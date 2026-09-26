@@ -4,6 +4,8 @@
  * Reads the `task run --output ndjson` event stream so the thinking status
  * shows real state / current tool / token counts (AGENT-8 / DISCORD-3, #73).
  * Injectable for tests; no ProcessManager.
+ * The child runs in its own process group: `signal` (daemon shutdown after its
+ * grace, AGENT-3) or this process exiting stops the child's whole tree.
  */
 
 import { askFromUnknown } from "../agent/ask.ts";
@@ -11,6 +13,12 @@ import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
+import {
+  collectProcessTree,
+  killProcessTree,
+  trackChildProcess,
+  type ProcEntry,
+} from "../plugins/proc-group.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
@@ -48,6 +56,11 @@ export type AgentRunChatOpts = {
    * counts forwarded from the NDJSON stream as frames arrive (REQ-discord-073).
    */
   onStatus?: (update: AgentStatusUpdate) => void;
+  /**
+   * Stops the spawned run and its whole process tree when aborted (AGENT-3);
+   * the daemon aborts runs it abandons at shutdown (REQ-cli-108).
+   */
+  signal?: AbortSignal;
 };
 
 export type AgentClient = {
@@ -79,7 +92,11 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       actingIsAdmin,
       cwd,
       onStatus,
+      signal,
     }) {
+      if (signal?.aborted) {
+        return { ok: false, sessionId, summary: "interrupted before start", exitCode: 130 };
+      }
       onStatus?.({ tool: "task run", message: "Spawning agent..." });
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
@@ -108,7 +125,21 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
         },
+        // Own process group, so a stop reaches its tools and workers too.
+        detached: true,
       });
+      // What the agent left in its group as it exited (a background process
+      // still holding the output pipe): an abort or this process exiting
+      // still reaches it once the agent pid is gone (as in spawnCapped).
+      let atExit: ProcEntry[] = [];
+      void proc.exited.then(() => {
+        atExit = collectProcessTree(proc.pid, { rootJustExited: true });
+      });
+      const untrack = trackChildProcess(proc.pid, () => atExit);
+      const onAbort = () => {
+        killProcessTree(proc.pid, { known: atExit });
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
       const { exitCode, summary, totalTokens, result } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
@@ -123,6 +154,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             message: p.message,
           });
         },
+      }).finally(() => {
+        signal?.removeEventListener("abort", onAbort);
+        untrack();
       });
       // Provider-reported total when a usage frame arrived; else a rough
       // stand-in from summary length (demo stub / providers without usage).

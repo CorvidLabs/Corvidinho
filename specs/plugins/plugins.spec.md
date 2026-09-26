@@ -78,6 +78,9 @@ files:
   - src/plugins/toolCost.ts
   - tests/fledge.plugins.test.ts
   - tests/fledge.cli.test.ts
+  - tests/fledge.hardening.test.ts
+  - src/plugins/proc-group.ts
+  - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
 
 db_tables: []
@@ -117,6 +120,15 @@ limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
 injectable env, bin, limiter, council timeout and per-voice timeout.
 `PluginCommand.autonomous?: boolean`;
 `PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
+`src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
+`signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
+`trackChildProcess(pid, known?)` (the `KnownMembers` exit-snapshot getter),
+`trackedChildProcesses`, `ignoredSignals` (`SigIgn` mask parse) and
+`forwardedSignals` (hooked signals, minus those ignored at load) for children
+spawned with `detached: true`. The registry exports `unregister(name, command)` (removes a
+name only while it is still that exact command). `plugins/fledge` exports
+`fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
+root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
 
 ## Invariants
 
@@ -193,6 +205,13 @@ time, in order, usage (exit 1), the
 AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
+
+Fledge commands (REQ-plugins-112/113) run `fledge plugins run <command> --
+<argv...>`, are bound to the project root they were discovered for (another
+root's load rebinds or removes them; a call from another cwd is refused), and
+run in their own process group so a timeout or abort stops the whole tree.
+Bounded children (Fledge runs, delegate workers, spawned schedule/chat runs)
+never outlive their limit or this process (REQ-plugins-154).
 
 `council` (REQ-plugins-118) declares the same flags as `delegate`
 (`dangerous: false`, `mutating: true`, minTier 2, `autonomous: true`) and
@@ -317,6 +336,8 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | council from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | council chair fails / fewer than 2 proposals | ok=false (exit 1) with the transcript |
 | council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
+| fledge-* called from a cwd other than its bound project root | Refuse (exit 2); fledge not started |
+| fledge-* times out / calling run aborts | exit 124 / 130; plugin process tree killed |
 
 ## Dependencies
 
@@ -329,6 +350,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays |
+| /proc (Linux) | process-tree walk for bounded child stops (proc-group) |
 
 ## Change Log
 
@@ -362,3 +384,5 @@ and current rows for plugins host evolution.
 | 2026-09-26 | council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2: Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed |
 | 2026-09-26 | plugin-argv-keeps-tokens-that-start-with-files-write-content-files-edit-strings-shell-exec-command-flags-search-grep: Plugin argv keeps tokens that start with -- (files-write content, files-edit strings, shell-exec command flags, search-grep patterns) and files-write refuses to empty a non-empty file without --allow-empty |
 | 2026-09-26 | files-edit-single-occurrence-replace-writes-new-literally-so-dollar-replacement-patterns-cannot-corrupt-the-file: Files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5) |
+| 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
+

@@ -6,7 +6,8 @@
  * bridge ticker: channel allowlist re-check (DISCORD-SCHEDULE-3), per-run
  * worktree (SESSION-WORKTREE), non-interactive spawns (SAFE-1). One daemon per
  * data dir (lock file); SIGTERM/SIGINT stop ticking, wait a bounded grace for
- * in-flight runs, record stragglers as failed, release the lock, exit 0.
+ * in-flight runs, then kill each straggler's process tree and record it
+ * failed (AGENT-3), release the lock, exit 0.
  *
  * Supervision/restart is systemd's job (docs/DAEMON.md); heartbeat, crash DMs
  * and running the bridge/watch inside the daemon are not built here.

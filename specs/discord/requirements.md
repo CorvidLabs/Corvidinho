@@ -819,6 +819,15 @@ correct:
   process SHALL NOT undo a pause or resume made in another.
 - The scheduler SHALL record each run's outcome exactly once, even when a
   shutdown abandons a run that later returns.
+- A run abandoned at shutdown SHALL also be stopped: `abandonInFlight` aborts
+  the run's signal, and the spawn client (`AgentRunChatOpts.signal`) kills
+  the spawned agent's whole process tree (AGENT-3 / REQ-plugins-154),
+  including a process the agent left in its group that still holds the
+  output pipe after the agent exited. The spawn client SHALL start each
+  agent in its own process group and stop its tree when the bridge or
+  daemon process exits. `ScheduleStore` SHALL start
+  runs only through `claimRun` (the unused unconditional `markRunStarted` is
+  removed).
 
 Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
 no catch-up, auto-pause after 5 failures, and the non-blocking tick
@@ -830,6 +839,8 @@ Acceptance Criteria
 - A pause made while a run is in flight survives that run finishing.
 - Failures from two handles with stale caches still count to 2.
 - `abandonInFlight` records a stuck run as failed once; a late agent result does not record it again.
+- `abandonInFlight` aborts the signal the stuck run's agent was given.
+- An abort after the spawned agent exited, while its background child still holds the output pipe, kills that child and `runChat` returns.
 
 ### REQ-discord-044
 

@@ -1,7 +1,8 @@
 /**
  * `corvidinho daemon` (REQ-cli-108 / CLI-8 / AUTONOMOUS-4): single-instance
  * lock, JSON-line scrubbed logs, headless ticking, graceful stop.
- * Fixtures only: temp data dirs, injected agent, no network, no spawns.
+ * Fixtures only: temp data dirs, injected agent, no network; the only spawn
+ * is a fake `sh` agent bin proving shutdown kills an abandoned run's tree.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
@@ -25,7 +26,7 @@ import {
   startDaemon,
   type DaemonLogger,
 } from "../src/daemon/index.ts";
-import type { AgentClient } from "../src/discord/agent-client.ts";
+import { createSpawnAgentClient, type AgentClient } from "../src/discord/agent-client.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 
@@ -40,6 +41,26 @@ afterEach(() => {
 });
 
 const DEAD_PID = 2_147_483_646;
+
+/** Alive and not a zombie (an unreaped orphan counts as dead). */
+function running(pid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const state = stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3);
+    return state !== "Z" && state !== "X";
+  } catch {
+    return false;
+  }
+}
+
+async function until(cond: () => boolean, ms = 3000): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (cond()) return true;
+    await Bun.sleep(20);
+  }
+  return cond();
+}
 const fakeToken = () => "gh" + "p_" + "a1B2c3D4e5".repeat(4).slice(0, 36);
 
 function memoryLogger(): { log: DaemonLogger; lines: Array<Record<string, unknown>> } {
@@ -281,6 +302,53 @@ describe("startDaemon", () => {
       .get(id) as { status: string; error: string };
     expect(run.status).toBe("failed");
     expect(run.error).toContain("daemon shutdown");
+    db.close();
+  });
+
+  test("stop after the grace kills an abandoned run's process tree (AGENT-3)", async () => {
+    const { projectRoot, env } = fixture();
+    const db = openCorvidinhoDb({ env });
+    const id = seedDue(db);
+    const binDir = tempDir("corvidinho-daemon-bin-");
+    const bin = join(binDir, "corvidinho");
+    writeFileSync(
+      bin,
+      [
+        "#!/bin/sh",
+        `echo $$ > "${binDir}/run.pid"`,
+        `sleep 30 & echo $! > "${binDir}/bg.pid"`,
+        `setsid sleep 30 & echo $! > "${binDir}/sess.pid"`,
+        "sleep 30",
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    const { log, lines } = memoryLogger();
+    const d = await startDaemon({
+      env,
+      projectRoot,
+      logger: log,
+      agent: createSpawnAgentClient({ bin, cwd: projectRoot }),
+      useWorktrees: false,
+      shutdownGraceMs: 100,
+    });
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+    expect((await d.tick()).started).toEqual([id]);
+    const pidFiles = ["run.pid", "bg.pid", "sess.pid"].map((f) => join(binDir, f));
+    expect(await until(() => pidFiles.every((f) => existsSync(f) && readFileSync(f, "utf8").trim() !== ""))).toBe(true);
+    const pids = pidFiles.map((f) => Number(readFileSync(f, "utf8").trim()));
+    expect(await until(() => pids.every(running))).toBe(true);
+
+    const summary = await d.stop("SIGTERM");
+    expect(summary.abandoned).toEqual([id]);
+    expect(lines.find((l) => l.event === "daemon.abandoned")).toMatchObject({ scheduleIds: [id] });
+    // Nothing of the abandoned run keeps working after the shutdown.
+    expect(await until(() => pids.every((p) => !running(p)))).toBe(true);
+    const run = db
+      .query("SELECT status, error FROM schedule_runs WHERE schedule_id = ?")
+      .get(id) as { status: string; error: string };
+    expect(run.status).toBe("failed");
     db.close();
   });
 
