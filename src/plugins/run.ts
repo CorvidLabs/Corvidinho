@@ -6,7 +6,13 @@ import {
   type AuditOutcome,
 } from "../audit/log.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
+import { isMutatingPlugin } from "./mutating.ts";
 import { get } from "./registry.ts";
+import {
+  ROLE_REFUSED_MESSAGE,
+  resolveActingIsAdmin,
+  roleSessionActive,
+} from "./roles.ts";
 import type { PluginHandlerResult } from "./types.ts";
 
 export type RunOptions = {
@@ -44,7 +50,8 @@ function toAllowSet(allowlist?: ReadonlySet<string> | string[]): Set<string> {
 
 /**
  * Run a registered plugin by name.
- * Enforces dangerous + nonInteractive deny unless allowlisted (SAFE-1 / PLUGIN-2).
+ * Enforces ROLES-CHAT role gate, then dangerous + nonInteractive deny unless
+ * allowlisted (SAFE-1 / PLUGIN-2).
  */
 export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> {
   const cmd = get(opts.name);
@@ -55,8 +62,19 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
   const allow = toAllowSet(opts.allowlist);
   const nonInteractive = Boolean(opts.nonInteractive);
   const dangerous = Boolean(cmd.dangerous);
+  const mutating = isMutatingPlugin(cmd);
 
   const args = opts.args ?? [];
+
+  // ROLES-CHAT-3/5/6: non-ADMIN acting sessions cannot run mutating tools
+  // (including files-write/edit marked mutating but not dangerous).
+  if (mutating && roleSessionActive() && !(await resolveActingIsAdmin())) {
+    return {
+      ok: false,
+      error: `Denied: plugin "${cmd.name}" is ${ROLE_REFUSED_MESSAGE} (ROLES-CHAT-3).`,
+      exitCode: 2,
+    };
+  }
 
   if (dangerous && nonInteractive && !allow.has(cmd.name)) {
     const err = new PluginDeniedError(cmd.name);

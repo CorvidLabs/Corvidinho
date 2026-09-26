@@ -1,8 +1,8 @@
 {
   "name": "corvidinho",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "private": true,
-  "description": "Linux-first Bun/TS agent runner (Fledge + SpecSync citizen) \u2014 CorvidLabs bootstrap",
+  "description": "Linux-first Bun/TS agent runner (Fledge + SpecSync citizen) — CorvidLabs bootstrap",
   "type": "module",
   "license": "MIT",
   "bin": {
