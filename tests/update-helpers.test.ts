@@ -83,6 +83,29 @@ describe("update-helpers.sh", () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("WATCH-RELIABILITY");
     expect(r.stdout).toContain("rate-limit");
+    // Backfilled: #139 NDJSON + #143 argv fix + protocol-2 upgrade note.
+    expect(r.stdout).toContain("NDJSON");
+    expect(r.stdout).toContain("protocol is now `2`");
+    expect(r.stdout).not.toContain("memory ACL");
+  });
+
+  test("extract_changelog_section finds 0.0.12", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.12`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("git-status");
+    expect(r.stdout).toContain("watch_sessions");
+    expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
+  });
+
+  test("extract_changelog_section finds 0.0.11", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.11`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ANNOUNCE-4");
+    expect(r.stdout).toContain("CHANGELOG bullets");
   });
 
   test("extract_changelog_section finds 0.0.9", () => {
@@ -92,6 +115,9 @@ describe("update-helpers.sh", () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("SAFE-6");
     expect(r.stdout).toContain("memory ACL");
+    // Backfilled: owner-only ADMIN upgrade note (#141) + SAFE-5 audit (#136).
+    expect(r.stdout).toContain("ADMIN is now owner-only");
+    expect(r.stdout).toContain("SAFE-5");
   });
 
   test("extract_changelog_section finds 0.0.8", () => {
@@ -126,10 +152,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.10", () => {
+  test("package.json is 0.0.12", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.10");
+    expect(pkg.version).toBe("0.0.12");
   });
 });

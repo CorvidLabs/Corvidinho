@@ -1,6 +1,42 @@
 # Changelog
 
+## 0.0.12
+
+### Typed git tools (#82) — [#145](https://github.com/CorvidLabs/Corvidinho/pull/145)
+
+- New builtins `git-status`, `git-diff`, `git-log` (safe) and `git-branch-create`, `git-commit`, `git-push` (dangerous, SAFE-1: denied non-interactive unless allowlisted) — PLUGIN-1/2, GITHUB-2.
+- Project root only (SAFE-3); never stages `.env*` or keystores, and a branch switch refuses to overwrite ignored files (SAFE-2); git hooks never run from these tools; no force/amend/rebase exposed.
+- `git-push` checks the remote's OWNER/REPO against the GitHub allow/deny lists (GITHUB-6). Draft SAFE-22 (refuse default-branch commits) awaits HI.
+
+### Durable WATCH sessions (#37) — [#142](https://github.com/CorvidLabs/Corvidinho/pull/142)
+
+- WATCH sessions keyed by `owner/repo#number` persist in the shared SQLite (**schema v6** `watch_sessions`; topic scrubbed, SAFE-6) with a soft idle TTL (default 45m) and survive restarts (SESSION-1..3).
+- Shutdown is clean: after SIGTERM the poller never acks or spawns again; poll cycles never overlap; one failing event is logged and skipped instead of blocking the rest.
+
+### Ops
+
+- Package version **0.0.12** — presence (DISCORD-12) reads `v0.0.12` after restart.
+- **Restart `github watch` and the Discord bridge** so the git tools and the schema v6 migration are picked up (the DB migrates on first open).
+
+## 0.0.11
+
+### Discord announce enrichment (DISCORD-ANNOUNCE-4 standing order)
+
+- **DISCORD-ANNOUNCE-4** — `formatBridgeLiveAnnouncement` posts version header plus ≤5 CHANGELOG bullets for what shipped (REQ-discord-025).
+- Prefer `CHANGELOG.md` section for the package version; fall back to package description or a single tip line when missing.
+- Still posts **only** to the configured announce channel via `postAnnouncement` — never dogfood allowlist by default.
+- Fixture tests for formatter + announce-channel-only post.
+
+### Ops
+
+- Package version **0.0.11** — presence (DISCORD-12) reads `v0.0.11` after restart.
+- **Restart the Discord bridge** so ClientReady posts the richer bridge-live note.
+
 ## 0.0.10
+
+### ⚠ Upgrade notes
+
+- **Restart the bridge, `github watch` and the checkout together.** The wire protocol is now `2` (DISCORD-10); a new bridge refuses an old binary.
 
 ### WATCH reliability (WATCH-RELIABILITY-1..3)
 
@@ -14,7 +50,24 @@
 - Package version **0.0.10** — presence (DISCORD-12) reads `v0.0.10` after restart.
 - **Restart `github watch`** to pick up summary comments, spawn JSONL, and rate-limit backoff.
 
+_Backfilled: these shipped in the tagged build but were missing from the first notes for this version._
+
+### Live NDJSON event stream for bridges (#73) — [#139](https://github.com/CorvidLabs/Corvidinho/pull/139)
+
+- `task run --output text|json|ndjson`; `--json` stays an alias and its output is unchanged.
+- `--output ndjson` writes one versioned JSON object per line as the run progresses: `StateChanged`, `Text`, `ToolCall` (a truncated, secret-scrubbed argument summary — never raw args), `ToolResult`, `VerifyResult`, running provider-reported `usage`, and a final `result` frame (summary capped at 4000 chars).
+- The Discord thinking embed and WATCH read the stream live: current state, current tool, and the real running token total when the provider reports usage (AGENT-8 / CLI-7 / DISCORD-3).
+- Frames from another protocol are never turned into reply text; the reply becomes a "protocol mismatch — restart the bridge" notice. Unoffered tool names show as "(unknown tool)".
+
+### Security fix — `--task` text can no longer become CLI flags — [#143](https://github.com/CorvidLabs/Corvidinho/pull/143)
+
+- The bridges pass untrusted Discord/GitHub text after `--task`. A message such as `--tier=code` or `--no-verify` used to lose its task text and be parsed as a flag, letting message text pick the capability tier. `--task` now always takes the next argv item; `--task=TEXT` keeps multi-line text (AGENT-5 / SAFE-1).
+
 ## 0.0.9
+
+### ⚠ Upgrade notes
+
+- **Set the owner before deploying.** ADMIN is now owner-only (IDENTITY-2). Set `CORVIDINHO_OWNER_DISCORD_ID` (or `[owner] discord_id` in the allowlist file) on the box. With no owner, nobody is ADMIN: `/mute`, `/unmute`, `/announce`, `/schedule` mutations and memory forget/override refuse everyone (IDENTITY-3 default-deny). `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` are ignored; the bridge and `doctor` warn when they are set.
 
 ### Security — memory ACL hardening (#59 follow-up) — [#128](https://github.com/CorvidLabs/Corvidinho/pull/128)
 
@@ -62,6 +115,18 @@
 - `docs/hi-drafts/WATCH-RELIABILITY.md` — draft only for Leif (post-ack summary, spawn outcome log, 403 backoff); **not** captured to `hi/`.
 - After restart, typed `shell-exec` + SAFE-3 cwd clamp are available to the LLM tool loop.
 
+_Backfilled: these shipped in the tagged build but were missing from the first notes for this version._
+
+### IDENTITY: durable owner record (#42) — [#138](https://github.com/CorvidLabs/Corvidinho/pull/138), owner-only ADMIN — [#141](https://github.com/CorvidLabs/Corvidinho/pull/141)
+
+- Owner = Discord snowflake + optional GitHub login + display name, from `CORVIDINHO_OWNER_DISCORD_ID` / `_GITHUB_LOGIN` / `_DISPLAY` or the allowlist file `[owner]` section (env wins per field); survives restarts; the display name never matches anything (IDENTITY-1, ALLOW-4).
+- The owner is the only ADMIN, re-checked at handler time in the bridge, slash dispatch and the memory plugins; muted or deny-listed owner is not ADMIN (IDENTITY-2/3, ADMIN-4).
+- `/status` and `doctor` show "owner configured yes/no" plus the display name only — never ids, logins or tokens.
+
+### SAFE-5 tamper-evident audit trail (#95) — [#136](https://github.com/CorvidLabs/Corvidinho/pull/136)
+
+- Every dangerous plugin run appends HMAC-chained `started` → `ok`/`error` (or `denied`) rows to `audit_log` in the shared DB (schema v5, append-only triggers); raw args are never stored, only a digest; a dangerous run is refused if its `started` row cannot be written.
+- `verifyAudit` finds the first tampered row; key from `CORVIDINHO_AUDIT_HMAC_KEY`. Draft SAFE-17 (wider coverage, Discord verify) awaits HI.
 
 ## 0.0.8
 
