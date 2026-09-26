@@ -5,5 +5,15 @@ artifact: testing
 
 # Testing
 
-- `tests/roles.chat.gates.test.ts`: (a) non-admin refuses files-write/shell/github-pr-create/memory-forget; catalog omits mutating; (b) admin reaches files-write; admin+allowlist reaches shell still SAFE-gated without allowlist; (c) channel allowlist empty still denies (existing router/config assertion).
+## Requirement evidence
+
+| Requirement | Test | Evidence |
+|---|---|---|
+| `REQ-plugins-roles-001` | `tests/roles.chat.gates.test.ts`, `tests/files.plugins.test.ts` | files-write/edit marked mutating; list entries expose mutating. |
+| `REQ-plugins-roles-002` | `tests/roles.chat.gates.test.ts` | Non-admin refuses files-write/shell/github-pr-create/memory-forget with "not allowed for your role"; admin files-write ok; shell still SAFE-1 without allowlist. |
+| `REQ-agent-roles-001` | `tests/roles.chat.gates.test.ts` | Non-admin catalog omits mutating; admin catalog includes files-write at code tier. |
+
+## Automated coverage
+
+- `bun test tests/roles.chat.gates.test.ts`
 - `fledge lanes run verify --non-interactive`
