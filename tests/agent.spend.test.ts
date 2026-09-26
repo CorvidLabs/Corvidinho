@@ -1,6 +1,7 @@
 /**
- * SAFE-8 daily spend cap + AUTONOMOUS-8 spend view (REQ-agent-098 / REQ-cli-098 /
- * REQ-discord-098). Mocked fetch only — no network, no real keys.
+ * SAFE-8 daily spend cap (as amended on #98: warn at 80%, ask at 100%) +
+ * AUTONOMOUS-8 spend view (REQ-agent-098 / REQ-cli-098 / REQ-discord-098).
+ * Mocked fetch or a localhost mock LLM only — no network, no real keys.
  */
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -169,7 +170,7 @@ describe("withSpendCap (SAFE-8)", () => {
     expect(new SpendLedger(db).window(NOW)).toEqual({ spentMicroUsd: 450, calls: 1, estimatedCalls: 0 });
   });
 
-  test("refuses before sending when spend + estimate would break the cap", async () => {
+  test("stops before sending when spend + estimate would break the cap, with a spend-cap ask", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const ledger = new SpendLedger(db);
     const pre = ledger.reserve({ provider: "p", model: "gpt-4o", estimateMicroUsd: 999_000, capMicroUsd: 1_000_000, now: NOW - 1000 });
@@ -183,10 +184,15 @@ describe("withSpendCap (SAFE-8)", () => {
       err = e;
     }
     expect(err).toBeInstanceOf(SpendCapRefusal);
-    const msg = (err as Error).message;
-    expect(msg).toContain("refused");
-    expect(msg).toContain("$1.00 daily cap");
-    expect(msg).toContain(SPEND_CAP_ENV);
+    const refusal = err as SpendCapRefusal;
+    expect(refusal.ask.reason).toBe("spend-cap");
+    expect(refusal.message).toBe(refusal.ask.question);
+    const msg = refusal.ask.question;
+    expect(msg).toContain("Daily spend cap reached");
+    expect(msg).toContain("$0.9990 spent in the last 24h (99% of the $1.00 cap)");
+    expect(msg).toContain("stopped before sending it");
+    expect(msg).toContain(`raise ${SPEND_CAP_ENV}`);
+    expect(msg).toContain("24h window");
     expect(calls).toHaveLength(0);
     expect(ledgerRows(db)).toHaveLength(1);
   });
@@ -202,7 +208,7 @@ describe("withSpendCap (SAFE-8)", () => {
     expect(ledger.window(NOW).calls).toBe(1);
   });
 
-  test("zero cap refuses every call", async () => {
+  test("zero cap stops every call", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const { fetch, calls } = mockFetch();
     const wrapped = withSpendCap(fetch, { env: { [SPEND_CAP_ENV]: "0" }, readUsage: extractUsage, db, now: () => NOW });
@@ -210,17 +216,20 @@ describe("withSpendCap (SAFE-8)", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("unpriced model is refused while a cap is set (never counted as free)", async () => {
+  test("unpriced model stops and asks while a cap is set (never counted as free)", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const { fetch, calls } = mockFetch();
     const wrapped = withSpendCap(fetch, { env: { [SPEND_CAP_ENV]: "100" }, readUsage: extractUsage, db, now: () => NOW });
     await expect(wrapped(URL_, chatInit("local-llama"))).rejects.toThrow(/no known price/);
+    await expect(wrapped(URL_, chatInit("local-llama"))).rejects.toMatchObject({
+      ask: { reason: "spend-cap" },
+    });
     expect(calls).toHaveLength(0);
     // refused before the ledger is even touched
     expect(db.query("SELECT 1 FROM sqlite_master WHERE name = 'spend_ledger'").get()).toBeNull();
   });
 
-  test("invalid cap refuses every call (fail closed) without echoing the value", async () => {
+  test("invalid cap stops every call (fail closed) without echoing the value", async () => {
     const { fetch, calls } = mockFetch();
     const wrapped = withSpendCap(fetch, { env: { [SPEND_CAP_ENV]: "five-dollars" }, readUsage: extractUsage });
     let msg = "";
@@ -302,7 +311,7 @@ describe("spend ledger is SAFE-6 scrubbed", () => {
 });
 
 describe("createTaskExecute hook", () => {
-  test("a capped run refuses the provider call and reports why in the summary", async () => {
+  test("a capped run stops before the provider call and ends the attempt with a spend-cap ask", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-spend-exec-"));
     try {
       const { fetch, calls } = mockFetch();
@@ -321,8 +330,14 @@ describe("createTaskExecute hook", () => {
       });
       const result = await exec({ attempt: 1, signal: new AbortController().signal });
       expect(calls).toHaveLength(0);
-      expect(result.summary).toContain("spend cap: refused provider call");
+      expect(result.ask?.reason).toBe("spend-cap");
+      expect(result.summary).toStartWith("Needs your input: Daily spend cap reached (SAFE-8)");
+      expect(result.summary).toContain("of the $0.00 cap");
+      expect(result.filesChanged).toEqual([]);
       expect(existsSync(join(dir, "corvidinho.db"))).toBe(true);
+      // The next attempt starts clean (the ask is taken once).
+      const again = await exec({ attempt: 2, signal: new AbortController().signal });
+      expect(again.ask?.reason).toBe("spend-cap");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -348,7 +363,7 @@ describe("createTaskExecute hook", () => {
       expect(line).toEqual({
         ok: true,
         mark: "ok",
-        detail: expect.stringContaining("$0.0005 of $5.00 daily cap used in the last 24h (1 provider call(s)"),
+        detail: expect.stringContaining("$0.0005 of $5.00 daily cap used in the last 24h (0%; 1 provider call(s)"),
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -357,31 +372,36 @@ describe("createTaskExecute hook", () => {
 });
 
 describe("spendDoctorCheck (AUTONOMOUS-8)", () => {
-  test("null when no cap is set", () => {
-    expect(spendDoctorCheck({ env: {}, model: "gpt-4o-mini" })).toBeNull();
+  test("info line when no cap is set (no DB opened)", () => {
+    expect(spendDoctorCheck({ env: {}, model: "gpt-4o-mini" })).toEqual({
+      ok: true,
+      mark: "info",
+      detail: `no daily cap set (${SPEND_CAP_ENV}); provider spend is not tracked`,
+    });
   });
 
   test("invalid cap warns; unpriced model warns; never fails doctor", () => {
     const invalid = spendDoctorCheck({ env: { [SPEND_CAP_ENV]: "nope" }, model: "gpt-4o-mini" });
     expect(invalid).toMatchObject({ ok: true, mark: "warn" });
-    expect(invalid!.detail).not.toContain("nope");
+    expect(invalid.detail).not.toContain("nope");
     const db = openCorvidinhoDb({ memory: true });
     const unpriced = spendDoctorCheck({ env: { [SPEND_CAP_ENV]: "5" }, model: "local-llama", db, now: NOW });
     expect(unpriced).toMatchObject({ ok: true, mark: "warn" });
-    expect(unpriced!.detail).toContain("no known price");
+    expect(unpriced.detail).toContain("no known price");
+    expect(unpriced.detail).toContain("runs stop and ask");
   });
 
   test("shows estimated calls separately", () => {
     const db = openCorvidinhoDb({ memory: true });
     new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o", estimateMicroUsd: 12_345, capMicroUsd: 5_000_000, now: NOW });
     const line = spendDoctorCheck({ env: { [SPEND_CAP_ENV]: "5" }, model: "gpt-4o", db, now: NOW });
-    expect(line!.detail).toContain("$0.0124 of $5.00");
-    expect(line!.detail).toContain("1 counted at its estimate");
+    expect(line.detail).toContain("$0.0124 of $5.00");
+    expect(line.detail).toContain("1 counted at its estimate");
   });
 });
 
 describe("doctor CLI", () => {
-  test("prints a spend line only when a cap is set", async () => {
+  test("prints an info spend line without a cap and spend vs cap with one", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-spend-doctor-"));
     try {
       const run = async (extra: Record<string, string>) => {
@@ -398,9 +418,9 @@ describe("doctor CLI", () => {
         await proc.exited;
         return out;
       };
-      expect(await run({})).not.toContain("] spend:");
+      expect(await run({})).toContain(`[info] spend: no daily cap set (${SPEND_CAP_ENV})`);
       const capped = await run({ [SPEND_CAP_ENV]: "5", CORVIDINHO_LLM_MODEL: "gpt-4o-mini" });
-      expect(capped).toContain("[ok] spend: $0.00 of $5.00 daily cap used in the last 24h (0 provider call(s)");
+      expect(capped).toContain("[ok] spend: $0.00 of $5.00 daily cap used in the last 24h (0%; 0 provider call(s)");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

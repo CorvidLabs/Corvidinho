@@ -44,6 +44,8 @@ export type StatusReportInput = {
   ownerLine?: string;
   /** SAFE-5 — audit chain verify line (bridge supplies). */
   auditLine?: string;
+  /** AUTONOMOUS-8 — 24 h spend vs the daily cap (bridge supplies). */
+  spendLine?: string;
 };
 
 /** Pure formatter for `/status` body — fixture-friendly. */
@@ -68,6 +70,9 @@ export function formatStatusReport(input: StatusReportInput): string {
   }
   if (input.auditLine) {
     lines.push(input.auditLine);
+  }
+  if (input.spendLine) {
+    lines.push(input.spendLine);
   }
   if (input.gitTipSha) {
     lines.push(`Git tip: ${input.gitTipSha}`);
@@ -99,6 +104,7 @@ export async function handleStatusCommand(
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
     ownerLine: formatOwnerStatus(ctx.owner),
     auditLine: ctx.auditLine?.(),
+    spendLine: ctx.spendLine?.(),
   });
 
   await interaction.reply({

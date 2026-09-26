@@ -33,9 +33,11 @@ export type AgentTokenUsage = {
 
 /**
  * Why a run stopped for a human (AUTONOMY-1/2, #44): `clarify` = the agent
- * called ask-human; `stuck` = the runner gave up (verify retries exhausted).
+ * called ask-human; `stuck` = the runner gave up (verify retries exhausted);
+ * `spend-cap` = the next provider call would pass the daily spend cap, so the
+ * runner stopped before sending it and asks the owner (SAFE-8, #98).
  */
-export type HumanAskReason = "clarify" | "stuck";
+export type HumanAskReason = "clarify" | "stuck" | "spend-cap";
 
 /** A question surfaced to the requester; bridges also ping the owner. */
 export type HumanAsk = {
@@ -78,6 +80,23 @@ export type TaskResult = {
   attempts: number;
   /** Present only when the run needs a human answer (AUTONOMY-1/2). */
   ask?: HumanAsk;
+  /**
+   * Present when this run pushed rolling 24 h spend to the SAFE-8 warning
+   * threshold (80% of the daily cap). Recorded once per crossing.
+   */
+  spendWarning?: SpendWarning;
+};
+
+/**
+ * SAFE-8 80% warning (#98): integer micro-USD so bridges format it from
+ * numbers, never from child-written text.
+ */
+export type SpendWarning = {
+  /** Spend counted in the rolling 24 h window when the warning fired. */
+  spentMicroUsd: number;
+  capMicroUsd: number;
+  /** floor(spent × 100 / cap). */
+  percent: number;
 };
 
 export type AgentConfig = {

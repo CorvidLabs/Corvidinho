@@ -183,7 +183,12 @@ export function stuckAfterVerifyAsk(maxRetries: number): HumanAsk {
   };
 }
 
-const REASONS: ReadonlySet<string> = new Set<HumanAskReason>(["clarify", "stuck"]);
+const REASONS: ReadonlySet<string> = new Set<HumanAskReason>([
+  "clarify",
+  "stuck",
+  // SAFE-8 (#98): the runner stopped before a provider call at the spend cap.
+  "spend-cap",
+]);
 
 /**
  * Read an ask from a parsed `result` frame (child process output). Returns

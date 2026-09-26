@@ -15,6 +15,7 @@ import {
   ASK_NO_OWNER_WARNING,
   askPingKey,
   formatAskReply,
+  withSpendWarningPost,
 } from "../discord/ask-ping.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import {
@@ -323,20 +324,33 @@ export class SchedulerService {
           if (!ask.ownerPinged && !alreadyPinged) {
             console.warn(ASK_NO_OWNER_WARNING);
           }
-          await this.outbound.post({
-            channelId: schedule.channelId,
-            content: ask.content,
-            mentionUserIds: ask.mentionUserIds,
-          });
+          await this.outbound.post(
+            withSpendWarningPost(
+              {
+                channelId: schedule.channelId,
+                content: ask.content,
+                mentionUserIds: ask.mentionUserIds,
+              },
+              result.spendWarning,
+              this.owner,
+            ),
+          );
           if (ask.ownerPinged && pingKey) {
             this.store.setAskPingKey(schedule.id, pingKey);
           }
         } else if (gate.ok) {
           const status = result.ok ? "✅" : "❌";
-          await this.outbound.post({
-            channelId: schedule.channelId,
-            content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
-          });
+          // SAFE-8: an 80% spend warning rides the post and pings the owner.
+          await this.outbound.post(
+            withSpendWarningPost(
+              {
+                channelId: schedule.channelId,
+                content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
+              },
+              result.spendWarning,
+              this.owner,
+            ),
+          );
         }
       }
     } catch (err) {

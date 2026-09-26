@@ -20,7 +20,11 @@ import {
   createEchoAgentClient,
   createSpawnAgentClient,
 } from "./agent-client.ts";
-import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
+import {
+  ASK_NO_OWNER_WARNING,
+  formatAskReply,
+  withSpendWarningPost,
+} from "./ask-ping.ts";
 import {
   goLiveChecklist,
   loadBridgeConfig,
@@ -69,6 +73,9 @@ import {
 } from "../scheduler/index.ts";
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
+import { loadLlmEnv } from "../agent/execute.ts";
+import { readSpendSnapshot } from "../agent/spend.ts";
+import { formatSpendStatusLine } from "../agent/spend-notice.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -246,6 +253,11 @@ export async function startBridge(
     ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
     : undefined;
   if (auditLine) console.log(`[discord] ${auditLine()}`);
+  // AUTONOMOUS-8: /status shows rolling 24 h spend against the daily cap.
+  const spendLine = () =>
+    formatSpendStatusLine(
+      readSpendSnapshot({ env, db, model: loadLlmEnv(env).model }),
+    );
   // SAFE-5: /admin mutations append to the same chain (fail closed on error).
   const recordAudit = db
     ? (entry: AuditEntryInput) =>
@@ -305,6 +317,7 @@ export async function startBridge(
       memoryStore,
       announceStore,
       auditLine,
+      spendLine,
       recordAudit,
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
@@ -463,12 +476,19 @@ export async function startBridge(
         : `session ${session.id} failed (exit ${result.exitCode})`;
 
       if (replyRef.fn) {
-        const sent = await replyRef.fn({
-          channelId,
-          content: body,
-          replyToMessageId: msg.id,
-          ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
-        });
+        // SAFE-8: an 80% spend warning rides the reply and pings the owner.
+        const sent = await replyRef.fn(
+          withSpendWarningPost(
+            {
+              channelId,
+              content: body,
+              replyToMessageId: msg.id,
+              ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
+            },
+            result.spendWarning,
+            config.owner,
+          ),
+        );
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
         }

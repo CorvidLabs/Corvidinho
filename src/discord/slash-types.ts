@@ -53,6 +53,8 @@ export type SlashContext = {
   announceStore?: AnnounceStore;
   /** SAFE-5 — one-line audit chain verify summary for /status. */
   auditLine?: () => string;
+  /** AUTONOMOUS-8 — rolling 24 h spend vs the daily cap for /status (SAFE-8). */
+  spendLine?: () => string;
   /**
    * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
    * the trail is unavailable; /admin mutations then fail closed.

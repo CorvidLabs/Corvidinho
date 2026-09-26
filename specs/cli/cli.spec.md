@@ -68,7 +68,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 Attribution output uses only the project name and repository link and contains no account handle.
-doctor prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098) only when `CORVIDINHO_DAILY_SPEND_CAP_USD` is set; it is informational (`ok` or `warn`) and never changes the doctor exit code.
+doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0.
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
 
 ## Behavioral Examples

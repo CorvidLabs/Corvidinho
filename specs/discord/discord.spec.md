@@ -73,6 +73,7 @@ files:
   - tests/discord.protocol-version.test.ts
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
+  - tests/discord.spend.test.ts
   - tests/discord.ask-ping.test.ts
 
 db_tables: []
@@ -115,6 +116,19 @@ per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey
 / `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
 (schema v7, `SCHEMA_VERSION` 7).
 
+Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
+AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
+`SPEND_CAP_HEADLINE` / `SPEND_CAP_STATUS` (paused, not an error) and the owner
+pinged; `askPingKey` keys a `spend-cap` ask on its reason only, so a schedule
+pings once per cap episode. `ask-ping.ts` also exports
+`formatSpendWarningReply`, `withSpendWarningPost` and `appendPostLine`:
+`AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
+`result` frame by `spendWarningFromUnknown`), and the bridge reply and the
+schedule post append the 80% warning line with the owner added to
+`mentionUserIds`. `SlashContext.spendLine` / `StatusReportInput.spendLine`
+carry `/status`'s 24 h spend vs cap line (`formatSpendStatusLine` over
+`readSpendSnapshot` on the bridge's shared DB); no new slash command.
+
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
@@ -150,10 +164,14 @@ recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
 No `/memory` slash command.
-Module-owned tables in the shared DB (e.g. `spend_ledger` from
-`src/agent/spend.ts`, REQ-discord-098) are created with CREATE TABLE IF NOT
-EXISTS without a schema version bump, and their free-text columns are
-scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6).
+Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
+from `src/agent/spend.ts`, REQ-discord-098) are created with CREATE TABLE IF
+NOT EXISTS without a schema version bump, and their free-text columns are
+scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
+no free-text column (a constant kind and integers).
+The spend warning line and `/status` spend line are built from integer
+amounts, never from child-written text; the spend-cap question is scrubbed and
+mention-defanged like every ask.
 
 ## Behavioral Examples
 

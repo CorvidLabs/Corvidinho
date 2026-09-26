@@ -4,20 +4,25 @@
  * Off unless CORVIDINHO_DAILY_SPEND_CAP_USD is set. With a cap, every
  * OpenAI-compatible chat call is priced from a per-model table, its estimate is
  * reserved against a rolling 24 h ledger in the shared SQLite DB before the
- * request is sent, and the call is refused when it would push spend past the
- * cap. The reservation is replaced by the provider-reported cost once the reply
- * arrives. No cap ⇒ `withSpendCap` returns the fetch untouched and the DB is
- * never opened (no behavior change).
+ * request is sent, and the reservation is replaced by the provider-reported
+ * cost once the reply arrives. No cap ⇒ the fetch comes back untouched and the
+ * DB is never opened (no behavior change).
+ *
+ * SAFE-8 as amended (#98): at 80% of the cap the run gets one warning per
+ * crossing (deduped in `spend_alerts` across processes); at 100% the call is
+ * not sent — the guard records a `spend-cap` ask and the execute hook ends the
+ * attempt with it, so the run stops `blocked` and the owner is asked through
+ * the AUTONOMY-1/2 path instead of the call being refused or overspent.
  *
  * Assumptions (see specs/agent REQ-agent-098):
  *  - "Daily" is the last 24 hours (rolling), not a calendar day.
  *  - Prices are standard USD per 1M tokens; cached-input discounts are ignored,
  *    so the count errs high.
  *  - A model missing from the table has no known price: while a cap is set its
- *    calls are refused — never counted as free, never guessed.
+ *    calls stop and ask — never counted as free, never guessed.
  *  - Pre-call estimate: request bytes / 3 prompt tokens + a 4096-token reply
  *    reserve. A reply longer than the reserve can overshoot the cap by that one
- *    call; the next call is then refused.
+ *    call; the next call then stops and asks.
  *  - Provider omitted `usage` (or the reply was unreadable) ⇒ the estimate stays
  *    counted. HTTP error reply ⇒ counted as 0 (not billed). Network error or
  *    abort ⇒ the estimate stays counted (it may have been billed).
@@ -29,10 +34,29 @@
 import type { Database } from "bun:sqlite";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import type { AgentTokenUsage } from "./types.ts";
+import { formatAskSummary } from "./ask.ts";
+import {
+  atWarnThreshold,
+  formatSpendDoctorLine,
+  SPEND_CAP_ENV,
+  spendCapInvalidAsk,
+  spendCapLedgerAsk,
+  spendCapReachedAsk,
+  spendCapUnpricedAsk,
+  spendPercent,
+  type SpendDoctorLine,
+  type SpendSnapshot,
+} from "./spend-notice.ts";
+import type {
+  AgentTokenUsage,
+  ExecuteResult,
+  HumanAsk,
+  SpendWarning,
+} from "./types.ts";
 
-/** Operator knob: daily (rolling 24 h) USD cap on provider calls. Unset = off. */
-export const SPEND_CAP_ENV = "CORVIDINHO_DAILY_SPEND_CAP_USD";
+export { formatUsd, SPEND_CAP_ENV, SPEND_WARN_PERCENT } from "./spend-notice.ts";
+export type { SpendDoctorLine, SpendSnapshot } from "./spend-notice.ts";
+
 export const SPEND_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Reply tokens reserved per call before the provider reports actual usage. */
 export const REPLY_RESERVE_TOKENS = 4096;
@@ -128,14 +152,6 @@ export function estimateCallMicroUsd(price: ModelPrice, requestBytes: number): n
   return tokensToMicroUsd(price, prompt, REPLY_RESERVE_TOKENS);
 }
 
-/** Whole cents print 2 decimals; anything else 4, rounded up (never under-reports spend). */
-export function formatUsd(microUsd: number): string {
-  const [unit, digits] = microUsd % 10_000 === 0 ? [10_000, 2] : [100, 4];
-  const n = Math.ceil(Math.max(0, microUsd) / unit);
-  const scale = 10 ** digits;
-  return `$${Math.floor(n / scale)}.${String(n % scale).padStart(digits, "0")}`;
-}
-
 const SPEND_LEDGER_SQL = `
 CREATE TABLE IF NOT EXISTS spend_ledger (
   id TEXT PRIMARY KEY NOT NULL,
@@ -150,9 +166,23 @@ CREATE TABLE IF NOT EXISTS spend_ledger (
   settled_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_spend_ledger_ts ON spend_ledger(ts);
+CREATE TABLE IF NOT EXISTS spend_alerts (
+  id TEXT PRIMARY KEY NOT NULL,
+  ts INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  cap_micro_usd INTEGER NOT NULL,
+  spent_micro_usd INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_spend_alerts_ts ON spend_alerts(ts);
 `;
 
-/** Create the ledger table in the shared DB (idempotent; no schema version bump). */
+/** `spend_alerts.kind` for the SAFE-8 80% warning (a constant, never free text). */
+const WARN_ALERT_KIND = "warn";
+
+/**
+ * Create the ledger and alert tables in the shared DB (idempotent; no schema
+ * version bump). `spend_alerts` holds only a constant kind and integers.
+ */
 export function ensureSpendLedger(db: Database): void {
   db.exec(SPEND_LEDGER_SQL);
 }
@@ -235,6 +265,39 @@ export class SpendLedger {
     return run.immediate();
   }
 
+  /**
+   * SAFE-8 80% warning, once per crossing: when 24 h spend is at or past the
+   * threshold and no warning for this cap value was recorded in the last 24 h,
+   * record one and return it. Check and insert share one IMMEDIATE
+   * transaction, so concurrent processes warn once between them. A new cap
+   * value re-arms the warning. A zero cap never warns (nothing is spent).
+   */
+  noteWarning(opts: { capMicroUsd: number; now: number }): SpendWarning | null {
+    const run = this.db.transaction((): SpendWarning | null => {
+      if (opts.capMicroUsd <= 0) return null;
+      const { spentMicroUsd } = this.window(opts.now);
+      if (!atWarnThreshold(spentMicroUsd, opts.capMicroUsd)) return null;
+      const seen = this.db
+        .query(
+          `SELECT 1 AS x FROM spend_alerts
+            WHERE kind = ? AND cap_micro_usd = ? AND ts > ? LIMIT 1`,
+        )
+        .get(WARN_ALERT_KIND, opts.capMicroUsd, opts.now - SPEND_WINDOW_MS);
+      if (seen) return null;
+      this.db.run(
+        `INSERT INTO spend_alerts (id, ts, kind, cap_micro_usd, spent_micro_usd)
+         VALUES (?, ?, ?, ?, ?)`,
+        [crypto.randomUUID(), opts.now, WARN_ALERT_KIND, opts.capMicroUsd, spentMicroUsd],
+      );
+      return {
+        spentMicroUsd,
+        capMicroUsd: opts.capMicroUsd,
+        percent: spendPercent(spentMicroUsd, opts.capMicroUsd),
+      };
+    });
+    return run.immediate();
+  }
+
   /** Replace a reservation with what the call actually cost. */
   settle(id: string, s: SpendSettlement, now: number): void {
     if (s.status === "actual") {
@@ -257,9 +320,16 @@ export class SpendLedger {
   }
 }
 
-/** Thrown by the capped fetch; the tool loop reports it as the task summary. */
+/**
+ * Thrown by the capped fetch instead of sending a call that would pass the
+ * cap (or cannot be counted). Carries the `spend-cap` ask; the execute hook
+ * turns it into a blocked run (see SpendGuard.finish).
+ */
 export class SpendCapRefusal extends Error {
   override name = "SpendCapRefusal";
+  constructor(readonly ask: HumanAsk) {
+    super(ask.question);
+  }
 }
 
 export type SpendFetch = (
@@ -271,14 +341,15 @@ export type SpendCapOptions = {
   env?: NodeJS.ProcessEnv;
   /** Reads provider-reported usage from the parsed JSON reply (execute's extractUsage). */
   readUsage: (data: unknown) => AgentTokenUsage | null;
+  /**
+   * SAFE-8 80% warning, called at most once per crossing (deduped in the
+   * ledger). Without a listener no warning is recorded.
+   */
+  onWarning?: (warning: SpendWarning) => void;
   /** Test seam: ledger DB. Default: shared DB under CORVIDINHO_DATA_DIR, opened on first call. */
   db?: Database;
   now?: () => number;
 };
-
-const INVALID_CAP_MESSAGE =
-  `spend cap: refused provider call — ${SPEND_CAP_ENV} is set but is not a plain USD amount ` +
-  "(e.g. 5 or 2.50); fix or unset it (SAFE-8)";
 
 function modelFromRequestBody(body: string): string {
   try {
@@ -298,16 +369,38 @@ function providerOf(input: string | URL | Request): string {
   }
 }
 
+/** Capped fetch plus the ask it stopped on, for the execute hook. */
+export type SpendGuard = {
+  /** The provider fetch; `fetchImpl` itself when no cap is set. */
+  fetch: SpendFetch;
+  /**
+   * When a call was stopped at the cap during this attempt, replace the
+   * attempt's result with the `spend-cap` ask (summary `Needs your input:
+   * <question>`, filesChanged kept), so the run ends `blocked` instead of
+   * reporting a failed call. Clears the ask.
+   */
+  finish(result: ExecuteResult): ExecuteResult;
+};
+
 /**
- * Wrap the provider fetch with the SAFE-8 cap. Returns `fetchImpl` itself when
- * no cap is set. Refusals throw SpendCapRefusal before any request is sent.
+ * Wrap the provider fetch with the SAFE-8 cap. No cap ⇒ `fetch` is
+ * `fetchImpl` itself and nothing else happens. With a cap, a call that would
+ * pass it (or cannot be counted: invalid cap value, unpriced model, ledger
+ * unavailable) throws SpendCapRefusal before any request is sent and leaves
+ * its ask for `finish`.
  */
-export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): SpendFetch {
+export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): SpendGuard {
   const env = opts.env ?? process.env;
   const cap = parseSpendCap(env);
-  if (cap.kind === "off") return fetchImpl;
+  if (cap.kind === "off") return { fetch: fetchImpl, finish: (r) => r };
   const now = opts.now ?? Date.now;
   let ledger: SpendLedger | undefined;
+  let pending: HumanAsk | null = null;
+
+  const stop = (ask: HumanAsk): never => {
+    pending = ask;
+    throw new SpendCapRefusal(ask);
+  };
 
   const settle = (id: string, s: SpendSettlement) => {
     try {
@@ -315,20 +408,22 @@ export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): Spen
     } catch {
       // Ledger write failed after the call: the reservation stays counted.
     }
+    if (!opts.onWarning || cap.kind !== "cap") return;
+    let warning: SpendWarning | null = null;
+    try {
+      warning = ledger?.noteWarning({ capMicroUsd: cap.capMicroUsd, now: now() }) ?? null;
+    } catch {
+      // Warning bookkeeping never breaks a call that already went out.
+    }
+    if (warning) opts.onWarning(warning);
   };
 
-  return async (input, init) => {
-    if (cap.kind === "invalid") throw new SpendCapRefusal(INVALID_CAP_MESSAGE);
+  const guarded: SpendFetch = async (input, init) => {
+    if (cap.kind === "invalid") return stop(spendCapInvalidAsk());
     const body = typeof init?.body === "string" ? init.body : "";
     const model = modelFromRequestBody(body);
     const price = priceForModel(model);
-    if (!price) {
-      throw new SpendCapRefusal(
-        `spend cap: refused provider call — model "${scrubSecrets(model) || "(none)"}" has no known price, ` +
-          `so the ${formatUsd(cap.capMicroUsd)} daily cap (${SPEND_CAP_ENV}) cannot be enforced (SAFE-8); ` +
-          "use a priced model or unset the cap",
-      );
-    }
+    if (!price) return stop(spendCapUnpricedAsk(model, cap.capMicroUsd));
     let hold: SpendReservation;
     const estimate = estimateCallMicroUsd(price, Buffer.byteLength(body, "utf8"));
     try {
@@ -341,16 +436,15 @@ export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): Spen
         now: now(),
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new SpendCapRefusal(
-        `spend cap: refused provider call — spend ledger unavailable (${scrubSecrets(msg).slice(0, 200)}) (SAFE-8)`,
-      );
+      return stop(spendCapLedgerAsk(err instanceof Error ? err.message : String(err)));
     }
     if (!hold.ok) {
-      throw new SpendCapRefusal(
-        `spend cap: refused provider call — ${formatUsd(hold.spentMicroUsd)} spent in the last 24h ` +
-          `+ ~${formatUsd(estimate)} for this call would exceed the ${formatUsd(cap.capMicroUsd)} ` +
-          `daily cap (${SPEND_CAP_ENV}, SAFE-8)`,
+      return stop(
+        spendCapReachedAsk({
+          spentMicroUsd: hold.spentMicroUsd,
+          estimateMicroUsd: estimate,
+          capMicroUsd: cap.capMicroUsd,
+        }),
       );
     }
 
@@ -379,13 +473,71 @@ export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): Spen
     );
     return resp;
   };
+
+  return {
+    fetch: guarded,
+    finish(result) {
+      const ask = pending;
+      pending = null;
+      if (!ask) return result;
+      return { summary: formatAskSummary(ask), filesChanged: [...result.filesChanged], ask };
+    },
+  };
 }
 
-export type SpendDoctorLine = { ok: true; mark: "ok" | "warn"; detail: string };
+/**
+ * The capped fetch alone (see createSpendGuard). Returns `fetchImpl` itself
+ * when no cap is set. Stopped calls throw SpendCapRefusal before any request.
+ */
+export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): SpendFetch {
+  return createSpendGuard(fetchImpl, opts).fetch;
+}
+
+/**
+ * AUTONOMOUS-8 — rolling 24 h spend against the cap right now (doctor,
+ * Discord /status). Opens the shared DB only when a cap is set and closes it
+ * again unless `db` was passed in. Never throws.
+ */
+export function readSpendSnapshot(opts: {
+  env?: NodeJS.ProcessEnv;
+  /** Configured provider model (loadLlmEnv().model). */
+  model: string;
+  db?: Database;
+  now?: number;
+}): SpendSnapshot {
+  const env = opts.env ?? process.env;
+  const cap = parseSpendCap(env);
+  if (cap.kind === "off") return { kind: "off" };
+  if (cap.kind === "invalid") return { kind: "invalid" };
+  let db: Database | undefined;
+  try {
+    db = opts.db ?? openCorvidinhoDb({ env });
+    const window = new SpendLedger(db).window(opts.now ?? Date.now());
+    return {
+      kind: "cap",
+      capMicroUsd: cap.capMicroUsd,
+      window,
+      model: opts.model,
+      priced: priceForModel(opts.model) !== null,
+    };
+  } catch (err) {
+    return { kind: "unreadable", error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (!opts.db) {
+      try {
+        db?.close();
+      } catch {
+        // already closed
+      }
+    }
+  }
+}
 
 /**
  * AUTONOMOUS-8 — spend in the last 24 h against the cap, for `doctor`.
- * Null when no cap is set. Informational: never fails doctor.
+ * `info` when no cap is set; `warn` at the 80% warning, at the cap, for an
+ * unpriced model, an invalid cap or an unreadable ledger. Informational: never
+ * fails doctor.
  */
 export function spendDoctorCheck(opts: {
   env?: NodeJS.ProcessEnv;
@@ -393,40 +545,6 @@ export function spendDoctorCheck(opts: {
   model: string;
   db?: Database;
   now?: number;
-}): SpendDoctorLine | null {
-  const env = opts.env ?? process.env;
-  const cap = parseSpendCap(env);
-  if (cap.kind === "off") return null;
-  if (cap.kind === "invalid") {
-    return {
-      ok: true,
-      mark: "warn",
-      detail: `${SPEND_CAP_ENV} is not a plain USD amount — every provider call is refused until it is fixed or unset (SAFE-8)`,
-    };
-  }
-  let window: SpendWindow;
-  let db: Database | undefined;
-  try {
-    db = opts.db ?? openCorvidinhoDb({ env });
-    window = new SpendLedger(db).window(opts.now ?? Date.now());
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: true, mark: "warn", detail: `spend ledger unreadable: ${scrubSecrets(msg).slice(0, 200)}` };
-  } finally {
-    if (!opts.db) db?.close();
-  }
-  const estimated = window.estimatedCalls
-    ? `, ${window.estimatedCalls} counted at its estimate`
-    : "";
-  const base =
-    `${formatUsd(window.spentMicroUsd)} of ${formatUsd(cap.capMicroUsd)} daily cap used in the last 24h ` +
-    `(${window.calls} provider call(s)${estimated}; ${SPEND_CAP_ENV}, SAFE-8)`;
-  if (!priceForModel(opts.model)) {
-    return {
-      ok: true,
-      mark: "warn",
-      detail: `${base}; model "${scrubSecrets(opts.model)}" has no known price, so provider calls are refused while the cap is set`,
-    };
-  }
-  return { ok: true, mark: "ok", detail: base };
+}): SpendDoctorLine {
+  return formatSpendDoctorLine(readSpendSnapshot(opts));
 }

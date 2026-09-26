@@ -9,6 +9,7 @@
 import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
@@ -134,12 +135,15 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       });
       // AUTONOMY-1/2: a validated ask from the result frame, if any.
       const ask = askFromUnknown(result?.ask);
+      // SAFE-8: the 80% warning, amounts only (validated, percent recomputed).
+      const spendWarning = spendWarningFromUnknown(result?.spendWarning);
       return {
         ok: exitCode === 0,
         sessionId,
         summary,
         exitCode,
         ...(ask ? { ask } : {}),
+        ...(spendWarning ? { spendWarning } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {

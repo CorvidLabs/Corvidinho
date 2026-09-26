@@ -9,6 +9,7 @@ export type {
   HumanAsk,
   HumanAskReason,
   RunTaskOptions,
+  SpendWarning,
   TaskResult,
   VerifyResult,
   VerifyRunner,
@@ -109,9 +110,12 @@ export {
   estimateCallMicroUsd,
   formatUsd,
   MODEL_PRICES_USD_PER_MTOK,
+  createSpendGuard,
   parseSpendCap,
   priceForModel,
+  readSpendSnapshot,
   SPEND_CAP_ENV,
+  SPEND_WARN_PERCENT,
   SPEND_WINDOW_MS,
   SpendCapRefusal,
   spendDoctorCheck,
@@ -123,8 +127,21 @@ export type {
   SpendCap,
   SpendCapOptions,
   SpendDoctorLine,
+  SpendGuard,
+  SpendSnapshot,
   SpendWindow,
 } from "./spend.ts";
+export {
+  formatSpendDoctorLine,
+  formatSpendStatusLine,
+  formatSpendWarningLine,
+  spendCapInvalidAsk,
+  spendCapLedgerAsk,
+  spendCapReachedAsk,
+  spendCapUnpricedAsk,
+  spendPercent,
+  spendWarningFromUnknown,
+} from "./spend-notice.ts";
 
 export {
   describeProjectInstructions,

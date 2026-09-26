@@ -17,6 +17,7 @@ files:
   - src/agent/project-instructions.ts
   - src/agent/events-ndjson.ts
   - src/agent/spend.ts
+  - src/agent/spend-notice.ts
   - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
@@ -25,6 +26,7 @@ files:
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
   - tests/agent.spend.test.ts
+  - tests/agent.spend-ask.test.ts
   - tests/agent.ask.test.ts
 
 db_tables: []
@@ -56,16 +58,26 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
-Daily spend cap (REQ-agent-098, issue #98, SAFE-8 / AUTONOMOUS-8):
+Daily spend cap (REQ-agent-098, issue #98, SAFE-8 as amended / AUTONOMOUS-8):
 `src/agent/spend.ts` exports `SPEND_CAP_ENV`
 (`CORVIDINHO_DAILY_SPEND_CAP_USD`), `SPEND_WINDOW_MS` (rolling 24 h),
-`MODEL_PRICES_USD_PER_MTOK`, `priceForModel`, `parseSpendCap`,
-`costMicroUsd`, `estimateCallMicroUsd`, `formatUsd`, `ensureSpendLedger`,
-`SpendLedger` (`reserve` / `settle` / `window` over the module-owned
-`spend_ledger` table in the shared DB), `SpendCapRefusal`, `withSpendCap`
-(wraps the provider fetch; returns it unchanged when no cap is set) and
-`spendDoctorCheck` (doctor line). `createTaskExecute` wraps its fetch with
-`withSpendCap`.
+`SPEND_WARN_PERCENT` (80), `MODEL_PRICES_USD_PER_MTOK`, `priceForModel`,
+`parseSpendCap`, `costMicroUsd`, `estimateCallMicroUsd`, `formatUsd`,
+`ensureSpendLedger`, `SpendLedger` (`reserve` / `settle` / `window` /
+`noteWarning` over the module-owned `spend_ledger` and `spend_alerts` tables
+in the shared DB), `SpendCapRefusal` (carries a `spend-cap` `HumanAsk`),
+`createSpendGuard` (`{ fetch, finish }`: the capped provider fetch plus the
+hook that turns a stopped call into the attempt's ask), `withSpendCap` (the
+fetch alone; unchanged when no cap is set), `readSpendSnapshot` and
+`spendDoctorCheck` (doctor line). `src/agent/spend-notice.ts` holds the
+pure text: `formatSpendWarningLine`, `spendWarningFromUnknown`, the
+`spendCap*Ask` question builders, `formatSpendDoctorLine`,
+`formatSpendStatusLine` (Discord `/status`) and `spendPercent`.
+`createTaskExecute` builds its fetch with `createSpendGuard`, emits the 80%
+warning as a `Text` event and through `onSpendWarning`, and passes every
+attempt's result through `finish`. `HumanAskReason` gains `spend-cap`;
+`TaskResult` gains optional `spendWarning` (`SpendWarning`: integer
+`spentMicroUsd` / `capMicroUsd` and `percent`).
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
 `loadProjectInstructions`, `renderProjectInstructions`,
@@ -103,9 +115,14 @@ events are unchanged.
 
 No spend cap set means no spend behavior: the fetch is untouched and the DB is
 not opened. With a cap, a provider call is never sent unless its estimate was
-reserved under the cap in one IMMEDIATE transaction; an unpriced model or an
-invalid cap value refuses every call (never counted as free). Money is
-integer micro-USD, rounded up.
+reserved under the cap in one IMMEDIATE transaction. A call that would pass
+the cap, and every call while the model is unpriced, the cap value is invalid
+or the ledger is unavailable, is not sent: the attempt ends with a
+`spend-cap` ask and the run is `blocked` (never `done`, never retried, verify
+skipped) — the runner never spends past the cap and never counts an unpriced
+model as free. The 80% warning is recorded at most once per cap value per
+rolling 24 h across processes (`spend_alerts`, same IMMEDIATE transaction as
+its check). Money is integer micro-USD, rounded up.
 Project instructions come only from the project root (nearest `.git` at or
 above cwd, else cwd), never from a parent directory above it. Each file is
 capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
@@ -148,7 +165,8 @@ model.
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
-| Spend cap set and 24h spend + estimate over it, unpriced model, or invalid cap value | provider call not sent; SpendCapRefusal becomes the task summary (SAFE-8) |
+| Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and how to continue (SAFE-8) |
+| Settled call brings 24h spend to ≥80% of the cap for the first time in 24h | one `Text` warning + `TaskResult.spendWarning`; later calls stay quiet (SAFE-8) |
 | AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
