@@ -369,7 +369,12 @@ The Discord agent spawn SHALL always overwrite `CORVIDINHO_ACTING_DISCORD_USER_I
 (empty when the run has no acting user) and `CORVIDINHO_ACTING_IS_ADMIN`, so a
 value in the bridge's own environment never leaks into a spawned run. Memory
 plugins SHALL read identity only from that env, never from argv
-(REQ-plugins-011).
+(REQ-plugins-011). The spawn SHALL run non-interactive
+(`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1 / CLI-3) and pass only the confirm
+tokens found in the human's message as `CORVIDINHO_ACTING_CONFIRM_TOKENS`
+(SAFE-4). Re-storing an existing memory key SHALL keep the prior content as a
+soft-deleted row (retrievable by ADMIN) rather than overwrite it, so an update
+is never a non-admin forget path (MEMORY-ACL-4).
 
 No Discord slash `/memory` SHALL be invented in this requirement — exposure is
 via `MemoryStore` + memory plugins used by the agent/session path. Categories
@@ -384,7 +389,8 @@ Acceptance Criteria
 - Admin forget soft-deletes with audit fields; refuse path leaks no content.
 - No on-chain memory; no new slash command; no ProcessManager.
 - Bridge opens MemoryStore on shared DB; package version bumped for ship.
-- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one.
+- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries only human-typed confirm tokens.
+- Re-storing a key soft-deletes the prior row instead of overwriting it.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-022
