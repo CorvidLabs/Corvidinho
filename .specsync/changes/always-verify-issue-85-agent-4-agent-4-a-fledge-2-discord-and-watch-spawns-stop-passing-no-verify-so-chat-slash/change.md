@@ -1,6 +1,6 @@
 ---
 id: always-verify-issue-85-agent-4-agent-4-a-fledge-2-discord-and-watch-spawns-stop-passing-no-verify-so-chat-slash
-state: draft
+state: implementing
 type: feature
 base_commit: 8011a5595fe9cbd065a01b98d1829c6ee381fd8a
 ---

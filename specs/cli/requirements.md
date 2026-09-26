@@ -58,16 +58,15 @@ Acceptance Criteria
 
 ### REQ-cli-006
 
-The CLI SHALL expose `task run` with `--no-verify`, optional `--max-retries`, and `--json` TaskResult output so operators and bridges can exercise or skip the prove-before-done gate.
+The CLI SHALL expose `task run` with `--no-verify`, optional `--max-retries`, and `--json` TaskResult output so operators can exercise or skip the prove-before-done gate. `--no-verify` is operator-only: bridges SHALL NOT pass it, and a skipped run that changed files SHALL say `NOT verified` in its summary (AGENT-4).
 
 Acceptance Criteria
-- `corvidinho task run --no-verify --json` exits 0 with verify_skipped.
-- Help documents `task run` and `--no-verify`.
-
+- `corvidinho task run --no-verify --json` exits 0 with verify_skipped and a summary leading with `NOT verified:` (demo stub reports a change).
+- Help documents `task run` and `--no-verify` as operator-only.
 
 ### REQ-cli-007
 
-`corvidinho task run` SHALL drive the prove-before-done loop with an injectable execute path: demo stub when no LLM key is configured; when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is set, OpenAI-compatible execute including the plugin tool loop (tier tool|code) or read-tier chat. `--no-verify` remains for bridge latency. `--json` emits structured result+events for Discord/WATCH callers to parse.
+`corvidinho task run` SHALL drive the prove-before-done loop with an injectable execute path: demo stub when no LLM key is configured; when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is set, OpenAI-compatible execute including the plugin tool loop (tier tool|code) or read-tier chat. `--no-verify` remains an operator escape hatch; Discord/WATCH callers run with the verify gate on. `--json` emits structured result+events for Discord/WATCH callers to parse.
 
 Acceptance Criteria
 - Help still documents task run / --no-verify / --json / --tier.
@@ -117,11 +116,12 @@ Acceptance Criteria
 
 ### REQ-cli-009
 
-The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop. Bridges SHALL keep `--no-verify` available for latency; the verify gate SHALL remain available when not skipped.
+The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop. Bridges SHALL NOT pass `--no-verify`: a bridge run that changed files is held to the same verify gate as `task run` (AGENT-4 / FLEDGE-2).
 
 Acceptance Criteria
 - Help documents `--tier` and LLM env vars (no secrets).
 - task run forwards ToolCall/ToolResult when not `--json`.
+- Discord and WATCH spawn argv contain no `--no-verify`.
 
 ### REQ-cli-010
 
