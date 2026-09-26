@@ -91,6 +91,52 @@
         "cli": "138e0ac388eacce46b1e48b023801273eef2670a7bfeb8df137ee596d80f3b62",
         "plugins": "83bd09e86a33b699f3ff9e4a537faa0ed83ab1aad525c9d5a31714ff9ed79d6d"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790453059,
+      "digest": "39733e4dfb6f55d32586000d07b605a0baae7fc66e1277ee3221990c6a124a63",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9",
+        "title": "Shell-exec plugin with SAFE-3 project-root cwd clamp (PLUGIN-1/2 SAFE-3 issue #83) package 0.0.9",
+        "description": "shell-exec plugin with SAFE-3 project-root cwd clamp (PLUGIN-1/2 SAFE-3 issue #83) package 0.0.9",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/hi-drafts/WATCH-RELIABILITY.md",
+          "package.json",
+          "plugins/shell/",
+          "specs/cli/",
+          "specs/plugins/",
+          "src/plugins/builtins.ts",
+          "src/version.ts",
+          "tests/plugins.list.smoke.test.ts",
+          "tests/shell.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "shell-exec registered as typed dangerous plugin minTier=code (PLUGIN-1/2); pins spawn cwd to project root; refuses cd/pushd targets that lexically escape root including ~ $VAR bare-cd and .. (SAFE-3); SAFE-1 deny in non-interactive without allowlist; happy-path + escape fixture tests green; STATUS/CHANGELOG + package 0.0.9"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "04b9c218be872c6b4a0e2308204f8705a42a1e3ef5383ff8c81beacd7719bbf2",
+        "plugins": "b3ce2b5a19996dfd26182ae1b5326a261524ee658a541ce25e0b01d3ea9e34f9"
+      }
     }
   ],
   "reopenings": []
