@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 55
+version: 57
 status: draft
 files:
   - src/discord/types.ts
@@ -9,6 +9,8 @@ files:
   - src/discord/image-attachments.ts
   - src/discord/memory-inject.ts
   - tests/discord.memory-inject.test.ts
+  - src/discord/identity-inject.ts
+  - tests/discord.identity-inject.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
   - src/identity/index.ts
@@ -73,6 +75,8 @@ files:
   - plugins/discord/index.ts
   - tests/discord.protocol-version.test.ts
   - tests/discord.presence.test.ts
+  - src/discord/ask-ping.ts
+  - tests/discord.ask-ping.test.ts
 
 db_tables: []
 depends_on:
@@ -103,11 +107,33 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
+Questions and owner ping (REQ-discord-044, issue #44, AUTONOMY-1/2):
+`src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
+`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. `AgentSpawnResult`
+gains optional `ask` (validated from the `result` frame); the gateway `reply`
+takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
+users plus the replied-to author); `SchedulerService` takes `owner` and its
+outbound `post` forwards `mentionUserIds`. Schedule owner pings are deduped
+per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey`
+/ `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
+(schema v7, `SCHEMA_VERSION` 7).
+
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
 `workCommitMessage` and `buildWorkPrBody` (REQ-discord-088).
 `AgentSpawnResult.task` carries the run's verify facts from its result frame.
+`WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
+human) never ships a PR (REQ-discord-044).
+
+`identity-inject.ts` formats/enriches the spawn prompt with acting Discord
+user id + resolved display (owner map wins for owner). Gateway fills
+`authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
+`userUsername`). Bridge and slash handlers inject identity before memory.
+
+`ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
+and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
+Final chat reply content remains human text only (DISCORD-3.a).
 
 ## Invariants
 
@@ -182,6 +208,7 @@ No `/memory` slash command.
 
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
+| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: IDENTITY-4 inject; DISCORD-3.a model+plumbing in thinking footer; clean chat body |
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
 | 2026-09-26 | bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral: Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands |
@@ -212,7 +239,9 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared: WATCH durable SessionStore (issue #37 slice 1, SESSION-1..3): WATCH sessions keyed by owner/repo#number persist in the shared SQLite DB (schema v6 watch_sessions) with the same soft TTL as Discord; activity keeps the session, idle past TTL starts fresh, sessions reload on restart; github watch opens the shared DB (in-memory for dry-run without a data dir and tests); topic scrubbed per SAFE-6; turn persistence/replay and summaries stay follow-ups |
 | 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
 | 2026-09-26 | headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord: Headless schedule daemon (issue #108 captured slice CLI-8 / AUTONOMOUS-4): corvidinho daemon ticks schedules without Discord, single-instance lock in the data dir, clean SIGTERM/SIGINT shutdown, JSON-line logs, systemd doc; schedule ticks claim each due run atomically in SQLite so a daemon and a bridge on one data dir never double-fire or clobber each other |
+| 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
 | 2026-09-26 | work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only: /work opens a draft PR from its verified worktree (issue 88, AUTONOMOUS-3, GITHUB-2, GITHUB-5, AGENT-4): after a /work run, only when git-commit, git-push and github-pr-create are allowlisted for non-interactive use, commit and push the talk branch and open a draft PR through the existing git and github plugins with a description built from the real diff and the verify result; otherwise reply plainly why no PR was opened |
 | 2026-09-26 | work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched: /work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD) |
 | 2026-09-26 | discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord: Discord searchable channel STRING+autocomplete for /admin channels add\|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17 |
+

@@ -17,8 +17,14 @@ import { Glob } from "bun";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import {
   isProtectedPath,
+  isSecretPath,
   protectedRefuseMessage,
+  secretRefuseMessage,
 } from "./protectedPaths.ts";
+import {
+  resolveActingIsAdmin,
+  roleSessionActive,
+} from "../../src/plugins/roles.ts";
 import {
   assertExistingFile,
   PathEscapeError,
@@ -117,6 +123,14 @@ export const filesCommands: PluginCommand[] = [
           return { ok: false, error: "missing path", exitCode: 1 };
         }
         const abs = resolveProjectPath(ctx.cwd, pathArg);
+        // ROLES-CHAT-8: community sessions cannot read secret-looking paths.
+        if (
+          roleSessionActive() &&
+          !(await resolveActingIsAdmin()) &&
+          (isSecretPath(pathArg) || isSecretPath(abs))
+        ) {
+          return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
+        }
         assertExistingFile(abs);
         const content = readFileSync(abs, "utf8");
         const data = { path: pathArg, bytes: Buffer.byteLength(content), content };

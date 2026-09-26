@@ -34,6 +34,11 @@ export type GatewayHandlers = {
     channelId: string;
     content: string;
     replyToMessageId?: string;
+    /**
+     * When set, only these users (plus the replied-to author) may be pinged
+     * by this post — used for the AUTONOMY-2 owner ping.
+     */
+    mentionUserIds?: string[];
   }) => Promise<{ messageId: string } | null>;
   /** Progress embeds (DISCORD-3). */
   sendEmbed?: (opts: {
@@ -175,8 +180,17 @@ export async function createLiveGateway(
     commandName: string;
     channelId: string;
     guildId: string | null;
-    user: { id: string };
-    member?: { roles?: { cache?: { keys: () => IterableIterator<string> } } | string[] } | null;
+    user: {
+      id: string;
+      username?: string | null;
+      globalName?: string | null;
+      displayName?: string | null;
+    };
+    member?: {
+      displayName?: string | null;
+      nickname?: string | null;
+      roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+    } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
       getSubcommandGroup?: (required?: boolean) => string | null;
@@ -250,6 +264,13 @@ export async function createLiveGateway(
       channelId: interaction.channelId,
       guildId: interaction.guildId ?? undefined,
       userId: interaction.user.id,
+      userDisplayName:
+        (interaction.member?.displayName ??
+          interaction.member?.nickname ??
+          interaction.user.globalName ??
+          interaction.user.displayName ??
+          undefined)?.trim() || undefined,
+      userUsername: interaction.user.username?.trim() || undefined,
       roleIds,
       options,
       reply: async (opts) => {
@@ -320,6 +341,14 @@ export async function createLiveGateway(
           guildId: message.guildId ?? undefined,
           authorId: message.author.id,
           authorBot: message.author.bot,
+          authorDisplayName:
+            (
+              message.member?.displayName ??
+              message.author.globalName ??
+              message.author.displayName ??
+              undefined
+            )?.trim() || undefined,
+          authorUsername: message.author.username?.trim() || undefined,
           content: message.content ?? "",
           mentionedBot: botUserId
             ? message.mentions.users.has(botUserId)
@@ -364,7 +393,7 @@ export async function createLiveGateway(
   };
 
   // Attach reply helper for bridge
-  handlers.reply = async ({ channelId, content, replyToMessageId }) => {
+  handlers.reply = async ({ channelId, content, replyToMessageId, mentionUserIds }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
@@ -375,6 +404,15 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        ...(mentionUserIds
+          ? {
+              allowedMentions: {
+                parse: [],
+                users: mentionUserIds,
+                repliedUser: true,
+              },
+            }
+          : {}),
       });
       return { messageId: sent.id };
     } catch (err) {

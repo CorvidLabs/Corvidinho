@@ -150,6 +150,62 @@ Acceptance Criteria
 - `progressFromFrame` maps states to planning / working / verifying / done / failed, ToolCall to the current tool, and usage to token totals.
 - Mocked fetch with `usage` over two rounds yields running totals via `onUsage` (no network).
 
+### REQ-agent-117
+
+Autonomous mode SHALL be off until the project enables it in project config
+(AUTONOMOUS-1). `src/autonomous/enabled.ts` SHALL read `<cwd>/fledge.toml` and
+treat autonomous mode as enabled only when the key
+`corvidinho.autonomous.enabled` (table `[corvidinho.autonomous]` or the dotted
+key under `[corvidinho]`) is the literal `true`. A missing file, section or
+key, any other value, an inline table, or a key under a later `[table]` /
+`[[array]]` header SHALL be off.
+
+The task-run tool loop SHALL offer autonomous extras (plugins declaring
+`autonomous: true`, such as `delegate`) only when the session is allowed:
+autonomous mode is enabled for the run's cwd and the delegation depth
+(`CORVIDINHO_DELEGATE_DEPTH`; unset is 0, a malformed value is treated as the
+cap) is below 2. Otherwise they SHALL be absent from the catalog at every tier
+(SAFE-9), and a model naming them SHALL get the REQ-agent-128 refusal. The
+loop SHALL pass its capability tier and abort signal to `runPlugin`.
+
+The delegation core (`src/autonomous/delegate.ts`) SHALL run a worker as
+`task run --non-interactive --tier <t> --output ndjson --task <text>`
+through `buildCorvidinhoArgv` (so a `.ts` bin runs as `bun --no-env-file`), with
+the `--task` value last and never `--no-verify` (REQ-cli-085): a worker keeps
+the project's prove-before-done gate (AGENT-4) and reports its `verified` /
+`verifySkipped` outcome. The worker bin SHALL be `CORVIDINHO_BIN` when set,
+else this checkout's `src/cli.ts`, never the cwd's. The worker tier SHALL be
+the requested tier clamped to the lead's; an omitted tier SHALL mean the
+lead's tier and an unknown tier SHALL be refused. The worker env SHALL be
+the lead's env without `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
+`CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
+provider keys stay), and SHALL force the depth to the lead's depth + 1,
+`CORVIDINHO_LLM_TIER` to the worker tier, `CORVIDINHO_NON_INTERACTIVE=1` and
+`CORVIDINHO_ALLOWLIST` to the lead's effective allowlist, overriding inherited
+values, so a worker never inherits ADMIN or human SAFE-4 confirm tokens. When
+the lead runs in a ROLES-CHAT role session (`CORVIDINHO_ACTING_IS_ADMIN` set)
+the worker env SHALL set `CORVIDINHO_ACTING_IS_ADMIN=0`, making the worker a
+non-ADMIN session with read/chat tools only (ROLES-CHAT-2/3); a lead outside a
+role session (local CLI) SHALL get a worker outside one. At most 2
+workers SHALL run at once and at most 4 SHALL start per lead process; beyond
+that the call is refused, not queued. A worker SHALL be stopped on lead abort
+(AGENT-3), after a 10 minute timeout, or when the lead process exits, and the
+lead SHALL NOT wait on a worker pipe held open by a grandchild beyond a short
+drain after the worker exits. The worker summary returned to the lead SHALL be
+SAFE-6 scrubbed and capped. The depth, tier and fan-out limits are safety
+defaults; draft AUTONOMOUS-10 is not an acceptance criterion and stays left
+for HI capture.
+
+Acceptance Criteria
+- Only `[corvidinho.autonomous] enabled = true` (or the dotted key) turns autonomous mode on; string / number / inline-table / later-table values and a missing file are off; this repo's `fledge.toml` ships off.
+- `buildOpenAiTools` omits `delegate` unless `autonomous: true`, and offers it at code tier only.
+- `createTaskExecute` in a temp project with autonomous enabled at code tier offers `delegate`; a disabled project, tool tier, or depth 2 does not; a model call to a hidden `delegate` is refused, not run.
+- A lead tool loop that calls `delegate` against a fake bin receives the worker summary in the tool message, and the worker's filesChanged join the lead's result.
+- Depth parse fails closed; tier clamp never exceeds the lead; spawn argv uses `bun --no-env-file` with `--task` last and no `--no-verify` flag; forced worker env overrides inherited env; the limiter refuses past 2 concurrent / 4 per run.
+- The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
+- A non-ADMIN role session's catalog leaves out `delegate` even when autonomous mode is allowed; the ADMIN owner's catalog offers it (ROLES-CHAT-2/4).
+- Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
+
 ### REQ-agent-084
 
 When `task run` executes, the execute hook SHALL read `AGENTS.md` and
@@ -215,4 +271,32 @@ receive mutating tools (including files-write/edit).
 
 Acceptance Criteria
 - `tests/roles.chat.gates.test.ts` catalog assertions for non-admin vs admin.
+
+### REQ-agent-044
+
+The tool loop SHALL offer an agent-level `ask-human` tool (argument
+`question`) on tool/code tiers alongside the plugin catalog, and its system
+prompt SHALL tell the model to call it when the task cannot proceed without a
+human choice instead of guessing, inventing acceptance criteria, or claiming
+done (AUTONOMY-1). The call SHALL NOT be dispatched as a plugin: a non-empty
+question SHALL end the execute attempt with `ask: {reason: "clarify",
+question}` and summary `Needs your input: <question>`; an empty question
+SHALL be refused back to the model as a failed tool result.
+
+`runTask` SHALL return state `blocked` (never `done`, verify not run,
+`verifySkipped: true`) with the same `ask` when execute returns one, and SHALL
+emit `StateChanged blocked`. When verification still fails after every retry,
+the result SHALL stay `failed` (AGENT-4) and SHALL carry `ask: {reason:
+"stuck", question}` with the question appended to the summary (AUTONOMY-2).
+`TaskResult.ask` rides the existing `--json` / NDJSON `result`; `blocked` is a
+valid NDJSON StateChanged value. The change is additive and the wire protocol
+stays 2.
+
+Acceptance Criteria
+- ask-human is in the provider tool list on tool/code tiers, once, and never on the read tier.
+- Calling ask-human ends the run with state `blocked`, `ask.reason` `clarify`, and no plugin dispatch.
+- An empty question is refused to the model and the loop continues.
+- Questions are trimmed, control characters dropped, capped at 1500 chars.
+- Verify exhaustion stays `failed` and carries a `stuck` ask.
+- `task run` text prints the question; `--json` / ndjson carry `result.ask`; blocked exits 0.
 

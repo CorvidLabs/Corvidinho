@@ -506,7 +506,13 @@ describe("Discord spawn client passes verify facts through (REQ-discord-088)", (
       sessionId: "s",
       cwd: dir,
     });
-    expect(res.task).toEqual({ verified: true, verifySkipped: false, state: "done" });
+    expect(res.task).toEqual({
+      verified: true,
+      verifySkipped: false,
+      state: "done",
+      attempts: 1,
+      cancelled: false,
+    });
   });
 });
 

@@ -22,7 +22,10 @@
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
-import { summarizeTaskResult, summarizeTaskRunOutput } from "./task-summary.ts";
+import {
+  chatBodyFromTaskResult,
+  chatBodyFromTaskRunOutput,
+} from "./task-summary.ts";
 import type {
   AgentEvent,
   AgentState,
@@ -314,6 +317,7 @@ const STATES: ReadonlySet<string> = new Set<AgentState>([
   "verifying",
   "done",
   "failed",
+  "blocked",
 ]);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -609,6 +613,7 @@ const STATE_LABELS: Record<AgentState, string> = {
   verifying: "verifying",
   done: "done",
   failed: "failed",
+  blocked: "needs input",
 };
 
 /** Map one frame to a status update; null for frames that change nothing shown. */
@@ -682,12 +687,13 @@ export async function collectTaskRunStream(opts: {
     opts.stderr ? new Response(opts.stderr).text() : Promise.resolve(""),
     opts.exited,
   ]);
-  const fromResult = streamed.result ? summarizeTaskResult(streamed.result) : "";
+  // DISCORD-3.a: summary is human chat body only (no state=/verified= plumbing).
+  const fromResult = streamed.result ? chatBodyFromTaskResult(streamed.result) : "";
   const summary =
     fromResult ||
     (streamed.protocolMismatch !== undefined
       ? protocolMismatchSummary(streamed.protocolMismatch, expected)
-      : summarizeTaskRunOutput(streamed.otherText, stderr, exitCode));
+      : chatBodyFromTaskRunOutput(streamed.otherText, stderr, exitCode));
   const out: TaskRunStreamOutcome = {
     exitCode,
     summary,

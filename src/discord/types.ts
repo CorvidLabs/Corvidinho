@@ -6,6 +6,7 @@
  * protocol lockstep (DISCORD-10).
  */
 
+import type { HumanAsk } from "../agent/types.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 
@@ -29,6 +30,10 @@ export type InboundMessage = {
   guildId?: string;
   authorId: string;
   authorBot: boolean;
+  /** Discord display name (globalName / displayName) when known — IDENTITY-4. */
+  authorDisplayName?: string;
+  /** Discord username (handle) when known — IDENTITY-4. */
+  authorUsername?: string;
   content: string;
   /** True when the bot user is @mentioned. */
   mentionedBot: boolean;
@@ -116,11 +121,19 @@ export type AgentSpawnResult = {
   sessionId: string;
   summary: string;
   exitCode: number;
+  /** The run needs a human (AUTONOMY-1/2): question + owner ping. */
+  ask?: HumanAsk;
   /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).
    */
-  task?: { verified: boolean; verifySkipped: boolean; state?: string };
+  task?: {
+    verified: boolean;
+    verifySkipped: boolean;
+    state?: string;
+    attempts?: number;
+    cancelled?: boolean;
+  };
 };
 
 export const NOT_AUTHORIZED = "not authorized";

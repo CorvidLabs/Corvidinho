@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44",
+  "implementation_commit": "beed94fa09135d9d3411a2eaca7e5256994646cb",
+  "implementation_tree": "b3610fa6497feef878dbab4feff6c4222de4c23f",
+  "contract_digest": "a1992cc875f3c85a37d07273720c47e6ebffb8042d7b492374d3fb425710ad56",
+  "workspace_digest": "f79cb189ade8b0e1e83d76d10c9027a0787ed016311f60b9537657792f55ddbe",
+  "closing_digest": "af93c6e80ecb1a9c03a7e7b5e7610ab143fe97b9e5dcf5566ce0ea30cca16c7a",
+  "review_digest": "f730c70c9b56ebf41f075e8999240a5f8cc241cb145d6194e698c392715de57b",
+  "finalization_digest": "be2daf381f656a825db05fd092c5895787d3bb36c51a8db75a1e3569ad0ce702",
+  "timestamp": 1790458797
+}

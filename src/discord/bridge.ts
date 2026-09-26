@@ -11,6 +11,8 @@
  * DISCORD-12: presence/custom status shows shared package version.
  * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
+ * AUTONOMY-1/2: a run that needs a human replies with its question and
+ * pings the configured owner (ask-ping.ts).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -18,6 +20,7 @@ import {
   createEchoAgentClient,
   createSpawnAgentClient,
 } from "./agent-client.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
 import {
   goLiveChecklist,
   loadBridgeConfig,
@@ -30,7 +33,10 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import { enrichPromptWithImages } from "./image-attachments.ts";
+import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
+import { formatTaskPlumbing } from "../agent/task-summary.ts";
+import { loadLlmEnv } from "../agent/execute.ts";
 import { routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
@@ -358,6 +364,21 @@ export async function startBridge(
         { messageId: msg.id },
       );
 
+      // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
+      const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+        userId: msg.authorId,
+        displayName: msg.authorDisplayName,
+        username: msg.authorUsername,
+        owner: config.owner ?? null,
+      });
+      if (idInject.injected) {
+        console.log(
+          `[discord] identity inject: user ${msg.authorId}` +
+            (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
+        );
+        enrichedPrompt = idInject.prompt;
+      }
+
       // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
       const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
         ownerUserId: msg.authorId,
@@ -370,12 +391,14 @@ export async function startBridge(
       }
 
       const outbound = resolveOutbound();
+      const llmModel = loadLlmEnv(process.env).model;
 
       const thinking = new ThinkingStatus({
         outbound,
         channelId,
         replyToMessageId: msg.id,
         sessionId: session.id,
+        model: llmModel,
         debounceMs: opts.thinkingDebounceMs,
         tickMs: opts.thinkingTickMs,
       });
@@ -436,21 +459,49 @@ export async function startBridge(
         throw err;
       }
 
-      if (result.ok) {
-        await thinking.done("✅ Done");
+      const plumbing = result.task
+        ? formatTaskPlumbing({
+            state: result.task.state,
+            verified: result.task.verified,
+            verifySkipped: result.task.verifySkipped,
+            attempts: result.task.attempts,
+            cancelled: result.task.cancelled,
+          })
+        : undefined;
+      const thinkExtras = { plumbing, model: llmModel };
+      // AUTONOMY-1/2: needs a human → question to the requester + owner ping.
+      const ask = result.ask
+        ? formatAskReply({
+            ask: result.ask,
+            owner: config.owner,
+            context: result.summary,
+            replyHint: true,
+          })
+        : null;
+      if (ask) {
+        await (ask.failed
+          ? thinking.fail(ask.status, thinkExtras)
+          : thinking.done(ask.status, thinkExtras));
+        if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
+      } else if (result.ok) {
+        await thinking.done("✅ Done", thinkExtras);
       } else {
-        await thinking.fail(`❌ exit ${result.exitCode}`);
+        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
       }
 
-      const body = result.ok
-        ? result.summary.slice(0, 1800)
-        : `session ${session.id} failed (exit ${result.exitCode})`;
+      // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
+      const body = ask
+        ? ask.content
+        : result.ok
+          ? result.summary.slice(0, 1800)
+          : `session ${session.id} failed (exit ${result.exitCode})`;
 
       if (replyRef.fn) {
         const sent = await replyRef.fn({
           channelId,
           content: body,
           replyToMessageId: msg.id,
+          ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
         });
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
@@ -501,10 +552,11 @@ export async function startBridge(
       allowlist: config.allowlist,
       pollIntervalMs: opts.schedulerPollIntervalMs,
       defaultProjectRoot: config.projectRoot,
+      owner: config.owner ?? null,
       outbound: {
-        post: async ({ channelId, content }) => {
+        post: async ({ channelId, content, mentionUserIds }) => {
           if (replyRef.fn) {
-            await replyRef.fn({ channelId, content });
+            await replyRef.fn({ channelId, content, mentionUserIds });
           }
         },
       },
