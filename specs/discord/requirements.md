@@ -927,7 +927,6 @@ Acceptance Criteria
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
 
-<<<<<<< HEAD
 ### REQ-discord-253
 
 The GITHUB-6 repo gate the `/work` draft-PR step (REQ-discord-088) applies to
@@ -941,7 +940,7 @@ verify or PR call. No new env var, config key, slash command or option.
 Acceptance Criteria
 - File deny + env allow: the `/work` PR step says `not opened` with the GITHUB-6 denial, calls no plugin and pushes nothing.
 - File-only allow: the `/work` PR step opens the draft PR (dry run in tests).
-=======
+
 ### REQ-discord-047
 
 When the bridge posts a button ask (Choose stub + components), it SHALL NOT leave a
@@ -967,5 +966,5 @@ Acceptance Criteria
 - Mention success: progress message becomes the answer body when collapse succeeds.
 - Button pick success: stub (reused as thinking) becomes the answer when collapse succeeds.
 - Fallback preserves Done embed + separate reply when editMessage is unavailable.
->>>>>>> b12eb02 (feat(discord): ASK-6/7 collapse thinking into Choose stub / final answer (v0.0.23))
+
 
