@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790464406,
+      "digest": "639945086ecbf37d6933047955a189c055783452b0488d5a8f964b9255540ac0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22",
+        "title": "DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22",
+        "description": "DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "hi",
+          "package.json",
+          "src/agent",
+          "src/discord",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "DISCORD-ASK-1..5: asks with 2+ options post Choose stub + ephemeral buttons (TTL ~30m, late press expired); free-text when no options; SESSION-MULTI-1..4: per-user sessions, buttons survive chat, multi-user independence; package 0.0.22; fixture tests green; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "5892578f753241cdb7b8254e7657c4425a08fae18295f5927e5cdd26cf12ba0c",
+        "discord": "2d3a9970abb4d31c9a169a1b27273e8f1d45a2a6e9d449f38f74722307ec1c06"
+      }
+    }
+  ],
+  "reopenings": []
+}

@@ -110,6 +110,8 @@ After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced
 
 ### Questions and owner ping (AUTONOMY-1/2)
 
+When choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..5). Buttons expire after ~30 minutes. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
+
 When a run needs a human, the reply is a question instead of a summary. Two cases:
 
 - **Clarify** — the agent called its `ask-human` tool (the task cannot go on without a human choice). The run ends in state `blocked` (never `done`, verify not run).

@@ -795,19 +795,57 @@ Amend: clarify asks SHALL mention the requester Discord id
 the configured owner (AUTONOMY-2/4). When the requester is the owner, clarify
 naturally pings the owner.
 
-Sessions SHALL persist `pendingAsk` (schema v8 `pending_ask`). While set,
-a thin-ack continue SHALL restate the ask via `formatAskReply` and SHALL NOT
-spawn the agent to done (AUTONOMY-5). An explicit cancel clears pending ask
-(AUTONOMY-6). A substantive continue clears pending and runs the agent with
-prior-question context.
+Sessions SHALL persist `pendingAsk` (schema v8 `pending_ask`, including
+`askId` / `expiresAt` / optional `options`). While set, a thin-ack continue
+SHALL restate the ask (stub+Choose when options; `formatAskReply` when
+free-text) and SHALL NOT spawn the agent to done (AUTONOMY-5). An explicit
+cancel clears pending ask (AUTONOMY-6). For free-text pending (no options),
+a substantive continue clears pending and runs the agent with prior-question
+context. For button pending (has options), ordinary chat SHALL continue the
+conversation WITHOUT clearing pending (SESSION-MULTI-3 / DISCORD-ASK); only
+button pick, cancel, or expiry clears it.
 
-The discord spec `files:` list SHALL include `src/discord/thin-ack.ts` and `tests/discord.thin-ack.test.ts`.
+The discord spec `files:` list SHALL include `src/discord/thin-ack.ts`,
+`tests/discord.thin-ack.test.ts`, `src/discord/ask-buttons.ts`,
+`src/agent/ask-options.ts`, `tests/discord.ask-buttons.test.ts`, and
+`tests/discord.ask-ephemeral.test.ts`.
 
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack on blocked session restates question; pendingAsk remains.
 - Cancel clears pendingAsk with a short ack.
-- Substantive continue runs agent; prior question is in the prompt context.
+- Free-text substantive continue runs agent; prior question is in the prompt context.
+- Button pending survives unrelated chat turns until pick/cancel/expiry.
+
+### REQ-discord-045
+
+When an ask has two or more options (from ask-human `options` or a numbered
+list parsed from the question), the bridge SHALL post a short public Choose
+stub (no MCQ body) with a button, and on requester press SHALL reply with an
+ephemeral interaction listing the option buttons (DISCORD-ASK-1..3). Button
+prompts SHALL expire after about 30 minutes; a late press SHALL get a short
+"that choice expired" (DISCORD-ASK-5). Free-text clarify SHALL be used only
+when options cannot be listed (DISCORD-ASK-4).
+
+Acceptance Criteria
+- Structured or numbered options → stub + components; ephemeral open shows choices.
+- Pick resumes the requester session with the chosen label; no public reply required.
+- Expired press returns ASK_CHOICE_EXPIRED and clears pending.
+- Question without listable options keeps the free-text ask-ping path.
+
+### REQ-discord-046
+
+Concurrent users in one channel SHALL each have their own session keyed by
+Discord user id (+ channel / thread) (SESSION-MULTI-1). Reply-to-bot and
+thread continue SHALL only resume when the message author owns that session.
+Other users talking while one has an open button ask SHALL not share history
+or invalidate the other's buttons (SESSION-MULTI-2). Memory inject remains
+scoped to the acting Discord user (SESSION-MULTI-4 / IDENTITY-4).
+
+Acceptance Criteria
+- Two @mentions from different users in one channel yield two session ids.
+- A non-owner reply to another user's bot message does not continue that session.
+- Same user @mention reuses their active session in the channel.
 
 ### REQ-discord-203
 

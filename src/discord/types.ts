@@ -7,6 +7,7 @@
  */
 
 import type { HumanAsk } from "../agent/types.ts";
+import type { PendingAsk } from "./ask-buttons.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 
@@ -64,10 +65,11 @@ export type SessionStub = {
   /** active | parked | removed */
   worktreeState?: "active" | "parked" | "removed";
   /**
-   * Pending human ask while the session is blocked (AUTONOMY-5/6).
-   * Cleared on substantive continue or explicit cancel.
+   * Pending human ask while the session is blocked (AUTONOMY-5/6 / DISCORD-ASK).
+   * Cleared on button pick, free-text answer (no options), explicit cancel, or expiry.
+   * Button asks are NOT cleared by ordinary chat (SESSION-MULTI-3).
    */
-  pendingAsk?: HumanAsk | null;
+  pendingAsk?: PendingAsk | null;
   createdAt: number;
   lastActivityAt: number;
 };
