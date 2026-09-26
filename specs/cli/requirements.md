@@ -94,3 +94,10 @@ Acceptance Criteria
 - The CLI output is exactly the markdown footer followed by a newline.
 - The command exits with status 0.
 
+### REQ-cli-watch-001
+
+The CLI SHALL expose `corvidinho github watch` to start the poll loop and SHALL surface go-live checklist text on clean failure without printing secrets.
+
+Acceptance Criteria
+- Help lists `github watch`; missing token exits non-zero with checklist.
+

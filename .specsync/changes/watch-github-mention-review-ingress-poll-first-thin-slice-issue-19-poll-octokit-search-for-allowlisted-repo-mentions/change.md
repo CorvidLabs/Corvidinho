@@ -1,6 +1,6 @@
 ---
 id: watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions
-state: approved
+state: implementing
 type: feature
 base_commit: 9095c9e96aa26d8198d6a4a0c2fd33e0c4611acf
 ---

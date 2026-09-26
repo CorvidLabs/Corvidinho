@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790442390,
+      "commit": "130ab04ba7888496831d34dbaab461b4de019a26",
+      "contract_digest": "e9a4e5123c2bf9f4ae68a97542dcc28ec8fc28805bf6c44741488e095d038370",
+      "execution_digest": "b2c290518e87490508dd337af1db862d9dc7bc0b0caa05e4f0baa7daaa72a00b",
+      "workspace_digest": "9f03b698e1ba5f71c984ddec609d14545f2df1cc20ef165b8040ace0bc2eff56",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-watch-001",
+        "REQ-watch-001",
+        "REQ-watch-002",
+        "REQ-watch-003",
+        "REQ-watch-004",
+        "REQ-watch-005"
+      ]
+    }
+  ]
+}
