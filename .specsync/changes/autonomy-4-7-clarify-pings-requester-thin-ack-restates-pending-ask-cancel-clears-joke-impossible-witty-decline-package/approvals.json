@@ -39,6 +39,46 @@
         "agent": "10175117c84bcc503ddc16f898a08c1fca7f48747e07b3a094116d0820d69836",
         "discord": "d03cfd6e1d9ecbb5f3a9579297a06d1e58a0ec14589999850a59d126b1d6fcf3"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790462789,
+      "digest": "e0a6643622d78eafd9a7e0a7265fbe3ee0373a613cd02b54acb40e988d440932",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package",
+        "title": "AUTONOMY-4..7 clarify pings requester, thin-ack restates pending ask, cancel clears, joke/impossible witty decline; package 0.0.20",
+        "description": "AUTONOMY-4..7 clarify pings requester, thin-ack restates pending ask, cancel clears, joke/impossible witty decline; package 0.0.20",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "src/agent",
+          "src/discord",
+          "src/scheduler",
+          "src/store",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AUTONOMY-4: formatAskReply clarify pings requesterDiscordId (owner only when stuck or requester===owner); AUTONOMY-5/6: session.pendingAsk persisted; thin ack restates ask without clearing blocked or running agent to done; cancel clears pending; substantive continue answers; AUTONOMY-7: ASK_AGENT_SYSTEM_INSTRUCTIONS covers joke/impossible witty decline; package 0.0.20; fixture tests for ping targets, thin-ack restate, cancel clear; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "10175117c84bcc503ddc16f898a08c1fca7f48747e07b3a094116d0820d69836",
+        "discord": "f0187f92e95f6dfcdf8a9172b9889579a14627fdcb8a28f93c0cfae7239b9732"
+      }
     }
   ],
   "reopenings": []
