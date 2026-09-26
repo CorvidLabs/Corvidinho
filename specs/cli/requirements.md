@@ -74,3 +74,23 @@ Acceptance Criteria
 - `corvidinho discord bridge` without token exits non-zero with clean explanation.
 - Help documents `discord bridge` and Discord env/allowlist vars.
 
+
+### REQ-cli-1
+
+The CLI SHALL export canonical markdown and plain attribution footers that link
+to the Corvidinho repository and contain no account handles.
+
+Acceptance Criteria
+
+- The markdown and plain strings match the canonical repository URL exactly.
+- Unit tests assert that neither string contains an `@` character.
+
+### REQ-cli-2
+
+`corvidinho attribution` SHALL print the canonical markdown footer and exit 0.
+
+Acceptance Criteria
+
+- The CLI output is exactly the markdown footer followed by a newline.
+- The command exits with status 0.
+

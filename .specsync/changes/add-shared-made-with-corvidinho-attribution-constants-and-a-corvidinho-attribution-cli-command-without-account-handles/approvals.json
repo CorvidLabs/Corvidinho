@@ -1,0 +1,153 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438877,
+      "digest": "c2a33f36884bc3e3b54fcbae2cfe347b09e71ddede23c474470d066577108b66",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles",
+        "title": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "description": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "kind": "feature",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "specs/cli/cli.spec.md",
+          "src/attribution.ts",
+          "src/cli.ts",
+          "tests/attribution.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Shared markdown and plain attribution constants are exported; the attribution text contains no @ characters; corvidinho attribution prints the markdown footer and exits 0; unit tests cover both forms and CLI output; CLI spec documents the command; bun test, bunx tsc --noEmit, and specsync check --spec cli pass."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "bad8afff29dd0bd6b1f5f6cfdfe46b8ff519c4ea5e257568d611256bc29deb82"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438921,
+      "digest": "c2a33f36884bc3e3b54fcbae2cfe347b09e71ddede23c474470d066577108b66",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles",
+        "title": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "description": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "kind": "feature",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "specs/cli/cli.spec.md",
+          "src/attribution.ts",
+          "src/cli.ts",
+          "tests/attribution.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Shared markdown and plain attribution constants are exported; the attribution text contains no @ characters; corvidinho attribution prints the markdown footer and exits 0; unit tests cover both forms and CLI output; CLI spec documents the command; bun test, bunx tsc --noEmit, and specsync check --spec cli pass."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "9ff62a685087949dd5f6d412b524de3919ff5308c43c49c95f233596040e1e3a"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438926,
+      "digest": "c2a33f36884bc3e3b54fcbae2cfe347b09e71ddede23c474470d066577108b66",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles",
+        "title": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "description": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "kind": "feature",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "specs/cli/cli.spec.md",
+          "src/attribution.ts",
+          "src/cli.ts",
+          "tests/attribution.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Shared markdown and plain attribution constants are exported; the attribution text contains no @ characters; corvidinho attribution prints the markdown footer and exits 0; unit tests cover both forms and CLI output; CLI spec documents the command; bun test, bunx tsc --noEmit, and specsync check --spec cli pass."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "adb8b4de0fafc806bb6eb151e2e75cbc242589e66b117ab590ad94fa5d5df301"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790439006,
+      "digest": "c2a33f36884bc3e3b54fcbae2cfe347b09e71ddede23c474470d066577108b66",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles",
+        "title": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "description": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
+        "kind": "feature",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "specs/cli/cli.spec.md",
+          "src/attribution.ts",
+          "src/cli.ts",
+          "tests/attribution.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Shared markdown and plain attribution constants are exported; the attribution text contains no @ characters; corvidinho attribution prints the markdown footer and exits 0; unit tests cover both forms and CLI output; CLI spec documents the command; bun test, bunx tsc --noEmit, and specsync check --spec cli pass."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "eadf58552ec47b0cb4a9dec2a60331ed44669b4c0292c5b71f98b0fbb1f6dcf6"
+      }
+    }
+  ],
+  "reopenings": []
+}
