@@ -1,6 +1,6 @@
 ---
 id: cover-specsync-audit-paths-for-discord-deny-polish-leftovers-index-exports-discord-go-live-link-admin-reauth-and-rate
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 5c4dc52158e5480b1efdf99dbab7891c0ba9bce8
 ---

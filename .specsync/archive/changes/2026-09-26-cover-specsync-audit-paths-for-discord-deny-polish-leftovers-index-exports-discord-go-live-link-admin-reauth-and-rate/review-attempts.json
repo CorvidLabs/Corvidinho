@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-specsync-audit-paths-for-discord-deny-polish-leftovers-index-exports-discord-go-live-link-admin-reauth-and-rate",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "12aadf7ffc0bf298103dcbea2b8f49ec6045d834",
+      "contract_digest": "f7f3a34efd922e0a57ffc18b6a5e14958a4df852de667240c650588aa332dcb6",
+      "execution_digest": "7797f4b472476ab019e59b2a2bd73d41499cdccddca5caf30b48c3f251043053",
+      "workspace_digest": "889d2df559a5eba6a6c08c75710646ade2b634c873148be86075a079e75514bd",
+      "timestamp": 1790446047
+    }
+  ]
+}

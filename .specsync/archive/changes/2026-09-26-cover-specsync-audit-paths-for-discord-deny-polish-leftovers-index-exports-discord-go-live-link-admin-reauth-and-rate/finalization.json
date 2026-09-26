@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-specsync-audit-paths-for-discord-deny-polish-leftovers-index-exports-discord-go-live-link-admin-reauth-and-rate",
+  "implementation_commit": "12aadf7ffc0bf298103dcbea2b8f49ec6045d834",
+  "implementation_tree": "f6a86c565b05e4a14f172b0956fcc898ac223896",
+  "contract_digest": "f7f3a34efd922e0a57ffc18b6a5e14958a4df852de667240c650588aa332dcb6",
+  "workspace_digest": "889d2df559a5eba6a6c08c75710646ade2b634c873148be86075a079e75514bd",
+  "closing_digest": "bf8d4487be296d2feb3110c9936ffd7cf5fbbd6b261e87c5558cdcfeb682e3b9",
+  "review_digest": "e2b9948a01e0fa81df52fd5f4f6f394adaf314e744eef6aca0c78a8f1884d17b",
+  "finalization_digest": "0362ab72a357d8b07f1056b0c583707f01ed51f7c2d58cb11d71aabc656ae4a1",
+  "timestamp": 1790446050
+}
