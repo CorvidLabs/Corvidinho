@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 35
+version: 37
 status: draft
 files:
   - src/discord/types.ts
@@ -9,6 +9,10 @@ files:
   - src/discord/image-attachments.ts
   - src/discord/permissions.ts
   - src/discord/session-store.ts
+  - src/store/db.ts
+  - src/store/index.ts
+  - src/store/paths.ts
+  - src/store/session-ttl.ts
   - src/discord/work-store.ts
   - src/discord/message-router.ts
   - src/discord/agent-client.ts
@@ -51,6 +55,7 @@ protocol-version lockstep, presence version under the bot name, and allowlist de
 ## Public API
 
 loadBridgeConfig, startBridge, routeMessage, SessionStore, WorkStore,
+shared store helpers (resolveDataDir, openCorvidinhoDb, resolveSessionTtlMs; src/store/),
 goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, ALLOWLIST_DENY_TIP, EPHEMERAL_SILENT_ACK, RATE_LIMITED,
 MUTED, PermissionLevel, resolvePermissionLevel, checkRateLimit, muteUser,
 unmuteUser, isMuted, evaluateRequesterCanSend, agent/gateway helpers,
@@ -75,7 +80,8 @@ unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agen
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
 ClientReady sets short Custom Status from shared package version (DISCORD-12);
-outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3).
+outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
+SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019).
 
 ## Behavioral Examples
 
@@ -109,3 +115,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src: Discord presence/custom status shows shared package version on ClientReady (DISCORD-12); fixture test; no slash/allowlist churn |
 
 | 2026-09-26 | discord-deny-polish-discord-deny-1-3-messagecreate-unauthorized-silent-slash-admin-ephemeral-allowlist-tip-non-admin: DISCORD-DENY-1..3 silent MessageCreate + slash admin tip / non-admin zero-width; docs/discord.md |
+| 2026-09-26 | session-durable-store: Discord SessionStore/WorkStore SQLite durability + soft TTL (SESSION-1..4 / REQ-discord-019); shared store module; no MEMORY ACL /schedule |
+| 2026-09-26 | session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho: SESSION durable store: Discord SessionStore (+ WorkStore) survive restarts via local SQLite under ~/.local/share/corvidinho/ (align MEMORY #41 path); soft TTL 30-60m keep-alive on activity; idle/stale → fresh session (SESSION-1..4); no ProcessManager; no /schedule; no MEMORY ACL |

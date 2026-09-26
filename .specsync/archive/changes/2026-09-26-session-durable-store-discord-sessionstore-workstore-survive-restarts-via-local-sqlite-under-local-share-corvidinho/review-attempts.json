@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "32c03d421241b0cd32d720590d2390cef5ef0a61",
+      "contract_digest": "8c7a48e8fa461f2de05efd8809698822465fef7ba795c9ae4d629f58877a44a3",
+      "execution_digest": "244cc02fc8e884c13d1146f6a9c468b328355c6928346ea5058376d11b1fff71",
+      "workspace_digest": "1b6634a382c60f1d3b5abf883cf367dd7ea500c12ef3c3c5300dd20ac13e05f3",
+      "timestamp": 1790447232
+    },
+    {
+      "schema_version": 2,
+      "change_id": "session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "028c40793d75e1288b5f0b0121ed64afe60880e2",
+      "contract_digest": "8c7a48e8fa461f2de05efd8809698822465fef7ba795c9ae4d629f58877a44a3",
+      "execution_digest": "6be569d6d43dc5b94c28d7422cdf9c9d3c17c0d4b4d2ba62fabc86383049c453",
+      "workspace_digest": "46736ae4d9470c702f94590a080449f52f45d9ff5e2218730d0f303d1c697471",
+      "timestamp": 1790447268
+    }
+  ]
+}

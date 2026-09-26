@@ -41,7 +41,7 @@ the script never prints them.
 
 ## After update
 
-- Sessions are **in-memory**; restart clears them (durable session DB is a separate ask).
+- Sessions/work stubs persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. MEMORY ACL / schedules still separate.
 - Confirm with Discord `/status` (ephemeral): version, uptime, LLM mode, git tip.
 
 ## Releases

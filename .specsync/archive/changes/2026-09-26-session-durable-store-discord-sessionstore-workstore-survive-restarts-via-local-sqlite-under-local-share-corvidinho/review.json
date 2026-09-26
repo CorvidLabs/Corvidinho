@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "028c40793d75e1288b5f0b0121ed64afe60880e2",
+  "contract_digest": "8c7a48e8fa461f2de05efd8809698822465fef7ba795c9ae4d629f58877a44a3",
+  "execution_digest": "6be569d6d43dc5b94c28d7422cdf9c9d3c17c0d4b4d2ba62fabc86383049c453",
+  "workspace_digest": "46736ae4d9470c702f94590a080449f52f45d9ff5e2218730d0f303d1c697471",
+  "timestamp": 1790447268
+}
