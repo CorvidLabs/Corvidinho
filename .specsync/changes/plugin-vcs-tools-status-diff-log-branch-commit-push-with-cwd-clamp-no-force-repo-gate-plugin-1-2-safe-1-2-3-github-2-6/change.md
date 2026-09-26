@@ -1,6 +1,6 @@
 ---
 id: plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6
-state: approved
+state: implementing
 type: feature
 base_commit: a49987d653499f40af938f26961c98e017c7777b
 ---

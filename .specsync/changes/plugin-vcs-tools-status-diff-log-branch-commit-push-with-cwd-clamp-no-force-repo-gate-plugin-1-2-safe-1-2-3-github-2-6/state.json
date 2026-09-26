@@ -7,10 +7,11 @@
   "title": "PLUGIN vcs tools: status diff log branch commit push with cwd clamp, no force, repo gate (PLUGIN-1/2 SAFE-1/2/3 GITHUB-2/6 issue 82)",
   "description": "PLUGIN vcs tools: status diff log branch commit push with cwd clamp, no force, repo gate (PLUGIN-1/2 SAFE-1/2/3 GITHUB-2/6 issue 82)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "a49987d653499f40af938f26961c98e017c7777b",
   "created_at": 1790453168,
-  "updated_at": 1790453269,
+  "updated_at": 1790453779,
   "affected_specs": [
     "plugins"
   ],
