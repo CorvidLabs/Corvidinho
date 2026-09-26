@@ -41,3 +41,5 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 - `tests/discord.presence.test.ts` — `formatPresenceVersionString` +
   `buildVersionPresenceActivity` Custom type/state from shared VERSION
   (no live token).
+
+REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.test.ts` cover SQLite persist/reload and soft TTL without live Discord.

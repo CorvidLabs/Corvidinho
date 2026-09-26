@@ -43,6 +43,8 @@ import {
 } from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
+import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 
 export type StartBridgeResult =
@@ -82,6 +84,17 @@ export type StartBridgeOptions = {
   /** Override bridge startedAt (tests). */
   startedAt?: number;
   version?: string;
+  /**
+   * Shared SQLite DB for SessionStore/WorkStore (REQ-discord-019).
+   * When omitted, opens the default Corvidinho DB (or :memory: when dryRun
+   * and CORVIDINHO_SESSION_MEMORY=1 for tests).
+   */
+  db?: Database;
+  /** Soft TTL override (tests). */
+  sessionTtlMs?: number;
+  /** Inject stores (tests); when set, skips DB open. */
+  sessionStore?: SessionStore;
+  workStore?: WorkStore;
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
@@ -137,8 +150,22 @@ export async function startBridge(
   }
 
   const config = loaded.config;
-  const store = new SessionStore();
-  const workStore = new WorkStore();
+  const env = opts.env ?? process.env;
+  const db =
+    opts.db ??
+    (opts.sessionStore || opts.workStore
+      ? undefined
+      : openCorvidinhoDb(
+          // dry-run without explicit data dir stays in-memory so tests do not
+          // touch ~/.local/share/corvidinho; set CORVIDINHO_DATA_DIR to exercise file DB.
+          config.dryRun && !env.CORVIDINHO_DATA_DIR?.trim()
+            ? { memory: true }
+            : { env },
+        ));
+  const ttlMs = opts.sessionTtlMs ?? resolveSessionTtlMs(env);
+  const store =
+    opts.sessionStore ?? new SessionStore({ db, ttlMs });
+  const workStore = opts.workStore ?? new WorkStore({ db });
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
