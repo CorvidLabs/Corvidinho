@@ -1,0 +1,54 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790448528,
+      "digest": "f77353d4bd95e9a50dfcba4d40098a3a5985747a0ab51b7b72634ccf94f92f0a",
+      "note": "cover leftover MEMORY audit paths",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-leftover-memory-acl-fixture-and-acting-user-wire-paths-for-specsync-audit-after-memory-sqlite-acl-archive-session",
+        "title": "Cover leftover MEMORY ACL fixture and acting-user wire paths for SpecSync audit after memory-sqlite-acl archive (session/work handlers, slash-types, scheduler actingUser, memory tests, version 0.0.4 fixtures)",
+        "description": "cover leftover MEMORY ACL fixture and acting-user wire paths for SpecSync audit after memory-sqlite-acl archive (session/work handlers, slash-types, scheduler actingUser, memory tests, version 0.0.4 fixtures)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/slash-types.ts",
+          "src/scheduler/service.ts",
+          "tests/discord.presence.test.ts",
+          "tests/memory.plugins.test.ts",
+          "tests/memory.store.test.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Cover leftover MEMORY #41/#59 ship paths for SpecSync change audit after archive tip; no module AC change beyond REQ-discord-021 / REQ-plugins-010 / REQ-cli-011 already archived",
+        "acceptance_criteria": [
+          "SpecSync change audit covers leftover MEMORY ship paths (session/work handlers, slash-types, scheduler actingUser env, memory*.test.ts, version/update-helpers 0.0.4 fixtures); no new HI; fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790448539,
+      "digest": "600a2288e5ee9e9e2d2b30e1fb3a2665455fc73fc9953f14e3d73aa3649c6ce7",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

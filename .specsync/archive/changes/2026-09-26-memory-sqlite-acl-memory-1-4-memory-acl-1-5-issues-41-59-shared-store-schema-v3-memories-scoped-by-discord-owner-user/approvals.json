@@ -1,0 +1,66 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790448229,
+      "digest": "2b5db04b010a1b400e8f91df60da507e81fe5fc09982e7ff5b52a9b930837b3d",
+      "note": "MEMORY-1..4 + MEMORY-ACL-1..5 / #41 #59; bump 0.0.4",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user",
+        "title": "MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4",
+        "description": "MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/BOX-UPDATE.md",
+          "docs/discord.md",
+          "package.json",
+          "plugins/memory/",
+          "specs/cli/",
+          "specs/discord/",
+          "specs/plugins/",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/index.ts",
+          "src/memory/",
+          "src/plugins/builtins.ts",
+          "src/store/",
+          "src/version.ts",
+          "tests/memory*.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Shared corvidinho.db schema v3 adds memories table (owner_user_id, category conversation|entity|person|personality, key, content, timestamps, soft-delete); MemoryStore CRUD scoped to acting Discord user (MEMORY-1..2/ACL-1); reload after reopen (MEMORY-4); local SQLite only no on-chain (MEMORY-3/ACL-5); non-admin cannot forget/override others without leaking content (ACL-2); ADMIN re-check at handler for forget/override of others AND self-forget; empty admin=deny-all (ACL-3/4 ADMIN-4 DISCORD-7); memory plugins (no new slash); fixture tests; package 0.0.4; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "16783c0bcfa2a811ae617a76d0a762996473522420b31b500a76e9c6d751de3a",
+        "discord": "62487aab5e9e16877b18ba35800b2fce4e22c2155efb35b2575bb0672160c237",
+        "plugins": "4c18318d5d9409ab1ae5474b8ab42ce6d1d7ef8f07b7e62fcf6f3d0b3d001909"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790448439,
+      "digest": "46296322174c0d0f4ec26d15d88c79aa9dab8d26bc7b2e4108be30799cb96696",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

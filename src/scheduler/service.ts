@@ -139,10 +139,13 @@ export class SchedulerService {
         "Stay within existing allowlists and SAFE gates. Linux host only.",
       ].join("\n");
 
+      // MEMORY scope to schedule creator; forget/override stay deny without live ADMIN re-check.
       const result = await this.agent.runChat({
         prompt,
         sessionId: `schedule_${schedule.id}`,
         resume: false,
+        actingUserId: schedule.createdByUserId,
+        actingIsAdmin: false,
       });
 
       const summary = result.ok

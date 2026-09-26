@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user",
+  "implementation_commit": "89f3d4c4a03bb0ef6f6ab76eb04019cd44cd1c05",
+  "implementation_tree": "87b51ca3ac4acee98022894e1dfd700d84a97cf6",
+  "contract_digest": "2b5db04b010a1b400e8f91df60da507e81fe5fc09982e7ff5b52a9b930837b3d",
+  "workspace_digest": "b1bc2fc061c583ea2ad60b590f333d32117600ad77b6a171b45d68b65a7b1e53",
+  "closing_digest": "46296322174c0d0f4ec26d15d88c79aa9dab8d26bc7b2e4108be30799cb96696",
+  "review_digest": "af12e2e71d7d7233ce65e522ffffe28d1acd5f0330426f29173e58e78990d451",
+  "finalization_digest": "1b3217dd266a98295de196630d530e3f6712feaf7e2d396d5e022b88308c6919",
+  "timestamp": 1790448439
+}

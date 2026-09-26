@@ -31,6 +31,8 @@ import {
   defaultRateLimitConfig,
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
+  PermissionLevel,
+  resolvePermissionLevel,
   type RateLimitState,
 } from "./permissions.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
@@ -45,6 +47,7 @@ import {
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { MemoryStore } from "../memory/index.ts";
 import {
   ScheduleStore,
   SchedulerService,
@@ -59,6 +62,7 @@ export type StartBridgeResult =
       store: SessionStore;
       workStore: WorkStore;
       scheduleStore: ScheduleStore;
+      memoryStore?: MemoryStore;
       mutedUsers: Set<string>;
       rateLimitState: RateLimitState;
       muteUser: (userId: string) => void;
@@ -91,7 +95,7 @@ export type StartBridgeOptions = {
   startedAt?: number;
   version?: string;
   /**
-   * Shared SQLite DB for SessionStore/WorkStore (REQ-discord-019).
+   * Shared SQLite DB for SessionStore/WorkStore/MemoryStore (REQ-discord-019/021).
    * When omitted, opens the default Corvidinho DB (or :memory: when dryRun
    * and CORVIDINHO_SESSION_MEMORY=1 for tests).
    */
@@ -102,6 +106,8 @@ export type StartBridgeOptions = {
   sessionStore?: SessionStore;
   workStore?: WorkStore;
   scheduleStore?: ScheduleStore;
+  /** MEMORY store (REQ-discord-021); default opens from shared db. */
+  memoryStore?: MemoryStore;
   /** Disable cooperative scheduler ticker (tests). */
   disableScheduler?: boolean;
   /** Scheduler poll interval override (tests). */
@@ -179,6 +185,8 @@ export async function startBridge(
   const workStore = opts.workStore ?? new WorkStore({ db });
   const scheduleStore =
     opts.scheduleStore ?? new ScheduleStore({ db });
+  const memoryStore =
+    opts.memoryStore ?? (db ? new MemoryStore({ db }) : undefined);
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -230,6 +238,7 @@ export async function startBridge(
       store,
       workStore,
       scheduleStore,
+      memoryStore,
       allowlist: config.allowlist,
       agent,
       version,
@@ -297,10 +306,21 @@ export async function startBridge(
 
       let result;
       try {
+        const actingIsAdmin =
+          resolvePermissionLevel({
+            userId: msg.authorId,
+            roleIds: msg.authorRoleIds,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            mutedUsers,
+          }) >= PermissionLevel.ADMIN;
         result = await agent.runChat({
           prompt: enrichedPrompt,
           sessionId: session.id,
           resume: action.kind === "continue_session",
+          actingUserId: msg.authorId,
+          actingIsAdmin,
           onStatus: (u) => {
             void thinking.update({
               tool: u.tool,
@@ -396,6 +416,7 @@ export async function startBridge(
     store,
     workStore,
     scheduleStore,
+      memoryStore,
     mutedUsers,
     rateLimitState,
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),

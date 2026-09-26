@@ -19,6 +19,13 @@ export type AgentRunChatOpts = {
   prompt: string;
   sessionId: string;
   resume?: boolean;
+  /** Discord acting user for MEMORY ACL scope (MEMORY-ACL-1). */
+  actingUserId?: string;
+  /**
+   * ADMIN re-checked at spawn time (DISCORD-7 / MEMORY-ACL-3/4).
+   * Empty admin lists ⇒ false (deny-all for forget/override).
+   */
+  actingIsAdmin?: boolean;
   /** Optional live status callback (DISCORD-3); spawn path may not emit tools yet. */
   onStatus?: (update: AgentStatusUpdate) => void;
 };
@@ -37,11 +44,17 @@ export type SpawnAgentClientOpts = {
 /**
  * Spawns: `<bin> task run --no-verify --task <prompt> --json`
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
- * No tool streaming yet (no ProcessManager) — bridge ticks elapsed time alone.
+ * Passes CORVIDINHO_ACTING_DISCORD_USER_ID / CORVIDINHO_ACTING_IS_ADMIN for memory plugins.
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
-    async runChat({ prompt, sessionId, onStatus }) {
+    async runChat({
+      prompt,
+      sessionId,
+      actingUserId,
+      actingIsAdmin,
+      onStatus,
+    }) {
       onStatus?.({ tool: "task run", message: "Spawning agent..." });
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
@@ -60,6 +73,12 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_DISCORD_SESSION_ID: sessionId,
+          ...(actingUserId
+            ? { CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId }
+            : {}),
+          ...(actingIsAdmin
+            ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
+            : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
         },
       });
       const [exitCode, stdout, stderr] = await Promise.all([

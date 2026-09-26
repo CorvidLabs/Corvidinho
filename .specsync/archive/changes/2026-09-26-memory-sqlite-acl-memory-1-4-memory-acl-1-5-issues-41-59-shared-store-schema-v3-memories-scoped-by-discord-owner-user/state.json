@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user",
+  "slug": "memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user",
+  "title": "MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4",
+  "description": "MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "7d81edc9d105fbea329e71deca99bfe05f100a27",
+  "created_at": 1790448203,
+  "updated_at": 1790448447,
+  "affected_specs": [
+    "discord",
+    "plugins",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/store/",
+    "src/memory/",
+    "plugins/memory/",
+    "src/discord/bridge.ts",
+    "src/discord/index.ts",
+    "src/discord/agent-client.ts",
+    "src/plugins/builtins.ts",
+    "specs/discord/",
+    "specs/plugins/",
+    "specs/cli/",
+    "tests/memory*.test.ts",
+    "STATUS.md",
+    "CHANGELOG.md",
+    "docs/BOX-UPDATE.md",
+    "docs/discord.md",
+    "package.json",
+    "src/version.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Shared corvidinho.db schema v3 adds memories table (owner_user_id, category conversation|entity|person|personality, key, content, timestamps, soft-delete); MemoryStore CRUD scoped to acting Discord user (MEMORY-1..2/ACL-1); reload after reopen (MEMORY-4); local SQLite only no on-chain (MEMORY-3/ACL-5); non-admin cannot forget/override others without leaking content (ACL-2); ADMIN re-check at handler for forget/override of others AND self-forget; empty admin=deny-all (ACL-3/4 ADMIN-4 DISCORD-7); memory plugins (no new slash); fixture tests; package 0.0.4; SpecSync+fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
