@@ -1,0 +1,376 @@
+/**
+ * File plugins (PLUGIN-1 / REQ-plugins-081..083).
+ * Steal: Merlin fledge-plugin-files + corvid-agent coding-tools path clamp.
+ */
+
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { Glob } from "bun";
+import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
+import {
+  isProtectedPath,
+  protectedRefuseMessage,
+} from "./protectedPaths.ts";
+import {
+  assertExistingFile,
+  PathEscapeError,
+  resolveProjectPath,
+} from "./resolvePath.ts";
+
+function flagValue(args: string[], name: string): string | undefined {
+  const idx = args.indexOf(name);
+  if (idx < 0) return undefined;
+  const v = args[idx + 1];
+  return v != null && !v.startsWith("--") ? v : undefined;
+}
+
+function hasFlag(args: string[], name: string): boolean {
+  return args.includes(name);
+}
+
+function positional(args: string[], skipFlags: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (skipFlags.includes(a)) {
+      i++;
+      continue;
+    }
+    if (
+      a === "--json" ||
+      a === "--replace-all" ||
+      a === "--show-hidden" ||
+      a === "--allow-large"
+    ) {
+      continue;
+    }
+    if (a.startsWith("--")) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+function refuseProtected(userPath: string, absPath: string): PluginHandlerResult | null {
+  if (isProtectedPath(userPath) || isProtectedPath(absPath)) {
+    return {
+      ok: false,
+      error: protectedRefuseMessage(userPath),
+      exitCode: 2,
+    };
+  }
+  return null;
+}
+
+function errResult(err: unknown): PluginHandlerResult {
+  if (err instanceof PathEscapeError) {
+    return { ok: false, error: err.message, exitCode: 1 };
+  }
+  return {
+    ok: false,
+    error: err instanceof Error ? err.message : String(err),
+    exitCode: 1,
+  };
+}
+
+const SIZE_GUARD_FLOOR = 64 * 1024;
+
+function checkSizeExplosion(
+  path: string,
+  originalLen: number,
+  newLen: number,
+  allowLarge: boolean,
+): PluginHandlerResult | null {
+  if (allowLarge) return null;
+  const limit = Math.max(originalLen * 10, SIZE_GUARD_FLOOR);
+  if (newLen > limit) {
+    return {
+      ok: false,
+      error:
+        `refused: write to '${path}' would grow from ${originalLen} to ${newLen} bytes ` +
+        `(limit ${limit}). Pass --allow-large to override if intentional.`,
+      exitCode: 1,
+    };
+  }
+  return null;
+}
+
+export const filesCommands: PluginCommand[] = [
+  {
+    name: "files-read",
+    description:
+      "Read file contents under the project cwd. Args: <path> [--json]",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      try {
+        const pos = positional(ctx.args, []);
+        const pathArg = flagValue(ctx.args, "--path") ?? pos[0];
+        if (!pathArg) {
+          return { ok: false, error: "missing path", exitCode: 1 };
+        }
+        const abs = resolveProjectPath(ctx.cwd, pathArg);
+        assertExistingFile(abs);
+        const content = readFileSync(abs, "utf8");
+        const data = { path: pathArg, bytes: Buffer.byteLength(content), content };
+        if (ctx.json || hasFlag(ctx.args, "--json")) {
+          return { ok: true, data, message: content };
+        }
+        return { ok: true, data, message: content };
+      } catch (err) {
+        return errResult(err);
+      }
+    },
+  },
+  {
+    name: "files-write",
+    description:
+      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large]. SAFE-2 protected paths refused.",
+    dangerous: false,
+    minTier: 2,
+    async handler(ctx) {
+      try {
+        const pathArg = flagValue(ctx.args, "--path") ?? positional(ctx.args, ["--content", "--path"])[0];
+        if (!pathArg) {
+          return { ok: false, error: "missing path", exitCode: 1 };
+        }
+        let content = flagValue(ctx.args, "--content");
+        if (content == null) {
+          const pos = positional(ctx.args, ["--content", "--path"]);
+          // path is first positional; content is rest joined
+          content = pos.slice(1).join(" ");
+        }
+        if (content == null) content = "";
+
+        const abs = resolveProjectPath(ctx.cwd, pathArg);
+        const blocked = refuseProtected(pathArg, abs);
+        if (blocked) return blocked;
+
+        const allowLarge = hasFlag(ctx.args, "--allow-large");
+        if (existsSync(abs)) {
+          const originalLen = statSync(abs).size;
+          const boom = checkSizeExplosion(
+            pathArg,
+            originalLen,
+            Buffer.byteLength(content),
+            allowLarge,
+          );
+          if (boom) return boom;
+        }
+
+        mkdirSync(dirname(abs), { recursive: true });
+        writeFileSync(abs, content, "utf8");
+        return {
+          ok: true,
+          data: { path: pathArg, bytes: Buffer.byteLength(content), filesChanged: [pathArg] },
+          message: `Wrote ${Buffer.byteLength(content)} bytes to ${pathArg}`,
+        };
+      } catch (err) {
+        return errResult(err);
+      }
+    },
+  },
+  {
+    name: "files-edit",
+    description:
+      "Exact string replace in a file. minTier=code. Args: <path> --old <str> --new <str> [--replace-all] [--allow-large]. SAFE-2 protected paths refused.",
+    dangerous: false,
+    minTier: 2,
+    async handler(ctx) {
+      try {
+        const pathArg =
+          flagValue(ctx.args, "--path") ??
+          positional(ctx.args, ["--old", "--new", "--path", "--content"])[0];
+        const oldStr = flagValue(ctx.args, "--old");
+        const newStr = flagValue(ctx.args, "--new");
+        if (!pathArg || oldStr == null || newStr == null) {
+          return {
+            ok: false,
+            error: "usage: files-edit <path> --old <str> --new <str> [--replace-all]",
+            exitCode: 1,
+          };
+        }
+        const abs = resolveProjectPath(ctx.cwd, pathArg);
+        const blocked = refuseProtected(pathArg, abs);
+        if (blocked) return blocked;
+        assertExistingFile(abs);
+
+        const original = readFileSync(abs, "utf8");
+        const replaceAll = hasFlag(ctx.args, "--replace-all");
+        if (!original.includes(oldStr)) {
+          return {
+            ok: false,
+            error: `no match for old string in ${pathArg}`,
+            exitCode: 1,
+          };
+        }
+        if (!replaceAll) {
+          const first = original.indexOf(oldStr);
+          const second = original.indexOf(oldStr, first + oldStr.length);
+          if (second !== -1) {
+            return {
+              ok: false,
+              error:
+                `ambiguous match in ${pathArg}: old string appears more than once; ` +
+                `pass --replace-all or use a more specific --old`,
+              exitCode: 1,
+            };
+          }
+        }
+        const next = replaceAll
+          ? original.split(oldStr).join(newStr)
+          : original.replace(oldStr, newStr);
+
+        const allowLarge = hasFlag(ctx.args, "--allow-large");
+        const boom = checkSizeExplosion(
+          pathArg,
+          Buffer.byteLength(original),
+          Buffer.byteLength(next),
+          allowLarge,
+        );
+        if (boom) return boom;
+
+        writeFileSync(abs, next, "utf8");
+        return {
+          ok: true,
+          data: { path: pathArg, filesChanged: [pathArg] },
+          message: `Edited ${pathArg}`,
+        };
+      } catch (err) {
+        return errResult(err);
+      }
+    },
+  },
+  {
+    name: "files-glob",
+    description: "List files matching a glob under the project cwd. Args: <pattern>",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      try {
+        const pattern =
+          flagValue(ctx.args, "--pattern") ??
+          positional(ctx.args, ["--pattern"])[0];
+        if (!pattern) {
+          return { ok: false, error: "missing glob pattern", exitCode: 1 };
+        }
+        // Refuse patterns that clearly escape
+        if (pattern.includes("..")) {
+          return {
+            ok: false,
+            error: `Path traversal denied: glob pattern "${pattern}"`,
+            exitCode: 1,
+          };
+        }
+        const glob = new Glob(pattern);
+        const matches: string[] = [];
+        for await (const m of glob.scan({ cwd: ctx.cwd, onlyFiles: true, dot: true })) {
+          try {
+            resolveProjectPath(ctx.cwd, m);
+            matches.push(m);
+          } catch {
+            // skip escapes
+          }
+        }
+        matches.sort();
+        const message =
+          `${matches.length} match(es)\n` +
+          (matches.length ? matches.join("\n") + "\n" : "(no matches)\n");
+        return {
+          ok: true,
+          data: { count: matches.length, matches },
+          message,
+        };
+      } catch (err) {
+        return errResult(err);
+      }
+    },
+  },
+  {
+    name: "files-list",
+    description:
+      "List directory entries under the project cwd. Args: <path> [--show-hidden] [--json]",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      try {
+        const pathArg =
+          flagValue(ctx.args, "--path") ??
+          positional(ctx.args, ["--path"])[0] ??
+          ".";
+        const abs = resolveProjectPath(ctx.cwd, pathArg);
+        if (!existsSync(abs) || !statSync(abs).isDirectory()) {
+          return { ok: false, error: `Not a directory: ${pathArg}`, exitCode: 1 };
+        }
+        const showHidden = hasFlag(ctx.args, "--show-hidden");
+        const names = readdirSync(abs).filter((n) => showHidden || !n.startsWith("."));
+        const entries = names.map((name) => {
+          const full = join(abs, name);
+          let type: "file" | "dir" | "symlink" | "other" = "other";
+          try {
+            const st = statSync(full);
+            if (st.isDirectory()) type = "dir";
+            else if (st.isSymbolicLink()) type = "symlink";
+            else if (st.isFile()) type = "file";
+          } catch {
+            /* ignore */
+          }
+          return { name, type };
+        });
+        entries.sort((a, b) => a.name.localeCompare(b.name));
+        const lines = entries.map((e) => {
+          const prefix = e.type === "dir" ? "d " : e.type === "symlink" ? "l " : "f ";
+          return prefix + e.name;
+        });
+        const data = { path: pathArg, count: entries.length, entries };
+        if (ctx.json || hasFlag(ctx.args, "--json")) {
+          return { ok: true, data, message: JSON.stringify(data, null, 2) };
+        }
+        return {
+          ok: true,
+          data,
+          message: lines.join("\n") + (lines.length ? "\n" : ""),
+        };
+      } catch (err) {
+        return errResult(err);
+      }
+    },
+  },
+  {
+    name: "files-delete",
+    description:
+      "Delete a file (irreversible). dangerous + minTier=code. SAFE-2 protected paths hard-refused. Args: <path>",
+    dangerous: true,
+    minTier: 2,
+    async handler(ctx) {
+      try {
+        const pathArg =
+          flagValue(ctx.args, "--path") ??
+          positional(ctx.args, ["--path"])[0];
+        if (!pathArg) {
+          return { ok: false, error: "missing path", exitCode: 1 };
+        }
+        const abs = resolveProjectPath(ctx.cwd, pathArg);
+        const blocked = refuseProtected(pathArg, abs);
+        if (blocked) return blocked;
+        assertExistingFile(abs);
+        rmSync(abs);
+        return {
+          ok: true,
+          data: { path: pathArg, filesChanged: [pathArg] },
+          message: `Deleted ${pathArg}`,
+        };
+      } catch (err) {
+        return errResult(err);
+      }
+    },
+  },
+];
+

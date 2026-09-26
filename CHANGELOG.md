@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.6
+
+### Files / search plugins (PLUGIN-1/2, SAFE-2 / #81)
+
+- Typed builtins: `files-read`, `files-write`, `files-edit`, `files-glob`, `files-list`, `files-delete`, `search-grep` (Merlin steal).
+- Writes/edits/deletes require capability tier **code** (`minTier: 2`); `files-delete` is dangerous (SAFE-1 allowlist).
+- Paths clamp to the plugin cwd (task worktree / project root); `..` and symlink escapes refuse.
+- SAFE-2 hard-refuse overwrite/delete of protected infra: `.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`, keystore basenames — no in-band override.
+- Wired into plugin builtins so the LLM tool loop can call them at code tier.
+- Fixture tests: happy path + SAFE-2 deny + path escape.
+
+### Ops
+
+- Package version **0.0.6** — Discord presence (DISCORD-12) reads `v0.0.6` after bridge restart (ops must restart live bridge; this release does not restart it).
+
 ## 0.0.5
 
 ### Session worktrees

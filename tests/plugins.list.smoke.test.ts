@@ -21,6 +21,9 @@ describe("plugins list smoke", () => {
     expect(out).toContain("github-pr-create");
     expect(out).toContain("github-pr-review");
     expect(out).toContain("plugins-list");
+    expect(out).toContain("files-read");
+    expect(out).toContain("files-write");
+    expect(out).toContain("search-grep");
     expect(out).toContain("danger-ping");
   });
 
