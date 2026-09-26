@@ -1,6 +1,6 @@
 ---
 id: watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared
-state: approved
+state: implementing
 type: feature
 base_commit: a49987d653499f40af938f26961c98e017c7777b
 ---
