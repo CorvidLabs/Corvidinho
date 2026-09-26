@@ -46,6 +46,17 @@ export type SessionStub = {
   userId: string;
   /** Optional topic from /session start or /work. */
   topic?: string;
+  /**
+   * Explicit project working directory for this talk (SESSION-WORKTREE-4).
+   * Frozen for the talk lifetime — never silently switched mid-conversation.
+   */
+  project?: string;
+  /** Isolated worktree or scoped-dir path (SESSION-WORKTREE-1). */
+  worktreePath?: string;
+  /** Branch name when kind=worktree. */
+  worktreeBranch?: string;
+  /** active | parked | removed */
+  worktreeState?: "active" | "parked" | "removed";
   createdAt: number;
   lastActivityAt: number;
 };

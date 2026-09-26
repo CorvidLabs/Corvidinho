@@ -17,10 +17,10 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | Command | Options | Ephemeral? | Purpose |
 |---------|---------|------------|---------|
 | `/session list` | — | yes | List active session stubs |
-| `/session start` | `topic` (string, required) | public (deferred) | Start session + agent run |
+| `/session start` | `topic` (required), optional `project` | public (deferred) | Start session + agent run in isolated worktree |
 | `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line, slash names, optional git tip) |
 | `/agents` | — | yes | List local Corvidinho agent |
-| `/work` | `description` (string, required) | public (deferred) | Drive a work task |
+| `/work` | `description` (required), optional `project` | public (deferred) | Drive a work task in isolated worktree |
 | `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check) |
 | `/unmute` | `user` (user, required) | yes | Unmute user (ADMIN) |
 | `/schedule list` | — | yes | List schedules |
@@ -102,3 +102,25 @@ flowchart TD
 - Permissions / admin: `src/discord/permissions.ts`
 - Types / tip constants: `src/discord/types.ts` (`ALLOWLIST_DENY_TIP`, `EPHEMERAL_SILENT_ACK`)
 - Presence: `src/discord/presence.ts`
+
+
+## Session worktrees (SESSION-WORKTREE-1..5)
+
+Each Discord talk that does repo work (`@mention` start, `/session start`, `/work`)
+and each `/schedule` tick on project X runs in an **isolated git worktree** (or a
+project-scoped directory when the target is not a git repo). Soft session TTL /
+new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
+
+| Item | Behavior |
+|------|----------|
+| Default project | Bridge `projectRoot` |
+| Explicit project | Optional `project` on `/session start` and `/work`; required on `/schedule create` |
+| Mid-conversation | Project never silently switches once set |
+| Root on disk | `{dirname(project)}/.corvid-worktrees/` or `WORKTREE_BASE_DIR` |
+| Branch | `talk/{sessionPrefix}` |
+| End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
+| Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
+
+Ops: restart the Discord bridge after deploying **0.0.5** so presence and spawn
+paths pick up the build. Do not leave abandoned worktrees under the base dir
+from crashed runs — prune via `git worktree prune` in the project if needed.

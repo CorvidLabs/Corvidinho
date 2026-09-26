@@ -5,7 +5,7 @@ import {
 /**
  * /work — drive a work task (DISCORD-4). Thin steal from corvid-agent
  * session-commands handleWorkCommand + work-dispatch (agent ops, not token product).
- * In-memory WorkStore + AgentClient; no ProcessManager.
+ * Optional project (SESSION-WORKTREE-4). In-memory WorkStore + AgentClient; no ProcessManager.
  */
 
 import { ThinkingStatus } from "../thinking-status.ts";
@@ -25,13 +25,31 @@ export async function handleWorkCommand(
     return;
   }
 
+  const projectRaw = interaction.options.project;
+  const project =
+    typeof projectRaw === "string" && projectRaw.trim()
+      ? projectRaw.trim()
+      : undefined;
+
   await interaction.deferReply?.({ ephemeral: false });
 
-  const session = ctx.store.create({
+  const created = await ctx.store.createWithWorktree({
     channelId: interaction.channelId,
     userId: interaction.userId,
     topic: description.slice(0, 120),
+    project,
   });
+  const session = created.session;
+  if (!created.ok) {
+    const body = `Work failed to isolate worktree: ${created.error}`;
+    if (interaction.editReply) {
+      await interaction.editReply({ content: body });
+    } else {
+      await interaction.reply({ content: body });
+    }
+    await ctx.store.endSession(session);
+    return;
+  }
 
   const task = ctx.workStore.create({
     description,
@@ -75,6 +93,7 @@ export async function handleWorkCommand(
       resume: false,
       actingUserId: interaction.userId,
       actingIsAdmin,
+      cwd: ctx.store.cwdFor(session),
       onStatus: (u) => {
         void thinking?.update({
           tool: u.tool,
@@ -111,9 +130,12 @@ export async function handleWorkCommand(
   const summary = result.ok
     ? result.summary.slice(0, 1500)
     : `failed (exit ${result.exitCode})`;
+  const wt = session.worktreePath
+    ? `\nWorktree: \`${session.worktreePath}\``
+    : "";
   const body = [
     `Work task \`${task.id}\` (${task.status}).`,
-    `Session: \`${session.id}\``,
+    `Session: \`${session.id}\`${wt}`,
     `Description: ${description.slice(0, 200)}`,
     "",
     summary,

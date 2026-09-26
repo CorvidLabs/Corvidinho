@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790448773,
+      "digest": "dd565c00e954cce14a039b948795f18cd6ddd8e42b7cfc4152c8170a310f5c8d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "session-worktree-per-talk-project-git-worktree-isolation-session-worktree-1-5-issue-58-package-v0-0-5-discord-cli-talks",
+        "title": "SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5: Discord/CLI talks and scheduled runs get isolated git worktrees so cwd/branch do not bleed; steal corvid-agent worktree lib Linux headless; soft TTL still applies; end/abandon parks or cleans; explicit project per talk/schedule never silent mid-conversation switch; wire session/work spawn + schedule ticks; fixture tests; SpecSync+fledge verify",
+        "description": "SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5: Discord/CLI talks and scheduled runs get isolated git worktrees so cwd/branch do not bleed; steal corvid-agent worktree lib Linux headless; soft TTL still applies; end/abandon parks or cleans; explicit project per talk/schedule never silent mid-conversation switch; wire session/work spawn + schedule ticks; fixture tests; SpecSync+fledge verify",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs",
+          "package.json",
+          "src/discord",
+          "src/scheduler",
+          "src/store",
+          "src/worktree",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Discord/CLI talks that do repo work and scheduled runs on project X each get an isolated git worktree (or project-scoped dir) under WORKTREE_BASE_DIR/.corvid-worktrees so cwd/branch do not bleed across concurrent talks (SESSION-WORKTREE-1/5); soft TTL/new-topic SESSION-1..3 still apply and isolation does not replace MEMORY (SESSION-WORKTREE-2); end/abandon/TTL purge parks or removes the worktree so another talk never silently reuses it as cwd (SESSION-WORKTREE-3); project is explicit per talk/schedule and never silently switches mid-conversation (SESSION-WORKTREE-4); schedule ticks use that project's worktree/scope; package bumped to 0.0.5; fixture tests + SpecSync + fledge verify green; no new slash commands; no ProcessManager; Linux headless only"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "4538e88cc81bee316dd2de3b058097330d3cf53062540afbde606a98f32cae57"
+      }
+    }
+  ],
+  "reopenings": []
+}

@@ -26,6 +26,11 @@ export type AgentRunChatOpts = {
    * Empty admin lists ⇒ false (deny-all for forget/override).
    */
   actingIsAdmin?: boolean;
+  /**
+   * Per-call working directory (SESSION-WORKTREE-1). When set, overrides the
+   * client default cwd so talks/schedules do not share a mutable checkout.
+   */
+  cwd?: string;
   /** Optional live status callback (DISCORD-3); spawn path may not emit tools yet. */
   onStatus?: (update: AgentStatusUpdate) => void;
 };
@@ -53,6 +58,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       sessionId,
       actingUserId,
       actingIsAdmin,
+      cwd,
       onStatus,
     }) {
       onStatus?.({ tool: "task run", message: "Spawning agent..." });
@@ -66,7 +72,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       ]);
 
       const proc = Bun.spawn(cmd, {
-        cwd: opts.cwd,
+        cwd: cwd ?? opts.cwd,
         stdout: "pipe",
         stderr: "pipe",
         env: {

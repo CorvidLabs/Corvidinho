@@ -16,7 +16,7 @@ describe("MemoryStore (MEMORY-1..4 / MEMORY-ACL-1..5)", () => {
       .query("SELECT value FROM schema_meta WHERE key = 'version'")
       .get() as { value: string };
     expect(row.value).toBe(String(SCHEMA_VERSION));
-    expect(SCHEMA_VERSION).toBe(3);
+    expect(SCHEMA_VERSION).toBe(4);
     const tables = db
       .query(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='memories'",

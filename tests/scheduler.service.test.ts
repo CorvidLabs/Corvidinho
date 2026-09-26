@@ -85,6 +85,7 @@ describe("SchedulerService tick (non-blocking)", () => {
       allowlist: allowCfg(),
       manual: true,
       maxConcurrent: 2,
+      useWorktrees: false,
       outbound: {
         post: async (p) => {
           posts.push(p);
@@ -139,6 +140,7 @@ describe("SchedulerService tick (non-blocking)", () => {
       agent,
       allowlist: allowCfg(["chan-allowed"]),
       manual: true,
+      useWorktrees: false,
     });
     const r = await svc.tick();
     expect(r.started).not.toContain(paused.id);

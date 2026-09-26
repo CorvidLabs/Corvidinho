@@ -4,7 +4,7 @@ import {
 } from "../permissions.ts";
 /**
  * /session list|start (DISCORD-4). Thin steal from corvid-agent session-commands.
- * No ProcessManager, no Discord thread product UI.
+ * Optional project (SESSION-WORKTREE-4). No ProcessManager, no Discord thread product UI.
  */
 
 import { ThinkingStatus } from "../thinking-status.ts";
@@ -15,11 +15,13 @@ function formatSessionLine(s: {
   channelId: string;
   userId: string;
   topic?: string;
+  project?: string;
   lastActivityAt: number;
 }): string {
   const ageSec = Math.max(0, Math.floor((Date.now() - s.lastActivityAt) / 1000));
   const topic = s.topic ? ` — ${s.topic.slice(0, 60)}` : "";
-  return `• \`${s.id}\` <#${s.channelId}> <@${s.userId}>${topic} (${ageSec}s ago)`;
+  const project = s.project ? ` · \`${s.project}\`` : "";
+  return `• \`${s.id}\` <#${s.channelId}> <@${s.userId}>${topic}${project} (${ageSec}s ago)`;
 }
 
 export async function handleSessionList(
@@ -57,13 +59,31 @@ export async function handleSessionStart(
     return;
   }
 
+  const projectRaw = interaction.options.project;
+  const project =
+    typeof projectRaw === "string" && projectRaw.trim()
+      ? projectRaw.trim()
+      : undefined;
+
   await interaction.deferReply?.({ ephemeral: false });
 
-  const session = ctx.store.create({
+  const created = await ctx.store.createWithWorktree({
     channelId: interaction.channelId,
     userId: interaction.userId,
     topic,
+    project,
   });
+  const session = created.session;
+  if (!created.ok) {
+    const body = `Session \`${session.id}\` failed to isolate worktree: ${created.error}`;
+    if (interaction.editReply) {
+      await interaction.editReply({ content: body });
+    } else {
+      await interaction.reply({ content: body });
+    }
+    await ctx.store.endSession(session);
+    return;
+  }
 
   const outbound = ctx.thinkingOutbound;
   const thinking = outbound
@@ -97,6 +117,7 @@ export async function handleSessionStart(
       resume: false,
       actingUserId: interaction.userId,
       actingIsAdmin,
+      cwd: ctx.store.cwdFor(session),
       onStatus: (u) => {
         void thinking?.update({
           tool: u.tool,
@@ -126,7 +147,10 @@ export async function handleSessionStart(
   const summary = result.ok
     ? result.summary.slice(0, 1500)
     : `failed (exit ${result.exitCode})`;
-  const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}\n\n${summary}`;
+  const wt = session.worktreePath
+    ? `\nWorktree: \`${session.worktreePath}\``
+    : "";
+  const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
 
   if (interaction.editReply) {
     await interaction.editReply({ content: body });

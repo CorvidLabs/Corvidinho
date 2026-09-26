@@ -1,6 +1,7 @@
 /**
  * Discord session stub maps (DISCORD-1 / 2 / 2.a) with optional SQLite
- * durability + soft TTL (SESSION-1..4 / REQ-discord-019).
+ * durability + soft TTL (SESSION-1..4 / REQ-discord-019) and per-talk
+ * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022).
  * No ProcessManager.
  */
 
@@ -10,6 +11,12 @@ import {
   resolveSessionTtlMs,
   SESSION_TTL_DEFAULT_MS,
 } from "../store/session-ttl.ts";
+import {
+  ensureTalkWorkspace,
+  parkWorktree,
+  resolveProjectDir,
+  type TalkWorkspace,
+} from "../worktree/index.ts";
 import type { SessionStub } from "./types.ts";
 
 function newId(): string {
@@ -23,6 +30,16 @@ export type SessionStoreOptions = {
   ttlMs?: number;
   /** Injectable clock (tests). */
   now?: () => number;
+  /**
+   * Default project root for talks that do not pass an explicit project
+   * (SESSION-WORKTREE-4). Usually the bridge projectRoot.
+   */
+  defaultProjectRoot?: string;
+  /**
+   * When true (default), create an isolated worktree/scoped dir on session
+   * create for repo work. Tests may disable.
+   */
+  ensureWorktree?: boolean;
 };
 
 export class SessionStore {
@@ -36,11 +53,15 @@ export class SessionStore {
   private readonly db: Database | undefined;
   readonly ttlMs: number;
   private readonly now: () => number;
+  readonly defaultProjectRoot: string | undefined;
+  private readonly ensureWorktreeOnCreate: boolean;
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
     this.ttlMs = opts.ttlMs ?? resolveSessionTtlMs();
     this.now = opts.now ?? (() => Date.now());
+    this.defaultProjectRoot = opts.defaultProjectRoot;
+    this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
     if (this.db) {
       this.loadFromDb();
     }
@@ -57,10 +78,12 @@ export class SessionStore {
     });
   }
 
-  /** Drop expired session from maps + DB; return true if purged. */
+  /** Drop expired session from maps + DB; park worktree async; return true if purged. */
   private purgeIfExpired(session: SessionStub | undefined): boolean {
     if (!session) return false;
     if (!this.expired(session)) return false;
+    // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
+    void this.parkSessionWorktree(session);
     this.removeLocal(session);
     this.deleteFromDb(session.id);
     return true;
@@ -82,7 +105,9 @@ export class SessionStore {
     const now = this.nowMs();
     const sessions = this.db
       .query(
-        `SELECT id, channel_id, thread_id, user_id, topic, created_at, last_activity_at
+        `SELECT id, channel_id, thread_id, user_id, topic, project,
+                worktree_path, worktree_branch, worktree_state,
+                created_at, last_activity_at
          FROM discord_sessions`,
       )
       .all() as Array<{
@@ -91,6 +116,10 @@ export class SessionStore {
       thread_id: string | null;
       user_id: string;
       topic: string | null;
+      project: string | null;
+      worktree_path: string | null;
+      worktree_branch: string | null;
+      worktree_state: string | null;
       created_at: number;
       last_activity_at: number;
     }>;
@@ -102,6 +131,22 @@ export class SessionStore {
           nowMs: now,
         })
       ) {
+        // Park leftover worktree then delete (SESSION-WORKTREE-3)
+        const doomed: SessionStub = {
+          id: row.id,
+          channelId: row.channel_id,
+          threadId: row.thread_id ?? undefined,
+          userId: row.user_id,
+          topic: row.topic ?? undefined,
+          project: row.project ?? undefined,
+          worktreePath: row.worktree_path ?? undefined,
+          worktreeBranch: row.worktree_branch ?? undefined,
+          worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
+            undefined,
+          createdAt: row.created_at,
+          lastActivityAt: row.last_activity_at,
+        };
+        void this.parkSessionWorktree(doomed);
         this.deleteFromDb(row.id);
         continue;
       }
@@ -111,6 +156,11 @@ export class SessionStore {
         threadId: row.thread_id ?? undefined,
         userId: row.user_id,
         topic: row.topic ?? undefined,
+        project: row.project ?? undefined,
+        worktreePath: row.worktree_path ?? undefined,
+        worktreeBranch: row.worktree_branch ?? undefined,
+        worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
+          undefined,
         createdAt: row.created_at,
         lastActivityAt: row.last_activity_at,
       };
@@ -142,13 +192,19 @@ export class SessionStore {
     if (!this.db) return;
     this.db.run(
       `INSERT INTO discord_sessions
-        (id, channel_id, thread_id, user_id, topic, created_at, last_activity_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+        (id, channel_id, thread_id, user_id, topic, project,
+         worktree_path, worktree_branch, worktree_state,
+         created_at, last_activity_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          channel_id = excluded.channel_id,
          thread_id = excluded.thread_id,
          user_id = excluded.user_id,
          topic = excluded.topic,
+         project = excluded.project,
+         worktree_path = excluded.worktree_path,
+         worktree_branch = excluded.worktree_branch,
+         worktree_state = excluded.worktree_state,
          created_at = excluded.created_at,
          last_activity_at = excluded.last_activity_at`,
       [
@@ -157,6 +213,10 @@ export class SessionStore {
         session.threadId ?? null,
         session.userId,
         session.topic ?? null,
+        session.project ?? null,
+        session.worktreePath ?? null,
+        session.worktreeBranch ?? null,
+        session.worktreeState ?? null,
         session.createdAt,
         session.lastActivityAt,
       ],
@@ -182,12 +242,108 @@ export class SessionStore {
     this.db.run(`DELETE FROM discord_sessions WHERE id = ?`, [sessionId]);
   }
 
+  /** Park/remove worktree so another talk cannot reuse it as cwd. */
+  async parkSessionWorktree(session: SessionStub): Promise<void> {
+    if (!session.worktreePath || !session.project) {
+      session.worktreeState = "removed";
+      return;
+    }
+    if (session.worktreeState === "parked" || session.worktreeState === "removed") {
+      return;
+    }
+    const state = await parkWorktree(session.project, session.worktreePath, {
+      kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+      branchName: session.worktreeBranch,
+    });
+    session.worktreeState = state;
+    session.worktreePath = undefined;
+  }
+
+  /**
+   * End/abandon a talk: park worktree, drop from maps + DB (SESSION-WORKTREE-3).
+   */
+  async endSession(session: SessionStub): Promise<void> {
+    await this.parkSessionWorktree(session);
+    this.removeLocal(session);
+    this.deleteFromDb(session.id);
+  }
+
+  /**
+   * Bind an isolated workspace onto a session (idempotent if already bound).
+   * Never silently switches project mid-conversation (SESSION-WORKTREE-4).
+   */
+  async bindWorktree(
+    session: SessionStub,
+    opts?: { project?: string },
+  ): Promise<{ ok: true; workspace: TalkWorkspace } | { ok: false; error: string }> {
+    if (session.worktreePath && session.worktreeState === "active") {
+      // Already bound — refuse silent project switch
+      if (opts?.project?.trim()) {
+        const resolved = resolveProjectDir(opts.project, {
+          defaultProjectRoot: session.project ?? this.defaultProjectRoot ?? process.cwd(),
+        });
+        if (
+          resolved.ok &&
+          session.project &&
+          resolved.dir !== session.project
+        ) {
+          return {
+            ok: false,
+            error: `project already set to ${session.project}; refusing mid-conversation switch`,
+          };
+        }
+      }
+      return {
+        ok: true,
+        workspace: {
+          kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+          workDir: session.worktreePath,
+          projectWorkingDir: session.project ?? session.worktreePath,
+          branchName: session.worktreeBranch,
+          worktreeId: session.id,
+          state: "active",
+        },
+      };
+    }
+
+    const defaultRoot =
+      this.defaultProjectRoot ?? session.project ?? process.cwd();
+    const resolved = resolveProjectDir(opts?.project ?? session.project, {
+      defaultProjectRoot: defaultRoot,
+    });
+    if (!resolved.ok) {
+      return { ok: false, error: resolved.error };
+    }
+
+    const ensured = await ensureTalkWorkspace({
+      projectWorkingDir: resolved.dir,
+      sessionId: session.id,
+    });
+    if (!ensured.ok) {
+      return { ok: false, error: ensured.error };
+    }
+
+    session.project = ensured.workspace.projectWorkingDir;
+    session.worktreePath = ensured.workspace.workDir;
+    session.worktreeBranch = ensured.workspace.branchName;
+    session.worktreeState = "active";
+    this.persistSession(session);
+    return { ok: true, workspace: ensured.workspace };
+  }
+
   create(opts: {
     channelId: string;
     userId: string;
     threadId?: string;
     topic?: string;
     id?: string;
+    /** Explicit project path/name (SESSION-WORKTREE-4). */
+    project?: string;
+    /**
+     * When false, skip worktree ensure (caller will bind later).
+     * Default follows store ensureWorktree option.
+     */
+    ensureWorktree?: boolean;
   }): SessionStub {
     const now = this.nowMs();
     const session: SessionStub = {
@@ -199,12 +355,54 @@ export class SessionStore {
       createdAt: now,
       lastActivityAt: now,
     };
+
+    // Resolve project eagerly when default root known (freeze early).
+    if (opts.project?.trim() || this.defaultProjectRoot) {
+      const resolved = resolveProjectDir(opts.project, {
+        defaultProjectRoot: this.defaultProjectRoot ?? process.cwd(),
+      });
+      if (resolved.ok) {
+        session.project = resolved.dir;
+      }
+    }
+
     this.bySessionId.set(session.id, session);
     if (session.threadId) {
       this.byThreadId.set(session.threadId, session);
     }
     this.persistSession(session);
+
+    const shouldEnsure =
+      opts.ensureWorktree ?? this.ensureWorktreeOnCreate;
+    if (shouldEnsure && (session.project || this.defaultProjectRoot)) {
+      // Sync best-effort: Bun tests can await bindWorktree separately when needed.
+      // We kick async bind and also expose bindWorktree for callers that await.
+      void this.bindWorktree(session, { project: opts.project });
+    }
+
     return session;
+  }
+
+  /**
+   * Create session and await worktree bind (preferred for Discord spawn paths).
+   */
+  async createWithWorktree(opts: {
+    channelId: string;
+    userId: string;
+    threadId?: string;
+    topic?: string;
+    id?: string;
+    project?: string;
+  }): Promise<
+    | { ok: true; session: SessionStub; workspace: TalkWorkspace }
+    | { ok: false; session: SessionStub; error: string }
+  > {
+    const session = this.create({ ...opts, ensureWorktree: false });
+    const bound = await this.bindWorktree(session, { project: opts.project });
+    if (!bound.ok) {
+      return { ok: false, session, error: bound.error };
+    }
+    return { ok: true, session, workspace: bound.workspace };
   }
 
   touch(session: SessionStub): void {
@@ -244,6 +442,14 @@ export class SessionStore {
       out.push(session);
     }
     return out.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+  }
+
+  /** Agent cwd for a session: worktree when active, else project, else default. */
+  cwdFor(session: SessionStub): string | undefined {
+    if (session.worktreePath && session.worktreeState === "active") {
+      return session.worktreePath;
+    }
+    return session.project ?? this.defaultProjectRoot;
   }
 }
 
