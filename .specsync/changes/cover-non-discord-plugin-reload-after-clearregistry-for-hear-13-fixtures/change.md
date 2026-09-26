@@ -1,6 +1,6 @@
 ---
 id: cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 3c0fc924bf80cfeaf55e5cfd86aaa6178eca20c6
 ---
