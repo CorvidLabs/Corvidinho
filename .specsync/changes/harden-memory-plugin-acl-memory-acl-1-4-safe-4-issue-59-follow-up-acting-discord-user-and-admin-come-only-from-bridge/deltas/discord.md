@@ -38,6 +38,12 @@ SHALL be `conversation` | `entity` | `person` | `personality`. Fixture tests
 without live Discord SHALL cover CRUD, reload, ACL deny, and admin forget.
 
 Acceptance Criteria
-- Memory CRUD, reload after reopen, ACL deny, and admin forget covered by fixtures.
+- Schema migrates to v3 with `memories` table and owner/category indexes.
+- Store + recall scoped to acting owner; four HI categories accepted.
+- Reload after reopen DB returns prior rows (MEMORY-4).
+- Non-admin cannot forget/override own or others; empty admin deny-all.
+- Admin forget soft-deletes with audit fields; refuse path leaks no content.
+- No on-chain memory; no new slash command; no ProcessManager.
+- Bridge opens MemoryStore on shared DB; package version bumped for ship.
 - Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one.
-- No `/memory` slash; no on-chain path.
+- Fixture tests + SpecSync + fledge verify green.
