@@ -96,7 +96,12 @@ stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
 stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
 must be the repository / worktree top level (SAFE-3). Flags are strict
 (unknown refused); path args use the files-plugin clamp and go after `--` as
-literal pathspecs. Reads are `dangerous: false`, minTier 0. `git-branch-create`,
+literal pathspecs. Hooks stay off even with a repo-local `core.hooksPath`, and
+a linked worktree top level (`.git` file) is a valid cwd. `git-status` lists
+untracked files individually (`--untracked-files=all`) so they feed
+`git-commit`. `git-branch-create` switches with `--no-overwrite-ignore` so an
+ignored `.env*` / keystore is never replaced by a start point's tracked copy
+(SAFE-2). Reads are `dangerous: false`, minTier 0. `git-branch-create`,
 `git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
 message, stages explicit file paths only (no directories / `--all` / amend),
 commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
@@ -152,6 +157,7 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
 | git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
+| git-branch-create switch would overwrite an ignored / untracked local file (e.g. `.env`) | Refuse (exit 2, SAFE-2); HEAD and files unchanged |
 | git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
 | git-push non-fast-forward | Fail (exit 1); never retried with force |
 

@@ -261,9 +261,13 @@ export const gitCommands: PluginCommand[] = [
       inRepo(ctx, async (root) => {
         const a = parseArgs(ctx.args, {});
         if (a.positional.length) return fail("usage: git-status (takes no arguments)");
-        const r = await runGit(root, ["status", "--porcelain=v1", "-z", "--branch"], {
-          maxStdoutBytes: STATUS_MAX_BYTES,
-        });
+        // --untracked-files=all: list each new file (not a collapsed `dir/`) so the
+        // paths can go straight to git-commit; the byte cap bounds the output.
+        const r = await runGit(
+          root,
+          ["status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all"],
+          { maxStdoutBytes: STATUS_MAX_BYTES },
+        );
         if (r.code !== 0) return gitFail(r, "git status");
         // Drop a record cut in half by the byte cap.
         const out = r.truncated ? r.stdout.slice(0, r.stdout.lastIndexOf("\0") + 1) : r.stdout;
@@ -430,7 +434,7 @@ export const gitCommands: PluginCommand[] = [
   {
     name: "git-branch-create",
     description:
-      'Create a branch from HEAD (or --from <ref>) and switch to it (--no-switch to only create). Never resets an existing branch. dangerous + minTier=code. Args: <name> [--from <ref>] [--no-switch]. e.g. ["feat/issue-82"]',
+      'Create a branch from HEAD (or --from <ref>) and switch to it (--no-switch to only create). Never resets an existing branch; never overwrites ignored local files such as .env* / keystores (SAFE-2). dangerous + minTier=code. Args: <name> [--from <ref>] [--no-switch]. e.g. ["feat/issue-82"]',
     dangerous: true,
     minTier: 2,
     handler: (ctx) =>
@@ -466,11 +470,23 @@ export const gitCommands: PluginCommand[] = [
         }
         const noSwitch = a.flags.has("--no-switch");
         const start = from !== undefined ? [from] : [];
+        // --no-overwrite-ignore (SAFE-2): never replace an ignored local file
+        // (.env*, keystores, …) with the start point's tracked copy — ignored
+        // files are not in git, so such an overwrite could not be undone.
         const argv = noSwitch
           ? ["branch", "--no-track", name, ...start]
-          : ["switch", "--no-track", "-c", name, ...start];
+          : ["switch", "--no-track", "--no-overwrite-ignore", "-c", name, ...start];
         const r = await runGit(root, argv, { timeoutMs: GIT_WRITE_TIMEOUT_MS });
-        if (r.code !== 0) return gitFail(r, noSwitch ? "git branch" : "git switch");
+        if (r.code !== 0) {
+          if (!noSwitch && /would be overwritten/.test(r.stderr)) {
+            return fail(
+              `refused (SAFE-2): switching to ${from ?? "HEAD"} would overwrite local untracked or ignored files; ` +
+                `nothing was changed: ${scrubGitOutput(r.stderr.trim())}`,
+              2,
+            );
+          }
+          return gitFail(r, noSwitch ? "git branch" : "git switch");
+        }
         const sha = await runGit(root, ["rev-parse", "--verify", "-q", `refs/heads/${name}`]);
         return ok(
           {

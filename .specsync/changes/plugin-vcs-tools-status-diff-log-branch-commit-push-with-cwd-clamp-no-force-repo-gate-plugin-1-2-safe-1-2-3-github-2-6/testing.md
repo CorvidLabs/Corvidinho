@@ -15,11 +15,13 @@ Fixtures: every repo is `git init` inside `mkdtempSync`; the push remote is
 a local bare repo at `<tmp>/acme/widget.git`; git config is isolated with
 `GIT_CONFIG_GLOBAL` / `GIT_CONFIG_NOSYSTEM`; the repo gate reads
 `CORVIDINHO_GITHUB_ALLOW_REPOS` / `DENY_REPOS` and a temp
-`CORVIDINHO_ALLOWLIST_FILE`. No network, no live tokens, no real worktrees.
-Dangerous runs are audited into the preload-isolated data dir.
+`CORVIDINHO_ALLOWLIST_FILE`. No network, no live tokens; the only linked
+worktree is one `git worktree add` inside the temp base. Hook fixtures touch
+marker files under the temp base. Dangerous runs are audited into the
+preload-isolated data dir.
 
 ## Requirement evidence
 
 | Requirement | How proven |
 |-------------|------------|
-| REQ-plugins-182 | list markings (dangerous/minTier); non-interactive deny; status/diff/log/branch-list JSON on a temp repo; diff cap; branch-create + refusals; commit explicit paths + filesChanged + refusals (message, directory, escape, .env, protected delete, amend); subdirectory cwd refused; push gate deny/allow, force/refspec refusal, non-fast-forward rejected with remote unchanged, detached HEAD refused; parser unit tests incl. credential redaction |
+| REQ-plugins-182 | list markings (dangerous/minTier); non-interactive deny; status/diff/log/branch-list JSON on a temp repo; untracked files in a new directory listed individually and committed; diff cap; branch-create + refusals; branch-create `--from` a commit tracking an ignored `.env` / `keystore.json` refused (exit 2) with local files and HEAD unchanged; commit explicit paths + filesChanged + refusals (message, directory, escape, .env, protected delete, amend); `.git/hooks` and repo-local `core.hooksPath` hooks never run on commit / push (control: plain git runs them); status + commit in a linked worktree; subdirectory cwd refused; push gate deny/allow, force/refspec refusal, non-fast-forward rejected with remote unchanged, detached HEAD refused; parser unit tests incl. credential redaction |

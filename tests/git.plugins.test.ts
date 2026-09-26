@@ -6,9 +6,11 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -201,6 +203,23 @@ describe("git reads", () => {
     expect(r.message).toContain("## main");
   });
 
+  test("git-status lists files in a new directory (not the collapsed dir) so git-commit can take them", async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, "plugins", "newthing"), { recursive: true });
+    writeFileSync(join(repo, "plugins", "newthing", "a.ts"), "a\n");
+    writeFileSync(join(repo, "plugins", "newthing", "b.ts"), "b\n");
+    const r = await run("git-status", [], repo);
+    expect(r.ok).toBe(true);
+    const untracked = (r.data as { untracked: string[] }).untracked;
+    expect(untracked).toEqual(["plugins/newthing/a.ts", "plugins/newthing/b.ts"]);
+
+    const c = await run("git-commit", ["-m", "feat: newthing", ...untracked], repo);
+    expect(c.error).toBeUndefined();
+    expect(c.ok).toBe(true);
+    expect((c.data as { filesChanged: string[] }).filesChanged.sort()).toEqual(untracked);
+    expect((await run("git-status", [], repo)).data).toMatchObject({ clean: true });
+  });
+
   test("git-diff: worktree vs --staged, byte cap, path filter, escape refused", async () => {
     const repo = makeRepo();
     writeFileSync(join(repo, "README.md"), "hello world\n");
@@ -373,6 +392,114 @@ describe("git-branch-create", () => {
     const unknownFrom = await run("git-branch-create", ["x2", "--from", "nope"], repo);
     expect(unknownFrom.ok).toBe(false);
     expect(unknownFrom.error).toContain("unknown start point");
+  });
+
+  test("SAFE-2: --from a ref that tracks ignored .env / keystore never overwrites the local files", async () => {
+    const repo = makeRepo();
+    // A secrets file committed by accident, later removed and gitignored.
+    writeFileSync(join(repo, ".env"), "TOKEN=old-committed\n");
+    writeFileSync(join(repo, "keystore.json"), '{"k":"old"}\n');
+    g(repo, "add", ".env", "keystore.json");
+    g(repo, "commit", "-q", "-m", "oops: secrets");
+    const old = g(repo, "rev-parse", "HEAD").trim();
+    g(repo, "rm", "-q", "--cached", ".env", "keystore.json");
+    writeFileSync(join(repo, ".gitignore"), ".env\nkeystore.json\n");
+    g(repo, "add", ".gitignore");
+    g(repo, "commit", "-q", "-m", "chore: ignore secrets");
+    // The operator's real (ignored, untracked) files.
+    writeFileSync(join(repo, ".env"), "TOKEN=operator-real-secret\n");
+    writeFileSync(join(repo, "keystore.json"), '{"k":"operator"}\n');
+    const head = g(repo, "rev-parse", "HEAD").trim();
+
+    const r = await run("git-branch-create", ["feat/x", "--from", old], repo);
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(2);
+    expect(r.error).toContain("SAFE-2");
+    expect(r.error).not.toContain("operator-real-secret");
+    expect(g(repo, "branch", "--list", "feat/x").trim()).toBe("");
+    expect(readFileSync(join(repo, ".env"), "utf8")).toBe("TOKEN=operator-real-secret\n");
+    expect(readFileSync(join(repo, "keystore.json"), "utf8")).toBe('{"k":"operator"}\n');
+    expect(g(repo, "symbolic-ref", "--short", "HEAD").trim()).toBe("main");
+    expect(g(repo, "rev-parse", "HEAD").trim()).toBe(head);
+
+    // --no-switch never touches the worktree, so it may still create the branch.
+    const side = await run("git-branch-create", ["side", "--no-switch", "--from", old], repo);
+    expect(side.ok).toBe(true);
+    expect(readFileSync(join(repo, ".env"), "utf8")).toBe("TOKEN=operator-real-secret\n");
+  });
+});
+
+describe("hooks disabled and linked worktrees", () => {
+  function writeHook(dir: string, name: string, marker: string): void {
+    mkdirSync(dir, { recursive: true });
+    const hook = join(dir, name);
+    writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`);
+    chmodSync(hook, 0o755);
+  }
+
+  test("agent-written hooks never run on git-commit / git-push (.git/hooks or core.hooksPath)", async () => {
+    const repo = makeRepo();
+    const bare = addBareRemote(repo);
+    process.env.CORVIDINHO_GITHUB_ALLOW_REPOS = "acme/widget";
+    const markers = mkdtempSync(join(base, "markers-"));
+    const m = (n: string) => join(markers, n);
+    writeHook(join(repo, ".git", "hooks"), "pre-commit", m("pre-commit"));
+    writeHook(join(repo, ".git", "hooks"), "commit-msg", m("commit-msg"));
+    writeHook(join(repo, ".git", "hooks"), "post-commit", m("post-commit"));
+    writeHook(join(repo, ".git", "hooks"), "pre-push", m("pre-push"));
+
+    writeFileSync(join(repo, "a.ts"), "a\n");
+    const c = await run("git-commit", ["-m", "feat: a", "a.ts"], repo);
+    expect(c.error).toBeUndefined();
+    expect(c.ok).toBe(true);
+    const p = await run("git-push", [], repo);
+    expect(p.error).toBeUndefined();
+    expect(p.ok).toBe(true);
+    expect(remoteRef(bare, "main")).toBe(g(repo, "rev-parse", "HEAD").trim());
+
+    // A repo-local core.hooksPath is overridden too.
+    const alt = join(repo, "alt-hooks");
+    writeHook(alt, "pre-commit", m("alt-pre-commit"));
+    g(repo, "config", "core.hooksPath", alt);
+    writeFileSync(join(repo, "b.ts"), "b\n");
+    const c2 = await run("git-commit", ["-m", "feat: b", "b.ts"], repo);
+    expect(c2.ok).toBe(true);
+
+    for (const n of ["pre-commit", "commit-msg", "post-commit", "pre-push", "alt-pre-commit"]) {
+      expect(existsSync(m(n))).toBe(false);
+    }
+    // Control: the same hook does run for plain git, so the assertions above are meaningful.
+    writeFileSync(join(repo, "c.ts"), "c\n");
+    g(repo, "add", "c.ts");
+    g(repo, "commit", "-q", "-m", "control");
+    expect(existsSync(m("alt-pre-commit"))).toBe(true);
+  });
+
+  test("git-status / git-commit work in a linked worktree (.git is a file)", async () => {
+    const repo = makeRepo();
+    const wt = join(mkdtempSync(join(base, "wt-")), "tree");
+    g(repo, "worktree", "add", "-q", "-b", "wt-branch", wt);
+    expect(existsSync(join(wt, ".git"))).toBe(true);
+
+    writeFileSync(join(wt, "w.ts"), "w\n");
+    const st = await run("git-status", [], wt);
+    expect(st.error).toBeUndefined();
+    expect(st.ok).toBe(true);
+    expect(st.data).toMatchObject({ branch: "wt-branch", untracked: ["w.ts"] });
+
+    const c = await run("git-commit", ["-m", "feat: from worktree", "w.ts"], wt);
+    expect(c.error).toBeUndefined();
+    expect(c.ok).toBe(true);
+    expect(c.data).toMatchObject({ branch: "wt-branch", filesChanged: ["w.ts"] });
+    expect(g(wt, "log", "-1", "--format=%s").trim()).toBe("feat: from worktree");
+    // The main worktree is untouched.
+    expect(g(repo, "symbolic-ref", "--short", "HEAD").trim()).toBe("main");
+    expect(existsSync(join(repo, "w.ts"))).toBe(false);
+
+    mkdirSync(join(wt, "sub"));
+    const sub = await run("git-status", [], join(wt, "sub"));
+    expect(sub.ok).toBe(false);
+    expect(sub.error).toContain("SAFE-3");
   });
 });
 
