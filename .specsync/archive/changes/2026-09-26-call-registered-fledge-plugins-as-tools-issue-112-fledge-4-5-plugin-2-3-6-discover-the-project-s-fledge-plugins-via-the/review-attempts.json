@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "e0f71dbb6bae084ea69e225db1c64ecb30cbcf34",
+      "contract_digest": "3fcf8bcfebb1d694643cd2f3432f83633e5109144b89c3ee8f9ba37846a5cdfb",
+      "execution_digest": "4563217ee4e82fc1c1ddcfb3ba224fc993ea716d238dd6ad4015259cb899afb1",
+      "workspace_digest": "b7adda696436d2cb842e3a6460417593cfc744cf25bcfdf12ef0be3457f79da1",
+      "timestamp": 1790455689
+    }
+  ]
+}

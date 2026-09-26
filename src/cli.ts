@@ -32,8 +32,14 @@ import { runDaemon } from "./daemon/index.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
-import { list, size } from "./plugins/registry.ts";
+import { get, list, size } from "./plugins/registry.ts";
 import { runPlugin } from "./plugins/run.ts";
+import {
+  formatPluginsListText,
+  toolSurfaceReport,
+  withToolCost,
+} from "./plugins/toolCost.ts";
+import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
@@ -309,15 +315,16 @@ async function doctor(): Promise<number> {
 
 async function pluginsList(json: boolean): Promise<number> {
   loadBuiltins();
-  const entries = list();
+  // FLEDGE-4 / PLUGIN-3: project Fledge plugins; failure degrades to builtins only.
+  const fledge = await loadFledgePlugins({ cwd: process.cwd() });
+  const entries = withToolCost(list());
   if (json) {
     console.log(JSON.stringify(entries, null, 2));
   } else {
-    console.log(`Loaded plugins (${entries.length}):\n`);
-    for (const e of entries) {
-      const danger = e.dangerous ? "dangerous" : "safe";
-      console.log(`  ${e.name}  [${danger}, tier>=${e.minTier}]  ${e.description}`);
-    }
+    // PLUGIN-6 / FLEDGE-5: per-command schema cost + tool-surface budget.
+    console.log(
+      formatPluginsListText(entries, toolSurfaceReport(entries), fledgeStatusLines(fledge)),
+    );
   }
   return 0;
 }
@@ -331,6 +338,9 @@ async function pluginsRun(
   if (!name) {
     console.error("usage: corvidinho plugins run <name> [--json] [-- ...args]");
     return 1;
+  }
+  if (name.startsWith("fledge-") && !get(name)) {
+    await loadFledgePlugins({ cwd: process.cwd() });
   }
   const result = await runPlugin({
     name,

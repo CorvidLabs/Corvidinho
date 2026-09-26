@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-leif-decision-on-98-amend-safe-8-to-warn-at-80-and-ask-approve-card-at-100-of-a-daily-spend-cap-instead-of",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "55576d0c83e48c597c4b0dd7a704fce783739b69",
+  "contract_digest": "d6eced61b65d6ac3b64e76245336b7e9608fb0860f9b9d04b039f472ec662cc8",
+  "execution_digest": "1f9e4f2a4295d38ae2aa8c1647c07d2b18dde95e509c3368c085f3f1df2aee09",
+  "workspace_digest": "81484df1dc07565577e3ce04b82f3383b39322d5b3a58d0c2ef750dad0608374",
+  "timestamp": 1790456045
+}

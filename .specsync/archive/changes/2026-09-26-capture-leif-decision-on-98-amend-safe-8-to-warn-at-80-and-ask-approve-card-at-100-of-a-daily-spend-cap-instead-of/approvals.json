@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790456042,
+      "digest": "d6eced61b65d6ac3b64e76245336b7e9608fb0860f9b9d04b039f472ec662cc8",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "capture-leif-decision-on-98-amend-safe-8-to-warn-at-80-and-ask-approve-card-at-100-of-a-daily-spend-cap-instead-of",
+        "title": "Capture Leif decision on #98: amend SAFE-8 to warn at 80% and ask (Approve card) at 100% of a daily spend cap instead of refusing",
+        "description": "Capture Leif decision on #98: amend SAFE-8 to warn at 80% and ask (Approve card) at 100% of a daily spend cap instead of refusing",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "hi/safe.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "HI text amendment in hi/safe.md per Leif's recorded decision on #98; no code or canonical spec change",
+        "acceptance_criteria": [
+          "hi/safe.md SAFE-8 reads warn at 80%, ask at 100% (Approve card); hi check passes"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790456049,
+      "digest": "ea0134ee54ec987097f1524711b20c50144932a9b06da01cbcf4602fffbc2396",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
