@@ -1,0 +1,128 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790451945,
+      "digest": "d04e2b2d24705128a61afdf6196894ff271765fb497d8e8d777a079a15eeb337",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one",
+        "title": "Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2",
+        "description": "Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/agent/",
+          "specs/cli/",
+          "specs/discord/",
+          "specs/watch/",
+          "src/agent/events-ndjson.ts",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/task-summary.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/protocol-version.ts",
+          "src/watch/agent-client.ts",
+          "tests/agent.cli.test.ts",
+          "tests/agent.events-ndjson.test.ts",
+          "tests/agent.ndjson-spawn.test.ts",
+          "tests/discord.bridge.cli.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "task run --output ndjson writes one JSON object per stdout line, each carrying protocol=CORVIDINHO_PROTOCOL_VERSION (2): StateChanged, Text, ToolCall (plugin command name + truncated/secret-scrubbed argument summary, never raw args), ToolResult, VerifyResult, a usage line with running prompt/completion/total token counts when the OpenAI-compatible response carries usage, and a final result line whose result equals the task run --json result object; --json single-result output unchanged; Discord and WATCH spawn clients run --output ndjson, read stdout line by line, forward state / current tool / token counts to onStatus (ThinkingStatus shows real state, AGENT-8/DISCORD-3) and take the summary from the result line, falling back to summarizeTaskRunOutput; CORVIDINHO_PROTOCOL_VERSION bumps 1 to 2 so DISCORD-10 lockstep refuses a stale binary; fixture tests cover serializer shape, redaction/truncation, parser robustness to partial lines and garbage, fake-bin spawn driving onStatus, and unchanged --json; no live tokens or network"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "2a171058b6a726197e91a95d538d1463f50629e424326656fefb95c0ba11daca",
+        "cli": "2ccfe5884c0183209b69580f783a3c45fbea21495bd7b80f43222f8567b2b72d",
+        "discord": "9899028fa8faddfc58df7090913eec0df88c11b2110f262a7cf594bbe6ad0157",
+        "watch": "60306137d7c7dddc70cc65837e615356a8daa3fb86ae33bac68c0e6c8e3ff4d6"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790453972,
+      "digest": "d04e2b2d24705128a61afdf6196894ff271765fb497d8e8d777a079a15eeb337",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one",
+        "title": "Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2",
+        "description": "Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/agent/",
+          "specs/cli/",
+          "specs/discord/",
+          "specs/watch/",
+          "src/agent/events-ndjson.ts",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/task-summary.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/protocol-version.ts",
+          "src/watch/agent-client.ts",
+          "tests/agent.cli.test.ts",
+          "tests/agent.events-ndjson.test.ts",
+          "tests/agent.ndjson-spawn.test.ts",
+          "tests/discord.bridge.cli.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "task run --output ndjson writes one JSON object per stdout line, each carrying protocol=CORVIDINHO_PROTOCOL_VERSION (2): StateChanged, Text, ToolCall (plugin command name + truncated/secret-scrubbed argument summary, never raw args), ToolResult, VerifyResult, a usage line with running prompt/completion/total token counts when the OpenAI-compatible response carries usage, and a final result line whose result equals the task run --json result object; --json single-result output unchanged; Discord and WATCH spawn clients run --output ndjson, read stdout line by line, forward state / current tool / token counts to onStatus (ThinkingStatus shows real state, AGENT-8/DISCORD-3) and take the summary from the result line, falling back to summarizeTaskRunOutput; CORVIDINHO_PROTOCOL_VERSION bumps 1 to 2 so DISCORD-10 lockstep refuses a stale binary; fixture tests cover serializer shape, redaction/truncation, parser robustness to partial lines and garbage, fake-bin spawn driving onStatus, and unchanged --json; no live tokens or network"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "2a171058b6a726197e91a95d538d1463f50629e424326656fefb95c0ba11daca",
+        "cli": "0a5fdbd3dc4d7e41ba72e2e55aee499ccfa9a4f5c9cf217c3e71af9290e2424b",
+        "discord": "ed50c8455bd63210a49368320dc19565d1b7f9dd46c64e010986dd464e696f86",
+        "watch": "60306137d7c7dddc70cc65837e615356a8daa3fb86ae33bac68c0e6c8e3ff4d6"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790454036,
+      "digest": "83f0c7f87536b6294ff04b60873fd6d79a8f5d80de06408ce2614c4bcbc176bf",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

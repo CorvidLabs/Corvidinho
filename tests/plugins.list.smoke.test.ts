@@ -24,6 +24,7 @@ describe("plugins list smoke", () => {
     expect(out).toContain("files-read");
     expect(out).toContain("files-write");
     expect(out).toContain("search-grep");
+    expect(out).toContain("shell-exec");
     expect(out).toContain("web-fetch");
     expect(out).toContain("danger-ping");
   });

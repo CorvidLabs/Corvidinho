@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "task-run-task-always-takes-the-next-argv-item-as-task-text-so-untrusted-discord-github-text-that-looks-like-a-flag-tier",
+  "implementation_commit": "bd9c4da9770050bf8ee0d48684093f79fc132f65",
+  "implementation_tree": "698db41e52e078b61b493949f348890734db0e83",
+  "contract_digest": "e4bdd78816ed1424db3755def3803019a76fcbc92f3a609d0013566cde1afe87",
+  "workspace_digest": "ecaba85ee623799ac9869a00a21e43addd776094df7ab730a3e0036376eb9e5d",
+  "closing_digest": "d3077487f1b713eb0b09619f19afe9cb9d02dd34ab5eb106604cfd664908fe23",
+  "review_digest": "a5b44d5934462995b0c312a4092b904510ee366eb610c11d50392c64ee29dc86",
+  "finalization_digest": "1eefd78160af74d72051a6fb31b4554e476343d114c73a00c3c4ff669e97179d",
+  "timestamp": 1790453581
+}
