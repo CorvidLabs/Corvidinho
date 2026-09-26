@@ -33,13 +33,13 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | SpecSync agent wiring | #8 → [#22](https://github.com/CorvidLabs/Corvidinho/pull/22) | Plan-time list/read (`spec_loader`) + verify-lane `spec-check`; typed SpecSync plugins |
 | HEAR thin | #5 → [#23](https://github.com/CorvidLabs/Corvidinho/pull/23) | Discord bridge: mention→session stub, reply/thread continuity, allowlisted channels; no ProcessManager |
 | Attribution helper | #20 → [#24](https://github.com/CorvidLabs/Corvidinho/pull/24) | Shared “Made with Corvidinho” markdown/plain constants + `corvidinho attribution` CLI (no @handles) |
+| HEAR thinking status | #10 → [#25](https://github.com/CorvidLabs/Corvidinho/pull/25) | DISCORD-3 edit-in-place progress (elapsed, tool, rough tokens); no ProcessManager |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
-| Thinking | [#10](https://github.com/CorvidLabs/Corvidinho/issues/10) HEAR live thinking status | DISCORD-3 edit-in-place progress (shipping in this PR when green) |
 | Polish | [#11](https://github.com/CorvidLabs/Corvidinho/issues/11)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Remaining Discord polish after thinking status |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
@@ -114,7 +114,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 4. **Discord HEAR** — #5 → #23 thin shipped (go-live = token + allowlists on VM)
 5. **Attribution** — #20 → #24 shipped
 6. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
-7. **Discord polish** — #10 thinking status (shipping); then #11–#14
+7. **Discord polish** — #10→#25 thinking status shipped; then #11–#14
 8. **GH write / review / mention** — #19 + later GITHUB-2/3/5
 9. **Deferred** — #9, wallets
 
