@@ -1,6 +1,6 @@
 ---
 id: schedule-runs-name-worktrees-and-branches-from-the-full-schedule-and-run-ids-and-stale-branch-cleanup-parks-a-branch
-state: implementing
+state: archived
 type: bug_fix
 base_commit: cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f
 ---
