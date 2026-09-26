@@ -24,5 +24,5 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
 
 ## Notes (not numbered AC)
 
-- SAFE-8 was amended per Leif decision on #98 (2026-09-26): warn at 80%, ask at 100% (Approve card) rather than refuse.
+- Leif's decision on #98 (2026-09-26) amended the spend-cap criterion above: warn at 80%, ask at 100% (Approve card) rather than refuse.
 - Non-ADMIN sessions refuse mutating tools at catalog + run time even when `dangerous: false` (notably files-write/edit): **ROLES-CHAT-2..5** in [`hi/roles.md`](roles.md).
