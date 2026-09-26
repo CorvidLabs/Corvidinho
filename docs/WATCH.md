@@ -17,6 +17,22 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
 
+## Durable sessions (REQ-watch-037, #37 slice 1)
+
+- WATCH sessions (`owner/repo#number`) persist in the shared SQLite DB
+  (`~/.local/share/corvidinho/corvidinho.db`, override `CORVIDINHO_DATA_DIR`),
+  table `watch_sessions` (schema v6). A `github watch` restart keeps live issue
+  sessions; startup logs `[watch] sessions: N restored (soft TTL Xm)`.
+- Same soft TTL as Discord (SESSION-1..3): `CORVIDINHO_SESSION_TTL_MS`, clamped
+  to 30–60m, default 45m. Each event on the issue keeps the session alive; an
+  issue idle past the TTL starts a fresh session. Cross-session continuity comes
+  from MEMORY (SESSION-4), not from a long-lived session.
+- Stored topic (issue title) is SAFE-6 scrubbed. Dry-run without
+  `CORVIDINHO_DATA_DIR` stays in-memory.
+- Not yet: turn persistence/replay, stored conversation summaries, durable
+  processed-id/ack dedup (a restart can re-see recent events; they continue the
+  persisted session).
+
 
 ## Reliability (REQ-watch-007)
 

@@ -2,9 +2,12 @@
  * WATCH poll loop: fetch → dedup → allowlist route → session stub.
  * Poll-first for bot/VM (no public URL). No ProcessManager.
  * REQ-watch-007: cycle logging, caught pollOnce errors, auto-ack on mention/comment.
+ * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL.
  */
 
+import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import {
   createEchoAgentClient,
   createSpawnAgentClient,
@@ -92,6 +95,16 @@ export type StartWatchOptions = {
   /** Override log sink (tests). Default console.log / console.error. */
   log?: (msg: string) => void;
   logError?: (msg: string, err?: unknown) => void;
+  /**
+   * Shared DB for durable WATCH sessions (REQ-watch-037). Default opens the
+   * shared Corvidinho DB (in-memory for dry-run without CORVIDINHO_DATA_DIR).
+   * An injected db is not closed on stop.
+   */
+  db?: Database;
+  /** Inject a session store (tests); skips opening the shared DB. */
+  sessionStore?: SessionStore;
+  /** Soft TTL override (ms); default resolveSessionTtlMs(env). */
+  sessionTtlMs?: number;
   onAction?: (info: {
     kind: string;
     event: DetectedEvent;
@@ -128,7 +141,25 @@ export async function startWatchPoller(
   }
 
   const config = loaded.config;
-  const store = new SessionStore();
+  const env = opts.env ?? process.env;
+  // Durable WATCH sessions (REQ-watch-037). Dry-run without an explicit data
+  // dir stays in-memory so tests never touch ~/.local/share/corvidinho.
+  const ownedDb =
+    opts.db || opts.sessionStore
+      ? undefined
+      : openCorvidinhoDb(
+          config.dryRun && !env.CORVIDINHO_DATA_DIR?.trim()
+            ? { memory: true }
+            : { env },
+        );
+  const db = opts.db ?? ownedDb;
+  let dbClosed = false;
+  const store =
+    opts.sessionStore ??
+    new SessionStore({
+      db,
+      ttlMs: opts.sessionTtlMs ?? resolveSessionTtlMs(env),
+    });
   const processed = new ProcessedIdStore();
   const acked = new AckedIdStore();
   const searchClient =
@@ -153,6 +184,12 @@ export async function startWatchPoller(
       if (err !== undefined) console.error(msg, err);
       else console.error(msg);
     });
+
+  if (!opts.sessionStore) {
+    log(
+      `[watch] sessions: ${store.list().length} restored (soft TTL ${Math.round(store.ttlMs / 60000)}m)`,
+    );
+  }
 
   let timer: ReturnType<typeof setInterval> | null = null;
   let running = true;
@@ -249,9 +286,16 @@ export async function startWatchPoller(
     return result;
   };
 
+  let inflight: Promise<void> | null = null;
   const schedulePoll = () => {
-    void pollOnce().catch((err) => {
-      logError("[watch] pollOnce error", err);
+    const p = pollOnce()
+      .then(() => undefined)
+      .catch((err) => {
+        logError("[watch] pollOnce error", err);
+      });
+    inflight = p;
+    void p.finally(() => {
+      if (inflight === p) inflight = null;
     });
   };
 
@@ -275,6 +319,12 @@ export async function startWatchPoller(
       if (timer) {
         clearInterval(timer);
         timer = null;
+      }
+      // Let an in-flight cycle finish its session writes before closing.
+      if (inflight) await inflight;
+      if (ownedDb && !dbClosed) {
+        dbClosed = true;
+        ownedDb.close();
       }
     },
   };

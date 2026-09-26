@@ -31,12 +31,16 @@ allowlisted targets (ALLOW-1). Assignment when watch username is in issue/PR
 assignees (#48). Poll-first for bot/VM; webhook deferred. Reliability harden:
 per-cycle poll logging, caught pollOnce errors, auto-ack GitHub comment on
 mention/comment start/continue (skip own username; once per event id), ignore
-own mentions in search, document org-search pagination bury risk.
+own mentions in search, document org-search pagination bury risk. WATCH
+sessions persist in the shared SQLite DB (`watch_sessions`, schema v6) with the
+same soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037).
 
 ## Public API
 
 loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
+SessionStore options (`db`, `ttlMs`, `now`; `durable`), startWatchPoller
+`db` / `sessionStore` / `sessionTtlMs` injection,
 agent helpers, createFixtureSearchClient / createOctokitSearchClient,
 ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore).
 
@@ -49,7 +53,12 @@ need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
 `CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
-user (REQ-watch-008).
+user (REQ-watch-008). With a DB, WATCH sessions reload on restart; a session
+idle past the soft TTL (`resolveSessionTtlMs`, 30–60m, default 45m) is dropped
+and the next event on that issue starts fresh; one session per
+`owner/repo#number`; stored topic is SAFE-6 scrubbed; dry-run without
+`CORVIDINHO_DATA_DIR` stays in-memory; the poller closes a DB it opened on stop
+(REQ-watch-037).
 
 ## Behavioral Examples
 
@@ -57,7 +66,9 @@ Allowlisted mention or assignment→start_session; same repo#number→continue_s
 non-allowlisted user/repo→refuse quiet; duplicate id→skip; missing token /
 empty repos refuse start cleanly; poll cycle logs six counters; mention/comment
 start/continue posts ack unless sender is watch username or already acked;
-own-username comment omitted from events.
+own-username comment omitted from events. Poller restarted on the same data dir
+continues the same issue session; issue idle past TTL → start_session with a
+new id.
 
 ## Error Cases
 
@@ -66,7 +77,8 @@ Missing token; missing mention username; empty repo allowlist; not authorized
 
 ## Dependencies
 
-src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify.
+src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify,
+src/store (shared SQLite DB, session TTL, SAFE-6 scrub).
 
 ## Change Log
 

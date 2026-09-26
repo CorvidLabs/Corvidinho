@@ -1,6 +1,7 @@
 /**
- * Shared bun:sqlite Database for Discord session/work/schedule/memory durability
- * (SESSION + DISCORD-SCHEDULE + MEMORY + SESSION-WORKTREE substrate).
+ * Shared bun:sqlite Database for Discord session/work/schedule/memory and WATCH
+ * session durability (SESSION + DISCORD-SCHEDULE + MEMORY + SESSION-WORKTREE
+ * substrate).
  */
 
 import { mkdirSync } from "node:fs";
@@ -146,7 +147,27 @@ CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
   BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 `;
 
-export const SCHEMA_VERSION = 5;
+/**
+ * v6 — durable WATCH sessions (#37 slice 1, SESSION-1..3): one row per
+ * owner/repo#number (issue_key), same soft TTL as discord_sessions.
+ * `topic` is free text (issue title) and is a SAFE-6 scrub target.
+ */
+const SCHEMA_V6_SQL = `
+CREATE TABLE IF NOT EXISTS watch_sessions (
+  id TEXT PRIMARY KEY NOT NULL,
+  issue_key TEXT NOT NULL UNIQUE,
+  repo TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  topic TEXT,
+  created_at INTEGER NOT NULL,
+  last_activity_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_activity
+  ON watch_sessions(last_activity_at);
+`;
+
+export const SCHEMA_VERSION = 6;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -199,6 +220,11 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V5_SQL);
     db.run("UPDATE schema_meta SET value = '5' WHERE key = 'version'");
     version = 5;
+  }
+  if (version < 6) {
+    db.exec(SCHEMA_V6_SQL);
+    db.run("UPDATE schema_meta SET value = '6' WHERE key = 'version'");
+    version = 6;
   }
 }
 

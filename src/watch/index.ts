@@ -33,7 +33,11 @@ export {
   type FixtureBundle,
   type SearchClient,
 } from "./searcher.ts";
-export { issueKey, SessionStore } from "./session-store.ts";
+export {
+  issueKey,
+  SessionStore,
+  type WatchSessionStoreOptions,
+} from "./session-store.ts";
 export {
   NOT_AUTHORIZED,
   type DetectedEvent,
