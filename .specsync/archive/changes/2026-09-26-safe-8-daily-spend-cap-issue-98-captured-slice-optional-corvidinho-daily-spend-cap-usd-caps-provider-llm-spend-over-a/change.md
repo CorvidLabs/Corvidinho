@@ -1,6 +1,6 @@
 ---
 id: safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a
-state: verifying
+state: archived
 type: feature
 base_commit: 3429ddd55c8a26e3f68e25defb953a010dab524f
 ---
