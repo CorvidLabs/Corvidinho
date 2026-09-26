@@ -7,6 +7,7 @@ import {
  * Optional project (SESSION-WORKTREE-4). No ProcessManager, no Discord thread product UI.
  */
 
+import { describeFailedRun } from "../../agent/verify-report.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 
@@ -148,7 +149,7 @@ export async function handleSessionStart(
 
   const summary = result.ok
     ? result.summary.slice(0, 1500)
-    : `failed (exit ${result.exitCode})`;
+    : describeFailedRun(result);
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";

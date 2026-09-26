@@ -1,5 +1,6 @@
 /**
- * Spawn corvidinho for WATCH chat with --no-verify (ingress latency).
+ * Spawn corvidinho for WATCH chat. Never passes --no-verify: a GitHub-started
+ * change runs the project verify lane like any other (AGENT-4 / FLEDGE-2, #85).
  * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
  * Injectable for tests; no ProcessManager.
  */
@@ -38,7 +39,6 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
-        "--no-verify",
         "--task",
         prompt,
         "--output",

@@ -3,6 +3,8 @@
  * Lean: OpenAI-compatible tool loop; no Trust/attest.
  */
 
+import type { WorkspaceProbe } from "./workspace-delta.ts";
+
 export type AgentState =
   | "idle"
   | "planning"
@@ -80,4 +82,9 @@ export type RunTaskOptions = {
   signal?: AbortSignal;
   /** Config loaded from fledge.toml; used as defaults when overrides omitted. */
   config?: AgentConfig;
+  /**
+   * Real worktree delta probe (AGENT-4, #85). Default: git status/HEAD in
+   * `cwd`; null disables it (tool-reported filesChanged only).
+   */
+  workspaceProbe?: WorkspaceProbe | null;
 };

@@ -48,7 +48,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, attribution, and task run 
 
 ## Invariants
 
-task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
+task run honors --no-verify (operator-only; the result then says NOT verified), --tier, and agent config; bridges never pass --no-verify (#85).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 Attribution output uses only the project name and repository link and contains no account handle.
 

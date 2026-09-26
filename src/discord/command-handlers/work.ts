@@ -8,6 +8,7 @@ import {
  * Optional project (SESSION-WORKTREE-4). In-memory WorkStore + AgentClient; no ProcessManager.
  */
 
+import { describeFailedRun } from "../../agent/verify-report.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 
@@ -131,7 +132,7 @@ export async function handleWorkCommand(
 
   const summary = result.ok
     ? result.summary.slice(0, 1500)
-    : `failed (exit ${result.exitCode})`;
+    : describeFailedRun(result);
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";

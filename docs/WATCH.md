@@ -15,7 +15,7 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
-5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
+5. Spawn `corvidinho task run` (verify gate on; or echo in dry-run)
 
 
 ## Reliability (REQ-watch-007)

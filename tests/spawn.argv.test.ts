@@ -27,7 +27,6 @@ describe("buildCorvidinhoArgv", () => {
     const argv = buildCorvidinhoArgv("src/cli.ts", [
       "task",
       "run",
-      "--no-verify",
       "--task",
       "hi",
       "--output",
@@ -39,7 +38,6 @@ describe("buildCorvidinhoArgv", () => {
     expect(argv.slice(3)).toEqual([
       "task",
       "run",
-      "--no-verify",
       "--task",
       "hi",
       "--output",

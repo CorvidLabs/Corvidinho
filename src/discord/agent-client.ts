@@ -1,5 +1,6 @@
 /**
- * Spawn corvidinho for chat with --no-verify (bridge latency).
+ * Spawn corvidinho for chat. Never passes --no-verify: a chat-started change
+ * runs the project verify lane like any other (AGENT-4 / FLEDGE-2, #85).
  * Reads the `task run --output ndjson` event stream so the thinking status
  * shows real state / current tool / token counts (AGENT-8 / DISCORD-3, #73).
  * Injectable for tests; no ProcessManager.
@@ -59,7 +60,7 @@ export type SpawnAgentClientOpts = {
 };
 
 /**
- * Spawns: `<bin> task run --no-verify --task <prompt> --output ndjson`
+ * Spawns: `<bin> task run --task <prompt> --output ndjson` (verify gate on)
  * and reads stdout line by line; the summary comes from the `result` frame
  * (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
@@ -81,7 +82,6 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
-        "--no-verify",
         "--task",
         prompt,
         "--output",

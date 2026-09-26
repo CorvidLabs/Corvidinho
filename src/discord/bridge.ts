@@ -59,6 +59,7 @@ import {
 } from "../scheduler/index.ts";
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
+import { describeFailedRun } from "../agent/verify-report.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -429,7 +430,7 @@ export async function startBridge(
 
       const body = result.ok
         ? result.summary.slice(0, 1800)
-        : `session ${session.id} failed (exit ${result.exitCode})`;
+        : `session ${session.id} ${describeFailedRun(result)}`;
 
       if (replyRef.fn) {
         const sent = await replyRef.fn({

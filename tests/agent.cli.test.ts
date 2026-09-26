@@ -34,12 +34,15 @@ describe("corvidinho task run CLI", () => {
         verified: boolean;
         state: string;
         cancelled: boolean;
+        summary: string;
       };
     };
     expect(parsed.result.verifySkipped).toBe(true);
     expect(parsed.result.verified).toBe(false);
     expect(parsed.result.state).toBe("done");
     expect(parsed.result.cancelled).toBe(false);
+    // Demo stub reports a change: skipping says so plainly (AGENT-4, #85).
+    expect(parsed.result.summary).toStartWith("NOT verified:");
   });
 
   test("--json stays one pretty { result, events } document (not ndjson, #73)", async () => {

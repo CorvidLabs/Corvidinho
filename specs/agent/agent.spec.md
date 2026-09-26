@@ -15,11 +15,14 @@ files:
   - src/agent/tier.ts
   - src/agent/tools.ts
   - src/agent/events-ndjson.ts
+  - src/agent/workspace-delta.ts
+  - src/agent/verify-report.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
+  - tests/agent.verify-gate.test.ts
 
 db_tables: []
 depends_on:
@@ -50,6 +53,15 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+Always verify (REQ-agent-085, issue #85): `src/agent/workspace-delta.ts`
+exports `snapshotWorkspace`, `workspaceChangedSince`, `parsePorcelainZ`,
+`createGitWorkspaceProbe`, `gitWorkspaceProbe`, `defaultGitRunner` and the
+`WorkspaceProbe` / `WorkspaceSnapshot` / `GitRunner` types;
+`RunTaskOptions.workspaceProbe` (default the probe for `cwd`, `null` = off).
+`src/agent/verify-report.ts` exports `verificationNote`,
+`withVerificationNote`, `describeFailedRun`, `NO_CHANGES_NOTE` and the
+`VerificationOutcome` type.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
@@ -61,6 +73,12 @@ ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
 
+The verify gate fires when a tool reported `filesChanged` OR the real worktree
+changed since the run started; the worktree probe only adds a reason to
+verify, never removes one. Every non-cancelled `TaskResult.summary` carries
+exactly one fixed verification line (Verified / Verification FAILED / NOT
+verified / No files changed), never built from model or lane output.
+
 ## Behavioral Examples
 
 ### Scenario: System prompt mentions memory-store
@@ -70,10 +88,17 @@ events are unchanged.
 - **Then** it embeds MEMORY_AGENT_SYSTEM_INSTRUCTIONS with argv example for
   memory-store
 
+### Scenario: Unreported edit still hits the verify lane
+
+- **Given** a clean worktree and a tool that writes a file without reporting `filesChanged`
+- **When** `runTask` finishes the execute step
+- **Then** the worktree delta is non-empty, the verify lane runs, and the summary leads with `Verified:` or `Verification FAILED:`
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
+| cwd not in a worktree / probe fails | tool-reported `filesChanged` alone decides the gate |
 | Verify exhausted | state failed, verified=false, summary includes verifier output |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | fledge missing | verify failure output names PATH miss |

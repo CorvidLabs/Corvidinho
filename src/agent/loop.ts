@@ -2,11 +2,19 @@
  * Prove-before-done task loop (Merlin agent-loop Verifying steal).
  * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5).
  * Verifying: fledge lanes run verify (includes spec-check when wired).
+ * Gate trigger: tool-reported filesChanged OR a real worktree delta; every
+ * result carries a plain verification line (AGENT-4 / FLEDGE-2, #85).
  */
 
 import { loadAgentConfig } from "./config.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
 import { defaultVerifyRunner } from "./verify.ts";
+import { withVerificationNote } from "./verify-report.ts";
+import {
+  gitWorkspaceProbe,
+  type WorkspaceProbe,
+  type WorkspaceSnapshot,
+} from "./workspace-delta.ts";
 import type {
   AgentEvent,
   AgentState,
@@ -30,6 +38,30 @@ function setState(
 
 function isAborted(signal?: AbortSignal): boolean {
   return Boolean(signal?.aborted);
+}
+
+async function safeSnapshot(
+  probe: WorkspaceProbe | null,
+  cwd: string,
+): Promise<WorkspaceSnapshot | null> {
+  if (!probe) return null;
+  try {
+    return await probe.snapshot(cwd);
+  } catch {
+    return null;
+  }
+}
+
+async function safeChangedSince(
+  probe: WorkspaceProbe | null,
+  before: WorkspaceSnapshot | null,
+): Promise<string[]> {
+  if (!probe || !before) return [];
+  try {
+    return await probe.changedSince(before);
+  } catch {
+    return [];
+  }
 }
 
 function cancelledResult(
@@ -60,6 +92,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     opts.verifyBeforeComplete ?? fileConfig.verifyBeforeComplete;
   const maxRetries = opts.maxRetries ?? fileConfig.maxRetries;
   const verifyRunner = opts.verifyRunner ?? defaultVerifyRunner;
+  const probe =
+    opts.workspaceProbe === undefined ? gitWorkspaceProbe : opts.workspaceProbe;
 
   let summary = "";
   let filesChanged: string[] = [];
@@ -101,6 +135,9 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     });
   }
 
+  // Real worktree fingerprint so edits no tool reported still hit the gate.
+  const baseline = await safeSnapshot(probe, opts.cwd);
+
   for (;;) {
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -120,13 +157,22 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       return cancelledResult(summary, filesChanged, attempts);
     }
 
-    const wantVerify =
-      verifyBeforeComplete && filesChanged.length > 0;
+    const worktreeDelta = await safeChangedSince(probe, baseline);
+    if (filesChanged.length === 0 && worktreeDelta.length > 0) {
+      emit(onEvent, {
+        type: "Text",
+        text: `Worktree changed (${worktreeDelta.length} path(s)) though no tool reported filesChanged — verify gate applies.`,
+      });
+    }
+    const changed = filesChanged.length > 0 || worktreeDelta.length > 0;
+    const wantVerify = verifyBeforeComplete && changed;
 
     if (!wantVerify) {
       setState(onEvent, "done");
       return {
-        summary,
+        summary: withVerificationNote(summary, {
+          kind: changed ? "gate-off" : "no-changes",
+        }),
         filesChanged,
         verified: false,
         verifySkipped: true,
@@ -168,7 +214,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     if (result.success) {
       setState(onEvent, "done");
       return {
-        summary,
+        summary: withVerificationNote(summary, { kind: "passed" }),
         filesChanged,
         verified: true,
         verifySkipped: false,
@@ -186,7 +232,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       });
       setState(onEvent, "failed");
       return {
-        summary: `${summary}\n\nVerification failed after ${maxRetries} retries:\n${result.output}`,
+        summary: `${withVerificationNote(summary, { kind: "failed", retries: maxRetries })}\n\nVerification failed after ${maxRetries} retries:\n${result.output}`,
         filesChanged,
         verified: false,
         verifySkipped: false,

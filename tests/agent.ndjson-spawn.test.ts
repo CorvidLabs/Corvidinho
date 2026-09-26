@@ -94,7 +94,6 @@ describe("Discord spawn client reads the ndjson stream (REQ-discord-073)", () =>
       expect(readFileSync(join(dir, "argv.txt"), "utf8").trim().split("\n")).toEqual([
         "task",
         "run",
-        "--no-verify",
         "--task",
         "list plugins",
         "--output",
@@ -181,7 +180,6 @@ describe("WATCH spawn client reads the ndjson stream (REQ-watch-073)", () => {
       expect(readFileSync(join(dir, "argv.txt"), "utf8").trim().split("\n")).toEqual([
         "task",
         "run",
-        "--no-verify",
         "--task",
         "review this",
         "--output",

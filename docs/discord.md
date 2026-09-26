@@ -65,11 +65,13 @@ MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite under `~/.local/share/corvidinho/` (
 
 One embed edited in place: description + color + footer (`sess · phase · elapsed [| tool | ~tok]`). Phases: starting / working / done / error. Used by @mention, `/session start`, `/work`.
 
-Live source (AGENT-8 / DISCORD-3, #73): the bridge spawns `task run --no-verify --task <prompt> --output ndjson` and reads one versioned frame per stdout line as the agent works. The description follows the agent state (`⏳ planning` / `working` / `calling tool <name>` / `verifying` / `done`), the footer shows the current tool, and `~tok` is the provider-reported running total when the LLM returns `usage` (rough estimate otherwise). Tool arguments are never streamed raw. The bridge requires protocol 2 (DISCORD-10): restart the bridge and the corvidinho checkout together after upgrading. If the binary streams another protocol mid-run, its frames are withheld and the reply is a "protocol mismatch — restart the bridge" notice. The final `result.summary` is capped at 4000 characters (Discord shows at most ~1800).
+Live source (AGENT-8 / DISCORD-3, #73): the bridge spawns `task run --task <prompt> --output ndjson` (never `--no-verify`, #85) and reads one versioned frame per stdout line as the agent works. The description follows the agent state (`⏳ planning` / `working` / `calling tool <name>` / `verifying` / `done`), the footer shows the current tool, and `~tok` is the provider-reported running total when the LLM returns `usage` (rough estimate otherwise). Tool arguments are never streamed raw. The bridge requires protocol 2 (DISCORD-10): restart the bridge and the corvidinho checkout together after upgrading. If the binary streams another protocol mid-run, its frames are withheld and the reply is a "protocol mismatch — restart the bridge" notice. The final `result.summary` is capped at 4000 characters (Discord shows at most ~1800).
 
 ### Session replies (mention / continue)
 
 After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced to the user message. Summary comes from the stream's final `result` frame (same `result` as `task run --json`), falling back to the raw output summary. No attribution footer on Discord outbound today.
+
+Verification (AGENT-4 / FLEDGE-2, #85): chat, `/session start`, `/work` and schedule runs are held to the project verify lane whenever the run changed files (a tool reported them, or the git worktree really changed). The reply leads with `Verified: …` only after the lane passed. When the lane still fails after retries, the reply says `failed (exit 1)` followed by `Verification FAILED: … — not done.` A run that changed nothing skips the lane and ends with `No files changed — nothing to verify.`
 
 ### Slash replies
 

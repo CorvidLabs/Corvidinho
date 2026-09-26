@@ -66,7 +66,7 @@ Missing token; missing mention username; empty repo allowlist; not authorized
 
 ## Dependencies
 
-src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify.
+src/allowlist/github.ts, @octokit/rest (live), agent `task run` with the verify gate on (never --no-verify, #85).
 
 ## Change Log
 

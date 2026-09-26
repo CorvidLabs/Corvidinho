@@ -7,6 +7,7 @@
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
+import { describeFailedRun } from "../agent/verify-report.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
 import {
   ensureTalkWorkspace,
@@ -209,7 +210,7 @@ export class SchedulerService {
 
       const summary = result.ok
         ? result.summary.slice(0, 1500)
-        : `failed (exit ${result.exitCode})`;
+        : describeFailedRun(result);
 
       this.store.markRunFinished(schedule, run, {
         ok: result.ok,

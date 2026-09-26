@@ -111,6 +111,9 @@ recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
 No `/memory` slash command.
+Discord agent spawns (mention, `/session start`, `/work`, schedule ticks) never
+pass `--no-verify`; a failed run's reply says `failed (exit N)` plus the fixed
+`Verification FAILED: …` line when the verify lane failed (REQ-discord-085).
 
 ## Behavioral Examples
 
