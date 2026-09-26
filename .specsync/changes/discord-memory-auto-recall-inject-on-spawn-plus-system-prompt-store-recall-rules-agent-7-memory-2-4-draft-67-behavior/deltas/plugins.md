@@ -23,6 +23,8 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 
 ### SPEC SECTION Change Log
 
+Preserve historical Change Log prose/rows; append the memory-discord-inject row.
+
 | 2026-09-26 | memory-discord-inject: richer memory-* argv descriptions (REQ-plugins-085) |
 
 ## Added

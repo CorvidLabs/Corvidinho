@@ -9,6 +9,8 @@ change: discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-reca
 
 ### SPEC SECTION Change Log
 
+Preserve historical Change Log prose/rows; append the memory-discord-inject row.
+
 | 2026-09-26 | memory-discord-inject: package 0.0.7 with MEMORY Discord inject (REQ-cli-014) |
 
 ## Added

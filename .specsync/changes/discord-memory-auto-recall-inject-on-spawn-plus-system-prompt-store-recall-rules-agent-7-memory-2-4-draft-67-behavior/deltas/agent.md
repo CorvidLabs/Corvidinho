@@ -35,6 +35,8 @@ descriptions for `memory-*` commands SHALL include concrete examples.
 
 ### SPEC SECTION Change Log
 
+Preserve historical Change Log prose/rows; append the memory-discord-inject row.
+
 | 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |
 
 ## Added

@@ -58,6 +58,8 @@ No `/memory` slash command.
 
 ### SPEC SECTION Change Log
 
+Preserve historical Change Log prose/rows; append the memory-discord-inject row.
+
 | 2026-09-26 | memory-discord-inject: auto-recall prepend on spawn (REQ-discord-023 / AGENT-7 / MEMORY-2/4); package 0.0.7 |
 
 ## Added
