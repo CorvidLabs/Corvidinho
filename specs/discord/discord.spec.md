@@ -62,4 +62,4 @@ src/allowlist/, agent task --no-verify, optional discord.js.
 ## Change Log
 
 DISCORD-3 live thinking status (2026-09-26, corvid-agent, #10).
-| 2026-09-26 | hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while: HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24 |
+
