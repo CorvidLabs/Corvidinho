@@ -17,6 +17,10 @@ import {
   goLiveChecklist,
   startBridge,
 } from "./discord/index.ts";
+import {
+  goLiveChecklist as watchGoLiveChecklist,
+  startWatchPoller,
+} from "./watch/index.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { list, size } from "./plugins/registry.ts";
@@ -43,6 +47,7 @@ Usage:
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
   corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
+  corvidinho github watch           Start WATCH GitHub mention poll (ALLOW-1; poll-first)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
@@ -64,6 +69,10 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   DISCORD_TOKEN / DISCORD_BOT_TOKEN                     required for discord bridge (never commit)
   DISCORD_CHANNEL_IDS                                   non-empty channel ids (union with allowlist)
   DISCORD_GUILD_ID                                      optional; fast guild slash registration
+  GITHUB_TOKEN / GH_TOKEN                               required for github watch + Octokit reads
+  CORVIDINHO_WATCH_USERNAME                             GitHub login to listen for (WATCH)
+  CORVIDINHO_WATCH_INTERVAL_MS                          poll interval (default 60000, min 30000)
+  CORVIDINHO_WATCH_DRY_RUN=1                            echo agent; no spawn
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -170,6 +179,22 @@ async function doctor(): Promise<number> {
       : "missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins",
   });
 
+  const watchUser = envPresent("CORVIDINHO_WATCH_USERNAME") || envPresent("GITHUB_WATCH_USERNAME");
+  const watchRepos =
+    envPresent("CORVIDINHO_GITHUB_ALLOW_REPOS") ||
+    envPresent("CORVIDINHO_GITHUB_ALLOW_ORGS");
+  checks.push({
+    name: "github-watch",
+    ok: tokenOk && watchUser && watchRepos,
+    detail: !tokenOk
+      ? "WATCH needs GITHUB_TOKEN/GH_TOKEN (poll-first; see docs/WATCH.md)"
+      : !watchUser
+        ? "set CORVIDINHO_WATCH_USERNAME (login to listen for)"
+        : !watchRepos
+          ? "set CORVIDINHO_GITHUB_ALLOW_REPOS / ORGS (empty = deny-all)"
+          : "token + username + repo allow env present (values not shown)",
+  });
+
   const fledgePath = which("fledge");
   checks.push({
     name: "fledge",
@@ -209,6 +234,10 @@ async function doctor(): Promise<number> {
   if (!discordTokenSet || !discordChannels) {
     console.log("");
     console.log(goLiveChecklist());
+  }
+  if (!tokenOk || !watchUser || !watchRepos) {
+    console.log("");
+    console.log(watchGoLiveChecklist());
   }
   return 1;
 }
@@ -394,6 +423,32 @@ async function discordBridge(): Promise<number> {
   return 0;
 }
 
+async function githubWatch(): Promise<number> {
+  const result = await startWatchPoller({ projectRoot: process.cwd() });
+  if (!result.ok) {
+    console.error(result.message);
+    return result.exitCode;
+  }
+  console.log(
+    `[watch] poll-first started for @${result.config.mentionUsername} on ${result.config.repos.join(", ")} every ${result.config.intervalMs}ms` +
+      (result.config.dryRun ? " (dry-run)" : ""),
+  );
+  await new Promise<void>((resolve) => {
+    const stop = async () => {
+      console.log("[watch] shutting down...");
+      await result.stop();
+      resolve();
+    };
+    process.once("SIGINT", () => {
+      void stop();
+    });
+    process.once("SIGTERM", () => {
+      void stop();
+    });
+  });
+  return 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
   const raw = argv.slice(2);
   const {
@@ -438,6 +493,15 @@ export async function main(argv: string[]): Promise<number> {
       return discordBridge();
     }
     console.error("usage: corvidinho discord bridge\n");
+    printHelp();
+    return 1;
+  }
+  if (cmd === "github") {
+    const sub = rest[1];
+    if (sub === "watch") {
+      return githubWatch();
+    }
+    console.error("usage: corvidinho github watch\n");
     printHelp();
     return 1;
   }

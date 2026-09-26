@@ -1,0 +1,43 @@
+# WATCH — GitHub mention/review ingress
+
+## Deploy choice (documented)
+
+| Mode | When | Status in Corvidinho |
+|------|------|----------------------|
+| **Poll-first** | Bot/VM **without** a public URL (dogfood default) | **Shipped** — `corvidinho github watch` |
+| **Webhook** | Public HTTPS URL + `GITHUB_WEBHOOK_SECRET` available | **Deferred** follow-up (same allowlist → session core) |
+
+Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when a stable public URL exists (HMAC verify → same `routeEvent` path).
+
+## What it does
+
+1. Interval-poll GitHub (Octokit search) for @mentions / issue comments / review requests involving `CORVIDINHO_WATCH_USERNAME`
+2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
+3. Denied contacts refuse quietly (ALLOW-5) — no session
+4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
+5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
+
+Not in this slice: auto-merge, auto-update, CI-retry, live webhook server.
+
+## Go-live (poll)
+
+```bash
+export GITHUB_TOKEN=…                 # or GH_TOKEN — secret store; never commit
+export CORVIDINHO_WATCH_USERNAME=corvid-agent   # login you listen for
+# Non-empty GitHub allowlists (file and/or env):
+export CORVIDINHO_GITHUB_ALLOW_REPOS=CorvidLabs/Corvidinho
+export CORVIDINHO_GITHUB_ALLOW_ORGS=CorvidLabs
+export CORVIDINHO_GITHUB_ALLOW_USERS=0xLeif
+# Optional:
+# export CORVIDINHO_WATCH_INTERVAL_MS=60000
+# export CORVIDINHO_WATCH_DRY_RUN=1
+
+bun src/cli.ts github watch
+# or: corvidinho github watch
+```
+
+Copy shape from [`allowlist.example.toml`](../allowlist.example.toml) → `~/.config/corvidinho/allowlist.toml`.
+
+## CI
+
+Fixture tests under `tests/watch.*.test.ts` — **no live webhook secrets** required.

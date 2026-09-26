@@ -1,0 +1,54 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790442361,
+      "digest": "e9a4e5123c2bf9f4ae68a97542dcc28ec8fc28805bf6c44741488e095d038370",
+      "note": "WATCH #19 poll-first thin slice: allowlist before session; fixture tests; webhook deferred",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions",
+        "title": "WATCH GitHub mention/review ingress poll-first thin slice (issue #19): poll Octokit search for allowlisted repo mentions/review_requests/issue_comments → allowlist gate (ALLOW-1/2/5) before session stub; document poll-for-VM vs webhook-when-public-URL; fixture tests; no ProcessManager; webhook deferred follow-up; STATUS Done for #19",
+        "description": "WATCH GitHub mention/review ingress poll-first thin slice (issue #19): poll Octokit search for allowlisted repo mentions/review_requests/issue_comments → allowlist gate (ALLOW-1/2/5) before session stub; document poll-for-VM vs webhook-when-public-URL; fixture tests; no ProcessManager; webhook deferred follow-up; STATUS Done for #19",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "watch"
+        ],
+        "affected_paths": [
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          "README.md",
+          "STATUS.md",
+          "allowlist.example.toml",
+          "docs/WATCH.md",
+          "specs/watch",
+          "src/cli.ts",
+          "src/watch",
+          "tests/fixtures/watch",
+          "tests/watch.cli.test.ts",
+          "tests/watch.config.test.ts",
+          "tests/watch.poller.test.ts",
+          "tests/watch.router.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Documented poll-first for bot/VM (webhook when public URL) in docs/WATCH.md + STATUS. Event→session path for mention/review_request/issue_comment on allowlisted repos+users only (ALLOW-1/2); denied contacts refuse quietly (ALLOW-5) with no session spawn. Empty github allowlists fail-start poller. Fixture tests without live webhook secrets; Octokit-shaped injectable searcher; no ProcessManager; no auto-merge. CLI corvidinho github watch. Webhook deferred follow-up. STATUS Done cites #19→this PR. SpecSync + fledge verify green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "afe0e1569af3f547774fe3cb06c86ec8f1535b63e445f31182cead75eb8b02f8",
+        "watch": "36509851cc586c5d740c30fc0f21f3285c695550fed4bd166e1d8c2006fcdf83"
+      }
+    }
+  ],
+  "reopenings": []
+}

@@ -42,6 +42,19 @@ bun src/cli.ts discord bridge
 
 Empty channel allowlists **refuse start** (default-deny; not Merlin BASIC). Without a token the CLI exits cleanly with a checklist — see [`STATUS.md`](STATUS.md). Soft later: issues #10–#14. Templates: [`.env.example`](.env.example), [`allowlist.example.toml`](allowlist.example.toml). Full checklist: [`docs/DISCORD-GO-LIVE.md`](docs/DISCORD-GO-LIVE.md). **READY-FOR-SECRETS** → request token via CoS/Leif secure room only (never chat paste).
 
+
+## GitHub WATCH (poll-first)
+
+```bash
+export GITHUB_TOKEN=…
+export CORVIDINHO_WATCH_USERNAME=corvid-agent
+export CORVIDINHO_GITHUB_ALLOW_REPOS=CorvidLabs/Corvidinho
+export CORVIDINHO_GITHUB_ALLOW_USERS=0xLeif
+bun src/cli.ts github watch
+```
+
+**Poll-first for bot/VM** (no public URL). Webhook deferred. Empty GitHub allowlists refuse start. Details: [`docs/WATCH.md`](docs/WATCH.md).
+
 ## Fledge lanes
 
 ```bash

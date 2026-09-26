@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions",
+  "slug": "watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions",
+  "title": "WATCH GitHub mention/review ingress poll-first thin slice (issue #19): poll Octokit search for allowlisted repo mentions/review_requests/issue_comments → allowlist gate (ALLOW-1/2/5) before session stub; document poll-for-VM vs webhook-when-public-URL; fixture tests; no ProcessManager; webhook deferred follow-up; STATUS Done for #19",
+  "description": "WATCH GitHub mention/review ingress poll-first thin slice (issue #19): poll Octokit search for allowlisted repo mentions/review_requests/issue_comments → allowlist gate (ALLOW-1/2/5) before session stub; document poll-for-VM vs webhook-when-public-URL; fixture tests; no ProcessManager; webhook deferred follow-up; STATUS Done for #19",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "9095c9e96aa26d8198d6a4a0c2fd33e0c4611acf",
+  "created_at": 1790442191,
+  "updated_at": 1790442361,
+  "affected_specs": [
+    "watch",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/watch",
+    "src/cli.ts",
+    "specs/watch",
+    "tests/watch.router.test.ts",
+    "tests/watch.poller.test.ts",
+    "tests/watch.config.test.ts",
+    "tests/watch.cli.test.ts",
+    "tests/fixtures/watch",
+    "STATUS.md",
+    "allowlist.example.toml",
+    "README.md",
+    "docs/WATCH.md",
+    ".specsync/config.toml",
+    ".specsync/registry.toml"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Documented poll-first for bot/VM (webhook when public URL) in docs/WATCH.md + STATUS. Event→session path for mention/review_request/issue_comment on allowlisted repos+users only (ALLOW-1/2); denied contacts refuse quietly (ALLOW-5) with no session spawn. Empty github allowlists fail-start poller. Fixture tests without live webhook secrets; Octokit-shaped injectable searcher; no ProcessManager; no auto-merge. CLI corvidinho github watch. Webhook deferred follow-up. STATUS Done cites #19→this PR. SpecSync + fledge verify green."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
