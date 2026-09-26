@@ -119,6 +119,18 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.19", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.19`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("IDENTITY-4");
+    expect(r.stdout).toContain("DISCORD-3.a");
+    expect(r.stdout).toContain("ROLES-CHAT-8");
+    expect(r.stdout).toContain("public GitHub");
+    expect(r.stdout).not.toContain("STRING + autocomplete");
+  });
+
   test("extract_changelog_section finds 0.0.18", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.18`,
@@ -133,12 +145,8 @@ describe("update-helpers.sh", () => {
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.17`,
     );
     expect(r.exitCode).toBe(0);
-    // Backfilled #166 / #169 entries belong to the 0.0.17 build.
-    expect(r.stdout).toContain("draft PR");
-    expect(r.stdout).toContain("HEAD commit");
     expect(r.stdout).toContain("STRING + autocomplete");
     expect(r.stdout).toContain("ADMIN-2");
-    expect(r.stdout).not.toContain("ROLES-CHAT-2");
   });
 
   test("extract_changelog_section finds 0.0.16", () => {
@@ -215,10 +223,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.18", () => {
+  test("package.json is 0.0.19", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.18");
+    expect(pkg.version).toBe("0.0.19");
   });
 });

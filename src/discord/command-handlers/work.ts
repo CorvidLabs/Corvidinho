@@ -8,8 +8,11 @@ import {
  * Optional project (SESSION-WORKTREE-4). In-memory WorkStore + AgentClient; no ProcessManager.
  */
 
+import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { formatTaskPlumbing } from "../../agent/task-summary.ts";
+import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
 
@@ -61,12 +64,14 @@ export async function handleWorkCommand(
   });
   ctx.workStore.setStatus(task, "running");
 
+  const llmModel = loadLlmEnv(process.env).model;
   const outbound = ctx.thinkingOutbound;
   const thinking = outbound
     ? new ThinkingStatus({
         outbound,
         channelId: interaction.channelId,
         sessionId: session.id,
+        model: llmModel,
         debounceMs: ctx.thinkingDebounceMs,
         tickMs: ctx.thinkingTickMs,
       })
@@ -88,10 +93,16 @@ export async function handleWorkCommand(
       owner: ctx.owner,
       mutedUsers: ctx.mutedUsers,
     }) >= PermissionLevel.ADMIN;
+  const idInject = enrichPromptWithIdentity(description, {
+    userId: interaction.userId,
+    displayName: interaction.userDisplayName,
+    username: interaction.userUsername,
+    owner: ctx.owner,
+  });
   let result;
   try {
     result = await ctx.agent.runChat({
-      prompt: description,
+      prompt: idInject.prompt,
       humanText: description,
       sessionId: session.id,
       resume: false,
@@ -109,7 +120,7 @@ export async function handleWorkCommand(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
     ctx.workStore.setStatus(task, "failed", msg);
-    await thinking?.fail(`❌ ${msg}`);
+    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Work \`${task.id}\` failed: ${msg}`;
     if (interaction.editReply) {
       await interaction.editReply({ content: body });
@@ -119,16 +130,26 @@ export async function handleWorkCommand(
     return;
   }
 
+  const plumbing = result.task
+    ? formatTaskPlumbing({
+        state: result.task.state,
+        verified: result.task.verified,
+        verifySkipped: result.task.verifySkipped,
+        attempts: result.task.attempts,
+        cancelled: result.task.cancelled,
+      })
+    : undefined;
+  const thinkExtras = { plumbing, model: llmModel };
   if (result.ok) {
     ctx.workStore.setStatus(task, "completed", result.summary.slice(0, 500));
-    await thinking?.done("✅ Done");
+    await thinking?.done("✅ Done", thinkExtras);
   } else {
     ctx.workStore.setStatus(
       task,
       "failed",
       `exit ${result.exitCode}`,
     );
-    await thinking?.fail(`❌ exit ${result.exitCode}`);
+    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
   }
 
   const summary = result.ok

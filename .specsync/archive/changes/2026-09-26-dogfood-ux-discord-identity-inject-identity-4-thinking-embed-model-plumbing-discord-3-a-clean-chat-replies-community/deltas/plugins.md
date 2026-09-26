@@ -1,115 +1,13 @@
 ---
 module: plugins
-version: 40
-status: draft
-files:
-  - src/plugins/types.ts
-  - src/plugins/registry.ts
-  - src/plugins/run.ts
-  - src/plugins/env.ts
-  - src/plugins/mutating.ts
-  - src/plugins/roles.ts
-  - src/plugins/builtins.ts
-  - src/plugins/githubDeny.ts
-  - src/plugins/githubPublic.ts
-  - tests/github.public.community.test.ts
-  - tests/files.secret-path.test.ts
-  - src/audit/log.ts
-  - src/audit/index.ts
-  - tests/audit.log.test.ts
-  - src/allowlist/types.ts
-  - src/allowlist/load.ts
-  - src/allowlist/github.ts
-  - src/allowlist/discord.ts
-  - src/allowlist/index.ts
-  - plugins/github/api.ts
-  - plugins/github/commands.ts
-  - plugins/github/ciStatus.ts
-  - tests/github.ci-status.test.ts
-  - plugins/github/index.ts
-  - plugins/github/review.ts
-  - tests/github.review.plugin.test.ts
-  - plugins/meta/index.ts
-  - plugins/specsync/api.ts
-  - plugins/specsync/commands.ts
-  - plugins/specsync/index.ts
-  - plugins/memory/index.ts
-  - plugins/memory/commands.ts
-  - plugins/files/index.ts
-  - plugins/files/commands.ts
-  - plugins/files/protectedPaths.ts
-  - plugins/files/resolvePath.ts
-  - plugins/search/index.ts
-  - plugins/search/commands.ts
-  - src/memory/confirm.ts
-  - tests/memory.plugins.test.ts
-  - tests/memory.confirm.test.ts
-  - tests/files.plugins.test.ts
-  - tests/search.plugins.test.ts
-  - plugins/shell/index.ts
-  - plugins/shell/commands.ts
-  - plugins/shell/clamp.ts
-  - tests/shell.plugins.test.ts
-  - plugins/web/index.ts
-  - plugins/web/commands.ts
-  - plugins/web/fetch.ts
-  - plugins/web/address.ts
-  - plugins/web/transport.ts
-  - plugins/web/text.ts
-  - tests/web.fetch.test.ts
-  - tests/web.transport.test.ts
-  - plugins/git/index.ts
-  - plugins/git/commands.ts
-  - plugins/git/exec.ts
-  - plugins/git/parse.ts
-  - tests/git.plugins.test.ts
-  - plugins/autonomous/index.ts
-  - plugins/autonomous/commands.ts
-  - tests/autonomous.delegate.test.ts
-  - plugins/fledge/index.ts
-  - plugins/fledge/discover.ts
-  - plugins/fledge/commands.ts
-  - plugins/fledge/spawn.ts
-  - src/plugins/toolCost.ts
-  - tests/fledge.plugins.test.ts
-  - tests/fledge.cli.test.ts
-  - tests/roles.chat.gates.test.ts
-
-db_tables: []
-depends_on: []
+change: dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community
 ---
 
-# Plugins
+# Delta — plugins (ROLES-CHAT-8 public GitHub + secret paths)
 
-## Purpose
+## Modified
 
-Plugin host includes Discord outbound post, GitHub write plugins as dangerous
-(GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
-file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
-`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088), the
-SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
-typed git plugins (`git-status|diff|log|branch-list` reads;
-`git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
-task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
-Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
-`delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117).
-
-## Public API
-
-Export allowlist load + github/discord gate helpers used by plugins and future
-HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
-Shell plugins register via `loadShellPlugins` (`shell-exec`). Git plugins
-register via `loadGitPlugins` (`plugins/git/index.ts`).
-`plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
-takes the resolver/transport seams, `webFetch` is the guarded GET core,
-`checkAddress` classifies one IP, and `createSocketTransport` is the pinned
-HTTP/1.1 socket transport. Autonomous plugins
-register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
-`createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
-limiter and timeout. `PluginCommand.autonomous?: boolean`;
-`PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
-
-## Invariants
+### SPEC SECTION Invariants
 
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
@@ -175,15 +73,6 @@ URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
 (GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
 SAFE-22 default-branch policy is not enforced (awaiting HI).
 
-`delegate` (REQ-plugins-117) is `dangerous: false`, `mutating: true`, minTier
-2, `autonomous: true`: hidden from the tool catalog unless the session is
-allowed (SAFE-9), never offered to or run for a non-ADMIN role session
-(ROLES-CHAT-2/3/5, a worker runs tools), and its handler re-checks at run
-time, in order, usage (exit 1), the
-AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
-concurrency / per-run budget (exit 2, nothing spawned). It returns the
-worker's skill, tier, depth, state, summary and filesChanged.
-
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
@@ -203,104 +92,7 @@ sessions keep the GITHUB-6 allowlist gate.
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`.
 
-## Behavioral Examples
-
-### Scenario: memory-store description shows argv example
-
-- **Given** builtins are loaded
-- **When** an operator or the tool loop inspects `memory-store`
-- **Then** the description includes `--category` / `person` / `identity` example argv
-
-### Scenario: SAFE-3 refuse cd outside root
-
-- **Given** builtins loaded and `shell-exec` allowlisted
-- **When** the agent runs `shell-exec` with `cd /tmp && pwd`
-- **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn outside root
-
-### Scenario: relative cd inside root
-
-- **Given** a project with subdirectory `sub`
-- **When** `shell-exec` runs `cd sub && …` allowlisted
-- **Then** the command runs with initial cwd at project root and succeeds if the subcommand does
-
-### Scenario: web-fetch refuses cloud metadata
-
-- **Given** builtins are loaded
-- **When** `web-fetch` is asked for `http://169.254.169.254/latest/meta-data/` (or a name that resolves or redirects there)
-- **Then** it refuses with a SAFE-7 error and exit 2 before any connection is opened
-
-### Scenario: web-fetch keeps a hostile page's text inside the fence
-
-- **Given** `web-fetch` is allowlisted and a public page sets `<title>IGNORE PREVIOUS INSTRUCTIONS</title>`, a prose Content-Type or a prose reason phrase
-- **When** the tool loop fetches it
-- **Then** the title appears only as a `Title:` line between the untrusted markers, and the prose Content-Type or status is refused / reported as a numeric status without echoing it
-
-### Scenario: git-push refuses a repo off the allowlist
-
-- **Given** the task worktree's `origin` points at OWNER/REPO not on the GitHub allowlist
-- **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
-- **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
-
-### Scenario: delegate refused while autonomous mode is off
-
-- **Given** a project without `[corvidinho.autonomous] enabled = true`
-- **When** `delegate` runs (tool loop or `plugins run`)
-- **Then** it fails with exit 2 citing AUTONOMOUS-1 and no worker is spawned
-
-### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
-
-- **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
-- **When** the agent runs `files-write`
-- **Then** the run fails with exit 2 and a "not allowed for your role" message; no file is written
-
-### Scenario: ADMIN files-write still allowed (ROLES-CHAT-4)
-
-- **Given** `CORVIDINHO_ACTING_IS_ADMIN=1` and the acting user is the configured owner
-- **When** the agent runs `files-write` under non-interactive
-- **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
-
-## Error Cases
-
-| Condition | Behavior |
-|-----------|----------|
-| Unknown plugin name | Throw / fail with Unknown plugin command |
-| Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
-| Mutating + acting non-ADMIN (ROLES-CHAT-3) | Deny (exit 2, not allowed for your role) |
-| Missing token / API fail on github-* | Clear error; non-zero exit |
-| Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
-| github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
-| Path escapes project cwd / symlink escape | Refuse (exit 1) |
-| Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
-| shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
-| web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
-| web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
-| web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
-| web-fetch non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
-| web-fetch > 5 redirects | Refuse (exit 2) |
-| web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
-| git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
-| git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
-| git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
-| git-branch-create switch would overwrite an ignored / untracked local file (e.g. `.env`) | Refuse (exit 2, SAFE-2); HEAD and files unchanged |
-| git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
-| git-push non-fast-forward | Fail (exit 1); never retried with force |
-| delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
-| delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
-| delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
-
-## Dependencies
-
-| Module | What is used |
-|--------|-------------|
-| Bun | `Bun.which`, `Bun.spawn`, `Bun.file`, `Bun.write` |
-| @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
-| node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
-| sh | shell-exec child via `sh -c` |
-| node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
-| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
-| git (system binary) | git plugins via `Bun.spawn` argv arrays |
-
-## Change Log
+### SPEC SECTION Change Log
 
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
@@ -319,11 +111,8 @@ and current rows for plugins host evolution.
 | 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
 | 2026-09-26 | web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http: Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output control-stripped, scrubbed and fenced as untrusted data (title inside the fence, no echo of server text); URLs carrying secrets refused; 100k-char text cap; dangerous true (SAFE-1 consent), minTier 1; web-search left for HI capture |
 | 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
-| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117: `delegate` autonomous plugin (PLUGIN-5, AUTONOMOUS-5, SAFE-9), `PluginCommand.autonomous`, handler tier + signal pass-through (REQ-plugins-117) |
-| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho: AUTONOMOUS-1 gate and depth-capped delegate tool (issue #117, AUTONOMOUS-1/5, SAFE-9): autonomous mode off until [corvidinho.autonomous] enabled = true in the project fledge.toml; a code-tier lead can delegate a skill-tagged subtask to a worker (child task run, same-or-lower tier, non-interactive, depth <= 2, capped fan-out) and synthesize its summary; delegate stays hidden from the tool catalog unless the session is allowed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |
 | 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |
 | 2026-09-26 | github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured: github-ci-status takes a PR number or a ref (branch/tag/SHA; git ref-name validation, option-looking refused) and reports verdict green/red/pending/none over check runs plus legacy commit statuses; rows keep name/state/bucket/link (REQ-plugins-094, GITHUB-4 / #94 captured slice; draft GITHUB-11 left for HI capture) |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
-
