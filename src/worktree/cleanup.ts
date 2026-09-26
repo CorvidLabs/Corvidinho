@@ -45,8 +45,10 @@ export async function deleteBranch(
 /**
  * True when `branchName` has commits not on the project's HEAD (the base
  * `git worktree add -b` branches from). Unknown (git error) counts as true.
+ * HEAD-based on purpose: it works whatever the default branch is called
+ * (`main`, `master`, `trunk`, ...).
  */
-async function branchHasOwnCommits(
+export async function branchHasOwnCommits(
   projectWorkingDir: string,
   branchName: string,
 ): Promise<boolean> {
