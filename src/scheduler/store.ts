@@ -31,6 +31,12 @@ export type Schedule = {
   nextRunAt?: number;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Digest of the question the owner was last pinged about (AUTONOMY-2):
+   * the same question pings once until a run succeeds, the schedule is
+   * paused/resumed, or the question changes.
+   */
+  askPingKey?: string;
 };
 
 export type ScheduleRunStatus =
@@ -81,6 +87,7 @@ type ScheduleRow = {
   next_run_at: number | null;
   created_at: number;
   updated_at: number;
+  ask_ping_key?: string | null;
 };
 
 function rowToSchedule(r: ScheduleRow): Schedule {
@@ -100,6 +107,7 @@ function rowToSchedule(r: ScheduleRow): Schedule {
     nextRunAt: r.next_run_at ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    askPingKey: r.ask_ping_key ?? undefined,
   };
 }
 
@@ -218,12 +226,28 @@ export class ScheduleStore {
     if (status === "active") {
       s.nextRunAt = getNextCronDate(s.cronExpression, new Date(now)).getTime();
     }
+    // Pause/resume re-arms the owner ping (AUTONOMY-2 dedupe).
+    s.askPingKey = undefined;
     // Only the columns this mutation owns — never a stale full row.
     this.db?.run(
-      "UPDATE schedules SET status = ?, next_run_at = ?, updated_at = ? WHERE id = ?",
+      "UPDATE schedules SET status = ?, next_run_at = ?, updated_at = ?, ask_ping_key = NULL WHERE id = ?",
       [s.status, s.nextRunAt ?? null, s.updatedAt, s.id],
     );
     return s;
+  }
+
+  /**
+   * Record (or clear with `null`) the digest of the question the owner was
+   * last pinged about for this schedule (AUTONOMY-2 dedupe). Writes only
+   * that column.
+   */
+  setAskPingKey(id: string, key: string | null): void {
+    const s = this.memory.get(id);
+    if (s) s.askPingKey = key ?? undefined;
+    this.db?.run("UPDATE schedules SET ask_ping_key = ? WHERE id = ?", [
+      key,
+      id,
+    ]);
   }
 
   delete(id: string): boolean {

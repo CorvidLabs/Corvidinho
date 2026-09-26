@@ -34,6 +34,11 @@ export type GatewayHandlers = {
     channelId: string;
     content: string;
     replyToMessageId?: string;
+    /**
+     * When set, only these users (plus the replied-to author) may be pinged
+     * by this post — used for the AUTONOMY-2 owner ping.
+     */
+    mentionUserIds?: string[];
   }) => Promise<{ messageId: string } | null>;
   /** Progress embeds (DISCORD-3). */
   sendEmbed?: (opts: {
@@ -364,7 +369,7 @@ export async function createLiveGateway(
   };
 
   // Attach reply helper for bridge
-  handlers.reply = async ({ channelId, content, replyToMessageId }) => {
+  handlers.reply = async ({ channelId, content, replyToMessageId, mentionUserIds }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
@@ -375,6 +380,15 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        ...(mentionUserIds
+          ? {
+              allowedMentions: {
+                parse: [],
+                users: mentionUserIds,
+                repliedUser: true,
+              },
+            }
+          : {}),
       });
       return { messageId: sent.id };
     } catch (err) {

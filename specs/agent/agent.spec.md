@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 20
+version: 21
 status: draft
 files:
   - src/agent/types.ts
@@ -16,12 +16,14 @@ files:
   - src/agent/tools.ts
   - src/agent/project-instructions.ts
   - src/agent/events-ndjson.ts
+  - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
+  - tests/agent.ask.test.ts
 
 db_tables: []
 depends_on:
@@ -67,6 +69,15 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 
+Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
+exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
+`askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
+`ASK_AGENT_SYSTEM_INSTRUCTIONS`. `AgentState` gains `blocked`;
+`ExecuteResult` / `TaskResult` gain optional `ask: { reason: "clarify" |
+"stuck", question }`. A clarify ask ends the run `blocked` (verify skipped,
+exit 0); verify exhaustion stays `failed` and carries a `stuck` ask. Additive
+on the NDJSON wire: protocol stays 2.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
@@ -95,6 +106,11 @@ filesystem.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
+`ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
+is offered only on tool/code tiers. A run with an ask is never `done`; the
+question is capped at 1500 chars and an empty question is refused back to the
+model.
+
 ## Behavioral Examples
 
 ### Scenario: System prompt mentions memory-store
@@ -108,7 +124,9 @@ filesystem.
 
 | Condition | Behavior |
 |-----------|----------|
-| Verify exhausted | state failed, verified=false, summary includes verifier output |
+| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
+| ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
@@ -137,5 +155,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
 | 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
+| 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
