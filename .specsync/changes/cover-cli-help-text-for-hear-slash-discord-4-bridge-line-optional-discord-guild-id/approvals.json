@@ -1,0 +1,35 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790440336,
+      "digest": "65f299a896c1ce14a9ccae7e305c67ed055a441a06c96829a70c38a72313e0ae",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-cli-help-text-for-hear-slash-discord-4-bridge-line-optional-discord-guild-id",
+        "title": "Cover CLI help text for HEAR slash (DISCORD-4 bridge line + optional DISCORD_GUILD_ID)",
+        "description": "Cover CLI help text for HEAR slash (DISCORD-4 bridge line + optional DISCORD_GUILD_ID)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/cli.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Help-only usage/env lines for DISCORD-4 slash mention and optional DISCORD_GUILD_ID; no cli module acceptance criteria change",
+        "acceptance_criteria": [
+          "CLI --help mentions DISCORD-1/2/3/4/5 for discord bridge and documents optional DISCORD_GUILD_ID for guild slash registration; no cli module AC change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
