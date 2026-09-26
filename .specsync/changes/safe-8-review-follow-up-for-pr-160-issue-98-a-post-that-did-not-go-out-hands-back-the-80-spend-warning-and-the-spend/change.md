@@ -1,6 +1,6 @@
 ---
 id: safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend
-state: approved
+state: implementing
 type: bug_fix
 base_commit: ab2b59186133982c009565f799ec0d32b121850a
 ---
