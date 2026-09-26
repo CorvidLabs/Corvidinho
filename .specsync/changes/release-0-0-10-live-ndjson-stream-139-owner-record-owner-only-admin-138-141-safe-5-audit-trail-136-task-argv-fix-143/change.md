@@ -1,6 +1,6 @@
 ---
 id: release-0-0-10-live-ndjson-stream-139-owner-record-owner-only-admin-138-141-safe-5-audit-trail-136-task-argv-fix-143
-state: draft
+state: implementing
 type: operations
 base_commit: 085997e28427678316dbc2d233c36f6695686d79
 ---

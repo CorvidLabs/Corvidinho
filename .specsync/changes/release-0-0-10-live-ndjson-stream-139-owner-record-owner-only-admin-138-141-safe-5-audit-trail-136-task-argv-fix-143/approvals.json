@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454355,
+      "digest": "59a3908d888f1a169e6e4c55858d2490b74fa79865c81a1ce8c65a469a167336",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-10-live-ndjson-stream-139-owner-record-owner-only-admin-138-141-safe-5-audit-trail-136-task-argv-fix-143",
+        "title": "Release 0.0.10: live NDJSON stream (#139), owner record + owner-only ADMIN (#138/#141), SAFE-5 audit trail (#136), --task argv fix (#143); package 0.0.10, CHANGELOG, STATUS",
+        "description": "Release 0.0.10: live NDJSON stream (#139), owner record + owner-only ADMIN (#138/#141), SAFE-5 audit trail (#136), --task argv fix (#143); package 0.0.10, CHANGELOG, STATUS",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.10; version prints 0.0.10; CHANGELOG 0.0.10 section with upgrade notes; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "a99d10fcd7558a8ecacdabfc2b53c933df985ed500f1207308265b25f5483b9d"
+      }
+    }
+  ],
   "reopenings": []
 }
