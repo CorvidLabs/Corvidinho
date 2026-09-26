@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-leftover-cli-package-0-0-5-req-cli-012-paths-for-specsync-audit-after-session-worktree-archive-no-module-ac",
+  "slug": "cover-leftover-cli-package-0-0-5-req-cli-012-paths-for-specsync-audit-after-session-worktree-archive-no-module-ac",
+  "title": "Cover leftover cli package 0.0.5 / REQ-cli-012 paths for SpecSync audit after SESSION-WORKTREE archive (no module AC change beyond version bump already shipped in #58 PR)",
+  "description": "Cover leftover cli package 0.0.5 / REQ-cli-012 paths for SpecSync audit after SESSION-WORKTREE archive (no module AC change beyond version bump already shipped in #58 PR)",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "4613993ffb73e2b2a57d6877b158bd5c751bcced",
+  "created_at": 1790449108,
+  "updated_at": 1790449140,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "specs/cli/cli.spec.md",
+    "specs/cli/requirements.md",
+    "package.json",
+    "CHANGELOG.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "CLI package.json version 0.0.5, REQ-cli-012, CHANGELOG 0.0.5, and version/update-helpers fixture paths are covered for SpecSync audit after SESSION-WORKTREE archive; no further module AC beyond already-shipped version bump"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

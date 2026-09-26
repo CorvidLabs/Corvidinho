@@ -3,6 +3,7 @@
  * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
  * DISCORD-4: thin slash /session /status /agents /work.
  * DISCORD-SCHEDULE: /schedule + cooperative ticker (single-project).
+ * SESSION-WORKTREE: per-talk/project git worktree isolation.
  * DISCORD-6: per-user rate limits + mutes.
  * DISCORD-9: image attachments → local files for agent.
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
@@ -181,7 +182,12 @@ export async function startBridge(
         ));
   const ttlMs = opts.sessionTtlMs ?? resolveSessionTtlMs(env);
   const store =
-    opts.sessionStore ?? new SessionStore({ db, ttlMs });
+    opts.sessionStore ??
+    new SessionStore({
+      db,
+      ttlMs,
+      defaultProjectRoot: config.projectRoot,
+    });
   const workStore = opts.workStore ?? new WorkStore({ db });
   const scheduleStore =
     opts.scheduleStore ?? new ScheduleStore({ db });
@@ -304,6 +310,23 @@ export async function startBridge(
 
       await thinking.start({ description: "Working on your request..." });
 
+      // SESSION-WORKTREE: bind isolated cwd on start; reuse on continue (no silent switch).
+      if (action.kind === "start_session" || !session.worktreePath) {
+        const bound = await store.bindWorktree(session);
+        if (!bound.ok) {
+          await thinking.fail(`❌ worktree: ${bound.error}`);
+          if (replyRef.fn) {
+            await replyRef.fn({
+              channelId,
+              content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
+              replyToMessageId: msg.id,
+            });
+          }
+          await store.endSession(session);
+          return;
+        }
+      }
+
       let result;
       try {
         const actingIsAdmin =
@@ -321,6 +344,7 @@ export async function startBridge(
           resume: action.kind === "continue_session",
           actingUserId: msg.authorId,
           actingIsAdmin,
+          cwd: store.cwdFor(session),
           onStatus: (u) => {
             void thinking.update({
               tool: u.tool,
@@ -386,6 +410,7 @@ export async function startBridge(
       agent,
       allowlist: config.allowlist,
       pollIntervalMs: opts.schedulerPollIntervalMs,
+      defaultProjectRoot: config.projectRoot,
       outbound: {
         post: async ({ channelId, content }) => {
           if (replyRef.fn) {

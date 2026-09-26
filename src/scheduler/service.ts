@@ -2,11 +2,17 @@
  * Cooperative scheduler ticker (DISCORD-SCHEDULE-3/4).
  * Steal ADR-001: ~60s poll, max concurrent 2, no catch-up, auto-pause @ 5 fails.
  * Tick MUST return without awaiting agent work so HEAR/WATCH ingress is not starved.
+ * SESSION-WORKTREE: each tick uses the schedule's project worktree/scope.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
+import {
+  ensureTalkWorkspace,
+  parkWorktree,
+  resolveProjectDir,
+} from "../worktree/index.ts";
 import type { Schedule, ScheduleStore } from "./store.ts";
 
 export const DEFAULT_POLL_INTERVAL_MS = 60_000;
@@ -32,6 +38,16 @@ export type SchedulerServiceOpts = {
   now?: () => number;
   /** When true, do not start the interval (tests call tick() manually). */
   manual?: boolean;
+  /**
+   * Default project root used when resolving relative schedule.project
+   * (usually bridge projectRoot).
+   */
+  defaultProjectRoot?: string;
+  /**
+   * When false, skip worktree isolation (tests that only check tick timing).
+   * Default true.
+   */
+  useWorktrees?: boolean;
 };
 
 export class SchedulerService {
@@ -42,6 +58,8 @@ export class SchedulerService {
   private readonly pollIntervalMs: number;
   private readonly maxConcurrent: number;
   private readonly nowFn: () => number;
+  private readonly defaultProjectRoot: string;
+  private readonly useWorktrees: boolean;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Set<string>();
   private tickInFlight = false;
@@ -54,6 +72,8 @@ export class SchedulerService {
     this.pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.maxConcurrent = opts.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
     this.nowFn = opts.now ?? (() => Date.now());
+    this.defaultProjectRoot = opts.defaultProjectRoot ?? process.cwd();
+    this.useWorktrees = opts.useWorktrees !== false;
     if (!opts.manual) {
       this.start();
     }
@@ -117,6 +137,10 @@ export class SchedulerService {
     this.running.add(schedule.id);
     const now = this.nowFn();
     const run = this.store.markRunStarted(schedule, now);
+    let workDir: string | undefined;
+    let projectDir: string | undefined;
+    let workspaceKind: "worktree" | "scoped_dir" | undefined;
+    let branchName: string | undefined;
     try {
       // Channel allowlist re-check before any outbound (DISCORD-SCHEDULE-3).
       if (schedule.channelId) {
@@ -131,13 +155,47 @@ export class SchedulerService {
         }
       }
 
+      // SESSION-WORKTREE: resolve schedule.project → isolated cwd.
+      if (this.useWorktrees) {
+        const resolved = resolveProjectDir(schedule.project, {
+          defaultProjectRoot: this.defaultProjectRoot,
+        });
+        if (!resolved.ok) {
+          this.store.markRunFinished(schedule, run, {
+            ok: false,
+            error: `project resolve failed: ${resolved.error}`,
+          });
+          this.maybeAutoPause(schedule);
+          return;
+        }
+        projectDir = resolved.dir;
+        const ensured = await ensureTalkWorkspace({
+          projectWorkingDir: resolved.dir,
+          sessionId: `schedule_${schedule.id}_${run.id}`,
+        });
+        if (!ensured.ok) {
+          this.store.markRunFinished(schedule, run, {
+            ok: false,
+            error: `worktree failed: ${ensured.error}`,
+          });
+          this.maybeAutoPause(schedule);
+          return;
+        }
+        workDir = ensured.workspace.workDir;
+        workspaceKind = ensured.workspace.kind;
+        branchName = ensured.workspace.branchName;
+      }
+
       const prompt = [
         `Scheduled work "${schedule.name}" on project: ${schedule.project}`,
+        workDir ? `Worktree: ${workDir}` : "",
         "",
         schedule.prompt,
         "",
         "Stay within existing allowlists and SAFE gates. Linux host only.",
-      ].join("\n");
+      ]
+        .filter((l) => l !== undefined)
+        .join("\n");
 
       // MEMORY scope to schedule creator; forget/override stay deny without live ADMIN re-check.
       const result = await this.agent.runChat({
@@ -146,6 +204,7 @@ export class SchedulerService {
         resume: false,
         actingUserId: schedule.createdByUserId,
         actingIsAdmin: false,
+        cwd: workDir,
       });
 
       const summary = result.ok
@@ -175,6 +234,13 @@ export class SchedulerService {
       this.store.markRunFinished(schedule, run, { ok: false, error: msg });
       this.maybeAutoPause(schedule);
     } finally {
+      // Park/remove so another talk never silently reuses this cwd.
+      if (workDir && projectDir) {
+        await parkWorktree(projectDir, workDir, {
+          kind: workspaceKind,
+          branchName,
+        });
+      }
       this.running.delete(schedule.id);
     }
   }

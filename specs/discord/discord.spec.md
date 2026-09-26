@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 41
+version: 42
 status: draft
 files:
   - src/discord/types.ts
@@ -13,6 +13,11 @@ files:
   - src/store/index.ts
   - src/store/paths.ts
   - src/store/session-ttl.ts
+  - src/worktree/index.ts
+  - src/worktree/manager.ts
+  - src/worktree/cleanup.ts
+  - tests/worktree.test.ts
+  - tests/discord.session-worktree.test.ts
   - src/memory/types.ts
   - src/memory/store.ts
   - src/memory/index.ts
@@ -62,7 +67,7 @@ Thin Discord HEAR bridge: gateway → message-router → session stub with live
 thinking status, slash ops, per-user rate limits/mutes, admin re-auth at
 command run time, confused-deputy requester checks on outbound posts,
 image attachments as local files for the agent, and Merlin-shaped
-protocol-version lockstep, presence version under the bot name, allowlist deny polish (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12/DENY-1..3), Discord `/schedule` recurring single-project runs with a cooperative ticker (DISCORD-SCHEDULE-1..5), and local SQLite MEMORY with per-user ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021).
+protocol-version lockstep, presence version under the bot name, allowlist deny polish (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12/DENY-1..3), Discord `/schedule` recurring single-project runs with a cooperative ticker (DISCORD-SCHEDULE-1..5), local SQLite MEMORY with per-user ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021), and per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022).
 
 ## Public API
 
@@ -74,6 +79,7 @@ unmuteUser, isMuted, evaluateRequesterCanSend, agent/gateway helpers,
 thinking-status builders/controller, slash command bodies + dispatch
 (handleSlashInteraction, buildSlashCommandBodies including mute/unmute/schedule, registerSlashCommandSet / registerSlashCommandsLive);
 ScheduleStore / SchedulerService / validateAndResolveCadence (src/scheduler/);
+worktree manager ensureTalkWorkspace/createWorktree/parkWorktree/resolveProjectDir (src/worktree/);
 loadDiscordPlugins registers discord-post-message (requester check);
 isImageAttachment, extractImageBlocks, enrichPromptWithImages,
 checkProtocolVersion, enforceProtocolVersionOrExit, summarizeTaskRunOutput;
@@ -96,7 +102,8 @@ ClientReady sets short Custom Status from shared package version (DISCORD-12);
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
-memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021).
+memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021);
+per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 
 ## Behavioral Examples
 
@@ -134,3 +141,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho: SESSION durable store: Discord SessionStore (+ WorkStore) survive restarts via local SQLite under ~/.local/share/corvidinho/ (align MEMORY #41 path); soft TTL 30-60m keep-alive on activity; idle/stale → fresh session (SESSION-1..4); no ProcessManager; no /schedule; no MEMORY ACL |
 | 2026-09-26 | discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume: Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain |
 | 2026-09-26 | memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user: MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4 |
+| 2026-09-26 | session-worktree-per-talk-project-git-worktree-isolation-session-worktree-1-5-issue-58-package-v0-0-5-discord-cli-talks: SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5 |

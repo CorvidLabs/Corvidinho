@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "session-worktree-per-talk-project-git-worktree-isolation-session-worktree-1-5-issue-58-package-v0-0-5-discord-cli-talks",
+  "implementation_commit": "bdca84018aef2efed89353675359ed7d82b606b2",
+  "implementation_tree": "e34a096876287db381f94a587b15c1b33e08b4db",
+  "contract_digest": "dd565c00e954cce14a039b948795f18cd6ddd8e42b7cfc4152c8170a310f5c8d",
+  "workspace_digest": "f8db579b2dad33c6c4eaf7fc93384220c9f66c45dd01be3d6881ffa1a09c685d",
+  "closing_digest": "dc126a7db0e2944f41a7dbeab3ea0b4c3366fadfcee37737e27e0194c7842512",
+  "review_digest": "a5c3b251c615eca7ce186cddfa7af5a9dbaa5372a22ccb704a74568aa2ba0f4f",
+  "finalization_digest": "f08a30821231003f3a0d1dc53ea1bf60155a7761caf45f4fa94bd6bfb2db1585",
+  "timestamp": 1790449067
+}

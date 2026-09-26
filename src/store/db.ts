@@ -1,6 +1,6 @@
 /**
  * Shared bun:sqlite Database for Discord session/work/schedule/memory durability
- * (SESSION + DISCORD-SCHEDULE + MEMORY #41/#59 substrate).
+ * (SESSION + DISCORD-SCHEDULE + MEMORY + SESSION-WORKTREE substrate).
  */
 
 import { mkdirSync } from "node:fs";
@@ -117,7 +117,9 @@ CREATE INDEX IF NOT EXISTS idx_memories_deleted
   ON memories(deleted_at);
 `;
 
-export const SCHEMA_VERSION = 3;
+
+
+export const SCHEMA_VERSION = 4;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -142,6 +144,27 @@ export function migrateCorvidinhoDb(db: Database): void {
   }
   if (version < 3) {
     db.exec(SCHEMA_V3_SQL);
+    db.run(
+      "UPDATE schema_meta SET value = ? WHERE key = 'version'",
+      ["3"],
+    );
+    version = 3;
+  }
+  if (version < 4) {
+    // SQLite ALTER ADD COLUMN is idempotent enough for fresh DBs that already
+    // have columns only if we check — use try/ignore for re-run safety.
+    for (const col of [
+      "project",
+      "worktree_path",
+      "worktree_branch",
+      "worktree_state",
+    ]) {
+      try {
+        db.exec(`ALTER TABLE discord_sessions ADD COLUMN ${col} TEXT`);
+      } catch {
+        // Column already present
+      }
+    }
     db.run(
       "UPDATE schema_meta SET value = ? WHERE key = 'version'",
       [String(SCHEMA_VERSION)],
