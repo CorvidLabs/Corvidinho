@@ -1,6 +1,6 @@
 ---
 id: headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord
-state: implementing
+state: archived
 type: feature
 base_commit: 8747a9abb99c2322ea67c40da96fb60bc69172bc
 ---
