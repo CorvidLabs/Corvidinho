@@ -1,6 +1,6 @@
 ---
 id: github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists
-state: approved
+state: implementing
 type: bug_fix
 base_commit: ea2c970cab0297f0e75f7b0e78e2598222cd687f
 ---

@@ -7,10 +7,11 @@
   "title": "GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4)",
   "description": "GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "ea2c970cab0297f0e75f7b0e78e2598222cd687f",
   "created_at": 1790462700,
-  "updated_at": 1790462773,
+  "updated_at": 1790462784,
   "affected_specs": [
     "plugins",
     "discord"
