@@ -17,7 +17,7 @@ Enable SpecSync SDD change workflow and fix CI SpecSync/bun install
 
 ## Acceptance Criteria
 
-- SDD enabled (enabled+require_change); workflow-v2 baseline adopted; CI uses CorvidLabs/spec-sync@v6.0.0 with version 6.0.0 and Bun matching bun.lock; bun test and fledge lanes run verify --non-interactive green
+- Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, strict, require-coverage 100) plus specsync change audit; ci.yml has no SpecSync curl/install and keeps Fledge v1.7.2 release install + verify; Bun 1.4.2 pin; sdd.json enabled with require_change_for_meaningful_files true.
 
 ## No-spec Rationale
 

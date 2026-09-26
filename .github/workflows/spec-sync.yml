@@ -1,0 +1,41 @@
+name: Spec Sync
+
+# Official CorvidLabs/spec-sync@v6 Action only — no curl|bash install.sh.
+# Visible dedicated job so Actions shows SpecSync clearly (SDD ON).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: spec-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  spec-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: spec-sync check
+        id: specsync
+        uses: CorvidLabs/spec-sync@v6
+        with:
+          version: "6.0.0"
+          strict: true
+          comment: false
+          # Bootstrap: one draft CLI spec covers src/; keep coverage on.
+          require-coverage: "100"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Action leaves `specsync` on PATH. With SDD enabled, audit active
+      # change workspaces + living policy coherence.
+      - name: SDD change audit
+        run: specsync change audit

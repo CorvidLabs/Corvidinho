@@ -5,9 +5,18 @@ artifact: testing
 
 # Testing
 
-- `bun test` exits 0
-- `bun src/cli.ts --help` exits 0
-- `bunx tsc --noEmit` exits 0
-- `specsync check` exits 0
-- `fledge lanes run verify --non-interactive` exits 0
-- GitHub Actions `smoke` job green on PR #1 after push
+## Local
+
+- `specsync check --force` exits 0
+- `specsync change audit` exits 0
+- `fledge lanes run verify --non-interactive` green without SpecSync on PATH for the lane
+
+## CI
+
+- **Spec Sync** workflow: Action + change audit
+- **ci** smoke: Bun + Fledge release install + verify; no SpecSync curl/Action in this job
+
+## Rejection signal
+
+Any curl|bash SpecSync install, SpecSync only buried in smoke with no dedicated
+workflow, or `sdd.json` `enabled: false` means the change is wrong.

@@ -26,11 +26,16 @@
     ".specsync/config.toml",
     ".specsync/config.json",
     ".specsync/registry.toml",
-    ".specsync/version"
+    ".specsync/version",
+    "hi/",
+    "docs/",
+    "fledge.toml",
+    "tsconfig.json"
   ],
   "ignored_paths": [
-    ".specsync/",
-    "specs/"
+    "specs/",
+    ".specsync/changes/",
+    ".specsync/archive/"
   ],
   "verification_commands": [
     "bun test",

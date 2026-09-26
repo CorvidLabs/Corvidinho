@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "eb9d9c6755d49dc92565a4c6f427f0589451f29a",
   "created_at": 1790436569,
-  "updated_at": 1790436730,
+  "updated_at": 1790436760,
   "affected_specs": [],
   "affected_paths": [
     ".github/workflows/ci.yml",
@@ -20,12 +20,15 @@
     "STATUS.md",
     ".specsync/adoption-report.json",
     ".specsync/workflow-v2-baseline.json",
-    "src/cli.ts"
+    "src/cli.ts",
+    ".github/workflows/spec-sync.yml",
+    "fledge.toml",
+    "specs/cli/cli.spec.md"
   ],
   "no_spec_change": true,
   "no_spec_change_rationale": "Ops/policy/CI only: enable SDD, adopt workflow-v2 baseline, fix SpecSync Action and Bun pin. No canonical module contracts change.",
   "acceptance_criteria": [
-    "SDD enabled (enabled+require_change); workflow-v2 baseline adopted; CI uses CorvidLabs/spec-sync@v6.0.0 with version 6.0.0 and Bun matching bun.lock; bun test and fledge lanes run verify --non-interactive green"
+    "Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, strict, require-coverage 100) plus specsync change audit; ci.yml has no SpecSync curl/install and keeps Fledge v1.7.2 release install + verify; Bun 1.4.2 pin; sdd.json enabled with require_change_for_meaningful_files true."
   ],
   "selected_artifacts": [
     "context",

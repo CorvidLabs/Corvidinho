@@ -30,43 +30,26 @@ jobs:
       - name: typecheck
         run: bunx tsc --noEmit
 
-      - name: Install SpecSync binary
+      # CorvidLabs/fledge@v1 floating major is not published yet (action.yml
+      # landed after the v1.7.2 tag). Install the pinned release binary with
+      # checksum verification — zero API calls, same contract as the action.
+      - name: Install Fledge v1.7.2
+        env:
+          FLEDGE_VERSION: "1.7.2"
+          FLEDGE_ASSET: fledge-linux-x86_64
+          FLEDGE_SHA256: bebbd9b9f377468b377ee1e177aef96992ee8f8d9f075f9fe2323153f2e165ec
         run: |
           set -euo pipefail
-          VER=6.0.0
-          ARCH="$(uname -m)"
-          case "$ARCH" in
-            x86_64|amd64) ARCH=x86_64 ;;
-            aarch64|arm64) ARCH=aarch64 ;;
-            *) echo "unsupported arch: $ARCH"; exit 1 ;;
-          esac
-          ART="specsync-linux-${ARCH}"
-          URL="https://github.com/CorvidLabs/spec-sync/releases/download/v${VER}/${ART}.tar.gz"
-          mkdir -p "$HOME/.local/bin"
-          tmp="$(mktemp -d)"
-          curl -fsSL "$URL" | tar -xz -C "$tmp"
-          # tarball contains a single binary named like specsync-linux-x86_64
-          bin="$(find "$tmp" -type f | head -1)"
-          install -m 755 "$bin" "$HOME/.local/bin/specsync"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/specsync" --version
+          dir="$RUNNER_TEMP/fledge-$FLEDGE_VERSION"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/$FLEDGE_ASSET" \
+            "https://github.com/CorvidLabs/fledge/releases/download/v$FLEDGE_VERSION/$FLEDGE_ASSET"
+          echo "$FLEDGE_SHA256  $dir/$FLEDGE_ASSET" | sha256sum -c -
+          install -m 755 "$dir/$FLEDGE_ASSET" "$dir/fledge"
+          echo "$dir" >> "$GITHUB_PATH"
 
-      - name: spec-check (SpecSync Action)
-        uses: CorvidLabs/spec-sync@v6.0.0
-        with:
-          version: "6.0.0"
-
-      - name: Install Fledge
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/CorvidLabs/fledge/main/install.sh | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          # install.sh may target /usr/local/bin; also ensure ~/.local/bin
-          if ! command -v fledge >/dev/null 2>&1; then
-            if [ -x /usr/local/bin/fledge ]; then
-              ln -sf /usr/local/bin/fledge "$HOME/.local/bin/fledge"
-            fi
-          fi
-          fledge --version || true
+      - name: Verify Fledge
+        run: fledge --version
 
       - name: fledge verify lane
         run: fledge lanes run verify --non-interactive
