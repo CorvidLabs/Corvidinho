@@ -27,6 +27,11 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-DENY-1**  If a message or slash arrives outside an allowlisted channel (or from a non-configured user where user allowlist applies), Corvidinho does not send any public channel reply.
 - **DISCORD-DENY-2**  If the actor is an admin (existing admin allowlist / ADMIN HI), reply ephemeral only with a short tip: how to add the channel (or user) to the Discord allowlist config — no public leak. MessageCreate has no ephemeral, so MessageCreate stays silent for admins too (tip is slash/interaction only).
 - **DISCORD-DENY-3**  Non-admins get zero response (no DM, no public message, no reaction). Slash interactions still require a Discord ack within 3s: use ephemeral zero-width (or defer+delete) so only the invoker briefly sees nothing useful — document the choice; never leak allowlist guidance to non-admins.
+- **DISCORD-SCHEDULE-1**  Slash `/schedule` (or equivalent) lets me create a recurring run with a human-readable cadence (e.g. every hour / cron) and a target project or work scope, so the agent does that work on the Linux host without me babysitting a REPL.
+- **DISCORD-SCHEDULE-2**  I can list, pause, resume, and delete schedules from Discord; mutations require ADMIN and re-check permission at handler time (**DISCORD-7** / **ADMIN-4**); empty admin/owner = deny-all.
+- **DISCORD-SCHEDULE-3**  Schedule ticks respect existing channel/user allowlists and SAFE gates; a schedule cannot post or act outside channels/repos I already allow.
+- **DISCORD-SCHEDULE-4**  Ingress responsiveness stays ≤ ~1 minute for live Discord/GH mentions (existing HEAR + WATCH ~60s poll); schedule ticks must not starve or delay that ingress path.
+- **DISCORD-SCHEDULE-5**  Provenance: steal from archived corvid-agent `server/discord/command-handlers/schedule-commands.ts`, `server/scheduler/`, `server/db/schedules*`, ADR `docs/decisions/001-autonomous-scheduler.md` — skip flock/council/on-chain extras unless separately HI’d.
 
 ## Notes (not numbered AC)
 

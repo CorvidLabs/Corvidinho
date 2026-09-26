@@ -6,7 +6,7 @@
 |------|--------|
 | Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **GitHub write plugins** (#48) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
-| HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET) — see `hi check` |
+| HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
@@ -20,6 +20,8 @@
 ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1. Do not invent HI/AC.
 
 **HI confirmed + captured (2026-09-26):** Leif approved MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS. Live acceptance criteria are under `hi/` (`memory.md`, `identity.md`, `admin.md`, `autonomy.md`, `session.md`). `docs/hi-drafts/` is historical — do not treat as pending.
+
+**HI confirmed + captured (2026-09-26, schedule/worktree/memory-ACL):** Leif confirmed DISCORD-SCHEDULE-1..5, SESSION-WORKTREE-1..5, MEMORY-ACL-1..5 with amendment **self-forget also requires ADMIN**. Live in `hi/discord.md`, `hi/session.md`, `hi/memory.md` (+ `hi/admin.md` cross-link). Impl: #57 · #58 · #59 — no code in the HI-capture PR.
 
 ## Process / governance (PROCESS-1..5)
 
@@ -61,20 +63,21 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HI drafts folder | #41–#44 → [#47](https://github.com/CorvidLabs/Corvidinho/pull/47) | `docs/hi-drafts/` proposals (superseded by capture) |
 | Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
 | HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → main | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
+| HI capture (schedule/worktree/memory-ACL) | #57 #58 #59 → (this PR) | DISCORD-SCHEDULE-1..5, SESSION-WORKTREE-1..5, MEMORY-ACL-1..5 (self-forget=ADMIN amendment); admin cross-link; **impl deferred** to those issues |
 | v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
 | Discord presence version | → [#53](https://github.com/CorvidLabs/Corvidinho/pull/53) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
-| Discord deny polish | → main | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
-| SESSION durable store | #37 → (this PR) | Shared `src/store/` SQLite under `~/.local/share/corvidinho/`; Discord SessionStore/WorkStore persist+reload; soft TTL ~45m (SESSION-1..4); no MEMORY ACL /schedule |
+| Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | Done | Slash guild PUT=6 + global `[]` | Landed [#51](https://github.com/CorvidLabs/Corvidinho/pull/51) |
-| **P0 now** | [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION durable store | SQLite SessionStore/WorkStore + soft TTL 30–60m (SESSION-1..4); shared `src/store/` for future MEMORY #41 — **no MEMORY ACL /schedule** |
+| **P0 now** | Discord deny polish (DENY-1..3) + `docs/discord.md` | This PR — silent MessageCreate deny; admin ephemeral tip on slash |
 | **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
-| HI captured | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) | Criteria in `hi/`; MEMORY/IDENTITY/ADMIN/AUTONOMY code still deferred |
-| Later | #41 MEMORY impl · #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #36 CONTACTS · schedules | After SESSION durable substrate |
+| HI captured | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) + [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION | Criteria in `hi/`; **impl deferred** (MEMORY code not in this PR) |
+| HI captured | [#57](https://github.com/CorvidLabs/Corvidinho/issues/57) schedule · [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) worktree · [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) memory ACL | Criteria in `hi/`; **impl deferred**; self-forget=ADMIN |
+| Later | #41 MEMORY impl · #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #37 SESSION soft-TTL · #36 CONTACTS | After slash + GH go-live |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |
 
