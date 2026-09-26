@@ -7,10 +7,11 @@
   "title": "Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150)",
   "description": "Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "6e7cbd5d8511c765824f70f11b59b5e2d7da36b5",
   "created_at": 1790457236,
-  "updated_at": 1790457243,
+  "updated_at": 1790457376,
   "affected_specs": [
     "agent"
   ],

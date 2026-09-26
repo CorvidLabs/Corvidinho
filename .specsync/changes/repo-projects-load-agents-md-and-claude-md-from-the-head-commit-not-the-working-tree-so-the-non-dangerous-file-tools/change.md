@@ -1,6 +1,6 @@
 ---
 id: repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 6e7cbd5d8511c765824f70f11b59b5e2d7da36b5
 ---
