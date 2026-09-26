@@ -178,3 +178,17 @@ Acceptance Criteria
 - CLI `version` prints `0.0.6`.
 - CHANGELOG has a 0.0.6 section covering files/search + SAFE-2.
 - STATUS ROADMAP marks #81 done; next = M3 plugins.
+
+### REQ-cli-014
+
+The project SHALL ship package version `0.0.7` with MEMORY Discord inject
+(AGENT-7 / MEMORY-2/4). CLI `version` and Discord presence (DISCORD-12) report
+`0.0.7` after bridge restart. CHANGELOG SHALL include verbose 0.0.7 notes.
+STATUS.md SHALL record the slice.
+
+Acceptance Criteria
+- `package.json` version is `0.0.7`.
+- CLI `version` prints `0.0.7`.
+- CHANGELOG has a 0.0.7 section covering MEMORY Discord inject.
+- STATUS ROADMAP marks MEMORY Discord inject done.
+
