@@ -1,0 +1,104 @@
+{
+  "timestamp": 1790461972,
+  "commit": "950cebf97a43545b1e4538bcf2d277ae94d68e58",
+  "contract_digest": "acabd524a506f9a4a00e21ef92d915c0dd21e5b3866901aa1b8a708444f79ddd",
+  "execution_digest": "2509774a7b20368c04ca858b5653537b0d6c75709e6c9b47ab5339555668d08e",
+  "workspace_digest": "847df2d2c1e21753b67f2b54bbac56f8db591702bbb5e2e0c3261e9a451b3bb2",
+  "acceptance_input_digest": "78140b769e276f557106aaec13b7a80f443e1c3c09982c62ae6f9fac21c33597",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "plugins/shell/clamp.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1629fee7ababd224fb31ad5d9fd370f5fae93f6bd206537edf75a9f249b03a63",
+        "entry_digest": "e434820658cc12adf8fee78080216e9fb20fd0007fc096242bc6f80ac620753c",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "plugins/shell/commands.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8791192055a94cc6f9f836ba6c3b1d4bf6ee744969aa214e7b71449e66509f20",
+        "entry_digest": "3d27bfee4a545c44f8c93e70cb55bfce2ab9dc678667153fb9926195c0634900",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0275526ffef851ba6a050b629dab8fa6ff0c31716c8342642e38cd74f8fecd3a",
+        "entry_digest": "70592aedad8dcab594c9673cbc5e01c03915338cb31bddc65ed2ed70bff49b89",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/plugins.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b62f0c295db261733e40f780bd13640186a317ec1d86cc655978f75a0ef03472",
+        "entry_digest": "cf7322197abadf07ce81507ebc02006b7b2d95cc5602d3b617eed324dff039bc",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ab81e374339619cac6dd0b25e11a5d16660c6acca226a9f139de753c0135b16a",
+        "entry_digest": "fb75c73847631c877262d2baa3c6fc207ff061d8232d0768c936ea7ec6b8b508",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+        "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a7da23248a3898f513c8b137d73d625a20f942ee3b353d1128682bc2f5143ab7",
+        "entry_digest": "647c38c24f0f50577682330b59ede31d1020115bd2fd3d863dae1c32ea604883",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "tests/shell.clamp-bypass.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "db40e6aebd622778247b8b469d62981ac547fa7beb1af9f3117672f3a4241aff",
+        "entry_digest": "365afa1c86dda9820e1c510bd190f9e463eb5662886805304aa2566cd62ad157",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-plugins-087"
+  ]
+}
