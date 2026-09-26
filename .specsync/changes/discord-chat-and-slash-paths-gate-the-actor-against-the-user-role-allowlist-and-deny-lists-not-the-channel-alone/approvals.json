@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790459294,
+      "digest": "97ff51a9843e3a1a7e5dbbfef3a6c7cb04cd1af7199ca1f2895648f4ce76f97c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-chat-and-slash-paths-gate-the-actor-against-the-user-role-allowlist-and-deny-lists-not-the-channel-alone",
+        "title": "Discord chat and slash paths gate the actor against the user/role allowlist and deny lists, not the channel alone",
+        "description": "Discord chat and slash paths gate the actor against the user/role allowlist and deny lists, not the channel alone",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "src/discord/permissions.ts",
+          "src/discord/slash-dispatch.ts",
+          "tests/discord.actor-gate.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With a non-empty user or role allowlist, a deny-listed or unlisted member of an allowlisted channel cannot start or continue a chat session (mention, reply, thread) or run any slash command; chat refusal is silent and slash refusal is an ephemeral zero-width ack; deny lists always win; listed users, allowed roles and the owner keep access; empty user+role lists keep the channel-only path"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "905e2a9c925e41492162b807f2d2ad993f7328d831672c45eb05cb8c3f232049"
+      }
+    }
+  ],
   "reopenings": []
 }

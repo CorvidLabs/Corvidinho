@@ -1,6 +1,6 @@
 ---
 id: discord-chat-and-slash-paths-gate-the-actor-against-the-user-role-allowlist-and-deny-lists-not-the-channel-alone
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 65cff62fdae8cb0413d92adfe8acb29455fc127f
 ---
