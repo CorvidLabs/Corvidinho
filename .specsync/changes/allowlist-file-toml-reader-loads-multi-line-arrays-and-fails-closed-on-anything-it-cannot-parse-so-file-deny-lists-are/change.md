@@ -1,6 +1,6 @@
 ---
 id: allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are
-state: draft
+state: implementing
 type: bug_fix
 base_commit: e8bbd215036e7dc8739ac9159afa19f17ae943c6
 ---
