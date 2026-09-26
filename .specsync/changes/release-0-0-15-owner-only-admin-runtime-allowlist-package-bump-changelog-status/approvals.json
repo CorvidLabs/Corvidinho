@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790457170,
+      "digest": "c7e8316f7f9500eb8ddad90754a01ada31c8fd21118c567cddac6e9fef1c1ca4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-15-owner-only-admin-runtime-allowlist-package-bump-changelog-status",
+        "title": "Release 0.0.15 owner-only /admin runtime allowlist package bump changelog status",
+        "description": "release 0.0.15 owner-only /admin runtime allowlist package bump changelog status",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          ".github/workflows/release.yml",
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Package bump to 0.0.15 for merged #147 ADMIN slash; CHANGELOG/STATUS/tests + release.yml slash list include /admin. No living-spec REQ text change (REQ-cli-002 already reads package.json).",
+        "acceptance_criteria": [
+          "package.json is 0.0.15; CLI version and Discord presence report v0.0.15 after bridge restart; CHANGELOG has a 0.0.15 section covering /admin ADMIN-1..4 (#147) that extract_changelog_section finds; STATUS records #43/#147 done; release.yml slash list includes /admin; version and update-helpers tests pass."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
