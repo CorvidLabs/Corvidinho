@@ -4,6 +4,13 @@ Linux-first Bun/TypeScript agent runner from CorvidLabs. Plans to **support Fled
 
 **Status:** see [`STATUS.md`](STATUS.md). Intent: [`hi/`](hi/). Steal/defer notes (not AC): [`docs/CORVIDINHO-FEATURE-STEAL.md`](docs/CORVIDINHO-FEATURE-STEAL.md).
 
+## Lineage
+
+Corvidinho is the third CorvidLabs agent-runner generation — best of
+[corvid-agent](https://github.com/CorvidLabs/corvid-agent) and
+[merlin](https://github.com/CorvidLabs/merlin), kept light for bots/VMs.
+Read the full story (honoring ancestors): [`docs/ORIGIN.md`](docs/ORIGIN.md).
+
 ## Requirements
 
 - Linux
@@ -28,21 +35,26 @@ Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, GitHub via `gh auth`) stay in th
 ```bash
 fledge run smoke
 fledge lanes run pre-commit --non-interactive
-fledge lanes run verify --non-interactive   # includes spec-check (needs specsync)
+fledge lanes run verify --non-interactive   # local/agent gate (Bun lint/smoke/test)
 ```
 
-## SpecSync seed
+GitHub Actions runs **Bun smoke/test/typecheck** plus the dedicated
+**Spec Sync** workflow (`CorvidLabs/spec-sync@v6`). Fledge verify stays local
+for now.
 
-Minimal project layout:
+## SpecSync
 
-- `.specsync/` — `config.toml`, `registry.toml`, `version`, `sdd.json` (change workflow **off**)
+- `.specsync/` — config, registry, version, `sdd.json` (**SDD change workflow ON**)
 - `specs/cli/` — draft stub for the CLI module + companions
+- CI: `.github/workflows/spec-sync.yml` uses `CorvidLabs/spec-sync@v6` (version `6.0.0`)
 
-Run `specsync check`. Promote draft specs to `active` when behavior stabilizes. Do not invent ACCESS/bounty/MainNet surfaces.
+Run `specsync check` locally. Open changes with `specsync change` before
+meaningful edits. Promote draft specs to `active` when behavior stabilizes.
+Do not invent ACCESS/bounty/MainNet surfaces.
 
 ## Agent rules
 
-See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, never merge without ask, secrets out of repo.
+See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, secrets out of repo.
 
 ## License
 
