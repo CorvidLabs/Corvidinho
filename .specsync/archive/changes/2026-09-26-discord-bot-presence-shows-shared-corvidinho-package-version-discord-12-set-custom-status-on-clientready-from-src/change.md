@@ -1,6 +1,6 @@
 ---
 id: discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src
-state: implementing
+state: archived
 type: feature
 base_commit: 186620b64e25a2cf6bb41d460c6ddecf20bec240
 ---

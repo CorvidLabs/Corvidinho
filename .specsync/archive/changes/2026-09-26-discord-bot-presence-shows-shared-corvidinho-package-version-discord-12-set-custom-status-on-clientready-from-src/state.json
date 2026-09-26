@@ -7,11 +7,11 @@
   "title": "Discord bot presence shows shared Corvidinho package version (DISCORD-12): set Custom Status on ClientReady from src/version.ts; short string e.g. v0.0.3; fixture test; STATUS note; no slash/allowlist churn",
   "description": "Discord bot presence shows shared Corvidinho package version (DISCORD-12): set Custom Status on ClientReady from src/version.ts; short string e.g. v0.0.3; fixture test; STATUS note; no slash/allowlist churn",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "186620b64e25a2cf6bb41d460c6ddecf20bec240",
   "created_at": 1790445107,
-  "updated_at": 1790445214,
+  "updated_at": 1790445235,
   "affected_specs": [
     "discord",
     "cli"

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "c58fde0b20d1db84aa8d78edf54ce0f3047dbfeb",
+  "contract_digest": "d36d04a2e878961d76a1d276758ad11813579e6604eb32ce89020b93451995d1",
+  "execution_digest": "1242436c08e212bf4388428fa6e1fd8a4f41e9f89398ff7fb41ff24872891934",
+  "workspace_digest": "9bde029e6fbecc738867f03372f64ddac3e6acf4944d5039566717452cfa95e2",
+  "timestamp": 1790445226
+}
