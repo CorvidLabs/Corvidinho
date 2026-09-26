@@ -7,11 +7,11 @@
   "title": "Enhance corvidinho-update.sh with pidfile /tmp/corvidinho-discord-bridge.pid stop/start and wait for logged-in or protocol OK else rollback; docs/UPDATE.md pointer; release workflow idempotent if release exists; helper tests; bump 0.0.3",
   "description": "Enhance corvidinho-update.sh with pidfile /tmp/corvidinho-discord-bridge.pid stop/start and wait for logged-in or protocol OK else rollback; docs/UPDATE.md pointer; release workflow idempotent if release exists; helper tests; bump 0.0.3",
   "kind": "operations",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "92519c3c18fa98a6c895cb55196b5529b77c711b",
   "created_at": 1790444519,
-  "updated_at": 1790444622,
+  "updated_at": 1790444659,
   "affected_specs": [],
   "affected_paths": [
     "scripts",

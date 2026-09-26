@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "enhance-corvidinho-update-sh-with-pidfile-tmp-corvidinho-discord-bridge-pid-stop-start-and-wait-for-logged-in-or",
+  "implementation_commit": "cb44514eb2f584599753737149bb00ee9ff8e819",
+  "implementation_tree": "f74c82e4c20c6bd7d40e72577c073043ad60567f",
+  "contract_digest": "3682d22deaa065d6f4e588eed443583aed908d19db7e02d70c891bfba7b30d59",
+  "workspace_digest": "1824d0a6af946887d7f307e0b55042b1df4a6848003054ddd6141d62b1cf4fba",
+  "closing_digest": "2fefcc4266caf68a9a8a3f6161f858e8711bcfa3fbafb27f59c251e26985abcf",
+  "review_digest": "1e43fc4cc1529d7d9dc0073f2b82ed364317717670897a1d996839b189e11471",
+  "finalization_digest": "0f886179e1601b471f11a9539db01bcbe9ae9cdcef2292ae381951c3df7ea379",
+  "timestamp": 1790444654
+}
