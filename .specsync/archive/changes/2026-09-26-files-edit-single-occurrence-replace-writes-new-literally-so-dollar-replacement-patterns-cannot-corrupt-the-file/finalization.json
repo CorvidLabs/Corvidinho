@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "files-edit-single-occurrence-replace-writes-new-literally-so-dollar-replacement-patterns-cannot-corrupt-the-file",
+  "implementation_commit": "a25ebc435a3c83ff43d0c212541b10f3b1b51c59",
+  "implementation_tree": "948f53f29a8d49248235945f8db7546916fea38f",
+  "contract_digest": "5b0e280a42079351d1a15a77aed491ab149e30b3e37ff7bfbe49ba6e19494dd2",
+  "workspace_digest": "bbb328ef09d3ff9729e6507d9492f09403d24a5dca18a2ccd1a7febd34cf3d56",
+  "closing_digest": "dc6ebe5da45fc4d62496f9bc1a533f9a75acfe27993b1de06020c3028a2a0dab",
+  "review_digest": "9bce307b07c703b7bdbf50810e46b9d8b1ce6f66027072bb3da7fd58a1bef362",
+  "finalization_digest": "9988d6032ee33c6827e5485e53b73268f348263c499ace460109d7bf8d48c53f",
+  "timestamp": 1790462182
+}

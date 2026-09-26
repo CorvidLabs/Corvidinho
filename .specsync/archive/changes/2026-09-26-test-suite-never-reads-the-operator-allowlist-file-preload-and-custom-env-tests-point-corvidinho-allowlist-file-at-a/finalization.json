@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a",
+  "implementation_commit": "59d230b378c78f91e3da93b3a4d32bfb69e67aed",
+  "implementation_tree": "550d2bcdd48edefb2eb9f8c8742a8f1044f1a5ae",
+  "contract_digest": "78e2880864cdba11c7f526ab8c5b695d7ca19bbbe9a4934df74e23ea48a3500b",
+  "workspace_digest": "c2af84d17f280a681ea92f4bdf2001aece01e4339d58de339857b947dac94c75",
+  "closing_digest": "141a73f9e530b918987608706f582e9959a23a26bf4dd5d543570cb5f0f64224",
+  "review_digest": "62cbd67a0286586afa6ee9eb881dd23b783c69234479c23241e94f42cdc0d641",
+  "finalization_digest": "0b631e3bb3974e7891c74dce8f0272f58ecf541885ea34c6530f3e416855ba26",
+  "timestamp": 1790464977
+}

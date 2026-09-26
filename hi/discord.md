@@ -41,6 +41,16 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-ANNOUNCE-5**  Mutations re-check ADMIN at handler time; empty admin = deny-all. Non-admins get existing silent/ephemeral deny.
 - **DISCORD-ANNOUNCE-6**  Config persists on bot VM (file or shared SQLite under corvidinho config/data) across restarts.
 
+
+
+- **DISCORD-ASK-1**  Clarify/stuck choices that fit a short list use Discord components (buttons), not a public "reply to this MCQ".
+- **DISCORD-ASK-2**  Ask UI is ephemeral (only the requester sees the choice buttons / question UI).
+- **DISCORD-ASK-3**  Button press continues that requester's session; no public reply is required to answer.
+- **DISCORD-ASK-4**  Free-text clarify only when options cannot be listed; prefer ephemeral over a public ping.
+- **DISCORD-ASK-5**  Button prompts expire after about 30 minutes; a late press gets a short "that choice expired".
+- **DISCORD-ASK-6**  When posting a button ask, do not leave a separate thinking "Needs your input" as the primary UX — prefer one public Choose stub (edit the thinking embed into the stub, or delete/collapse it).
+- **DISCORD-ASK-7**  On successful completion after a button pick (or normal done), prefer editing the existing stub/thinking message into the final answer instead of posting an extra ✅ Done + new reply when practical.
+
 ## Notes (not numbered AC)
 
 - **Searchable channel add (2026-09-26):** Leif — native Discord CHANNEL picker only showed a limited subset with no useful search; typing a channel id failed. `/admin channels add|remove` and `/announce channel` use STRING + autocomplete instead (ADMIN-2 UX under existing AC; DISCORD-ANNOUNCE-2 amended above).

@@ -13,8 +13,11 @@ import {
   type DiscordEmbedPayload,
 } from "../src/discord/thinking-status.ts";
 
+/** Missing allowlist file: never read the operator's allowlist (ALLOW-4). */
+const NO_ALLOWLIST = join(mkdtempSync(join(tmpdir(), "corvidinho-thinking-")), "no-allowlist.toml");
+
 describe("bridge thinking status wiring (DISCORD-3)", () => {
-  test("mention path posts progress then Done before final reply tracking", async () => {
+  test("mention path posts progress then collapses into final answer (ASK-7)", async () => {
     const box: { handlers: GatewayHandlers | null } = { handlers: null };
     const outbound = memoryThinkingOutbound();
     const replies: Array<{ content: string; messageId: string }> = [];
@@ -24,6 +27,7 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
       },
       // Temp non-git project: never create real worktrees/branches in this repo.
       projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
@@ -67,13 +71,15 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
     expect(outbound.sends[0]!.embed).toMatchObject({
       color: THINKING_COLORS.working,
     });
+    // Progress edits while working; final is content collapse (no Done+reply).
     expect(outbound.edits.length).toBeGreaterThanOrEqual(1);
-    const lastEdit = outbound.edits[outbound.edits.length - 1]!;
-    const lastEmbed = lastEdit.embed as DiscordEmbedPayload;
-    expect(lastEmbed.description).toContain("Done");
-    expect(lastEmbed.color).toBe(THINKING_COLORS.success);
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain("echo:");
+    expect(replies).toHaveLength(0);
+    const finalEdit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("echo:"),
+    );
+    expect(finalEdit).toBeDefined();
+    expect(finalEdit!.messageId).toBe(outbound.sends[0]!.messageId);
+    expect(finalEdit!.embed).toBeNull();
     expect(result.store.bySessionId.size).toBe(1);
 
     await result.stop();
@@ -88,6 +94,7 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
       },
       // Temp non-git project: never create real worktrees/branches in this repo.
       projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
@@ -128,9 +135,14 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
       mentionedBot: true,
     });
 
-    const last = outbound.edits.at(-1)!;
-    const embed = last.embed as DiscordEmbedPayload;
-    expect(embed.color).toBe(THINKING_COLORS.error);
+    // ASK-7 collapse: failure body edited into the progress message.
+    const failEdit = outbound.contentEdits.find(
+      (e) =>
+        typeof e.content === "string" &&
+        (e.content.includes("failed") || e.content.includes("exit")),
+    );
+    expect(failEdit).toBeDefined();
+    expect(failEdit!.embed).toBeNull();
     await result.stop();
   });
 });

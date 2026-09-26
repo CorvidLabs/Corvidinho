@@ -1,0 +1,10 @@
+---
+change: release-0-0-23-stop-means-stop-process-trees-safe-3-cd-clamp-scrub-before-clip-github-gate-reads-allowlist-file
+artifact: plan
+---
+
+# Plan
+
+1. Version + tests.
+2. CHANGELOG + STATUS.
+3. REQ-cli-023.

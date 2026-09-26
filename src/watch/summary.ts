@@ -1,9 +1,13 @@
 /**
  * WATCH-RELIABILITY-1 — short summary comment after agent run finishes,
  * once per event id, only after a successful auto-ack.
+ *
+ * REQ-watch-231 / SAFE-6 — the summary is agent output (or its stderr) and
+ * the comment is public on public repos, so it is secret-scrubbed first.
  */
 
 import { attribution } from "../attribution.ts";
+import { scrubSecrets } from "../store/scrub.ts";
 import type { AckClient } from "./ack.ts";
 import { isAckableEventType } from "./ack.ts";
 import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
@@ -45,7 +49,8 @@ export function buildSummaryBody(spawn: AgentSpawnResult): string {
   const status = spawn.ok
     ? `Done (exit ${spawn.exitCode}).`
     : `Failed (exit ${spawn.exitCode}).`;
-  const preview = (spawn.summary || "").trim().slice(0, 1200);
+  // Scrub before clipping so a token cut at the cap leaks no prefix.
+  const preview = scrubSecrets(spawn.summary || "").trim().slice(0, 1200);
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;

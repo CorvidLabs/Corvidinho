@@ -395,6 +395,8 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
           DISCORD_BOT_TOKEN: "fake",
           DISCORD_CHANNEL_IDS: "chan-1",
           CORVIDINHO_DISCORD_DRY_RUN: "1",
+          // Missing file: never read the operator's allowlist (ALLOW-4).
+          CORVIDINHO_ALLOWLIST_FILE: join(project, "no-allowlist.toml"),
         },
         projectRoot: project,
         skipProtocolCheck: true,
@@ -419,8 +421,8 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
       });
       expect(seen.midRunDirKept).toBe(true);
       expect(seen.midRunFileKept).toBe(true);
-      // A reply to the bot still continues the same live session.
-      const session = store.getByBotMessage("bot_1");
+      // Session tracked via collapsed thinking message (ASK-7); list is enough here.
+      const session = store.list()[0];
       expect(session?.worktreePath).toBe(seen.cwd);
       await store.endSession(session!);
       await started.stop();
