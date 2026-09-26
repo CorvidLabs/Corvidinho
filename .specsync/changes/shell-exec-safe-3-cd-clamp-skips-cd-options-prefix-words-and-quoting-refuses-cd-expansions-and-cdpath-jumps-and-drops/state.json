@@ -7,10 +7,11 @@
   "title": "Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root",
   "description": "Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
   "created_at": 1790461690,
-  "updated_at": 1790461698,
+  "updated_at": 1790461849,
   "affected_specs": [
     "plugins"
   ],
