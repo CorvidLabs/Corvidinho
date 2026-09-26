@@ -7,11 +7,11 @@
   "title": "/work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD)",
   "description": "/work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "155f20af4346b11c10cdbe68526314962a1e09a2",
   "created_at": 1790458095,
-  "updated_at": 1790458119,
+  "updated_at": 1790458155,
   "affected_specs": [
     "discord"
   ],

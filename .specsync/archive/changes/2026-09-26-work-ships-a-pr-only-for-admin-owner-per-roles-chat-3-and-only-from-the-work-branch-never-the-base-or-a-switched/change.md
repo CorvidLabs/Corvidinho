@@ -1,6 +1,6 @@
 ---
 id: work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 155f20af4346b11c10cdbe68526314962a1e09a2
 ---
