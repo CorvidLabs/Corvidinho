@@ -161,4 +161,63 @@ describe("WATCH summary is secret-scrubbed before public post and JSONL (REQ-wat
     const { jsonl } = await runOnce(agent, dir, "comment-scrub-clip");
     expect(jsonl).not.toContain("ghp_");
   });
+
+  test(
+    "a token straddling the 500-char stderr fallback cap leaks no prefix into the comment (REQ-agent-232)",
+    async () => {
+      // The stderr fallback is clipped to 500 chars before WATCH sees it; the
+      // token starts at 477 so clip-then-scrub would post `ghp_` + 19 chars.
+      const pad = "e".repeat(476);
+      const { bin, dir } = fakeBin(`printf '%s %s\\n' "${pad}" "${TOKEN}" >&2\nexit 1`);
+      const agent = createSpawnAgentClient({ bin, cwd: dir });
+      const { posts, jsonl } = await runOnce(agent, dir, "comment-scrub-stderr-cap");
+
+      expect(posts).toHaveLength(2);
+      const summary = posts[1]!.body;
+      expect(summary).toContain("Failed (exit 1)");
+      expect(summary).not.toContain("ghp_");
+      expect(summary).toContain(`${pad} ${REDACTED}`);
+      expect(jsonl).not.toContain("ghp_");
+    },
+    30_000,
+  );
+
+  test(
+    "a PEM key cut by the 1800-char chat body cap posts no key body (REQ-agent-232)",
+    async () => {
+      const keyLine = "MIIEpAIBAAKCAQEA" + "q1W2e3R4t5Y6u7I8o9P0".repeat(2) + "abcdefgh";
+      const pem =
+        "-----BEGIN RSA " +
+        "PRIVATE KEY-----\n" +
+        Array.from({ length: 26 }, () => keyLine).join("\n") +
+        "\n-----END RSA PRIVATE KEY-----";
+      // Key starts at 100 (inside both the 240-char preview and the 1200-char
+      // comment cap) and ends past 1800, so the chat body clip drops its END.
+      const summary = `${"s".repeat(99)}\n${pem}\nDone.`;
+      expect(summary.indexOf("-----END")).toBeGreaterThan(1800);
+      const frame = serializeFrame(
+        resultFrame({
+          summary,
+          filesChanged: [],
+          verified: false,
+          verifySkipped: true,
+          cancelled: false,
+          state: "done",
+          attempts: 1,
+        }),
+      );
+      const { bin, dir } = fakeBin(`cat <<'NDJSON_EOF'\n${frame}\nNDJSON_EOF`);
+      const agent = createSpawnAgentClient({ bin, cwd: dir });
+      const { posts, jsonl } = await runOnce(agent, dir, "comment-scrub-pem");
+
+      expect(posts).toHaveLength(2);
+      const body = posts[1]!.body;
+      expect(body).not.toContain("PRIVATE KEY");
+      expect(body).not.toContain("MIIEpAIBAAKCAQEA");
+      expect(body).toContain("[redacted:private-key]\nDone.");
+      expect(jsonl).not.toContain("PRIVATE KEY");
+      expect(jsonl).toContain("[redacted:private-key]");
+    },
+    30_000,
+  );
 });

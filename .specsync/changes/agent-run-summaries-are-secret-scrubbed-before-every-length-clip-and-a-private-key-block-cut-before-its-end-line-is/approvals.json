@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790464437,
+      "digest": "d082a8285c38caf04ed4d92394040aa4b4184c5657f2e0347aa6d560e0c8f0b9",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is",
+        "title": "Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted",
+        "description": "Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "src/agent/events-ndjson.ts",
+          "src/agent/task-summary.ts",
+          "src/store/scrub.ts",
+          "tests/agent.summary-scrub.test.ts",
+          "tests/store.scrub.test.ts",
+          "tests/watch.summary-scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "a run summary whose stderr fallback, non-frame stdout or result summary holds a vendor token or PEM private key that straddles a length cap (500-char stderr fallback, 1800-char chat body, 4000-char result frame) comes out as [redacted:<kind>] with no raw token prefix or key body, so WATCH and Discord never post it; scrubSecrets redacts a BEGIN ... PRIVATE KEY block that has no END line through the next BEGIN line or end of text while still redacting full blocks in linear time; text with no secret is unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "6fd273874b995dc8e5937dbd6380212c783cbd5fa0a0abf507ec020ddbfc6f89",
+        "discord": "6b0cd9885f97e910281d0d646424d0c324c8f065ee53ea152622604059254f94"
+      }
+    }
+  ],
+  "reopenings": []
+}

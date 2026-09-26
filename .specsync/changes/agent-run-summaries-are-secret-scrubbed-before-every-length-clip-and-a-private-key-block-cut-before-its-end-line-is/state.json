@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is",
+  "slug": "agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is",
+  "title": "Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted",
+  "description": "Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "5b0c8a64a53421a13f292eed646b2358f4545c72",
+  "created_at": 1790464065,
+  "updated_at": 1790464437,
+  "affected_specs": [
+    "agent",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/agent/task-summary.ts",
+    "src/agent/events-ndjson.ts",
+    "src/store/scrub.ts",
+    "tests/agent.summary-scrub.test.ts",
+    "tests/store.scrub.test.ts",
+    "tests/watch.summary-scrub.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "a run summary whose stderr fallback, non-frame stdout or result summary holds a vendor token or PEM private key that straddles a length cap (500-char stderr fallback, 1800-char chat body, 4000-char result frame) comes out as [redacted:<kind>] with no raw token prefix or key body, so WATCH and Discord never post it; scrubSecrets redacts a BEGIN ... PRIVATE KEY block that has no END line through the next BEGIN line or end of text while still redacting full blocks in linear time; text with no secret is unchanged"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}
