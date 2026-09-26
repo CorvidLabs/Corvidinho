@@ -97,24 +97,14 @@ Acceptance Criteria
 
 ### REQ-discord-009
 
-The bridge SHALL register and dispatch thin slash commands `/session`,
-`/status`, `/agents`, `/work`, `/mute`, and `/unmute` so operators can manage
-sessions, see agents, check status, and drive work tasks without leaving
-Discord (DISCORD-4 / DISCORD-7). Handlers SHALL re-check the channel allowlist
-at run time (DISCORD-5 / DISCORD-7 light). Session start and work SHALL use
-SessionStore + in-memory work stubs + AgentClient. Registration SHALL use the
-overwrite path in REQ-discord-016 (guild PUT of exactly these six, clear
-globals when guild-scoped). The bridge SHALL NOT introduce ProcessManager,
-invent additional slash commands, or weaken allowlists. Fixture tests SHALL
-cover dispatch and handlers without a live Discord token.
+Slash command set SHALL include `/schedule` (list|create|pause|resume|delete)
+in addition to session/status/agents/work/mute/unmute. Registration overwrites
+the **current** body set (seven commands), not a frozen six.
 
 Acceptance Criteria
-- Command bodies include session (list/start), status, agents, work, mute, unmute (exactly these six).
-- Non-allowlisted channel slash → not authorized; no session/work created.
-- `/session list` reflects SessionStore; `/session start` creates stub + agent run.
-- `/status` reports shared package version/uptime/sessions/work/channels/protocol plus dogfood lines (see REQ-discord-015).
-- `/agents` lists local Corvidinho agent; `/work` creates work stub + agent run.
-- No ProcessManager; secrets out of repo; default-deny allowlists unchanged.
+- `buildSlashCommandBodies()` includes schedule with list/create/pause/resume/delete.
+- Bodies remain fixture-testable without live Discord.
+- Mute/unmute and prior DISCORD-4 commands still present.
 
 ### REQ-discord-010
 
@@ -224,25 +214,13 @@ Acceptance Criteria
 
 ### REQ-discord-016
 
-Slash command registration SHALL full-overwrite the target scope with
-`buildSlashCommandBodies()` (exactly the six DISCORD-4 commands) via Discord
-REST PUT. When `DISCORD_GUILD_ID` (or equivalent guild id) is set, the system
-SHALL PUT `Routes.applicationGuildCommands(appId, guildId)` with the six
-bodies, then PUT `Routes.applicationCommands(appId)` with body `[]` to clear
-stale globals (guild PUT never clears globals). The system SHALL NOT register
-the same command names both global and guild in one registration path. When
-guild id is unset, the system MAY PUT globals to the six bodies and SHALL warn
-that stale guild commands are not cleared. Fixture tests SHALL cover
-guild-then-clear-globals put order without a live Discord token. Steal
-PUT+clear-globals only — do NOT port archive full `buildCommands()` lists.
+Guild PUT overwrite SHALL register the current `buildSlashCommandBodies()` set
+(seven commands including `/schedule`) then clear globals when guild id is set.
 
 Acceptance Criteria
-- Guild id set → put order: guild bodies (len 6), then global `[]`.
-- Guild id unset → global bodies (len 6); `clearedGlobals` false / warn.
-- Bodies names exactly session, status, agents, work, mute, unmute.
-- No dual global+guild registration of the same names in one path.
-- No ProcessManager; secrets out of repo; no new slash names.
-
+- Guild register path PUTs seven bodies then clears globals.
+- Global-only path warns when guild id unset.
+- `discord register-commands` CLI still works against live Discord when configured.
 
 ### REQ-discord-017
 
@@ -265,38 +243,12 @@ Acceptance Criteria
 
 ### REQ-discord-018
 
-Outside an allowlisted Discord channel (or from a non-configured user when a
-user allowlist applies), Corvidinho SHALL NOT send any public channel reply
-(DISCORD-DENY-1 / amended DISCORD-5). Behavior:
-
-- **MessageCreate / gateway messages:** refuse silently for all actors (no
-  public reply, no DM, no reaction). MessageCreate has no ephemeral; admin tip
-  is slash/interaction only.
-- **Slash interactions:** if the actor is ADMIN per existing
-  `resolvePermissionLevel` + `adminUserIds`/`adminRoleIds` (empty = nobody
-  ADMIN), reply **ephemeral only** with a short tip how to add the channel (or
-  user) to Discord allowlist config (`~/.config/corvidinho/allowlist.toml`
-  `discord.channels` or `CORVIDINHO_DISCORD_CHANNELS` / `DISCORD_CHANNEL_IDS`)
-  and restart the bridge (DISCORD-DENY-2). Non-admins SHALL get zero useful
-  response (DISCORD-DENY-3); because Discord requires an interaction response
-  within 3s, the system SHALL ack with an ephemeral zero-width character
-  (`\u200b`) (or equivalent defer+delete) — never allowlist guidance and never
-  a public "not authorized" leak.
-
-Operator docs (`docs/discord.md`) SHALL document the six slash commands,
-outbound formats, and a deny-behavior flowchart (mermaid in repo docs only;
-Discord chat uses embeds/fences/PNG, not native Mermaid). Fixture tests SHALL
-cover message-router and slash-dispatch deny paths without a live token.
+Operator docs (`docs/discord.md`) SHALL document `/schedule` alongside the
+prior slash inventory and DISCORD-SCHEDULE behavior.
 
 Acceptance Criteria
-- MessageCreate non-allowlisted → no `reply` on refuse; bridge posts nothing public.
-- Slash non-allowlisted admin → ephemeral tip containing allowlist.toml / env hint.
-- Slash non-allowlisted non-admin → ephemeral zero-width (or empty-useful) only; no tip text.
-- No public "not authorized" on channel deny paths.
-- Admin detection reuses DISCORD-7 admin lists (empty ⇒ nobody ADMIN).
-- `docs/discord.md` exists with slash inventory + deny mermaid + mermaid-docs-only note.
-- Fixture tests for router + slash deny paths pass.
-
+- `docs/discord.md` lists `/schedule` subcommands and admin mutation note.
+- Deny flowchart / mermaid-docs-only note unchanged in intent.
 
 ### REQ-discord-019
 
@@ -307,18 +259,19 @@ so session and work stubs survive process restarts (SESSION durable substrate;
 aligns with MEMORY-1 path for future #41 — this requirement does **not**
 implement MEMORY ACL or conversation recall).
 
-Soft TTL SHALL default to about **45 minutes** (within SESSION-2’s 30–60 minute
+Soft TTL SHALL default to about **45 minutes** (within SESSION-2's 30–60 minute
 band), overridable via `CORVIDINHO_SESSION_TTL_MS` clamped to that band.
 Continued activity (`touch` / continue paths) SHALL refresh `lastActivityAt`
 (SESSION-2). Lookups for sessions idle past the TTL SHALL treat them as expired
 and SHALL NOT continue them, so the next eligible mention starts a fresh
-session (SESSION-1 / SESSION-3). Cross-session continuity remains MEMORY’s
+session (SESSION-1 / SESSION-3). Cross-session continuity remains MEMORY's
 responsibility later (SESSION-4), not a long-lived ProcessManager.
 
 The bridge SHALL open the shared DB when starting (unless tests inject
-in-memory stores) and SHALL NOT introduce ProcessManager, `/schedule`, or
-MEMORY product surfaces. Fixture tests SHALL cover persist/reload and TTL
-expiry without a live Discord token.
+in-memory stores) and SHALL NOT introduce ProcessManager or MEMORY product
+surfaces. Schedules MAY share the same SQLite file (see REQ-discord-020).
+Fixture tests SHALL cover persist/reload and TTL expiry without a live Discord
+token.
 
 Acceptance Criteria
 - Session create + bot-message/thread maps reload from SQLite after reopen.
@@ -327,6 +280,41 @@ Acceptance Criteria
 - Idle past TTL → getByThread/getByBotMessage/get/list omit or purge; continue path does not resume.
 - Activity within TTL keeps continue_session.
 - Data dir defaults to `~/.local/share/corvidinho/`; `CORVIDINHO_DATA_DIR` overrides.
-- No ProcessManager; no /schedule; no MEMORY ACL; secrets out of repo; existing allowlists unchanged.
+- No ProcessManager; no MEMORY ACL; secrets out of repo; existing allowlists unchanged.
 - Fixture tests pass without live Discord token.
+
+### REQ-discord-020
+
+Corvidinho SHALL expose Discord slash `/schedule` with subcommands
+`list|create|pause|resume|delete` so an admin can create a recurring
+single-project agent run with a human-readable cadence (cron, `@hourly` /
+`@daily` / …, or `every N minutes|hours`) plus a target `project` and
+`prompt` (DISCORD-SCHEDULE-1..2). Pipeline templates, flock, council, and
+on-chain extras are out of scope for this requirement.
+
+Mutations (`create|pause|resume|delete`) SHALL re-check ADMIN at handler time
+(DISCORD-7 / ADMIN-4); empty admin/owner lists SHALL deny-all. `list` MAY be
+used by allowlisted actors after normal channel and rate/mute gates.
+
+Cadence SHALL enforce a minimum interval of **5 minutes** at create time.
+Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
+SHALL run a cooperative ~60s ticker that fires due active schedules
+asynchronously with a small concurrency cap so live Discord HEAR and GitHub
+WATCH ingress remain ≤ ~1 minute (DISCORD-SCHEDULE-4). Schedule ticks SHALL
+re-check channel allowlists (and rely on existing SAFE gates) so a schedule
+cannot post or act outside channels/repos already allowed (DISCORD-SCHEDULE-3).
+Provenance: steal archived corvid-agent schedule slash + scheduler + ADR
+(DISCORD-SCHEDULE-5). No ProcessManager. Fixture tests without live Discord.
+
+Acceptance Criteria
+- `/schedule` registered with list/create/pause/resume/delete bodies.
+- Admin can create with cadence + project + prompt; non-admin / empty admin denied.
+- Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
+- list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
+- Optional create `channel` must be allowlisted; tick re-checks before post.
+- Tick returns without awaiting agent; concurrent cap respected.
+- Schedules reload from shared SQLite after reopen.
+- Durable SessionStore/WorkStore from SESSION (#61) remains the bridge path.
+- No flock/council/templates/on-chain/ProcessManager; secrets out of repo.
+- Fixture tests + SpecSync + fledge verify green.
 

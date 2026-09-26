@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+  "slug": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+  "title": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+  "description": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "64e3ee175f266a41f4b8181f43f1e70b01d2c396",
+  "created_at": 1790447659,
+  "updated_at": 1790447863,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/slash-commands.ts",
+    "src/discord/slash-dispatch.ts",
+    "src/discord/slash-types.ts",
+    "src/discord/command-handlers/schedule.ts",
+    "src/discord/bridge.ts",
+    "src/discord/index.ts",
+    "src/discord/register-commands.ts",
+    "src/scheduler/",
+    "src/store/db.ts",
+    "src/store/index.ts",
+    "specs/discord/",
+    "tests/discord.schedule*.test.ts",
+    "tests/scheduler*.test.ts",
+    "STATUS.md",
+    "docs/discord.md",
+    "CHANGELOG.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Slash /schedule list|create|pause|resume|delete works (DISCORD-SCHEDULE-1..2); create takes human cadence (cron/@hourly/every Nh) + single project + prompt; mutations ADMIN re-check at handler (empty admin=deny-all); min interval 5m enforced; ticks respect channel/user allowlists+SAFE (DISCORD-SCHEDULE-3); scheduler tick cooperative so HEAR/WATCH ingress stays ≤~1m (DISCORD-SCHEDULE-4); steal corvid-agent schedule-commands/scheduler/db/ADR (no flock/council/templates/on-chain) (DISCORD-SCHEDULE-5); SQLite schedules in shared store; fixture tests; SpecSync+fledge verify green; Made with Corvidinho"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "research",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

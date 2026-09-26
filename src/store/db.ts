@@ -1,6 +1,6 @@
 /**
- * Shared bun:sqlite Database for Discord session/work durability
- * (SESSION substrate; same file reserved for future MEMORY #41).
+ * Shared bun:sqlite Database for Discord session/work/schedule durability
+ * (SESSION + DISCORD-SCHEDULE substrate; same file reserved for future MEMORY #41).
  */
 
 import { mkdirSync } from "node:fs";
@@ -15,7 +15,7 @@ export type OpenDbOptions = DataDirOptions & {
   memory?: boolean;
 };
 
-const SCHEMA_SQL = `
+const SCHEMA_V1_SQL = `
 CREATE TABLE IF NOT EXISTS schema_meta (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT NOT NULL
@@ -56,15 +56,63 @@ CREATE INDEX IF NOT EXISTS idx_discord_work_updated
   ON discord_work_tasks(updated_at);
 `;
 
+const SCHEMA_V2_SQL = `
+CREATE TABLE IF NOT EXISTS schedules (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  cron_expression TEXT NOT NULL,
+  project TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  channel_id TEXT,
+  created_by_user_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  execution_count INTEGER NOT NULL DEFAULT 0,
+  consecutive_failures INTEGER NOT NULL DEFAULT 0,
+  last_run_at INTEGER,
+  next_run_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS schedule_runs (
+  id TEXT PRIMARY KEY NOT NULL,
+  schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  summary TEXT,
+  error TEXT,
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_schedules_next_run
+  ON schedules(next_run_at);
+CREATE INDEX IF NOT EXISTS idx_schedules_status
+  ON schedules(status);
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule
+  ON schedule_runs(schedule_id);
+`;
+
+export const SCHEMA_VERSION = 2;
+
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
-  db.exec(SCHEMA_SQL);
+  db.exec(SCHEMA_V1_SQL);
   const row = db
     .query("SELECT value FROM schema_meta WHERE key = 'version'")
     .get() as { value: string } | null;
+  let version = row ? parseInt(row.value, 10) : 0;
   if (!row) {
     db.run(
       "INSERT INTO schema_meta (key, value) VALUES ('version', '1')",
+    );
+    version = 1;
+  }
+  if (version < 2) {
+    db.exec(SCHEMA_V2_SQL);
+    db.run(
+      "UPDATE schema_meta SET value = ? WHERE key = 'version'",
+      [String(SCHEMA_VERSION)],
     );
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Shared local store helpers (SESSION durable + future MEMORY #41).
+ * Shared local store helpers (SESSION durable + DISCORD-SCHEDULE + future MEMORY #41).
  */
 
 export {
@@ -9,6 +9,7 @@ export {
   type DataDirOptions,
 } from "./paths.ts";
 export {
+  SCHEMA_VERSION,
   migrateCorvidinhoDb,
   openCorvidinhoDb,
   type OpenDbOptions,

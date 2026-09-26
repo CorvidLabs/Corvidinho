@@ -88,7 +88,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
 }
 
 describe("slash command bodies (DISCORD-4)", () => {
-  test("includes session/status/agents/work", () => {
+  test("includes session/status/agents/work/mute/unmute/schedule", () => {
     const bodies = buildSlashCommandBodies();
     const names = bodies.map((b) => b.name).sort();
     expect(names).toEqual([...SLASH_COMMAND_NAMES].sort());
