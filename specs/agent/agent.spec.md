@@ -1,31 +1,33 @@
 ---
 module: agent
-version: 5
+version: 8
 status: draft
 files:
   - src/agent/types.ts
   - src/agent/config.ts
   - src/agent/verify.ts
   - src/agent/loop.ts
+  - src/agent/specLoader.ts
   - src/agent/index.ts
 
 db_tables: []
-depends_on: []
+depends_on:
+  - plugins
 ---
 
 # Agent
 
 ## Purpose
 
-Prove-before-done agent task loop: refuse done until project verify lane passes.
+Prove-before-done agent task loop with SpecSync-aware Planning briefing and SpecSync check on the verify lane.
 
 ## Public API
 
-Export AgentState, AgentEvent, TaskResult, runTask, loadAgentConfig, defaultVerifyRunner.
+Also export `selectRelevantSpecs`, `extractConstraintSections`, `loadRelevantSpecs` (or equivalent) from the agent module.
 
 ## Invariants
 
-No claim of done with verified=true unless verify passed or was skipped; max_retries respected; no Trust/attest invented.
+Planning loads specs before execute when possible; SpecSync check participates in done-gate via fledge verify lane; no SpecSync cloud key; no Trust/attest.
 
 ## Behavioral Examples
 
@@ -47,6 +49,12 @@ No claim of done with verified=true unless verify passed or was skipped; max_ret
 - **When** runTask completes
 - **Then** verifySkipped=true and verify runner is not called
 
+### Scenario: Planning SpecSync briefing
+
+- **Given** a task description that mentions a registered module
+- **When** runTask enters Planning
+- **Then** a Text event includes `# Spec: <module>` constraint sections (and companions when present)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -54,12 +62,13 @@ No claim of done with verified=true unless verify passed or was skipped; max_ret
 | Verify exhausted | state failed, verified=false, summary includes verifier output |
 | AbortSignal fired | cancelled=true, state failed |
 | fledge missing | verify failure output names PATH miss |
+| SpecSync registry missing | Planning soft-fails; execute continues |
 
 ## Dependencies
 
-Spawns `fledge` for the default verify runner. No Trust/attest.
+Spawns `fledge` for the default verify runner (lane includes `spec-check`). Reads SpecSync registry/specs via plugin helpers. No Trust/attest.
 
 ## Change Log
 
-STEAL prove-before-done gate (AGENT-4 / FLEDGE-2) (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing: STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete |
+STEAL SpecSync agent wiring: plan-time list/read + verify-lane spec-check (2026-09-26, corvid-agent).
+| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); keep CI Spec Sync Action separate from fledge verify lane |

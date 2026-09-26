@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Corvidinho — Bun/TS CLI (Linux).
- * Surfaces: help, version, doctor, plugins list/run, task run (prove-before-done).
+ * Surfaces: help, version, doctor, plugins list/run, specsync *, task run (prove-before-done).
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
@@ -37,7 +37,9 @@ Usage:
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
-  corvidinho task run [--no-verify] [--max-retries N] [--json]
+  corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
+                                    SpecSync agent tools (SPECSYNC-1..6; local binary)
+  corvidinho task run [--task TEXT] [--no-verify] [--max-retries N] [--json]
                                     Demo execute + prove-before-done verify gate (AGENT-4)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --no-verify ...        Skip verify gate (bridges / WATCH latency)
@@ -56,7 +58,8 @@ Rules (see AGENTS.md + hi/):
   - HI-first; do not invent ACCESS/bounty/MainNet criteria
   - Secrets stay out of the repo and out of chat logs (SAFE-6)
   - Merge only when SpecSync change + verify are green (GITHUB intent)
-  - Real code tasks: prove-before-done via fledge verify (AGENT-4 / FLEDGE-2)
+  - Real code tasks: prove-before-done via fledge verify incl. spec-check (AGENT-4 / SPECSYNC-2)
+  - Prefer SpecSync plugins (list/read/check/brief) over raw shell (SPECSYNC-6)
 `);
 }
 
@@ -75,12 +78,14 @@ function parseGlobalFlags(args: string[]): {
   json: boolean;
   noVerify: boolean;
   maxRetries: number | undefined;
+  taskText: string | undefined;
 } {
   const rest: string[] = [];
   let nonInteractiveFlag = false;
   let json = false;
   let noVerify = false;
   let maxRetries: number | undefined;
+  let taskText: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--non-interactive") {
@@ -93,6 +98,19 @@ function parseGlobalFlags(args: string[]): {
     }
     if (a === "--no-verify") {
       noVerify = true;
+      continue;
+    }
+    if (a === "--task") {
+      const next = args[i + 1];
+      if (next && !next.startsWith("-")) {
+        taskText = next;
+        i++;
+      }
+      continue;
+    }
+    const tf = a.match(/^--task=(.+)$/);
+    if (tf) {
+      taskText = tf[1];
       continue;
     }
     if (a === "--max-retries") {
@@ -110,7 +128,7 @@ function parseGlobalFlags(args: string[]): {
     }
     rest.push(a);
   }
-  return { rest, nonInteractiveFlag, json, noVerify, maxRetries };
+  return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText };
 }
 
 async function doctor(): Promise<number> {
@@ -258,12 +276,14 @@ async function taskRun(opts: {
   json: boolean;
   noVerify: boolean;
   maxRetries: number | undefined;
+  taskText: string | undefined;
 }): Promise<number> {
   const cwd = process.cwd();
   const config = loadAgentConfig(cwd);
   const events: AgentEvent[] = [];
   const result: TaskResult = await runTask({
     cwd,
+    task: opts.taskText,
     config,
     verifyBeforeComplete: opts.noVerify ? false : undefined,
     maxRetries: opts.maxRetries,
@@ -305,6 +325,30 @@ async function taskRun(opts: {
   return 0;
 }
 
+
+async function specsyncCli(
+  sub: string | undefined,
+  args: string[],
+  opts: { json: boolean; nonInteractive: boolean },
+): Promise<number> {
+  const map: Record<string, string> = {
+    list: "specsync-list",
+    read: "specsync-read",
+    check: "specsync-check",
+    brief: "specsync-brief",
+    coverage: "specsync-coverage",
+    "change-list": "specsync-change-list",
+    "ship-status": "specsync-ship-status",
+  };
+  if (!sub || !(sub in map)) {
+    console.error(
+      "usage: corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]",
+    );
+    return 1;
+  }
+  return pluginsRun(map[sub], args, opts);
+}
+
 export async function main(argv: string[]): Promise<number> {
   const raw = argv.slice(2);
   const {
@@ -313,6 +357,7 @@ export async function main(argv: string[]): Promise<number> {
     json: globalJson,
     noVerify,
     maxRetries,
+    taskText,
   } = parseGlobalFlags(raw);
   const nonInteractive = isNonInteractive({ nonInteractiveFlag });
 
@@ -350,6 +395,12 @@ export async function main(argv: string[]): Promise<number> {
     printHelp();
     return 1;
   }
+  if (cmd === "specsync") {
+    return specsyncCli(rest[1], rest.slice(2), {
+      json: globalJson || rest.includes("--json"),
+      nonInteractive,
+    });
+  }
   if (cmd === "task") {
     const sub = rest[1];
     if (sub === "run") {
@@ -357,9 +408,10 @@ export async function main(argv: string[]): Promise<number> {
         json: globalJson || rest.includes("--json"),
         noVerify,
         maxRetries,
+        taskText,
       });
     }
-    console.error("usage: corvidinho task run [--no-verify] [--max-retries N] [--json]\n");
+    console.error("usage: corvidinho task run [--task TEXT] [--no-verify] [--max-retries N] [--json]\n");
     printHelp();
     return 1;
   }

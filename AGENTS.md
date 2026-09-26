@@ -20,9 +20,11 @@ Secrets stay out of the repo and out of chat logs (`hi/safe.md`, SAFE-6). Use en
 
 ## Fledge + SpecSync
 
-- Prefer Fledge plugin commands over raw shell when a plugin covers the job.
-- Before claiming done, run `fledge lanes run verify --non-interactive`.
+- Prefer Fledge / SpecSync plugin commands over raw shell when a plugin covers the job (`specsync-list|read|check|brief`).
+- Before claiming done, run `fledge lanes run verify --non-interactive` (verify lane includes local `spec-check`).
+- Planning loads relevant specs via Merlin `spec_loader` pattern when task text is provided (`--task`).
 - SpecSync SDD / change cycle is **ON** (`hi/specsync.md` SPECSYNC-4). Every material change: `specsync change new` → specs/artifacts → implement → `specsync check` → `fledge lanes run verify --non-interactive` → review → finalize/archive.
+- CI still runs `.github/workflows/spec-sync.yml` (Spec Sync Action) separately from Bun smoke CI.
 - New specs go through SpecSync layout, not orphan hand files.
 - Merge Corvidinho PRs only when verify + change cycle are green (approve if GitHub allows; merge when checks pass if same-author approve is blocked).
 
@@ -34,7 +36,8 @@ bun src/cli.ts --help
 bun src/cli.ts doctor
 bun src/cli.ts version
 bun src/cli.ts plugins list
-bun src/cli.ts task run --no-verify --json
+bun src/cli.ts specsync list
+bun src/cli.ts task run --task "touch agent loop" --no-verify --json
 bun test
 hi check
 fledge lanes run verify --non-interactive

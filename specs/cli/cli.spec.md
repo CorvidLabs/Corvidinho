@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 10
+version: 13
 status: draft
 files:
   - src/cli.ts
@@ -15,7 +15,7 @@ depends_on:
 
 ## Purpose
 
-Operator surface includes task run for prove-before-done gate.
+Operator surface includes plugins, task run, and SpecSync list/read/check/brief.
 
 ## Public API
 
@@ -44,6 +44,12 @@ plugins list/run load builtins and honor non-interactive deny; doctor reports pl
 - **When** the operator runs `corvidinho plugins list`
 - **Then** github-* and plugins-list appear with danger markings and exit 0
 
+### Scenario: Specsync list
+
+- **Given** builtins are loaded and `.specsync/registry.toml` has modules
+- **When** the operator runs `corvidinho specsync list`
+- **Then** registered module names print and exit 0
+
 ### Scenario: Task run skip verify
 
 - **Given** `--no-verify`
@@ -65,8 +71,5 @@ Consumes agent module for runTask / loadAgentConfig.
 
 ## Change Log
 
-task run + --no-verify prove-before-done surface (2026-09-26, corvid-agent).
-Document default-deny allowlists + wallet deferral (2026-09-26, corvid-agent).
-| 2026-09-26 | safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm: SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5 |
-plugins list/run + non-interactive + doctor plugin count (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing: STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete |
+SpecSync CLI forwarding + task --task briefing hook (2026-09-26, corvid-agent).
+| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); keep CI Spec Sync Action separate from fledge verify lane |

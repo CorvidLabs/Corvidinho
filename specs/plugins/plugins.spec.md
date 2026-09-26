@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 9
+version: 12
 status: draft
 files:
   - src/plugins/types.ts
@@ -18,6 +18,9 @@ files:
   - plugins/github/commands.ts
   - plugins/github/index.ts
   - plugins/meta/index.ts
+  - plugins/specsync/api.ts
+  - plugins/specsync/commands.ts
+  - plugins/specsync/index.ts
 
 db_tables: []
 depends_on: []
@@ -27,7 +30,7 @@ depends_on: []
 
 ## Purpose
 
-Typed plugin command host for Corvidinho: register/list/run commands with honest danger and minTier markings. Built-in GitHub read tools and a meta list command live behind this host. Dangerous commands are denied in non-interactive mode unless allowlisted (SAFE-1).
+Typed plugin host including GitHub reads and SpecSync list/read/check/brief tools for the agent loop.
 
 ## Public API
 
@@ -76,5 +79,5 @@ Empty allowlists deny all targeted GH/Discord actions; deny overrides win; file+
 
 ## Change Log
 
-Default-deny allowlists file+env; Discord stub; empty≠BASIC (2026-09-26, corvid-agent).
-| 2026-09-26 | safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm: SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5 |
+STEAL SpecSync plugins list/read/check/brief (+ coverage/change-list/ship-status) (2026-09-26, corvid-agent).
+| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); keep CI Spec Sync Action separate from fledge verify lane |

@@ -27,3 +27,20 @@ Acceptance Criteria
 - Skip path never calls verify runner; `verified=false`, `verify_skipped=true`.
 - Aborted signal during/before verify returns `cancelled=true`.
 
+
+### REQ-agent-004
+
+During Planning, `runTask` SHALL load relevant module specs via SpecSync list/read (Merlin `spec_loader` pattern): token-overlap select top modules from the task text, extract Purpose/Invariants/Public API/Error Cases, and include companion briefing files when present (SPECSYNC-1/5). Soft-fail if registry or SpecSync tooling is unavailable.
+
+Acceptance Criteria
+- Task text mentioning a registered module produces Planning `Text` that includes `# Spec: <module>`.
+- Companion files (`context.md`, `tasks.md`, …) appear in the briefing when present on disk.
+- Missing registry does not fail the task; Planning continues.
+
+### REQ-agent-005
+
+Prove-before-done verify lane SHALL include SpecSync check (`spec-check` on `lanes.verify`) so SpecSync check failures block `verified=true` (SPECSYNC-2/7). CI Spec Sync Action remains a separate workflow.
+
+Acceptance Criteria
+- `fledge.toml` `[lanes.verify]` steps include `spec-check`.
+- Default verify runner argv stays `lanes run verify --non-interactive` (spec-check runs inside the lane).
