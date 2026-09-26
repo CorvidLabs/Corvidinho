@@ -81,8 +81,17 @@ describe("update-helpers.sh", () => {
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.10`,
     );
     expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("WATCH-RELIABILITY");
+    expect(r.stdout).toContain("rate-limit");
+  });
+
+  test("extract_changelog_section finds 0.0.9", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.9`,
+    );
+    expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("SAFE-6");
-    expect(r.stdout).toContain("memory ACL hardening");
+    expect(r.stdout).toContain("memory ACL");
   });
 
   test("extract_changelog_section finds 0.0.8", () => {
