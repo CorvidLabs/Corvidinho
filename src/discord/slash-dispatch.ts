@@ -1,12 +1,14 @@
 /**
  * Slash command dispatch map (DISCORD-4 / 6 / 7 / DENY-1..3).
  * Ancestor shape: COMMAND_HANDLERS Map + permission gate before handler.
- * Corvidinho: channel allowlist → mute/rate → resolvePermissionLevel +
- * minPermission re-check (DISCORD-7) → handler.
+ * Corvidinho: channel allowlist → actor gate (REQ-discord-201) → mute/rate →
+ * resolvePermissionLevel + minPermission re-check (DISCORD-7) → handler.
  *
  * Channel deny (DISCORD-DENY-1..3):
  * - ADMIN → ephemeral allowlist tip (no public leak)
  * - non-admin → ephemeral zero-width ack (Discord 3s rule; no useful leak)
+ * Actor deny (deny-listed, or unlisted when a user/role allowlist applies) →
+ * the same ephemeral zero-width ack on every command (REQ-discord-201).
  */
 
 import { handleAgentsCommand } from "./command-handlers/agents.ts";
@@ -18,6 +20,7 @@ import { handleScheduleCommand } from "./command-handlers/schedule.ts";
 import { handleAnnounceCommand } from "./command-handlers/announce.ts";
 import { handleAdminCommand } from "./command-handlers/admin.ts";
 import {
+  gateActor,
   gateChannel,
   gateRateOrMute,
   PermissionLevel,
@@ -98,7 +101,7 @@ function isAdminActor(ctx: SlashContext, interaction: SlashInteraction): boolean
 
 /**
  * Dispatch a slash interaction.
- * Order: channel → mute/rate → permission floor → handler.
+ * Order: channel → actor → mute/rate → permission floor → handler.
  */
 export async function handleSlashInteraction(
   ctx: SlashContext,
@@ -125,6 +128,23 @@ export async function handleSlashInteraction(
       ephemeral: true,
     });
     return { ok: false, reason: "channel_not_allowlisted" };
+  }
+
+  // REQ-discord-201 / DISCORD-DENY-3 — every command gates the actor; the
+  // owner is refused here only when deny-listed (user or role) and is then
+  // not ADMIN, so no admin tip applies.
+  const actorGate = gateActor({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    owner: ctx.owner,
+  });
+  if (!actorGate.ok) {
+    await interaction.reply({
+      content: EPHEMERAL_SILENT_ACK,
+      ephemeral: true,
+    });
+    return { ok: false, reason: "user_not_allowlisted" };
   }
 
   const rateGate = gateRateOrMute({

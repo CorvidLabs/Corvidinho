@@ -178,20 +178,30 @@ Acceptance Criteria
 
 Every path argument SHALL resolve relative to the plugin cwd (task worktree /
 project root). Absolute paths outside the root, `..` escapes, and symlink
-resolutions that leave the root SHALL be refused.
+resolutions that leave the root SHALL be refused. A dangling symlink (the leaf
+or an ancestor, whose target does not exist yet) SHALL be followed by hand and
+its target clamped the same way, so a write through it cannot land outside the
+root and SAFE-2 (REQ-plugins-083) checks see the path the write would create;
+a symlink loop SHALL be refused.
 
 Acceptance Criteria
 - Escape and symlink-outside-root fixtures refuse with a clear error.
+- files-write through a dangling symlink to a missing file outside the root (absolute or relative link), or through a dangling directory link with a nested path, is refused and nothing is created outside the root.
+- files-write through a dangling symlink to a missing SAFE-2 path (`.env`, `specs/*.spec.md`) is refused with SAFE-2 (exit 2) and the file is not created.
+- A symlink loop is refused with a symlink error; a dangling symlink to a missing file inside the root still writes that in-root file.
 
 ### REQ-plugins-083
 
 `files-write`, `files-edit`, and `files-delete` SHALL hard-refuse protected
 project infra with no override (SAFE-2): `.env` / `.env.*`, `.git` components,
-basename `fledge.toml`, paths under `specs/` or ending in `.spec.md`, and
-keystore-like basenames (`*keystore*`, `wallet-keystore.json`).
+basename `fledge.toml`, basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
+config whose `preload` would run code in spawned agents), paths under `specs/`
+or ending in `.spec.md`, and keystore-like basenames (`*keystore*`,
+`wallet-keystore.json`).
 
 Acceptance Criteria
 - Protected write/edit/delete tests refuse; target file unchanged after refuse.
+- files-write of `bunfig.toml` / `.bunfig.toml` (any directory) is refused and no file is created.
 
 ### REQ-plugins-084
 
@@ -465,7 +475,16 @@ exit 3).
 unified diff, capped at 200 KiB of UTF-8 cut on a line boundary, with a clear
 `[corvidinho: diff truncated …]` marker when capped. `--file PATH` SHALL return
 only that file's diff section (matching the new or previous path) and SHALL
-fail with a clear error when the file is not in the PR.
+fail with a clear error when the file is not in the PR. The `--file` value
+SHALL be trimmed and stripped of leading `./`; a `--file` that is empty after
+that (for example `./` or whitespace) SHALL be a usage error (exit 1, no API
+call), never a fallback to the whole-PR diff. A file section rebuilt from
+`pulls.listFiles` SHALL carry `rename from`/`rename to` lines for a renamed
+file and `copy from`/`copy to` lines for a copied file. When GitHub returns no
+patch and reports no changed lines for a renamed, copied, or mode/type-changed
+(`changed`) file, the section SHALL say the content is unchanged (a pure
+rename, copy, or mode change; for rename/copy, unless the file is binary) and
+SHALL NOT describe it as a binary file or a diff that is too large.
 
 `github-pr-files <number> --repo OWNER/REPO [--limit N]` SHALL list changed
 files with status, additions and deletions (and the previous name for
@@ -484,6 +503,8 @@ Acceptance Criteria
 - `plugins list` shows `github-pr-diff` and `github-pr-files` with dangerous=false and minTier=0.
 - Empty or deny-listed repo refuses with exit 3 before any Octokit call.
 - A diff over 200 KiB returns at most 200 KiB plus the truncation marker; `--file` returns one file's section.
+- `--file ./`, `--file "   "`, `--file=./` and `--file " ././ "` each fail with a usage error and make no API call.
+- A pure rename, pure copy, or `changed` (mode) entry with no patch and 0 lines says content unchanged, not binary or too large; a copied file's section has `copy from`/`copy to` lines; entries with line changes but no patch keep the binary/too-large note.
 - `github-pr-files` pages `pulls.listFiles`, honours `--limit`, and sets `truncated`.
 - Vendor-token-looking strings in diff text are redacted, including one straddling the cap.
 - A hostile diff far over the cap (many private-key openers, no closer) returns quickly; a private key split by the hard cut is not returned.

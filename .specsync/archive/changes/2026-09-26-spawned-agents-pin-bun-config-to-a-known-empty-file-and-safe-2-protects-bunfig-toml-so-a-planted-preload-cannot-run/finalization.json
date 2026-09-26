@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run",
+  "implementation_commit": "958c53e482ea0f7432768a112e7cdd189055b3d5",
+  "implementation_tree": "d6dce06edf17160e53c6afcf538cd321e67c6a96",
+  "contract_digest": "e92cc86898b1cab837abc05c7acfe20b0a4f9c437a3fd920e7e85b2a5ac8caaf",
+  "workspace_digest": "cfaa8acccbb7b0ddacec867b17c278ad971995a815b6d56325d03465def6d3f1",
+  "closing_digest": "099f6ed4a0c735d1e73b7389a6828577138250eca0190d6488cb803e3dac37ee",
+  "review_digest": "59637843f2a3f53a219b06012071e043a1a60e52ef72a86537188eb941fd8d66",
+  "finalization_digest": "b0da47678d65fa56d00dc60b43117faf367f7889e0575a3560a43db493b8230b",
+  "timestamp": 1790460686
+}
