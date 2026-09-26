@@ -115,6 +115,63 @@
         "cli": "179d2ee947b430c9dcc6393b54ec72970dddbeecf19f4003416ef8b01d2b6e0b",
         "discord": "186a914669c689bb31c4adcc2083387240b144e6a1221812509b475face2bf14"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790460601,
+      "digest": "3c9681f18c187e943bf110c4db920975f96038a8f4119cd3121cd37e0a556f36",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run",
+        "title": "SAFE-8 amended (issue #98): warn at 80% of the daily spend cap and ask at 100% instead of refusing. Once per crossing a run that pushes rolling 24h spend to 80% of CORVIDINHO_DAILY_SPEND_CAP_USD emits a warning (Text event, result spendWarning, Discord reply line with owner ping); a provider call that would pass the cap is stopped before it is sent and the run ends blocked with a spend-cap ask to the owner via the AUTONOMY-1/2 ask path stating spend vs cap and how to continue; doctor and Discord /status show 24h spend vs the cap (AUTONOMOUS-8); Approve card (#96) left for HI capture",
+        "description": "SAFE-8 amended (issue #98): warn at 80% of the daily spend cap and ask at 100% instead of refusing. Once per crossing a run that pushes rolling 24h spend to 80% of CORVIDINHO_DAILY_SPEND_CAP_USD emits a warning (Text event, result spendWarning, Discord reply line with owner ping); a provider call that would pass the cap is stopped before it is sent and the run ends blocked with a spend-cap ask to the owner via the AUTONOMY-1/2 ask path stating spend vs cap and how to continue; doctor and Discord /status show 24h spend vs the cap (AUTONOMOUS-8); Approve card (#96) left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "specs/agent/",
+          "specs/cli/",
+          "specs/discord/",
+          "src/agent/ask.ts",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spend-notice.ts",
+          "src/agent/spend.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/ask-ping.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/status.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/types.ts",
+          "src/scheduler/service.ts",
+          "tests/agent.spend.test.ts",
+          "tests/discord.spend.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With CORVIDINHO_DAILY_SPEND_CAP_USD set: (1) when a run's settled provider call brings rolling 24h spend to at least 80% of the cap, one warning is recorded in a module-owned spend_alerts table inside an IMMEDIATE transaction (at most once per cap value per 24h across processes), the run emits a Text event naming spend vs cap, TaskResult.spendWarning carries the numbers on --json and the NDJSON result frame, and the Discord chat reply and schedule post append a warning line that pings the configured owner; (2) a provider call whose estimate would push spend past the cap (or any call while the cap value is invalid, the model is unpriced, or the ledger is unavailable) is never sent: the attempt ends with an ask reason spend-cap whose question states spend, estimate and cap and says how to continue (raise or unset the cap and ask again, or wait for spend to leave the window), runTask returns state blocked (verify skipped, exit 0), and the Discord bridge and scheduler post it through the AUTONOMY-1/2 ask path with the owner pinged (schedules ping once until a clean run); (3) doctor always prints a spend line (info when no cap, ok/warn with 24h spend, cap and percent, warn at 80% and at the cap) and Discord /status shows the same 24h spend vs cap line; no cap means the fetch is untouched and no DB is opened; fixture tests with mocked fetch only"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "6096a8abff22cf49fa83b1bea41baba6c8cb6646c986f078f2c3dc0a4053190f",
+        "cli": "179d2ee947b430c9dcc6393b54ec72970dddbeecf19f4003416ef8b01d2b6e0b",
+        "discord": "186a914669c689bb31c4adcc2083387240b144e6a1221812509b475face2bf14"
+      }
     }
   ],
   "reopenings": []
