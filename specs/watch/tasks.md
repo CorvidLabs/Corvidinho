@@ -8,3 +8,4 @@ module: watch
 - [x] CLI github watch
 - [x] Fixture tests
 - [x] docs/WATCH.md + STATUS
+- [x] Durable WATCH SessionStore + soft TTL (#37 slice 1, REQ-watch-037)

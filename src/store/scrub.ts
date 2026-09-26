@@ -65,6 +65,7 @@ export const SCRUB_TARGETS: ReadonlyArray<{ table: string; columns: readonly str
   { table: "schedules", columns: ["name", "description", "prompt"] },
   { table: "schedule_runs", columns: ["summary", "error"] },
   { table: "memories", columns: ["key", "content"] },
+  { table: "watch_sessions", columns: ["topic"] },
   { table: "spend_ledger", columns: ["provider", "model"] },
 ];
 

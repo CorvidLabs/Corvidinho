@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) + **v0.0.10** WATCH-RELIABILITY-1..3 |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) + **v0.0.10** WATCH-RELIABILITY-1..3 + **v0.0.11** enriched bridge-live announce (CHANGELOG bullets) + **v0.0.12** typed git tools (#145) / durable WATCH sessions (#142) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (17 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -80,6 +80,8 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | IDENTITY owner + owner-only ADMIN | #42 → [#138](https://github.com/CorvidLabs/Corvidinho/pull/138), [#141](https://github.com/CorvidLabs/Corvidinho/pull/141) | Durable owner (IDENTITY-1); ADMIN = owner only, no owner ⇒ nobody (IDENTITY-2/3); admin env lists ignored + warned; in the **v0.0.9** build |
 | SAFE-5 audit trail | #95 → [#136](https://github.com/CorvidLabs/Corvidinho/pull/136) | HMAC-chained append-only `audit_log` (schema v5) for dangerous plugin runs; SAFE-17 awaits HI; in the **v0.0.9** build |
 | `--task` argv hardening | → [#143](https://github.com/CorvidLabs/Corvidinho/pull/143) | Untrusted bridge text after `--task` never becomes CLI flags (AGENT-5 / SAFE-1); in the **v0.0.10** build |
+| Typed git tools | #82 → [#145](https://github.com/CorvidLabs/Corvidinho/pull/145) | status/diff/log + dangerous branch-create/commit/push; SAFE-1/2/3, GITHUB-6 push gate; hooks off; package **0.0.12** |
+| Durable WATCH sessions | #37 → [#142](https://github.com/CorvidLabs/Corvidinho/pull/142) | Schema v6 `watch_sessions`, soft TTL, restart-safe; clean shutdown + single-flight polls; package **0.0.12** |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-version-fixture-paths-tests-version-test-ts-and-tests-update-helpers-test-ts-for-0-0-11-bump-audit",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "b57f12efbf2ceef43e1eae5b93891b11c6736f8a",
+  "contract_digest": "93b0d079dadc66af3c5d3c4c9765d894c6bf558c78642e24bbb0148fb91fa16c",
+  "execution_digest": "041e3510af569240b2c8c1ac9998c20f2990603d8a25a6d87606c294acf138e2",
+  "workspace_digest": "d83568f6032e3cbb26d417cfe8318a96ec376200f0b429cc68a4d297b3dc90d7",
+  "timestamp": 1790454885
+}
