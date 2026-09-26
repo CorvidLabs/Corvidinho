@@ -3,9 +3,14 @@
  * Poll-first for bot/VM (no public URL). No ProcessManager.
  * REQ-watch-007: cycle logging, caught pollOnce errors, auto-ack on mention/comment.
  * WATCH-RELIABILITY-1..3: post-run summary, spawn outcome log, 403 rate-limit backoff.
+ * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL;
+ * cycles are single-flight, stop() halts before the next event and waits for
+ * the in-flight cycle, and one failing event never aborts the cycle.
  */
 
+import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import {
   createEchoAgentClient,
   createSpawnAgentClient,
@@ -125,6 +130,16 @@ export type StartWatchOptions = {
   now?: () => number;
   /** Injectable sleep for backoff-aware loop (tests can no-op). */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Shared DB for durable WATCH sessions (REQ-watch-037). Default opens the
+   * shared Corvidinho DB (in-memory for dry-run without CORVIDINHO_DATA_DIR).
+   * An injected db is not closed on stop.
+   */
+  db?: Database;
+  /** Inject a session store (tests); skips opening the shared DB. */
+  sessionStore?: SessionStore;
+  /** Soft TTL override (ms); default resolveSessionTtlMs(env). */
+  sessionTtlMs?: number;
   onAction?: (info: {
     kind: string;
     event: DetectedEvent;
@@ -161,7 +176,25 @@ export async function startWatchPoller(
   }
 
   const config = loaded.config;
-  const store = new SessionStore();
+  const env = opts.env ?? process.env;
+  // Durable WATCH sessions (REQ-watch-037). Dry-run without an explicit data
+  // dir stays in-memory so tests never touch ~/.local/share/corvidinho.
+  const ownedDb =
+    opts.db || opts.sessionStore
+      ? undefined
+      : openCorvidinhoDb(
+          config.dryRun && !env.CORVIDINHO_DATA_DIR?.trim()
+            ? { memory: true }
+            : { env },
+        );
+  const db = opts.db ?? ownedDb;
+  let dbClosed = false;
+  const store =
+    opts.sessionStore ??
+    new SessionStore({
+      db,
+      ttlMs: opts.sessionTtlMs ?? resolveSessionTtlMs(env),
+    });
   const processed = new ProcessedIdStore();
   const acked = new AckedIdStore();
   const summarized = new SummarizedIdStore();
@@ -200,6 +233,12 @@ export async function startWatchPoller(
     opts.sleep ??
     ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
+  if (!opts.sessionStore) {
+    log(
+      `[watch] sessions: ${store.list().length} restored (soft TTL ${Math.round(store.ttlMs / 60000)}m)`,
+    );
+  }
+
   let timer: ReturnType<typeof setTimeout> | null = null;
   let running = true;
   let backoffUntilMs = 0;
@@ -217,7 +256,7 @@ export async function startWatchPoller(
     return parsed.waitMs;
   };
 
-  const pollOnce = async (): Promise<PollCycleResult> => {
+  const runCycle = async (): Promise<PollCycleResult> => {
     const result: PollCycleResult = {
       fetched: 0,
       newEvents: 0,
@@ -276,15 +315,12 @@ export async function startWatchPoller(
 
     let triggered = 0;
     for (const event of deduped) {
+      // stop() mid-cycle: no further routing, acks, or agent spawns.
+      if (!running) break;
       if (triggered >= config.maxTriggersPerCycle) {
         result.skipped += 1;
         continue;
       }
-
-      const action = routeEvent(event, {
-        store,
-        allowlist: config.allowlist,
-      });
 
       // Mark related eligible ids for this issue so other search paths don't re-fire.
       const related = eligible
@@ -294,106 +330,142 @@ export async function startWatchPoller(
             e.number === event.number,
         )
         .map((e) => e.id);
-      processed.addMany(related.length > 0 ? related : [event.id]);
+      const relatedIds = related.length > 0 ? related : [event.id];
 
-      if (action.kind === "refuse" || action.kind === "ignore") {
-        result.refused += 1;
-        opts.onAction?.({ kind: action.kind, event });
-        continue;
-      }
+      try {
+        const action = routeEvent(event, {
+          store,
+          allowlist: config.allowlist,
+        });
+        processed.addMany(relatedIds);
 
-      triggered += 1;
-      if (action.kind === "start_session") result.started += 1;
-      if (action.kind === "continue_session") result.continued += 1;
+        if (action.kind === "refuse" || action.kind === "ignore") {
+          result.refused += 1;
+          opts.onAction?.({ kind: action.kind, event });
+          continue;
+        }
 
-      // Auto-ack BEFORE spawn so the thread sees presence even if spawn is slow.
-      const ackResult = await maybePostWatchAck({
-        event,
-        kind: action.kind,
-        mentionUsername: config.mentionUsername,
-        ackClient,
-        acked,
-        log,
-      });
-      if (ackResult.posted) {
-        successfulAcks.add(event.id);
-      }
+        triggered += 1;
+        if (action.kind === "start_session") result.started += 1;
+        if (action.kind === "continue_session") result.continued += 1;
 
-      const startedAtMs = now();
-      const startedAt = new Date(startedAtMs).toISOString();
-      log(
-        formatSpawnStartLog({
+        // Auto-ack BEFORE spawn so the thread sees presence even if spawn is slow.
+        const ackResult = await maybePostWatchAck({
+          event,
+          kind: action.kind,
+          mentionUsername: config.mentionUsername,
+          ackClient,
+          acked,
+          log,
+        });
+        if (ackResult.posted) {
+          successfulAcks.add(event.id);
+        }
+
+        // stop() may have landed while the ack was in flight.
+        if (!running) break;
+
+        const startedAtMs = now();
+        const startedAt = new Date(startedAtMs).toISOString();
+        log(
+          formatSpawnStartLog({
+            eventId: event.id,
+            sessionId: action.session.id,
+            repo: event.repo,
+            number: event.number,
+          }),
+        );
+
+        let spawnOk = false;
+        let spawnExit = 1;
+        let spawnSummary = "";
+        let threw = false;
+        try {
+          const spawn = await agent.runChat({
+            prompt: action.prompt,
+            sessionId: action.session.id,
+            resume: action.kind === "continue_session",
+          });
+          spawnOk = spawn.ok;
+          spawnExit = spawn.exitCode;
+          spawnSummary = spawn.summary;
+          opts.onAction?.({
+            kind: action.kind,
+            event,
+            sessionId: action.session.id,
+            summary: spawn.summary,
+          });
+        } catch (err) {
+          threw = true;
+          spawnOk = false;
+          spawnExit = 1;
+          spawnSummary = err instanceof Error ? err.message : String(err);
+          logError("[watch] spawn error", err);
+        }
+
+        const finishedAtMs = now();
+        const outcome: SpawnOutcome = {
+          startedAt,
+          finishedAt: new Date(finishedAtMs).toISOString(),
           eventId: event.id,
           sessionId: action.session.id,
           repo: event.repo,
           number: event.number,
-        }),
-      );
+          ok: spawnOk,
+          exitCode: spawnExit,
+          errorClass: classifySpawnError(spawnOk, spawnExit, threw),
+          durationMs: Math.max(0, finishedAtMs - startedAtMs),
+          summaryPreview: spawnSummary.slice(0, 240),
+        };
+        spawnOutcomes.append(outcome);
+        log(formatSpawnOutcomeLog(outcome));
 
-      let spawnOk = false;
-      let spawnExit = 1;
-      let spawnSummary = "";
-      let threw = false;
-      try {
-        const spawn = await agent.runChat({
-          prompt: action.prompt,
-          sessionId: action.session.id,
-          resume: action.kind === "continue_session",
-        });
-        spawnOk = spawn.ok;
-        spawnExit = spawn.exitCode;
-        spawnSummary = spawn.summary;
-        opts.onAction?.({
-          kind: action.kind,
+        // WATCH-RELIABILITY-1 — summary after run, only if auto-ack succeeded.
+        await maybePostWatchSummary({
           event,
-          sessionId: action.session.id,
-          summary: spawn.summary,
+          spawn: {
+            ok: spawnOk,
+            sessionId: action.session.id,
+            summary: spawnSummary,
+            exitCode: spawnExit,
+          },
+          ackClient,
+          successfulAcks,
+          summarized,
+          log,
         });
       } catch (err) {
-        threw = true;
-        spawnOk = false;
-        spawnExit = 1;
-        spawnSummary = err instanceof Error ? err.message : String(err);
-        logError("[watch] spawn error", err);
+        // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
+        // retried forever ahead of later events: log, mark processed, move on.
+        processed.addMany(relatedIds);
+        logError(
+          `[watch] event ${event.repo}#${event.number} (${event.id}) failed; marked processed`,
+          err,
+        );
       }
-
-      const finishedAtMs = now();
-      const outcome: SpawnOutcome = {
-        startedAt,
-        finishedAt: new Date(finishedAtMs).toISOString(),
-        eventId: event.id,
-        sessionId: action.session.id,
-        repo: event.repo,
-        number: event.number,
-        ok: spawnOk,
-        exitCode: spawnExit,
-        errorClass: classifySpawnError(spawnOk, spawnExit, threw),
-        durationMs: Math.max(0, finishedAtMs - startedAtMs),
-        summaryPreview: spawnSummary.slice(0, 240),
-      };
-      spawnOutcomes.append(outcome);
-      log(formatSpawnOutcomeLog(outcome));
-
-      // WATCH-RELIABILITY-1 — summary after run, only if auto-ack succeeded.
-      await maybePostWatchSummary({
-        event,
-        spawn: {
-          ok: spawnOk,
-          sessionId: action.session.id,
-          summary: spawnSummary,
-          exitCode: spawnExit,
-        },
-        ackClient,
-        successfulAcks,
-        summarized,
-        log,
-      });
     }
 
     log(formatCycleLog(result));
     return result;
   };
 
+  // Single-flight: at most one cycle runs at a time, so stop() can await it
+  // before closing the DB and an issue is never handled by two cycles at once.
+  // A pollOnce while a cycle is in flight joins it instead of starting another.
+  let inflight: Promise<PollCycleResult> | null = null;
+  const pollOnce = (): Promise<PollCycleResult> => {
+    if (inflight) return inflight;
+    const p = runCycle();
+    inflight = p;
+    const clear = () => {
+      if (inflight === p) inflight = null;
+    };
+    p.then(clear, clear);
+    return p;
+  };
+
+  // The loop re-arms only after a cycle settles, so a long agent run never
+  // overlaps the next tick.
   const scheduleNext = (delayMs: number) => {
     if (!running) return;
     if (timer) clearTimeout(timer);
@@ -444,6 +516,12 @@ export async function startWatchPoller(
       if (timer) {
         clearTimeout(timer);
         timer = null;
+      }
+      // Let an in-flight cycle finish its session writes before closing.
+      if (inflight) await inflight.catch(() => undefined);
+      if (ownedDb && !dbClosed) {
+        dbClosed = true;
+        ownedDb.close();
       }
     },
   };

@@ -15,7 +15,31 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
-5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
+5. Spawn `corvidinho task run` (prove-before-done; no `--no-verify`) or echo in dry-run
+
+## Durable sessions (REQ-watch-037, #37 slice 1)
+
+- WATCH sessions (`owner/repo#number`) persist in the shared SQLite DB
+  (`~/.local/share/corvidinho/corvidinho.db`, override `CORVIDINHO_DATA_DIR`),
+  table `watch_sessions` (schema v6). A `github watch` restart keeps live issue
+  sessions; startup logs `[watch] sessions: N restored (soft TTL Xm)`.
+- Same soft TTL as Discord (SESSION-1..3): `CORVIDINHO_SESSION_TTL_MS`, clamped
+  to 30–60m, default 45m. Each event on the issue keeps the session alive; an
+  issue idle past the TTL starts a fresh session. Cross-session continuity comes
+  from MEMORY (SESSION-4), not from a long-lived session.
+- Stored topic (issue title) is SAFE-6 scrubbed. Dry-run without
+  `CORVIDINHO_DATA_DIR` stays in-memory.
+- Shutdown and overlap: poll cycles are single-flight (an interval tick while a
+  long agent run is still going is skipped). On SIGINT/SIGTERM the in-flight
+  cycle stops before the next event (no new ack or agent spawn), `stop()` waits
+  for the current run, then closes the DB.
+- One failing event (e.g. `SQLITE_BUSY`) is logged as
+  `[watch] event owner/repo#N (id) failed; marked processed` and the cycle moves
+  on. If a second watcher on the same data dir replaced an issue's row, the
+  latest write wins instead of failing on the unique issue key.
+- Not yet: turn persistence/replay, stored conversation summaries, durable
+  processed-id/ack dedup (a restart can re-see recent events; they continue the
+  persisted session).
 
 
 ## Reliability (REQ-watch-007 + WATCH-RELIABILITY-1..3)

@@ -49,6 +49,11 @@ files:
   - plugins/web/text.ts
   - tests/web.fetch.test.ts
   - tests/web.transport.test.ts
+  - plugins/git/index.ts
+  - plugins/git/commands.ts
+  - plugins/git/exec.ts
+  - plugins/git/parse.ts
+  - tests/git.plugins.test.ts
 
 db_tables: []
 depends_on: []
@@ -61,14 +66,18 @@ depends_on: []
 Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 (GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
 file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
-`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088), and
-the SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111).
+`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088), the
+SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
+typed git plugins (`git-status|diff|log|branch-list` reads;
+`git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
+task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
 
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
 HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
-Shell plugins register via `loadShellPlugins` (`shell-exec`).
+Shell plugins register via `loadShellPlugins` (`shell-exec`). Git plugins
+register via `loadGitPlugins` (`plugins/git/index.ts`).
 `plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
 takes the resolver/transport seams, `webFetch` is the guarded GET core,
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
@@ -108,6 +117,26 @@ body is capped at 1 MiB (truncated, flagged) and the whole call at 15 s;
 non-text content types and compressed bodies are refused. Returned text is
 secret-scrubbed and fenced as untrusted data with a per-call random marker id.
 `web-search` is not built (provider not captured).
+Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
+stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
+stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
+must be the repository / worktree top level (SAFE-3). Flags are strict
+(unknown refused); path args use the files-plugin clamp and go after `--` as
+literal pathspecs. Hooks stay off even with a repo-local `core.hooksPath`, and
+a linked worktree top level (`.git` file) is a valid cwd. `git-status` lists
+untracked files individually (`--untracked-files=all`) so they feed
+`git-commit`. `git-branch-create` switches with `--no-overwrite-ignore` so an
+ignored `.env*` / keystore is never replaced by a start point's tracked copy
+(SAFE-2). Reads are `dangerous: false`, minTier 0. `git-branch-create`,
+`git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
+message, stages explicit file paths only (no directories / `--all` / amend),
+commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
+paths and staging the deletion of SAFE-2 protected infra, and reports
+`filesChanged`. `git-push` pushes only the current branch to the same-named
+ref of a configured remote (never a URL), never forces, gates every push
+URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
+(GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
+SAFE-22 default-branch policy is not enforced (awaiting HI).
 
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
@@ -139,6 +168,12 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 - **When** `web-fetch` is asked for `http://169.254.169.254/latest/meta-data/` (or a name that resolves or redirects there)
 - **Then** it refuses with a SAFE-7 error and exit 2 before any connection is opened
 
+### Scenario: git-push refuses a repo off the allowlist
+
+- **Given** the task worktree's `origin` points at OWNER/REPO not on the GitHub allowlist
+- **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
+- **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -155,6 +190,12 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch > 5 redirects | Refuse (exit 2) |
 | web-fetch non-text content-type / compressed body / non-2xx / timeout | Error (exit 1); nothing returned |
+| git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
+| git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
+| git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
+| git-branch-create switch would overwrite an ignored / untracked local file (e.g. `.env`) | Refuse (exit 2, SAFE-2); HEAD and files unchanged |
+| git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
+| git-push non-fast-forward | Fail (exit 1); never retried with force |
 
 ## Dependencies
 
@@ -166,6 +207,7 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | sh | shell-exec child via `sh -c` |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors |
+| git (system binary) | git plugins via `Bun.spawn` argv arrays |
 
 ## Change Log
 
@@ -184,3 +226,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9: shell-exec + SAFE-3 cwd clamp; package 0.0.9 |
 | 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
 | 2026-09-26 | web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http: Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output scrubbed and fenced as untrusted data; dangerous false, minTier 1; web-search left for HI capture |
+| 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |

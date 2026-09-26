@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-version-fixture-paths-tests-version-test-ts-and-tests-update-helpers-test-ts-for-0-0-11-bump-audit",
+  "implementation_commit": "b57f12efbf2ceef43e1eae5b93891b11c6736f8a",
+  "implementation_tree": "5a3c32825b00ca6afb8837dd7bf56ffc0f7fd0f3",
+  "contract_digest": "93b0d079dadc66af3c5d3c4c9765d894c6bf558c78642e24bbb0148fb91fa16c",
+  "workspace_digest": "d83568f6032e3cbb26d417cfe8318a96ec376200f0b429cc68a4d297b3dc90d7",
+  "closing_digest": "c806f206136d386531844d55221f48e24da275428a4eb0b3ba662d9e84050920",
+  "review_digest": "f0a37373ebf559ff475e702785faa95b3eba5d32e91f19bfacf647611c23142c",
+  "finalization_digest": "76e94aff3aff7c31b5238d472f0d1e6c92f40db3b2c8acbe28d48e9cf759bdb6",
+  "timestamp": 1790454888
+}
