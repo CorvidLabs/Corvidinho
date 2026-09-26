@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 50
+version: 51
 status: draft
 files:
   - src/discord/types.ts
@@ -49,6 +49,9 @@ files:
   - src/discord/command-handlers/mute.ts
   - src/discord/command-handlers/schedule.ts
   - src/discord/command-handlers/announce.ts
+  - src/discord/command-handlers/admin.ts
+  - src/discord/admin-allowlist.ts
+  - tests/discord.admin-slash.test.ts
   - src/discord/announce-store.ts
   - src/discord/announce.ts
   - tests/discord.announce.test.ts
@@ -79,13 +82,19 @@ depends_on:
 HEAR Discord bridge also auto-recalls MEMORY for the acting Discord user on
 spawn and prepends an inject block to the agent prompt (AGENT-7 / MEMORY-2/4 /
 REQ-discord-023) and `/announce` ops channel (DISCORD-ANNOUNCE-1..6 / REQ-discord-024), alongside image attachments, schedule, presence, and
-session worktrees.
+session worktrees. Owner-only `/admin` edits the Discord user/channel
+allowlists at runtime (ADMIN-1..4 / REQ-discord-043).
 
 ## Public API
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
-`src/discord/index.ts`).
+`src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
+`ADMIN_AUDIT_SURFACE` (`command-handlers/admin.ts`); `planAdminListChange`,
+`commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
+`setJsonDiscordList`, `writeFileAtomic` (`admin-allowlist.ts`);
+`flattenSlashOptions` (`gateway.ts`); `SlashInteraction.subcommandGroup` and
+`SlashContext.recordAudit`.
 
 ## Invariants
 
@@ -103,6 +112,7 @@ slash registration with guild id PUTs guild commands then clears globals;
 ClientReady sets short Custom Status from shared package version (DISCORD-12);
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
+`/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel, warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
@@ -128,12 +138,25 @@ No `/memory` slash command.
 - **Then** the prompt still includes the empty-memory one-liner nudging
   `memory-store`
 
+### Scenario: Owner approves the first user at runtime
+
+- **Given** an allowlist file with `[discord] users = []`, `roles = []`, an
+  `[owner]` section, and the owner invoking from an allowlisted channel
+- **When** the owner runs `/admin users add user:@U`
+- **Then** only the `users` line becomes `users = ["U"]` (other lines kept),
+  the live allowlist holds U without a restart, the ephemeral reply shows
+  before/after counts and warns that unlisted callers now resolve to BLOCKED,
+  and the audit chain gains `started` + `ok` rows
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | memoryStore undefined | Prompt unchanged; no inject log |
 | Blank author id | Prompt unchanged; no inject |
+| `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
+| `/admin` on unreadable/unparsable file | Ephemeral refusal naming the path; file untouched |
+| `/admin` audit trail unavailable | Ephemeral refusal (SAFE-5 fail closed); nothing changed |
 
 ## Dependencies
 

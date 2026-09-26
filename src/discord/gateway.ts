@@ -53,6 +53,50 @@ function optionValue(raw: unknown): SlashOptionValue {
   return String(raw);
 }
 
+/** Raw discord.js `interaction.options.data` entry (fixture-friendly subset). */
+export type RawSlashOption = {
+  name: string;
+  type?: number;
+  value?: unknown;
+  options?: RawSlashOption[];
+};
+
+/**
+ * Flatten top-level, SUB_COMMAND (type 1) and SUB_COMMAND_GROUP (type 2)
+ * options into one map plus the subcommand / group names
+ * (e.g. /admin users add user:@x → group "users", sub "add", {user}).
+ */
+export function flattenSlashOptions(data: readonly RawSlashOption[]): {
+  subcommandGroup?: string;
+  subcommand?: string;
+  options: Record<string, SlashOptionValue>;
+} {
+  const options: Record<string, SlashOptionValue> = {};
+  let subcommandGroup: string | undefined;
+  let subcommand: string | undefined;
+  const takeSub = (opt: RawSlashOption) => {
+    subcommand = subcommand ?? opt.name;
+    for (const nested of opt.options ?? []) {
+      options[nested.name] = optionValue(nested.value);
+    }
+  };
+  for (const opt of data) {
+    if (opt.type === 2 && Array.isArray(opt.options)) {
+      subcommandGroup = subcommandGroup ?? opt.name;
+      for (const sub of opt.options) {
+        if (sub.type === 1) takeSub(sub);
+      }
+    } else if (opt.type === 1 && Array.isArray(opt.options)) {
+      takeSub(opt);
+    } else if (opt.type === 1) {
+      subcommand = subcommand ?? opt.name;
+    } else if (opt.value !== undefined) {
+      options[opt.name] = optionValue(opt.value);
+    }
+  }
+  return { subcommandGroup, subcommand, options };
+}
+
 /**
  * Live gateway via discord.js. Dynamic import so unit tests need not load it
  * when using the null/fake gateway.
@@ -126,7 +170,8 @@ export async function createLiveGateway(
     member?: { roles?: { cache?: { keys: () => IterableIterator<string> } } | string[] } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
-      data: Array<{ name: string; value?: unknown; type?: number; options?: Array<{ name: string; value?: unknown }> }>;
+      getSubcommandGroup?: (required?: boolean) => string | null;
+      data: RawSlashOption[];
     };
     reply: (opts: unknown) => Promise<unknown>;
     deferReply: (opts?: unknown) => Promise<unknown>;
@@ -134,27 +179,26 @@ export async function createLiveGateway(
     deferred: boolean;
     replied: boolean;
   }): SlashInteraction {
-    const options: Record<string, SlashOptionValue> = {};
     let subcommand: string | undefined;
+    let subcommandGroup: string | undefined;
     try {
       const sub = interaction.options.getSubcommand(false);
       if (sub) subcommand = sub;
     } catch {
       /* no subcommand */
     }
-
-    // Flatten top-level and nested (subcommand) options.
-    for (const opt of interaction.options.data) {
-      if (opt.type === 1 && Array.isArray(opt.options)) {
-        // SUB_COMMAND
-        subcommand = subcommand ?? opt.name;
-        for (const nested of opt.options) {
-          options[nested.name] = optionValue(nested.value);
-        }
-      } else if (opt.value !== undefined) {
-        options[opt.name] = optionValue(opt.value);
-      }
+    try {
+      const group = interaction.options.getSubcommandGroup?.(false);
+      if (group) subcommandGroup = group;
+    } catch {
+      /* no subcommand group */
     }
+
+    // Flatten top-level, subcommand and subcommand-group options.
+    const flat = flattenSlashOptions(interaction.options.data);
+    const options = flat.options;
+    subcommand = subcommand ?? flat.subcommand;
+    subcommandGroup = subcommandGroup ?? flat.subcommandGroup;
 
     const send = async (opts: SlashReplyPayload, mode: "reply" | "edit") => {
       const payload: Record<string, unknown> = {};
@@ -193,6 +237,7 @@ export async function createLiveGateway(
       id: interaction.id,
       commandName: interaction.commandName,
       subcommand,
+      subcommandGroup,
       channelId: interaction.channelId,
       guildId: interaction.guildId ?? undefined,
       userId: interaction.user.id,

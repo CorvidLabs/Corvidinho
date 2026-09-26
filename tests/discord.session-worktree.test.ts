@@ -178,9 +178,9 @@ describe("session worktree binding (SESSION-WORKTREE-1..4)", () => {
     const workOpts = work?.options?.map((o) => o.name) ?? [];
     expect(workOpts).toContain("description");
     expect(workOpts).toContain("project");
-    // Still eight top-level commands
+    // Nine top-level commands (incl. /admin, ADMIN-1..3)
     expect(bodies.map((b) => b.name).sort()).toEqual(
-      ["agents", "announce", "mute", "schedule", "session", "status", "unmute", "work"].sort(),
+      ["admin", "agents", "announce", "mute", "schedule", "session", "status", "unmute", "work"].sort(),
     );
   });
 });

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-admin-slash-for-runtime-allowlist-admin-issue-43-captured-admin-1-4-owner-only-admin-users-add-channels-add",
+  "slug": "discord-admin-slash-for-runtime-allowlist-admin-issue-43-captured-admin-1-4-owner-only-admin-users-add-channels-add",
+  "title": "Discord /admin slash for runtime allowlist admin (issue #43 captured ADMIN-1..4): owner-only /admin users add, channels add|remove, config show; persists to the allowlist file the bridge already reads (atomic temp+rename, other sections and comments kept) and updates the live allowlist without restart; env values read-only at runtime; empty stays deny-all; SAFE-5 audit rows for mutations",
+  "description": "Discord /admin slash for runtime allowlist admin (issue #43 captured ADMIN-1..4): owner-only /admin users add, channels add|remove, config show; persists to the allowlist file the bridge already reads (atomic temp+rename, other sections and comments kept) and updates the live allowlist without restart; env values read-only at runtime; empty stays deny-all; SAFE-5 audit rows for mutations",
+  "kind": "feature",
+  "state": "draft",
+  "base_commit": "20fb34ff8db5759a2aad968e74d1d21b4c344b83",
+  "created_at": 1790453717,
+  "updated_at": 1790453724,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "tests",
+    "docs/discord.md",
+    "allowlist.example.toml"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Owner-only /admin slash (ADMIN minPermission plus an explicit handler-time re-check; no owner means nobody can run it) approves/adds Discord users (users add) and adds/removes channels (channels add|remove) in the allowlist file the bridge already reads, written atomically with other sections and comments kept, and the live allowlist updates without restart; env-sourced entries are reported read-only; deny-listed ids and removing the last live channel are refused; the first user entry warns that unlisted callers now resolve to BLOCKED; config show gives an ephemeral audit-friendly view (live/file/env counts, updatable knobs) with no secrets; mutations append SAFE-5 audit rows (fail closed when the trail is unavailable); gateway flattens subcommand groups; register count is nine; fixture tests only"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "research",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

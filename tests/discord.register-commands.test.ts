@@ -30,7 +30,7 @@ describe("registerSlashCommandSet (DISCORD-4 / REQ-discord-016)", () => {
 
     expect(result.scope).toBe("guild");
     expect(result.guildId).toBe("guild-9");
-    expect(result.registeredCount).toBe(8);
+    expect(result.registeredCount).toBe(9);
     expect(result.clearedGlobals).toBe(true);
     expect(result.warnNoGuildId).toBeUndefined();
     expect(calls).toHaveLength(2);
@@ -60,10 +60,10 @@ describe("registerSlashCommandSet (DISCORD-4 / REQ-discord-016)", () => {
     expect(result.warnNoGuildId).toContain("DISCORD_GUILD_ID");
     expect(calls).toHaveLength(1);
     expect(calls[0]?.route).toBe(applicationCommandsRoute("app-1"));
-    expect(calls[0]?.body).toHaveLength(8);
+    expect(calls[0]?.body).toHaveLength(9);
   });
 
-  test("bodies include DISCORD-4 plus /schedule plus /announce", () => {
+  test("bodies include DISCORD-4 plus /schedule, /announce and /admin", () => {
     const names = buildSlashCommandBodies().map((b) => b.name);
     expect(names).toEqual([...SLASH_COMMAND_NAMES]);
   });

@@ -83,7 +83,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
 describe("/announce bodies", () => {
   test("includes announce with channel|show and CHANNEL picker", () => {
     expect(SLASH_COMMAND_NAMES).toContain("announce");
-    expect(SLASH_COMMAND_NAMES.length).toBe(8);
+    expect(SLASH_COMMAND_NAMES.length).toBe(9);
     const announce = buildSlashCommandBodies().find((b) => b.name === "announce");
     expect(announce?.options?.map((o) => o.name).sort()).toEqual([
       "channel",
