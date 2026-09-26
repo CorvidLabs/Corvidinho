@@ -7,11 +7,11 @@
   "title": "Cover leftover cli package 0.0.5 / REQ-cli-012 paths for SpecSync audit after SESSION-WORKTREE archive (no module AC change beyond version bump already shipped in #58 PR)",
   "description": "Cover leftover cli package 0.0.5 / REQ-cli-012 paths for SpecSync audit after SESSION-WORKTREE archive (no module AC change beyond version bump already shipped in #58 PR)",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "4613993ffb73e2b2a57d6877b158bd5c751bcced",
   "created_at": 1790449108,
-  "updated_at": 1790449124,
+  "updated_at": 1790449131,
   "affected_specs": [
     "cli"
   ],

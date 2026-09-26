@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-leftover-cli-package-0-0-5-req-cli-012-paths-for-specsync-audit-after-session-worktree-archive-no-module-ac",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "e12a232628818575ce469d656f32cf1d7fb724c0",
+      "contract_digest": "fb809c9554d73faa929856091ba6fcf1f6b09fade694a52a37086e5a77f5a1d8",
+      "execution_digest": "65efdec4288c6fde8c2a6886b96c818086e99d672649a844a310e148cd039c87",
+      "workspace_digest": "3750318346dbc21b2527bed835dea61cecc5fcb7f2c2271b4f13131a9044c652",
+      "timestamp": 1790449129
+    }
+  ]
+}

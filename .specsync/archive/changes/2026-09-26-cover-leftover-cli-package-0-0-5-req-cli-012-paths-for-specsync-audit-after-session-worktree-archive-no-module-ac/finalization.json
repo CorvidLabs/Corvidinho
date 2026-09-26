@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-cli-package-0-0-5-req-cli-012-paths-for-specsync-audit-after-session-worktree-archive-no-module-ac",
+  "implementation_commit": "e12a232628818575ce469d656f32cf1d7fb724c0",
+  "implementation_tree": "9ce599f77a2a80924e70b6eff9d1d3f92e1c0135",
+  "contract_digest": "fb809c9554d73faa929856091ba6fcf1f6b09fade694a52a37086e5a77f5a1d8",
+  "workspace_digest": "3750318346dbc21b2527bed835dea61cecc5fcb7f2c2271b4f13131a9044c652",
+  "closing_digest": "cb6d3214ea2dfc7001692b8b03b8152fb95d32a9cf7715e98e87cf40ced66382",
+  "review_digest": "85314f37c5e9a4be7f16db9b06e12c6c0547a3f03d9a9d255ea2665f57f4c3b5",
+  "finalization_digest": "8273c982d665d767bf1d23d4c7337f08e3e49fd3dc41d28e2b4d2bd5a28f8e73",
+  "timestamp": 1790449131
+}

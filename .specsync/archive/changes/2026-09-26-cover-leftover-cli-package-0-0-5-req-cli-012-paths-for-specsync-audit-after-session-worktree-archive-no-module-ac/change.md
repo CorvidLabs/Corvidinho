@@ -1,6 +1,6 @@
 ---
 id: cover-leftover-cli-package-0-0-5-req-cli-012-paths-for-specsync-audit-after-session-worktree-archive-no-module-ac
-state: implementing
+state: archived
 type: documentation
 base_commit: 4613993ffb73e2b2a57d6877b158bd5c751bcced
 ---
