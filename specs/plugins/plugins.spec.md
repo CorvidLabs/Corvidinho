@@ -18,6 +18,7 @@ files:
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
+  - tests/store.busy-lock.test.ts
   - src/allowlist/types.ts
   - src/allowlist/load.ts
   - src/allowlist/github.ts

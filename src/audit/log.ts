@@ -84,7 +84,11 @@ function link(
     : createHash("sha256").update(data).digest("hex");
 }
 
-/** Append one entry; returns its sequence number and hash. */
+/**
+ * Append one entry; returns its sequence number and hash. Takes the write
+ * lock up front (BEGIN IMMEDIATE) so a concurrent writer is waited for under
+ * busy_timeout; a deferred read-then-write gets SQLITE_BUSY at once instead.
+ */
 export function appendAudit(
   db: Database,
   entry: AuditEntryInput,
@@ -127,7 +131,7 @@ export function appendAudit(
       ],
     );
     seq = Number(res.lastInsertRowid);
-  })();
+  }).immediate();
   return { seq, hash };
 }
 
