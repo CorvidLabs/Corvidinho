@@ -11,4 +11,4 @@ artifact: tasks
 - [x] slash-dispatch admin tip / non-admin zero-width ephemeral
 - [x] fixture tests router + slash deny paths
 - [x] docs/discord.md + links (STATUS, AGENTS, README, hi/discord)
-- [ ] Spec delta REQ-discord-018 + SpecSync check / fledge verify / PR
+- [x] Spec delta REQ-discord-018 + SpecSync check / fledge verify / PR
