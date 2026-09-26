@@ -1,6 +1,6 @@
 ---
 id: watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 3af288a04306b7463f1275d4db93001ca51bede2
 ---
