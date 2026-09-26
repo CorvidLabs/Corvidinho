@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive",
+  "implementation_commit": "1d0306fcc652c233362980eb61a162287ded43c0",
+  "implementation_tree": "396f194b29f936012d873ee9a2de8e118bc9ae20",
+  "contract_digest": "e348f7c6fe9b50401565c7945ac3018f84b3690b8292384f896a00dacaa5a93b",
+  "workspace_digest": "7fe9c73f6cc0075760fce3f43cf408b7204b2528a8c4afd7681636cb61634f93",
+  "closing_digest": "5d720739e36542c5727dc88cab9f7d50b84d320bd36885f8652b0c81d496c82c",
+  "review_digest": "0ef131152da7e25375effe9a7d443a80279fa99ed8b2ab3d61fd79064e747051",
+  "finalization_digest": "67b3f26e264d47de90a4cd52d42b10e597ab9095332d928372072a11b8f2aa17",
+  "timestamp": 1790449812
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "1d0306fcc652c233362980eb61a162287ded43c0",
+      "contract_digest": "e348f7c6fe9b50401565c7945ac3018f84b3690b8292384f896a00dacaa5a93b",
+      "execution_digest": "f011dc95225f18ec74d8a5dedd275988b959d4d3172683675bcdf73e3f122675",
+      "workspace_digest": "7fe9c73f6cc0075760fce3f43cf408b7204b2528a8c4afd7681636cb61634f93",
+      "timestamp": 1790449809
+    }
+  ]
+}

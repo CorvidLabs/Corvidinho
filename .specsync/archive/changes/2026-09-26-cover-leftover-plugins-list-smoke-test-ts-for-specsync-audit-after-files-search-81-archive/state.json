@@ -7,11 +7,11 @@
   "title": "Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive",
   "description": "Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "373b0c69e27a9857138e554e7536e5dd5901d9ba",
   "created_at": 1790449799,
-  "updated_at": 1790449808,
+  "updated_at": 1790449821,
   "affected_specs": [
     "plugins"
   ],

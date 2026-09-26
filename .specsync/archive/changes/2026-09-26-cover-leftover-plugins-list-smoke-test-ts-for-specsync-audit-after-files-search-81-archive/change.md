@@ -1,6 +1,6 @@
 ---
 id: cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 373b0c69e27a9857138e554e7536e5dd5901d9ba
 ---
