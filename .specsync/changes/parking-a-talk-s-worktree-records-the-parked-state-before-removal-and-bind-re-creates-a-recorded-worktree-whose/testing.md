@@ -16,6 +16,11 @@ with its directory left was skipped on end; bind handed back the removed
 directory; the bridge ran the agent in a cwd that did not exist). After the
 fix: 13/13 pass in the file.
 
+After merging main (#198 added the button-ask pick path, which bound only
+when no worktree path was recorded): a fifth case drives a button pick on a
+`parked` row after restart. Before binding on that path too it ran the agent
+in the repo root (1 fail); after, 14/14 pass in the file.
+
 Plus `bun test`, `bunx tsc --noEmit`, `specsync check --require-coverage 100`
 and `fledge lanes run verify --non-interactive`.
 
@@ -27,3 +32,4 @@ and `fledge lanes run verify --non-interactive`.
 | REQ-discord-357 | tests/discord.session-worktree.test.ts › a park cut short before removal is finished when the talk ends after restart | row `parked` with its dir still present; `endSession` after reopen removes the dir and the row |
 | REQ-discord-357 | tests/discord.session-worktree.test.ts › bind re-creates a recorded active worktree whose directory is gone (same project, never the repo root) | `active` row at a removed dir: project switch still refused; bind re-creates an existing worktree for the same project and persists it |
 | REQ-discord-357 | tests/discord.session-worktree.test.ts › bridge: a thread continue after restart never spawns in a removed worktree | thread continue after reopen runs the agent in an existing worktree, not the repo root |
+| REQ-discord-357 | tests/discord.session-worktree.test.ts › bridge: a button pick after restart never runs in the repo root or a parked worktree | button-ask pick on a `parked` row after reopen re-binds; the agent runs in an existing worktree, not the repo root, and the row reads `active` at it |

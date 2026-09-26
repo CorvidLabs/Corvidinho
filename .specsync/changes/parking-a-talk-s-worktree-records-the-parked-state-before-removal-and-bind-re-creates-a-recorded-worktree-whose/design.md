@@ -25,7 +25,9 @@ artifact: design
 - The bridge calls `bindWorktree` on every turn (it is idempotent) instead of
   only on start or when no path is recorded, so a thread continue after a
   restart goes through that check. On bind failure it ends the talk and
-  replies as before.
+  replies as before. The button-ask pick path (`onComponent`, from #198)
+  likewise binds on every turn instead of only when no path is recorded;
+  its bind-failure handling is unchanged.
 - Untouched: schema (v4 columns already exist), `cwdFor` logic, TTL, slash
   commands, env vars.
 

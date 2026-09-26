@@ -35,6 +35,42 @@
       "approved_delta_digests": {
         "discord": "5354d58dd4224173368611d11f349af956f565c94fa50e58ba5d442d70376537"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790465563,
+      "digest": "91be2ca7ab9fcb19ec45aa68e08f1a8dfc17331d7618ed8932698d328f765687",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose",
+        "title": "Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3)",
+        "description": "Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/discord/bridge.ts",
+          "src/discord/session-store.ts",
+          "tests/discord.session-worktree.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Parking a session worktree persists worktree_state=parked before any removal side effect, so a crash between park and row delete never restarts with a row that says active at a removed directory; a park cut short (row parked, path recorded) is finished when the talk ends; bindWorktree re-creates a recorded active worktree whose directory is gone for the same project and session (never the repo root or another talk dir; project switch still refused); the bridge binds on every turn so a thread continue after restart runs in an existing worktree; fixture tests with a real temp git repo and a reopened DB file fail before and pass after"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "ad4bad061160f177bec3a1f1cd0078a52fd24b03822b1363d9b5f8ae0c78f9e7"
+      }
     }
   ],
   "reopenings": []

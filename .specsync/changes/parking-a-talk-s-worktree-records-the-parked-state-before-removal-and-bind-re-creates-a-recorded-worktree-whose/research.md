@@ -15,5 +15,6 @@ artifact: research
 - `createWorktree` already runs `cleanStaleWorktreeState` (prune, force
   remove a leftover dir, park a branch with commits, delete an empty one), so
   re-creating the same `talk-<id>` worktree needs no new manager code.
-- Only the bridge continues an existing talk; `/session start` and `/work`
-  always create a fresh session and bind it before `cwdFor`.
+- Only the bridge continues an existing talk (a chat continue, and since
+  #198 a button-ask pick); `/session start` and `/work` always create a fresh
+  session and bind it before `cwdFor`.

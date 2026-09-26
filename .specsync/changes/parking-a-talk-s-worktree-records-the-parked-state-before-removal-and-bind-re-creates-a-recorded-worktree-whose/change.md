@@ -1,6 +1,6 @@
 ---
 id: parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 213900d3875250f6d845b036d9eebc1ab7e1d4b1
 ---

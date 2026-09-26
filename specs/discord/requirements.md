@@ -953,13 +953,15 @@ ends. Binding a session SHALL reuse a recorded `active` worktree only when its
 directory exists; otherwise it SHALL re-create the worktree for the same
 session and project through the existing worktree manager, never falling back
 to the repo root or another talk's directory, and a different project SHALL
-still be refused (SESSION-WORKTREE-4). The bridge SHALL bind on every turn so
-a continue after a restart never spawns in a missing directory.
+still be refused (SESSION-WORKTREE-4). The bridge SHALL bind on every turn
+(a chat continue and a button-ask pick alike) so a turn after a restart never
+spawns in a missing directory, a parked worktree, or the repo root.
 
 Acceptance Criteria
 - The row reads `parked` as soon as a park starts, before the worktree is removed.
 - After a restart, a talk whose park finished or was cut short is not `active`; its next turn runs in an existing worktree that is not the repo root.
 - A `parked` row whose directory is still there is removed when the talk ends.
 - An `active` row at a removed directory is re-bound to an existing worktree for the same project; a different project is refused.
+- A button-ask pick after a restart on a `parked` row runs in an existing worktree that is not the repo root.
 - No new env vars, slash commands, or schema changes.
 

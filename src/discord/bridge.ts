@@ -749,12 +749,13 @@ export async function startBridge(
       });
       await thinking.start({ description: "Working on your request..." });
 
-      if (!session.worktreePath) {
-        const bound = await store.bindWorktree(session);
-        if (!bound.ok) {
-          await thinking.fail(`❌ worktree: ${bound.error}`);
-          return;
-        }
+      // SESSION-WORKTREE-3 / REQ-discord-357: bind on every turn, as the chat
+      // path does, so a parked or missing worktree is re-created, never the
+      // repo root or a dead directory.
+      const bound = await store.bindWorktree(session);
+      if (!bound.ok) {
+        await thinking.fail(`❌ worktree: ${bound.error}`);
+        return;
       }
       const sessionCwd = store.cwdFor(session);
 

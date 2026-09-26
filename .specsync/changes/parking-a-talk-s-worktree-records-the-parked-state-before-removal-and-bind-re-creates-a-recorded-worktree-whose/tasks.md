@@ -10,4 +10,5 @@ artifact: tasks
 - [x] Finish a park cut short (`parked` with a recorded path) instead of skipping it.
 - [x] `bindWorktree` re-creates a recorded `active` worktree whose directory is gone; project-switch refusal kept.
 - [x] Bridge binds on every turn.
+- [x] After merging main: the button-ask pick path binds on every turn too (regression fixture).
 - [x] Spec delta REQ-discord-357.

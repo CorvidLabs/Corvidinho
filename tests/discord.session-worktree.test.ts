@@ -5,6 +5,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HumanAsk } from "../src/agent/types.ts";
+import { pickCustomId, toPendingAsk } from "../src/discord/ask-buttons.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { buildSlashCommandBodies } from "../src/discord/slash-commands.ts";
@@ -479,6 +481,40 @@ describe("a crash between park and row delete never leaves a dead cwd (SESSION-W
     }
   }
 
+  /** Bridge over a reopened store; records each agent run's cwd. */
+  async function restartBridge(project: string, db: Db, store: SessionStore) {
+    const runs: Array<{ cwd?: string; existed: boolean }> = [];
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const started = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: "chan-1",
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        // Missing file: never read the operator's allowlist (ALLOW-4).
+        CORVIDINHO_ALLOWLIST_FILE: join(project, "no-allowlist.toml"),
+      },
+      projectRoot: project,
+      db,
+      sessionStore: store,
+      workStore: new WorkStore({ db }),
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      agent: {
+        runChat: async ({ sessionId, cwd }) => {
+          runs.push({ cwd, existed: cwd ? existsSync(cwd) : false });
+          return { ok: true, sessionId, summary: "ok", exitCode: 0 };
+        },
+      },
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        handlers.reply = async () => ({ messageId: "bot_2" });
+        return createNullGateway();
+      },
+    });
+    if (started.ok !== true || !box.handlers) throw new Error("bridge failed to start");
+    return { started, handlers: box.handlers, runs };
+  }
+
   function rowOf(db: Db, id: string) {
     return db
       .query(`SELECT worktree_state, worktree_path FROM discord_sessions WHERE id = ?`)
@@ -593,35 +629,8 @@ describe("a crash between park and row delete never leaves a dead cwd (SESSION-W
       expect(existsSync(wt)).toBe(false);
 
       const { db, store } = reopen();
-      const runs: Array<{ cwd?: string; existed: boolean }> = [];
-      const box: { handlers: GatewayHandlers | null } = { handlers: null };
-      const started = await startBridge({
-        env: {
-          DISCORD_BOT_TOKEN: "fake",
-          DISCORD_CHANNEL_IDS: "chan-1",
-          CORVIDINHO_DISCORD_DRY_RUN: "1",
-        },
-        projectRoot: project,
-        db,
-        sessionStore: store,
-        workStore: new WorkStore({ db }),
-        skipProtocolCheck: true,
-        disableScheduler: true,
-        agent: {
-          runChat: async ({ sessionId, cwd }) => {
-            runs.push({ cwd, existed: cwd ? existsSync(cwd) : false });
-            return { ok: true, sessionId, summary: "ok", exitCode: 0 };
-          },
-        },
-        gatewayFactory: async (_cfg, handlers) => {
-          box.handlers = handlers;
-          handlers.reply = async () => ({ messageId: "bot_2" });
-          return createNullGateway();
-        },
-      });
-      expect(started.ok).toBe(true);
-      if (started.ok !== true) return;
-      await box.handlers!.onMessage({
+      const { started, handlers, runs } = await restartBridge(project, db, store);
+      await handlers.onMessage({
         id: "m2",
         channelId: "chan-1",
         threadId: "thr-1",
@@ -636,6 +645,52 @@ describe("a crash between park and row delete never leaves a dead cwd (SESSION-W
       const session = store.getByThread("thr-1");
       expect(session?.worktreePath).toBe(runs[0]!.cwd);
       await store.endSession(session!);
+      await started.stop();
+    });
+  });
+
+  test("bridge: a button pick after restart never runs in the repo root or a parked worktree", async () => {
+    await withDurable("corvidinho-parked-button-", async (project, reopen) => {
+      const first = reopen();
+      const created = await first.store.createWithWorktree({
+        channelId: "chan-1",
+        userId: "u1",
+        threadId: "thr-1",
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const id = created.session.id;
+      const ask: HumanAsk = {
+        reason: "clarify",
+        question: "Which DB?",
+        options: [
+          { id: "1", label: "Postgres" },
+          { id: "2", label: "SQLite" },
+        ],
+      };
+      first.store.setPendingAsk(created.session, toPendingAsk(ask, { askId: "ask1" }));
+      // Crash right after the parked marker was written (endSession cut short).
+      first.db.run(`UPDATE discord_sessions SET worktree_state = 'parked' WHERE id = ?`, [id]);
+
+      const { db, store } = reopen();
+      expect(store.get(id)?.worktreeState).toBe("parked");
+      const { started, handlers, runs } = await restartBridge(project, db, store);
+      await handlers.onComponent!({
+        id: "ix-pick",
+        customId: pickCustomId("ask1", "1"),
+        channelId: "thr-1",
+        userId: "u1",
+        messageId: "bot_1",
+        reply: async () => {},
+      });
+      expect(runs.length).toBe(1);
+      expect(runs[0]!.existed).toBe(true);
+      expect(runs[0]!.cwd).not.toBe(project);
+      const session = store.get(id)!;
+      expect(session.worktreeState).toBe("active");
+      expect(session.worktreePath).toBe(runs[0]!.cwd);
+      expect(rowOf(db, id)).toEqual({ worktree_state: "active", worktree_path: runs[0]!.cwd! });
+      await store.endSession(session);
       await started.stop();
     });
   });
