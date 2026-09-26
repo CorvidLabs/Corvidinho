@@ -101,22 +101,26 @@ export async function handleWorkCommand(
   });
   let result;
   try {
-    result = await ctx.agent.runChat({
-      prompt: idInject.prompt,
-      humanText: description,
-      sessionId: session.id,
-      resume: false,
-      actingUserId: interaction.userId,
-      actingIsAdmin,
-      cwd: ctx.store.cwdFor(session),
-      onStatus: (u) => {
-        void thinking?.update({
-          tool: u.tool,
-          tokens: u.tokens,
-          description: u.message ? `⏳ ${u.message}` : undefined,
-        });
-      },
-    });
+    // Busy while the agent runs: the soft-TTL purge must not park this
+    // worktree mid-run (REQ-discord-204).
+    result = await ctx.store.runActive(session, () =>
+      ctx.agent.runChat({
+        prompt: idInject.prompt,
+        humanText: description,
+        sessionId: session.id,
+        resume: false,
+        actingUserId: interaction.userId,
+        actingIsAdmin,
+        cwd: ctx.store.cwdFor(session),
+        onStatus: (u) => {
+          void thinking?.update({
+            tool: u.tool,
+            tokens: u.tokens,
+            description: u.message ? `⏳ ${u.message}` : undefined,
+          });
+        },
+      }),
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
     ctx.workStore.setStatus(task, "failed", msg);
