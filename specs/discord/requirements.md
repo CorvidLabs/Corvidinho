@@ -189,14 +189,18 @@ Acceptance Criteria
 
 Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `buildCorvidinhoArgv` so `.ts` entrypoints always run under `bun`. When
-`task run --json` stdout is present, the Discord chat reply SHALL surface a
-parsed summary (state / verified / attempts + `result.summary`) rather than
-dumping raw JSON. Prefer `--no-verify` for bridge latency. Fixture tests SHALL
-cover argv shape and JSON summary parsing without a live Discord token.
+`task run` stdout is present (ndjson result frame or legacy `--json`), the
+Discord chat reply SHALL surface a parsed summary (state / verified /
+attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
+`--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
+agent loop still skips the verify lane when `filesChanged` is empty so plain
+chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
+without a live Discord token.
 
 Acceptance Criteria
-- `.ts` bin → `["bun", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
-- Valid `--json` stdout → Discord body includes state and summary text.
+- `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
+- Spawn argv for Discord chat is `task run --task <prompt> --output ndjson` with **no** `--no-verify`.
+- Valid result/json stdout → Discord body includes state and summary text.
 - Unparseable stdout falls back to truncated stdout/stderr.
 - No ProcessManager; allowlists unchanged; secrets out of repo.
 
@@ -617,6 +621,21 @@ Acceptance Criteria
 - Missing CHANGELOG / empty section → description or tip fallback (or header-only if none).
 - `postAnnouncement` still default-deny / announce-channel-only.
 - Package `0.0.11`; docs/STATUS/CHANGELOG updated.
+- Fixture tests + SpecSync + fledge verify green.
+
+### REQ-discord-085
+
+Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
+prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
+argv MUST NOT include `--no-verify`. Empty `filesChanged` continues to skip
+verify inside the agent loop (honest `verifySkipped`); when tools report file
+changes, `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
+of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
+Discord.
+
+Acceptance Criteria
+- Discord spawn argv never includes `--no-verify`.
+- Package `0.0.13`; docs/STATUS/CHANGELOG updated.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-108
