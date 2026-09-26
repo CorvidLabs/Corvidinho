@@ -7,4 +7,4 @@ artifact: plan
 
 1. Make `--task` always consume the next argv item; `/s` on `--task=`.
 2. Export `parseGlobalFlags`; add fixture tests.
-3. Spec delta REQ-cli-015.
+3. Spec delta REQ-cli-143.

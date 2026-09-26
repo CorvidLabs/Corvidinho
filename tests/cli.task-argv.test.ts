@@ -1,5 +1,5 @@
 /**
- * `--task` value is always task text (REQ-cli-015): untrusted bridge text
+ * `--task` value is always task text (REQ-cli-143): untrusted bridge text
  * that looks like a flag must never be parsed as a flag.
  */
 import { describe, expect, test } from "bun:test";

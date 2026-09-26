@@ -7,4 +7,4 @@ artifact: requirements
 
 - AGENT-5 (hi/agent.md): the operator picks provider and capability tier.
 - SAFE-1 (hi/safe.md): consent/verify posture is not chosen by message text.
-- New canonical requirement REQ-cli-015 (see deltas/cli.md).
+- New canonical requirement REQ-cli-143 (see deltas/cli.md).

@@ -7,7 +7,7 @@ change: task-run-task-always-takes-the-next-argv-item-as-task-text-so-untrusted-
 
 ## Added
 
-### REQUIREMENT REQ-cli-015
+### REQUIREMENT REQ-cli-143
 
 `task run --task <text>` SHALL treat the next argv item as the task text even
 when it starts with `-`, and `--task=<text>` SHALL keep text that spans

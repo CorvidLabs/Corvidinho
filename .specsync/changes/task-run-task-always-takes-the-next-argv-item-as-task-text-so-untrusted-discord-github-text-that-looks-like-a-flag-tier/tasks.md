@@ -8,4 +8,4 @@ artifact: tasks
 - [x] `--task` always consumes the next argv item.
 - [x] `--task=TEXT` spans lines.
 - [x] Fixture tests in tests/cli.task-argv.test.ts.
-- [x] Spec delta REQ-cli-015.
+- [x] Spec delta REQ-cli-143.
