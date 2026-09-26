@@ -48,6 +48,8 @@ beforeEach(() => {
     delete process.env[k];
   }
   tmp = mkdtempSync(join(tmpdir(), "gh-gate-file-"));
+  // Missing until a test writes one; never the operator's ~/.config file.
+  process.env.CORVIDINHO_ALLOWLIST_FILE = join(tmp, "no-allowlist.toml");
   process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
   loadBuiltins();
 });
@@ -149,6 +151,47 @@ describe("GITHUB-6 gate reads the allowlist file + env (REQ-plugins-253)", () =>
     });
     expect(other.ok).toBe(false);
     expect(other.exitCode).toBe(3);
+  });
+
+  test("malformed or unreadable allowlist file contributes nothing; env overlays still apply", async () => {
+    // Truncated JSON: neither its deny nor its allow entries load (same as before
+    // the file was read at all, and as WATCH ingress).
+    const bad = join(tmp, "allowlist.json");
+    writeFileSync(bad, `{"github": {"orgs": ["corvidlabs"], "deny_repos": ["corvidlabs/secret"]`, "utf8");
+    const unreadable = join(tmp, "is-a-dir");
+    mkdirSync(unreadable);
+
+    for (const path of [bad, unreadable]) {
+      process.env.CORVIDINHO_ALLOWLIST_FILE = path;
+
+      // No env allow: nothing admits the repo → default-deny, nothing posted.
+      delete process.env.CORVIDINHO_GITHUB_ALLOW_ORGS;
+      const gate = await checkRepoGateForActingRole("corvidlabs/ok");
+      expect(gate.ok).toBe(false);
+      if (!gate.ok) expect(gate.error).toContain("allowlist empty");
+      expect((await checkRepoGateAsync("corvidlabs/ok")).ok).toBe(false);
+      const refused = await runPlugin({
+        name: "github-issue-create",
+        args: ["--repo", "corvidlabs/ok", "--title", "nope"],
+        nonInteractive: true,
+        allowlist: ["github-issue-create"],
+      });
+      expect({ path, ok: refused.ok, exitCode: refused.exitCode }).toEqual({ path, ok: false, exitCode: 3 });
+
+      // Env allow still applies; the file's deny entry did not load either.
+      process.env.CORVIDINHO_GITHUB_ALLOW_ORGS = "corvidlabs";
+      expect((await checkRepoGateForActingRole("corvidlabs/secret")).ok).toBe(true);
+      expect((await checkRepoGateAsync("corvidlabs/secret")).ok).toBe(true);
+      const allowed = await runPlugin({
+        name: "github-issue-create",
+        args: ["--repo", "corvidlabs/ok", "--title", "fine"],
+        nonInteractive: true,
+        allowlist: ["github-issue-create"],
+      });
+      expect(allowed.ok).toBe(true);
+      expect(allowed.data).toMatchObject({ dryRun: true, owner: "corvidlabs", repo: "ok" });
+      expect((await checkRepoGateForActingRole("other/repo")).ok).toBe(false);
+    }
   });
 
   test("CLI plugins run honors ~/.config/corvidinho/allowlist.toml deny lists", () => {

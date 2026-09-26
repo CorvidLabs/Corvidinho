@@ -13,6 +13,9 @@ import {
   type DiscordEmbedPayload,
 } from "../src/discord/thinking-status.ts";
 
+/** Missing allowlist file: never read the operator's allowlist (ALLOW-4). */
+const NO_ALLOWLIST = join(mkdtempSync(join(tmpdir(), "corvidinho-thinking-")), "no-allowlist.toml");
+
 describe("bridge thinking status wiring (DISCORD-3)", () => {
   test("mention path posts progress then Done before final reply tracking", async () => {
     const box: { handlers: GatewayHandlers | null } = { handlers: null };
@@ -24,6 +27,7 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
       },
       // Temp non-git project: never create real worktrees/branches in this repo.
       projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
@@ -88,6 +92,7 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
       },
       // Temp non-git project: never create real worktrees/branches in this repo.
       projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
