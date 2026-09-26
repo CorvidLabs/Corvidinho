@@ -27,9 +27,9 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional: CORVIDINHO_ALLOWLIST_FILE=/path/to/allowlist.toml
 # optional DISCORD-6: DISCORD_RATE_LIMIT_WINDOW_MS=60000 DISCORD_RATE_LIMIT_MAX=10
 # optional DISCORD-6 mute seed: DISCORD_MUTED_USER_IDS=
-# optional DISCORD-7 admin: CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES (empty = nobody ADMIN)
-# optional IDENTITY-1 owner: CORVIDINHO_OWNER_DISCORD_ID (+ _GITHUB_LOGIN, _DISPLAY)
-#   or allowlist [owner] discord_id / github_login / display (env wins; owner = ADMIN)
+# owner = the only ADMIN (IDENTITY-1/2/3): CORVIDINHO_OWNER_DISCORD_ID (+ _GITHUB_LOGIN, _DISPLAY)
+#   or allowlist [owner] discord_id / github_login / display (env wins). No owner = nobody ADMIN.
+#   CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES are ignored (bridge + doctor warn if set).
 # optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
 ```
 

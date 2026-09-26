@@ -33,7 +33,11 @@ export type ResolvePermissionOpts = {
   /** In-memory muted set (DISCORD-6). */
   mutedUsers?: Set<string>;
   allowlist: AllowlistConfig;
-  /** DISCORD-7 — empty ⇒ nobody ADMIN (default-deny). */
+  /**
+   * Legacy admin allowlists. IGNORED for authorization: ADMIN is owner-only
+   * (IDENTITY-2, Leif decision on #42). Kept so callers/config still compile;
+   * the bridge warns at start when they are set.
+   */
   adminUserIds?: string[];
   adminRoleIds?: string[];
   /**
@@ -45,16 +49,15 @@ export type ResolvePermissionOpts = {
 
 /**
  * Resolve caller permission at command run time (DISCORD-7).
- * Empty adminUserIds/adminRoleIds and no owner ⇒ nobody is ADMIN (default-deny).
- * The configured owner is ADMIN unless muted or deny-listed (ADMIN-4).
+ * ADMIN is owner-only (IDENTITY-2): only the configured owner, unless muted
+ * or deny-listed (ADMIN-4). No owner ⇒ nobody is ADMIN (IDENTITY-3).
+ * Admin user/role lists no longer grant ADMIN.
  * Denied users are BLOCKED. When users+roles allowlists are both empty,
  * channel-gated callers get STANDARD (preserve HEAR thin slash).
  */
 export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionLevel {
   const id = opts.userId.trim().toLowerCase();
   const d = opts.allowlist.discord;
-  const adminUsers = (opts.adminUserIds ?? []).map((x) => x.toLowerCase());
-  const adminRoles = (opts.adminRoleIds ?? []).map((x) => x.toLowerCase());
   if (opts.mutedUsers && opts.mutedUsers.has(opts.userId)) {
     return PermissionLevel.BLOCKED;
   }
@@ -63,12 +66,6 @@ export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionL
   }
   const roleIds = (opts.roleIds ?? []).map((r) => r.trim().toLowerCase()).filter(Boolean);
   if (isOwnerDiscord(opts.owner, opts.userId)) {
-    return PermissionLevel.ADMIN;
-  }
-  if (adminUsers.includes(id)) {
-    return PermissionLevel.ADMIN;
-  }
-  if (roleIds.some((r) => adminRoles.includes(r))) {
     return PermissionLevel.ADMIN;
   }
   if (d.users.some((x) => x === id)) {
