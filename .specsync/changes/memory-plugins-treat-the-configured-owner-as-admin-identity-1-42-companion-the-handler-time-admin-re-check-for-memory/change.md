@@ -1,6 +1,6 @@
 ---
 id: memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory
-state: approved
+state: implementing
 type: feature
 base_commit: 5f1db8a2a44464694bdde6d4695f6c186d29cfc0
 ---
