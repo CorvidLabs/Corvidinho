@@ -38,7 +38,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR rate limits + mutes | #12 → [#27](https://github.com/CorvidLabs/Corvidinho/pull/27) | DISCORD-6 per-user sliding window + in-memory mute; peers unaffected; no ProcessManager |
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 | HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
-| WATCH poll-first ingress | #19 → (this PR) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
+| WATCH poll-first ingress | #19 → [#30](https://github.com/CorvidLabs/Corvidinho/pull/30) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
 
 ### In flight / next
 
