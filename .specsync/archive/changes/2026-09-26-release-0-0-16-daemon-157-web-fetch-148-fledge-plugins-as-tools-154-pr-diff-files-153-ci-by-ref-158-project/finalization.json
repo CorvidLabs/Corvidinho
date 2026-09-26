@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-16-daemon-157-web-fetch-148-fledge-plugins-as-tools-154-pr-diff-files-153-ci-by-ref-158-project",
+  "implementation_commit": "7e10362762b923d70d2cf7e0b969b0775963da92",
+  "implementation_tree": "7419b5d347a69cf4384d16da4d7d1f6de3a6e946",
+  "contract_digest": "dfb2c7c14338cd1ff3eea3d27b5c2e0bbb9f1d991f9bbe2f479879eb84ac47b1",
+  "workspace_digest": "0e0dd78d62578adea858a1d5096e4a6fdc7e78bf3d87a63f226411e8d75ee93f",
+  "closing_digest": "63efd1e8aa5fae3478380203b491f35326f7aed027f589748c265b2168fc0360",
+  "review_digest": "c091e2895ab91d5b76df0001d1c2b1969dd4a778469214882666060b8353a86d",
+  "finalization_digest": "88b0824a96fde169b37d0ebdd91c355854f63d14659597798e7e9997865da893",
+  "timestamp": 1790457703
+}

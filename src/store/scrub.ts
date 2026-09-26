@@ -15,11 +15,19 @@ const RULES_VERSION_KEY = "scrub_rules_version";
 
 const redacted = (kind: string) => `[redacted:${kind}]`;
 
-/** Order matters: more specific shapes first (sk-ant- before sk-). */
+/**
+ * Order matters: more specific shapes first (sk-ant- before sk-).
+ *
+ * Every pattern must run in linear time: callers scrub text written by others
+ * (e.g. PR diffs), so a pattern whose match attempts can each rescan to the
+ * end of the input is a denial-of-service. The private-key body stops at the
+ * next BEGIN line and the JWT header stops at the next `-eyJ`, so each part of
+ * the text is scanned by at most one match attempt.
+ */
 const PATTERNS: ReadonlyArray<{ kind: string; re: RegExp; keepPrefix?: boolean }> = [
   {
     kind: "private-key",
-    re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+    re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:(?!-----BEGIN )[\s\S])*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
   },
   { kind: "github-token", re: /\bgithub_pat_[A-Za-z0-9_]{20,}/g },
   { kind: "github-token", re: /\bgh[pousr]_[A-Za-z0-9]{20,}/g },
@@ -30,7 +38,7 @@ const PATTERNS: ReadonlyArray<{ kind: string; re: RegExp; keepPrefix?: boolean }
   { kind: "google-key", re: /\bAIza[0-9A-Za-z_-]{35}/g },
   {
     kind: "jwt",
-    re: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+    re: /\beyJ(?:(?!-eyJ)[A-Za-z0-9_-]){8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
   },
   {
     kind: "discord-token",

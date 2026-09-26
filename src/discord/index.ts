@@ -80,6 +80,22 @@ export {
   type PostAnnouncementResult,
 } from "./announce.ts";
 export { handleAnnounceCommand } from "./command-handlers/announce.ts";
+export {
+  handleAdminCommand,
+  formatConfigShow,
+  ADMIN_AUDIT_SURFACE,
+} from "./command-handlers/admin.ts";
+export {
+  planAdminListChange,
+  commitAdminListChange,
+  resolveAdminAllowlistPath,
+  setTomlDiscordList,
+  setJsonDiscordList,
+  writeFileAtomic,
+  type AdminListKey,
+  type AdminListOp,
+  type AdminListPlan,
+} from "./admin-allowlist.ts";
 export { routeMessage, type RouterDeps } from "./message-router.ts";
 export {
   createSpawnAgentClient,
@@ -92,8 +108,10 @@ export {
 export {
   createLiveGateway,
   createNullGateway,
+  flattenSlashOptions,
   type DiscordGateway,
   type GatewayHandlers,
+  type RawSlashOption,
 } from "./gateway.ts";
 export {
   startBridge,
@@ -120,6 +138,7 @@ export {
   buildSlashCommandBodies,
   SLASH_COMMAND_NAMES,
   OPT_SUB_COMMAND,
+  OPT_SUB_COMMAND_GROUP,
   OPT_STRING,
   OPT_USER,
   type SlashCommandBody,

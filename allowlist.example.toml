@@ -15,6 +15,10 @@ deny_orgs = []
 deny_users = []
 
 [discord]
+# The owner can change `channels` and `users` at runtime with /admin
+# (ADMIN-1/2): the bridge rewrites just those lines in this file (atomic;
+# other lines and comments kept) and applies them live. Env values stay
+# read-only at runtime.
 # REQUIRED non-empty for HEAR bridge start (also via DISCORD_CHANNEL_IDS env).
 # Paste snowflake channel IDs from Discord (Developer Mode → Copy Channel ID).
 channels = []

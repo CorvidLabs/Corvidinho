@@ -4,6 +4,7 @@
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import type { AuditEntryInput } from "../audit/index.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import type { AgentClient } from "./agent-client.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -28,6 +29,8 @@ export type SlashInteraction = {
   commandName: string;
   /** Present for /session list|start. */
   subcommand?: string;
+  /** SUB_COMMAND_GROUP name, e.g. "users" for /admin users add (ADMIN-1..3). */
+  subcommandGroup?: string;
   channelId: string;
   guildId?: string;
   userId: string;
@@ -50,6 +53,11 @@ export type SlashContext = {
   announceStore?: AnnounceStore;
   /** SAFE-5 — one-line audit chain verify summary for /status. */
   auditLine?: () => string;
+  /**
+   * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
+   * the trail is unavailable; /admin mutations then fail closed.
+   */
+  recordAudit?: (entry: AuditEntryInput) => { seq: number };
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;

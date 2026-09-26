@@ -132,8 +132,9 @@ export const filesCommands: PluginCommand[] = [
   {
     name: "files-write",
     description:
-      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large]. SAFE-2 protected paths refused.",
+      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large]. SAFE-2 protected paths refused. Mutating (ROLES-CHAT-5).",
     dangerous: false,
+    mutating: true,
     minTier: 2,
     async handler(ctx) {
       try {
@@ -180,8 +181,9 @@ export const filesCommands: PluginCommand[] = [
   {
     name: "files-edit",
     description:
-      "Exact string replace in a file. minTier=code. Args: <path> --old <str> --new <str> [--replace-all] [--allow-large]. SAFE-2 protected paths refused.",
+      "Exact string replace in a file. minTier=code. Args: <path> --old <str> --new <str> [--replace-all] [--allow-large]. SAFE-2 protected paths refused. Mutating (ROLES-CHAT-5).",
     dangerous: false,
+    mutating: true,
     minTier: 2,
     async handler(ctx) {
       try {

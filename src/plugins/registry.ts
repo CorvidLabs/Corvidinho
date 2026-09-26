@@ -22,6 +22,7 @@ export function list(): PluginListEntry[] {
       name: c.name,
       description: c.description,
       dangerous: Boolean(c.dangerous),
+      mutating: Boolean(c.dangerous) || Boolean(c.mutating),
       minTier: c.minTier ?? 0,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
