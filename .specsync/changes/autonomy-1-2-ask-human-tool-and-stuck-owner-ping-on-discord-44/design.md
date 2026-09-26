@@ -47,6 +47,9 @@ Discord side (`src/discord/ask-ping.ts`, new):
   (ok, no ask) and `setStatus` (pause/resume) clear it; a failed run keeps it.
   Persisting it in SQLite keeps the dedupe across bridge restarts and a
   bridge + daemon sharing one data dir.
+- `/work` (merged from #166): `openWorkPr` stops with `needs-input` when the
+  run's result frame says `blocked`, before any repository, plugin or verify
+  call — a run that asked a human is not done, so it is not shipped.
 
 Alternatives rejected: a DM to the owner (not captured; DISCORD-5), a new
 slash command (not captured), a protocol bump (the change is additive).

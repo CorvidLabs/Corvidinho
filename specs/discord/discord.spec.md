@@ -120,6 +120,8 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
 `workCommitMessage` and `buildWorkPrBody` (REQ-discord-088).
 `AgentSpawnResult.task` carries the run's verify facts from its result frame.
+`WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
+human) never ships a PR (REQ-discord-044).
 
 ## Invariants
 

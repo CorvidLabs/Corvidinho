@@ -29,6 +29,7 @@ import { ScheduleStore } from "../src/scheduler/store.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
 import { Database as SqliteDatabase } from "bun:sqlite";
 import { SchedulerService } from "../src/scheduler/service.ts";
+import { openWorkPr } from "../src/work/pr.ts";
 
 const OWNER_ID = "111122223333444455";
 const OWNER = { discordId: OWNER_ID, display: "Leif" };
@@ -544,5 +545,52 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     };
     expect(row.ask_ping_key).toBeNull();
     db.close();
+  });
+});
+
+describe("/work never ships a PR from a run that asked a human (AUTONOMY-1)", () => {
+  test("blocked run → needs-input line; no repo calls, no plugins, no verify", async () => {
+    const calls: string[] = [];
+    const r = await openWorkPr(
+      {
+        worktreePath: "/nonexistent/work-tree",
+        branch: "work/w1",
+        taskId: "w1",
+        description: "pick a DB",
+        run: {
+          ok: true,
+          exitCode: 0,
+          task: { verified: false, verifySkipped: true, state: "blocked" },
+        },
+      },
+      {
+        git: async (_cwd, args) => {
+          calls.push(`repo ${args.join(" ")}`);
+          return {
+            code: 1,
+            stdout: "",
+            stdoutBytes: 0,
+            truncated: false,
+            stderr: "",
+            timedOut: false,
+          };
+        },
+        runPlugin: async (o) => {
+          calls.push(`plugin ${o.name}`);
+          return { ok: false, exitCode: 1 };
+        },
+        verify: async () => {
+          calls.push("verify");
+          return { success: true, output: "" };
+        },
+        allowlist: new Set(["git-commit", "git-push", "github-pr-create"]),
+        repoGate: () => ({ ok: true as const, repo: "acme/widget" }),
+      },
+    );
+    expect(r).toMatchObject({ opened: false, reason: "needs-input" });
+    expect(r.line).toBe(
+      "PR: not opened — the work run is waiting for your answer to its question.",
+    );
+    expect(calls).toEqual([]);
   });
 });

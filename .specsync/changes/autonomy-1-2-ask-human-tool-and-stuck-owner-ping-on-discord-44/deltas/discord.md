@@ -35,6 +35,11 @@ when a run succeeds without an ask or the schedule is paused or resumed, and a
 different question or reason SHALL ping again. A failed run without an ask
 SHALL keep the marker. With no owner configured no marker is recorded.
 
+A `/work` run whose result frame reports state `blocked` SHALL NOT be shipped
+as a pull request (REQ-discord-088): the PR step SHALL stop before any
+repository, plugin or verify call and its `PR:` line SHALL say the run is
+waiting for an answer (skip reason `needs-input`).
+
 Acceptance Criteria
 - Mention path: an ask reply quotes the question and carries `<@owner>` plus `mentionUserIds: [owner]`.
 - A stuck ask on a failed run replaces `failed (exit N)` with the question and a failed thinking status.
@@ -45,3 +50,4 @@ Acceptance Criteria
 - The same schedule question pings once; repeat ticks post it with no mention.
 - A changed question or reason pings again; a clean run or pause/resume re-arms the ping; a failed run keeps the marker.
 - The marker persists in SQLite (schema v7) across a restart or a second ticker on one data dir.
+- A blocked `/work` run opens no PR, says it is waiting for an answer, and makes no repository, plugin or verify call.
