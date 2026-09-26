@@ -11,12 +11,16 @@
   "canonical_applied": true,
   "base_commit": "435556dcaedb9817bef4466404825147c9da817e",
   "created_at": 1790440758,
-  "updated_at": 1790440934,
+  "updated_at": 1790440976,
   "affected_specs": [
     "discord"
   ],
   "affected_paths": [
-    "src/discord/ tests/discord* STATUS.md specs/discord/ docs/"
+    "src/discord",
+    "tests",
+    "docs",
+    "STATUS.md",
+    ".env.example"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,

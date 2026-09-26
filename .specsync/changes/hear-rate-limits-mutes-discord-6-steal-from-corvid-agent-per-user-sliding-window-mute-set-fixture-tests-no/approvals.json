@@ -33,6 +33,44 @@
       "approved_delta_digests": {
         "discord": "c1816aecbe33ea58ad28e8eb8c3eab2f531d166fedd2e61d0918dbf9d09f70d3"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790440975,
+      "digest": "700a022660b73f44b0245b062cb1bd20338acc7496d42f78a5f2008f8ce8ecf7",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "hear-rate-limits-mutes-discord-6-steal-from-corvid-agent-per-user-sliding-window-mute-set-fixture-tests-no",
+        "title": "HEAR rate limits + mutes (DISCORD-6) — steal from corvid-agent; per-user sliding window + mute set; fixture tests; no ProcessManager; STATUS Done for #12",
+        "description": "HEAR rate limits + mutes (DISCORD-6) — steal from corvid-agent; per-user sliding window + mute set; fixture tests; no ProcessManager; STATUS Done for #12",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "STATUS.md",
+          "docs",
+          "src/discord",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Per-user sliding-window rate limit and in-memory mute set refuse only that user on mention/reply/slash (DISCORD-6); other users unaffected; rateLimitByLevel override optional; env knobs for window/max + muted seed; fixture tests no live token; allowlists stay default-deny; no ProcessManager; STATUS Done for #12 when merged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "c1816aecbe33ea58ad28e8eb8c3eab2f531d166fedd2e61d0918dbf9d09f70d3"
+      }
     }
   ],
   "reopenings": []
