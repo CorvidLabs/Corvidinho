@@ -45,30 +45,30 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-discord-009
 
-Slash command set SHALL remain the seven commands
-(session/status/agents/work/mute/unmute/schedule). `/session start` and `/work`
-MAY accept an optional `project` string option for explicit project selection
-(SESSION-WORKTREE-4). No new slash command names.
+Retain seven-command slash set including `/schedule`. Additionally: `/session start`
+and `/work` MAY accept an optional `project` string (SESSION-WORKTREE-4). No new
+slash command names.
 
 Acceptance Criteria
 - `buildSlashCommandBodies()` still seven commands; session start + work have optional `project`.
+- Schedule/mute/unmute/prior DISCORD-4 bodies still present.
 - Bodies remain fixture-testable without live Discord.
 
 ### REQUIREMENT REQ-discord-018
 
-Operator docs (`docs/discord.md`) SHALL document per-talk worktree isolation,
+Retain `/schedule` inventory docs. Additionally document per-talk worktree isolation,
 optional `project` on `/session start` and `/work`, schedule project scope, and
 `WORKTREE_BASE_DIR` / `.corvid-worktrees` rooting.
 
 Acceptance Criteria
-- `docs/discord.md` covers SESSION-WORKTREE behavior and env.
+- `docs/discord.md` lists `/schedule` and SESSION-WORKTREE behavior/env.
 - Deny flowchart / mermaid-docs-only note unchanged in intent.
 
 ### REQUIREMENT REQ-discord-019
 
-Session durable store SHALL additionally persist optional worktree fields
-(`project`, `worktree_path`, `worktree_branch`, `worktree_state`) on schema v4
-without breaking soft TTL behavior (SESSION-1..4 remain).
+Retain SESSION durable store + soft TTL. Additionally persist optional worktree
+fields (`project`, `worktree_path`, `worktree_branch`, `worktree_state`) on schema
+v4; TTL purge parks/removes worktree before dropping the row.
 
 Acceptance Criteria
 - Schema v4 migration adds columns; reload restores worktree binding.
@@ -77,10 +77,8 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-discord-020
 
-Schedule ticks SHALL spawn the agent with cwd scoped to the schedule's
-`project` worktree (or project-scoped directory), then park/remove that
-workspace after the run, while keeping the cooperative non-blocking tick
-semantics.
+Retain cooperative `/schedule` ticker. Additionally: ticks SHALL spawn with cwd
+scoped to `schedule.project` worktree/scope and park/remove after the run.
 
 Acceptance Criteria
 - Tick resolves `schedule.project` → isolated cwd for `runChat`.
