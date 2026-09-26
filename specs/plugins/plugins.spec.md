@@ -94,4 +94,4 @@ Add GITHUB-6 repo gate invariant; keep danger/minTier and gh-helper invariants.
 ## Change Log
 
 WATCH: host + github read + SAFE-1 deny + repo deny gate (2026-09-26, corvid-agent).
-| 2026-09-26 | plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface: WATCH: plugin host + GitHub read + repo deny gate |
+
