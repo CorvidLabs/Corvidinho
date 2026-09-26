@@ -55,6 +55,14 @@ bun src/cli.ts github watch
 
 **Poll-first for bot/VM** (no public URL). Webhook deferred. Empty GitHub allowlists refuse start. Details: [`docs/WATCH.md`](docs/WATCH.md).
 
+## Schedule daemon
+
+```bash
+bun src/cli.ts daemon
+```
+
+Ticks `/schedule` work on the Linux host without Discord or a REPL (CLI-8 / AUTONOMOUS-4). One daemon per data dir; JSON-line logs; SIGTERM stops it cleanly. systemd unit and details: [`docs/DAEMON.md`](docs/DAEMON.md).
+
 ## Fledge lanes
 
 ```bash
