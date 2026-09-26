@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-status-protocol-line-fixture-in-tests-discord-slash-test-ts-for-the-protocol-2-bump-issue-73-assertion-reads",
+  "implementation_commit": "5c347e0ec048ca02ec7a38764c17c87b1ef408f8",
+  "implementation_tree": "3392a51d463e3a8cb7d1616545a4006996f91112",
+  "contract_digest": "9c4cb38035572fe666ce3fbf6cae5f6ebcebe52fd5d364b0eb866808fe7db56f",
+  "workspace_digest": "d5e22b8eb52a9b42a890b65be151d538adad3d6be2f720c20083354bea17e45b",
+  "closing_digest": "55b92effb05d75dbd7322e465a0ec31c48d0e97b93fb7b8d3416656047ec4d6b",
+  "review_digest": "18f7e745fd8130c2457d3bb1aa6ff8c34bbed816b2486dcddf87643cd978f7e2",
+  "finalization_digest": "d160afbfc1e44711afec0d2d6235addbbf86eb73f06ff83d120256505e2ed4a8",
+  "timestamp": 1790454058
+}
