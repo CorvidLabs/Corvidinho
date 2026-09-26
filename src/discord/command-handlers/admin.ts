@@ -11,7 +11,7 @@
  * no owner ⇒ nobody passes. Writes go to the allowlist file the bridge already
  * reads and to the live allowlist in place (no restart). Env values are
  * read-only at runtime. Empty stays deny-all: deny lists still win, and the
- * last live channel cannot be removed. Mutations leave SAFE-5 audit rows
+ * last live (non-denied) channel cannot be removed. Mutations leave SAFE-5 audit rows
  * (intent first; fail closed when the trail is unavailable). Replies are
  * ephemeral and never contain tokens or secrets.
  */
@@ -194,7 +194,7 @@ async function handleMutation(
   }
   const plan = planned.plan;
 
-  const refusal = refusalFor(plan, m);
+  const refusal = refusalFor(plan, m, d.denyChannels);
   if (refusal) {
     auditSoft(ctx, auditEntry(interaction, m.action, "denied", args));
     await interaction.reply({ content: refusal, ephemeral: true });
@@ -242,15 +242,29 @@ async function handleMutation(
   });
 }
 
-/** Guard rails that keep empty=deny-all and env read-only honest. */
-function refusalFor(plan: AdminListPlan, m: Mutation): string | null {
+/**
+ * Guard rails that keep empty=deny-all and env read-only honest.
+ * A channel that is also on deny_channels does not count as live: deny always
+ * wins in the channel gate, so leaving only denied channels is the same
+ * lockout as leaving none.
+ */
+function refusalFor(
+  plan: AdminListPlan,
+  m: Mutation,
+  denyChannels: readonly string[],
+): string | null {
   if (m.op !== "remove") return null;
   const target = mention(plan.key, plan.id);
   if (!plan.inFileBefore && plan.inEnv) {
     return `Refused: ${target} comes from env (${ADMIN_LIST_ENV[plan.key]}); env values cannot be changed at runtime. Change the VM env and restart the bridge. Nothing changed.`;
   }
-  if (plan.key === "channels" && plan.liveAfter.length === 0) {
+  if (plan.key !== "channels") return null;
+  if (plan.liveAfter.length === 0) {
     return `Refused: removing ${target} would leave no allowlisted channel — every message and slash (including /admin) would be refused and the bridge would not start again. Add another channel first. Nothing changed.`;
+  }
+  const denied = new Set(denyChannels.map((c) => c.trim().toLowerCase()));
+  if (plan.liveAfter.every((c) => denied.has(c))) {
+    return `Refused: removing ${target} would leave only deny-listed channels (deny_channels always wins) — every message and slash (including /admin) would be refused. Add another channel first. Nothing changed.`;
   }
   return null;
 }

@@ -425,6 +425,34 @@ describe("/admin channels add|remove (ADMIN-2)", () => {
     expect(auditRows(f.db).map((r) => r.outcome)).toEqual(["denied"]);
   });
 
+  test("removal refused when only deny-listed channels would remain (deny wins ⇒ same lockout)", async () => {
+    const f = await fixture({
+      text: SAMPLE_TOML.replace(`channels = ["${CHAN_A}"]`, `channels = ["${CHAN_A}", "${CHAN_B}"]`)
+        .replace("deny_users = []", `deny_users = []\ndeny_channels = ["${CHAN_B}"]`),
+    });
+    const fileBefore = readFileSync(f.path, "utf8");
+    expect(f.ctx.channelIds).toEqual([CHAN_A, CHAN_B]);
+    expect(f.ctx.allowlist.discord.denyChannels).toEqual([CHAN_B]);
+
+    const i = ix({ subcommandGroup: "channels", subcommand: "remove", options: { channel: CHAN_A } });
+    await handleSlashInteraction(f.ctx, i);
+    expect(i.replies[0]?.content).toContain("would leave only deny-listed channels");
+    expect(i.replies[0]?.content).not.toContain("✅");
+    expect(readFileSync(f.path, "utf8")).toBe(fileBefore);
+    expect(f.ctx.channelIds).toEqual([CHAN_A, CHAN_B]);
+    expect(auditRows(f.db).map((r) => r.outcome)).toEqual(["denied"]);
+
+    // The owner can still reach /admin in the surviving channel.
+    const show = ix({ subcommandGroup: "config", subcommand: "show" });
+    expect(await handleSlashInteraction(f.ctx, show)).toEqual({ ok: true, handled: true });
+
+    // Removing the denied channel itself is fine: a usable channel remains.
+    const j = ix({ subcommandGroup: "channels", subcommand: "remove", options: { channel: CHAN_B } });
+    await handleAdminCommand(f.ctx, j);
+    expect(j.replies[0]?.content).toContain(`removed <#${CHAN_B}>`);
+    expect(f.ctx.channelIds).toEqual([CHAN_A]);
+  });
+
   test("env-sourced channel cannot be removed at runtime; file+env removes from file only", async () => {
     const f = await fixture({ env: { DISCORD_CHANNEL_IDS: CHAN_ENV } });
     expect(f.ctx.channelIds).toEqual([CHAN_A, CHAN_ENV]);
