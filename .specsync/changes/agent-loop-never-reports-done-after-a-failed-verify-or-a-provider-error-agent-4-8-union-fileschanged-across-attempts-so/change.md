@@ -1,6 +1,6 @@
 ---
 id: agent-loop-never-reports-done-after-a-failed-verify-or-a-provider-error-agent-4-8-union-fileschanged-across-attempts-so
-state: draft
+state: implementing
 type: bug_fix
 base_commit: e8bbd215036e7dc8739ac9159afa19f17ae943c6
 ---
