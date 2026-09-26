@@ -1,0 +1,300 @@
+{
+  "timestamp": 1790444751,
+  "commit": "bdf6aeb285b89be181e39c0857f0b438dc22757e",
+  "contract_digest": "12f3f8408eac6543a5cfa3a9d91a742680e22b2c7c8d87e359250398e0679496",
+  "execution_digest": "1589a5a032d8f29c58bfb91d87e7e79e7bc47840de5509f1de0b92599fabc5f8",
+  "workspace_digest": "72613af7249ec1dde435665bc1bde374353cb1fce80c8c8c7eaffa4b4d6972f9",
+  "acceptance_input_digest": "e45e4af2b533c47d217357fea99b5ed8fe8880c830c856c966c8391840ce5e2c",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d5125c9c0faed1c1badf4a22383407d556bea6376ccc693e685378ddf51641cd",
+        "entry_digest": "80b9225a8527676b158c41385f921c6282e7be5c084e726b2dab0ddeba5e38c2",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/WATCH.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b0a852003cc597c83b3dde645ea8bbfb920c453038ed1e1116efb1ea92585dfc",
+        "entry_digest": "53d4ba4256fe469743dee232fa0aff8e08002a3147c3d671cb5525aa49743b62",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "plugins/github/commands.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9cd3bf68db11f407ca108e5abb08844d09118900cdf10a276e9fa47f636fb53b",
+        "entry_digest": "118c57006889eda5827a280f703f3525d7e9ea903f8539ae9f7baf9f0d2c77b3",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9bf6e6fe267b3ffa2606f0f7cbe3f699b2392dd6e79cb2ab6e50e7ed3cf7d6dc",
+        "entry_digest": "f27f6ca681f204fcf70b4ad816c105569a1e790c1527bac5c0f811f3d91cb83f",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/plugins.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7966babf51532391b91f4d1b2e6650d03082ad43a0b917e2ef2e8ff319cc8a43",
+        "entry_digest": "e051d568ba730047c3b22fd88dbb01f742dc2d4e7a23ef81423787a424f7d2c0",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "41e4bcdfd0caf4dd7001c51d80f481806f98a33655c4f6ea35137654cf739e0a",
+        "entry_digest": "9123a4111727ab150347698a8f39a1fce3e9a741cfedd684ea251637dbc813d0",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+        "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "13407ac70cf4e22b43bef4a049904ce3f46a207fe105f365eba953e920ca8b95",
+        "entry_digest": "5bda67c69c728e3413f89efa2c6a247200c225c08962a2e90c016e4b6296766d",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/watch/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+        "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "977b268caec67b9da4ad29376ee03cd00acc325ea868de647a794cea0b2093f6",
+        "entry_digest": "fa39386aa048055fa27603aeebdfc6665456ffa049c268d909478dc9c6c1ba7c",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "325040a88a3ca49de2e913ea46f6dba0a8a97e866c7bb91985b9117c084df2ad",
+        "entry_digest": "c36d10c30e7a4e29d81eb117c16c9eb2a446b41b745234da2d10345eaea662ca",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bbbb84af25d7f77f05a4745262660dea339a5d464649b59eee6688982aa62d5a",
+        "entry_digest": "1159a0145681bade26701a5c84276090cb999bea9a0f224c0dc8ab7da1b4774f",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/watch.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8634d1e18619c1888e39f3c50a10eaab29a169aba6f5b8aacbb3a6c22443e7f8",
+        "entry_digest": "a19ede5e6076fc8dfcda7caf48da6959e747e2977b8e1aae371b2c235f267bb8",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/searcher.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3134f021bcca25b9ef606d2add5b734d40dc12e700cc9c96b2064d59062cfc08",
+        "entry_digest": "0f54434d1da500fbb9ac8963a8ab20b932f08f7b7d16ffc79899607aea601735",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/types.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7dc104401c6c4679ab5cb06429acba3b9df9bcb58e47928cd9c7d2e5dc4a88f7",
+        "entry_digest": "1cc5e287ea6b917a8d0f1fe2d74ecc6f27a3964aa9a4feac4966d4f1e439732a",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/ci-status.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6168c526a65a9e31014953299992da52a7c3600c012d4b845bc7fc7fa8d7bd01",
+        "entry_digest": "8f8931cb79c29047a53a267b98350a053fb7875c75ebba6f0911f0b8e0dddc7e",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/issue-comment.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "516be672d587b754d88de3568eca1110d19dbe2ea444bda7b7ea58f4bc969f32",
+        "entry_digest": "6efdbc1f6d9009413ee16bf0f1364685b4b74de745e6bc64f83170eb0d3e0e52",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/issue-create.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "340ec57071f0644aec4316756093bf7da2109c417ebb358d56411781eeae8b04",
+        "entry_digest": "5f6e6950246eae7ff3e2827b9cd2bb839a6f27824d8aea6c51c679422ad73e1a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/issue-list.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4b62f69c13a47f4eee1d8514d3e876763f0ad3b3ac074ed909f5e4d74ab9ccb2",
+        "entry_digest": "4b16b69872023c78a46f6639796db016c995a3dfd068337026c9bebb184eb478",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-create.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bf86de626d7195f48a6dadfd5407f52ba1440571b8680d0d93a2259ee69432be",
+        "entry_digest": "dbfe71950db811e7bd6e5f8fe7e727f53a44b7ee225030be65f6639c58d40aed",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-list.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "539953257b056cf21cf14d23d3760d100dade8e1d34e1f9dda329f1ea5f38611",
+        "entry_digest": "a80ae5b4b6464a52d611b60a878a6e8fc8c13e34d33ab81a18fcf0deefde3b14",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-review.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0d986837e1c59c40f3f2ff1f72a29388abb96e127db2cfe8bb500abcb9cd719f",
+        "entry_digest": "d97649657ad8ff944212c222daea04b6108f99894f12609f9b71ff9a42ada111",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-status.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6d6c83b9970cd264e7e0b3bcc79a33e87be354d7c98c4228eec382e87d948f70",
+        "entry_digest": "1fe3629a802629b96e5bc6c92e301c7b7d6d9cd6b174ab8909b482bbf956b401",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/watch/mentions.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7612ead1dde6570e12155212ab8434dc9ea5974f85bef0c37ba2ca73c7bd4475",
+        "entry_digest": "73d4f711fb3778f36a8563a3d46e8bb6ec153b2c479baea888939b8d99a6e098",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.write.plugin.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ddc309d348d48edfb0f6221bd39c74c8e8a687eebaeb1f866ff7b7bc244f27be",
+        "entry_digest": "c593344cf42322f306b729cb780e1f9a49a84d7d36fa2e992a8240b465c75b6b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/plugins.list.smoke.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9c9df292c005cbaa987769a7ad9026d654032ecddfa447a776a6e1747a4d9b50",
+        "entry_digest": "573b1d704c4dc63909e5cd43068b1743fe9974002f8745181a0e6244ba4f477f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.poller.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "86f8f7aa733514a7d52cea53cdf14fea8bf31ff8572d7752e9102a558e999d3b",
+        "entry_digest": "a47e04a796cd138e647f1a6b66a47b73200bda4719c7f6c2400a4a570679324f",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli --spec plugins --spec watch",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-plugins-048",
+    "REQ-plugins-049",
+    "REQ-plugins-050",
+    "REQ-plugins-051",
+    "REQ-plugins-052",
+    "REQ-plugins-053",
+    "REQ-watch-048"
+  ]
+}

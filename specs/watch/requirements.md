@@ -50,3 +50,13 @@ Prefer `--no-verify` for ingress latency. Fixture tests SHALL cover argv shape.
 Acceptance Criteria
 - `.ts` → bun-prefixed argv; binary path unchanged when not `.ts`.
 - No ProcessManager; allowlists unchanged.
+
+### REQ-watch-048
+
+WATCH SHALL emit an assignment DetectedEvent when the watch username appears in
+issue/PR assignees from search results, using the same allowlist → session path
+as mentions.
+
+Acceptance Criteria
+- Fixture with assignees includes assign-owner/repo#n event type assignment.
+

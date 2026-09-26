@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater pidfile/ready + release idempotency |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **GitHub write plugins** (#48) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -53,20 +53,21 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 | HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
 | WATCH poll-first ingress | #19 → [#30](https://github.com/CorvidLabs/Corvidinho/pull/30) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
+| GitHub writes + assignee ingress | #48 → [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) | Dangerous Octokit writes: issue create/comment, PR create (attribution footer), PR review; SAFE-1 + GITHUB-6 gates; WATCH `assignment` events from assignees; fixtures/dry-run; no live tokens in CI |
 | Discord spawn + dogfood path | → [#32](https://github.com/CorvidLabs/Corvidinho/pull/32) | Always `bun`-invoke `.ts` for protocol + agent spawn (fix EACCES); parse `task run --json` for Discord summary; thin env-gated LLM execute stub |
 | LLM tool loop (DOGFOOD) | #31 → [#33](https://github.com/CorvidLabs/Corvidinho/pull/33) | Interruptible OpenAI-compatible plugin tool loop on `task run` (AGENT-3/5); prove-before-done unchanged; fixture mock HTTP; Discord/WATCH keep `--no-verify` |
 | v0.0.2 dogfood polish | → [#34](https://github.com/CorvidLabs/Corvidinho/pull/34) | Shared `src/version.ts` from package.json; enriched ephemeral `/status` (LLM model+host / demo stub, slash names, optional git tip); no new slash commands |
 | HI drafts folder | #41–#44 → [#47](https://github.com/CorvidLabs/Corvidinho/pull/47) | `docs/hi-drafts/` proposals (superseded by capture) |
 | Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
-| HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → (this PR) | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
-| v0.0.3 updater polish | → (this PR) | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
+| HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → main | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
+| v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | **P0 now** | Slash guild PUT=6 + global `[]` | Leif/CoS priority flip — finish Discord slash registration before deeper MEMORY |
-| **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live | Token + `CORVIDINHO_WATCH_USERNAME` + non-empty GH allowlists + `github watch` |
+| **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
 | HI captured | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) + [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION | Criteria in `hi/`; **impl deferred** (MEMORY code not in this PR) |
 | Later | #41 MEMORY impl · #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #37 SESSION soft-TTL · #36 CONTACTS | After slash + GH go-live |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
@@ -97,9 +98,9 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 
 Thin slice **landed** (`corvidinho discord bridge`). Live @bot works **only after** the VM has token + non-empty Discord allowlists (see go-live below).
 
-### GitHub mention → agent response
+### GitHub mention / assign → agent response → comment → PR
 
-**Poll thin slice landed** (`corvidinho github watch`) — [#19](https://github.com/CorvidLabs/Corvidinho/issues/19). Live listen needs token + username + non-empty GH allowlists on the VM. No reply to random mentions (ALLOW-1). Webhook deferred (poll-first for VM; see `docs/WATCH.md`).
+**Poll thin slice landed** (`corvidinho github watch`) — [#19](https://github.com/CorvidLabs/Corvidinho/issues/19). **Assignee ingress + write plugins** — [#48](https://github.com/CorvidLabs/Corvidinho/issues/48): `assignment` events when watch user is assignee; dangerous `github-issue-create` / `github-issue-comment` / `github-pr-create` / `github-pr-review` (SAFE-1 allowlist + GITHUB-6). Live listen needs token + username + non-empty GH allowlists + `CORVIDINHO_ALLOWLIST` for writes. No reply to random mentions (ALLOW-1). Webhook deferred (poll-first for VM; see `docs/WATCH.md`).
 
 ### “Made with Corvidinho” attribution
 

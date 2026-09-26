@@ -1,4 +1,4 @@
-# WATCH — GitHub mention/review ingress
+# WATCH — GitHub mention/review/assignment ingress
 
 ## Deploy choice (documented)
 
@@ -11,11 +11,15 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 
 ## What it does
 
-1. Interval-poll GitHub (Octokit search) for @mentions / issue comments / review requests involving `CORVIDINHO_WATCH_USERNAME`
+1. Interval-poll GitHub (Octokit search) for @mentions / issue comments / review requests / **assignments** involving `CORVIDINHO_WATCH_USERNAME`
 2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
+
+**Assignee ingress (#48):** when the watch username appears in issue/PR `assignees` (from search results), WATCH emits an `assignment` event — same allowlist → session path as mentions. Dogfood can use assign *or* @mention.
+
+**Outbound writes (GITHUB-2/3/5):** dangerous plugins `github-issue-create`, `github-issue-comment`, `github-pr-create`, `github-pr-review` — require `CORVIDINHO_ALLOWLIST` in non-interactive mode + non-empty GitHub repo allowlist. PR bodies get a plain Made with Corvidinho footer (no @handles). Set `CORVIDINHO_GITHUB_DRY_RUN=1` for local dry-run.
 
 Not in this slice: auto-merge, auto-update, CI-retry, live webhook server.
 

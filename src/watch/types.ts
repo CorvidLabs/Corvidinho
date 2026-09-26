@@ -1,5 +1,5 @@
 /**
- * WATCH ingress types — GitHub mention/review → session stub (#19).
+ * WATCH ingress types — GitHub mention/review/assignment → session stub (#19/#48).
  */
 
 export const NOT_AUTHORIZED = "not authorized";
@@ -7,6 +7,7 @@ export const NOT_AUTHORIZED = "not authorized";
 export type DetectedEventType =
   | "issue_comment"
   | "issues"
+  | "assignment"
   | "review_request"
   | "pull_request_review_comment";
 

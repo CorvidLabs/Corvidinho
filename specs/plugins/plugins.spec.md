@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 21
+version: 25
 status: draft
 files:
   - src/plugins/types.ts
@@ -30,7 +30,7 @@ depends_on: []
 
 ## Purpose
 
-Plugin host includes Discord outbound post as dangerous.
+Plugin host includes Discord outbound post and GitHub write plugins as dangerous (GITHUB-2/3/5).
 
 ## Public API
 
@@ -40,7 +40,12 @@ Export allowlist load + github/discord gate helpers used by plugins and future H
 
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
-register. No new dangerous commands; SAFE-1 non-interactive deny unchanged.
+register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
+`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
+non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
+(GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
+plain Made with Corvidinho attribution (no @handles). Dry-run via
+CORVIDINHO_GITHUB_DRY_RUN=1.
 
 ## Behavioral Examples
 
@@ -63,15 +68,15 @@ register. No new dangerous commands; SAFE-1 non-interactive deny unchanged.
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
 | Missing token / API fail on github-* | Clear error; non-zero exit |
+| Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
+| github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 
 ## Dependencies
-
-### Consumes
 
 | Module | What is used |
 |--------|-------------|
 | Bun | `Bun.which`, `Bun.spawn` |
-| @octokit/rest | REST list/view/checks for read commands |
+| @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
 
 ### Consumed By
 
@@ -83,3 +88,5 @@ register. No new dangerous commands; SAFE-1 non-interactive deny unchanged.
 
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
 
+| 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
+| 2026-09-26 | github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create: GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens |

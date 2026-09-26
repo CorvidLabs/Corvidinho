@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create",
+  "implementation_commit": "bdf6aeb285b89be181e39c0857f0b438dc22757e",
+  "implementation_tree": "f7300ae46316d94e00f05131eb5ad7d5b5d151e4",
+  "contract_digest": "12f3f8408eac6543a5cfa3a9d91a742680e22b2c7c8d87e359250398e0679496",
+  "workspace_digest": "72613af7249ec1dde435665bc1bde374353cb1fce80c8c8c7eaffa4b4d6972f9",
+  "closing_digest": "d0552e93217cdc84c82c044643590f5d7f6374fabe0229a0e3d3d8683ee7efec",
+  "review_digest": "918bc673334926a4183324c3697d2fe132664c11808f93b332a1fc707f3b157c",
+  "finalization_digest": "add775a06589ec019c0a2bb783f708937ae58d8657efb7020bd5d4d3a00a28b1",
+  "timestamp": 1790444814
+}

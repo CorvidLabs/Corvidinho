@@ -100,3 +100,45 @@ Acceptance Criteria
 - Non-interactive without allowlist → deny (exit 2).
 - Missing/empty channel allowlist or non-allowlisted channel → not authorized.
 
+### REQ-plugins-048
+
+The system SHALL register github-issue-create, github-issue-comment, github-pr-create, and github-pr-review as dangerous plugins with minTier 1.
+
+Acceptance Criteria
+- plugins list marks each write command dangerous=true minTier=1.
+
+### REQ-plugins-049
+
+In non-interactive mode the system SHALL deny write plugins unless CORVIDINHO_ALLOWLIST includes the command name (SAFE-1 / GITHUB-5).
+
+Acceptance Criteria
+- runPlugin without allowlist returns exit 2 and SAFE-1 wording.
+
+### REQ-plugins-050
+
+Every write SHALL pass the GITHUB-6 / ALLOW-1 repo gate before Octokit; empty allowlists SHALL refuse with exit 3.
+
+Acceptance Criteria
+- allowlisted command with empty repo allowlist fails exit 3.
+
+### REQ-plugins-051
+
+github-pr-create SHALL append plain Made with Corvidinho markdown attribution when missing and SHALL NOT insert @handles.
+
+Acceptance Criteria
+- dry-run body contains Made with Corvidinho link and no @Corvidinho.
+
+### REQ-plugins-052
+
+When CORVIDINHO_GITHUB_DRY_RUN=1 the write handlers SHALL return success without calling Octokit so CI needs no live tokens.
+
+Acceptance Criteria
+- dry-run tests pass without GITHUB_TOKEN.
+
+### REQ-plugins-053
+
+STATUS.md and docs/WATCH.md SHALL document the GitHub write plugins and assignee ingress dogfood path for issue #48.
+
+Acceptance Criteria
+- STATUS Done row and WATCH.md mention write plugins + assignment events.
+
