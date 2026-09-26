@@ -1,3 +1,7 @@
+import {
+  PermissionLevel,
+  resolvePermissionLevel,
+} from "../permissions.ts";
 /**
  * /work — drive a work task (DISCORD-4). Thin steal from corvid-agent
  * session-commands handleWorkCommand + work-dispatch (agent ops, not token product).
@@ -56,10 +60,21 @@ export async function handleWorkCommand(
 
   let result;
   try {
+    const actingIsAdmin =
+      resolvePermissionLevel({
+        userId: interaction.userId,
+        roleIds: interaction.roleIds,
+        allowlist: ctx.allowlist,
+        adminUserIds: ctx.adminUserIds,
+        adminRoleIds: ctx.adminRoleIds,
+        mutedUsers: ctx.mutedUsers,
+      }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
       prompt: description,
       sessionId: session.id,
       resume: false,
+      actingUserId: interaction.userId,
+      actingIsAdmin,
       onStatus: (u) => {
         void thinking?.update({
           tool: u.tool,

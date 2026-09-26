@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 25
+version: 27
 status: draft
 files:
   - src/plugins/types.ts
@@ -21,6 +21,9 @@ files:
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
   - plugins/specsync/index.ts
+  - plugins/memory/index.ts
+  - plugins/memory/commands.ts
+  - tests/memory.plugins.test.ts
 
 db_tables: []
 depends_on: []
@@ -30,7 +33,7 @@ depends_on: []
 
 ## Purpose
 
-Plugin host includes Discord outbound post and GitHub write plugins as dangerous (GITHUB-2/3/5).
+Plugin host includes Discord outbound post, GitHub write plugins as dangerous (GITHUB-2/3/5), and memory-store/recall/forget/override (MEMORY / REQ-plugins-010).
 
 ## Public API
 
@@ -90,3 +93,4 @@ Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
 
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
 | 2026-09-26 | github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create: GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens |
+| 2026-09-26 | memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user: MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4 |

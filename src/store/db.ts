@@ -1,6 +1,6 @@
 /**
- * Shared bun:sqlite Database for Discord session/work/schedule durability
- * (SESSION + DISCORD-SCHEDULE substrate; same file reserved for future MEMORY #41).
+ * Shared bun:sqlite Database for Discord session/work/schedule/memory durability
+ * (SESSION + DISCORD-SCHEDULE + MEMORY #41/#59 substrate).
  */
 
 import { mkdirSync } from "node:fs";
@@ -93,7 +93,31 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule
   ON schedule_runs(schedule_id);
 `;
 
-export const SCHEMA_VERSION = 2;
+const SCHEMA_V3_SQL = `
+CREATE TABLE IF NOT EXISTS memories (
+  id TEXT PRIMARY KEY NOT NULL,
+  owner_user_id TEXT NOT NULL,
+  category TEXT NOT NULL,
+  key TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  deleted_by_user_id TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_owner_cat_key_active
+  ON memories(owner_user_id, category, key)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_memories_owner
+  ON memories(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_category
+  ON memories(category);
+CREATE INDEX IF NOT EXISTS idx_memories_deleted
+  ON memories(deleted_at);
+`;
+
+export const SCHEMA_VERSION = 3;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -110,6 +134,14 @@ export function migrateCorvidinhoDb(db: Database): void {
   }
   if (version < 2) {
     db.exec(SCHEMA_V2_SQL);
+    db.run(
+      "UPDATE schema_meta SET value = ? WHERE key = 'version'",
+      ["2"],
+    );
+    version = 2;
+  }
+  if (version < 3) {
+    db.exec(SCHEMA_V3_SQL);
     db.run(
       "UPDATE schema_meta SET value = ? WHERE key = 'version'",
       [String(SCHEMA_VERSION)],

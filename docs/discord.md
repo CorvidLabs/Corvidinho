@@ -31,6 +31,10 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 
 Gate order for every slash: **channel allowlist → mute/rate → minPermission → handler**.
 
+### Memory (no slash)
+
+MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite under `~/.local/share/corvidinho/` (shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); empty admin = deny-all.
+
 ---
 
 ## Outbound formats

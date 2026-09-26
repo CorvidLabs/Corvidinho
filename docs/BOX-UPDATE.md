@@ -41,7 +41,7 @@ the script never prints them.
 
 ## After update
 
-- Sessions/work stubs persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. MEMORY ACL / schedules still separate.
+- Sessions/work stubs **and memories** persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. Schedules + MEMORY (schema v3) share the same DB. Forget/override of memories (own or other) requires ADMIN at handler time; empty admin = deny-all. Bridge restart picks up package presence version after update.
 - Confirm with Discord `/status` (ephemeral): version, uptime, LLM mode, git tip.
 
 ## Releases

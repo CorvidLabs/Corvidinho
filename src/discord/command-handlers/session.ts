@@ -1,3 +1,7 @@
+import {
+  PermissionLevel,
+  resolvePermissionLevel,
+} from "../permissions.ts";
 /**
  * /session list|start (DISCORD-4). Thin steal from corvid-agent session-commands.
  * No ProcessManager, no Discord thread product UI.
@@ -78,10 +82,21 @@ export async function handleSessionStart(
 
   let result;
   try {
+    const actingIsAdmin =
+      resolvePermissionLevel({
+        userId: interaction.userId,
+        roleIds: interaction.roleIds,
+        allowlist: ctx.allowlist,
+        adminUserIds: ctx.adminUserIds,
+        adminRoleIds: ctx.adminRoleIds,
+        mutedUsers: ctx.mutedUsers,
+      }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
       prompt: topic,
       sessionId: session.id,
       resume: false,
+      actingUserId: interaction.userId,
+      actingIsAdmin,
       onStatus: (u) => {
         void thinking?.update({
           tool: u.tool,

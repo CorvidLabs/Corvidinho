@@ -60,6 +60,14 @@ describe("update-helpers.sh", () => {
     expect(noPrev.exitCode).not.toBe(0);
   });
 
+  test("extract_changelog_section finds 0.0.4", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.4`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("MEMORY");
+    expect(r.stdout).toContain("schema **v3**");
+  });
   test("extract_changelog_section finds 0.0.3", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.3`,
@@ -83,10 +91,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.3", () => {
+  test("package.json is 0.0.4", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.3");
+    expect(pkg.version).toBe("0.0.4");
   });
 });

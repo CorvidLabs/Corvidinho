@@ -159,3 +159,5 @@ export {
   buildVersionPresenceActivity,
   type VersionPresenceActivity,
 } from "./presence.ts";
+
+export { MemoryStore, type MemoryRecord, type MemoryCategory } from "../memory/index.ts";

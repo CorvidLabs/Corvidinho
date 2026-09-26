@@ -1,5 +1,5 @@
 /**
- * Shared local store helpers (SESSION durable + DISCORD-SCHEDULE + future MEMORY #41).
+ * Shared local store helpers (SESSION durable + DISCORD-SCHEDULE + MEMORY #41/#59).
  */
 
 export {
