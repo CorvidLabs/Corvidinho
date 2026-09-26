@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "4045410c80be225dad6507703abe6852574169a1",
+      "contract_digest": "642e79df82a83d69143cafe917cb06351f036e22475dda99ed58207abf513961",
+      "execution_digest": "f397228f5639d070ab4d7bca711f7db7416ea775e31b524042778098358d9eea",
+      "workspace_digest": "9bb6f680672c30c9ed32bbabbcaf975dc606636c2b0ad8ba82a6541959855873",
+      "timestamp": 1790443605
+    }
+  ]
+}
