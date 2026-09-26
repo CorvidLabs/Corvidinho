@@ -227,10 +227,11 @@ Acceptance Criteria
 ### REQ-discord-016
 
 Guild PUT overwrite SHALL register the current `buildSlashCommandBodies()` set
-(eight commands including `/announce`) then clear globals when guild id is set.
+(nine commands including `/announce` and `/admin`) then clear globals when
+guild id is set.
 
 Acceptance Criteria
-- Guild register path PUTs eight bodies then clears globals.
+- Guild register path PUTs nine bodies then clears globals.
 - Global-only path warns when guild id unset.
 - `discord register-commands` CLI still works against live Discord when configured.
 
@@ -580,7 +581,9 @@ updated in place so it applies without a restart. Env values SHALL NOT be
 written to the file or changed at runtime; the reply SHALL say so.
 
 Empty SHALL stay deny-all: adding a deny-listed id SHALL be refused, and
-removing an env-only channel or the last live channel SHALL be refused. When
+removing an env-only channel SHALL be refused, as SHALL removing a channel
+when no live channel that is not also on `deny_channels` would remain (deny
+always wins, so only deny-listed channels left is the same lockout). When
 the first user is added while users and roles were both empty, the reply
 SHALL warn that unlisted callers now resolve to BLOCKED. Replies SHALL be
 ephemeral, show before/after counts and never contain tokens or secrets.
@@ -593,7 +596,7 @@ SHALL flatten subcommand-group options.
 Acceptance Criteria
 - Non-owner and no-owner callers get ephemeral `not authorized` at dispatch and at the handler; the file is not written.
 - `/admin users add` writes only the users line, keeps `[owner]`/`[github]`/comments, updates the live list in place, and warns on the first user.
-- `/admin channels add` makes a new channel pass the slash gate without restart; `remove` drops it; env-only and last-channel removals are refused.
+- `/admin channels add` makes a new channel pass the slash gate without restart; `remove` drops it; env-only and last-channel removals are refused, and so is a removal that would leave only deny-listed channels.
 - Deny-listed ids are refused; unreadable/unparsable files are refused untouched; JSON with lossy numeric ids is refused.
 - `/admin config show` shows counts by source and updatable knobs, and no token, key or owner id.
 - Mutations append `started` + `ok` audit rows with an args digest only; an unavailable audit trail refuses the change.

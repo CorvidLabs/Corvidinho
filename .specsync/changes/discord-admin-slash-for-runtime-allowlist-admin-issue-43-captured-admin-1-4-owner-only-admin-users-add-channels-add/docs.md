@@ -9,7 +9,9 @@ artifact: docs
   admin" section (updatable vs read-only knobs, one store, atomic write, live
   without restart, env read-only, empty stays deny-all, first-user narrowing,
   SAFE-5 audit, mermaid flow), deny tip text, source map.
-- `docs/BOX-UPDATE.md`: the current slash set is nine incl. `/admin`.
+- `docs/BOX-UPDATE.md` is outside this change's approved path scope and is
+  not edited here. Its step 3 count (eight → nine incl. `/admin`) is fixed
+  by the companion docs change `box-update-md-slash-count-is-nine-guild-commands-incl-admin-43-companion-docs` on the same PR.
 - `allowlist.example.toml`: `[discord]` note that `/admin` rewrites the
   `channels` / `users` lines in place.
 - `ALLOWLIST_DENY_TIP` (DISCORD-DENY-2) points the owner at

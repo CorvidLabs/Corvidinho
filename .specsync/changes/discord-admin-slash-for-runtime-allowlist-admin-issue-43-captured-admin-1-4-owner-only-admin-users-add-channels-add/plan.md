@@ -14,5 +14,7 @@ artifact: plan
    wiring, index exports, deny tip text.
 4. Fixture tests (`tests/discord.admin-slash.test.ts`); register-count tests
    move from eight to nine commands.
-5. Docs (`docs/discord.md`, `docs/BOX-UPDATE.md`, `allowlist.example.toml`),
-   spec files list, REQ-discord-043 added, REQ-discord-009 modified.
+5. Docs (`docs/discord.md`, `allowlist.example.toml`), spec files list,
+   REQ-discord-043 added, REQ-discord-009 and REQ-discord-016 modified.
+   `docs/BOX-UPDATE.md` (out of this change's path scope) gets its count
+   fix in the companion docs change `box-update-md-slash-count-is-nine-guild-commands-incl-admin-43-companion-docs`.

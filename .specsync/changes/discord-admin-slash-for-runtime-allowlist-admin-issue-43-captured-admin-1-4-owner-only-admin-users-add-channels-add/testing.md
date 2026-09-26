@@ -20,15 +20,17 @@ artifact: testing
     unavailable ⇒ fail closed;
   - channels add is live (the new channel passes the slash gate), deny-listed
     refused, remove drops it (warns when run in that channel), last channel
-    refused, env-only refused, file+env removes from the file only, unknown →
-    no-op;
+    refused, removal that would leave only deny-listed channels refused (the
+    owner can still reach /admin; removing the denied one is allowed),
+    env-only refused, file+env removes from the file only, unknown → no-op;
   - config show: counts by source, owner display without id, updatable
     knobs, no token / HMAC key in output; unknown route;
   - writer: missing file created 0600, path resolution order, atomic write
     keeps mode / follows symlink / leaves no temp file, TOML multi-line /
     missing key / missing section / CRLF / other-section key, JSON keeps
     owner and refuses lossy numbers and bad JSON, env never written to file.
-- Updated: `tests/discord.register-commands.test.ts`,
+- Updated: `tests/discord.register-commands.test.ts` (REQ-discord-016: guild
+  PUT of nine bodies incl. `/announce` and `/admin`),
   `tests/discord.announce.test.ts`, `tests/discord.session-worktree.test.ts`
   (nine commands).
 - `bun test`, `bunx tsc --noEmit`, `specsync check --require-coverage 100`,
@@ -40,3 +42,4 @@ artifact: testing
 |-------------|------------|
 | REQ-discord-043 | `tests/discord.admin-slash.test.ts` |
 | REQ-discord-009 | `tests/discord.register-commands.test.ts`, `tests/discord.admin-slash.test.ts` (body shape), `tests/discord.session-worktree.test.ts`, `tests/discord.announce.test.ts` |
+| REQ-discord-016 | `tests/discord.register-commands.test.ts` (guild PUT of nine bodies then clear globals) |

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "box-update-md-slash-count-is-nine-guild-commands-incl-admin-43-companion-docs",
+  "slug": "box-update-md-slash-count-is-nine-guild-commands-incl-admin-43-companion-docs",
+  "title": "BOX-UPDATE.md slash count is nine guild commands incl. /admin (#43 companion docs)",
+  "description": "BOX-UPDATE.md slash count is nine guild commands incl. /admin (#43 companion docs)",
+  "kind": "documentation",
+  "state": "approved",
+  "base_commit": "92359247c1841bed84b9298ad1d75b17faaf409f",
+  "created_at": 1790456123,
+  "updated_at": 1790456178,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/BOX-UPDATE.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Operator doc count only; the slash set is specified by REQ-discord-009/016 in the /admin change on this PR",
+  "acceptance_criteria": [
+    "docs/BOX-UPDATE.md step 3 tells operators to expect nine guild commands including /schedule, /announce and /admin; SpecSync change audit green on this PR"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

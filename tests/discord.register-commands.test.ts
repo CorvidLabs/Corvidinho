@@ -40,6 +40,10 @@ describe("registerSlashCommandSet (DISCORD-4 / REQ-discord-016)", () => {
     expect(calls[0]?.body.map((b) => (b as { name: string }).name)).toEqual([
       ...SLASH_COMMAND_NAMES,
     ]);
+    // REQ-discord-016: nine bodies, including /announce and /admin.
+    expect(calls[0]?.body).toHaveLength(9);
+    expect(SLASH_COMMAND_NAMES).toContain("announce");
+    expect(SLASH_COMMAND_NAMES).toContain("admin");
     expect(calls[1]?.route).toBe(applicationCommandsRoute("app-1"));
     expect(calls[1]?.body).toEqual([]);
   });
