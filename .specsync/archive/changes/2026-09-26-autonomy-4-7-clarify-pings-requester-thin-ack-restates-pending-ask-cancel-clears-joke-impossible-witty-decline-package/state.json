@@ -7,11 +7,11 @@
   "title": "AUTONOMY-4..7 clarify pings requester, thin-ack restates pending ask, cancel clears, joke/impossible witty decline; package 0.0.20",
   "description": "AUTONOMY-4..7 clarify pings requester, thin-ack restates pending ask, cancel clears, joke/impossible witty decline; package 0.0.20",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "3af288a04306b7463f1275d4db93001ca51bede2",
   "created_at": 1790462432,
-  "updated_at": 1790462937,
+  "updated_at": 1790463025,
   "affected_specs": [
     "discord",
     "agent"

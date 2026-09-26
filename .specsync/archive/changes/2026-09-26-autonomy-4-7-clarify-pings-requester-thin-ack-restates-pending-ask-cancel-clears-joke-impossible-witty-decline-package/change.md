@@ -1,6 +1,6 @@
 ---
 id: autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package
-state: verifying
+state: archived
 type: feature
 base_commit: 3af288a04306b7463f1275d4db93001ca51bede2
 ---
