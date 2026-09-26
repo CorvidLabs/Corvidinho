@@ -39,7 +39,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Then | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR Discord thin (DISCORD-1,2,5) | **Blocked** on Discord token + non-empty channel (+ user/role) allowlists |
 | Polish | [#10](https://github.com/CorvidLabs/Corvidinho/issues/10)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Discord polish after thin slice |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
-| Brand | [#20](https://github.com/CorvidLabs/Corvidinho/issues/20) DOGFOOD: “Made with Corvidinho” | Attribution footer on PR bodies — **can land ASAP** even pre-runner |
+| Brand | [#20](https://github.com/CorvidLabs/Corvidinho/issues/20) DOGFOOD: “Made with Corvidinho” | Plain-text + link footer on PR bodies (**no @handles**) — **can land ASAP** even pre-runner |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
 
 ### Leif config moments
@@ -69,7 +69,21 @@ Expected **after #5** thin slice lands **and** the VM has token + non-empty allo
 
 ### “Made with Corvidinho” attribution
 
-[#20](https://github.com/CorvidLabs/Corvidinho/issues/20) — footer/link on PR bodies can land **ASAP** (even while Cursor/Grok still author Corvidinho PRs). Reviews/Discord embeds follow HEAR #5. Separate from live runner flip.
+[#20](https://github.com/CorvidLabs/Corvidinho/issues/20) — footer on PR bodies can land **ASAP** (even while Cursor/Grok still author Corvidinho PRs). Reviews/Discord embeds follow HEAR #5. Separate from live runner flip.
+
+**HARD RULE (Leif):** attribution is plain text + markdown link **only**:
+
+```text
+Made with Corvidinho — https://github.com/CorvidLabs/Corvidinho
+```
+
+or markdown:
+
+```markdown
+Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
+```
+
+**NEVER** use `@Corvidinho` or any `@handle` in the footer (GitHub may notify unrelated users). Encode the same rule in helpers when #20 ships.
 
 ### DOGFOOD / RUNNER (live bot loop)
 
