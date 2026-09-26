@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "4fc555e9f4b95cc3c2ff6f6f25661ba8030b9155",
+      "contract_digest": "c2a33f36884bc3e3b54fcbae2cfe347b09e71ddede23c474470d066577108b66",
+      "execution_digest": "3cf6642de41da8b596194831fd44bd2dc1beb5276e7a5d7fb63dbd65ba416325",
+      "workspace_digest": "a75ed86f145f5f7a0b7773af545d04d80811eb58eba913b2054b639d59663e35",
+      "timestamp": 1790439525
+    }
+  ]
+}

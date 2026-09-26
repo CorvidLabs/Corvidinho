@@ -1,6 +1,6 @@
 ---
 id: add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles
-state: implementing
+state: archived
 type: feature
 base_commit: 8609cc16f73198c35f4a17c4d8a775900561ff77
 ---

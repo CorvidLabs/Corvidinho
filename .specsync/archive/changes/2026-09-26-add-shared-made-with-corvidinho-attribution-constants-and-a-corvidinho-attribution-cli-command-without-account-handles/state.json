@@ -7,11 +7,11 @@
   "title": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
   "description": "Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "8609cc16f73198c35f4a17c4d8a775900561ff77",
   "created_at": 1790438610,
-  "updated_at": 1790439375,
+  "updated_at": 1790439531,
   "affected_specs": [
     "cli"
   ],
