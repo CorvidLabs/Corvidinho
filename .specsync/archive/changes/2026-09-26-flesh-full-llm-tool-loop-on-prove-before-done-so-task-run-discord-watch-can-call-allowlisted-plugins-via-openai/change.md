@@ -1,6 +1,6 @@
 ---
 id: flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai
-state: implementing
+state: archived
 type: feature
 base_commit: 4ef180b31cf719ac1e1661d209b37360781dd026
 ---
