@@ -10,6 +10,10 @@ import {
   type LoadOptions,
 } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import {
+  DEFAULT_RATE_LIMIT_MAX_MESSAGES,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
+} from "./permissions.ts";
 import type { BridgeConfig } from "./types.ts";
 
 export type ConfigError = {
@@ -54,6 +58,34 @@ export function mergeChannelIds(
   const fromEnv = parseList(env.DISCORD_CHANNEL_IDS).map((s) => s.toLowerCase());
   const merged = [...new Set([...allowlist.discord.channels, ...fromEnv])];
   return merged;
+}
+
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (!raw || !raw.trim()) return fallback;
+  const n = Number.parseInt(raw.trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** Parse optional JSON object of level→max, e.g. {"1":5,"2":20}. */
+function parseRateLimitByLevel(
+  raw: string | undefined,
+): Record<number, number> | undefined {
+  if (!raw || !raw.trim()) return undefined;
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<number, number> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const level = Number.parseInt(k, 10);
+      const max = typeof v === "number" ? v : Number.parseInt(String(v), 10);
+      if (Number.isFinite(level) && Number.isFinite(max) && max > 0) {
+        out[level] = max;
+      }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export type LoadBridgeOptions = LoadOptions & {
@@ -110,6 +142,17 @@ export async function loadBridgeConfig(
 
   const guildId = env.DISCORD_GUILD_ID?.trim() || undefined;
 
+  const rateLimitWindowMs = parsePositiveInt(
+    env.DISCORD_RATE_LIMIT_WINDOW_MS,
+    DEFAULT_RATE_LIMIT_WINDOW_MS,
+  );
+  const rateLimitMaxMessages = parsePositiveInt(
+    env.DISCORD_RATE_LIMIT_MAX,
+    DEFAULT_RATE_LIMIT_MAX_MESSAGES,
+  );
+  const rateLimitByLevel = parseRateLimitByLevel(env.DISCORD_RATE_LIMIT_BY_LEVEL);
+  const mutedUserIds = parseList(env.DISCORD_MUTED_USER_IDS);
+
   return {
     ok: true,
     config: {
@@ -119,6 +162,10 @@ export async function loadBridgeConfig(
       corvidinhoBin: resolveCorvidinhoBin(env, projectRoot),
       projectRoot,
       guildId,
+      rateLimitWindowMs,
+      rateLimitMaxMessages,
+      rateLimitByLevel,
+      mutedUserIds,
       dryRun: env.CORVIDINHO_DISCORD_DRY_RUN === "1",
     },
   };
@@ -132,6 +179,8 @@ export function goLiveChecklist(): string {
      CORVIDINHO_DISCORD_ALLOW_CHANNELS / ~/.config/corvidinho/allowlist.toml [discord].channels
   3. Optional user/role allowlists (empty = deny-all when those gates apply):
      CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES (or file [discord].users / .roles)
-  4. Then: corvidinho discord bridge
+  4. Optional rate/mute (DISCORD-6): DISCORD_RATE_LIMIT_WINDOW_MS (default 60000),
+     DISCORD_RATE_LIMIT_MAX (default 10), DISCORD_MUTED_USER_IDS (comma snowflakes)
+  5. Then: corvidinho discord bridge
 Empty channel lists refuse start (not Merlin BASIC). Secrets stay out of the repo.`;
 }

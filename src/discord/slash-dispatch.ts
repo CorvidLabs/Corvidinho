@@ -1,14 +1,14 @@
 /**
- * Slash command dispatch map (DISCORD-4).
+ * Slash command dispatch map (DISCORD-4 / DISCORD-6).
  * Ancestor shape: COMMAND_HANDLERS Map + permission gate before handler.
- * Corvidinho thin: channel allowlist re-check at run time (DISCORD-5 / 7 light).
+ * Corvidinho thin: channel allowlist re-check, then mute + rate limit.
  */
 
 import { handleAgentsCommand } from "./command-handlers/agents.ts";
 import { handleSessionCommand } from "./command-handlers/session.ts";
 import { handleStatusCommand } from "./command-handlers/status.ts";
 import { handleWorkCommand } from "./command-handlers/work.ts";
-import { gateChannel } from "./permissions.ts";
+import { gateChannel, gateRateOrMute } from "./permissions.ts";
 import { SLASH_COMMAND_NAMES } from "./slash-commands.ts";
 import type {
   SlashContext,
@@ -34,7 +34,7 @@ export function knownSlashCommands(): string[] {
 }
 
 /**
- * Dispatch a slash interaction. Re-checks channel allowlist before handler.
+ * Dispatch a slash interaction. Re-checks channel allowlist, then mute/rate.
  */
 export async function handleSlashInteraction(
   ctx: SlashContext,
@@ -47,6 +47,26 @@ export async function handleSlashInteraction(
       ephemeral: true,
     });
     return { ok: false, reason: "channel_not_allowlisted", reply: NOT_AUTHORIZED };
+  }
+
+  const rateGate = gateRateOrMute({
+    userId: interaction.userId,
+    mutedUsers: ctx.mutedUsers,
+    rateLimit:
+      ctx.rateLimitState && ctx.rateLimitConfig
+        ? {
+            state: ctx.rateLimitState,
+            config: ctx.rateLimitConfig,
+            permLevel: ctx.permLevelFor?.(interaction.userId),
+          }
+        : undefined,
+  });
+  if (!rateGate.ok) {
+    await interaction.reply({
+      content: rateGate.reply,
+      ephemeral: true,
+    });
+    return { ok: false, reason: rateGate.reason, reply: rateGate.reply };
   }
 
   const handler = COMMAND_HANDLERS.get(interaction.commandName);
