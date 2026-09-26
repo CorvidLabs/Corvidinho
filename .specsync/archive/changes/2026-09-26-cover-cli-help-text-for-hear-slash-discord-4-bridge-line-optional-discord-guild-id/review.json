@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-cli-help-text-for-hear-slash-discord-4-bridge-line-optional-discord-guild-id",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "b9c1eb61800bb1dc7795fdfaa30146d229205cc3",
+  "contract_digest": "65f299a896c1ce14a9ccae7e305c67ed055a441a06c96829a70c38a72313e0ae",
+  "execution_digest": "10478cfc7484a976d7ea27e5a36698e32925c68c90b1170e6c037fec18c8394a",
+  "workspace_digest": "5691c07dc74979778921e3d055215855a8da948845e3723803747e20d3f3e9d6",
+  "timestamp": 1790440574
+}

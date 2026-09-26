@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hear-slash-commands-for-session-status-agents-work-discord-4-steal-from-corvid-agent-thin-useful-set-fixture-tests-no",
+  "slug": "hear-slash-commands-for-session-status-agents-work-discord-4-steal-from-corvid-agent-thin-useful-set-fixture-tests-no",
+  "title": "HEAR slash commands for session/status/agents/work (DISCORD-4) — steal from corvid-agent; thin useful set; fixture tests; no ProcessManager; STATUS Done for #11",
+  "description": "HEAR slash commands for session/status/agents/work (DISCORD-4) — steal from corvid-agent; thin useful set; fixture tests; no ProcessManager; STATUS Done for #11",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "8d6976d8f2317ba95d061733739247ec4bf6ed2a",
+  "created_at": 1790440109,
+  "updated_at": 1790440625,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "tests",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Bridge registers and dispatches thin slash set /session /status /agents /work (DISCORD-4); channel allowlist re-checked at handler time (DISCORD-5/7 light); session list/start and work drive SessionStore + in-memory work stubs via AgentClient (no ProcessManager); fixture tests without live Discord token; allowlists remain default-deny; STATUS Done lists #11 when merged; SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

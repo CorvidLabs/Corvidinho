@@ -21,6 +21,7 @@ export {
   checkDiscordAction,
 } from "./permissions.ts";
 export { SessionStore } from "./session-store.ts";
+export { WorkStore, type WorkTaskStub, type WorkTaskStatus } from "./work-store.ts";
 export { routeMessage, type RouterDeps } from "./message-router.ts";
 export {
   createSpawnAgentClient,
@@ -57,6 +58,28 @@ export {
   type ThinkingOutbound,
   type ThinkingStatusOpts,
 } from "./thinking-status.ts";
+export {
+  buildSlashCommandBodies,
+  SLASH_COMMAND_NAMES,
+  OPT_SUB_COMMAND,
+  OPT_STRING,
+  type SlashCommandBody,
+  type SlashCommandName,
+} from "./slash-commands.ts";
+export {
+  handleSlashInteraction,
+  knownSlashCommands,
+} from "./slash-dispatch.ts";
+export {
+  formatUptime,
+} from "./command-handlers/status.ts";
+export type {
+  SlashInteraction,
+  SlashContext,
+  SlashResult,
+  SlashOptionValue,
+  SlashReplyPayload,
+} from "./slash-types.ts";
 export {
   NOT_AUTHORIZED,
   type InboundMessage,

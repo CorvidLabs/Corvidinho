@@ -1,13 +1,21 @@
 /**
  * Thin Discord gateway (discord.js). Live connect only when token present.
- * Tests inject InboundMessage directly into the router — no ProcessManager.
+ * Tests inject InboundMessage / SlashInteraction — no ProcessManager.
  */
 
+import { buildSlashCommandBodies } from "./slash-commands.ts";
+import type {
+  SlashInteraction,
+  SlashOptionValue,
+  SlashReplyPayload,
+} from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 
 export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
+  /** Slash commands (DISCORD-4). */
+  onSlash?: (interaction: SlashInteraction) => void | Promise<void>;
   onReady?: (botUserId: string) => void;
   /** Optional outbound helper used by bridge after agent reply. */
   reply?: (opts: {
@@ -33,6 +41,14 @@ export type DiscordGateway = {
   stop(): Promise<void>;
   botUserId: string | null;
 };
+
+function optionValue(raw: unknown): SlashOptionValue {
+  if (raw == null) return null;
+  if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+    return raw;
+  }
+  return String(raw);
+}
 
 /**
  * Live gateway via discord.js. Dynamic import so unit tests need not load it
@@ -60,6 +76,113 @@ export async function createLiveGateway(
 
   let botUserId: string | null = null;
 
+  async function registerSlashCommands(): Promise<void> {
+    const bodies = buildSlashCommandBodies();
+    try {
+      if (!client.application) {
+        console.warn("[discord] slash register skipped: application not ready");
+        return;
+      }
+      const guildId = config.guildId?.trim();
+      if (guildId) {
+        const guild = await client.guilds.fetch(guildId);
+        await guild.commands.set(bodies);
+        console.log(
+          `[discord] registered ${bodies.length} guild slash command(s) on ${guildId}`,
+        );
+      } else {
+        await client.application.commands.set(bodies);
+        console.log(
+          `[discord] registered ${bodies.length} global slash command(s)`,
+        );
+      }
+    } catch (err) {
+      console.error("[discord] slash command registration failed:", err);
+    }
+  }
+
+  function adaptChatInput(interaction: {
+    id: string;
+    commandName: string;
+    channelId: string;
+    guildId: string | null;
+    user: { id: string };
+    options: {
+      getSubcommand: (required?: boolean) => string | null;
+      data: Array<{ name: string; value?: unknown; type?: number; options?: Array<{ name: string; value?: unknown }> }>;
+    };
+    reply: (opts: unknown) => Promise<unknown>;
+    deferReply: (opts?: unknown) => Promise<unknown>;
+    editReply: (opts: unknown) => Promise<unknown>;
+    deferred: boolean;
+    replied: boolean;
+  }): SlashInteraction {
+    const options: Record<string, SlashOptionValue> = {};
+    let subcommand: string | undefined;
+    try {
+      const sub = interaction.options.getSubcommand(false);
+      if (sub) subcommand = sub;
+    } catch {
+      /* no subcommand */
+    }
+
+    // Flatten top-level and nested (subcommand) options.
+    for (const opt of interaction.options.data) {
+      if (opt.type === 1 && Array.isArray(opt.options)) {
+        // SUB_COMMAND
+        subcommand = subcommand ?? opt.name;
+        for (const nested of opt.options) {
+          options[nested.name] = optionValue(nested.value);
+        }
+      } else if (opt.value !== undefined) {
+        options[opt.name] = optionValue(opt.value);
+      }
+    }
+
+    const send = async (opts: SlashReplyPayload, mode: "reply" | "edit") => {
+      const payload: Record<string, unknown> = {};
+      if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
+      if (opts.embeds?.length) {
+        payload.embeds = opts.embeds.map((e) => ({
+          description: e.description,
+          color: e.color,
+          footer: e.footer,
+        }));
+      }
+      if (mode === "reply") {
+        if (opts.ephemeral) payload.ephemeral = true;
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply(payload);
+        } else {
+          await interaction.reply(payload);
+        }
+      } else {
+        await interaction.editReply(payload);
+      }
+    };
+
+    return {
+      id: interaction.id,
+      commandName: interaction.commandName,
+      subcommand,
+      channelId: interaction.channelId,
+      guildId: interaction.guildId ?? undefined,
+      userId: interaction.user.id,
+      options,
+      reply: async (opts) => {
+        await send(opts, "reply");
+      },
+      deferReply: async (opts) => {
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply({ ephemeral: opts?.ephemeral ?? false });
+        }
+      },
+      editReply: async (opts) => {
+        await send(opts, "edit");
+      },
+    };
+  }
+
   const gateway: DiscordGateway = {
     get botUserId() {
       return botUserId;
@@ -69,6 +192,7 @@ export async function createLiveGateway(
         botUserId = ready.user.id;
         console.log(`[discord] logged in as ${ready.user.tag}`);
         handlers.onReady?.(ready.user.id);
+        void registerSlashCommands();
       });
 
       client.on(Events.MessageCreate, (message) => {
@@ -98,6 +222,15 @@ export async function createLiveGateway(
         };
         Promise.resolve(handlers.onMessage(inbound)).catch((err) => {
           console.error("[discord] message handler error:", err);
+        });
+      });
+
+      client.on(Events.InteractionCreate, (interaction) => {
+        if (!interaction.isChatInputCommand()) return;
+        if (!handlers.onSlash) return;
+        const adapted = adaptChatInput(interaction as never);
+        Promise.resolve(handlers.onSlash(adapted)).catch((err) => {
+          console.error("[discord] slash handler error:", err);
         });
       });
 

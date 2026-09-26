@@ -1,6 +1,6 @@
 /**
  * HEAR thin types — inbound Discord messages + session stubs.
- * No ProcessManager; no voice/slash/Angular.
+ * No ProcessManager; no voice/iced/Angular. Slash ops are thin (DISCORD-4).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -27,6 +27,8 @@ export type SessionStub = {
   channelId: string;
   threadId?: string;
   userId: string;
+  /** Optional topic from /session start or /work. */
+  topic?: string;
   createdAt: number;
   lastActivityAt: number;
 };
@@ -54,6 +56,8 @@ export type BridgeConfig = {
   /** Path/bin for corvidinho CLI spawn. */
   corvidinhoBin: string;
   projectRoot: string;
+  /** Optional guild id for fast slash command registration. */
+  guildId?: string;
   /** When true, skip live discord.js connect (tests). */
   dryRun?: boolean;
 };

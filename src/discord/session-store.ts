@@ -21,6 +21,7 @@ export class SessionStore {
     channelId: string;
     userId: string;
     threadId?: string;
+    topic?: string;
     id?: string;
   }): SessionStub {
     const now = Date.now();
@@ -29,6 +30,7 @@ export class SessionStore {
       channelId: opts.channelId,
       threadId: opts.threadId,
       userId: opts.userId,
+      topic: opts.topic,
       createdAt: now,
       lastActivityAt: now,
     };
@@ -58,5 +60,12 @@ export class SessionStore {
 
   get(sessionId: string): SessionStub | undefined {
     return this.bySessionId.get(sessionId);
+  }
+
+  /** Active sessions newest-first (slash /session list). */
+  list(): SessionStub[] {
+    return [...this.bySessionId.values()].sort(
+      (a, b) => b.lastActivityAt - a.lastActivityAt,
+    );
   }
 }

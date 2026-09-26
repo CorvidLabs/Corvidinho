@@ -8,6 +8,7 @@ spec: discord.spec.md
 - As a user, replies and thread messages continue the same session without hunting for an id (DISCORD-2 / 2.a).
 - As an operator, non-allowlisted channels are refused; empty channel lists refuse start (DISCORD-5; default-deny).
 - As a user, while the agent thinks I see a live status (time, tool, rough tokens) instead of a silent void (DISCORD-3).
+- As an operator, slash commands let me manage sessions, see agents, check status, and drive work tasks without leaving Discord (DISCORD-4).
 
 ## Acceptance Criteria
 
@@ -68,7 +69,7 @@ Acceptance Criteria
 
 ## Out of Scope
 
-Soft later #11–14. No voice, Angular, AlgoChat, iced, ProcessManager.
+Soft later #12–14. No voice, Angular, AlgoChat, iced, ProcessManager.
 
 ### REQ-discord-008
 
@@ -85,4 +86,22 @@ Acceptance Criteria
 - On success, progress marked Done then final reply posted; on failure, progress marked error.
 - Fixture tests cover builders and edit sequence without live Discord token.
 - Allowlists remain default-deny; no new secrets in repo.
+
+### REQ-discord-009
+
+The bridge SHALL register and dispatch thin slash commands `/session`,
+`/status`, `/agents`, and `/work` so operators can manage sessions, see agents,
+check status, and drive work tasks without leaving Discord (DISCORD-4). Handlers
+SHALL re-check the channel allowlist at run time (DISCORD-5 / DISCORD-7 light).
+Session start and work SHALL use SessionStore + in-memory work stubs +
+AgentClient. The bridge SHALL NOT introduce ProcessManager or weaken allowlists.
+Fixture tests SHALL cover dispatch and handlers without a live Discord token.
+
+Acceptance Criteria
+- Command bodies include session (list/start), status, agents, work.
+- Non-allowlisted channel slash → not authorized; no session/work created.
+- `/session list` reflects SessionStore; `/session start` creates stub + agent run.
+- `/status` reports version/uptime/sessions/work/channels/protocol.
+- `/agents` lists local Corvidinho agent; `/work` creates work stub + agent run.
+- No ProcessManager; secrets out of repo; default-deny allowlists unchanged.
 
