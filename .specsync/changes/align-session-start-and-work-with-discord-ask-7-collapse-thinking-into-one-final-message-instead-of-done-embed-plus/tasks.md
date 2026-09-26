@@ -9,4 +9,4 @@ artifact: tasks
 - [x] Implement `slash-finish.ts` + session/work + gateway `deleteReply`
 - [x] Fix `finalizeContent` close-on-success
 - [x] Tests + package 0.0.25 + CHANGELOG
-- [ ] SpecSync verify + PR
+- [x] SpecSync verify + PR
