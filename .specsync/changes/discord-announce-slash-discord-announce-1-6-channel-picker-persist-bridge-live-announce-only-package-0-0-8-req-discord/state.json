@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-announce-slash-discord-announce-1-6-channel-picker-persist-bridge-live-announce-only-package-0-0-8-req-discord",
+  "slug": "discord-announce-slash-discord-announce-1-6-channel-picker-persist-bridge-live-announce-only-package-0-0-8-req-discord",
+  "title": "Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024",
+  "description": "Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "459f48215bb329d617a71d7e51e6faf4e1af2231",
+  "created_at": 1790451024,
+  "updated_at": 1790451026,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "hi/discord.md",
+    "docs/discord.md",
+    "docs/BOX-UPDATE.md",
+    "STATUS.md",
+    "package.json",
+    "CHANGELOG.md",
+    "tests/discord.announce.test.ts",
+    "tests/discord.register-commands.test.ts",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts",
+    "tests/discord.session-worktree.test.ts",
+    ".github/workflows/release.yml"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "/announce channel|show with CHANNEL picker; ADMIN set/clear persists SQLite; show+/status; ClientReady bridge live only to announce channel; empty admin deny-all; package 0.0.8 eight slash; REQ-discord-024; tests+verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

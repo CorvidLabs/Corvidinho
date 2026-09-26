@@ -3,14 +3,14 @@
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
 **As of:** 2026-09-26 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
 
 ---
 
-## Slash commands (seven: DISCORD-4 six + /schedule)
+## Slash commands (eight: DISCORD-4 six + /schedule + /announce)
 
 Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globals when `DISCORD_GUILD_ID` is set (`discord register-commands` / ClientReady).
 
@@ -28,8 +28,30 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/schedule pause` | `schedule` (id) | yes | Pause (ADMIN) |
 | `/schedule resume` | `schedule` (id) | yes | Resume (ADMIN) |
 | `/schedule delete` | `schedule` (id) | yes | Delete (ADMIN) |
+| `/announce channel` | `channel` (CHANNEL picker), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
+| `/announce show` | — | yes | Show current announcements channel; empty = not configured (DISCORD-ANNOUNCE-3) |
+
 
 Gate order for every slash: **channel allowlist → mute/rate → minPermission → handler**.
+
+
+### Announcements (DISCORD-ANNOUNCE-1..6)
+
+Dedicated **ops/dev** announcements channel for version bumps, bridge restarts, and ship notes — **separate from the dogfood/chat allowlist**. Default-deny: no announce posts until `/announce channel` sets one. Mutations re-check ADMIN at handler time; empty admin = deny-all. Config persists in shared SQLite `schema_meta` (`discord_announce_channel_id`) under `~/.local/share/corvidinho/`.
+
+On ClientReady (after every successful bridge restart), if configured, Corvidinho posts a short `bridge live vX.Y.Z` note **only** to that channel — never to general allowlisted chat by default.
+
+```mermaid
+flowchart TD
+  A[Bridge ClientReady / version bump] --> B{Announce channel configured?}
+  B -->|no| C[Skip — default-deny]
+  B -->|yes| D[postAnnouncement to announce channel only]
+  D --> E[Never post to dogfood allowlist by default]
+  F["/announce channel CHANNEL picker"] --> G{ADMIN re-check}
+  G -->|deny| H[Ephemeral not authorized]
+  G -->|allow| I[Persist channel id in SQLite]
+  J["/announce show or /status"] --> K[Show channel or not configured]
+```
 
 ### Memory (no slash)
 
@@ -62,7 +84,7 @@ Outside an allowlisted channel (or from a non-configured user when a user allowl
 | **MessageCreate** (@mention / reply / thread) | **Silent** — no public reply, no DM, no reaction | **Silent** (MessageCreate has no ephemeral; tip is slash-only) |
 | **Slash** | Ephemeral **zero-width** ack (`\u200b`) only — Discord requires a response within 3s; no useful leak | Ephemeral **allowlist tip** (how to add channel/user to config + restart) |
 
-Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`, `/schedule` mutations) still uses ephemeral `"not authorized"` (different from channel deny).
+Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`, `/schedule` mutations, `/announce channel`) still uses ephemeral `"not authorized"` (different from channel deny).
 
 Admin detection: `resolvePermissionLevel` + `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` (empty ⇒ nobody ADMIN).
 
@@ -102,6 +124,7 @@ flowchart TD
 - Permissions / admin: `src/discord/permissions.ts`
 - Types / tip constants: `src/discord/types.ts` (`ALLOWLIST_DENY_TIP`, `EPHEMERAL_SILENT_ACK`)
 - Presence: `src/discord/presence.ts`
+- Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
 
 
 ## Session worktrees (SESSION-WORKTREE-1..5)
