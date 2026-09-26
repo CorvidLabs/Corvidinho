@@ -1,4 +1,40 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790463341,
+      "digest": "9fb4f01ed6b4615692f6a27983463626c69a4f98a8f1f8b72dfcf2a7c3110230",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "scheduler-tick-errors-never-crash-the-discord-bridge-a-tick-that-throws-sqlite-busy-in-refresh-listdue-claimrun-is",
+        "title": "Scheduler tick errors never crash the Discord bridge: a tick that throws (SQLITE_BUSY in refresh/listDue/claimRun) is caught and logged scrubbed and the next tick still runs; fire-and-forget runs never reject and always free their running slot",
+        "description": "Scheduler tick errors never crash the Discord bridge: a tick that throws (SQLITE_BUSY in refresh/listDue/claimRun) is caught and logged scrubbed and the next tick still runs; fire-and-forget runs never reject and always free their running slot",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/scheduler/service.ts",
+          "tests/scheduler.tick-errors.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A scheduler tick that throws (e.g. SQLITE_BUSY from refresh/listDue/claimRun while the daemon, watch or agents share the data dir) is caught by the start() interval and logged to stderr as '[scheduler] tick failed: <message>' with the message scrubbed by scrubSecrets (SAFE-6); it never becomes an unhandled rejection, so the Discord bridge process stays up; tick() still rejects for direct callers (the daemon keeps its own tick.failed log) and releases its tick lock, so the next tick runs and runs claimed before the throw keep going; the fire-and-forget run promise never rejects (a run whose failure cannot be recorded logs '[scheduler] run failed: ...') and always frees its running slot even when parking the worktree throws, so the schedule is not wedged; no global unhandledRejection handler is installed; regression tests in tests/scheduler.tick-errors.test.ts fail on the old code and pass"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "2a7aec6559fe3bdd07bd0b8492f16fce43f3ab6bec58e8e1b750490b3e293e74"
+      }
+    }
+  ],
   "reopenings": []
 }

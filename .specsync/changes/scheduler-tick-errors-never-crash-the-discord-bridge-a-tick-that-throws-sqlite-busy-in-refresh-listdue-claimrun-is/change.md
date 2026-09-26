@@ -1,6 +1,6 @@
 ---
 id: scheduler-tick-errors-never-crash-the-discord-bridge-a-tick-that-throws-sqlite-busy-in-refresh-listdue-claimrun-is
-state: draft
+state: approved
 type: bug_fix
 base_commit: aef2cde685e9e9be6f0dc1c4311a916e33981afc
 ---
