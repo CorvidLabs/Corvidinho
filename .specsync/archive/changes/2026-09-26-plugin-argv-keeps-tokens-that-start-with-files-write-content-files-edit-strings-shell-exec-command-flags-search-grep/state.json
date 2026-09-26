@@ -7,11 +7,11 @@
   "title": "Plugin argv keeps tokens that start with -- (files-write content, files-edit strings, shell-exec command flags, search-grep patterns) and files-write refuses to empty a non-empty file without --allow-empty",
   "description": "Plugin argv keeps tokens that start with -- (files-write content, files-edit strings, shell-exec command flags, search-grep patterns) and files-write refuses to empty a non-empty file without --allow-empty",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
   "created_at": 1790461279,
-  "updated_at": 1790461470,
+  "updated_at": 1790461595,
   "affected_specs": [
     "plugins"
   ],

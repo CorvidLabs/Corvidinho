@@ -1,6 +1,6 @@
 ---
 id: plugin-argv-keeps-tokens-that-start-with-files-write-content-files-edit-strings-shell-exec-command-flags-search-grep
-state: implementing
+state: archived
 type: bug_fix
 base_commit: cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f
 ---
