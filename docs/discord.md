@@ -39,7 +39,7 @@ Gate order for every slash: **channel allowlist → mute/rate → minPermission 
 
 Dedicated **ops/dev** announcements channel for version bumps, bridge restarts, and ship notes — **separate from the dogfood/chat allowlist**. Default-deny: no announce posts until `/announce channel` sets one. Mutations re-check ADMIN at handler time; empty admin = deny-all. Config persists in shared SQLite `schema_meta` (`discord_announce_channel_id`) under `~/.local/share/corvidinho/`.
 
-On ClientReady (after every successful bridge restart), if configured, Corvidinho posts a short `bridge live vX.Y.Z` note **only** to that channel — never to general allowlisted chat by default.
+On ClientReady (after every successful bridge restart), if configured, Corvidinho posts a short `bridge live **vX.Y.Z**` note plus ≤5 bullets from the matching `CHANGELOG.md` section (fallback: package description or tip) **only** to that channel — never to general allowlisted chat by default (DISCORD-ANNOUNCE-4 / REQ-discord-025).
 
 ```mermaid
 flowchart TD

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "backfill-changelog-0-0-9-0-0-10-notes-owner-only-admin-upgrade-note-136-138-141-under-0-0-9-protocol-2-restart-note-139",
+  "implementation_commit": "623e8b81d4e347513b7fa941afe0137026a2753b",
+  "implementation_tree": "90c29f634c1348bacca7082b8438847a65a03787",
+  "contract_digest": "556cf74fef93b1b60fe4a06e7b0466189d459bda654332cd3a217eb64bad1033",
+  "workspace_digest": "b1748d1fcdb4880f614180049c8991a092bf85fa68da8f4cb90ba9218dbe514f",
+  "closing_digest": "1c4fb5706787d0deecedafba06d065dd3128587960f7c833317d2a3996fdf230",
+  "review_digest": "ca9f14b271c5a688d90e4f7a1317a4ea0f928d0d2ec1c2f5b84cfa26e1cd4f92",
+  "finalization_digest": "aa5baa3f1d01c332b6df316d949c1c40b155cbd0bbf2b7e4dcef4e09481a385d",
+  "timestamp": 1790454600
+}
