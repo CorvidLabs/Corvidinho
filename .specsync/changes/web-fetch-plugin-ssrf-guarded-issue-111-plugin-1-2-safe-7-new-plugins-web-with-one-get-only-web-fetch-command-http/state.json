@@ -7,10 +7,11 @@
   "title": "Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output scrubbed and fenced as untrusted data; dangerous false, minTier 1; web-search left for HI capture",
   "description": "web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output scrubbed and fenced as untrusted data; dangerous false, minTier 1; web-search left for HI capture",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "20fb34ff8db5759a2aad968e74d1d21b4c344b83",
   "created_at": 1790453650,
-  "updated_at": 1790453657,
+  "updated_at": 1790454299,
   "affected_specs": [
     "plugins"
   ],
