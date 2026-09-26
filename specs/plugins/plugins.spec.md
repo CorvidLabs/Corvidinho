@@ -45,6 +45,7 @@ files:
   - tests/memory.plugins.test.ts
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
+  - tests/files.dangling-symlink.test.ts
   - tests/search.plugins.test.ts
   - plugins/shell/index.ts
   - plugins/shell/commands.ts
@@ -119,7 +120,8 @@ non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
 plain Made with Corvidinho attribution (no @handles). Dry-run via
 CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
-`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
+`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
+a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
 keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
 no in-band override. Memory plugins take the acting user and ADMIN
@@ -269,7 +271,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Missing token / API fail on github-* | Clear error; non-zero exit |
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
-| Path escapes project cwd / symlink escape | Refuse (exit 1) |
+| Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
