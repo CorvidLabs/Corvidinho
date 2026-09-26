@@ -9,6 +9,81 @@ change: dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumb
 
 ### SPEC SECTION Invariants
 
+Builtin plugin loaders MAY re-register after an in-process registry clear
+(test seam). Presence of an already-registered command name skips duplicate
+register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
+`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
+non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
+(GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
+plain Made with Corvidinho attribution (no @handles). Dry-run via
+CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
+`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
+Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
+keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
+no in-band override. Memory plugins take the acting user and ADMIN
+only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
+`CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
+refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
+`memory-forget` / `memory-override` are two-phase with an HMAC confirm token
+confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+Memory plugin command descriptions SHALL include concrete argv examples so the
+LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
+`memory-*` is enriched similarly in `buildOpenAiTools`.
+`web-fetch` is dangerous + minTier 1 (tool): SAFE-1 consent applies (left out
+of the default tool catalog, non-interactive deny unless CORVIDINHO_ALLOWLIST
+names it, SAFE-5 audit) until community-role web gating (#65) and the
+untrusted-content rules (#71) are captured. GET only, http/https only, no URL
+credentials, and no URL (first hop or redirect) carrying a value
+`scrubSecrets` would redact, raw or percent-decoded, so vendor-key-shaped
+values never leave in a URL. Loopback, private, CGNAT, link-local (incl. cloud
+metadata), unique-local, multicast, unspecified, `0.0.0.0/8`,
+reserved/documentation and IPv4-mapped / NAT64 forms of those are refused after
+DNS and before any connection; any non-public address in an answer refuses the
+whole name. The socket dials only checked IP literals (no DNS, no proxy), in
+answer order, trying the next checked address only after a socket-level
+connect error, while Host and TLS SNI keep the original name and the
+certificate is verified against it. Redirects are followed manually (max 5)
+and every hop repeats the check. The body is capped at 1 MiB and the returned
+text at 100,000 chars (truncated, flagged with `truncatedBy`), the whole call
+at 15 s; non-text or malformed (not an RFC 6838 `type/subtype` token) content
+types and compressed bodies are refused. Returned text has C0/C1 controls
+stripped (newline and tab kept), is secret-scrubbed and is fenced as untrusted
+data with a per-call random marker id; the page title is a `Title:` line
+inside the fence, never a separate field. Errors never echo the reason phrase
+or other server-chosen header values and are one line, control-free and at
+most 300 chars. `web-search` is not built (provider not captured).
+Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
+stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
+stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
+must be the repository / worktree top level (SAFE-3). Flags are strict
+(unknown refused); path args use the files-plugin clamp and go after `--` as
+literal pathspecs. Hooks stay off even with a repo-local `core.hooksPath`, and
+a linked worktree top level (`.git` file) is a valid cwd. `git-status` lists
+untracked files individually (`--untracked-files=all`) so they feed
+`git-commit`. `git-branch-create` switches with `--no-overwrite-ignore` so an
+ignored `.env*` / keystore is never replaced by a start point's tracked copy
+(SAFE-2). Reads are `dangerous: false`, minTier 0. `git-branch-create`,
+`git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
+message, stages explicit file paths only (no directories / `--all` / amend),
+commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
+paths and staging the deletion of SAFE-2 protected infra, and reports
+`filesChanged`. `git-push` pushes only the current branch to the same-named
+ref of a configured remote (never a URL), never forces, gates every push
+URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
+(GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
+SAFE-22 default-branch policy is not enforced (awaiting HI).
+
+`shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
+Lexical `cd`/`pushd` targets that escape the root are refused before spawn
+(SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
+
+
+File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
+When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
+non-ADMIN callers are refused for every mutating plugin at run time with a
+"not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
+for dangerous tools. Role is re-checked via owner config each call.
+
 Non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN` set and not admin) may
 call GitHub read tools against any *public* repository after deny-list checks
 (ROLES-CHAT-8). Private or unknown visibility is refused. ADMIN / non-role
@@ -19,4 +94,25 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 
 ### SPEC SECTION Change Log
 
+Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
+and current rows for plugins host evolution.
+
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
+| 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
+| 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |
+| 2026-09-26 | plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81: files-read/write/edit/glob/list/delete + search-grep; SAFE-2 protected paths; path clamp; package 0.0.6 |
+| 2026-09-26 | cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive: Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive |
+| 2026-09-26 | memory-discord-inject: richer memory-* argv descriptions (REQ-plugins-085) |
+| 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
+| 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |
+| 2026-09-26 | safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by: SAFE-5 tamper-evident audit trail (issue #95 captured slice): append-only audit_log (schema v5, UPDATE/DELETE blocked by triggers) with an HMAC-SHA256 chain keyed by CORVIDINHO_AUDIT_HMAC_KEY from the bot VM env (plain SHA-256 integrity chain when unset); runPlugin records every dangerous plugin run (started then ok/error, fail closed if the intent cannot be recorded) and denied close calls, storing action, actor, surface, args digest and outcome, never raw args; verify at bridge start and a chain-status line in /status; busy_timeout on the shared DB; tests isolate the data dir; draft SAFE-17 Discord verify command left for HI capture |
+| 2026-09-26 | memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory: Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners |
+| 2026-09-26 | shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9: shell-exec + SAFE-3 cwd clamp; package 0.0.9 |
+| 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
+| 2026-09-26 | web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http: Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output control-stripped, scrubbed and fenced as untrusted data (title inside the fence, no echo of server text); URLs carrying secrets refused; 100k-char text cap; dangerous true (SAFE-1 consent), minTier 1; web-search left for HI capture |
+| 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
+| 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
+| 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |
+| 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |
+| 2026-09-26 | github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured: github-ci-status takes a PR number or a ref (branch/tag/SHA; git ref-name validation, option-looking refused) and reports verdict green/red/pending/none over check runs plus legacy commit statuses; rows keep name/state/bucket/link (REQ-plugins-094, GITHUB-4 / #94 captured slice; draft GITHUB-11 left for HI capture) |
+| 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
