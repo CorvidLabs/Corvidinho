@@ -7,11 +7,11 @@
   "title": "Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3)",
   "description": "Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "213900d3875250f6d845b036d9eebc1ab7e1d4b1",
   "created_at": 1790463921,
-  "updated_at": 1790466720,
+  "updated_at": 1790466816,
   "affected_specs": [
     "discord"
   ],
