@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "add-living-roadmap-section-to-status-md-honest-done-vs-next-tied-to-prs-issues-leif-config-moments-discord-gh-mention",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "39675055b46e50f9ed6d5c212b2492163e5b7e19",
+      "contract_digest": "56850f9131dde3f1a7ca5ebfa85521cdbe28bc2074d3ed9da38a22f230f57804",
+      "execution_digest": "23ffb29af8d07ae980f8418960d23d1543f54ac65c1db03f3c5ee3cd17ea7b44",
+      "workspace_digest": "cd5a3e75eb520130e17d232d0e8aad631476ccc5c3606e4bc567b0a4db639fdf",
+      "timestamp": 1790438066
+    }
+  ]
+}

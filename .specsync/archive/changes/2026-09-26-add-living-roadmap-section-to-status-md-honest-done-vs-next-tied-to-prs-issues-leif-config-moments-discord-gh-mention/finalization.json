@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "add-living-roadmap-section-to-status-md-honest-done-vs-next-tied-to-prs-issues-leif-config-moments-discord-gh-mention",
+  "implementation_commit": "39675055b46e50f9ed6d5c212b2492163e5b7e19",
+  "implementation_tree": "697a3e7a080080093d9648f7b9a3b247d60ab1a3",
+  "contract_digest": "56850f9131dde3f1a7ca5ebfa85521cdbe28bc2074d3ed9da38a22f230f57804",
+  "workspace_digest": "cd5a3e75eb520130e17d232d0e8aad631476ccc5c3606e4bc567b0a4db639fdf",
+  "closing_digest": "654b84c5e459e4e829ca0cad32c5abaf656dc8c317cd63de3f1d884df35e24c5",
+  "review_digest": "ea1082cd6bd876f044a32ef4c70e4c47bc70d0de8ebb777745678920ebe13cdd",
+  "finalization_digest": "04f62c33e3fa0288ca5b76e5b9419b836256cbad5e5796824f7d88184b3a839e",
+  "timestamp": 1790438114
+}
