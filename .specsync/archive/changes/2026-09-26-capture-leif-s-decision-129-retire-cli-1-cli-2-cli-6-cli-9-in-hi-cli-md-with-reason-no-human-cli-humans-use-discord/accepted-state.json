@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "capture-leif-s-decision-129-retire-cli-1-cli-2-cli-6-cli-9-in-hi-cli-md-with-reason-no-human-cli-humans-use-discord",
+  "slug": "capture-leif-s-decision-129-retire-cli-1-cli-2-cli-6-cli-9-in-hi-cli-md-with-reason-no-human-cli-humans-use-discord",
+  "title": "Capture Leif's decision (#129): retire CLI-1, CLI-2, CLI-6, CLI-9 in hi/cli.md with reason 'no human CLI; humans use Discord/GitHub'; keep CLI-7 and CLI-8 for the daemon",
+  "description": "Capture Leif's decision (#129): retire CLI-1, CLI-2, CLI-6, CLI-9 in hi/cli.md with reason 'no human CLI; humans use Discord/GitHub'; keep CLI-7 and CLI-8 for the daemon",
+  "kind": "documentation",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "06e2b08c7c53f59adb122f7a6c9025a007b55838",
+  "created_at": 1790451226,
+  "updated_at": 1790451406,
+  "affected_specs": [],
+  "affected_paths": [
+    "hi/cli.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "HI capture only: hi/cli.md criteria retired by Leif's explicit decision; no canonical spec or code behavior changes",
+  "acceptance_criteria": [
+    "hi/cli.md lists CLI-1, CLI-2, CLI-6 and CLI-9 under Retired with the reason 'no human CLI; humans use Discord/GitHub'; CLI-3, CLI-4, CLI-5, CLI-7 and CLI-8 stay live; hi check passes; no code or canonical spec change"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
