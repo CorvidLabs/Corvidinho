@@ -1,9 +1,9 @@
 # Corvidinho — Bun/TS Linux agent (bootstrap)
 # Prefer Fledge plugin commands over raw shell when a plugin covers the job.
 #
-# Verify lane: lint + smoke + tests. SpecSync is gated by the dedicated
-# `.github/workflows/spec-sync.yml` job (CorvidLabs/spec-sync@v6 Action), not
-# buried inside this lane.
+# Verify lane: lint + smoke + tests + spec-check (Merlin pattern / SPECSYNC-2/7).
+# CI still runs the dedicated `.github/workflows/spec-sync.yml` Spec Sync Action
+# as a visible SDD gate — that Action is not replaced by this lane step.
 
 [tasks.test]
 cmd = "bun test"
@@ -27,7 +27,7 @@ description = "Validate hi/ criterion structure (optional if hi not on PATH)"
 
 [tasks.spec-check]
 cmd = "specsync check"
-description = "SpecSync drift check — local/optional; CI uses Spec Sync workflow"
+description = "SpecSync drift check — also on verify lane; CI Spec Sync Action remains"
 
 [lanes.pre-commit]
 description = "Run before committing"
@@ -37,12 +37,12 @@ steps = [
 ]
 
 [lanes.ci]
-description = "CI pipeline (Bun). SpecSync is a separate workflow."
+description = "CI pipeline (Bun). SpecSync Action is still a separate workflow."
 steps = ["lint", "smoke", "test"]
 
 [lanes.verify]
-description = "Required gate before claiming done (AGENT-4). SpecSync is separate."
-steps = ["lint", "smoke", "test"]
+description = "Required gate before claiming done (AGENT-4 / SPECSYNC-2). Includes local spec-check."
+steps = ["lint", "smoke", "test", "spec-check"]
 
 # Prove-before-done (AGENT-4 / FLEDGE-2). Merlin field names; Corvidinho section.
 # Bridges / WATCH chat hot path should pass --no-verify for latency.

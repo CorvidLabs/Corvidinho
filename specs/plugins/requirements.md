@@ -78,3 +78,14 @@ Acceptance Criteria
 - Exported `checkChannel` / `checkRole` / `checkUser` (or equivalent) honor default-deny + deny override.
 - No Discord gateway/bridge process in this change.
 
+
+### REQ-plugins-008
+
+Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
+
+Acceptance Criteria
+- `plugins list` includes the SpecSync command names.
+- `specsync-list` returns registered module names from `.specsync/registry.toml`.
+- `specsync-read <module>` returns `specs/<module>/<module>.spec.md` contents.
+- `specsync-check` runs project `spec-check` (fledge task or `specsync check` fallback) and fails non-zero on drift.
+- `specsync-brief <module>` returns companion files when present.

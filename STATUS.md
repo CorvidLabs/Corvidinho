@@ -8,8 +8,8 @@
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
-| Fledge | `fledge.toml` with `smoke` + `verify` (includes `spec-check` note/task) |
-| SpecSync | Minimal `.specsync/` + `specs/cli/` + `specs/plugins/`; SDD change workflow **ON** |
+| Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
+| SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
 | Trust / Augur / Attest | **Not** wired — do not re-add Trust thrash on this bootstrap |
 | Merge policy | Merge when verify + SpecSync change cycle are green (Leif/CoS standing order) |
 
@@ -30,13 +30,13 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Plugin host + GH reads | #6 + #4 → [#15](https://github.com/CorvidLabs/Corvidinho/pull/15) | Fledge plugin host + Octokit typed GH reads + GITHUB-6 deny gate |
 | Default-deny allowlists | #16 → [#18](https://github.com/CorvidLabs/Corvidinho/pull/18) | ALLOW/WALLET HI + file/env allowlists (empty = deny-all); wallets deferred |
 | Prove-before-done | #7 → [#17](https://github.com/CorvidLabs/Corvidinho/pull/17) | Agent loop refuses done until Fledge verify passes (AGENT-4 / FLEDGE-2) |
+| SpecSync agent wiring | #8 → [#22](https://github.com/CorvidLabs/Corvidinho/pull/22) | Plan-time list/read (`spec_loader`) + verify-lane `spec-check`; typed SpecSync plugins |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
-| Next | [#8](https://github.com/CorvidLabs/Corvidinho/issues/8) SpecSync agent wiring | In flight or next — typed list/read/check/brief; check blocks prove-before-done |
-| Then | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR Discord thin (DISCORD-1,2,5) | **Blocked** on Discord token + non-empty channel (+ user/role) allowlists |
+| Next | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR Discord thin (DISCORD-1,2,5) | **Blocked** on Discord token + non-empty channel (+ user/role) allowlists |
 | Polish | [#10](https://github.com/CorvidLabs/Corvidinho/issues/10)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Discord polish after thin slice |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
 | Brand | [#20](https://github.com/CorvidLabs/Corvidinho/issues/20) DOGFOOD: “Made with Corvidinho” | Plain-text + link footer on PR bodies (**no @handles**) — **can land ASAP** even pre-runner |
@@ -96,7 +96,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 **Honest gaps before first flip (not inventing HI):**
 
 - Full LLM tool loop on top of prove-before-done (#17 landed the gate; loop flesh still open)
-- SpecSync agent tools (#8) so the live CLI can list/read/check specs
+- SpecSync agent tools (#8/#22 landing) so the live CLI can list/read/check specs
 - For Discord callers: HEAR (#5) + filled allowlists + `DISCORD_TOKEN` on the VM
 - For GH @mention callers: ingress (#19) — typed reads alone are not enough
 - Attribution (#20) preferred on outbound PRs before/at flip (can land earlier)
@@ -106,7 +106,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 
 1. **Foundation** — done (#1, #2, #15, #18)
 2. **Prove loop** — done (#17)
-3. **SpecSync wiring** — #8 (CLI usefulness for live callers)
+3. **SpecSync wiring** — #8 → #22 (landing; CLI usefulness for live callers)
 4. **Discord HEAR** — #5 (Discord as a caller of the same CLI)
 5. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
 6. **Discord polish** — #10–#14
@@ -152,8 +152,9 @@ WALLET-1..3 captured in `hi/allow.md`. **No wallet ACT** until an approved-walle
 
 See **ROADMAP** above. Short pointers:
 
-- #8 SpecSync + #5 HEAR unlock callers; first DOGFOOD flip = CoS bot execs headless CLI
-- #19 GH mention/listen ingress; #20 attribution ASAP
+- #8 SpecSync agent wiring lands in this PR (#22) — then #5 HEAR unlocks Discord callers; first DOGFOOD flip = CoS bot execs headless CLI
+- Flesh full LLM tool loop on top of prove-before-done + SpecSync plugins
+- #19 GH mention/listen ingress; #20 attribution ASAP (footer on PR bodies)
 - #10–#14 Discord polish after #5; #9 / wallets deferred
 - Keep secrets out of repo; keep verify lane honest; no Trust/attest on bootstrap
 
@@ -163,5 +164,7 @@ See **ROADMAP** above. Short pointers:
 hi check
 bun test
 bun src/cli.ts --help
+bun src/cli.ts specsync list
+bun src/cli.ts plugins list
 fledge lanes run verify --non-interactive
 ```

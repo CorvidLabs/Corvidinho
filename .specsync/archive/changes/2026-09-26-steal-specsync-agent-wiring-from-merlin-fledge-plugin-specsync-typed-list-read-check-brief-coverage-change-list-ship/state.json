@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
+  "slug": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
+  "title": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated",
+  "description": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "b55ff627783de1b7d5ce5c0ed9c75c618d9b546b",
+  "created_at": 1790437972,
+  "updated_at": 1790438249,
+  "affected_specs": [
+    "agent",
+    "plugins",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/agent",
+    "src/cli.ts",
+    "src/plugins",
+    "plugins/specsync",
+    "fledge.toml",
+    "tests",
+    "STATUS.md",
+    "AGENTS.md",
+    "specs/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Agent/CLI can list and read specs/ via typed plugins (specsync-list/read) and CLI; companion brief loads context.md/tasks.md/etc when modules targeted (SPECSYNC-5); plan-time Merlin spec_loader list/read feeds Planning; spec-check is on lanes.verify so SpecSync check failures block prove-before-done verified=true (SPECSYNC-2/7); CI Spec Sync Action remains a dedicated workflow alongside Bun smoke; coverage and change list/ship-status available when asked; no SpecSync API key; bun test + SpecSync Action green; change archived"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

@@ -1,9 +1,11 @@
 /**
  * Prove-before-done task loop (Merlin agent-loop Verifying steal).
- * Refuses verified=true until fledge verify passes when the gate is on.
+ * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5).
+ * Verifying: fledge lanes run verify (includes spec-check when wired).
  */
 
 import { loadAgentConfig } from "./config.ts";
+import { loadRelevantSpecs } from "./specLoader.ts";
 import { defaultVerifyRunner } from "./verify.ts";
 import type {
   AgentEvent,
@@ -70,11 +72,34 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     return cancelledResult(summary, filesChanged, attempts);
   }
 
-  // Brief planning note (AGENT-2 briefing hook — lean: no spec load yet)
-  emit(onEvent, {
-    type: "Text",
-    text: "Planning: ready to execute (specs briefing deferred to later slice).",
-  });
+  // Merlin Planning: list → select → read → constraint extract (+ companions)
+  const taskText = opts.task?.trim() ?? "";
+  if (taskText) {
+    try {
+      const briefing = loadRelevantSpecs({ cwd: opts.cwd, task: taskText });
+      if (briefing) {
+        emit(onEvent, {
+          type: "Text",
+          text: `Planning: SpecSync briefing\n\n${briefing}`,
+        });
+      } else {
+        emit(onEvent, {
+          type: "Text",
+          text: "Planning: no SpecSync modules matched task tokens (or registry empty).",
+        });
+      }
+    } catch (err) {
+      emit(onEvent, {
+        type: "Text",
+        text: `Planning: SpecSync briefing skipped (${err instanceof Error ? err.message : String(err)}).`,
+      });
+    }
+  } else {
+    emit(onEvent, {
+      type: "Text",
+      text: "Planning: ready to execute (pass task text for SpecSync briefing).",
+    });
+  }
 
   for (;;) {
     if (isAborted(signal)) {
@@ -114,7 +139,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     setState(onEvent, "verifying");
     emit(onEvent, {
       type: "Text",
-      text: "Running fledge lanes run verify --non-interactive…",
+      text: "Running fledge lanes run verify --non-interactive (includes spec-check)…",
     });
 
     if (isAborted(signal)) {

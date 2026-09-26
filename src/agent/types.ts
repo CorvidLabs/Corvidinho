@@ -56,6 +56,8 @@ export type AgentConfig = {
 
 export type RunTaskOptions = {
   cwd: string;
+  /** Task description for Planning SpecSync briefing (Merlin spec_loader). */
+  task?: string;
   execute: ExecuteFn;
   /** Override config; when false, skip verify gate. */
   verifyBeforeComplete?: boolean;

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "0985c8387899c1c5661240e6cdecaad9d56d9840",
+  "contract_digest": "b1998e8c552d28bd1bd13e3538f7a594f7470a3b5100a947a459dde30b5ef93b",
+  "execution_digest": "7070b3b35c134aa3a3ec84915cc28b7f7b6a025e32546965607184f0a6c86db2",
+  "workspace_digest": "a7d1f93f381eba404e48766b6f4f84d19852012146ceca396465069af1adca10",
+  "timestamp": 1790438245
+}

@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438297,
+      "digest": "2801dfb1845f09ddc7ee7ecbbbfe1ebdb607206ddabe4054691c175c6ce56ae0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-specsync-config-toml-agent-registry-entry-added-during-specsync-agent-wiring-8-pr-22",
+        "title": "Cover .specsync/config.toml agent registry entry added during SpecSync agent wiring #8 / PR #22",
+        "description": "Cover .specsync/config.toml agent registry entry added during SpecSync agent wiring #8 / PR #22",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          ".specsync/config.toml"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Canonical specs unchanged; config.toml [specs] agent= entry mirrors existing .specsync/registry.toml agent mapping already introduced with specs/agent/ on main via #17 — this change only covers the config.toml path left uncovered after #8 archive",
+        "acceptance_criteria": [
+          "PR #22 diff vs main includes .specsync/config.toml agent registry entry; covered by this change; bun test + Spec Sync Action green; change archived on same PR"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790438306,
+      "digest": "b3e60f60682c9cb914c597ec4bd231256854dec508e9cf3c697d22dffacd2331",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

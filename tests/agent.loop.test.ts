@@ -172,3 +172,33 @@ describe("runTask prove-before-done", () => {
     ]);
   });
 });
+
+describe("runTask SpecSync Planning briefing", () => {
+  const root = import.meta.dir + "/..";
+
+  test("task mentioning agent emits Spec briefing Text", async () => {
+    const c = collect();
+    const result = await runTask({
+      cwd: root,
+      task: "Improve the agent prove-before-done loop",
+      verifyBeforeComplete: false,
+      onEvent: c.onEvent,
+      execute: async () => ({
+        summary: "noop",
+        filesChanged: [],
+      }),
+    });
+    expect(result.state).toBe("done");
+    const texts = c.events
+      .filter((e): e is Extract<AgentEvent, { type: "Text" }> => e.type === "Text")
+      .map((e) => e.text)
+      .join("\n");
+    expect(texts).toContain("# Spec: agent");
+    expect(texts).toContain("Planning: SpecSync briefing");
+  });
+
+  test("fledge.toml verify lane includes spec-check", async () => {
+    const toml = await Bun.file(`${root}/fledge.toml`).text();
+    expect(toml).toMatch(/\[lanes\.verify\][\s\S]*spec-check/);
+  });
+});
