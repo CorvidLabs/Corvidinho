@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord",
+  "implementation_commit": "0dd645345905aaabd6b42fa2be5aa2dfce85ca7d",
+  "implementation_tree": "445dd0a3f768cac97c4fa5ee6de3e652e0c73faf",
+  "contract_digest": "02d0e586d08eb717ceb72278bbe8d76eb5f2910dbf6fbb40b3975102df104126",
+  "workspace_digest": "2e2ef9a5f8479d0aa73b1f7a81530bfee4caf1642fbe7ecaeac4cc8104d7fdd5",
+  "closing_digest": "7f0d1379e4e5e208e33b2661fd8a57e830afb91eff0d8e0bf76167208e5031fb",
+  "review_digest": "c466ca5cb217384ff7e28d6233cc2b6db38242330b7154c71844843a56b9d8f0",
+  "finalization_digest": "124ae06ce4f70da36fc8197ee455ee4a84d238a277b15e68b5b57adf36f7eb98",
+  "timestamp": 1790455696
+}

@@ -177,6 +177,22 @@ Acceptance Criteria
 - `projectInstructions: false` or no files leaves the system prompt unchanged.
 - A clean load adds no event; a refused or truncated file yields exactly one `Text` note across attempts.
 
+### REQ-agent-112
+
+When a task run's catalog may include dangerous tools (`includeDangerous`),
+`createTaskExecute` SHALL load the project's Fledge plugins (cwd = task cwd,
+env = run env) before building the tool catalog, so Fledge commands can be
+offered and called as tools under the usual tier filter, catalog-only
+dispatch and SAFE-1 allowlist (FLEDGE-4). The default catalog (dangerous
+omitted) SHALL NOT spawn fledge. `buildOpenAiTools` SHALL build each tool with
+the exported `toolDefForEntry`, which is also what the schema-cost view
+measures (FLEDGE-5); the tool definitions sent are unchanged.
+
+Acceptance Criteria
+- includeDangerous + code tier + allowlist: the first request offers `fledge-hello`; the model's call runs the fake fledge and the ToolResult succeeds with the plugin output.
+- Default catalog: no `fledge-*` tool is offered and none is registered.
+- Existing tool-loop tests pass unchanged.
+
 ### REQ-agent-044
 
 The tool loop SHALL offer an agent-level `ask-human` tool (argument
