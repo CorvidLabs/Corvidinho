@@ -21,6 +21,15 @@ artifact: research
   its check, like the ledger reservation.
 - Owner-ping dedupe for schedules keys on reason + question; spend-cap
   questions carry live amounts, so the key ignores them for that reason.
-- WATCH posts run summaries to GitHub (`src/watch/summary.ts`); it is out of
-  this change's modules and its behavior is unchanged (the summary is the
-  ask text, as it was the refusal text before).
+- WATCH posts run summaries to GitHub (`src/watch/summary.ts`) and ignores
+  `result.ask` / `result.spendWarning`. Rather than touch the watch module,
+  the runner's summary at the cap is the generic `SPEND_CAP_SUMMARY` (no
+  amounts, env names or restart hints), so the public comment leaks nothing;
+  WATCH's spawn log carries the same line, and its 80% warning reaches the
+  owner through the bridge outbox.
+- Review (PR #160): the only surfaces that know the owner are the Discord
+  bridge's posts; the daemon and WATCH have none. Recording in the runner and
+  delivering from the bridge (claimed in SQLite) is the one design that
+  covers every surface without per-consumer plumbing. A slash reply is an
+  edit of a deferred interaction response, which may not notify a mention,
+  so the owner notice is a fresh channel post.

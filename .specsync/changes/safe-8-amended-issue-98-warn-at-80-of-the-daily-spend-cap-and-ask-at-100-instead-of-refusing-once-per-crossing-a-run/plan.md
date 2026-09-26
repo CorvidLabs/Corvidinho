@@ -21,3 +21,8 @@ artifact: plan
 7. Tests (mocked fetch, localhost mock LLM, fake gateway / sh bin), spec
    prose, deltas, artifacts; approve; `change check --commit`; audit,
    coverage, tsc, bun test, fledge verify.
+8. Review round: `spend-alerts.ts` (pending/delivered, re-arm under 70%,
+   cap ping rows), `spend-outbox.ts` (bridge delivery), `spend-post.ts`
+   (Discord glue); wire the bridge chat reply, `/work`, `/session start`,
+   schedule posts and daemon logs; ask text without a yes/no question;
+   generic summary; tests; deltas and spec prose; re-approve; check again.

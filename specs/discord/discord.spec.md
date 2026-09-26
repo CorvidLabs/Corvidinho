@@ -78,6 +78,7 @@ files:
   - tests/discord.protocol-version.test.ts
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
+  - src/discord/spend-post.ts
   - tests/discord.spend.test.ts
   - tests/discord.ask-ping.test.ts
 
@@ -134,6 +135,22 @@ schedule post append the 80% warning line with the owner added to
 `mentionUserIds`. `SlashContext.spendLine` / `StatusReportInput.spendLine`
 carry `/status`'s 24 h spend vs cap line (`formatSpendStatusLine` over
 `readSpendSnapshot` on the bridge's shared DB); no new slash command.
+The bridge builds one `createSpendAlertOutbox({ db, env })`
+(`src/agent/spend-outbox.ts`) and shares it as `SlashContext.spendAlerts` and
+`SchedulerServiceOpts.spendAlerts`; `SlashContext.post` is the gateway reply
+(a fresh channel post). `src/discord/spend-post.ts` exports `askPingOwner`
+(a `spend-cap` ask pings once per cap episode via `claimCapPing`),
+`takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
+`replyWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
+`AskPingOwner` types. The chat reply, `/work`, `/session start` and the
+schedule post take the pending warning from the outbox (the run's own
+`spendWarning` only when there is no DB), and hand it back when the post
+fails (`SchedulerOutbound.post` may resolve `false`). `/work` and
+`/session start` post `result.ask` through `formatAskReply` (paused status,
+not ✅); `WorkTaskStatus` gains `blocked` (listed on `/status` as waiting for
+input when > 0); their owner ping and warning go out as a fresh post after
+the reply. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
+`ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
@@ -200,6 +217,14 @@ no free-text column (a constant kind and integers).
 The spend warning line and `/status` spend line are built from integer
 amounts, never from child-written text; the spend-cap question is scrubbed and
 mention-defanged like every ask.
+Recording a SAFE-8 warning and delivering it are separate: whichever process
+crossed 80% records it, and the bridge delivers it on its next post to any
+allowlisted channel it already posts in (no new channel, no DM), claiming it
+in one IMMEDIATE transaction so two posts never repeat it. A spend-cap ask
+never carries the "reply to answer" hint (a reply cannot lift the cap); it
+pings the owner once per cap episode across chat, slash commands and
+schedules. A slash run's owner ping is a fresh post (an edit of a deferred
+reply may not notify), with allowed mentions limited to the owner.
 
 ## Behavioral Examples
 
@@ -291,4 +316,3 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6: Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3) |
 | 2026-09-26 | cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master: CleanupEmptyBranch never force-deletes a branch with commits when the default branch is not main/master |
 | 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
-

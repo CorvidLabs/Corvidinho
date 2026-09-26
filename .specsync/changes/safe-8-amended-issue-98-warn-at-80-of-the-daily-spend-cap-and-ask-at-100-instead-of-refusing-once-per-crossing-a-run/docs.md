@@ -16,4 +16,10 @@ artifact: docs
   `specs/discord/discord.spec.md` (spend-cap ask, warning line, `/status`,
   `spend_alerts`) describe the amended behavior; REQ-agent-098,
   REQ-cli-098 and REQ-discord-098 are modified through this change's deltas.
+- Review round: `specs/agent/agent.spec.md` lists `src/agent/spend-alerts.ts`
+  and `src/agent/spend-outbox.ts` and describes re-arming and delivery;
+  `specs/discord/discord.spec.md` lists `src/discord/spend-post.ts` and
+  describes the outbox, the once-per-episode ping, `/work` / `/session start`
+  asks and `blocked` work; `specs/cli/cli.spec.md` describes the text-mode
+  question and the daemon's `spend.warning` / `run.needs_human` lines.
 - No CHANGELOG / STATUS / package version edits (release PRs own those).

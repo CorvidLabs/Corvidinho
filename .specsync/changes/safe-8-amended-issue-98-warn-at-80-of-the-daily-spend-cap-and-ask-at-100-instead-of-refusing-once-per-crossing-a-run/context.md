@@ -31,4 +31,11 @@ Constraints for a session picking this up:
 - The earlier change's ledger, price table and estimates are kept as is; this
   change only modifies REQ-agent-098 / REQ-cli-098 / REQ-discord-098.
 - No schema version bump: `spend_alerts` is created with CREATE TABLE IF NOT
-  EXISTS in `src/agent/spend.ts`, like `spend_ledger`.
+  EXISTS (now in `src/agent/spend-alerts.ts`), like `spend_ledger`.
+- PR #160 review found that the warning was recorded once globally but only
+  shown by Discord chat and bridge schedule posts, that `/work` and
+  `/session start` ignored the ask, that the chat ask invited a reply that
+  could not help and pinged the owner on every message, and that a second
+  crossing inside 24 h stayed silent. This change's review round fixes
+  those; SAFE-8 is only partially met until the Approve card (#96) is
+  captured and built.

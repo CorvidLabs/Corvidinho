@@ -18,6 +18,8 @@ files:
   - src/agent/events-ndjson.ts
   - src/agent/spend.ts
   - src/agent/spend-notice.ts
+  - src/agent/spend-alerts.ts
+  - src/agent/spend-outbox.ts
   - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
@@ -81,7 +83,17 @@ pure text: `formatSpendWarningLine`, `spendWarningFromUnknown`, the
 warning as a `Text` event and through `onSpendWarning`, and passes every
 attempt's result through `finish`. `HumanAskReason` gains `spend-cap`;
 `TaskResult` gains optional `spendWarning` (`SpendWarning`: integer
-`spentMicroUsd` / `capMicroUsd` and `percent`).
+`spentMicroUsd` / `capMicroUsd` and `percent`). A run stopped at the cap
+reports the generic `SPEND_CAP_SUMMARY` as its summary (no amounts or env
+names; the details are in `ask.question`), and `SPEND_REARM_PERCENT` (70)
+sets where the warning re-arms. `src/agent/spend-alerts.ts` owns the
+`spend_alerts` table (`ensureSpendAlerts`, adding `delivered_at` to an older
+table): `recordSpendWarning`, `rearmSpendAlerts`, `warnArmed`,
+`capPingArmed`, `claimSpendWarnings` / `releaseSpendWarnings` and
+`claimSpendCapPing`. `src/agent/spend-outbox.ts` exports
+`createSpendAlertOutbox` (`SpendAlertOutbox`: `takeWarning(fallback)` →
+`TakenSpendWarning` with `release()`, and `claimCapPing()`), the delivery
+side the Discord bridge uses.
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
 `loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
@@ -159,9 +171,15 @@ the cap, and every call while the model is unpriced, the cap value is invalid
 or the ledger is unavailable, is not sent: the attempt ends with a
 `spend-cap` ask and the run is `blocked` (never `done`, never retried, verify
 skipped) — the runner never spends past the cap and never counts an unpriced
-model as free. The 80% warning is recorded at most once per cap value per
-rolling 24 h across processes (`spend_alerts`, same IMMEDIATE transaction as
-its check). Money is integer micro-USD, rounded up.
+model as free. The 80% warning is recorded once per crossing across
+processes (`spend_alerts`, same IMMEDIATE transaction as its check): it
+re-arms when spend is seen back under 70% of that cap value (by a settle or
+by the next call's reservation), 24 h after the last warning, or for a new
+cap value — the 70–80% band keeps spend hovering at 80% from warning on every
+call. Recording is separate from delivery: a recorded warning stays pending
+(`delivered_at` NULL) until a surface that can reach the owner claims it, so
+a run whose surface cannot show it (WATCH, daemon, delegate worker) never
+uses it up. Money is integer micro-USD, rounded up.
 Autonomous mode is off unless the project `fledge.toml` sets
 `[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
 left out of the tool catalog unless the session is allowed (enabled, depth
@@ -243,8 +261,8 @@ model.
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
-| Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and how to continue (SAFE-8) |
-| Settled call brings 24h spend to ≥80% of the cap for the first time in 24h | one `Text` warning + `TaskResult.spendWarning`; later calls stay quiet (SAFE-8) |
+| Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
+| Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
@@ -285,4 +303,3 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run: SAFE-8 amended (issue #98): warn at 80% of the daily spend cap and ask at 100% instead of refusing. Once per crossing a run that pushes rolling 24h spend to 80% of CORVIDINHO_DAILY_SPEND_CAP_USD emits a warning (Text event, result spendWarning, Discord reply line with owner ping); a provider call that would pass the cap is stopped before it is sent and the run ends blocked with a spend-cap ask to the owner via the AUTONOMY-1/2 ask path stating spend vs cap and how to continue; doctor and Discord /status show 24h spend vs the cap (AUTONOMOUS-8); Approve card (#96) left for HI capture |
 | 2026-09-26 | spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run: Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1) |
 | 2026-09-26 | council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2: Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed |
-
