@@ -12,6 +12,7 @@ describe("buildCorvidinhoArgv", () => {
     expect(buildCorvidinhoArgv("/repo/src/cli.ts", ["--protocol-version"])).toEqual([
       "bun",
       "--no-env-file",
+      "--config=/dev/null",
       "/repo/src/cli.ts",
       "--protocol-version",
     ]);
@@ -36,8 +37,9 @@ describe("buildCorvidinhoArgv", () => {
     ]);
     expect(argv[0]).toBe("bun");
     expect(argv[1]).toBe("--no-env-file");
-    expect(argv[2]).toBe("src/cli.ts");
-    expect(argv.slice(3)).toEqual([
+    expect(argv[2]).toBe("--config=/dev/null");
+    expect(argv[3]).toBe("src/cli.ts");
+    expect(argv.slice(4)).toEqual([
       "task",
       "run",
       "--task",
@@ -114,6 +116,39 @@ describe("spawned agents ignore the project .env (ALLOW-4 / SAFE-1)", () => {
       const out = await new Response(proc.stdout).text();
       await proc.exited;
       expect(out).toContain("allow=[unset]");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("spawned agents ignore a project bunfig.toml (REQ-agent-133 / SAFE-1)", () => {
+  test("a bunfig.toml preload in the spawn cwd never runs in the child", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-nobunfig-"));
+    try {
+      // What a model (files-write) or a committed repo file could plant.
+      writeFileSync(join(dir, "bunfig.toml"), 'preload = ["./p.ts"]\n');
+      writeFileSync(
+        join(dir, "p.ts"),
+        "console.log(`PRELOAD RAN token=${process.env.CORVIDINHO_PROBE_TOKEN}`);\n",
+      );
+      const bin = join(dir, "probe.ts");
+      writeFileSync(bin, 'console.log("child ran");\n');
+      const env = { ...process.env, CORVIDINHO_PROBE_TOKEN: "fake-token-123" };
+      const proc = Bun.spawn(buildCorvidinhoArgv(bin), {
+        cwd: dir,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = await new Response(proc.stdout).text();
+      expect(await proc.exited).toBe(0);
+      expect(out).toContain("child ran");
+      expect(out).not.toContain("PRELOAD RAN");
+      expect(out).not.toContain("fake-token-123");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
