@@ -1,6 +1,6 @@
 ---
 id: shell-exec-cd-pushd-clamp-skips-options-and-before-taking-the-target-so-cd-p-etc-cd-etc-and-cd-cannot-escape-the
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 2ff0598784b5e7c72f2c0eedbb85131324e7e239
 ---

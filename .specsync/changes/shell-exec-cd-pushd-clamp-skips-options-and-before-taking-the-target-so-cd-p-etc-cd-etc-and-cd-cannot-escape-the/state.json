@@ -7,10 +7,11 @@
   "title": "Shell-exec cd/pushd clamp skips options and -- before taking the target so cd -P /etc, cd -- /etc and cd - cannot escape the project root (SAFE-3)",
   "description": "shell-exec cd/pushd clamp skips options and -- before taking the target so cd -P /etc, cd -- /etc and cd - cannot escape the project root (SAFE-3)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "2ff0598784b5e7c72f2c0eedbb85131324e7e239",
   "created_at": 1790464362,
-  "updated_at": 1790464478,
+  "updated_at": 1790464493,
   "affected_specs": [
     "plugins"
   ],
