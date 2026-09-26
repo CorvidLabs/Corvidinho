@@ -39,6 +39,7 @@ files:
   - plugins/files/commands.ts
   - plugins/files/protectedPaths.ts
   - plugins/files/resolvePath.ts
+  - plugins/files/argv.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -46,6 +47,7 @@ files:
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/search.plugins.test.ts
+  - tests/plugins.argv-dashes.test.ts
   - plugins/shell/index.ts
   - plugins/shell/commands.ts
   - plugins/shell/clamp.ts
