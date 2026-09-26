@@ -1,5 +1,6 @@
 /**
  * HEAR bridge orchestrator: gateway → message-router → session stub + agent spawn.
+ * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -21,6 +22,10 @@ import {
 import { routeMessage } from "./message-router.ts";
 import { enforceProtocolVersionOrExit } from "./protocol.ts";
 import { SessionStore } from "./session-store.ts";
+import {
+  ThinkingStatus,
+  type ThinkingOutbound,
+} from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 
 export type StartBridgeResult =
@@ -39,7 +44,44 @@ export type StartBridgeOptions = {
   ) => Promise<DiscordGateway>;
   /** Skip protocol handshake (unit tests). */
   skipProtocolCheck?: boolean;
+  /**
+   * Override thinking outbound (tests). When omitted, uses gateway
+   * sendEmbed/editEmbed; if those are missing, uses a memory outbound.
+   */
+  thinkingOutbound?: ThinkingOutbound;
+  /** ThinkingStatus debounce/tick (tests may shrink). */
+  thinkingDebounceMs?: number;
+  thinkingTickMs?: number;
 };
+
+function memoryThinkingOutbound(): ThinkingOutbound & {
+  sends: Array<{ channelId: string; embed: unknown; replyToMessageId?: string; messageId: string }>;
+  edits: Array<{ channelId: string; messageId: string; embed: unknown }>;
+} {
+  let n = 0;
+  const sends: Array<{
+    channelId: string;
+    embed: unknown;
+    replyToMessageId?: string;
+    messageId: string;
+  }> = [];
+  const edits: Array<{ channelId: string; messageId: string; embed: unknown }> =
+    [];
+  return {
+    sends,
+    edits,
+    async sendEmbed({ channelId, embed, replyToMessageId }) {
+      n += 1;
+      const messageId = `progress_${n}`;
+      sends.push({ channelId, embed, replyToMessageId, messageId });
+      return { messageId };
+    },
+    async editEmbed({ channelId, messageId, embed }) {
+      edits.push({ channelId, messageId, embed });
+      return true;
+    },
+  };
+}
 
 /**
  * Start the Discord HEAR bridge. Clean exit semantics when token/channels missing.
@@ -82,6 +124,12 @@ export async function startBridge(
   const replyRef: {
     fn?: GatewayHandlers["reply"];
   } = {};
+  const embedRef: {
+    send?: GatewayHandlers["sendEmbed"];
+    edit?: GatewayHandlers["editEmbed"];
+  } = {};
+
+  const fallbackOutbound = memoryThinkingOutbound();
 
   const handlers: GatewayHandlers = {
     onMessage: async (msg: InboundMessage) => {
@@ -105,11 +153,54 @@ export async function startBridge(
       }
 
       const { session, prompt } = action;
-      const result = await agent.runChat({
-        prompt,
+      const channelId = msg.threadId ?? msg.channelId;
+
+      const outbound: ThinkingOutbound =
+        opts.thinkingOutbound ??
+        (embedRef.send && embedRef.edit
+          ? {
+              sendEmbed: embedRef.send,
+              editEmbed: embedRef.edit,
+            }
+          : fallbackOutbound);
+
+      const thinking = new ThinkingStatus({
+        outbound,
+        channelId,
+        replyToMessageId: msg.id,
         sessionId: session.id,
-        resume: action.kind === "continue_session",
+        debounceMs: opts.thinkingDebounceMs,
+        tickMs: opts.thinkingTickMs,
       });
+
+      await thinking.start({ description: "Working on your request..." });
+
+      let result;
+      try {
+        result = await agent.runChat({
+          prompt,
+          sessionId: session.id,
+          resume: action.kind === "continue_session",
+          onStatus: (u) => {
+            void thinking.update({
+              tool: u.tool,
+              tokens: u.tokens,
+              description: u.message ? `⏳ ${u.message}` : undefined,
+            });
+          },
+        });
+      } catch (err) {
+        await thinking.fail(
+          `❌ ${err instanceof Error ? err.message : "agent error"}`,
+        );
+        throw err;
+      }
+
+      if (result.ok) {
+        await thinking.done("✅ Done");
+      } else {
+        await thinking.fail(`❌ exit ${result.exitCode}`);
+      }
 
       const body = result.ok
         ? result.summary.slice(0, 1800)
@@ -117,7 +208,7 @@ export async function startBridge(
 
       if (replyRef.fn) {
         const sent = await replyRef.fn({
-          channelId: msg.threadId ?? msg.channelId,
+          channelId,
           content: body,
           replyToMessageId: msg.id,
         });
@@ -140,15 +231,19 @@ export async function startBridge(
       if (cfg.dryRun) return createNullGateway();
       const gw = await createLiveGateway(cfg, h);
       replyRef.fn = h.reply;
+      embedRef.send = h.sendEmbed;
+      embedRef.edit = h.editEmbed;
       return gw;
     });
 
   const gateway = await factory(config, handlers);
   // If factory is createLiveGateway-like, reply is set inside; for custom, allow handlers.reply
   if (handlers.reply) replyRef.fn = handlers.reply;
+  if (handlers.sendEmbed) embedRef.send = handlers.sendEmbed;
+  if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
 
   await gateway.start();
-  console.log("[discord] HEAR bridge ready (session stub; no ProcessManager).");
+  console.log("[discord] HEAR bridge ready (session stub + thinking status; no ProcessManager).");
 
   return {
     ok: true,
@@ -160,4 +255,4 @@ export async function startBridge(
   };
 }
 
-export { goLiveChecklist, loadBridgeConfig };
+export { goLiveChecklist, loadBridgeConfig, memoryThinkingOutbound };

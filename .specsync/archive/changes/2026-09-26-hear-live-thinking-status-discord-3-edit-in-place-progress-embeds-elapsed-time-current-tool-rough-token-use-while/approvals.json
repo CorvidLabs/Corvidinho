@@ -1,0 +1,84 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790439787,
+      "digest": "9cd8ef3398c12b3bfbc7b8f609a0f129b9e07a7bc70f4816243fc39602f27af4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while",
+        "title": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
+        "description": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "src/discord",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "On start/continue session the bridge posts one progress embed (not silent void); edits it in-place with elapsed time and optional current tool / rough token use while agent runs; marks Done (or error) when complete then posts final reply; no ProcessManager; allowlists unchanged (default-deny); fixture/unit tests without live Discord token; STATUS Done lists HEAR thin #5→#23 and attribution #20→#24; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "d594a6ec04cfaf90e737f09ab16a43245f2216c08219aa2059c71421981e82bf"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790439789,
+      "digest": "9cd8ef3398c12b3bfbc7b8f609a0f129b9e07a7bc70f4816243fc39602f27af4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while",
+        "title": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
+        "description": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "src/discord",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "On start/continue session the bridge posts one progress embed (not silent void); edits it in-place with elapsed time and optional current tool / rough token use while agent runs; marks Done (or error) when complete then posts final reply; no ProcessManager; allowlists unchanged (default-deny); fixture/unit tests without live Discord token; STATUS Done lists HEAR thin #5→#23 and attribution #20→#24; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "d594a6ec04cfaf90e737f09ab16a43245f2216c08219aa2059c71421981e82bf"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790439968,
+      "digest": "a89fd0bc8530a60ccea447816e4b60cee2b8e842193c735e551fcf22840ae14f",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

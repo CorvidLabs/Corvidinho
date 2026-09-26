@@ -26,6 +26,9 @@ export {
   createSpawnAgentClient,
   createEchoAgentClient,
   type AgentClient,
+  type AgentStatusUpdate,
+  type AgentRunChatOpts,
+  type EchoAgentClientOpts,
 } from "./agent-client.ts";
 export {
   createLiveGateway,
@@ -33,7 +36,27 @@ export {
   type DiscordGateway,
   type GatewayHandlers,
 } from "./gateway.ts";
-export { startBridge, type StartBridgeOptions, type StartBridgeResult } from "./bridge.ts";
+export {
+  startBridge,
+  memoryThinkingOutbound,
+  type StartBridgeOptions,
+  type StartBridgeResult,
+} from "./bridge.ts";
+export {
+  THINKING_COLORS,
+  formatElapsed,
+  formatTokenCount,
+  formatTokenSegment,
+  buildThinkingFooter,
+  buildThinkingEmbed,
+  ThinkingStatus,
+  type ThinkingPhase,
+  type ThinkingTokens,
+  type ThinkingSnapshot,
+  type DiscordEmbedPayload,
+  type ThinkingOutbound,
+  type ThinkingStatusOpts,
+} from "./thinking-status.ts";
 export {
   NOT_AUTHORIZED,
   type InboundMessage,

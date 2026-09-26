@@ -7,6 +7,7 @@ spec: discord.spec.md
 - As Leif, I @mention the bot in an allowlisted Discord channel and get a real session stub on my Linux host (DISCORD-1).
 - As a user, replies and thread messages continue the same session without hunting for an id (DISCORD-2 / 2.a).
 - As an operator, non-allowlisted channels are refused; empty channel lists refuse start (DISCORD-5; default-deny).
+- As a user, while the agent thinks I see a live status (time, tool, rough tokens) instead of a silent void (DISCORD-3).
 
 ## Acceptance Criteria
 
@@ -64,6 +65,24 @@ Acceptance Criteria
 - `plugins list` shows dangerous=true.
 - Non-interactive without allowlist → exit 2.
 
+
 ## Out of Scope
 
-Soft later #10–14. No voice, Angular, AlgoChat, iced, ProcessManager.
+Soft later #11–14. No voice, Angular, AlgoChat, iced, ProcessManager.
+
+### REQ-discord-008
+
+While a session is running, the bridge SHALL show a live thinking status in the
+channel (elapsed time, and when known: current tool and rough token use) by
+posting one progress message and editing it in-place (DISCORD-3). The bridge
+SHALL NOT leave a silent void for the duration of `agent.runChat`. Final agent
+text SHALL still be posted as a separate reply after the progress message is
+marked Done or error. The bridge SHALL NOT introduce ProcessManager.
+
+Acceptance Criteria
+- Session start/continue posts a progress embed (or equivalent) before awaiting agent completion.
+- Progress edits include elapsed time; optional tool / token segments when provided.
+- On success, progress marked Done then final reply posted; on failure, progress marked error.
+- Fixture tests cover builders and edit sequence without live Discord token.
+- Allowlists remain default-deny; no new secrets in repo.
+
