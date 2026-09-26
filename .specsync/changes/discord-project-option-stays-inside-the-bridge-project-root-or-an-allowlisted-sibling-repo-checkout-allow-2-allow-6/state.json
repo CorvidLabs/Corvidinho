@@ -7,10 +7,10 @@
   "title": "Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3)",
   "description": "Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "approved",
   "base_commit": "65cff62fdae8cb0413d92adfe8acb29455fc127f",
   "created_at": 1790459296,
-  "updated_at": 1790459301,
+  "updated_at": 1790459630,
   "affected_specs": [
     "discord"
   ],
