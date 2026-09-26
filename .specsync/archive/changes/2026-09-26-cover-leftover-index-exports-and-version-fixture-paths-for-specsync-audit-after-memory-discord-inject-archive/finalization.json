@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-index-exports-and-version-fixture-paths-for-specsync-audit-after-memory-discord-inject-archive",
+  "implementation_commit": "817d8139113f9af4896fa25240f02854128d04fe",
+  "implementation_tree": "909fcacd9d4329ea00269ec983c995c2d1358a46",
+  "contract_digest": "b909a0b953e543e9ae02de2f8781f6f6598fcd49e11a28cb5aaa52c00d2b4561",
+  "workspace_digest": "fd41bb747c629089647dc480f3b2d0f95ecdccbd9ea06af35ca75dd9ae3ab745",
+  "closing_digest": "ef0fa961fdd1028e8c3610b9d3ef30a3e3ebda598982111126631a9067edff20",
+  "review_digest": "efe5706c471298e39ec7046b23f224d3d1ba0439e946f6ceecf3cf4bce6dcf38",
+  "finalization_digest": "1d0848ad4fb7ac625902c646f808b4b38241c13f7111282517066f3f54b3732c",
+  "timestamp": 1790450721
+}

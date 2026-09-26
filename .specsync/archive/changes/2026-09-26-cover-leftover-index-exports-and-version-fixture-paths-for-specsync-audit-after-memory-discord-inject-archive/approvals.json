@@ -1,0 +1,49 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790450716,
+      "digest": "b909a0b953e543e9ae02de2f8781f6f6598fcd49e11a28cb5aaa52c00d2b4561",
+      "note": "cover leftover after memory-discord-inject archive",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-leftover-index-exports-and-version-fixture-paths-for-specsync-audit-after-memory-discord-inject-archive",
+        "title": "Cover leftover index exports and version fixture paths for SpecSync audit after memory-discord-inject archive",
+        "description": "Cover leftover index exports and version fixture paths for SpecSync audit after memory-discord-inject archive",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          "src/agent/index.ts",
+          "src/discord/index.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Re-export MEMORY_AGENT_SYSTEM_INSTRUCTIONS / memory-inject helpers and version/changelog fixture bumps are already covered by living agent/discord/cli specs from the archived memory-discord-inject change; no new acceptance criteria.",
+        "acceptance_criteria": [
+          "src/agent/index.ts re-exports MEMORY_AGENT_SYSTEM_INSTRUCTIONS; src/discord/index.ts re-exports memory-inject helpers; tests/version.test.ts and tests/update-helpers.test.ts assert package 0.0.7 / changelog 0.0.7; covered for SpecSync change audit after memory-discord-inject archive; no new module AC"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790450721,
+      "digest": "ef0fa961fdd1028e8c3610b9d3ef30a3e3ebda598982111126631a9067edff20",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

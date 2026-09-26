@@ -20,6 +20,16 @@ export {
   type ExtractedImages,
   type MaterializedImage,
 } from "./image-attachments.ts";
+
+export {
+  enrichPromptWithMemories,
+  formatMemoryInjectBlock,
+  MEMORY_INJECT_EMPTY,
+  MEMORY_INJECT_HEADER,
+  MEMORY_INJECT_LIMIT,
+  type EnrichPromptWithMemoriesOpts,
+  type MemoryInjectResult,
+} from "./memory-inject.ts";
 export {
   loadBridgeConfig,
   mergeChannelIds,
