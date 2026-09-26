@@ -1,6 +1,6 @@
 ---
 id: hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version
-state: approved
+state: implementing
 type: feature
 base_commit: 6116dd1c2c8773880f3f5183dad4b27dfb87303a
 ---
