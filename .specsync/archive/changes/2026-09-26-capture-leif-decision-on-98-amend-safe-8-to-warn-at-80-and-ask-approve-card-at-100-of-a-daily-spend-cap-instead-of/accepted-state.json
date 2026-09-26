@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "capture-leif-decision-on-98-amend-safe-8-to-warn-at-80-and-ask-approve-card-at-100-of-a-daily-spend-cap-instead-of",
+  "slug": "capture-leif-decision-on-98-amend-safe-8-to-warn-at-80-and-ask-approve-card-at-100-of-a-daily-spend-cap-instead-of",
+  "title": "Capture Leif decision on #98: amend SAFE-8 to warn at 80% and ask (Approve card) at 100% of a daily spend cap instead of refusing",
+  "description": "Capture Leif decision on #98: amend SAFE-8 to warn at 80% and ask (Approve card) at 100% of a daily spend cap instead of refusing",
+  "kind": "documentation",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "3625075b24331b1aecb1a2769a9a11b28d1e9ef6",
+  "created_at": 1790456028,
+  "updated_at": 1790456049,
+  "affected_specs": [],
+  "affected_paths": [
+    "hi/safe.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "HI text amendment in hi/safe.md per Leif's recorded decision on #98; no code or canonical spec change",
+  "acceptance_criteria": [
+    "hi/safe.md SAFE-8 reads warn at 80%, ask at 100% (Approve card); hi check passes"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the",
+  "implementation_commit": "e0f71dbb6bae084ea69e225db1c64ecb30cbcf34",
+  "implementation_tree": "9a3b37dc0ee1521ec103c8d50d0a70fa7ca26ebd",
+  "contract_digest": "3fcf8bcfebb1d694643cd2f3432f83633e5109144b89c3ee8f9ba37846a5cdfb",
+  "workspace_digest": "b7adda696436d2cb842e3a6460417593cfc744cf25bcfdf12ef0be3457f79da1",
+  "closing_digest": "a638565952806fb617990eb3ab51e533379bc25ce36d272e9e5ecb108ea63580",
+  "review_digest": "e10c0bdf6ece9a27323a5d6824a0bbbed9cce04deeec533e00cb7938e2b32662",
+  "finalization_digest": "03b230e7bb0d496b183750978a66a10203062cb852b5f776400222fb8464fb60",
+  "timestamp": 1790455694
+}

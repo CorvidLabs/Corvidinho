@@ -189,14 +189,18 @@ Acceptance Criteria
 
 Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `buildCorvidinhoArgv` so `.ts` entrypoints always run under `bun`. When
-`task run --json` stdout is present, the Discord chat reply SHALL surface a
-parsed summary (state / verified / attempts + `result.summary`) rather than
-dumping raw JSON. Prefer `--no-verify` for bridge latency. Fixture tests SHALL
-cover argv shape and JSON summary parsing without a live Discord token.
+`task run` stdout is present (ndjson result frame or legacy `--json`), the
+Discord chat reply SHALL surface a parsed summary (state / verified /
+attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
+`--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
+agent loop still skips the verify lane when `filesChanged` is empty so plain
+chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
+without a live Discord token.
 
 Acceptance Criteria
-- `.ts` bin → `["bun", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
-- Valid `--json` stdout → Discord body includes state and summary text.
+- `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
+- Spawn argv for Discord chat is `task run --task <prompt> --output ndjson` with **no** `--no-verify`.
+- Valid result/json stdout → Discord body includes state and summary text.
 - Unparseable stdout falls back to truncated stdout/stderr.
 - No ProcessManager; allowlists unchanged; secrets out of repo.
 
@@ -658,4 +662,49 @@ Acceptance Criteria
 - An unverified run triggers one verify-lane run in the worktree before push; a failing lane ships nothing.
 - Push or PR-create failure yields a plain line and never a claimed PR.
 - Fixture tests use temp repos, a local bare remote, the dry-run github plugin and a mocked verify lane.
+
+### REQ-discord-085
+
+Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
+prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
+argv MUST NOT include `--no-verify`. Empty `filesChanged` continues to skip
+verify inside the agent loop (honest `verifySkipped`); when tools report file
+changes, `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
+of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
+Discord.
+
+Acceptance Criteria
+- Discord spawn argv never includes `--no-verify`.
+- Package `0.0.13`; docs/STATUS/CHANGELOG updated.
+- Fixture tests + SpecSync + fledge verify green.
+
+### REQ-discord-108
+
+The Discord bridge and `corvidinho daemon` may tick schedules from one data
+dir at the same time (CLI-8 / AUTONOMOUS-4). Schedule ticks SHALL then stay
+correct:
+
+- Each tick SHALL re-read the `schedules` table first, so schedules created,
+  paused, resumed or deleted by another process are seen.
+- Each due run SHALL be claimed with a compare-and-set on `status = 'active'`
+  and the `next_run_at` the ticker saw. A run another ticker already claimed
+  SHALL be skipped, so each due run fires exactly once.
+- Store updates SHALL write only the columns they own. Status changes write
+  status / next_run_at / updated_at; run start writes last_run_at /
+  execution_count / next_run_at / updated_at; run finish writes
+  consecutive_failures (counted in SQL) / updated_at. A run finishing in one
+  process SHALL NOT undo a pause or resume made in another.
+- The scheduler SHALL record each run's outcome exactly once, even when a
+  shutdown abandons a run that later returns.
+
+Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
+no catch-up, auto-pause after 5 failures, and the non-blocking tick
+(DISCORD-SCHEDULE-4). No schema change.
+
+Acceptance Criteria
+- Two tickers on one DB file start a due run once; one run row, `execution_count` 1.
+- A tick sees create/pause/resume/delete made through another store handle.
+- A pause made while a run is in flight survives that run finishing.
+- Failures from two handles with stale caches still count to 2.
+- `abandonInFlight` records a stuck run as failed once; a late agent result does not record it again.
 
