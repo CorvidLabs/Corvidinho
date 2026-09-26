@@ -7,10 +7,10 @@
   "title": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
   "description": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "approved",
   "base_commit": "ede5f461fdd16166e8cfee218b0bf8e860fa5499",
   "created_at": 1790463159,
-  "updated_at": 1790463267,
+  "updated_at": 1790463277,
   "affected_specs": [],
   "affected_paths": [
     "src/agent/spend-alerts.ts",
