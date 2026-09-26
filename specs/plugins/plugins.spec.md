@@ -202,4 +202,4 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 ## Change Log
 
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
-| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: Dogfood UX: Discord identity inject (IDENTITY-4), thinking embed model+plumbing (DISCORD-3.a), clean chat replies, community public GitHub gate (ROLES-CHAT-8); package 0.0.18 |
+
