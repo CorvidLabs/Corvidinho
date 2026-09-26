@@ -67,12 +67,19 @@ Acceptance Criteria
 
 ### REQ-cli-007
 
-`corvidinho task run` SHALL drive the prove-before-done loop with an injectable execute path: demo stub when no LLM key is configured; when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is set, OpenAI-compatible execute including the plugin tool loop (tier tool|code) or read-tier chat. `--no-verify` remains for bridge latency. `--json` emits structured result+events for Discord/WATCH callers to parse.
+`corvidinho task run` SHALL drive the prove-before-done loop with an injectable
+execute path: demo stub when no LLM key is configured; thin env-gated
+OpenAI-compatible chat when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is
+set. `--no-verify` remains for **local/operator opt-out only** — Discord and
+WATCH bridges MUST NOT pass it (REQ-discord-085 / REQ-watch-085 / AGENT-4).
+`--json` / `--output ndjson` emit structured result+events for callers to parse.
+Package version after this change is **0.0.13**.
 
 Acceptance Criteria
-- Help still documents task run / --no-verify / --json / --tier.
+- Help still documents `task run` / `--no-verify` / `--json` / `--output`.
 - Without LLM key, demo execute behaves as before (verify gate exercise).
-- With key env documented in `.env.example` (no secret values).
+- Help / fledge.toml no longer tell bridges to pass `--no-verify` for latency.
+- Package `0.0.13`.
 
 ### REQ-cli-008
 
@@ -292,4 +299,87 @@ Acceptance Criteria
 - `bun src/cli.ts doctor` without the variable prints no spend line.
 - With `CORVIDINHO_DAILY_SPEND_CAP_USD=5` it prints `[ok] spend: $0.00 of $5.00 daily cap used in the last 24h (0 provider call(s)`.
 - Invalid cap and unpriced model yield a `warn` line with `ok: true`.
+### REQ-cli-085
+
+The CLI SHALL keep `--no-verify` as an explicit local skip of prove-before-done
+(AGENT-4). Product bridges (Discord HEAR, GitHub WATCH) SHALL NOT use that flag
+(REQ-discord-085 / REQ-watch-085). Removing the flag entirely (draft AGENT-14)
+awaits HI capture. Package **0.0.13**.
+
+Acceptance Criteria
+- `corvidinho task run --no-verify --json` still exits 0 with `verifySkipped`.
+- Bridge spawn clients do not pass `--no-verify` (covered under discord/watch).
+
+### REQ-cli-108
+
+The CLI SHALL expose `corvidinho daemon`. It ticks the shared SQLite schedules
+table on the existing 60 s poll with no Discord token and no REPL (CLI-8,
+AUTONOMOUS-4). It SHALL use the bridge's scheduler gates: the channel
+allowlist re-check (DISCORD-SCHEDULE-3), per-run worktrees
+(SESSION-WORKTREE), and non-interactive agent spawns (SAFE-1). It SHALL add no
+new environment variables.
+
+Only one daemon SHALL run per data dir. The daemon SHALL create
+`<data dir>/daemon.lock` exclusively, recording its pid and Linux process
+start time. A second daemon SHALL log `daemon.lock_held` naming the holder's
+pid and exit 1. A lock whose pid is gone, or whose pid now belongs to
+another process, SHALL be taken over.
+
+On SIGTERM or SIGINT the daemon SHALL:
+- stop ticking;
+- wait up to 30 s for in-flight runs;
+- record any run still going as failed (`interrupted: daemon shutdown`);
+- remove its lock and exit 0.
+
+A second signal SHALL skip the rest of the wait.
+
+Daemon logs SHALL be one JSON object per line on stdout
+(`ts`, `level`, `component`, `event`, then fields), with every string value
+scrubbed (SAFE-6). `docs/DAEMON.md` SHALL document a systemd unit and leave
+restarts to systemd's own `Restart=`. Heartbeats, crash DMs and running the
+bridge/watch inside the daemon are out of scope (draft OPS-3..5).
+
+Acceptance Criteria
+- `corvidinho daemon` with a temp data dir logs `daemon.started`, creates `daemon.lock`, and exits 0 on SIGTERM with the lock removed.
+- A second daemon on the same data dir exits 1 with `daemon.lock_held` and the holder pid.
+- A lock from a dead or recycled pid is taken over; an unreadable lock younger than 5 s is not.
+- A due schedule is run headlessly and logged as `run.finished`; a non-allowlisted channel is refused without running the agent.
+- Stop after the grace records stragglers as failed and frees the lock; a forced stop skips the grace.
+- Log lines parse as JSON, and secrets in fields are redacted.
+- `--help` lists `daemon`.
+
+### REQ-cli-112
+
+`corvidinho plugins list` SHALL load the project's Fledge plugins (cwd =
+current directory) before listing (FLEDGE-4 / PLUGIN-6). The text view SHALL
+show for each command its danger marking, minimum tier, origin when not
+builtin, and approximate schema tokens, followed by the tool schema cost
+summary (total vs budget, per-origin subtotals, largest, oversized) and a
+Fledge status line (plugins/commands registered, or why none loaded, plus
+skipped names and warnings). `plugins list --json` SHALL stay a JSON array of
+entries, each adding `origin`, `schemaChars` and `approxTokens`. When fledge is
+missing or fails, the command SHALL still list builtins and exit 0.
+`corvidinho plugins run fledge-<command>` SHALL discover Fledge plugins only
+when that name is not already registered, then run it under SAFE-1.
+
+Acceptance Criteria
+- With a fake fledge on PATH, `plugins list` shows `fledge-hello  [dangerous, tier>=2, fledge:fledge-plugin-hello@0.2.0]  ~N tok`, the cost summary and `Fledge plugins: 1 plugin(s), 1 command(s) registered`.
+- `plugins list --json` is an array; `fledge-hello` has dangerous=true, minTier=2, origin, schemaChars, approxTokens; builtins have origin `builtin`.
+- Without fledge on PATH, builtins list, `Fledge plugins: none loaded (fledge not on PATH)` prints, exit 0.
+- `--non-interactive plugins run fledge-hello` exits 2 (SAFE-1) unless `CORVIDINHO_ALLOWLIST=fledge-hello`, which runs it in the project root.
+
+### REQ-cli-017
+
+The project SHALL ship package version `0.0.16` covering the headless daemon
+(#157), SSRF-guarded web-fetch (#148), Fledge plugins as tools (#154), GitHub
+PR diff/files (#153), CI status by ref (#158) and project instructions in the
+prompt (#150). CLI `version` and Discord presence (DISCORD-12) report
+`0.0.16` after a restart. CHANGELOG SHALL include verbose 0.0.16 notes with the
+restart and allowlist steps. STATUS.md SHALL record the slices.
+
+Acceptance Criteria
+- `package.json` version is `0.0.16`.
+- CLI `version` prints `0.0.16`.
+- CHANGELOG has a 0.0.16 section that the updater's changelog helper extracts exactly.
+- STATUS records #157, #148, #154, #153, #158 and #150.
 

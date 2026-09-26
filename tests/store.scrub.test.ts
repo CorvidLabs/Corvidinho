@@ -53,6 +53,38 @@ describe("scrubSecrets (SAFE-6)", () => {
     const plain = "task-runner sk- skip ghp dashboard eyJ short Bearer x AKIA-short";
     expect(scrubSecrets(plain)).toBe(plain);
   });
+
+  test("private keys and JWTs in diff-shaped text are still redacted", () => {
+    const pemBody = a(64);
+    const key = (kind: string) =>
+      `+-----BEGIN ${kind} PRIVATE KEY-----\n+${pemBody}\n+${pemBody}\n+-----END ${kind} PRIVATE KEY-----`;
+    // Two keys back to back, a lone header before them, and a JWT after a dash.
+    const text = `+-----BEGIN NOTE-----\n${key("RSA")}\n${key("EC")}\n x-${FAKE.jwt}\n`;
+    const out = scrubSecrets(text);
+    expect(out).not.toContain(pemBody);
+    expect(out.match(/\[redacted:private-key\]/g)).toHaveLength(2);
+    expect(out).toContain("x-[redacted:jwt]");
+    expect(out.startsWith("+-----BEGIN NOTE-----\n")).toBe(true);
+  });
+
+  test("runs in linear time on hostile input (many openers, no closer)", () => {
+    // Before the linear patterns each of these took seconds: every opener
+    // rescanned to the end of the text looking for its closer.
+    const hostile = [
+      "+-----BEGIN A PRIVATE KEY-----\n".repeat(20_000),
+      "-----BEGIN A PRIVATE KEY-----".repeat(20_000),
+      "-----BEGIN A PRIVATE KEY-----\n" + "+QUJDREVGR0hJSktMTU5PUA==\n".repeat(20_000),
+      "eyJ-".repeat(50_000),
+      "eyJ" + "a".repeat(8) + ".eyJ-" + "eyJ-".repeat(50_000),
+    ];
+    for (const text of hostile) {
+      const started = performance.now();
+      const out = scrubSecrets(text);
+      const ms = performance.now() - started;
+      expect(out).toBe(text); // nothing here is a complete secret
+      expect(ms).toBeLessThan(1_000);
+    }
+  });
 });
 
 describe("scrub on every write path", () => {

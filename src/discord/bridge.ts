@@ -10,6 +10,9 @@
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
  * DISCORD-12: presence/custom status shows shared package version.
  * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
+ * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
+ * AUTONOMY-1/2: a run that needs a human replies with its question and
+ * pings the configured owner (ask-ping.ts).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -17,6 +20,7 @@ import {
   createEchoAgentClient,
   createSpawnAgentClient,
 } from "./agent-client.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
 import {
   goLiveChecklist,
   loadBridgeConfig,
@@ -51,7 +55,13 @@ import {
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
-import { auditKeyFromEnv, formatAuditLine, verifyAudit } from "../audit/index.ts";
+import {
+  appendAudit,
+  auditKeyFromEnv,
+  formatAuditLine,
+  verifyAudit,
+  type AuditEntryInput,
+} from "../audit/index.ts";
 import { MemoryStore } from "../memory/index.ts";
 import {
   ScheduleStore,
@@ -236,6 +246,11 @@ export async function startBridge(
     ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
     : undefined;
   if (auditLine) console.log(`[discord] ${auditLine()}`);
+  // SAFE-5: /admin mutations append to the same chain (fail closed on error).
+  const recordAudit = db
+    ? (entry: AuditEntryInput) =>
+        appendAudit(db, entry, { key: auditKeyFromEnv(env) })
+    : undefined;
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -290,6 +305,8 @@ export async function startBridge(
       memoryStore,
       announceStore,
       auditLine,
+      recordAudit,
+      // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,
       version,
@@ -421,13 +438,27 @@ export async function startBridge(
         throw err;
       }
 
-      if (result.ok) {
+      // AUTONOMY-1/2: needs a human → question to the requester + owner ping.
+      const ask = result.ask
+        ? formatAskReply({
+            ask: result.ask,
+            owner: config.owner,
+            context: result.summary,
+            replyHint: true,
+          })
+        : null;
+      if (ask) {
+        await (ask.failed ? thinking.fail(ask.status) : thinking.done(ask.status));
+        if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
+      } else if (result.ok) {
         await thinking.done("✅ Done");
       } else {
         await thinking.fail(`❌ exit ${result.exitCode}`);
       }
 
-      const body = result.ok
+      const body = ask
+        ? ask.content
+        : result.ok
         ? result.summary.slice(0, 1800)
         : `session ${session.id} failed (exit ${result.exitCode})`;
 
@@ -436,6 +467,7 @@ export async function startBridge(
           channelId,
           content: body,
           replyToMessageId: msg.id,
+          ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
         });
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
@@ -448,6 +480,7 @@ export async function startBridge(
     onSlash: async (interaction) => {
       await handleSlashInteraction(buildSlashCtx(), interaction);
     },
+    getAllowlistedChannelIds: () => config.channelIds,
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
       // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel.
@@ -485,10 +518,11 @@ export async function startBridge(
       allowlist: config.allowlist,
       pollIntervalMs: opts.schedulerPollIntervalMs,
       defaultProjectRoot: config.projectRoot,
+      owner: config.owner ?? null,
       outbound: {
-        post: async ({ channelId, content }) => {
+        post: async ({ channelId, content, mentionUserIds }) => {
           if (replyRef.fn) {
-            await replyRef.fn({ channelId, content });
+            await replyRef.fn({ channelId, content, mentionUserIds });
           }
         },
       },

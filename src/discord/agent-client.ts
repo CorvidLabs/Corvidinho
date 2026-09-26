@@ -1,10 +1,12 @@
 /**
- * Spawn corvidinho for chat with --no-verify (bridge latency).
+ * Spawn corvidinho for chat with prove-before-done (AGENT-4 / FLEDGE-2 / #85).
+ * Does not pass --no-verify; empty filesChanged still skips verify in the loop.
  * Reads the `task run --output ndjson` event stream so the thinking status
  * shows real state / current tool / token counts (AGENT-8 / DISCORD-3, #73).
  * Injectable for tests; no ProcessManager.
  */
 
+import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
@@ -59,9 +61,9 @@ export type SpawnAgentClientOpts = {
 };
 
 /**
- * Spawns: `<bin> task run --no-verify --task <prompt> --output ndjson`
- * and reads stdout line by line; the summary comes from the `result` frame
- * (fallback: summarizeTaskRunOutput).
+ * Spawns: `<bin> task run --task <prompt> --output ndjson` (no --no-verify;
+ * REQ-discord-085 / AGENT-4) and reads stdout line by line; the summary comes
+ * from the `result` frame (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
  * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
  * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011).
@@ -81,7 +83,6 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
-        "--no-verify",
         "--task",
         prompt,
         "--output",
@@ -107,7 +108,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
         },
       });
-      const { exitCode, summary, totalTokens } = await collectTaskRunStream({
+      const { exitCode, summary, totalTokens, result } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
@@ -131,11 +132,24 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         tokens: { estimated: finalTok },
         message: "Agent finished",
       });
+      // AUTONOMY-1/2: a validated ask from the result frame, if any.
+      const ask = askFromUnknown(result?.ask);
       return {
         ok: exitCode === 0,
         sessionId,
         summary,
         exitCode,
+        ...(ask ? { ask } : {}),
+        // Verify facts for the /work PR gate (REQ-discord-088).
+        ...(result
+          ? {
+              task: {
+                verified: result.verified === true,
+                verifySkipped: result.verifySkipped === true,
+                state: result.state,
+              },
+            }
+          : {}),
       };
     },
   };

@@ -199,7 +199,10 @@ export const githubCommands: PluginCommand[] = [
   },
   {
     name: "github-ci-status",
-    description: "Show CI check status for a PR (Octokit checks.listForRef)",
+    description:
+      "Show CI verdict (green/red/pending/none) plus per-check rows for a PR number or a ref " +
+      "(branch, tag or commit SHA), e.g. `12 --repo OWNER/REPO` or `main --repo OWNER/REPO` " +
+      "(Octokit checks.listForRef + repos.getCombinedStatusForRef)",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -207,36 +210,24 @@ export const githubCommands: PluginCommand[] = [
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
+      const usage = "usage: github-ci-status <pr-number|ref> --repo OWNER/REPO";
       const selector = rest[0];
       if (!selector) {
-        return {
-          ok: false,
-          error: "usage: github-ci-status <number> --repo OWNER/REPO",
-          exitCode: 1,
-        };
+        return { ok: false, error: usage, exitCode: 1 };
       }
-      const pull_number = Number(selector);
-      if (!Number.isFinite(pull_number)) {
-        return { ok: false, error: "PR selector must be a number when using Octokit", exitCode: 1 };
+      const ci = await import("./ciStatus.ts");
+      const parsed = ci.parseCiSelector(selector);
+      if (!parsed.ok) {
+        return { ok: false, error: `${parsed.error} (${usage})`, exitCode: 1 };
+      }
+      if (rest.length > 1) {
+        return { ok: false, error: `unexpected args: ${rest.slice(1).join(" ")} (${usage})`, exitCode: 1 };
       }
       const octokit = clientOrErr();
       if (!("rest" in octokit)) return octokit;
       try {
-        const pr = await octokit.rest.pulls.get({ owner, repo: name, pull_number });
-        const ref = pr.data.head.sha;
-        const checks = await octokit.rest.checks.listForRef({
-          owner,
-          repo: name,
-          ref,
-          per_page: 100,
-        });
-        const data = checks.data.check_runs.map((c) => ({
-          name: c.name,
-          state: (c.conclusion || c.status || "").toUpperCase(),
-          bucket: c.conclusion === "success" ? "pass" : c.conclusion ? "fail" : "pending",
-          link: c.html_url,
-        }));
-        return okResult(ctx, data);
+        const data = await ci.fetchCiStatus(octokit, { owner, repo: name, target: parsed.target });
+        return { ok: true, data, message: ci.ciStatusMessage(data), exitCode: 0 };
       } catch (e) {
         return fail(e);
       }

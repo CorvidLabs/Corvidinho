@@ -39,6 +39,8 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     expect(byName["files-delete"]!.minTier).toBe(2);
     expect(byName["files-delete"]!.dangerous).toBe(true);
     expect(byName["files-write"]!.dangerous).toBe(false);
+    expect(byName["files-write"]!.mutating).toBe(true);
+    expect(byName["files-edit"]!.mutating).toBe(true);
   });
 
   test("isProtectedPath catches SAFE-2 infra", () => {

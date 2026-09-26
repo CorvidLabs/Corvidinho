@@ -1,7 +1,7 @@
 /**
  * /announce channel|show (DISCORD-ANNOUNCE-1..6).
  * Mutations ADMIN re-check at handler time; empty admin = deny-all.
- * Channel option is Discord CHANNEL picker (never type snowflake by hand).
+ * Channel option is STRING + autocomplete (search by name or paste snowflake).
  */
 
 import {
@@ -9,6 +9,7 @@ import {
   resolvePermissionLevel,
 } from "../permissions.ts";
 import { formatAnnounceChannelLine } from "../announce.ts";
+import { resolveChannelOption } from "../channel-autocomplete.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
 
@@ -112,16 +113,26 @@ async function handleChannel(
   if (!channel) {
     await interaction.reply({
       content:
-        "Pick a channel from the dropdown (`channel` option), or set `clear:true` to unset. Do not type a snowflake by hand.",
+        "Type a few letters of the channel name and pick from autocomplete, paste a snowflake id, or set `clear:true` to unset.",
       ephemeral: true,
     });
     return;
   }
 
-  ctx.announceStore!.setChannelId(channel);
+  const resolved = resolveChannelOption(channel);
+  if (!resolved.ok) {
+    await interaction.reply({
+      content:
+        "Could not resolve that channel. Pick a choice from autocomplete or paste a numeric snowflake id.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  ctx.announceStore!.setChannelId(resolved.id);
   await interaction.reply({
     content: [
-      `Announcements channel set to <#${channel}>.`,
+      `Announcements channel set to <#${resolved.id}>.`,
       "Version bumps / bridge restarts post **only** here — not to the dogfood chat allowlist.",
     ].join("\n"),
     ephemeral: true,

@@ -4,6 +4,7 @@
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import type { AuditEntryInput } from "../audit/index.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import type { AgentClient } from "./agent-client.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -13,6 +14,7 @@ import type { WorkStore } from "./work-store.ts";
 import type { ScheduleStore } from "../scheduler/store.ts";
 import type { MemoryStore } from "../memory/index.ts";
 import type { AnnounceStore } from "./announce-store.ts";
+import type { WorkPrRunner } from "../work/pr.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -27,6 +29,8 @@ export type SlashInteraction = {
   commandName: string;
   /** Present for /session list|start. */
   subcommand?: string;
+  /** SUB_COMMAND_GROUP name, e.g. "users" for /admin users add (ADMIN-1..3). */
+  subcommandGroup?: string;
   channelId: string;
   guildId?: string;
   userId: string;
@@ -49,6 +53,11 @@ export type SlashContext = {
   announceStore?: AnnounceStore;
   /** SAFE-5 — one-line audit chain verify summary for /status. */
   auditLine?: () => string;
+  /**
+   * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
+   * the trail is unavailable; /admin mutations then fail closed.
+   */
+  recordAudit?: (entry: AuditEntryInput) => { seq: number };
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;
@@ -76,6 +85,11 @@ export type SlashContext = {
   env?: NodeJS.ProcessEnv;
   /** Optional git tip short SHA (bridge fills best-effort). */
   gitTipSha?: string;
+  /**
+   * /work → draft PR step (REQ-discord-088). Default `openWorkPr`; tests
+   * inject a fake so no git push or GitHub call happens.
+   */
+  openWorkPr?: WorkPrRunner;
 };
 
 export type SlashResult =

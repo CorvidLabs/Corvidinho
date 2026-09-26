@@ -15,7 +15,7 @@ import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts"
 import { SessionStore } from "../src/discord/session-store.ts";
 import {
   OPT_BOOLEAN,
-  OPT_CHANNEL,
+  OPT_STRING,
   buildSlashCommandBodies,
   SLASH_COMMAND_NAMES,
 } from "../src/discord/slash-commands.ts";
@@ -81,9 +81,9 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
 }
 
 describe("/announce bodies", () => {
-  test("includes announce with channel|show and CHANNEL picker", () => {
+  test("includes announce with channel|show and STRING autocomplete", () => {
     expect(SLASH_COMMAND_NAMES).toContain("announce");
-    expect(SLASH_COMMAND_NAMES.length).toBe(8);
+    expect(SLASH_COMMAND_NAMES.length).toBe(9);
     const announce = buildSlashCommandBodies().find((b) => b.name === "announce");
     expect(announce?.options?.map((o) => o.name).sort()).toEqual([
       "channel",
@@ -93,8 +93,9 @@ describe("/announce bodies", () => {
     const opts = channel?.options ?? [];
     expect(opts.map((o) => o.name).sort()).toEqual(["channel", "clear"]);
     const chOpt = opts.find((o) => o.name === "channel");
-    expect(chOpt?.type).toBe(OPT_CHANNEL);
-    expect(chOpt?.channel_types).toEqual([0]);
+    expect(chOpt?.type).toBe(OPT_STRING);
+    expect(chOpt?.autocomplete).toBe(true);
+    expect(chOpt).not.toHaveProperty("channel_types");
     expect(opts.find((o) => o.name === "clear")?.type).toBe(OPT_BOOLEAN);
   });
 });
@@ -253,7 +254,7 @@ describe("/announce dispatch", () => {
     expect(ctx.announceStore!.getChannelId()).toBeNull();
   });
 
-  test("admin sets channel via picker snowflake value", async () => {
+  test("admin sets channel via autocomplete snowflake value", async () => {
     const ctx = makeCtx({ owner: { discordId: "admin-1" } });
     const ix = memoryInteraction({
       commandName: "announce",

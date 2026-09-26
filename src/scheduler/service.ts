@@ -3,17 +3,26 @@
  * Steal ADR-001: ~60s poll, max concurrent 2, no catch-up, auto-pause @ 5 fails.
  * Tick MUST return without awaiting agent work so HEAR/WATCH ingress is not starved.
  * SESSION-WORKTREE: each tick uses the schedule's project worktree/scope.
+ * CLI-8 / AUTONOMOUS-4: the same ticker runs inside the Discord bridge and in
+ * `corvidinho daemon`; each tick re-reads SQLite and claims a due run
+ * atomically, so two tickers on one data dir fire it once.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
 import {
+  ASK_NO_OWNER_WARNING,
+  askPingKey,
+  formatAskReply,
+} from "../discord/ask-ping.ts";
+import type { OwnerRecord } from "../identity/owner.ts";
+import {
   ensureTalkWorkspace,
   parkWorktree,
   resolveProjectDir,
 } from "../worktree/index.ts";
-import type { Schedule, ScheduleStore } from "./store.ts";
+import type { Schedule, ScheduleRun, ScheduleStore } from "./store.ts";
 
 export const DEFAULT_POLL_INTERVAL_MS = 60_000;
 export const DEFAULT_MAX_CONCURRENT = 2;
@@ -24,7 +33,20 @@ export type SchedulerOutbound = {
   post?: (opts: {
     channelId: string;
     content: string;
+    /** Only these users may be pinged (AUTONOMY-2 owner ping). */
+    mentionUserIds?: string[];
   }) => Promise<void>;
+};
+
+/** One finished (or abandoned) schedule run, for operator logs. */
+export type ScheduleRunFinished = {
+  scheduleId: string;
+  runId: string;
+  ok: boolean;
+  /** Failure reason (already scrubbed when persisted; callers scrub logs). */
+  error?: string;
+  /** Schedule was auto-paused after this run (FAILURE_AUTO_PAUSE). */
+  autoPaused: boolean;
 };
 
 export type SchedulerServiceOpts = {
@@ -48,6 +70,16 @@ export type SchedulerServiceOpts = {
    * Default true.
    */
   useWorktrees?: boolean;
+  /** Configured owner pinged when a tick needs a human (AUTONOMY-2). */
+  owner?: OwnerRecord | null;
+  /** Called once per run when it finishes or is abandoned (daemon logs). */
+  onRunFinished?: (event: ScheduleRunFinished) => void;
+};
+
+type InFlight = {
+  schedule: Schedule;
+  run: ScheduleRun;
+  settled: Promise<void>;
 };
 
 export class SchedulerService {
@@ -60,8 +92,12 @@ export class SchedulerService {
   private readonly nowFn: () => number;
   private readonly defaultProjectRoot: string;
   private readonly useWorktrees: boolean;
+  private readonly owner: OwnerRecord | null;
+  private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private readonly running = new Set<string>();
+  private readonly running = new Map<string, InFlight>();
+  /** Runs already finished/abandoned — a run is recorded once. */
+  private readonly finishedRuns = new WeakSet<ScheduleRun>();
   private tickInFlight = false;
 
   constructor(opts: SchedulerServiceOpts) {
@@ -74,6 +110,8 @@ export class SchedulerService {
     this.nowFn = opts.now ?? (() => Date.now());
     this.defaultProjectRoot = opts.defaultProjectRoot ?? process.cwd();
     this.useWorktrees = opts.useWorktrees !== false;
+    this.owner = opts.owner ?? null;
+    this.onRunFinished = opts.onRunFinished;
     if (!opts.manual) {
       this.start();
     }
@@ -99,12 +137,13 @@ export class SchedulerService {
 
   /** Running schedule ids (for tests / status). */
   runningIds(): string[] {
-    return [...this.running];
+    return [...this.running.keys()];
   }
 
   /**
    * Scan due schedules and fire async work without awaiting agents.
    * Returns immediately after scheduling starts (DISCORD-SCHEDULE-4).
+   * `skipped` includes due runs another ticker on the same data dir claimed.
    */
   async tick(): Promise<{ started: string[]; skipped: string[] }> {
     if (this.tickInFlight) return { started: [], skipped: [] };
@@ -113,6 +152,8 @@ export class SchedulerService {
     const skipped: string[] = [];
     try {
       const now = this.nowFn();
+      // Another process may have created/paused/run schedules since last tick.
+      this.store.refresh();
       const due = this.store.listDue(now);
       for (const schedule of due) {
         if (this.running.size >= this.maxConcurrent) {
@@ -123,9 +164,16 @@ export class SchedulerService {
           skipped.push(schedule.id);
           continue;
         }
+        const run = this.store.claimRun(schedule, now);
+        if (!run) {
+          skipped.push(schedule.id);
+          continue;
+        }
         started.push(schedule.id);
+        const entry: InFlight = { schedule, run, settled: Promise.resolve() };
+        this.running.set(schedule.id, entry);
         // Fire-and-forget — do not await (ingress must not wait).
-        void this.runOne(schedule);
+        entry.settled = this.runOne(schedule, run);
       }
     } finally {
       this.tickInFlight = false;
@@ -133,10 +181,43 @@ export class SchedulerService {
     return { started, skipped };
   }
 
-  private async runOne(schedule: Schedule): Promise<void> {
-    this.running.add(schedule.id);
-    const now = this.nowFn();
-    const run = this.store.markRunStarted(schedule, now);
+  /**
+   * Wait until in-flight runs settle, up to `timeoutMs`.
+   * Resolves true when none are left running.
+   */
+  async drain(timeoutMs: number): Promise<boolean> {
+    if (this.running.size === 0) return true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, Math.max(0, timeoutMs));
+    });
+    const settled = Promise.allSettled(
+      [...this.running.values()].map((e) => e.settled),
+    ).then(() => undefined);
+    try {
+      await Promise.race([settled, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    return this.running.size === 0;
+  }
+
+  /**
+   * Record every still-running run as failed with `reason` (shutdown after
+   * the grace period) so history never shows a run stuck at "running".
+   * Returns the abandoned schedule ids.
+   */
+  abandonInFlight(reason: string): string[] {
+    const ids: string[] = [];
+    for (const [id, entry] of this.running) {
+      this.finish(entry.schedule, entry.run, { ok: false, error: reason });
+      ids.push(id);
+    }
+    this.running.clear();
+    return ids;
+  }
+
+  private async runOne(schedule: Schedule, run: ScheduleRun): Promise<void> {
     let workDir: string | undefined;
     let projectDir: string | undefined;
     let workspaceKind: "worktree" | "scoped_dir" | undefined;
@@ -146,11 +227,10 @@ export class SchedulerService {
       if (schedule.channelId) {
         const gate = checkChannel(schedule.channelId, this.allowlist);
         if (!gate.ok) {
-          this.store.markRunFinished(schedule, run, {
+          this.finish(schedule, run, {
             ok: false,
             error: `channel not allowlisted: ${schedule.channelId}`,
           });
-          this.maybeAutoPause(schedule);
           return;
         }
       }
@@ -161,11 +241,10 @@ export class SchedulerService {
           defaultProjectRoot: this.defaultProjectRoot,
         });
         if (!resolved.ok) {
-          this.store.markRunFinished(schedule, run, {
+          this.finish(schedule, run, {
             ok: false,
             error: `project resolve failed: ${resolved.error}`,
           });
-          this.maybeAutoPause(schedule);
           return;
         }
         projectDir = resolved.dir;
@@ -174,11 +253,10 @@ export class SchedulerService {
           sessionId: `schedule_${schedule.id}_${run.id}`,
         });
         if (!ensured.ok) {
-          this.store.markRunFinished(schedule, run, {
+          this.finish(schedule, run, {
             ok: false,
             error: `worktree failed: ${ensured.error}`,
           });
-          this.maybeAutoPause(schedule);
           return;
         }
         workDir = ensured.workspace.workDir;
@@ -211,28 +289,59 @@ export class SchedulerService {
         ? result.summary.slice(0, 1500)
         : `failed (exit ${result.exitCode})`;
 
-      this.store.markRunFinished(schedule, run, {
+      // Abandoned at shutdown meanwhile: already recorded, post nothing.
+      if (!this.finish(schedule, run, {
         ok: result.ok,
         summary,
         error: result.ok ? undefined : summary,
-      });
+      })) {
+        return;
+      }
+
+      // A clean run re-arms the owner ping for the next question (AUTONOMY-2).
+      if (result.ok && !result.ask && schedule.askPingKey) {
+        this.store.setAskPingKey(schedule.id, null);
+      }
 
       if (schedule.channelId && this.outbound?.post) {
         const gate = checkChannel(schedule.channelId, this.allowlist);
-        if (gate.ok) {
+        const title = `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
+        // AUTONOMY-2: a tick that needs a human posts its question and pings
+        // the owner once per question — a repeat still posts, without a ping.
+        const pingKey = result.ask ? askPingKey(result.ask) : null;
+        const alreadyPinged =
+          pingKey !== null && schedule.askPingKey === pingKey;
+        const ask = result.ask
+          ? formatAskReply({
+              ask: result.ask,
+              owner: alreadyPinged ? null : this.owner,
+              context: result.summary,
+              prefix: `${title}:`,
+            })
+          : null;
+        if (gate.ok && ask) {
+          if (!ask.ownerPinged && !alreadyPinged) {
+            console.warn(ASK_NO_OWNER_WARNING);
+          }
+          await this.outbound.post({
+            channelId: schedule.channelId,
+            content: ask.content,
+            mentionUserIds: ask.mentionUserIds,
+          });
+          if (ask.ownerPinged && pingKey) {
+            this.store.setAskPingKey(schedule.id, pingKey);
+          }
+        } else if (gate.ok) {
           const status = result.ok ? "✅" : "❌";
           await this.outbound.post({
             channelId: schedule.channelId,
-            content: `${status} Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\`:\n${summary.slice(0, 1500)}`,
+            content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
           });
         }
       }
-
-      this.maybeAutoPause(schedule);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.store.markRunFinished(schedule, run, { ok: false, error: msg });
-      this.maybeAutoPause(schedule);
+      this.finish(schedule, run, { ok: false, error: msg });
     } finally {
       // Park/remove so another talk never silently reuses this cwd.
       if (workDir && projectDir) {
@@ -241,13 +350,40 @@ export class SchedulerService {
           branchName,
         });
       }
-      this.running.delete(schedule.id);
+      if (this.running.get(schedule.id)?.run.id === run.id) {
+        this.running.delete(schedule.id);
+      }
     }
   }
 
-  private maybeAutoPause(schedule: Schedule): void {
+  /**
+   * Record a run outcome once, then auto-pause after repeated failures.
+   * Returns false when the run was already recorded (e.g. abandoned).
+   */
+  private finish(
+    schedule: Schedule,
+    run: ScheduleRun,
+    result: { ok: boolean; summary?: string; error?: string },
+  ): boolean {
+    if (this.finishedRuns.has(run)) return false;
+    this.finishedRuns.add(run);
+    this.store.markRunFinished(schedule, run, result);
+    const autoPaused = this.maybeAutoPause(schedule);
+    this.onRunFinished?.({
+      scheduleId: schedule.id,
+      runId: run.id,
+      ok: result.ok,
+      error: result.error,
+      autoPaused,
+    });
+    return true;
+  }
+
+  private maybeAutoPause(schedule: Schedule): boolean {
     if (schedule.consecutiveFailures >= FAILURE_AUTO_PAUSE) {
       this.store.setStatus(schedule.id, "paused", this.nowFn());
+      return true;
     }
+    return false;
   }
 }

@@ -1,0 +1,90 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454294,
+      "digest": "4e5294ae5c92f21873732bccebf587e33e6e655085ec7bfef8dab5c444584d81",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http",
+        "title": "Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output scrubbed and fenced as untrusted data; dangerous false, minTier 1; web-search left for HI capture",
+        "description": "web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output scrubbed and fenced as untrusted data; dangerous false, minTier 1; web-search left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/web/",
+          "specs/plugins/",
+          "src/plugins/builtins.ts",
+          "tests/plugins.list.smoke.test.ts",
+          "tests/web.fetch.test.ts",
+          "tests/web.transport.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "web-fetch is registered as a typed builtin plugin (dangerous false, minTier 1) that only GETs http/https URLs; loopback, RFC1918, CGNAT, link-local incl 169.254.169.254, fe80::/10, fc00::/7, multicast, unspecified, 0.0.0.0/8, reserved and IPv4-mapped/NAT64 forms of those are refused after DNS resolution, before any connection; the connection goes to the checked IP while Host and SNI use the original name so DNS rebinding cannot swap it; redirects are followed manually (max 5) and each hop is re-checked; body is capped at 1 MiB and the whole fetch at 15s; non-text content types are refused; returned text is secret-scrubbed and fenced as untrusted data; fixture tests with injected resolver/transport and loopback-only socket tests cover every blocked range, redirect-to-private, rebinding, caps and non-http schemes; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "927a98cc72400e3e6cb525d5e1fcb259bdceaa935239437dff6ac3df6adb5ce6"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790456546,
+      "digest": "7df5878d8fd73d76dede2704938e9e793c6fe2dd95a69182662b39106fe72b69",
+      "note": "Re-approve after review fixes: dangerous=true (SAFE-1), fence-only title, no echo of server text, secret-URL refusal, connect fallback, 100k-char cap, control stripping",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http",
+        "title": "Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output control-stripped, scrubbed and fenced as untrusted data (title inside the fence, no echo of server text); URLs carrying secrets refused; 100k-char text cap; dangerous true (SAFE-1 consent), minTier 1; web-search left for HI capture",
+        "description": "web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output control-stripped, scrubbed and fenced as untrusted data (title inside the fence, no echo of server text); URLs carrying secrets refused; 100k-char text cap; dangerous true (SAFE-1 consent), minTier 1; web-search left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/web/",
+          "specs/plugins/",
+          "src/plugins/builtins.ts",
+          "tests/plugins.list.smoke.test.ts",
+          "tests/web.fetch.test.ts",
+          "tests/web.transport.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "web-fetch is registered as a typed builtin plugin (dangerous true so SAFE-1 consent applies, minTier 1) that only GETs http/https URLs; loopback, RFC1918, CGNAT, link-local incl 169.254.169.254, fe80::/10, fc00::/7, multicast, unspecified, 0.0.0.0/8, reserved and IPv4-mapped/NAT64 forms of those are refused after DNS resolution, before any connection; the connection goes to the checked IP while Host and SNI use the original name so DNS rebinding cannot swap it; redirects are followed manually (max 5) and each hop is re-checked; body is capped at 1 MiB and the whole fetch at 15s; non-text content types are refused; URLs carrying secret-looking values are refused; returned text is control-stripped, capped at 100k chars, secret-scrubbed and fenced as untrusted data with the page title inside the fence and no server-chosen text echoed outside it; fixture tests with injected resolver/transport and loopback-only socket tests cover every blocked range, redirect-to-private, rebinding, caps and non-http schemes; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "9d972470da6e41c1038852006b17d7be6d7b88c94a3d2abd2f5befd83c850d84"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790456678,
+      "digest": "9beeb9300c964cafca9f07dc7c8ac3be08050866c7f5437b0f3ec41e35b08f91",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

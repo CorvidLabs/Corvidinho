@@ -40,12 +40,14 @@ describe("plugin deny-dangerous (SAFE-1)", () => {
         name: "test-dangerous-echo",
         description: "test-only dangerous command",
         dangerous: true,
+        mutating: true,
         minTier: 1,
       },
       {
         name: "test-safe-echo",
         description: "test-only safe command",
         dangerous: false,
+        mutating: false,
         minTier: 0,
       },
     ]);

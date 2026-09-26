@@ -1,13 +1,18 @@
 /**
  * Thin slash command bodies for Discord application commands (DISCORD-4 / 7 /
- * DISCORD-SCHEDULE-1..2 / DISCORD-ANNOUNCE-1..2). Plain JSON — no live discord.js required for fixture tests.
+ * DISCORD-SCHEDULE-1..2 / DISCORD-ANNOUNCE-1..2 / ADMIN-1..3). Plain JSON — no live discord.js required for fixture tests.
  *
  * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN
- * + /schedule list|create|pause|resume|delete (single-project; skip templates).
+ * + /schedule list|create|pause|resume|delete (single-project; skip templates)
+ * + /admin users|channels|config (corvid-agent admin-commands.ts, trimmed to
+ * the captured ADMIN-1..3 surface). Channel options use STRING + autocomplete
+ * (searchable names/ids) instead of the limited native CHANNEL picker.
  */
 
 /** Discord Application Command option type: SUB_COMMAND */
 export const OPT_SUB_COMMAND = 1;
+/** Discord Application Command option type: SUB_COMMAND_GROUP */
+export const OPT_SUB_COMMAND_GROUP = 2;
 /** Discord Application Command option type: STRING */
 export const OPT_STRING = 3;
 /** Discord Application Command option type: USER */
@@ -24,8 +29,10 @@ export type SlashOptionDef = {
   name: string;
   description: string;
   required?: boolean;
-  /** Restrict CHANNEL picker (e.g. [0] = guild text). */
+  /** Restrict CHANNEL picker (e.g. [0] = guild text). Legacy; prefer STRING+autocomplete. */
   channel_types?: number[];
+  /** Enable Discord autocomplete (STRING/INTEGER/NUMBER). Max 25 choices. */
+  autocomplete?: boolean;
   options?: SlashOptionDef[];
 };
 
@@ -38,7 +45,8 @@ export type SlashCommandBody = {
 /**
  * Build the slash set: /session list|start, /status, /agents, /work,
  * /mute /unmute (DISCORD-7), /schedule list|create|pause|resume|delete
- * (DISCORD-SCHEDULE), /announce channel|show (DISCORD-ANNOUNCE).
+ * (DISCORD-SCHEDULE), /announce channel|show (DISCORD-ANNOUNCE),
+ * /admin users add | channels add|remove | config show (ADMIN-1..3).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -220,11 +228,11 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
           description: "Set or clear the announcements channel (admin)",
           options: [
             {
-              type: OPT_CHANNEL,
+              type: OPT_STRING,
               name: "channel",
-              description: "Guild text channel (picker — do not type a snowflake)",
+              description: "Search guild text channels by name or paste a snowflake id",
               required: false,
-              channel_types: [CHANNEL_TYPE_GUILD_TEXT],
+              autocomplete: true,
             },
             {
               type: OPT_BOOLEAN,
@@ -241,6 +249,79 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
         },
       ],
     },
+    {
+      name: "admin",
+      description: "Runtime allowlist admin (owner only)",
+      options: [
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "users",
+          description: "Discord user allowlist",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "add",
+              description: "Approve a user: add to [discord].users (owner only)",
+              options: [
+                {
+                  type: OPT_USER,
+                  name: "user",
+                  description: "User to approve",
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "channels",
+          description: "Discord channel allowlist",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "add",
+              description: "Add a channel to [discord].channels (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "channel",
+                  description: "Search guild text channels by name or paste a snowflake id",
+                  required: true,
+                  autocomplete: true,
+                },
+              ],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "remove",
+              description: "Remove a channel from [discord].channels (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "channel",
+                  description: "Search allowlisted channels by name or paste a snowflake id",
+                  required: true,
+                  autocomplete: true,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "config",
+          description: "Allowlist / safe config knobs",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "show",
+              description: "Show allowlists and safe config knobs (owner only)",
+            },
+          ],
+        },
+      ],
+    },
   ];
 }
 
@@ -253,5 +334,6 @@ export const SLASH_COMMAND_NAMES = [
   "unmute",
   "schedule",
   "announce",
+  "admin",
 ] as const;
 export type SlashCommandName = (typeof SLASH_COMMAND_NAMES)[number];

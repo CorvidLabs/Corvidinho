@@ -16,6 +16,7 @@ import { handleStatusCommand } from "./command-handlers/status.ts";
 import { handleWorkCommand } from "./command-handlers/work.ts";
 import { handleScheduleCommand } from "./command-handlers/schedule.ts";
 import { handleAnnounceCommand } from "./command-handlers/announce.ts";
+import { handleAdminCommand } from "./command-handlers/admin.ts";
 import {
   gateChannel,
   gateRateOrMute,
@@ -65,6 +66,14 @@ const COMMAND_HANDLERS = new Map<string, CommandEntry>([
     "unmute",
     {
       handler: handleUnmuteCommand,
+      minPermission: PermissionLevel.ADMIN,
+    },
+  ],
+  // ADMIN-1..4: floor here AND an explicit re-check inside the handler.
+  [
+    "admin",
+    {
+      handler: handleAdminCommand,
       minPermission: PermissionLevel.ADMIN,
     },
   ],

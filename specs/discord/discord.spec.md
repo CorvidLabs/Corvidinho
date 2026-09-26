@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 51
+version: 56
 status: draft
 files:
   - src/discord/types.ts
@@ -46,9 +46,17 @@ files:
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
+  - src/work/pr.ts
+  - src/work/pr-body.ts
+  - tests/work.pr.test.ts
   - src/discord/command-handlers/mute.ts
   - src/discord/command-handlers/schedule.ts
   - src/discord/command-handlers/announce.ts
+  - src/discord/command-handlers/admin.ts
+  - src/discord/admin-allowlist.ts
+  - src/discord/channel-autocomplete.ts
+  - tests/discord.admin-slash.test.ts
+  - tests/discord.channel-autocomplete.test.ts
   - src/discord/announce-store.ts
   - src/discord/announce.ts
   - tests/discord.announce.test.ts
@@ -64,6 +72,8 @@ files:
   - plugins/discord/index.ts
   - tests/discord.protocol-version.test.ts
   - tests/discord.presence.test.ts
+  - src/discord/ask-ping.ts
+  - tests/discord.ask-ping.test.ts
 
 db_tables: []
 depends_on:
@@ -79,13 +89,39 @@ depends_on:
 HEAR Discord bridge also auto-recalls MEMORY for the acting Discord user on
 spawn and prepends an inject block to the agent prompt (AGENT-7 / MEMORY-2/4 /
 REQ-discord-023) and `/announce` ops channel (DISCORD-ANNOUNCE-1..6 / REQ-discord-024), alongside image attachments, schedule, presence, and
-session worktrees.
+session worktrees. Owner-only `/admin` edits the Discord user/channel
+allowlists at runtime (ADMIN-1..4 / REQ-discord-043); channel options use
+STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
-`src/discord/index.ts`).
+`src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
+`ADMIN_AUDIT_SURFACE` (`command-handlers/admin.ts`); `planAdminListChange`,
+`commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
+`setJsonDiscordList`, `writeFileAtomic` (`admin-allowlist.ts`);
+`flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
+`SlashContext.recordAudit`.
+
+Questions and owner ping (REQ-discord-044, issue #44, AUTONOMY-1/2):
+`src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
+`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. `AgentSpawnResult`
+gains optional `ask` (validated from the `result` frame); the gateway `reply`
+takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
+users plus the replied-to author); `SchedulerService` takes `owner` and its
+outbound `post` forwards `mentionUserIds`. Schedule owner pings are deduped
+per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey`
+/ `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
+(schema v7, `SCHEMA_VERSION` 7).
+
+`src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
+throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
+`WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
+`workCommitMessage` and `buildWorkPrBody` (REQ-discord-088).
+`AgentSpawnResult.task` carries the run's verify facts from its result frame.
+`WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
+human) never ships a PR (REQ-discord-044).
 
 ## Invariants
 
@@ -103,9 +139,12 @@ slash registration with guild id PUTs guild commands then clears globals;
 ClientReady sets short Custom Status from shared package version (DISCORD-12);
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
+`/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
+`/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
+Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
@@ -132,12 +171,25 @@ scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6).
 - **Then** the prompt still includes the empty-memory one-liner nudging
   `memory-store`
 
+### Scenario: Owner approves the first user at runtime
+
+- **Given** an allowlist file with `[discord] users = []`, `roles = []`, an
+  `[owner]` section, and the owner invoking from an allowlisted channel
+- **When** the owner runs `/admin users add user:@U`
+- **Then** only the `users` line becomes `users = ["U"]` (other lines kept),
+  the live allowlist holds U without a restart, the ephemeral reply shows
+  before/after counts and warns that unlisted callers now resolve to BLOCKED,
+  and the audit chain gains `started` + `ok` rows
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | memoryStore undefined | Prompt unchanged; no inject log |
 | Blank author id | Prompt unchanged; no inject |
+| `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
+| `/admin` on unreadable/unparsable file | Ephemeral refusal naming the path; file untouched |
+| `/admin` audit trail unavailable | Ephemeral refusal (SAFE-5 fail closed); nothing changed |
 
 ## Dependencies
 
@@ -171,7 +223,16 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | restart-recovery-for-work-tasks-issue-87-captured-slice-session-worktree-3-on-bridge-start-work-tasks-left-queued-or: Restart recovery for /work tasks (issue #87 captured slice, SESSION-WORKTREE-3): on bridge start, work tasks left queued or running by a dead process are marked failed with an honest summary and their abandoned talk is ended (worktree parked, session dropped) so /status never shows ghost running work and no later talk reuses the stale cwd; durable queue, repo locks and resume stay draft AUTONOMOUS-14 |
 | 2026-09-26 | safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by: SAFE-5 tamper-evident audit trail (issue #95 captured slice): append-only audit_log (schema v5, UPDATE/DELETE blocked by triggers) with an HMAC-SHA256 chain keyed by CORVIDINHO_AUDIT_HMAC_KEY from the bot VM env (plain SHA-256 integrity chain when unset); runPlugin records every dangerous plugin run (started then ok/error, fail closed if the intent cannot be recorded) and denied close calls, storing action, actor, surface, args digest and outcome, never raw args; verify at bridge start and a chain-status line in /status; busy_timeout on the shared DB; tests isolate the data dir; draft SAFE-17 Discord verify command left for HI capture |
 | 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
+| 2026-09-26 | discord-admin-announce-channel-string-autocomplete-searchable-name-id-admin-2-discord-announce-2-v0-0-16: Discord /admin channels add|remove + /announce channel STRING+autocomplete searchable by name/id (≤25); replaces limited CHANNEL picker; package 0.0.16 |
+| 2026-09-26 | discord-admin-slash-for-runtime-allowlist-admin-issue-43-captured-admin-1-4-owner-only-admin-users-add-channels-add: Discord /admin slash for runtime allowlist admin (issue #43 captured ADMIN-1..4): owner-only /admin users add, channels add\|remove, config show; persists to the allowlist file the bridge already reads (atomic temp+rename, other sections and comments kept) and updates the live allowlist without restart; env values read-only at runtime; empty stays deny-all; SAFE-5 audit rows for mutations |
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
 | 2026-09-26 | enrich-formatbridgeliveannouncement-with-5-changelog-bullets-for-discord-announce-4-standing-order-package-0-0-11: Enrich formatBridgeLiveAnnouncement with ≤5 CHANGELOG bullets for DISCORD-ANNOUNCE-4 standing order; package 0.0.11 |
 | 2026-09-26 | watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared: WATCH durable SessionStore (issue #37 slice 1, SESSION-1..3): WATCH sessions keyed by owner/repo#number persist in the shared SQLite DB (schema v6 watch_sessions) with the same soft TTL as Discord; activity keeps the session, idle past TTL starts fresh, sessions reload on restart; github watch opens the shared DB (in-memory for dry-run without a data dir and tests); topic scrubbed per SAFE-6; turn persistence/replay and summaries stay follow-ups |
 | 2026-09-26 | safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a: SAFE-8 daily spend cap (issue #98 captured slice): optional CORVIDINHO_DAILY_SPEND_CAP_USD caps provider (LLM) spend over a rolling 24h; each OpenAI-compatible call is priced from a per-model table, reserved against a spend_ledger in the shared SQLite DB before it is sent and refused with a clear error when it would break the cap, then settled from provider-reported token usage; unpriced models are refused while a cap is set; no cap means no behavior change; doctor shows spend vs the cap (AUTONOMOUS-8); ledger provider/model columns are SAFE-6 scrubbed; draft SAFE-14..16 (80% warn, per-provider caps, ask at 100%) left for HI capture |
+| 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
+| 2026-09-26 | headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord: Headless schedule daemon (issue #108 captured slice CLI-8 / AUTONOMOUS-4): corvidinho daemon ticks schedules without Discord, single-instance lock in the data dir, clean SIGTERM/SIGINT shutdown, JSON-line logs, systemd doc; schedule ticks claim each due run atomically in SQLite so a daemon and a bridge on one data dir never double-fire or clobber each other |
+| 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
+| 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
+| 2026-09-26 | work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only: /work opens a draft PR from its verified worktree (issue 88, AUTONOMOUS-3, GITHUB-2, GITHUB-5, AGENT-4): after a /work run, only when git-commit, git-push and github-pr-create are allowlisted for non-interactive use, commit and push the talk branch and open a draft PR through the existing git and github plugins with a description built from the real diff and the verify result; otherwise reply plainly why no PR was opened |
+| 2026-09-26 | work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched: /work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD) |
+| 2026-09-26 | discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord: Discord searchable channel STRING+autocomplete for /admin channels add\|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17 |

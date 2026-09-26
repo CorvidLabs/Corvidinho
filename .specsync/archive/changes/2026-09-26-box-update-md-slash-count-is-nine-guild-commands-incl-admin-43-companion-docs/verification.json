@@ -1,0 +1,32 @@
+{
+  "timestamp": 1790456201,
+  "commit": "3b5d39b31393c044cddc284f5030b0be996040e5",
+  "contract_digest": "de1f9a627b74df6c54ccbff178d3cd43418bed9b0f41e782b1b5c9e1bfc2d8a0",
+  "execution_digest": "e79327c3e21f52a7dec0c0b9af3ae976fb0ae7104c12d82941e378f5e0ff8272",
+  "workspace_digest": "36153202a4ccac81da4d0f4488cf312667e79207b2dc25056c5c08545fd57a2b",
+  "acceptance_input_digest": "4a50c7103f36678223f6e89da5e45398f19e0f6a0b22afd2a92803f69691c1a9",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "docs/BOX-UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3e8fa8e160b0c9710dc21e9f5dab103d5e724b31ad75706c6d7072dc1ff3a94f",
+        "entry_digest": "39db99edae125f46689810484924018cdf64735a9ab80d79fdff64c48c6e4415",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

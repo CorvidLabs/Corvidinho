@@ -1,6 +1,12 @@
 /**
  * ScheduleStore — SQLite-backed recurring schedules (DISCORD-SCHEDULE).
  * Steal shape from corvid-agent server/db/schedules.ts (thin single-project).
+ *
+ * The bridge and `corvidinho daemon` may share one data dir (CLI-8 /
+ * AUTONOMOUS-4): tickers `refresh()` from SQLite, `claimRun()` a due run with
+ * a compare-and-set so it fires once, and every update writes only the
+ * columns it owns so one process never overwrites another's pause/resume or
+ * run counters with a stale cached row.
  */
 
 import type { Database } from "bun:sqlite";
@@ -25,6 +31,12 @@ export type Schedule = {
   nextRunAt?: number;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Digest of the question the owner was last pinged about (AUTONOMY-2):
+   * the same question pings once until a run succeeds, the schedule is
+   * paused/resumed, or the question changes.
+   */
+  askPingKey?: string;
 };
 
 export type ScheduleRunStatus =
@@ -75,6 +87,7 @@ type ScheduleRow = {
   next_run_at: number | null;
   created_at: number;
   updated_at: number;
+  ask_ping_key?: string | null;
 };
 
 function rowToSchedule(r: ScheduleRow): Schedule {
@@ -94,6 +107,7 @@ function rowToSchedule(r: ScheduleRow): Schedule {
     nextRunAt: r.next_run_at ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    askPingKey: r.ask_ping_key ?? undefined,
   };
 }
 
@@ -107,16 +121,31 @@ export class ScheduleStore {
 
   constructor(opts: { db?: Database } = {}) {
     this.db = opts.db;
-    if (this.db) this.loadFromDb();
+    this.refresh();
   }
 
-  private loadFromDb(): void {
+  /**
+   * Re-read schedules from SQLite so rows another process created, paused,
+   * resumed, deleted or ran are seen (bridge + daemon on one data dir).
+   * Cached objects are updated in place, so an in-flight run keeps the live
+   * object. No-op for the in-memory store.
+   */
+  refresh(): void {
     if (!this.db) return;
     const rows = this.db
       .query("SELECT * FROM schedules ORDER BY created_at ASC")
       .all() as ScheduleRow[];
-    this.memory.clear();
-    for (const r of rows) this.memory.set(r.id, rowToSchedule(r));
+    const seen = new Set<string>();
+    for (const r of rows) {
+      seen.add(r.id);
+      const fresh = rowToSchedule(r);
+      const cached = this.memory.get(r.id);
+      if (cached) Object.assign(cached, fresh);
+      else this.memory.set(r.id, fresh);
+    }
+    for (const id of [...this.memory.keys()]) {
+      if (!seen.has(id)) this.memory.delete(id);
+    }
   }
 
   list(): Schedule[] {
@@ -189,32 +218,6 @@ export class ScheduleStore {
     );
   }
 
-  private persistUpdate(s: Schedule): void {
-    if (!this.db) return;
-    this.db.run(
-      `UPDATE schedules SET
-        name = ?, description = ?, cron_expression = ?, project = ?, prompt = ?,
-        channel_id = ?, status = ?, execution_count = ?, consecutive_failures = ?,
-        last_run_at = ?, next_run_at = ?, updated_at = ?
-      WHERE id = ?`,
-      [
-        scrubSecrets(s.name),
-        scrubSecrets(s.description),
-        s.cronExpression,
-        s.project,
-        scrubSecrets(s.prompt),
-        s.channelId ?? null,
-        s.status,
-        s.executionCount,
-        s.consecutiveFailures,
-        s.lastRunAt ?? null,
-        s.nextRunAt ?? null,
-        s.updatedAt,
-        s.id,
-      ],
-    );
-  }
-
   setStatus(id: string, status: ScheduleStatus, now = Date.now()): Schedule | undefined {
     const s = this.memory.get(id);
     if (!s) return undefined;
@@ -223,8 +226,28 @@ export class ScheduleStore {
     if (status === "active") {
       s.nextRunAt = getNextCronDate(s.cronExpression, new Date(now)).getTime();
     }
-    this.persistUpdate(s);
+    // Pause/resume re-arms the owner ping (AUTONOMY-2 dedupe).
+    s.askPingKey = undefined;
+    // Only the columns this mutation owns — never a stale full row.
+    this.db?.run(
+      "UPDATE schedules SET status = ?, next_run_at = ?, updated_at = ?, ask_ping_key = NULL WHERE id = ?",
+      [s.status, s.nextRunAt ?? null, s.updatedAt, s.id],
+    );
     return s;
+  }
+
+  /**
+   * Record (or clear with `null`) the digest of the question the owner was
+   * last pinged about for this schedule (AUTONOMY-2 dedupe). Writes only
+   * that column.
+   */
+  setAskPingKey(id: string, key: string | null): void {
+    const s = this.memory.get(id);
+    if (s) s.askPingKey = key ?? undefined;
+    this.db?.run("UPDATE schedules SET ask_ping_key = ? WHERE id = ?", [
+      key,
+      id,
+    ]);
   }
 
   delete(id: string): boolean {
@@ -251,6 +274,49 @@ export class ScheduleStore {
     schedule: Schedule,
     now = Date.now(),
   ): ScheduleRun {
+    return this.startRun(schedule, now, false) as ScheduleRun;
+  }
+
+  /**
+   * Claim a due run for this process: advances next_run_at only when the row
+   * is still active with the next_run_at this process last saw. Returns null
+   * when another ticker on the same data dir already claimed it, or it was
+   * paused/deleted meanwhile — so each due run fires exactly once.
+   */
+  claimRun(schedule: Schedule, now = Date.now()): ScheduleRun | null {
+    return this.startRun(schedule, now, true);
+  }
+
+  private startRun(
+    schedule: Schedule,
+    now: number,
+    compareAndSet: boolean,
+  ): ScheduleRun | null {
+    // Advance next_run before work so we do not double-fire if tick overlaps.
+    const next = getNextCronDate(
+      schedule.cronExpression,
+      new Date(now),
+    ).getTime();
+    if (this.db) {
+      const cas = compareAndSet
+        ? " AND status = 'active' AND next_run_at IS ?"
+        : "";
+      const params: Array<number | string | null> = [now, next, now, schedule.id];
+      if (compareAndSet) params.push(schedule.nextRunAt ?? null);
+      const res = this.db.run(
+        `UPDATE schedules SET last_run_at = ?,
+           execution_count = execution_count + 1, next_run_at = ?, updated_at = ?
+         WHERE id = ?${cas}`,
+        params,
+      );
+      if (compareAndSet && res.changes === 0) {
+        // Lost the race (or paused/deleted elsewhere): pick up the new row.
+        this.refresh();
+        return null;
+      }
+    } else if (compareAndSet && schedule.status !== "active") {
+      return null;
+    }
     const run: ScheduleRun = {
       id: newId("srun"),
       scheduleId: schedule.id,
@@ -261,12 +327,7 @@ export class ScheduleStore {
     schedule.lastRunAt = now;
     schedule.executionCount += 1;
     schedule.updatedAt = now;
-    // Advance next_run before work so we do not double-fire if tick overlaps.
-    schedule.nextRunAt = getNextCronDate(
-      schedule.cronExpression,
-      new Date(now),
-    ).getTime();
-    this.persistUpdate(schedule);
+    schedule.nextRunAt = next;
     if (this.db) {
       this.db.run(
         `INSERT INTO schedule_runs (id, schedule_id, status, summary, error, started_at, completed_at)
@@ -293,8 +354,19 @@ export class ScheduleStore {
       schedule.consecutiveFailures += 1;
     }
     schedule.updatedAt = now;
-    this.persistUpdate(schedule);
     if (this.db) {
+      // Count in SQL, not from the cached row, so every writer agrees.
+      this.db.run(
+        `UPDATE schedules SET
+           consecutive_failures = CASE WHEN ? = 1 THEN 0 ELSE consecutive_failures + 1 END,
+           updated_at = ?
+         WHERE id = ?`,
+        [result.ok ? 1 : 0, now, schedule.id],
+      );
+      const row = this.db
+        .query("SELECT consecutive_failures FROM schedules WHERE id = ?")
+        .get(schedule.id) as { consecutive_failures: number } | null;
+      if (row) schedule.consecutiveFailures = row.consecutive_failures;
       this.db.run(
         `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?
          WHERE id = ?`,

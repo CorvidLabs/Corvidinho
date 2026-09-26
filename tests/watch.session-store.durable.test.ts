@@ -58,13 +58,14 @@ function rowCount(db: Database): number {
 }
 
 describe("schema v6 watch_sessions (REQ-discord-037)", () => {
-  test("fresh DB reaches schema 6 with watch_sessions", () => {
+  test("fresh DB reaches schema 6+ with watch_sessions", () => {
     const db = openCorvidinhoDb({ memory: true });
-    expect(SCHEMA_VERSION).toBe(6);
+    // v7 (AUTONOMY-2 schedule ping dedupe) builds on v6.
+    expect(SCHEMA_VERSION).toBe(7);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
-    expect(v.value).toBe("6");
+    expect(v.value).toBe(String(SCHEMA_VERSION));
     const t = db
       .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'watch_sessions'")
       .get();
@@ -72,7 +73,7 @@ describe("schema v6 watch_sessions (REQ-discord-037)", () => {
     db.close();
   });
 
-  test("a v5 DB migrates to 6 and keeps existing rows", () => {
+  test("a v5 DB migrates through 6 and keeps existing rows", () => {
     const db = new Database(":memory:");
     migrateCorvidinhoDb(db);
     db.exec("DROP TABLE watch_sessions");
@@ -84,7 +85,7 @@ describe("schema v6 watch_sessions (REQ-discord-037)", () => {
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
-    expect(v.value).toBe("6");
+    expect(v.value).toBe(String(SCHEMA_VERSION));
     expect(rowCount(db)).toBe(0);
     expect(
       (db.query("SELECT COUNT(*) AS c FROM discord_sessions").get() as { c: number }).c,

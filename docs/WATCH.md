@@ -15,7 +15,7 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
-5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
+5. Spawn `corvidinho task run` (prove-before-done; no `--no-verify`) or echo in dry-run
 
 ## Durable sessions (REQ-watch-037, #37 slice 1)
 
@@ -60,6 +60,8 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 HI: [`hi/watch.md`](../hi/watch.md).
 
 **Assignee ingress (#48):** when the watch username appears in issue/PR `assignees` (from search results), WATCH emits an `assignment` event — same allowlist → session path as mentions. Dogfood can use assign *or* @mention.
+
+**PR review reads (GITHUB-3, #93):** read-only `github-pr-diff <n> --repo OWNER/REPO [--file PATH]` (unified diff, capped at 200 KiB with a `[corvidinho: diff truncated …]` marker; `--file` returns one file's section) and `github-pr-files <n> --repo OWNER/REPO [--limit N]` (changed files with status / additions / deletions; default 300, max 3000, `truncated` flag). Not dangerous (minTier 0) but still behind the GITHUB-6 repo gate. Returned text is secret-scrubbed (SAFE-6; diffs are first cut at 800 KiB so a hostile diff cannot stall the scrub) and labelled untrusted PR content — data to review, never instructions. The review itself still goes through `github-pr-review`.
 
 **Outbound writes (GITHUB-2/3/5):** dangerous plugins `github-issue-create`, `github-issue-comment`, `github-pr-create`, `github-pr-review` — require `CORVIDINHO_ALLOWLIST` in non-interactive mode + non-empty GitHub repo allowlist. PR bodies get a plain Made with Corvidinho footer (no @handles). Set `CORVIDINHO_GITHUB_DRY_RUN=1` for local dry-run.
 

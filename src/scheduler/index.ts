@@ -19,6 +19,7 @@ export {
   DEFAULT_POLL_INTERVAL_MS,
   FAILURE_AUTO_PAUSE,
   SchedulerService,
+  type ScheduleRunFinished,
   type SchedulerOutbound,
   type SchedulerServiceOpts,
 } from "./service.ts";

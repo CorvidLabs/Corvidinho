@@ -10,6 +10,8 @@ import {
 
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
+import { scrubSecrets } from "../../store/scrub.ts";
 
 export async function handleWorkCommand(
   ctx: SlashContext,
@@ -76,18 +78,18 @@ export async function handleWorkCommand(
     });
   }
 
+  const actingIsAdmin =
+    resolvePermissionLevel({
+      userId: interaction.userId,
+      roleIds: interaction.roleIds,
+      allowlist: ctx.allowlist,
+      adminUserIds: ctx.adminUserIds,
+      adminRoleIds: ctx.adminRoleIds,
+      owner: ctx.owner,
+      mutedUsers: ctx.mutedUsers,
+    }) >= PermissionLevel.ADMIN;
   let result;
   try {
-    const actingIsAdmin =
-      resolvePermissionLevel({
-        userId: interaction.userId,
-        roleIds: interaction.roleIds,
-        allowlist: ctx.allowlist,
-        adminUserIds: ctx.adminUserIds,
-        adminRoleIds: ctx.adminRoleIds,
-        owner: ctx.owner,
-        mutedUsers: ctx.mutedUsers,
-      }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
       prompt: description,
       humanText: description,
@@ -135,10 +137,25 @@ export async function handleWorkCommand(
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
+  // AUTONOMOUS-3 / GITHUB-2/5 (REQ-discord-088): ship a verified worktree as
+  // a draft PR only when the PR path is allowlisted; else one plain line why.
+  // ROLES-CHAT-3: commit/push/PR are mutating — only ADMIN (the owner) may
+  // ship /work as a PR; everyone else keeps the changes on the work branch.
+  const prLine = !actingIsAdmin
+    ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR (ROLES-CHAT-3). The changes stay on the work branch."
+    : await shipWorkPr(ctx, {
+    worktreePath:
+      session.worktreeState === "active" ? session.worktreePath : undefined,
+    branch: session.worktreeBranch,
+    taskId: task.id,
+    description,
+    run: { ok: result.ok, exitCode: result.exitCode, task: result.task },
+  });
   const body = [
     `Work task \`${task.id}\` (${task.status}).`,
     `Session: \`${session.id}\`${wt}`,
     `Description: ${description.slice(0, 200)}`,
+    prLine,
     "",
     summary,
   ].join("\n");
@@ -147,5 +164,19 @@ export async function handleWorkCommand(
     await interaction.editReply({ content: body });
   } else {
     await interaction.reply({ content: body });
+  }
+}
+
+/** One reply line for the /work PR step; never throws (REQ-discord-088). */
+async function shipWorkPr(
+  ctx: SlashContext,
+  input: OpenWorkPrInput,
+): Promise<string> {
+  try {
+    const pr = await (ctx.openWorkPr ?? openWorkPr)(input);
+    return pr.line.slice(0, 400);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "error";
+    return scrubSecrets(`PR: not opened — ${msg.slice(0, 200)}`);
   }
 }

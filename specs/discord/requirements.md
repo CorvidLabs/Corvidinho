@@ -97,16 +97,19 @@ Acceptance Criteria
 
 ### REQ-discord-009
 
-Slash command set SHALL include `/schedule` (list|create|pause|resume|delete)
-and `/announce` (channel|show) in addition to session/status/agents/work/mute/unmute.
-Registration overwrites the **current** body set (eight commands), not a frozen
-six or seven. `/session start` and `/work` MAY accept an optional `project`
-string option for explicit project selection (SESSION-WORKTREE-4 /
-REQ-discord-022). No other new slash command names beyond schedule/announce.
+Slash command set SHALL include `/schedule` (list|create|pause|resume|delete),
+`/announce` (channel|show) and `/admin` (users add | channels add|remove |
+config show, REQ-discord-043) in addition to
+session/status/agents/work/mute/unmute. Registration overwrites the
+**current** body set (nine commands), not a frozen six, seven or eight.
+`/session start` and `/work` MAY accept an optional `project` string option
+for explicit project selection (SESSION-WORKTREE-4 / REQ-discord-022). No
+other new slash command names beyond schedule/announce/admin.
 
 Acceptance Criteria
 - `buildSlashCommandBodies()` includes schedule with list/create/pause/resume/delete.
-- `buildSlashCommandBodies()` includes announce with channel|show and CHANNEL picker.
+- `buildSlashCommandBodies()` includes announce with channel|show and STRING + autocomplete (searchable channel).
+- `buildSlashCommandBodies()` includes admin with users add, channels add|remove and config show groups.
 - Session start + work have optional `project`.
 - Bodies remain fixture-testable without live Discord.
 - Mute/unmute and prior DISCORD-4 commands still present.
@@ -189,14 +192,18 @@ Acceptance Criteria
 
 Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `buildCorvidinhoArgv` so `.ts` entrypoints always run under `bun`. When
-`task run --json` stdout is present, the Discord chat reply SHALL surface a
-parsed summary (state / verified / attempts + `result.summary`) rather than
-dumping raw JSON. Prefer `--no-verify` for bridge latency. Fixture tests SHALL
-cover argv shape and JSON summary parsing without a live Discord token.
+`task run` stdout is present (ndjson result frame or legacy `--json`), the
+Discord chat reply SHALL surface a parsed summary (state / verified /
+attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
+`--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
+agent loop still skips the verify lane when `filesChanged` is empty so plain
+chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
+without a live Discord token.
 
 Acceptance Criteria
-- `.ts` bin → `["bun", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
-- Valid `--json` stdout → Discord body includes state and summary text.
+- `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
+- Spawn argv for Discord chat is `task run --task <prompt> --output ndjson` with **no** `--no-verify`.
+- Valid result/json stdout → Discord body includes state and summary text.
 - Unparseable stdout falls back to truncated stdout/stderr.
 - No ProcessManager; allowlists unchanged; secrets out of repo.
 
@@ -220,10 +227,11 @@ Acceptance Criteria
 ### REQ-discord-016
 
 Guild PUT overwrite SHALL register the current `buildSlashCommandBodies()` set
-(eight commands including `/announce`) then clear globals when guild id is set.
+(nine commands including `/announce` and `/admin`) then clear globals when
+guild id is set.
 
 Acceptance Criteria
-- Guild register path PUTs eight bodies then clears globals.
+- Guild register path PUTs nine bodies then clears globals.
 - Global-only path warns when guild id unset.
 - `discord register-commands` CLI still works against live Discord when configured.
 
@@ -453,7 +461,9 @@ Anthropic, Discord bot, Slack, AWS, Google, JWT, Bearer, PEM private keys) as
 `[redacted:<kind>]` before any free text is written to the shared SQLite DB:
 session topics, work task descriptions/summaries, schedule names/descriptions/
 prompts, schedule run summaries/errors, and memory keys/content (SAFE-6).
-Redaction SHALL be idempotent and leave ordinary text unchanged.
+Redaction SHALL be idempotent and leave ordinary text unchanged. Because
+callers also scrub text written by others (PR diffs, REQ-plugins-093), every
+scrub pattern SHALL run in time linear in its input.
 
 When the scrub rules tighten (`SCRUB_RULES_VERSION` increases), the next open
 of the shared DB SHALL re-scrub existing rows once and record the version in
@@ -463,6 +473,7 @@ of scope until captured.
 
 Acceptance Criteria
 - Each vendor shape is redacted; ordinary text is untouched; scrub is idempotent.
+- Hostile input (many private-key or JWT openers with no closer) scrubs in linear time.
 - Sessions, work tasks, schedules, schedule runs and memories persist scrubbed.
 - Rows written before the current rules are re-scrubbed on next open; second open is a no-op.
 - Fixture tests use runtime-built fake secrets only.
@@ -555,6 +566,45 @@ Acceptance Criteria
 - UPDATE/DELETE on `audit_log` raise an append-only error.
 - `/status` includes the audit line when the bridge has a DB.
 
+### REQ-discord-043
+
+The bridge SHALL register one owner-only `/admin` slash command with
+subcommand groups `users add` (ADMIN-1), `channels add|remove` (ADMIN-2) and
+`config show` (ADMIN-3). The dispatcher SHALL require ADMIN and the handler
+SHALL re-check ADMIN before doing anything else (ADMIN-4 / DISCORD-7); with
+no owner nobody can run it (IDENTITY-2/3).
+
+Mutations SHALL edit only `[discord].users` / `[discord].channels` in the
+allowlist file the bridge already reads (the loaded file, else
+`CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml`,
+created 0600 when missing), written atomically (temp file in the same
+directory, fsync, rename; mode kept) with every other line, section and
+comment kept. The live allowlist SHALL be recomputed as file ∪ env and
+updated in place so it applies without a restart. Env values SHALL NOT be
+written to the file or changed at runtime; the reply SHALL say so.
+
+Empty SHALL stay deny-all: adding a deny-listed id SHALL be refused, and
+removing an env-only channel SHALL be refused, as SHALL removing a channel
+when no live channel that is not also on `deny_channels` would remain (deny
+always wins, so only deny-listed channels left is the same lockout). When
+the first user is added while users and roles were both empty, the reply
+SHALL warn that unlisted callers now resolve to BLOCKED. Replies SHALL be
+ephemeral, show before/after counts and never contain tokens or secrets.
+`config show` SHALL list live/file/env counts, owner configured yes/no plus
+display, and which knobs are updatable. Each mutation SHALL append SAFE-5
+audit rows (`started` before the write, failing closed when the trail is
+unavailable, then `ok`/`error`); refusals SHALL append `denied`. The gateway
+SHALL flatten subcommand-group options.
+
+Acceptance Criteria
+- Non-owner and no-owner callers get ephemeral `not authorized` at dispatch and at the handler; the file is not written.
+- `/admin users add` writes only the users line, keeps `[owner]`/`[github]`/comments, updates the live list in place, and warns on the first user.
+- `/admin channels add` makes a new channel pass the slash gate without restart; `remove` drops it; env-only and last-channel removals are refused, and so is a removal that would leave only deny-listed channels.
+- Deny-listed ids are refused; unreadable/unparsable files are refused untouched; JSON with lossy numeric ids is refused.
+- `/admin config show` shows counts by source and updatable knobs, and no token, key or owner id.
+- Mutations append `started` + `ok` audit rows with an args digest only; an unavailable audit trail refuses the change.
+- Fixture tests only; no live Discord token or network.
+
 ### REQ-discord-037
 
 The shared SQLite store SHALL migrate to schema version 6 with a
@@ -632,4 +682,135 @@ Acceptance Criteria
 - A ledger row written with a vendor-key-looking provider or model persists redacted.
 - `SCRUB_TARGETS` contains `spend_ledger` with `provider` and `model`.
 - `rescrubDatabase` re-scrubs a raw `spend_ledger` row.
+### REQ-discord-088
+
+After a `/work` run finishes, the handler SHALL try to ship the run's active
+git worktree as a **draft** pull request (AUTONOMOUS-3 / GITHUB-2) and SHALL
+add exactly one `PR:` line to its reply, above the run summary. A PR SHALL be
+opened only when all of these hold, checked before any commit or push:
+
+- the run finished cleanly and its result frame does not report a failed
+  verify (AGENT-4);
+- the work ran in an active git worktree with a branch, and that worktree has
+  uncommitted changes or commits ahead of the merge-base with the remote
+  default branch (`refs/remotes/origin/HEAD`, else `main`), with no conflicts;
+- `git-push` and `github-pr-create` — plus `git-commit` when the tree is
+  dirty — are in the non-interactive plugin allowlist (GITHUB-5 / SAFE-1);
+- the push remote's OWNER/REPO passes the GitHub repo gate (GITHUB-6);
+- the tree passed `fledge lanes run verify --non-interactive`: taken from the
+  run's result frame when it reports `verified`, else run once in the worktree
+  before anything is pushed (AGENT-4).
+
+The steps SHALL run through the existing typed plugins with
+`nonInteractive: true` — `git-commit` (explicit paths from `git status`),
+`git-push`, then `github-pr-create --draft --head <talk branch> --base
+<default branch>` — so SAFE-1 denial and SAFE-5 audit apply. The PR body
+SHALL be built from the real diff against the merge-base (name-status file
+list, diffstat, commit subjects) plus the verify result, with repo, model and
+chat text inside code fences, and title, body and commit message SHALL be
+secret-scrubbed (SAFE-6). The Discord spawn client SHALL pass the result
+frame's `verified` / `verifySkipped` / `state` through as
+`AgentSpawnResult.task`. When a gate fails or a step errors, the `PR:` line
+SHALL say plainly why and SHALL NOT claim a PR. No new slash command, option,
+env var, table or column.
+
+Acceptance Criteria
+- A dirty verified worktree with the three plugins allowlisted is committed, pushed and opened as a draft PR whose body lists the changed files, diffstat, commits and verify result.
+- Missing allowlist entries are named in the reply and nothing is committed, pushed or verified.
+- A failed run, failed verify, scoped (non-git) dir, clean tree, conflicts or repo-gate refusal opens no PR and says why in one line.
+- An unverified run triggers one verify-lane run in the worktree before push; a failing lane ships nothing.
+- Push or PR-create failure yields a plain line and never a claimed PR.
+- Fixture tests use temp repos, a local bare remote, the dry-run github plugin and a mocked verify lane.
+- A /work by anyone other than ADMIN (the owner) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
+
+### REQ-discord-085
+
+Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
+prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
+argv MUST NOT include `--no-verify`. Empty `filesChanged` continues to skip
+verify inside the agent loop (honest `verifySkipped`); when tools report file
+changes, `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
+of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
+Discord.
+
+Acceptance Criteria
+- Discord spawn argv never includes `--no-verify`.
+- Package `0.0.13`; docs/STATUS/CHANGELOG updated.
+- Fixture tests + SpecSync + fledge verify green.
+
+### REQ-discord-108
+
+The Discord bridge and `corvidinho daemon` may tick schedules from one data
+dir at the same time (CLI-8 / AUTONOMOUS-4). Schedule ticks SHALL then stay
+correct:
+
+- Each tick SHALL re-read the `schedules` table first, so schedules created,
+  paused, resumed or deleted by another process are seen.
+- Each due run SHALL be claimed with a compare-and-set on `status = 'active'`
+  and the `next_run_at` the ticker saw. A run another ticker already claimed
+  SHALL be skipped, so each due run fires exactly once.
+- Store updates SHALL write only the columns they own. Status changes write
+  status / next_run_at / updated_at; run start writes last_run_at /
+  execution_count / next_run_at / updated_at; run finish writes
+  consecutive_failures (counted in SQL) / updated_at. A run finishing in one
+  process SHALL NOT undo a pause or resume made in another.
+- The scheduler SHALL record each run's outcome exactly once, even when a
+  shutdown abandons a run that later returns.
+
+Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
+no catch-up, auto-pause after 5 failures, and the non-blocking tick
+(DISCORD-SCHEDULE-4). No schema change.
+
+Acceptance Criteria
+- Two tickers on one DB file start a due run once; one run row, `execution_count` 1.
+- A tick sees create/pause/resume/delete made through another store handle.
+- A pause made while a run is in flight survives that run finishing.
+- Failures from two handles with stale caches still count to 2.
+- `abandonInFlight` records a stuck run as failed once; a late agent result does not record it again.
+
+### REQ-discord-044
+
+When a spawned run's `result` carries a valid `ask`, the HEAR mention/reply
+path SHALL reply to the requester with the question instead of the summary or
+a bare `failed (exit N)` line (AUTONOMY-1), and SHALL mention the configured
+owner (IDENTITY-1) on the post's first line (AUTONOMY-2). The post SHALL limit
+allowed mentions to the owner plus the replied-to author, SHALL scrub secrets
+(SAFE-6) and defang `@everyone` / `@here` in the model's text, and SHALL end
+with a hint that replying answers (DISCORD-2 continues the session). The
+thinking status SHALL end as "Needs your input" (clarify) or failed "Stuck"
+(stuck). With no owner configured the question SHALL still post with no
+mention and the bridge SHALL log a warning (IDENTITY-3).
+
+A scheduled tick whose run carries an ask SHALL post the question with the
+schedule line as prefix and the same owner mention to the schedule's channel,
+only when that channel passes the allowlist (DISCORD-SCHEDULE-3). Pings SHALL
+go only where the bridge already posts: no DMs, no new channels, no new slash
+commands.
+
+A schedule SHALL ping the owner once per question: the scheduler SHALL
+persist a digest of the pinged ask (reason plus SAFE-6 scrubbed question,
+never the text) on the schedule row (schema v7 `schedules.ask_ping_key`), and
+a later tick whose ask has the same digest SHALL still post the question but
+SHALL NOT mention anyone (`mentionUserIds: []`). The marker SHALL be cleared
+when a run succeeds without an ask or the schedule is paused or resumed, and a
+different question or reason SHALL ping again. A failed run without an ask
+SHALL keep the marker. With no owner configured no marker is recorded.
+
+A `/work` run whose result frame reports state `blocked` SHALL NOT be shipped
+as a pull request (REQ-discord-088): the PR step SHALL stop before any
+repository, plugin or verify call and its `PR:` line SHALL say the run is
+waiting for an answer (skip reason `needs-input`).
+
+Acceptance Criteria
+- Mention path: an ask reply quotes the question and carries `<@owner>` plus `mentionUserIds: [owner]`.
+- A stuck ask on a failed run replaces `failed (exit N)` with the question and a failed thinking status.
+- No owner: question posts, no mention, `mentionUserIds: []`.
+- Runs without an ask keep the plain reply with no mention restriction.
+- The spawn client passes a valid `result.ask` through and drops a malformed one.
+- Scheduler ask posts carry the schedule prefix, the question, and the owner mention.
+- The same schedule question pings once; repeat ticks post it with no mention.
+- A changed question or reason pings again; a clean run or pause/resume re-arms the ping; a failed run keeps the marker.
+- The marker persists in SQLite (schema v7) across a restart or a second ticker on one data dir.
+- A blocked `/work` run opens no PR, says it is waiting for an answer, and makes no repository, plugin or verify call.
 

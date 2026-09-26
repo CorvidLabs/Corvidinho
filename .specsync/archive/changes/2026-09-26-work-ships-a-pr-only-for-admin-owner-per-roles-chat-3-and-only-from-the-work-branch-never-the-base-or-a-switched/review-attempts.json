@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "461d10b7bbc981cba4ee7872f41b5853c057427f",
+      "contract_digest": "2a640b8571357a59bf38254a7b81d1859fca3fe67b6043d02e5ea85d13b5bcf6",
+      "execution_digest": "ef4f8313c97eee4b9787c37aec618137b9288acf875a1faeb8724d8cdcdba8d5",
+      "workspace_digest": "d3029a48087d6cced87092ec5aad052f275610e1012f4b56b45372e146c00be1",
+      "timestamp": 1790458120
+    }
+  ]
+}
