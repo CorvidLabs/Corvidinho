@@ -1,0 +1,92 @@
+{
+  "timestamp": 1790444309,
+  "commit": "17fac0e0c9d1de3ab224ec6079f08a248896e72e",
+  "contract_digest": "e2181474c4c1befa3a4f47f040f10821ccc0ec2d8b254ecd3c95e374d1eadb5c",
+  "execution_digest": "4339f0967a1615b65c4a601f9e234a0ce5033883b59c9b60c29f8d378204c126",
+  "workspace_digest": "2a86321325f985dd2dc4fb18b4d03608172b6f1ea977f3cb34652f0192f5de53",
+  "acceptance_input_digest": "bde0fc07947353cbdf672ed4f1a8bc43afa2d5514318c8addf47d8756d2c8830",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b3694e14e59e41b8f0ad451ea0193dd4e5966e3c66ff28478548d3fa3e1b4672",
+        "entry_digest": "f22f01b0c1cf2b532fe6016660ba8a9f9c9937832ccfe243cfe1f8d247411aaa",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/hi-drafts",
+        "kind": "non_file",
+        "mode": 0,
+        "payload_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "entry_digest": "3e8eb8958d9a1a2ef6a1511a0b58d1914b97d37333dcba7471538c649acca584",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/hi-drafts/ADMIN.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "08e9977998007d7ee1b38edce58495eb9ce85e1e342925ed3779587206aa6347",
+        "entry_digest": "821c1ee6054b3a523f87981973fb62846c8685d1a0b26f8532b4c1197baea228",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/hi-drafts/AUTONOMY.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8e5a4dc03da8b760cb6bf241eeeb4a72d22389a0772118fb79965139bcf6db4f",
+        "entry_digest": "6d1a5658775b57f9324b3eca12b38a75c629b1aadb0e7fb5b3a736f727a0af62",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/hi-drafts/IDENTITY.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ad66ef317e4226a06395e929abd767cf1317fc8ffdfb8651677f8eca71b0b5d8",
+        "entry_digest": "4502b3a9488ad279ab9caab0c79113d15e56cc4cbc83c2238024509a5690c897",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/hi-drafts/MEMORY.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "efc26407ebca8cc77c2194424eb75c40eaef5e231d3bf6268f6c77ac703aaa50",
+        "entry_digest": "67ea54a0344804152a23e1f084014c4cec10f826894eb0e981ef00973c8bf298",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/hi-drafts/README.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "287eef189fd633ca80e01070ba81e89fe2741872dcf832b53b17d4796be8a390",
+        "entry_digest": "316e55a74f80e2559c7ea22aabda2e1d675f45afdaf7c994db7185e9107bd4e3",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

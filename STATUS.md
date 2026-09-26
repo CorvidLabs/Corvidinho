@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress + Discord go-live + LLM tool-loop dogfood (#31) + **v0.0.2** status polish |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress + Discord go-live + LLM tool-loop dogfood (#31) + **v0.0.2** + **HI drafts pending Leif confirm** (#41–#44) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -18,6 +18,8 @@
 ## Not inventing
 
 ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1. Do not invent HI/AC.
+
+**HI drafts pending Leif confirm:** `docs/hi-drafts/` (MEMORY / IDENTITY / ADMIN / AUTONOMY) ↔ issues #41–#44. Proposals only — not captured under `hi/`.
 
 ## ROADMAP (living)
 
@@ -49,6 +51,8 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 
 | Order | Issue | Notes |
 |-------|-------|--------|
+| **Pending Leif HI confirm** | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY · [#42](https://github.com/CorvidLabs/Corvidinho/issues/42) IDENTITY · [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) ADMIN · [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) AUTONOMY | CoS next-evolution drafts under `docs/hi-drafts/` — **do not** capture into `hi/` until Leif confirms. Steal-detail siblings #36 CONTACTS, #37 SESSION |
+| Defer invent | — | Do not invent HI/AC into `hi/`; drafts-only until confirm |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** + **live on Leif's box** (corvid-agent#1110) | Token + channel allowlists on VM; bun-spawn fix for `.ts` protocol/agent (this PR) |
 | Go-live | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH poll **shipped** (code) | Needs Leif: `GITHUB_TOKEN` + `CORVIDINHO_WATCH_USERNAME` + non-empty GH allowlists; webhook follow-up when public URL exists |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
