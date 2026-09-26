@@ -59,13 +59,6 @@ rate-limit schedules backoff and skips tight re-poll.
 Missing token; missing mention username; empty repo allowlist; not authorized
 (user/repo); already processed; GitHub 403 rate-limit backoff.
 
-### SPEC SECTION files (frontmatter)
-
-Add:
-- src/watch/summary.ts
-- src/watch/spawn-log.ts
-- src/watch/rate-limit.ts
-
 ### SPEC SECTION Change Log
 
 | 2026-09-26 | watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging: WATCH-RELIABILITY-1..3 — post-run summary, spawn outcome JSONL, 403 rate-limit backoff; package 0.0.10 |

@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 8
+version: 9
 status: draft
 files:
   - src/watch/types.ts
@@ -12,6 +12,9 @@ files:
   - src/watch/agent-client.ts
   - src/watch/poller.ts
   - src/watch/ack.ts
+  - src/watch/summary.ts
+  - src/watch/spawn-log.ts
+  - src/watch/rate-limit.ts
   - src/watch/index.ts
 
 db_tables: []
