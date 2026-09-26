@@ -3,9 +3,24 @@
  * discord-image-attachments.test.ts (no live Discord token).
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
+import type { AgentRunChatOpts } from "../src/discord/agent-client.ts";
+import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
+import {
+  createNullGateway,
+  type GatewayHandlers,
+} from "../src/discord/gateway.ts";
+import { loadBuiltins } from "../src/plugins/builtins.ts";
+import { runPlugin } from "../src/plugins/run.ts";
 import {
   appendAttachmentUrls,
   buildMultimodalContent,
@@ -234,5 +249,127 @@ describe("enrichPromptWithImages (DISCORD-9 agent files)", () => {
 
   test("returns original text when no attachments", async () => {
     expect(await enrichPromptWithImages("hi", undefined)).toBe("hi");
+  });
+});
+
+function initGitRepo(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  const run = (args: string[]) => {
+    const p = Bun.spawnSync(["git", ...args], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (p.exitCode !== 0) {
+      throw new Error(
+        `git ${args.join(" ")} failed: ${new TextDecoder().decode(p.stderr)}`,
+      );
+    }
+  };
+  run(["init", "-b", "main"]);
+  run(["config", "user.email", "test@example.com"]);
+  run(["config", "user.name", "Test"]);
+  writeFileSync(join(dir, "README.md"), "# test\n");
+  run(["add", "."]);
+  run(["commit", "-m", "init"]);
+}
+
+describe("bridge writes attachments inside the session workspace (DISCORD-9 / REQ-discord-013)", () => {
+  const prevBase = process.env.WORKTREE_BASE_DIR;
+  beforeEach(() => mockFetchSuccess());
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (prevBase === undefined) delete process.env.WORKTREE_BASE_DIR;
+    else process.env.WORKTREE_BASE_DIR = prevBase;
+  });
+
+  test("agent files-read opens the image under the session cwd; git ignores it; session end deletes it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "corvidinho-img-bridge-"));
+    const project = join(root, "proj");
+    initGitRepo(project);
+    // Keep the talk worktree inside the temp root (cleaned below).
+    process.env.WORKTREE_BASE_DIR = join(root, "wts");
+    const calls: AgentRunChatOpts[] = [];
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const bridge = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: "chan-1",
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+      },
+      projectRoot: project,
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      thinkingOutbound: memoryThinkingOutbound(),
+      thinkingDebounceMs: 0,
+      thinkingTickMs: 60_000,
+      agent: {
+        async runChat(opts) {
+          calls.push(opts);
+          return {
+            ok: true,
+            sessionId: opts.sessionId,
+            summary: "ok",
+            exitCode: 0,
+          };
+        },
+      },
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        return createNullGateway();
+      },
+    });
+    try {
+      expect(bridge.ok).toBe(true);
+      if (bridge.ok !== true || !box.handlers) return;
+
+      await box.handlers.onMessage({
+        id: `imgws${Date.now()}`,
+        channelId: "chan-1",
+        authorId: "u1",
+        authorBot: false,
+        content: "@bot what is in this screenshot?",
+        mentionedBot: true,
+        attachments: [makeAttachment()],
+      });
+
+      expect(calls).toHaveLength(1);
+      const cwd = calls[0]!.cwd!;
+      expect(cwd).toBeTruthy();
+      const m = calls[0]!.prompt.match(
+        /\[image: test\.png \(image\/png[^)]*\) (\S+)\]/,
+      );
+      expect(m).not.toBeNull();
+      const imagePath = m![1]!;
+
+      // The agent's non-dangerous reader must be able to open the path it was given.
+      loadBuiltins();
+      const read = await runPlugin({
+        name: "files-read",
+        args: [imagePath],
+        cwd,
+        nonInteractive: true,
+      });
+      expect(read.error).toBeUndefined();
+      expect(read.ok).toBe(true);
+      expect(
+        imagePath.startsWith(join(cwd, ".corvidinho", "attachments") + sep),
+      ).toBe(true);
+
+      // Excluded from commits: the talk worktree stays clean.
+      const status = Bun.spawnSync(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        { cwd, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(new TextDecoder().decode(status.stdout).trim()).toBe("");
+
+      // Session end removes the attachment together with the workspace.
+      const session = [...bridge.store.bySessionId.values()][0]!;
+      await bridge.store.endSession(session);
+      expect(existsSync(imagePath)).toBe(false);
+    } finally {
+      if (bridge.ok) await bridge.stop();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

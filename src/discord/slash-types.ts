@@ -73,7 +73,8 @@ export type SlashContext = {
   post?: ChannelPost;
   /**
    * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
-   * the trail is unavailable; /admin mutations then fail closed.
+   * the trail is unavailable; /admin mutations then fail closed, as they do
+   * when this is unset (no DB).
    */
   recordAudit?: (entry: AuditEntryInput) => { seq: number };
   allowlist: AllowlistConfig;

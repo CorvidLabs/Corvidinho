@@ -110,16 +110,19 @@ Acceptance Criteria
 ### REQ-agent-133
 
 When Corvidinho spawns its own `.ts` entrypoint (Discord/WATCH agent runs,
-protocol handshake), it SHALL invoke `bun --no-env-file <bin>` so `.env*` files
-in the spawn cwd (a project worktree) are never loaded into the agent. Agent
+protocol handshake), it SHALL invoke `bun --no-env-file --config=/dev/null <bin>`
+so `.env*` files in the spawn cwd (a project worktree) are never loaded into
+the agent and Bun config (including `bunfig.toml` `preload`) is never read from
+the spawn cwd; the child's Bun config is pinned to a known-empty file. Agent
 configuration (allowlists, admin lists, keys) SHALL come only from the
 environment the parent passes (ALLOW-4 / SAFE-1). Fixture tests SHALL use
 temporary project roots so test runs create no worktrees or branches in the
 repository (SESSION-WORKTREE-3 hygiene).
 
 Acceptance Criteria
-- `.ts` spawn argv is `bun --no-env-file <bin> ...`; non-`.ts` bins unchanged.
+- `.ts` spawn argv is `bun --no-env-file --config=/dev/null <bin> ...`; non-`.ts` bins unchanged.
 - A `.env` in the spawn cwd does not reach the child.
+- A `bunfig.toml` `preload` in the spawn cwd never runs in the child.
 - `bun test` leaves no `talk/*` worktrees or branches behind.
 
 ### REQ-agent-073
@@ -254,6 +257,52 @@ Acceptance Criteria
 - The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
 - A non-ADMIN role session's catalog leaves out `delegate` even when autonomous mode is allowed; the ADMIN owner's catalog offers it (ROLES-CHAT-2/4).
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
+
+### REQ-agent-118
+
+A council SHALL deliberate in structured phases when a decision needs more
+than one voice (AUTONOMOUS-6). `runCouncil` (`src/autonomous/council.ts`)
+SHALL run, in order: **propose**, where each of N voices (2..5) answers the
+question independently; **critique**, where each voice whose proposal
+finished sees every finished proposal (its own marked as its own) and
+critiques the others; and **decide**, where one chair run synthesizes a
+decision from the finished proposals and critiques. When fewer than 2 voices
+finish the propose phase, no critique or decide run SHALL start and the
+outcome SHALL be failed. Failed critiques SHALL NOT block the decide phase.
+When the chair does not finish, the outcome SHALL be failed with an empty
+decision.
+
+Every voice and the chair SHALL run through the delegation core
+(`runDelegateChild`, REQ-agent-117) one level deeper than the lead, so each
+keeps its argv, worker env stripping, timeout / abort / exit cleanup and
+scrubbed summary. Voices SHALL run at the `read` tier by default, never above
+`tool` and never above the lead's tier (an unknown tier is refused). They
+SHALL run as non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN=0`), so
+mutating tools are absent and refused (ROLES-CHAT-2/3), and SHALL get an
+empty SAFE-1 allowlist, so a must-ask tool is always denied. At most 2 voices
+(`MAX_CONCURRENT_DELEGATES`) SHALL run at once. Each phase entry SHALL be
+SAFE-6 scrubbed and capped (1500 chars per voice entry, `DELEGATE_SUMMARY_MAX`
+for the decision). Later phases SHALL see only capped text, quoted as data
+and not as instructions. A finished run SHALL be quoted by the worker's own
+result summary (`DelegateChildOutcome.resultText`, capped at
+`DELEGATE_SUMMARY_MAX` rather than the 1800-char chat body).
+Each run SHALL get a per-voice time cap (5 min) no larger than the time left.
+The whole council SHALL have a wall-clock cap (15 min). When the cap is
+reached or the lead aborts, running voices SHALL be stopped, no later phase
+SHALL start, and the outcome SHALL be cancelled. The outcome SHALL carry the
+decision, the transcript (phase, speaker, lens, ok, state, exit code, text),
+per-phase tallies, the union of voice filesChanged, summed tokens, elapsed
+time and timeout / abort flags. The voice tier, caps and lenses are safety
+defaults. Draft AUTONOMOUS-11 (a multi-model council with a confidence
+score) is not an acceptance criterion: voices use the lead's provider and the
+council returns no confidence score.
+
+Acceptance Criteria
+- With 3 voices the runs go propose 1..3, critique 1..3, then decide, never more than 2 at once. Critique prompts contain every finished proposal, the decide prompt contains every finished proposal and critique, and the outcome is done with the chair's text as the decision.
+- A failed proposal drops that voice from critique. Fewer than 2 finished proposals ends the council failed with no critique or decide. Failed critiques still reach the chair. A failed chair gives ok=false and an empty decision. A runner that throws is a failed entry.
+- Entries and the decision are scrubbed and capped. The per-voice timeout never exceeds the voice cap or the time left. The council time cap and a lead abort stop running voices, skip later phases and give state cancelled.
+- The voice tier defaults to read, `code` is clamped to tool, a read lead clamps to read, and an unknown tier is refused.
+- The tool loop offers `council` only for an autonomous-enabled project at code tier below the depth cap, and a lead that calls it gets the decision in the tool message.
 
 ### REQ-agent-084
 

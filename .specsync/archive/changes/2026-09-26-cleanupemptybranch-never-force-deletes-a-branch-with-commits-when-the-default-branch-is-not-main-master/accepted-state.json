@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master",
+  "slug": "cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master",
+  "title": "CleanupEmptyBranch never force-deletes a branch with commits when the default branch is not main/master",
+  "description": "cleanupEmptyBranch never force-deletes a branch with commits when the default branch is not main/master",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "0f81c13648593457803513b59068008ddd07d6db",
+  "created_at": 1790461735,
+  "updated_at": 1790461842,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/worktree/manager.ts",
+    "src/worktree/cleanup.ts",
+    "tests/worktree.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "removing or parking a talk worktree with branch cleanup deletes the branch only when it has no commits off the project HEAD, and any git error keeps the branch; in a repo whose default branch is trunk (no main or master) a branch with a commit survives remove and park, and a branch with no commits of its own is still deleted"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
