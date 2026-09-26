@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9",
+  "implementation_commit": "be445a51dcf3d12e81b3f8a687aa27d94a73a02a",
+  "implementation_tree": "c7ac344897d9fd469bb94f484feee55db6f222e0",
+  "contract_digest": "4b50e276b18d03fd5d69c8a0af811ffaedd3420b37e7dacf3eb35e02c2c3af11",
+  "workspace_digest": "b1e1936b656da62e147fc70e597278815031bc13769427b3518d6b2aee2d5d5f",
+  "closing_digest": "5634ea8b1482175558ceb0548db0cc1b2e20e0595e3a42af4552b673806474d0",
+  "review_digest": "c2c16d2e65ad4280712f73421ccf75e78d5c89cb17e7e5cb6e91f22f7e09ef79",
+  "finalization_digest": "bc0c1a58cbfd4d808ce1b3fa125dd1f2b8d3e4f7b66eb976c9c98acea735f550",
+  "timestamp": 1790460805
+}

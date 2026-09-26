@@ -125,22 +125,26 @@ export async function handleSessionStart(
         owner: ctx.owner,
         mutedUsers: ctx.mutedUsers,
       }) >= PermissionLevel.ADMIN;
-    result = await ctx.agent.runChat({
-      prompt,
-      humanText: topic,
-      sessionId: session.id,
-      resume: false,
-      actingUserId: interaction.userId,
-      actingIsAdmin,
-      cwd: ctx.store.cwdFor(session),
-      onStatus: (u) => {
-        void thinking?.update({
-          tool: u.tool,
-          tokens: u.tokens,
-          description: u.message ? `⏳ ${u.message}` : undefined,
-        });
-      },
-    });
+    // Busy while the agent runs: the soft-TTL purge must not park this
+    // worktree mid-run (REQ-discord-204).
+    result = await ctx.store.runActive(session, () =>
+      ctx.agent.runChat({
+        prompt,
+        humanText: topic,
+        sessionId: session.id,
+        resume: false,
+        actingUserId: interaction.userId,
+        actingIsAdmin,
+        cwd: ctx.store.cwdFor(session),
+        onStatus: (u) => {
+          void thinking?.update({
+            tool: u.tool,
+            tokens: u.tokens,
+            description: u.message ? `⏳ ${u.message}` : undefined,
+          });
+        },
+      }),
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
     await thinking?.fail(`❌ ${msg}`, { model: llmModel });
