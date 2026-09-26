@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-leif-s-decision-129-retire-cli-1-cli-2-cli-6-cli-9-in-hi-cli-md-with-reason-no-human-cli-humans-use-discord",
+  "implementation_commit": "8c951a96e9b189b5f074fcf703e1199187d31ed9",
+  "implementation_tree": "dab8bb145733d92b5421e1b359d5c8141f1d8a1e",
+  "contract_digest": "e5b2684bcd4d1048ca1e197d40894f912b2034a68581160d65ea8bb064ca3b2d",
+  "workspace_digest": "0262e1e878ee6fb0164a032d7482fa2caedd8001ee1485da23de04e07bb98a22",
+  "closing_digest": "17f0cdb21cf168e2da0e729e2f7dda2daa623f08679cb382fd287266f677c350",
+  "review_digest": "987e05fe2df75b272e50d1ee932bd3967b9bf94ca18ce458dcae413143974c58",
+  "finalization_digest": "5aecfdf78610ef231e0de9d21d974d830472b110938a94119e0be73920de6721",
+  "timestamp": 1790451406
+}

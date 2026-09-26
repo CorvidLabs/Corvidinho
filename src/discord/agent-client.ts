@@ -7,6 +7,7 @@
 
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { extractConfirmTokens } from "../memory/confirm.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
@@ -19,6 +20,12 @@ export type AgentStatusUpdate = {
 
 export type AgentRunChatOpts = {
   prompt: string;
+  /**
+   * The human's own words for this run, before memory/image enrichment.
+   * SAFE-4 confirm tokens are taken only from here — never from `prompt`,
+   * which may carry recalled memory the model wrote. Omitted ⇒ no tokens.
+   */
+  humanText?: string;
   sessionId: string;
   resume?: boolean;
   /** Discord acting user for MEMORY ACL scope (MEMORY-ACL-1). */
@@ -56,12 +63,14 @@ export type SpawnAgentClientOpts = {
  * and reads stdout line by line; the summary comes from the `result` frame
  * (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
- * Passes CORVIDINHO_ACTING_DISCORD_USER_ID / CORVIDINHO_ACTING_IS_ADMIN for memory plugins.
+ * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
+ * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011).
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
     async runChat({
       prompt,
+      humanText,
       sessionId,
       actingUserId,
       actingIsAdmin,
@@ -87,9 +96,12 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_DISCORD_SESSION_ID: sessionId,
-          ...(actingUserId
-            ? { CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId }
-            : {}),
+          // Chat/schedule runs have no human at a terminal: SAFE-1 non-interactive.
+          CORVIDINHO_NON_INTERACTIVE: "1",
+          // Always overwrite: never inherit an actor from the bridge env (REQ-discord-021).
+          CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
+          // SAFE-4: only confirm tokens the human typed in this message count.
+          CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(humanText ?? "").join(","),
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),

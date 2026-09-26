@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.0.9
+
+### Security — memory ACL hardening (#59 follow-up) — [#128](https://github.com/CorvidLabs/Corvidinho/pull/128)
+
+- Memory plugins no longer accept `--user`, `--admin`, or `--db` from argv. In the LLM tool loop argv is model-controlled, so the model could previously read or overwrite any user's memories and self-assert ADMIN (MEMORY-ACL-1..4). The acting user and ADMIN now come only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`).
+- ADMIN is re-checked in the plugin handler: the bridge's per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` is required (scheduled runs never get ADMIN) and the live config must agree — empty `CORVIDINHO_DISCORD_ADMIN_USERS` + `_ROLES` ⇒ nobody; deny-listed/muted users are never ADMIN; admin user id, or admin roles configured (ADMIN-4).
+- `memory-forget` / `memory-override` are real two-phase (SAFE-4): run once for a confirm token (no content), then `--confirm TOKEN` from a new turn within 10 minutes. The token is HMAC-bound to op + actor + memory id + row state (+ override content) and is single-use. No schema change.
+- `memory-recall --include-deleted` is ADMIN-only.
+- Phase 2 also needs the token to appear in the human's own message (the bridge passes only human-typed tokens), so the model cannot confirm from its own memory.
+- Discord / schedule / WATCH spawns run non-interactive (SAFE-1), and the tool loop only runs tools it offered this run — a dangerous plugin can no longer be called by name.
+- Re-storing a memory key keeps the prior content as a soft-deleted row instead of overwriting it (no non-admin forget path).
+- Discord spawns always overwrite the acting env; WATCH spawns clear it.
+
+### SAFE-6 secret scrub before persist (#66) — [#130](https://github.com/CorvidLabs/Corvidinho/pull/130)
+
+- One redaction module (`src/store/scrub.ts`) on every SQLite write path: session topics, work tasks, schedules + runs, memory key/content. GitHub, OpenAI-compatible, Anthropic, Discord bot, Slack, AWS, Google, JWT, Bearer and PEM private-key shapes → `[redacted:<kind>]`.
+- Re-scrub when rules tighten: opening the DB re-scrubs stored rows once whenever `SCRUB_RULES_VERSION` increases (first start after this release scrubs rows already written by #61/#64).
+- Draft SAFE-10 (outbound replies, Discord-admin re-scrub) and Algorand mnemonics wait for HI capture.
+
+### Spawned agents ignore the project `.env` — [#133](https://github.com/CorvidLabs/Corvidinho/pull/133)
+
+- Spawns run with cwd = the talk's project worktree; Bun would auto-load that project's `.env*` into the agent. `.ts` spawns now run `bun --no-env-file`, so a worked-on repo cannot inject allowlists, admin lists or keys (ALLOW-4 / SAFE-1).
+- `bun test` no longer creates real `talk/*` worktrees next to the repo.
+
+### Restart recovery for `/work` (#87, SESSION-WORKTREE-3) — [#135](https://github.com/CorvidLabs/Corvidinho/pull/135)
+
+- On bridge start, work left queued/running by a dead process is marked failed with an honest summary and its talk ended (worktree parked). Durable queue/locks/resume stay draft AUTONOMOUS-14.
+
+### HI
+
+- CLI-1, CLI-2, CLI-6, CLI-9 retired — no human CLI; humans use Discord/GitHub (#129 → [#134](https://github.com/CorvidLabs/Corvidinho/pull/134)).
+
+### Ops
+
+- Package version **0.0.9** — presence (DISCORD-12) reads `v0.0.9` after restart.
+- **Restart the Discord bridge and `github watch`** so spawns pick up the hardened memory plugins, non-interactive SAFE-1, `--no-env-file`, and the one-time secret re-scrub. No slash re-register needed (command set unchanged). No schema migration beyond what main already had.
+- Operators running `corvidinho plugins run memory-*` by hand now set `CORVIDINHO_ACTING_DISCORD_USER_ID` (+ admin env for forget/override) instead of `--user`/`--admin`; forget/override confirm tokens must be supplied by a human.
+- Bot config belongs in the VM env / `~/.config/corvidinho/` — a `.env` inside a worked-on project is ignored by spawned agents.
+
 ## 0.0.8
 
 ### Discord `/announce` (DISCORD-ANNOUNCE-1..6)

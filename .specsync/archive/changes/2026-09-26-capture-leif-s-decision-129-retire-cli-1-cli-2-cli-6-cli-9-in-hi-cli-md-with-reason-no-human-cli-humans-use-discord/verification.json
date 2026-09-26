@@ -1,0 +1,32 @@
+{
+  "timestamp": 1790451237,
+  "commit": "8c951a96e9b189b5f074fcf703e1199187d31ed9",
+  "contract_digest": "e5b2684bcd4d1048ca1e197d40894f912b2034a68581160d65ea8bb064ca3b2d",
+  "execution_digest": "9362cdf67a2ad2299046d85603cdc536bf0c003297ac14b5262b8d64ce08667f",
+  "workspace_digest": "0262e1e878ee6fb0164a032d7482fa2caedd8001ee1485da23de04e07bb98a22",
+  "acceptance_input_digest": "61920fbda6686a1e66face63b61fd16f517d0f6a33e3f70e7ea99cff7f6bdc6a",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "hi/cli.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b2511c90dec25e364a7a43cf90a6dd3b681c65a0e4aab30e672f4bcd974c2b33",
+        "entry_digest": "595828805805fb83f3ed4a659ae76c695d8906d7f557e038e8206c016de77183",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

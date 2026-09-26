@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-cut-v0-0-9-package-0-0-9-changelog-0-0-9-section-memory-acl-hardening-128-safe-6-scrub-130-spawn-env-isolation",
+  "implementation_commit": "ebe1f69ba95a9125fb28fdffb7c60324898873ef",
+  "implementation_tree": "86a96d8ffa8c6371adc3df85138f5e95845a41c9",
+  "contract_digest": "7dc360bc92838884b8eff283d39d86a44221190026727dd61efbc35bbe677714",
+  "workspace_digest": "03fd972d38b298c91d1501ea2556a6f168326229d1a31aaac9478803fe7507a7",
+  "closing_digest": "7bb01750b6384108176f10e4d83d7f24922318a0d5f008090960aa81ac532631",
+  "review_digest": "ae2929aaad30bb43d55953872c8362747b3f186477922459639d8939e1747c07",
+  "finalization_digest": "efbebafba84c44d3992801c50da0e3fa405a558337590082930cf52ce567cf48",
+  "timestamp": 1790452187
+}

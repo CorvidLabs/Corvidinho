@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790451236,
+      "digest": "e5b2684bcd4d1048ca1e197d40894f912b2034a68581160d65ea8bb064ca3b2d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "capture-leif-s-decision-129-retire-cli-1-cli-2-cli-6-cli-9-in-hi-cli-md-with-reason-no-human-cli-humans-use-discord",
+        "title": "Capture Leif's decision (#129): retire CLI-1, CLI-2, CLI-6, CLI-9 in hi/cli.md with reason 'no human CLI; humans use Discord/GitHub'; keep CLI-7 and CLI-8 for the daemon",
+        "description": "Capture Leif's decision (#129): retire CLI-1, CLI-2, CLI-6, CLI-9 in hi/cli.md with reason 'no human CLI; humans use Discord/GitHub'; keep CLI-7 and CLI-8 for the daemon",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "hi/cli.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "HI capture only: hi/cli.md criteria retired by Leif's explicit decision; no canonical spec or code behavior changes",
+        "acceptance_criteria": [
+          "hi/cli.md lists CLI-1, CLI-2, CLI-6 and CLI-9 under Retired with the reason 'no human CLI; humans use Discord/GitHub'; CLI-3, CLI-4, CLI-5, CLI-7 and CLI-8 stay live; hi check passes; no code or canonical spec change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790451406,
+      "digest": "17f0cdb21cf168e2da0e729e2f7dda2daa623f08679cb382fd287266f677c350",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

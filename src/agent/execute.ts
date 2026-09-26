@@ -227,6 +227,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
 
   const filesChanged = new Set<string>();
   const toolNamesUsed: string[] = [];
+  // SAFE-1 / AGENT-5: the model may only call tools offered in this run's
+  // catalog (tier + danger filtered) — never an arbitrary registered name.
+  const offered = new Set(tools.map((t) => t.function.name));
   let lastText = "";
 
   const system =
@@ -311,14 +314,20 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
 
       let result;
       try {
-        result = await runPlugin({
-          name,
-          args: argv,
-          cwd,
-          json: true,
-          nonInteractive,
-          allowlist,
-        });
+        result = offered.has(name)
+          ? await runPlugin({
+              name,
+              args: argv,
+              cwd,
+              json: true,
+              nonInteractive,
+              allowlist,
+            })
+          : {
+              ok: false,
+              error: `refused: tool "${name}" is not offered in this run's catalog (SAFE-1 / capability tier)`,
+              exitCode: 2,
+            };
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         result = { ok: false, error: errMsg, exitCode: 1 };

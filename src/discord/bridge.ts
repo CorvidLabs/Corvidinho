@@ -51,6 +51,7 @@ import {
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { auditKeyFromEnv, formatAuditLine, verifyAudit } from "../audit/index.ts";
 import { MemoryStore } from "../memory/index.ts";
 import {
   ScheduleStore,
@@ -200,12 +201,32 @@ export async function startBridge(
       defaultProjectRoot: config.projectRoot,
     });
   const workStore = opts.workStore ?? new WorkStore({ db });
+  if (!opts.workStore && db) {
+    // SESSION-WORKTREE-3: work left running by a dead process is failed
+    // honestly and its abandoned talk ended (worktree parked, session
+    // dropped) so no later talk reuses it as cwd.
+    const abandoned = workStore.recoverAbandoned();
+    for (const task of abandoned) {
+      const session = task.sessionId ? store.get(task.sessionId) : undefined;
+      if (session) await store.endSession(session);
+    }
+    if (abandoned.length > 0) {
+      console.log(
+        `[discord] restart recovery: ${abandoned.length} abandoned work task(s) marked failed`,
+      );
+    }
+  }
   const scheduleStore =
     opts.scheduleStore ?? new ScheduleStore({ db });
   const memoryStore =
     opts.memoryStore ?? (db ? new MemoryStore({ db }) : undefined);
   const announceStore =
     opts.announceStore ?? (db ? new AnnounceStore(db) : undefined);
+  // SAFE-5: verify the tamper-evident audit chain at start; /status repeats it.
+  const auditLine = db
+    ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
+    : undefined;
+  if (auditLine) console.log(`[discord] ${auditLine()}`);
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -259,6 +280,7 @@ export async function startBridge(
       scheduleStore,
       memoryStore,
       announceStore,
+      auditLine,
       allowlist: config.allowlist,
       agent,
       version,
@@ -365,6 +387,9 @@ export async function startBridge(
           }) >= PermissionLevel.ADMIN;
         result = await agent.runChat({
           prompt: enrichedPrompt,
+          // Raw human text (before memory/image enrichment) — the only
+          // source of SAFE-4 confirm tokens.
+          humanText: prompt,
           sessionId: session.id,
           resume: action.kind === "continue_session",
           actingUserId: msg.authorId,

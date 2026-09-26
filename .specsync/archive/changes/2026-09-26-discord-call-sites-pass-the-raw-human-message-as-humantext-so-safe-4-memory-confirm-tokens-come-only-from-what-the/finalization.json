@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-call-sites-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-come-only-from-what-the",
+  "implementation_commit": "1eab6b863a89e4ef9fc766655e8dd75ba8059b15",
+  "implementation_tree": "71e4ef173a23ea88688144214e7229cd0e0f8fbc",
+  "contract_digest": "9cb4f43aaee122ccfc26700354ce17f21bbee9a35474168f3f30d722d82b902a",
+  "workspace_digest": "5658887469eea211231309832f9486a8aa2249a5a428b66d12ac3a4efcb72099",
+  "closing_digest": "0e1a3ee7a4aea8d79f5281833d299077a6566d45469787a3ae102b32ff0d9d4b",
+  "review_digest": "40ca70f5666e574c8a0128e00429ba138da6d4bfc6335cdeafc4036a3b78d24d",
+  "finalization_digest": "864872c8c3f9ab029d12b71c7b40d485d8735eece1bf1ae31f4c322abe655092",
+  "timestamp": 1790451339
+}

@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { startBridge, memoryThinkingOutbound } from "../src/discord/bridge.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
@@ -22,6 +25,8 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
       },
+      // Temp non-git project: never create real worktrees/branches in this repo.
+      projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
       skipProtocolCheck: true,
       thinkingOutbound: outbound,
       thinkingDebounceMs: 0,
@@ -84,6 +89,8 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
       },
+      // Temp non-git project: never create real worktrees/branches in this repo.
+      projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
       skipProtocolCheck: true,
       thinkingOutbound: outbound,
       thinkingDebounceMs: 0,

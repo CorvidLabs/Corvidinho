@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { startBridge } from "../src/discord/bridge.ts";
@@ -72,6 +75,8 @@ describe("discord bridge CLI / start semantics", () => {
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
       },
+      // Temp non-git project: never create real worktrees/branches in this repo.
+      projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
       skipProtocolCheck: true,
       agent: createEchoAgentClient(),
       gatewayFactory: async () => createNullGateway(),

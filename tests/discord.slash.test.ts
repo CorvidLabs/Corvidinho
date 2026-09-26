@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 /**
  * DISCORD-4 slash commands — fixture tests (no live Discord token).
  */
@@ -65,7 +68,11 @@ function memoryInteraction(
 }
 
 function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
-  const store = over.store ?? new SessionStore();
+  // Temp non-git project root: /session start and /work must never create
+  // real worktrees or talk/* branches in this repo during tests.
+  const store =
+    over.store ??
+    new SessionStore({ defaultProjectRoot: mkdtempSync(join(tmpdir(), "corvidinho-slash-proj-")) });
   const workStore = over.workStore ?? new WorkStore();
   return {
     store,

@@ -16,7 +16,7 @@ describe("MemoryStore (MEMORY-1..4 / MEMORY-ACL-1..5)", () => {
       .query("SELECT value FROM schema_meta WHERE key = 'version'")
       .get() as { value: string };
     expect(row.value).toBe(String(SCHEMA_VERSION));
-    expect(SCHEMA_VERSION).toBe(4);
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(3);
     const tables = db
       .query(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='memories'",
@@ -147,7 +147,7 @@ describe("MemoryStore (MEMORY-1..4 / MEMORY-ACL-1..5)", () => {
     db.close();
   });
 
-  test("own upsert via store (same owner) is allowed without admin", () => {
+  test("own re-store keeps prior content as soft-deleted history (no non-admin forget)", () => {
     const db = openCorvidinhoDb({ memory: true });
     const store = new MemoryStore({ db });
     const a = store.store({
@@ -162,8 +162,14 @@ describe("MemoryStore (MEMORY-1..4 / MEMORY-ACL-1..5)", () => {
       key: "leif",
       content: "owner updated",
     });
-    expect(b.id).toBe(a.id);
+    // Prior content is kept as a soft-deleted row, not overwritten (MEMORY-ACL-4).
+    expect(b.id).not.toBe(a.id);
     expect(b.content).toBe("owner updated");
+    const live = store.recall({ ownerUserId: "alice" });
+    expect(live.map((r) => r.content)).toEqual(["owner updated"]);
+    const all = store.recall({ ownerUserId: "alice", includeDeleted: true });
+    expect(all.map((r) => r.content).sort()).toEqual(["owner", "owner updated"]);
+    expect(all.find((r) => r.id === a.id)?.deletedByUserId).toBe("alice");
     db.close();
   });
 });

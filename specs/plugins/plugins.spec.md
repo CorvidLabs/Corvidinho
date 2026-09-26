@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 32
+version: 33
 status: draft
 files:
   - src/plugins/types.ts
@@ -9,6 +9,9 @@ files:
   - src/plugins/env.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
+  - src/audit/log.ts
+  - src/audit/index.ts
+  - tests/audit.log.test.ts
   - src/allowlist/types.ts
   - src/allowlist/load.ts
   - src/allowlist/github.ts
@@ -29,7 +32,9 @@ files:
   - plugins/files/resolvePath.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
+  - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
+  - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/search.plugins.test.ts
 
@@ -53,6 +58,23 @@ HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 
 ## Invariants
 
+Builtin plugin loaders MAY re-register after an in-process registry clear
+(test seam). Presence of an already-registered command name skips duplicate
+register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
+`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
+non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
+(GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
+plain Made with Corvidinho attribution (no @handles). Dry-run via
+CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
+`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
+Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
+keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
+no in-band override. Memory plugins take the acting user and ADMIN
+only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
+`CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
+refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
+`memory-forget` / `memory-override` are two-phase with an HMAC confirm token
+confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
@@ -103,3 +125,5 @@ and current rows for plugins host evolution.
 | 2026-09-26 | cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive: Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive |
 | 2026-09-26 | memory-discord-inject: richer memory-* argv descriptions (REQ-plugins-085) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
+| 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |
+| 2026-09-26 | safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by: SAFE-5 tamper-evident audit trail (issue #95 captured slice): append-only audit_log (schema v5, UPDATE/DELETE blocked by triggers) with an HMAC-SHA256 chain keyed by CORVIDINHO_AUDIT_HMAC_KEY from the bot VM env (plain SHA-256 integrity chain when unset); runPlugin records every dangerous plugin run (started then ok/error, fail closed if the intent cannot be recorded) and denied close calls, storing action, actor, surface, args digest and outcome, never raw args; verify at bridge start and a chain-status line in /status; busy_timeout on the shared DB; tests isolate the data dir; draft SAFE-17 Discord verify command left for HI capture |
