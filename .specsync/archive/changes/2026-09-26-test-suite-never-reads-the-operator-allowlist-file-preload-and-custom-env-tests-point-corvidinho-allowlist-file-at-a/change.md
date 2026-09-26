@@ -1,6 +1,6 @@
 ---
 id: test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 8129f4d1f055ea6ee19bfd9a013797fe5b140c53
 ---

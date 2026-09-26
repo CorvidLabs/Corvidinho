@@ -7,11 +7,11 @@
   "title": "Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file contributes nothing at the GitHub plugin gate (REQ-plugins-253)",
   "description": "Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file contributes nothing at the GitHub plugin gate (REQ-plugins-253)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "8129f4d1f055ea6ee19bfd9a013797fe5b140c53",
   "created_at": 1790464133,
-  "updated_at": 1790464897,
+  "updated_at": 1790465038,
   "affected_specs": [
     "plugins"
   ],
