@@ -1,0 +1,44 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454680,
+      "digest": "85a0d39230adf9925cb41be271ce92e3b4c6367512e54cb0bd8605663014781e",
+      "note": "Leif standing order: enrich bridge-live announce from CHANGELOG (DISCORD-ANNOUNCE-4 / REQ-discord-025)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "enrich-formatbridgeliveannouncement-with-5-changelog-bullets-for-discord-announce-4-standing-order-package-0-0-11",
+        "title": "Enrich formatBridgeLiveAnnouncement with ≤5 CHANGELOG bullets for DISCORD-ANNOUNCE-4 standing order; package 0.0.11",
+        "description": "Enrich formatBridgeLiveAnnouncement with ≤5 CHANGELOG bullets for DISCORD-ANNOUNCE-4 standing order; package 0.0.11",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/discord.md",
+          "package.json",
+          "src/discord/announce.ts",
+          "tests/discord.announce.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "formatBridgeLiveAnnouncement returns version header plus ≤5 CHANGELOG bullets for the package version; falls back to package description or tip when CHANGELOG missing; posts still only via postAnnouncement to configured announce channel; package 0.0.11; fixture tests + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "0a832eee11c2b9b0b22542c701c9b55406d70060d6d539c9870ff49981ea1849"
+      }
+    }
+  ],
+  "reopenings": []
+}

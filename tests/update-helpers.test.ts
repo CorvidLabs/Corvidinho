@@ -85,6 +85,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).toContain("rate-limit");
   });
 
+  test("extract_changelog_section finds 0.0.11", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.11`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ANNOUNCE-4");
+    expect(r.stdout).toContain("CHANGELOG bullets");
+  });
+
   test("extract_changelog_section finds 0.0.9", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.9`,
@@ -126,10 +135,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.10", () => {
+  test("package.json is 0.0.11", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.10");
+    expect(pkg.version).toBe("0.0.11");
   });
 });
