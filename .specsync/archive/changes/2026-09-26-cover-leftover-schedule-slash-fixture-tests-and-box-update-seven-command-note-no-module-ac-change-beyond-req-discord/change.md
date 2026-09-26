@@ -1,6 +1,6 @@
 ---
 id: cover-leftover-schedule-slash-fixture-tests-and-box-update-seven-command-note-no-module-ac-change-beyond-req-discord
-state: implementing
+state: archived
 type: documentation
 base_commit: 79961525e42f6c2df06e2ac410f297bc89116062
 ---
