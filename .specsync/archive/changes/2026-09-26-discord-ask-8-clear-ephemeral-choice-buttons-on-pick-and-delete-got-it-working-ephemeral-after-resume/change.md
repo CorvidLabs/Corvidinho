@@ -1,6 +1,6 @@
 ---
 id: discord-ask-8-clear-ephemeral-choice-buttons-on-pick-and-delete-got-it-working-ephemeral-after-resume
-state: implementing
+state: archived
 type: feature
 base_commit: 4f489b6c11c4b1665c3f5e1c4c06348042d5be17
 ---
