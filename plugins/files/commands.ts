@@ -240,9 +240,11 @@ export const filesCommands: PluginCommand[] = [
             };
           }
         }
+        // Function replacer: --new is literal data, so `$$`, `$&`, `$'`, `` $` ``
+        // are never expanded as String.replace patterns (matches --replace-all).
         const next = replaceAll
           ? original.split(oldStr).join(newStr)
-          : original.replace(oldStr, newStr);
+          : original.replace(oldStr, () => newStr);
 
         const allowLarge = hasFlag(ctx.args, "--allow-large");
         const boom = checkSizeExplosion(
