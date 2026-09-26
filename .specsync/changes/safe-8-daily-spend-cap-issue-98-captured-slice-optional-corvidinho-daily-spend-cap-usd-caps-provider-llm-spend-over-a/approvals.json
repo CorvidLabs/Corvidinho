@@ -140,6 +140,53 @@
         "cli": "6bdbdfb7ee20a025a42eb7e07d2ce6686edf0302c8f7e64553aa0b2615b7606f",
         "discord": "6ac0652bbe223ac91bdc76365a67f61098d5d526634a11cdc79dfb8b94aac362"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790463714,
+      "digest": "c69983d19c1b0fcf134c122b97ece8b254ff951b29dc871d76d0db6c7a8747f6",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a",
+        "title": "SAFE-8 daily spend cap (issue #98 captured slice): optional CORVIDINHO_DAILY_SPEND_CAP_USD caps provider (LLM) spend over a rolling 24h; each OpenAI-compatible call is priced from a per-model table, reserved against a spend_ledger in the shared SQLite DB before it is sent and refused with a clear error when it would break the cap, then settled from provider-reported token usage; unpriced models are refused while a cap is set; no cap means no behavior change; doctor shows spend vs the cap (AUTONOMOUS-8); ledger provider/model columns are SAFE-6 scrubbed; draft SAFE-14..16 (80% warn, per-provider caps, ask at 100%) left for HI capture",
+        "description": "SAFE-8 daily spend cap (issue #98 captured slice): optional CORVIDINHO_DAILY_SPEND_CAP_USD caps provider (LLM) spend over a rolling 24h; each OpenAI-compatible call is priced from a per-model table, reserved against a spend_ledger in the shared SQLite DB before it is sent and refused with a clear error when it would break the cap, then settled from provider-reported token usage; unpriced models are refused while a cap is set; no cap means no behavior change; doctor shows spend vs the cap (AUTONOMOUS-8); ledger provider/model columns are SAFE-6 scrubbed; draft SAFE-14..16 (80% warn, per-provider caps, ask at 100%) left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "specs/agent/",
+          "specs/cli/",
+          "specs/discord/",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spend.ts",
+          "src/cli.ts",
+          "src/store/scrub.ts",
+          "tests/agent.spend.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With CORVIDINHO_DAILY_SPEND_CAP_USD unset the provider fetch is untouched and no ledger/DB is opened; with it set, each OpenAI-compatible call is priced from the per-model table and its estimate (request bytes/3 prompt tokens + 4096-token reply reserve) is reserved in spend_ledger inside one IMMEDIATE transaction, and the call is refused before sending (SpendCapRefusal, clear message naming spent, estimate, cap and env var; surfaced as the task summary) when 24h spend + estimate would exceed the cap; the reservation settles to the provider-reported usage cost (actual), stays at the estimate when usage is missing or the request errored at the network, and drops to 0 on an HTTP error reply; spend older than 24h no longer counts; an unpriced model or an invalid cap refuses every call (never free, fail closed); spend_ledger provider/model are scrubSecrets-ed and in SCRUB_TARGETS; doctor prints a spend line (spend vs cap, calls, estimated calls, unpriced-model warning) only when a cap is set and never fails doctor; fixture tests with mocked fetch, no network"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "3e41d50c251b64df87136b735f61acdcfacb2aa0fc5af3ee69558098f99e922e",
+        "cli": "6bdbdfb7ee20a025a42eb7e07d2ce6686edf0302c8f7e64553aa0b2615b7606f",
+        "discord": "4e93bed63d20f719dc3a0fff7bfd372e13a965f8e4653a3724d4bd4b867e3a29"
+      }
     }
   ],
   "reopenings": []
