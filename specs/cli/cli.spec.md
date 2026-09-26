@@ -75,4 +75,4 @@ Consumes agent module for runTask / loadAgentConfig.
 ## Change Log
 
 task run LLM tool loop + --tier (#31) (2026-09-26, corvid-agent).
-| 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
+
