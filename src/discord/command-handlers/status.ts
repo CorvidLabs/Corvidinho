@@ -42,6 +42,8 @@ export type StatusReportInput = {
   announceChannelId?: string | null;
   /** IDENTITY-1 owner line (`formatOwnerStatus`); omitted when undefined. */
   ownerLine?: string;
+  /** SAFE-5 — audit chain verify line (bridge supplies). */
+  auditLine?: string;
 };
 
 /** Pure formatter for `/status` body — fixture-friendly. */
@@ -63,6 +65,9 @@ export function formatStatusReport(input: StatusReportInput): string {
   ];
   if (input.ownerLine) {
     lines.push(input.ownerLine);
+  }
+  if (input.auditLine) {
+    lines.push(input.auditLine);
   }
   if (input.gitTipSha) {
     lines.push(`Git tip: ${input.gitTipSha}`);
@@ -93,6 +98,7 @@ export async function handleStatusCommand(
     gitTipSha: ctx.gitTipSha,
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
     ownerLine: formatOwnerStatus(ctx.owner),
+    auditLine: ctx.auditLine?.(),
   });
 
   await interaction.reply({

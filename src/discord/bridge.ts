@@ -51,6 +51,7 @@ import {
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { auditKeyFromEnv, formatAuditLine, verifyAudit } from "../audit/index.ts";
 import { MemoryStore } from "../memory/index.ts";
 import {
   ScheduleStore,
@@ -221,6 +222,11 @@ export async function startBridge(
     opts.memoryStore ?? (db ? new MemoryStore({ db }) : undefined);
   const announceStore =
     opts.announceStore ?? (db ? new AnnounceStore(db) : undefined);
+  // SAFE-5: verify the tamper-evident audit chain at start; /status repeats it.
+  const auditLine = db
+    ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
+    : undefined;
+  if (auditLine) console.log(`[discord] ${auditLine()}`);
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -274,6 +280,7 @@ export async function startBridge(
       scheduleStore,
       memoryStore,
       announceStore,
+      auditLine,
       allowlist: config.allowlist,
       agent,
       version,

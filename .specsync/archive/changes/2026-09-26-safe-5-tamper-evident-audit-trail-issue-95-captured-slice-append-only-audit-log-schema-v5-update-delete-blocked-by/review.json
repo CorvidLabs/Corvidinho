@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "2b1e9a15564c27e1583cf2021dcc3f328faa6b1f",
+  "contract_digest": "c7568922d9b00d65f9a0537d271ace03f13bbaa9da2c1c60519a08a46e83941e",
+  "execution_digest": "5637209c8a0714f5bc84c23fc45b6a178a8c7dfb678a4be85c28d0f087acb012",
+  "workspace_digest": "63a22051a96d0551bc5cbe2126ce689ec1a61109d38a6ec2ddf35a549192fecc",
+  "timestamp": 1790452303
+}
