@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version",
+  "slug": "hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version",
+  "title": "HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14",
+  "description": "HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "6116dd1c2c8773880f3f5183dad4b27dfb87303a",
+  "created_at": 1790441750,
+  "updated_at": 1790441972,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/image-attachments.ts",
+    "src/discord/protocol-version.ts",
+    "src/discord/types.ts",
+    "src/discord/gateway.ts",
+    "src/discord/bridge.ts",
+    "src/discord/message-router.ts",
+    "src/discord/index.ts",
+    "STATUS.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/requirements.md",
+    "specs/discord/testing.md",
+    "specs/discord/context.md",
+    "tests/discord.image-attachments.test.ts",
+    "tests/discord.protocol-version.test.ts",
+    "tests/discord.bridge.cli.test.ts",
+    "tests/discord.router.test.ts",
+    "tests/discord.admin-reauth.test.ts",
+    "tests/discord.slash.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Images attached in Discord are downloaded (MIME allowlist jpeg/png/gif/webp; 20MB and 5-image caps) and written under /tmp/corvidinho-images so the agent prompt includes real local file paths the agent can look at (DISCORD-9; steal corvid-agent image-attachments + Merlin localPath). Bridge protocol-version.ts (Merlin-shaped) hard-fails startup on verifiable version mismatch and soft-continues when unverifiable (DISCORD-10). Fixture tests without live Discord token; allowlists stay default-deny; no ProcessManager; STATUS Done cites #14→this PR when merged."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
