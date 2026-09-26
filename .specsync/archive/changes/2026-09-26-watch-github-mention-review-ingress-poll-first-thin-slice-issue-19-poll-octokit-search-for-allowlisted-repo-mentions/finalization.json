@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions",
+  "implementation_commit": "735985ef1d1f0b7c08ba7e93913de108cecd91d1",
+  "implementation_tree": "688fc535e0367f541fadfe767df24bcc0afae03a",
+  "contract_digest": "e9a4e5123c2bf9f4ae68a97542dcc28ec8fc28805bf6c44741488e095d038370",
+  "workspace_digest": "9f03b698e1ba5f71c984ddec609d14545f2df1cc20ef165b8040ace0bc2eff56",
+  "closing_digest": "d2d4710a48d100db58140e98120853a67b812df69fd5717b8879ddba4a327d2a",
+  "review_digest": "d70be7506117775b30041a72bfa0a9130a34b8e27863465349ff3c89bb714775",
+  "finalization_digest": "351facf657104ac61ff906c3bca4a57f750b6d329101592b0671ba56f952609a",
+  "timestamp": 1790442485
+}
