@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "9ce144c2e7a1247cd5d0eb03b7520eb049af7925",
+  "contract_digest": "b78ebad651e9e0f3a1481acb69dbe9db841711fa840360769504796c5039f424",
+  "execution_digest": "cdcd8f30fbc61f0f71fcedbec54d8abc068920a5bd519b51fd714c9437a88fc5",
+  "workspace_digest": "af45576a35a809e703d275015c69e79ef387c0da579d051b3c5d181b5b7f9e3c",
+  "timestamp": 1790451374
+}

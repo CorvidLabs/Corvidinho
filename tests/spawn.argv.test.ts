@@ -6,6 +6,7 @@ describe("buildCorvidinhoArgv", () => {
   test("prefixes bun for .ts bins", () => {
     expect(buildCorvidinhoArgv("/repo/src/cli.ts", ["--protocol-version"])).toEqual([
       "bun",
+      "--no-env-file",
       "/repo/src/cli.ts",
       "--protocol-version",
     ]);
@@ -29,8 +30,9 @@ describe("buildCorvidinhoArgv", () => {
       "--json",
     ]);
     expect(argv[0]).toBe("bun");
-    expect(argv[1]).toBe("src/cli.ts");
-    expect(argv.slice(2)).toEqual([
+    expect(argv[1]).toBe("--no-env-file");
+    expect(argv[2]).toBe("src/cli.ts");
+    expect(argv.slice(3)).toEqual([
       "task",
       "run",
       "--no-verify",
@@ -70,5 +72,27 @@ describe("summarizeTaskRunOutput", () => {
   test("falls back to stderr / exit when stdout empty", () => {
     expect(summarizeTaskRunOutput("", "boom", 1)).toBe("boom");
     expect(summarizeTaskRunOutput("", "", 7)).toBe("(exit 7)");
+  });
+});
+
+describe("spawned agents ignore the project .env (ALLOW-4 / SAFE-1)", () => {
+  test("a .env in the spawn cwd does not reach the child", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-noenv-"));
+    try {
+      writeFileSync(join(dir, ".env"), "CORVIDINHO_ALLOWLIST=memory-forget\n");
+      const bin = join(dir, "probe.ts");
+      writeFileSync(bin, "console.log(`allow=[${process.env.CORVIDINHO_ALLOWLIST ?? \"unset\"}]`);\n");
+      const env = { ...process.env };
+      delete env.CORVIDINHO_ALLOWLIST;
+      const proc = Bun.spawn(buildCorvidinhoArgv(bin), { cwd: dir, env, stdout: "pipe" });
+      const out = await new Response(proc.stdout).text();
+      await proc.exited;
+      expect(out).toContain("allow=[unset]");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
