@@ -227,3 +227,18 @@ Acceptance Criteria
 - CHANGELOG has a 0.0.9 section covering shell-exec + SAFE-3.
 - STATUS ROADMAP marks #83 done; next = remaining M3 plugins (git, …).
 
+### REQ-cli-143
+
+`task run --task <text>` SHALL treat the next argv item as the task text even
+when it starts with `-`, and `--task=<text>` SHALL keep text that spans
+lines. The bridges pass untrusted Discord and GitHub text as that value, so
+text that looks like a flag (for example `--tier=code`, `--no-verify`,
+`--max-retries=9`) SHALL NOT be parsed as a CLI flag and SHALL NOT change
+the capability tier, verify, or retry settings (AGENT-5, SAFE-1).
+
+Acceptance Criteria
+- A `--task` value starting with `-` is kept verbatim as the task text.
+- Flag-looking task text never sets tier, max-retries, JSON, or no-verify.
+- `--task=` with newlines keeps every line.
+- Normal `--task TEXT --tier code --json` parsing is unchanged.
+
