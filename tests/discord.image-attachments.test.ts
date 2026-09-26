@@ -296,6 +296,8 @@ describe("bridge writes attachments inside the session workspace (DISCORD-9 / RE
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        // Missing file: never read the operator's allowlist (ALLOW-4).
+        CORVIDINHO_ALLOWLIST_FILE: join(root, "no-allowlist.toml"),
       },
       projectRoot: project,
       skipProtocolCheck: true,

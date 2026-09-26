@@ -6,7 +6,7 @@
 
 import {
   checkGithubRepo,
-  configFromEnvOnly,
+  loadAllowlist,
   type AllowlistConfig,
 } from "../allowlist/index.ts";
 import { createOctokit, splitOwnerRepo } from "../../plugins/github/api.ts";
@@ -52,9 +52,8 @@ export async function checkRepoGateForActingRole(
   } = {},
 ): Promise<RepoGateResult> {
   const env = opts.env ?? process.env;
-  const cfg =
-    opts.cfg ??
-    configFromEnvOnly(env);
+  // ALLOW-4: allowlist file + env overlays (same loader as WATCH ingress).
+  const cfg = opts.cfg ?? (await loadAllowlist({ env }));
 
   if (!repo || !repo.includes("/")) {
     return {
