@@ -1,6 +1,6 @@
 ---
 id: github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured
-state: implementing
+state: verifying
 type: feature
 base_commit: 8747a9abb99c2322ea67c40da96fb60bc69172bc
 ---
