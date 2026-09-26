@@ -7,6 +7,8 @@ files:
   - src/plugins/registry.ts
   - src/plugins/run.ts
   - src/plugins/env.ts
+  - src/plugins/mutating.ts
+  - src/plugins/roles.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
   - src/audit/log.ts
@@ -61,6 +63,7 @@ files:
   - src/plugins/toolCost.ts
   - tests/fledge.plugins.test.ts
   - tests/fledge.cli.test.ts
+  - tests/roles.chat.gates.test.ts
 
 db_tables: []
 depends_on: []
@@ -160,6 +163,13 @@ SAFE-22 default-branch policy is not enforced (awaiting HI).
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
 
+
+File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
+When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
+non-ADMIN callers are refused for every mutating plugin at run time with a
+"not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
+for dangerous tools. Role is re-checked via owner config each call.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -198,12 +208,26 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 - **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
 - **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
 
+
+### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
+
+- **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
+- **When** the agent runs `files-write`
+- **Then** the run fails with exit 2 and a "not allowed for your role" message; no file is written
+
+### Scenario: ADMIN files-write still allowed (ROLES-CHAT-4)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=1` and the acting user is the configured owner
+- **When** the agent runs `files-write` under non-interactive
+- **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
+| Mutating + acting non-ADMIN (ROLES-CHAT-3) | Deny (exit 2, not allowed for your role) |
 | Missing token / API fail on github-* | Clear error; non-zero exit |
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
@@ -254,3 +278,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http: Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output control-stripped, scrubbed and fenced as untrusted data (title inside the fence, no echo of server text); URLs carrying secrets refused; 100k-char text cap; dangerous true (SAFE-1 consent), minTier 1; web-search left for HI capture |
 | 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
+| 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |

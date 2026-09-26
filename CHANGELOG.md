@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.14
+
+### ROLES-CHAT tool gates (community read/chat vs ADMIN)
+
+- **ROLES-CHAT-2..6** — Non-ADMIN Discord/WATCH/schedule sessions (when `CORVIDINHO_ACTING_IS_ADMIN` is set) only get **read/chat** tools in the catalog; mutating tools never appear.
+- At tool-run time, non-ADMIN callers are refused for every mutating plugin — including `files-write` / `files-edit` (`mutating: true`, `dangerous: false`) — with a short in-session **not allowed for your role** (ROLES-CHAT-3/5).
+- ADMIN (owner + `CORVIDINHO_ACTING_IS_ADMIN=1`, re-checked each call) may use mutating tools still behind **SAFE-1..9** / ALLOW / MEMORY-ACL (ROLES-CHAT-4/6).
+- Prove-before-done: `tests/roles.chat.gates.test.ts` (ROLES-CHAT-7).
+- HI: [`hi/roles.md`](hi/roles.md) (captured in #159).
+
+### Ops
+
+- Package version **0.0.14** — presence (DISCORD-12) reads `v0.0.14` after restart.
+- **Restart the Discord bridge** so acting sessions pick up the role gates.
+
 ## 0.0.13
 
 ### Always verify on Discord / WATCH (#85 captured slice — AGENT-4 / FLEDGE-2)
