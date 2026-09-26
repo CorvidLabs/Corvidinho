@@ -208,3 +208,11 @@ Acceptance Criteria
 - Default catalog: no `fledge-*` tool is offered and none is registered.
 - Existing tool-loop tests pass unchanged.
 
+### REQ-agent-roles-001
+
+When building the tool catalog for an acting session, non-ADMIN SHALL not
+receive mutating tools (including files-write/edit).
+
+Acceptance Criteria
+- `tests/roles.chat.gates.test.ts` catalog assertions for non-admin vs admin.
+

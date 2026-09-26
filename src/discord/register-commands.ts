@@ -1,6 +1,6 @@
 /**
  * Discord slash registration (DISCORD-4 / REQ-discord-016).
- * Guild PUT overwrite of the six current bodies + clear globals.
+ * Guild PUT overwrite of the current body set (nine incl. /admin) + clear globals.
  * Steal PUT+clear-globals only — do NOT port archive buildCommands() lists.
  */
 
@@ -49,7 +49,7 @@ export function applicationCommandsRoute(applicationId: string): string {
 
 /**
  * Full-overwrite registration:
- * - With guildId: PUT guild bodies (six), then PUT globals [].
+ * - With guildId: PUT guild bodies (current set), then PUT globals [].
  * - Without guildId: PUT globals to bodies; warn that stale guild cmds remain.
  * Never dual-registers the same names global+guild in one path.
  */
