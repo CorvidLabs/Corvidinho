@@ -17,7 +17,12 @@
  * - at most 2 workers at once and 4 per lead process;
  * - workers are forced non-interactive, get the lead's effective SAFE-1
  *   allowlist and nothing more, never inherit ADMIN or human SAFE-4 confirm
- *   tokens, and are killed on abort, timeout or lead exit (AGENT-3).
+ *   tokens, and are killed on abort, timeout or lead exit (AGENT-3);
+ * - workers do not inherit bridge / GitHub tokens or the audit HMAC key
+ *   (SAFE-6), only what a task run needs (LLM provider keys stay);
+ * - a lead in a ROLES-CHAT role session gets a non-ADMIN worker (read/chat
+ *   tools only, ROLES-CHAT-2/3); a lead outside one (local CLI) gets a worker
+ *   outside one too, so the worker never has more power than the lead.
  */
 
 import { join } from "node:path";
@@ -28,6 +33,7 @@ import {
   parseCapabilityTier,
   type CapabilityTier,
 } from "../agent/tier.ts";
+import { roleSessionActive } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
 /** Env var carrying how deep in a delegation chain this process runs. */
@@ -197,7 +203,25 @@ export function resolveDelegateBin(env: NodeJS.ProcessEnv = process.env): string
   return join(import.meta.dir, "..", "cli.ts");
 }
 
-/** argv + env for one worker spawn. Forced keys always win over inherited env. */
+/** Inherited env keys a worker never gets (SAFE-6): bridge / GitHub tokens, audit key. */
+const WORKER_ENV_DROP = new Set([
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "CORVIDINHO_AUDIT_HMAC_KEY",
+]);
+/** Inherited env key prefixes a worker never gets: Discord bot config, acting identity. */
+const WORKER_ENV_DROP_PREFIXES = ["DISCORD_", "CORVIDINHO_ACTING_"];
+
+/** True when an inherited env key must not reach a worker. */
+export function isWorkerEnvDropped(key: string): boolean {
+  if (WORKER_ENV_DROP.has(key)) return true;
+  return WORKER_ENV_DROP_PREFIXES.some((p) => key.startsWith(p));
+}
+
+/**
+ * argv + env for one worker spawn. The worker env is the lead's minus
+ * {@link isWorkerEnvDropped} keys; forced keys always win over inherited env.
+ */
 export function buildDelegateSpawn(opts: {
   bin: string;
   taskText: string;
@@ -218,9 +242,10 @@ export function buildDelegateSpawn(opts: {
     "--task",
     opts.taskText,
   ]);
+  const baseEnv = opts.baseEnv ?? process.env;
   const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(opts.baseEnv ?? process.env)) {
-    if (typeof v === "string") env[k] = v;
+  for (const [k, v] of Object.entries(baseEnv)) {
+    if (typeof v === "string" && !isWorkerEnvDropped(k)) env[k] = v;
   }
   Object.assign(env, {
     [DELEGATE_DEPTH_ENV]: String(opts.childDepth),
@@ -228,10 +253,11 @@ export function buildDelegateSpawn(opts: {
     CORVIDINHO_NON_INTERACTIVE: "1",
     // The lead's effective SAFE-1 allowlist — never a wider env one.
     CORVIDINHO_ALLOWLIST: [...opts.allowlist].join(","),
-    // Workers never act as ADMIN or complete a human SAFE-4 confirm.
-    CORVIDINHO_ACTING_IS_ADMIN: "0",
-    CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
   });
+  // Workers never act as ADMIN or complete a human SAFE-4 confirm (the
+  // CORVIDINHO_ACTING_* keys were dropped above). A lead in a role session
+  // gets a non-ADMIN worker: read/chat tools only (ROLES-CHAT-2/3).
+  if (roleSessionActive(baseEnv)) env.CORVIDINHO_ACTING_IS_ADMIN = "0";
   return { cmd, env };
 }
 

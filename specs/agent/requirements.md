@@ -176,11 +176,17 @@ the project's prove-before-done gate (AGENT-4) and reports its `verified` /
 `verifySkipped` outcome. The worker bin SHALL be `CORVIDINHO_BIN` when set,
 else this checkout's `src/cli.ts`, never the cwd's. The worker tier SHALL be
 the requested tier clamped to the lead's; an omitted tier SHALL mean the
-lead's tier and an unknown tier SHALL be refused. The worker env SHALL force
-the depth to the lead's depth + 1, `CORVIDINHO_LLM_TIER` to the worker tier,
-`CORVIDINHO_NON_INTERACTIVE=1`, `CORVIDINHO_ALLOWLIST` to the lead's effective
-allowlist, `CORVIDINHO_ACTING_IS_ADMIN=0` and an empty
-`CORVIDINHO_ACTING_CONFIRM_TOKENS`, overriding inherited values. At most 2
+lead's tier and an unknown tier SHALL be refused. The worker env SHALL be
+the lead's env without `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
+`CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
+provider keys stay), and SHALL force the depth to the lead's depth + 1,
+`CORVIDINHO_LLM_TIER` to the worker tier, `CORVIDINHO_NON_INTERACTIVE=1` and
+`CORVIDINHO_ALLOWLIST` to the lead's effective allowlist, overriding inherited
+values, so a worker never inherits ADMIN or human SAFE-4 confirm tokens. When
+the lead runs in a ROLES-CHAT role session (`CORVIDINHO_ACTING_IS_ADMIN` set)
+the worker env SHALL set `CORVIDINHO_ACTING_IS_ADMIN=0`, making the worker a
+non-ADMIN session with read/chat tools only (ROLES-CHAT-2/3); a lead outside a
+role session (local CLI) SHALL get a worker outside one. At most 2
 workers SHALL run at once and at most 4 SHALL start per lead process; beyond
 that the call is refused, not queued. A worker SHALL be stopped on lead abort
 (AGENT-3), after a 10 minute timeout, or when the lead process exits, and the
@@ -196,6 +202,8 @@ Acceptance Criteria
 - `createTaskExecute` in a temp project with autonomous enabled at code tier offers `delegate`; a disabled project, tool tier, or depth 2 does not; a model call to a hidden `delegate` is refused, not run.
 - A lead tool loop that calls `delegate` against a fake bin receives the worker summary in the tool message, and the worker's filesChanged join the lead's result.
 - Depth parse fails closed; tier clamp never exceeds the lead; spawn argv uses `bun --no-env-file` with `--task` last and no `--no-verify` flag; forced worker env overrides inherited env; the limiter refuses past 2 concurrent / 4 per run.
+- The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
+- A non-ADMIN role session's catalog leaves out `delegate` even when autonomous mode is allowed; the ADMIN owner's catalog offers it (ROLES-CHAT-2/4).
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
 
 ### REQ-agent-084

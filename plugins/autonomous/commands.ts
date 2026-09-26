@@ -6,7 +6,9 @@
  * re-checks every gate at run time, so `plugins run delegate` or a model
  * naming the tool cannot skip them. Not SAFE-1 dangerous: a worker adds no
  * power the lead lacks (same-or-lower tier, the lead's allowlist, forced
- * non-interactive); cost is bounded by the depth / fan-out caps.
+ * non-interactive); cost is bounded by the depth / fan-out caps. Mutating
+ * (ROLES-CHAT-5): a worker runs tools, so non-ADMIN role sessions never see
+ * or run `delegate` (ROLES-CHAT-2/3, enforced by the catalog and runPlugin).
  */
 
 import { loadTierFromEnv, tierAllowsPlugin } from "../../src/agent/tier.ts";
@@ -54,6 +56,7 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
       'argv e.g. ["--skill","specsync","--task","List the specs that cover the agent loop"]; optional ["--tier","read|tool|code"] (never above yours). ' +
       `Autonomous extra: only when the project enables [corvidinho.autonomous]; code tier; workers max ${MAX_DELEGATE_DEPTH} levels deep (AUTONOMOUS-1/5, SAFE-9).`,
     dangerous: false,
+    mutating: true,
     minTier: DELEGATE_MIN_TIER,
     autonomous: true,
     async handler(ctx): Promise<PluginHandlerResult> {

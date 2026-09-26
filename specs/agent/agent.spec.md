@@ -60,8 +60,8 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
 `src/autonomous/delegate.ts` exports `delegateDepthFromEnv`,
 `canDelegateAtDepth`, `clampChildTier`, `parseDelegateArgs`,
-`buildDelegateTaskText`, `resolveDelegateBin`, `buildDelegateSpawn`,
-`createDelegateLimiter`, `runDelegateChild` and the caps
+`buildDelegateTaskText`, `resolveDelegateBin`, `isWorkerEnvDropped`,
+`buildDelegateSpawn`, `createDelegateLimiter`, `runDelegateChild` and the caps
 (`MAX_DELEGATE_DEPTH` 2, `MAX_CONCURRENT_DELEGATES` 2,
 `MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`

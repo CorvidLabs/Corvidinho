@@ -15,6 +15,7 @@ import {
   buildDelegateSpawn,
   buildDelegateTaskText,
   canDelegateAtDepth,
+  isWorkerEnvDropped,
   clampChildTier,
   createDelegateLimiter,
   delegateDepthFromEnv,
@@ -170,9 +171,77 @@ describe("delegate core (safety defaults)", () => {
       CORVIDINHO_LLM_TIER: "tool",
       CORVIDINHO_NON_INTERACTIVE: "1",
       CORVIDINHO_ALLOWLIST: "files-write",
+      // Lead in a role session ⇒ non-ADMIN worker; confirm tokens never pass.
       CORVIDINHO_ACTING_IS_ADMIN: "0",
-      CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
     });
+    expect(env.CORVIDINHO_ACTING_CONFIRM_TOKENS).toBeUndefined();
+  });
+
+  test("worker env drops Discord / GitHub tokens, the audit key and acting identity; keeps LLM keys", () => {
+    const { env } = buildDelegateSpawn({
+      bin: "/opt/corvidinho/src/cli.ts",
+      taskText: "x",
+      tier: "code",
+      childDepth: 1,
+      allowlist: [],
+      baseEnv: {
+        PATH: "/usr/bin",
+        HOME: "/home/lead",
+        DISCORD_TOKEN: "discord-token-value",
+        DISCORD_BOT_TOKEN: "discord-bot-token-value",
+        DISCORD_CHANNEL_IDS: "1408845298629083220",
+        GITHUB_TOKEN: "github-token-value",
+        GH_TOKEN: "gh-token-value",
+        CORVIDINHO_AUDIT_HMAC_KEY: "audit-hmac-key-value",
+        CORVIDINHO_ACTING_IS_ADMIN: "1",
+        CORVIDINHO_ACTING_DISCORD_USER_ID: "181969874455756800",
+        CORVIDINHO_ACTING_CONFIRM_TOKENS: "mc1.x",
+        OPENAI_API_KEY: "openai-key-value",
+        CORVIDINHO_LLM_API_KEY: "llm-key-value",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.example/v1",
+        CORVIDINHO_LLM_MODEL: "m",
+      },
+    });
+    for (const k of [
+      "DISCORD_TOKEN",
+      "DISCORD_BOT_TOKEN",
+      "DISCORD_CHANNEL_IDS",
+      "GITHUB_TOKEN",
+      "GH_TOKEN",
+      "CORVIDINHO_AUDIT_HMAC_KEY",
+      "CORVIDINHO_ACTING_DISCORD_USER_ID",
+      "CORVIDINHO_ACTING_CONFIRM_TOKENS",
+    ]) {
+      expect(env[k]).toBeUndefined();
+    }
+    expect(JSON.stringify(env)).not.toMatch(/discord-|github-token|gh-token|audit-hmac/);
+    expect(env).toMatchObject({
+      PATH: "/usr/bin",
+      HOME: "/home/lead",
+      OPENAI_API_KEY: "openai-key-value",
+      CORVIDINHO_LLM_API_KEY: "llm-key-value",
+      CORVIDINHO_LLM_BASE_URL: "https://llm.example/v1",
+      CORVIDINHO_LLM_MODEL: "m",
+      CORVIDINHO_ACTING_IS_ADMIN: "0",
+    });
+    for (const k of ["DISCORD_TOKEN", "GITHUB_TOKEN", "GH_TOKEN", "CORVIDINHO_AUDIT_HMAC_KEY"]) {
+      expect(isWorkerEnvDropped(k)).toBe(true);
+    }
+    expect(isWorkerEnvDropped("CORVIDINHO_ACTING_ANYTHING")).toBe(true);
+    expect(isWorkerEnvDropped("OPENAI_API_KEY")).toBe(false);
+    expect(isWorkerEnvDropped("CORVIDINHO_LLM_API_KEY")).toBe(false);
+  });
+
+  test("a lead outside a role session (local CLI) gets a worker outside one", () => {
+    const { env } = buildDelegateSpawn({
+      bin: "/opt/corvidinho/src/cli.ts",
+      taskText: "x",
+      tier: "code",
+      childDepth: 1,
+      allowlist: [],
+      baseEnv: { PATH: "/usr/bin" },
+    });
+    expect(Object.hasOwn(env, "CORVIDINHO_ACTING_IS_ADMIN")).toBe(false);
   });
 
   test("bin: CORVIDINHO_BIN, else this checkout's CLI (never the cwd's)", () => {
@@ -297,6 +366,44 @@ describe("delegate plugin handler (fake bin)", () => {
       CORVIDINHO_ACTING_IS_ADMIN: "0",
       CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
     });
+  });
+
+  test("the spawned worker never sees bridge / GitHub tokens or the audit key (SAFE-6)", async () => {
+    const { bin, dir } = fakeBin(
+      `env | sed 's/=.*//' > "$(dirname "$0")/keys.txt"\ncat <<'EOF'\n${serializeFrame(resultFrame(DONE))}\nEOF`,
+    );
+    const cmd = createDelegateCommand({
+      bin,
+      env: {
+        ...BASE_ENV,
+        DISCORD_TOKEN: "t1",
+        DISCORD_BOT_TOKEN: "t2",
+        GITHUB_TOKEN: "t3",
+        GH_TOKEN: "t4",
+        CORVIDINHO_AUDIT_HMAC_KEY: "k1",
+        CORVIDINHO_ACTING_DISCORD_USER_ID: "181969874455756800",
+        CORVIDINHO_ACTING_CONFIRM_TOKENS: "mc1.x",
+        CORVIDINHO_LLM_API_KEY: "llm",
+      },
+    });
+    const r = await cmd.handler(ctx({ cwd: project(ENABLED) }));
+    expect(r.ok).toBe(true);
+    const keys = new Set(readFileSync(join(dir, "keys.txt"), "utf8").split("\n"));
+    for (const k of [
+      "DISCORD_TOKEN",
+      "DISCORD_BOT_TOKEN",
+      "GITHUB_TOKEN",
+      "GH_TOKEN",
+      "CORVIDINHO_AUDIT_HMAC_KEY",
+      "CORVIDINHO_ACTING_DISCORD_USER_ID",
+      "CORVIDINHO_ACTING_CONFIRM_TOKENS",
+      // CLI lead (no role session) ⇒ worker outside one too.
+      "CORVIDINHO_ACTING_IS_ADMIN",
+    ]) {
+      expect(keys.has(k)).toBe(false);
+    }
+    expect(keys.has("CORVIDINHO_LLM_API_KEY")).toBe(true);
+    expect(keys.has(DELEGATE_DEPTH_ENV)).toBe(true);
   });
 
   test("omitted worker tier inherits the lead's tier from env, not a higher default", async () => {

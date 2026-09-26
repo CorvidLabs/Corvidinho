@@ -3,7 +3,7 @@
  * Temp project roots only; mocked fetch; no network, no worktrees.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -19,7 +19,9 @@ import {
 } from "../src/autonomous/enabled.ts";
 import { createDelegateCommand } from "../plugins/autonomous/index.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
-import { clearRegistry, get, register } from "../src/plugins/registry.ts";
+import { clearRegistry, get, list, register } from "../src/plugins/registry.ts";
+import { ROLE_REFUSED_MESSAGE } from "../src/plugins/roles.ts";
+import { runPlugin } from "../src/plugins/run.ts";
 import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
 
 const root = import.meta.dir + "/..";
@@ -101,6 +103,18 @@ describe("SAFE-9: delegate hidden from the catalog unless the session is allowed
     expect(cmd!.dangerous).toBe(false);
     expect(cmd!.minTier).toBe(2);
     expect(cmd!.autonomous).toBe(true);
+    // ROLES-CHAT-5: a worker runs tools, so delegate counts as mutating.
+    expect(cmd!.mutating).toBe(true);
+    expect(list().find((e) => e.name === "delegate")?.mutating).toBe(true);
+  });
+
+  test("ROLES-CHAT-2: non-ADMIN catalog omits delegate even when autonomous is allowed", () => {
+    const nonAdmin = buildOpenAiTools({ tier: "code", autonomous: true, actingIsAdmin: false });
+    const names = nonAdmin.map((t) => t.function.name);
+    expect(names).not.toContain("delegate");
+    expect(names).toContain("files-read");
+    const admin = buildOpenAiTools({ tier: "code", autonomous: true, actingIsAdmin: true });
+    expect(admin.map((t) => t.function.name)).toContain("delegate");
   });
 
   test("default catalog omits delegate at every tier", () => {
@@ -179,6 +193,61 @@ describe("tool loop offers delegate per project config (REQ-agent-117)", () => {
     expect(
       await catalogFor(on, { CORVIDINHO_LLM_TIER: "code", CORVIDINHO_DELEGATE_DEPTH: "2" }),
     ).not.toContain("delegate");
+  });
+
+  test("ROLES-CHAT-2/4: a non-ADMIN role session never sees delegate; the ADMIN owner does", async () => {
+    const on = project(ENABLED);
+    const owner = "181969874455756800";
+    const allowFile = join(mkdtempSync(join(tmpdir(), "corvidinho-autonomous-roles-")), "allowlist.toml");
+    writeFileSync(
+      allowFile,
+      `[discord]\nchannels = ["1"]\nroles = []\nusers = []\ndeny_users = []\n\n[owner]\ndiscord_id = "${owner}"\n`,
+    );
+    const role = { CORVIDINHO_LLM_TIER: "code", CORVIDINHO_ALLOWLIST_FILE: allowFile };
+    expect(
+      await catalogFor(on, {
+        ...role,
+        CORVIDINHO_ACTING_IS_ADMIN: "0",
+        CORVIDINHO_ACTING_DISCORD_USER_ID: "999999999999999999",
+      }),
+    ).not.toContain("delegate");
+    expect(
+      await catalogFor(on, {
+        ...role,
+        CORVIDINHO_ACTING_IS_ADMIN: "1",
+        CORVIDINHO_ACTING_DISCORD_USER_ID: owner,
+      }),
+    ).toContain("delegate");
+  });
+
+  test("ROLES-CHAT-3: runPlugin refuses delegate for a non-ADMIN role session; nothing spawned", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-delegate-role-"));
+    const bin = join(dir, "corvidinho");
+    writeFileSync(bin, `#!/bin/sh\ntouch "${dir}/spawned"\n`, { mode: 0o755 });
+    clearRegistry();
+    register(createDelegateCommand({ bin, env: { PATH: process.env.PATH ?? "" } }));
+    const keys = ["CORVIDINHO_ACTING_IS_ADMIN", "CORVIDINHO_ACTING_DISCORD_USER_ID"] as const;
+    const prev = keys.map((k) => process.env[k]);
+    process.env.CORVIDINHO_ACTING_IS_ADMIN = "0";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = "999999999999999999";
+    try {
+      const r = await runPlugin({
+        name: "delegate",
+        args: ["--task", "sub"],
+        cwd: project(ENABLED),
+        nonInteractive: true,
+        tier: "code",
+      });
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toContain(ROLE_REFUSED_MESSAGE);
+      expect(existsSync(join(dir, "spawned"))).toBe(false);
+    } finally {
+      keys.forEach((k, i) => {
+        if (prev[i] === undefined) delete process.env[k];
+        else process.env[k] = prev[i];
+      });
+    }
   });
 
   test("a model naming delegate when it is hidden is refused, not run (REQ-agent-128)", async () => {

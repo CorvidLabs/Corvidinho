@@ -172,9 +172,11 @@ URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
 (GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
 SAFE-22 default-branch policy is not enforced (awaiting HI).
 
-`delegate` (REQ-plugins-117) is `dangerous: false`, minTier 2, `autonomous:
-true`: hidden from the tool catalog unless the session is allowed (SAFE-9),
-and its handler re-checks at run time, in order, usage (exit 1), the
+`delegate` (REQ-plugins-117) is `dangerous: false`, `mutating: true`, minTier
+2, `autonomous: true`: hidden from the tool catalog unless the session is
+allowed (SAFE-9), never offered to or run for a non-ADMIN role session
+(ROLES-CHAT-2/3/5, a worker runs tools), and its handler re-checks at run
+time, in order, usage (exit 1), the
 AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
@@ -272,6 +274,7 @@ for dangerous tools. Role is re-checked via owner config each call.
 | git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
 | git-push non-fast-forward | Fail (exit 1); never retried with force |
 | delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
+| delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
 
 ## Dependencies
