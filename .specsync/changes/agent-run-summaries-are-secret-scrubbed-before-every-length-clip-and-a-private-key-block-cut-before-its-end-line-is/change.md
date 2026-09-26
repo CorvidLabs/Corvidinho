@@ -1,6 +1,6 @@
 ---
 id: agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 5b0c8a64a53421a13f292eed646b2358f4545c72
 ---
