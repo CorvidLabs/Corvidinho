@@ -11,9 +11,10 @@
   "canonical_applied": true,
   "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
   "created_at": 1790454572,
-  "updated_at": 1790455020,
+  "updated_at": 1790456825,
   "affected_specs": [
-    "plugins"
+    "plugins",
+    "discord"
   ],
   "affected_paths": [
     "plugins/github/review.ts",
@@ -21,7 +22,9 @@
     "tests/github.review.plugin.test.ts",
     "tests/plugins.list.smoke.test.ts",
     "specs/plugins/",
-    "docs/WATCH.md"
+    "docs/WATCH.md",
+    "src/store/scrub.ts",
+    "tests/store.scrub.test.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,

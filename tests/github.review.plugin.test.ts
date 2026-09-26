@@ -6,8 +6,10 @@ import { runPlugin } from "../src/plugins/run.ts";
 import type { PluginCommand, PluginHandlerResult } from "../src/plugins/types.ts";
 import {
   PR_DIFF_MAX_BYTES,
+  PR_DIFF_SCRUB_MAX_BYTES,
   PR_FILES_MAX_LIMIT,
   UNTRUSTED_NOTE,
+  boundForScrub,
   capUtf8,
   fileDiffSection,
   makeGithubReviewCommands,
@@ -256,6 +258,61 @@ describe("github review reads (GITHUB-3 / issue #93)", () => {
     const d = r.data as { diff: string; truncated: boolean };
     expect(d.truncated).toBe(true);
     expect(d.diff).not.toContain("ghp_");
+  });
+
+  test("a hostile diff far over the cap is cut before the scrub and returns quickly", async () => {
+    // ~1.2 MiB of private-key openers with no closer: every opener used to
+    // rescan to the end of the text, stalling the task process.
+    const body = SAMPLE_DIFF + "+-----BEGIN A PRIVATE KEY-----\n".repeat(40_000);
+    expect(Buffer.byteLength(body)).toBeGreaterThan(PR_DIFF_SCRUB_MAX_BYTES);
+    const { diff } = commands(diffRoute(body));
+    const started = performance.now();
+    const r = await run(diff, ["7", "--repo", REPO]);
+    expect(performance.now() - started).toBeLessThan(2_000);
+    const d = r.data as { diff: string; truncated: boolean; bytes: number; totalBytes: number };
+    expect(d.truncated).toBe(true);
+    expect(d.bytes).toBeLessThanOrEqual(PR_DIFF_MAX_BYTES);
+    expect(d.totalBytes).toBe(Buffer.byteLength(body));
+    expect(d.diff).toContain(`of ${Buffer.byteLength(body)} bytes (cap ${PR_DIFF_MAX_BYTES})`);
+  });
+
+  test("SAFE-6: a private key split by the hard cut is dropped, not returned half-scrubbed", async () => {
+    // Enough whole keys to shrink by far more than the cap once redacted, then
+    // one key whose END line lands past the hard cut.
+    const key = (fill: string, lines: number) =>
+      "+-----BEGIN RSA PRIVATE KEY-----\n" +
+      `+${fill.repeat(64)}\n`.repeat(lines) +
+      "+-----END RSA PRIVATE KEY-----\n";
+    const whole = key("A", 50);
+    let body = SAMPLE_DIFF;
+    while (Buffer.byteLength(body) < PR_DIFF_SCRUB_MAX_BYTES - 2_000) body += whole;
+    body += key("Q", 100);
+    expect(Buffer.byteLength(body)).toBeGreaterThan(PR_DIFF_SCRUB_MAX_BYTES);
+    const { diff } = commands(diffRoute(body));
+    const r = await run(diff, ["7", "--repo", REPO]);
+    const d = r.data as { diff: string; truncated: boolean; totalBytes: number };
+    expect(d.truncated).toBe(true);
+    expect(d.totalBytes).toBe(Buffer.byteLength(body));
+    expect(d.diff).toContain("[redacted:private-key]");
+    expect(d.diff).not.toContain("A".repeat(64));
+    expect(d.diff).not.toContain("Q".repeat(64));
+    expect(d.diff).not.toContain("-----BEGIN");
+  });
+
+  test("boundForScrub cuts on a line boundary and drops an open private-key block", () => {
+    expect(boundForScrub("small\n", 100)).toEqual({ text: "small\n", truncated: false, totalBytes: 6 });
+
+    const lines = "a".repeat(9) + "\n";
+    const cut = boundForScrub(lines.repeat(10), 35);
+    expect(cut).toEqual({ text: lines.repeat(3), truncated: true, totalBytes: 100 });
+
+    // No newline before the limit: nothing is kept rather than half a line.
+    expect(boundForScrub("x".repeat(50), 20).text).toBe("");
+
+    const open = "keep\n-----BEGIN EC PRIVATE KEY-----\nAAAA\nBBBB\n-----END EC PRIVATE KEY-----\n";
+    expect(boundForScrub(open, 40).text).toBe("keep\n");
+    const closed = "-----BEGIN EC PRIVATE KEY-----\nAAAA\n-----END EC PRIVATE KEY-----\nmore\ntail\n";
+    expect(boundForScrub(closed, closed.length - 2).text).toBe(closed.slice(0, closed.length - 5));
   });
 
   test("github-pr-diff --file returns one file section across pages", async () => {

@@ -29,7 +29,11 @@ flag when more files exist.
 
 Returned diff text and file names SHALL be passed through `scrubSecrets`
 (SAFE-6) before capping, and payloads SHALL label the content as untrusted PR
-data, not instructions.
+data, not instructions. Because the diff is written by whoever opened the PR,
+the scrub's work SHALL be bounded: diff text SHALL first be cut to a hard
+limit of 800 KiB (4 × the cap) on a line boundary, dropping a private-key
+block left without its END line, and the scrub patterns SHALL run in time
+linear in their input. `totalBytes` SHALL report the uncut size.
 
 Acceptance Criteria
 - `plugins list` shows `github-pr-diff` and `github-pr-files` with dangerous=false and minTier=0.
@@ -37,4 +41,5 @@ Acceptance Criteria
 - A diff over 200 KiB returns at most 200 KiB plus the truncation marker; `--file` returns one file's section.
 - `github-pr-files` pages `pulls.listFiles`, honours `--limit`, and sets `truncated`.
 - Vendor-token-looking strings in diff text are redacted, including one straddling the cap.
+- A hostile diff far over the cap (many private-key openers, no closer) returns quickly; a private key split by the hard cut is not returned.
 - Tests mock Octokit (no network, no token).

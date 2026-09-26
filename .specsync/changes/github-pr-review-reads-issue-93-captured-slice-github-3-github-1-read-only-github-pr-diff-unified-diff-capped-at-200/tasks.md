@@ -9,6 +9,7 @@ artifact: tasks
 - [x] Register from `plugins/github/index.ts` (no edit to `commands.ts`)
 - [x] 200 KiB cap with truncation marker; `--file PATH` filter; files pagination cap
 - [x] SAFE-6 scrub before cap; untrusted-data label on payloads
+- [x] Bound the scrub: 800 KiB hard cut before it (open key block dropped); linear PEM/JWT patterns in `src/store/scrub.ts`; timing regression tests
 - [x] Octokit-mocked fixture tests + plugins list smoke
 - [x] Spec delta REQ-plugins-093 + spec `files:` coverage
 - [x] Docs: `docs/WATCH.md`

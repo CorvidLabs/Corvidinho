@@ -1,6 +1,6 @@
 ---
 id: github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200
-state: implementing
+state: verifying
 type: feature
 base_commit: 8747a9abb99c2322ea67c40da96fb60bc69172bc
 ---
@@ -14,6 +14,7 @@ GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-onl
 ## Affected Canonical Specs
 
 - `plugins`
+- `discord`
 
 ## Acceptance Criteria
 

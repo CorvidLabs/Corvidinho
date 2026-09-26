@@ -16,5 +16,10 @@ artifact: research
   or very large files.
 - `src/store/scrub.ts` `scrubSecrets` (SAFE-6) — patterns need a word boundary
   and a minimum length, so scrubbing must run on the full text *before* a cap.
+  Review found its lazy PEM body and the JWT header segment quadratic on many
+  openers with no closer (bun 1.4.2: 20,000 lines of
+  `+-----BEGIN A PRIVATE KEY-----` 8.7 s; 200 KB of `eyJ-` 4.1 s), and
+  regex runs synchronously, so a PR diff must be bounded before the scrub and
+  the patterns made linear.
 - Octokit accepts `request.fetch`, so tests can use a real client over a
   mocked fetch (no network, no token).

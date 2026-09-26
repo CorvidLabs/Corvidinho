@@ -4,8 +4,9 @@
  * Read-only typed commands (dangerous: false, minTier 0) behind the same
  * `--repo OWNER/REPO` GITHUB-6 gate as the other github-* commands, called
  * through Octokit, never shell `gh` (GITHUB-1). Returned text is PR content
- * written by whoever opened the PR: it is scrubbed (SAFE-6) before the cap and
- * labelled as untrusted data, never instructions.
+ * written by whoever opened the PR: it is cut to a hard limit so the scrub's
+ * work is bounded, scrubbed (SAFE-6) before the cap, and labelled as untrusted
+ * data, never instructions.
  */
 
 import { Octokit } from "@octokit/rest";
@@ -16,6 +17,13 @@ import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 
 /** Byte cap on diff text returned by `github-pr-diff` (200 KiB). */
 export const PR_DIFF_MAX_BYTES = 200 * 1024;
+/**
+ * Hard limit on diff text handed to the SAFE-6 scrub (4 × the output cap).
+ * The diff is written by whoever opened the PR, so the scrub's work is
+ * bounded before it runs; the slack above the cap covers redactions that
+ * shorten the text.
+ */
+export const PR_DIFF_SCRUB_MAX_BYTES = 4 * PR_DIFF_MAX_BYTES;
 /** Default number of files `github-pr-files` returns. */
 export const PR_FILES_DEFAULT_LIMIT = 300;
 /** Hard cap: GitHub's pulls.listFiles itself stops at 3000 files. */
@@ -116,6 +124,27 @@ export function capUtf8(
     bytes: Buffer.byteLength(cut, "utf8"),
     totalBytes: buf.byteLength,
   };
+}
+
+/**
+ * Cut raw diff text to `maxBytes` before it is scrubbed, so the scrub's work
+ * is bounded no matter how large the PR's diff is. The cut never leaves a
+ * partial line, and a private-key block whose END line fell past the cut is
+ * dropped too: the scrub could not match half a block, so nothing it would
+ * have redacted can survive at the cut. `totalBytes` is the uncut size.
+ */
+export function boundForScrub(
+  raw: string,
+  maxBytes: number = PR_DIFF_SCRUB_MAX_BYTES,
+): { text: string; truncated: boolean; totalBytes: number } {
+  const cut = capUtf8(raw, maxBytes);
+  if (!cut.truncated) return { text: raw, truncated: false, totalBytes: cut.totalBytes };
+  let text = cut.text.slice(0, cut.text.lastIndexOf("\n") + 1);
+  const begin = text.lastIndexOf("-----BEGIN ");
+  if (begin >= 0 && !text.includes("-----END ", begin)) {
+    text = text.slice(0, text.lastIndexOf("\n", begin) + 1);
+  }
+  return { text, truncated: true, totalBytes: cut.totalBytes };
 }
 
 export function truncationMarker(shown: number, total: number, maxBytes: number): string {
@@ -250,13 +279,17 @@ function makeDiffCommand(deps: ReviewDeps): PluginCommand {
         );
       }
 
-      // Scrub the whole text before capping so a secret cut at the boundary
+      // Bound the scrub's work first (hard cut on a line boundary), then scrub
+      // all of the bounded text before capping so a secret cut at the cap
       // cannot slip under the scrub patterns' minimum length.
-      const capped = capUtf8(scrubSecrets(raw), PR_DIFF_MAX_BYTES);
-      const diff = capped.truncated
+      const bounded = boundForScrub(raw);
+      const capped = capUtf8(scrubSecrets(bounded.text), PR_DIFF_MAX_BYTES);
+      const truncated = bounded.truncated || capped.truncated;
+      const totalBytes = bounded.truncated ? bounded.totalBytes : capped.totalBytes;
+      const diff = truncated
         ? `${capped.text}${capped.text.endsWith("\n") || !capped.text ? "" : "\n"}${truncationMarker(
             capped.bytes,
-            capped.totalBytes,
+            totalBytes,
             PR_DIFF_MAX_BYTES,
           )}\n`
         : capped.text;
@@ -266,9 +299,9 @@ function makeDiffCommand(deps: ReviewDeps): PluginCommand {
         file: file ?? null,
         untrusted: true,
         note: UNTRUSTED_NOTE,
-        truncated: capped.truncated,
+        truncated,
         bytes: capped.bytes,
-        totalBytes: capped.totalBytes,
+        totalBytes,
         maxBytes: PR_DIFF_MAX_BYTES,
         diff,
       };
