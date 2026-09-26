@@ -174,34 +174,50 @@ when the provider returned an HTTP error.
 
 At 100%, a call whose estimate would exceed the cap SHALL NOT be sent.
 Instead the attempt SHALL end with `ask: {reason: "spend-cap", question}`
-whose question states the 24-hour spend, the call estimate and the cap and
-says how to continue (raise or unset the cap and ask again, or wait for
-earlier spend to leave the window), and `runTask` SHALL return state
-`blocked` (never `done`, verify not run, no retry) through the AUTONOMY-1/2
-ask path. A model with no known price, a cap value that is not a plain USD
-amount (never echoed), or an unavailable ledger SHALL end the attempt the
-same way (never counted as free, fail closed). The runner SHALL NOT send a
-provider call past the cap.
+whose question states the 24-hour spend, the call estimate and the cap, names
+the operator action that continues (raise or unset the cap where Corvidinho
+runs and restart, or wait for earlier spend to leave the window, then ask
+again) and says a reply cannot lift the cap, without a yes/no question; the
+attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY` with no amounts
+and no env names (safe for a public reply such as a WATCH comment), and
+`runTask` SHALL return state `blocked` (never `done`, verify not run, no
+retry) through the AUTONOMY-1/2 ask path. A model with no known price, a cap
+value that is not a plain USD amount (never echoed), or an unavailable ledger
+SHALL end the attempt the same way (never counted as free, fail closed). The
+runner SHALL NOT send a provider call past the cap.
 
 At 80%, after a call settles, when 24-hour spend is at or above 80% of the
-cap and no warning for that cap value was recorded in the last 24 hours, the
-module SHALL record one in the module-owned `spend_alerts` table within one
-IMMEDIATE transaction (so concurrent processes warn once between them), emit
-one `Text` event naming the spend, the cap and the percent, report it through
-`onSpendWarning`, and `TaskResult.spendWarning` SHALL carry the integer
-amounts. The module SHALL also report spend against the cap for doctor and
-Discord `/status` (AUTONOMOUS-8). The Approve card (#96, draft SAFE-18..20)
-and draft SAFE-14..16 are not part of this requirement.
+cap and the warning for that cap value is armed, the module SHALL record one
+pending warning in the module-owned `spend_alerts` table
+(`src/agent/spend-alerts.ts`) within one IMMEDIATE transaction (so concurrent
+processes warn once between them), emit one `Text` event naming the spend,
+the cap and the percent, report it through `onSpendWarning`, and
+`TaskResult.spendWarning` SHALL carry the integer amounts. The warning SHALL
+be armed once per crossing: it disarms when recorded and re-arms when a
+settle or a later reservation sees spend under 70% of that cap value, 24
+hours after the last warning, or for a new cap value. Recording SHALL be
+separate from delivery: a recorded warning SHALL stay pending until a surface
+that can reach the owner claims it (`src/agent/spend-outbox.ts`
+`createSpendAlertOutbox`: `takeWarning` claims every pending warning of the
+last 24 hours in one IMMEDIATE transaction, returns current spend against the
+recorded cap, drops it when spend is back under 80%, and `release` returns
+it when the post failed; `claimCapPing` allows one owner ping per cap episode,
+re-armed the same way). The module SHALL also report spend against the cap
+for doctor and Discord `/status` (AUTONOMOUS-8). The Approve card (#96, draft
+SAFE-18..20) and draft SAFE-14..16 are not part of this requirement.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
 - Under the cap: the call is sent, the caller can still read the reply, and the ledger row settles to the usage cost in integer micro-USD.
-- Spend plus estimate over the cap (including a zero cap): no fetch; the attempt returns a `spend-cap` ask naming spend, estimate, cap and `CORVIDINHO_DAILY_SPEND_CAP_USD`; `runTask` returns `blocked` with verify skipped; `task run --json` exits 0 with `result.ask.reason` `spend-cap`.
+- Spend plus estimate over the cap (including a zero cap): no fetch; the attempt returns a `spend-cap` ask naming spend, estimate, cap and `CORVIDINHO_DAILY_SPEND_CAP_USD`, ending with the operator action and no question mark; the summary is `SPEND_CAP_SUMMARY` (no `$`, no `CORVIDINHO_`); `runTask` returns `blocked` with verify skipped; `task run --json` exits 0 with `result.ask.reason` `spend-cap`.
 - Spend older than 24 hours no longer counts.
 - Unpriced model, invalid cap value or unavailable ledger: no fetch and a `spend-cap` ask; the invalid value and secret-shaped model ids are not echoed.
 - HTTP error reply counts 0; missing usage and network errors keep the estimate.
 - Two connections on one DB file see each other's reservations and record the 80% warning once between them.
-- The call that brings spend to 80% yields exactly one `Text` warning and one `onSpendWarning`; later calls and runs in the same 24 hours at the same cap do not; a new cap value re-arms it; `task run --json` carries `result.spendWarning` on the crossing run.
+- The call that brings spend to 80% yields exactly one `Text` warning and one `onSpendWarning`; later calls stay quiet while spend stays at or above 70%; after spend is seen under 70% (by a settle or a reservation) the next crossing warns again, including within 24 hours; 24 hours after the last warning, or with a new cap value, it warns again; `task run --json` carries `result.spendWarning` on the crossing run.
+- A warning recorded by one process is taken once by the outbox with current spend, can be released and taken again, and is dropped when spend is back under 80%; without a database the outbox returns the run's own warning.
+- `claimCapPing` is true once per cap episode and true again after spend is seen under 70% or 24 hours pass.
+
 ### REQ-agent-117
 
 Autonomous mode SHALL be off until the project enables it in project config
