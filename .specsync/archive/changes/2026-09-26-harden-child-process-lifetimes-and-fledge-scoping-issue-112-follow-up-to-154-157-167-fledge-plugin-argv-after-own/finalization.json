@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own",
+  "implementation_commit": "dcbd50a086165a937a53a027ac006b019956c1b9",
+  "implementation_tree": "890361bebb62e9f2bf4eb11d5ddbb66f8d2988e8",
+  "contract_digest": "6e328990959bbc713cf132312e971544e720faae6765db0164541d4d28eaafdc",
+  "workspace_digest": "84d4f67c5f4a097fe68dbc8f688586cfefca4b1ff655276f66319cc5ca97b53c",
+  "closing_digest": "3d4f1a8ad272ea3b5ad7a431b232a2ea5252fbb6b97f69bc10db0b697a99e0b3",
+  "review_digest": "5f5eb597b604babc20b7ec25cb50df94c4373d8ab20d72c7263fab7fa5ab3c57",
+  "finalization_digest": "95bb3f18605406af8b3df240418370d31afefb2476f1345e617957ffe7fcdcd0",
+  "timestamp": 1790463660
+}

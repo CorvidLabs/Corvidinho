@@ -154,7 +154,7 @@ describe("scrub on every write path", () => {
       prompt: `call api with ${FAKE.anthropic}`,
       createdByUserId: "u",
     });
-    const run = schedules.markRunStarted(s);
+    const run = schedules.claimRun(s)!;
     schedules.markRunFinished(s, run, { ok: false, error: `401 for ${FAKE.jwt}` });
     const memory = new MemoryStore({ db });
     const rec = memory.store({ ownerUserId: "u", category: "person", key: `k ${FAKE.google}`, content: `pw ${FAKE.pem}` });
