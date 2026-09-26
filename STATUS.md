@@ -41,7 +41,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | WATCH poll-first ingress | #19 → [#30](https://github.com/CorvidLabs/Corvidinho/pull/30) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
 | Discord spawn + dogfood path | → [#32](https://github.com/CorvidLabs/Corvidinho/pull/32) | Always `bun`-invoke `.ts` for protocol + agent spawn (fix EACCES); parse `task run --json` for Discord summary; thin env-gated LLM execute stub |
 | LLM tool loop (DOGFOOD) | #31 → [#33](https://github.com/CorvidLabs/Corvidinho/pull/33) | Interruptible OpenAI-compatible plugin tool loop on `task run` (AGENT-3/5); prove-before-done unchanged; fixture mock HTTP; Discord/WATCH keep `--no-verify` |
-| v0.0.2 dogfood polish | → (this PR) | Shared `src/version.ts` from package.json; enriched ephemeral `/status` (LLM model+host / demo stub, slash names, optional git tip); no new slash commands |
+| v0.0.2 dogfood polish | → [#34](https://github.com/CorvidLabs/Corvidinho/pull/34) | Shared `src/version.ts` from package.json; enriched ephemeral `/status` (LLM model+host / demo stub, slash names, optional git tip); no new slash commands |
 
 ### In flight / next
 
@@ -113,7 +113,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 - For Discord callers: HEAR (#5) **live on Leif's box** (token + allowlists); bun-spawn for `.ts` fixed this PR
 - For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later
 - Attribution (#20→#24) on outbound PRs — **shipped**
-- Package **0.0.2** + richer Discord `/status` (shared version, LLM mode without key, slash names, optional git tip) — **this PR**
+- Package **0.0.2** + richer Discord `/status` (shared version, LLM mode without key, slash names, optional git tip) — [#34](https://github.com/CorvidLabs/Corvidinho/pull/34)
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 
 ### Phased milestones
