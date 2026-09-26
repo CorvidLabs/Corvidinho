@@ -28,8 +28,9 @@ import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { list, size } from "./plugins/registry.ts";
 import { runPlugin } from "./plugins/run.ts";
+import { VERSION } from "./version.ts";
 
-export const VERSION = "0.0.1";
+export { VERSION };
 
 type DoctorCheck = {
   name: string;

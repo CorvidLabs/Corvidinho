@@ -58,6 +58,10 @@ export type SlashContext = {
   /** DISCORD-7 admin lists (empty = nobody ADMIN). */
   adminUserIds?: string[];
   adminRoleIds?: string[];
+  /** Optional env for LLM status line (tests inject). */
+  env?: NodeJS.ProcessEnv;
+  /** Optional git tip short SHA (bridge fills best-effort). */
+  gitTipSha?: string;
 };
 
 export type SlashResult =

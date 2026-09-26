@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral",
+  "slug": "bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral",
+  "title": "Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands",
+  "description": "Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "4ef180b31cf719ac1e1661d209b37360781dd026",
+  "created_at": 1790443783,
+  "updated_at": 1790444046,
+  "affected_specs": [
+    "discord",
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "src/version.ts",
+    "src/cli.ts",
+    "src/discord/bridge.ts",
+    "src/discord/command-handlers/status.ts",
+    "src/discord/slash-types.ts",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/discord.slash.test.ts",
+    "src/discord/index.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json is 0.0.2; shared src/version.ts (or equivalent) feeds CLI version and Discord bridge /status (no hardcoded BRIDGE_VERSION); /status ephemeral includes Corvidinho vX.Y.Z, uptime, protocol, channels count, sessions/work counts, LLM model+base host without API key (or demo stub), registered slash command names (the 6), optional git tip short SHA without failing offline; STATUS.md notes 0.0.2 dogfood polish; SpecSync + tests for version helper + status formatting; no new slash commands; mute/unmute unchanged; fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
