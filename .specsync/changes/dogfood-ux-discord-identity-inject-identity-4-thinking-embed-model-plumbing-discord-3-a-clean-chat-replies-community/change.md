@@ -1,6 +1,6 @@
 ---
 id: dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 65cff62fdae8cb0413d92adfe8acb29455fc127f
 ---
