@@ -28,6 +28,17 @@ artifact: testing
   `--protocol-version` prints 2; a protocol-1 binary is a mismatch.
 - No live tokens, no network, no real git worktrees.
 
+## Requirement evidence
+
+| Requirement | Test | Evidence |
+|---|---|---|
+| `REQ-agent-073` | `tests/agent.events-ndjson.test.ts` | Frame shapes, redaction/scrub, caps, parser edge cases, result summary cap, protocol-mismatch withholding. |
+| `REQ-cli-073` | `tests/agent.ndjson-spawn.test.ts`, `tests/agent.cli.test.ts` | Real `task run --output ndjson` prints protocol-2 frames ending in the result; `--json` unchanged; bad `--output` exits 1. |
+| `REQ-discord-073` | `tests/agent.ndjson-spawn.test.ts`, `tests/agent.events-ndjson.test.ts` | Fake bin drives `onStatus`; result-frame summary; fallback; a protocol-3 ToolResult never reaches the summary. |
+| `REQ-watch-073` | `tests/agent.ndjson-spawn.test.ts` | WATCH client forwards the same progress from a fake bin. |
+| `REQ-cli-008` | `tests/discord.bridge.cli.test.ts` | `--protocol-version` prints `CORVIDINHO_PROTOCOL_VERSION` (2) and exits 0. |
+| `REQ-discord-006` | `tests/discord.protocol-version.test.ts` | Match / mismatch (protocol-1 binary) / unverifiable / timeout fixtures. |
+
 ## Automated coverage
 
 - `bunx tsc --noEmit`
