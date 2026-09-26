@@ -45,9 +45,11 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-discord-009
 
-Retain seven-command slash set including `/schedule`. Additionally: `/session start`
-and `/work` MAY accept an optional `project` string (SESSION-WORKTREE-4). No new
-slash command names.
+Slash command set SHALL include `/schedule` (list|create|pause|resume|delete)
+in addition to session/status/agents/work/mute/unmute (seven commands).
+`/session start` and `/work` MAY accept an optional `project` string option for
+explicit project selection (SESSION-WORKTREE-4). The command set SHALL NOT invent
+new slash command names for this requirement.
 
 Acceptance Criteria
 - `buildSlashCommandBodies()` still seven commands; session start + work have optional `project`.
@@ -56,9 +58,10 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-discord-018
 
-Retain `/schedule` inventory docs. Additionally document per-talk worktree isolation,
-optional `project` on `/session start` and `/work`, schedule project scope, and
-`WORKTREE_BASE_DIR` / `.corvid-worktrees` rooting.
+Operator docs (`docs/discord.md`) SHALL document `/schedule` alongside the prior
+slash inventory and SHALL document per-talk worktree isolation, optional
+`project` on `/session start` and `/work`, schedule project scope, and
+`WORKTREE_BASE_DIR` / `.corvid-worktrees` rooting (SESSION-WORKTREE).
 
 Acceptance Criteria
 - `docs/discord.md` lists `/schedule` and SESSION-WORKTREE behavior/env.
@@ -66,9 +69,10 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-discord-019
 
-Retain SESSION durable store + soft TTL. Additionally persist optional worktree
-fields (`project`, `worktree_path`, `worktree_branch`, `worktree_state`) on schema
-v4; TTL purge parks/removes worktree before dropping the row.
+Session durable store SHALL continue to persist SessionStore/WorkStore with soft
+TTL (SESSION-1..4) and SHALL additionally persist optional worktree fields
+(`project`, `worktree_path`, `worktree_branch`, `worktree_state`) on schema v4.
+Soft TTL purge SHALL park or remove the session worktree before dropping the row.
 
 Acceptance Criteria
 - Schema v4 migration adds columns; reload restores worktree binding.
@@ -77,8 +81,9 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-discord-020
 
-Retain cooperative `/schedule` ticker. Additionally: ticks SHALL spawn with cwd
-scoped to `schedule.project` worktree/scope and park/remove after the run.
+Schedule ticks SHALL remain cooperative (non-blocking, concurrency-capped) and
+SHALL spawn the agent with cwd scoped to the schedule's `project` worktree (or
+project-scoped directory), then park/remove that workspace after the run.
 
 Acceptance Criteria
 - Tick resolves `schedule.project` → isolated cwd for `runChat`.
