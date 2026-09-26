@@ -7,11 +7,11 @@
   "title": "Dogfood UX: Discord identity inject (IDENTITY-4), thinking embed model+plumbing (DISCORD-3.a), clean chat replies, community public GitHub gate (ROLES-CHAT-8); package 0.0.18",
   "description": "Dogfood UX: Discord identity inject (IDENTITY-4), thinking embed model+plumbing (DISCORD-3.a), clean chat replies, community public GitHub gate (ROLES-CHAT-8); package 0.0.18",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "65cff62fdae8cb0413d92adfe8acb29455fc127f",
   "created_at": 1790459007,
-  "updated_at": 1790459185,
+  "updated_at": 1790459197,
   "affected_specs": [
     "discord",
     "agent",
