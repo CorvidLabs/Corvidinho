@@ -77,6 +77,12 @@ for 24 h.
   (`SlashContext.post` = gateway reply), because an edit of a deferred reply
   may not notify a mention; without a post function (or on failure) they are
   appended to the reply.
+- With AUTONOMY-4 (#189) on main, a clarify ask addresses the requester and
+  a stuck ask pings the owner; `formatAskReply` treats `spend-cap` like
+  stuck (owner), `/work` and `/session start` address the requester on
+  clarify and send the owner notice only for stuck / spend-cap
+  (`askNeedsOwner`), and the bridge's thin-reply restatement of a pending
+  spend-cap ask goes through the same once-per-episode claim.
 - No Approve card exists (#96), so a reply cannot unblock: the questions end
   with the operator action and "Replying can't lift the cap — this needs the
   operator." (no `?`), and `formatAskReply` drops the reply hint for a

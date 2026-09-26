@@ -145,7 +145,9 @@ The bridge builds one `createSpendAlertOutbox({ db, env })`
 (`src/agent/spend-outbox.ts`) and shares it as `SlashContext.spendAlerts` and
 `SchedulerServiceOpts.spendAlerts`; `SlashContext.post` is the gateway reply
 (a fresh channel post). `src/discord/spend-post.ts` exports `askPingOwner`
-(a `spend-cap` ask pings once per cap episode via `claimCapPing`),
+(a `spend-cap` ask pings once per cap episode via `claimCapPing`, also when
+a thin reply restates it), `askNeedsOwner` (stuck and spend-cap ping the
+owner; clarify addresses the requester, AUTONOMY-4),
 `takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
 `replyWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
 `AskPingOwner` types. The chat reply, `/work`, `/session start` and the
@@ -153,9 +155,11 @@ schedule post take the pending warning from the outbox (the run's own
 `spendWarning` only when there is no DB), and hand it back when the post
 fails (`SchedulerOutbound.post` may resolve `false`). `/work` and
 `/session start` post `result.ask` through `formatAskReply` (paused status,
-not ✅); `WorkTaskStatus` gains `blocked` (listed on `/status` as waiting for
-input when > 0); their owner ping and warning go out as a fresh post after
-the reply. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
+not ✅; a clarify ask addresses the requester); `WorkTaskStatus` gains
+`blocked` (listed on `/status` as waiting for input when > 0); the owner
+ping (stuck and spend-cap only) and the warning go out as a fresh post after
+the reply. `formatAskReply` pings the owner for a `spend-cap` ask like a
+stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never

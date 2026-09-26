@@ -27,17 +27,20 @@ On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8), a run that stopped at
 the spend cap (`ask.reason` `spend-cap`) SHALL be posted through the
 AUTONOMY-1/2 ask path on every bridge surface — chat reply, `/work`,
 `/session start` and schedule post — with a paused, not failed, status and
-without the "reply to answer" hint (a reply cannot lift the cap). The
-configured owner SHALL be pinged once per cap episode across those surfaces
-(the bridge's spend alert outbox `claimCapPing`; a schedule also keeps its
-per-schedule ping key); later spend-cap asks in the same episode SHALL post
-without a ping. `/work` SHALL record a run that stopped to ask as `blocked`
-(not `completed`; a stuck run stays `failed`), SHALL say the PR was not
-opened because the run paused at the spend cap, and `/status` SHALL count
-blocked work as waiting for input. A slash run's owner ping and warning
-SHALL go out as a fresh channel post after the reply (allowed mentions
-limited to the owner), or be appended to the reply when that post cannot be
-sent.
+without the "reply to answer" hint (a reply cannot lift the cap). Like a
+stuck ask (AUTONOMY-2/4), a spend-cap ask SHALL ping the configured owner,
+once per cap episode across those surfaces (the bridge's spend alert outbox
+`claimCapPing`; a schedule also keeps its per-schedule ping key); later
+spend-cap asks in the same episode, and a thin reply that restates the
+pending spend-cap ask, SHALL post without a ping. `/work` SHALL record a run
+that stopped to ask as `blocked` (not `completed`; a stuck run stays
+`failed`), SHALL say the PR was not opened because the run paused at the
+spend cap, and `/status` SHALL count blocked work as waiting for input.
+`/work` and `/session start` SHALL address the requester on a clarify ask
+(AUTONOMY-4) and ping the owner only for stuck and spend-cap asks; that
+owner ping and the warning SHALL go out as a fresh channel post after the
+reply (allowed mentions limited to the owner), or be appended to the reply
+when that post cannot be sent.
 
 The 80% warning SHALL reach the owner even when the run that crossed it had
 no Discord reply (WATCH, the headless daemon, a delegate worker, a schedule
@@ -56,7 +59,8 @@ Acceptance Criteria
 - `rescrubDatabase` re-scrubs a raw `spend_ledger` row.
 - A `spend-cap` ask reply carries the spend-cap headline and the question, pings the owner, its thinking status is not an error, and it never carries the reply hint.
 - Two spend-cap asks with different amounts share one `askPingKey`.
-- Two chat messages at the cap: the first reply pings the owner, the second posts the ask with no mention; after spend is seen under 70% the next one pings again.
+- Two chat messages at the cap: the first reply pings the owner, the second posts the ask with no mention; after spend is seen under 70% the next one pings again. A thin reply (`ok`) to the spend-cap ask restates it with no mention and does not run the agent.
+- `/work` with a clarify ask is `blocked`, mentions the requester in the reply and posts no owner notice.
 - `/work` at the cap: the task is `blocked`, the reply shows the ask and the spend-cap PR line (no ✅), and one fresh post pings the owner; a second `/work` in the same episode does not ping. `/session start` at the cap shows the ask and pings the owner.
 - A schedule spend-cap ask in an episode already pinged elsewhere posts without a mention.
 - A warning recorded by another process (a WATCH-style run on the same data dir) appears on the next bridge chat reply with the owner pinged, once; `/work` delivers a pending warning as a fresh post pinging the owner.

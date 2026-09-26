@@ -19,11 +19,13 @@ from recording", "Spend-cap ask on every surface"). Paths in this change:
   `takeWarning(fallback)` claims pending warnings (current spend; dropped
   when back under 80%; `release()` on a failed post; no DB ⇒ the run's own
   warning) and `claimCapPing()` (once per episode; fails open to pinging).
-- `src/discord/spend-post.ts` — `askPingOwner`, `takeSpendWarning`,
-  `ownerAskNoticeLine`, `slashOwnerNotice`, `replyWithOwnerNotice`: shared by
-  the chat reply, `/work`, `/session start` and schedule posts. Slash owner
-  notices are a fresh channel post (a deferred-reply edit may not notify a
-  mention), else appended to the reply.
+- `src/discord/spend-post.ts` — `askPingOwner`, `askNeedsOwner`,
+  `takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
+  `replyWithOwnerNotice`: shared by the chat reply (and its thin-reply
+  restatement), `/work`, `/session start` and schedule posts. Stuck and
+  spend-cap asks ping the owner; clarify addresses the requester
+  (AUTONOMY-4). Slash owner notices are a fresh channel post (a
+  deferred-reply edit may not notify a mention), else appended to the reply.
 - `src/discord/command-handlers/work.ts` / `session.ts` — handle
   `result.ask` through `formatAskReply` (paused status, ask in the reply,
   spend-cap PR line for `/work`) and send the owner notice.

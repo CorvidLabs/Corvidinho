@@ -52,6 +52,8 @@ or temp-dir SQLite. No network, no real keys, no git worktrees.
     owner once in a fresh post and not again; `/session start` at the cap;
     `replyWithOwnerNotice` falls back to the reply; a schedule ask in an
     already-pinged episode posts without a mention; the daemon logs
-    `spend.warning` and `run.needs_human`.
+    `spend.warning` and `run.needs_human`; a thin reply to a spend-cap ask
+    restates it without a mention or agent run; a `/work` clarify ask
+    addresses the requester with no owner post (AUTONOMY-4).
 - Full suite: `bun test`, `bunx tsc --noEmit`, `specsync check
   --require-coverage 100`, `fledge lanes run verify --non-interactive`.
