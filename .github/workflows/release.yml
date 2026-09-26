@@ -1,0 +1,133 @@
+# Create a GitHub Release when a version tag is pushed.
+# Trigger: push tags matching v* (e.g. v0.0.3).
+# Body preference: CHANGELOG.md section for the tag, else generated notes.
+# Idempotent: if the release already exists, log and succeed (exit 0).
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: create-github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "::notice::release workflow starting for tag=${TAG}"
+          git rev-parse --verify "refs/tags/${TAG}"
+          echo "commit=$(git rev-list -n 1 "refs/tags/${TAG}")" >> "$GITHUB_OUTPUT"
+
+      - name: Idempotency check (release already exists?)
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "::group::gh release view ${TAG}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" > /tmp/existing-release.txt 2>/tmp/existing-release.err; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release ${TAG} already exists — idempotent success (will not recreate)."
+            cat /tmp/existing-release.txt
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existing release for ${TAG}; will create."
+            cat /tmp/existing-release.err || true
+          fi
+          echo "::endgroup::"
+
+      - name: Build release body (CHANGELOG or generated)
+        if: steps.exists.outputs.exists != 'true'
+        id: body
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          # Strip leading v for CHANGELOG heading match (## 0.0.3 or ## v0.0.3)
+          VER="${TAG#v}"
+          BODY_FILE=/tmp/release-body.md
+          : > "$BODY_FILE"
+
+          extract_section() {
+            local file="$1" ver="$2"
+            [[ -f "$file" ]] || return 1
+            # Prefer exact ## vX.Y.Z or ## X.Y.Z headings; stop at next ##
+            awk -v ver="$ver" '
+              BEGIN { want=0 }
+              /^##[ \t]+v?/ {
+                heading=$0
+                sub(/^##[ \t]+/, "", heading)
+                if (heading == ver || heading == ("v" ver)) { want=1; next }
+                else if (want) { exit }
+              }
+              want { print }
+            ' "$file" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+          }
+
+          echo "::group::CHANGELOG excerpt"
+          if SECTION=$(extract_section CHANGELOG.md "$VER") && [[ -n "${SECTION// }" ]]; then
+            {
+              echo "## Corvidinho ${TAG}"
+              echo
+              echo "$SECTION"
+            } > "$BODY_FILE"
+            echo "source=CHANGELOG.md"
+            echo "$SECTION" | head -40
+          else
+            echo "CHANGELOG section missing/empty — will use generated notes from softprops"
+            {
+              echo "## Corvidinho ${TAG}"
+              echo
+              echo "_Notes generated from commits since previous tag._"
+            } > "$BODY_FILE"
+            echo "source=generated"
+          fi
+          echo "::endgroup::"
+          echo "path=${BODY_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.exists.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Corvidinho ${{ steps.tag.outputs.tag }}
+          body_path: ${{ steps.body.outputs.path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Verbose summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "::group::Final release view"
+          gh release view "$TAG" --repo "${{ github.repository }}"
+          echo "::endgroup::"
+          echo "::notice::release job complete for ${TAG} (exists_was=${{ steps.exists.outputs.exists }})"

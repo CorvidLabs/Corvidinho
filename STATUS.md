@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress + Discord go-live + LLM tool-loop dogfood (#31) + **v0.0.2** status polish |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress + Discord go-live + LLM tool-loop dogfood (#31) + **v0.0.2** status polish + **v0.0.3** release Action + safe updater |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -42,6 +42,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Discord spawn + dogfood path | → [#32](https://github.com/CorvidLabs/Corvidinho/pull/32) | Always `bun`-invoke `.ts` for protocol + agent spawn (fix EACCES); parse `task run --json` for Discord summary; thin env-gated LLM execute stub |
 | LLM tool loop (DOGFOOD) | #31 → [#33](https://github.com/CorvidLabs/Corvidinho/pull/33) | Interruptible OpenAI-compatible plugin tool loop on `task run` (AGENT-3/5); prove-before-done unchanged; fixture mock HTTP; Discord/WATCH keep `--no-verify` |
 | v0.0.2 dogfood polish | → [#34](https://github.com/CorvidLabs/Corvidinho/pull/34) | Shared `src/version.ts` from package.json; enriched ephemeral `/status` (LLM model+host / demo stub, slash names, optional git tip); no new slash commands |
+| v0.0.3 release + safe update | → (this PR) | Tag→Release Action; `scripts/corvidinho-update.sh` with pidfile stop/start + SHA rollback; `docs/UPDATE.md`; no Discord panic posts on failure |
 
 ### In flight / next
 
@@ -113,6 +114,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 - For Discord callers: HEAR (#5) **live on Leif's box** (token + allowlists); bun-spawn for `.ts` fixed this PR
 - For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later
 - Attribution (#20→#24) on outbound PRs — **shipped**
+- Package **0.0.3** — tag→Release Action + `scripts/corvidinho-update.sh` + `docs/UPDATE.md`
 - Package **0.0.2** + richer Discord `/status` (shared version, LLM mode without key, slash names, optional git tip) — [#34](https://github.com/CorvidLabs/Corvidinho/pull/34)
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 
