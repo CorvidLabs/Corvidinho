@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "c238e3029a833915f1b31f75d23ed09f6e5c584f",
   "created_at": 1790459562,
-  "updated_at": 1790460455,
+  "updated_at": 1790460490,
   "affected_specs": [
     "agent",
     "cli",
@@ -54,7 +54,9 @@
     "design",
     "research"
   ],
-  "dependencies": [],
+  "dependencies": [
+    "safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a"
+  ],
   "answers": {
     "architecture_risk": "yes",
     "public_contract": "yes"

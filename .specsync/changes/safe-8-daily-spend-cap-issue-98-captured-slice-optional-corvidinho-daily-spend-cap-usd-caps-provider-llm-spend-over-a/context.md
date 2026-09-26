@@ -39,3 +39,17 @@ Constraints:
   and no version bump.
 - Free-text columns go through scrubSecrets and SCRUB_TARGETS (SAFE-6).
 - Keep hot shared files (execute.ts, cli.ts) to small hooks.
+
+Amended before finalize (lesson):
+
+- Leif amended SAFE-8 on #98 (captured by #162): warn at 80%, and at 100%
+  ask (Approve card) instead of refusing. The refusal behavior above was
+  replaced in the same PR by the follow-up change
+  `safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run`
+  (ordered after this one), which modifies REQ-agent-098 / REQ-cli-098 /
+  REQ-discord-098. Once that change materialized, this change's original
+  `## Added` text no longer matched the living tree and could not
+  re-verify, so its deltas now carry the amended text (re-approved). The
+  ledger, price table and estimates described above are unchanged; only the
+  at-cap behavior (stop and ask, run `blocked`), the 80% warning and the
+  doctor / `/status` lines differ.
