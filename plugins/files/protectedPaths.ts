@@ -20,6 +20,8 @@ export function isProtectedPath(filePath: string): boolean {
   const base = basename(normalized);
   const baseLower = base.toLowerCase();
   if (baseLower === "fledge.toml") return true;
+  // Bun runtime config: a planted `preload` runs code in every spawned agent.
+  if (baseLower === "bunfig.toml" || baseLower === ".bunfig.toml") return true;
   if (baseLower.endsWith(".spec.md")) return true;
   if (baseLower.includes("keystore")) return true;
   if (baseLower === "wallet-keystore.json") return true;
@@ -30,7 +32,7 @@ export function isProtectedPath(filePath: string): boolean {
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +
-    `(.env* / .git / fledge.toml / specs / *.spec.md / keystores). ` +
+    `(.env* / .git / fledge.toml / bunfig.toml / specs / *.spec.md / keystores). ` +
     `There is NO override — edit via SpecSync or outside the agent file tools.`
   );
 }

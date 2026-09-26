@@ -63,6 +63,8 @@ export class SessionStore {
   readonly defaultProjectRoot: string | undefined;
   private readonly allowlist: AllowlistConfig | undefined;
   private readonly ensureWorktreeOnCreate: boolean;
+  /** session id → number of agent runs in flight (REQ-discord-204). */
+  private readonly activeRuns = new Map<string, number>();
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
@@ -90,6 +92,8 @@ export class SessionStore {
   /** Drop expired session from maps + DB; park worktree async; return true if purged. */
   private purgeIfExpired(session: SessionStub | undefined): boolean {
     if (!session) return false;
+    // A run in flight is live work in the worktree, never an idle talk.
+    if (this.activeRuns.has(session.id)) return false;
     if (!this.expired(session)) return false;
     // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
     void this.parkSessionWorktree(session);
@@ -419,6 +423,24 @@ export class SessionStore {
   touch(session: SessionStub): void {
     session.lastActivityAt = this.nowMs();
     this.persistSession(session);
+  }
+
+  /**
+   * Run `fn` (an agent run) with the session marked busy: the soft-TTL purge
+   * never drops or parks it meanwhile, and the end of the run counts as
+   * activity (SESSION-2 / SESSION-WORKTREE-3 / REQ-discord-204).
+   */
+  async runActive<T>(session: SessionStub, fn: () => Promise<T>): Promise<T> {
+    this.activeRuns.set(session.id, (this.activeRuns.get(session.id) ?? 0) + 1);
+    try {
+      return await fn();
+    } finally {
+      const left = (this.activeRuns.get(session.id) ?? 1) - 1;
+      if (left > 0) this.activeRuns.set(session.id, left);
+      else this.activeRuns.delete(session.id);
+      // Only a still-live session is touched; an ended one stays ended.
+      if (this.bySessionId.get(session.id) === session) this.touch(session);
+    }
   }
 
   /** Bind a bot outbound message id so replies continue the session (DISCORD-2). */

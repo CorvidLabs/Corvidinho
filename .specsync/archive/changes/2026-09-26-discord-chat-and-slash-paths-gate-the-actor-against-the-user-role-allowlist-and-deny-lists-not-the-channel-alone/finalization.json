@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-chat-and-slash-paths-gate-the-actor-against-the-user-role-allowlist-and-deny-lists-not-the-channel-alone",
+  "implementation_commit": "72223ffe33cca090e9af2cbb83edfe7e4987939e",
+  "implementation_tree": "8f313ba1ee4485ae139e6bfee9ca55394959e42e",
+  "contract_digest": "97ff51a9843e3a1a7e5dbbfef3a6c7cb04cd1af7199ca1f2895648f4ce76f97c",
+  "workspace_digest": "105787d6e4d11111fe3d7bf0e7dced8b86742495bad8400ef1788f017e760c07",
+  "closing_digest": "62cd4213726950f11176570f10a6d2eb0159f1eda6aad45d6c6d716cee97c16f",
+  "review_digest": "141921a953fe0057f1bf570e3c576252edc7352873e8ce8e184af07ec078895a",
+  "finalization_digest": "db86ef9cbfbe68cc4c60ef67b47895dbc730f338670a2050dff07cfed09cd0bc",
+  "timestamp": 1790459517
+}
