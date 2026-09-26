@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "d38f210d5b05f9b905cd69d2ad6c55329f84d8b1",
+      "contract_digest": "fbbdf4ccfd665b59c8d725476df5110b44f76d44c024a88c82c13d49f699ba70",
+      "execution_digest": "90e303214baff7cd46da1f443b13fa5251178e8ed4ae2919bbbe84043e411b63",
+      "workspace_digest": "b803047118ca9f8db99807be3655c9138e29f579eaed465cb01b7cb84f23496b",
+      "timestamp": 1790466515
+    }
+  ]
+}
