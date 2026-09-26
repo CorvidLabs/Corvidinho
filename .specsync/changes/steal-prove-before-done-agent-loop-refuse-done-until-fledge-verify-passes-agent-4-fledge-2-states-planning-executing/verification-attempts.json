@@ -63,6 +63,27 @@
         "REQ-agent-003",
         "REQ-cli-005"
       ]
+    },
+    {
+      "timestamp": 1790437634,
+      "commit": "4ced043dadaff00db33f09eb8ec896107bc8a17b",
+      "contract_digest": "1c2cf6ae2dbeb0f7b717474ff78f2a2f6712a57e06706175628b405c846ea398",
+      "execution_digest": "5605096b1f873425657467449f1881bfe5ebc4f5fa399fa0871ca27dd0704624",
+      "workspace_digest": "95adbdf444a45ae7a9e18f4bd455ed465510257490f054100787530f936b655f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-001",
+        "REQ-agent-002",
+        "REQ-agent-003",
+        "REQ-cli-005"
+      ]
     }
   ]
 }
