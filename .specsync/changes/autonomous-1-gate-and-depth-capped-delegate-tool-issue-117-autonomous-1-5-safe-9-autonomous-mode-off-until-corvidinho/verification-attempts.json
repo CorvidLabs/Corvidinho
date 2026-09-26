@@ -76,6 +76,25 @@
         "REQ-agent-117",
         "REQ-plugins-117"
       ]
+    },
+    {
+      "timestamp": 1790458482,
+      "commit": "bef1e11eefa9bb8debe16fa287227648db1d056d",
+      "contract_digest": "b0c333c46b558e5e9cb3ada64df10966d9493735d23335c94442459a1925697e",
+      "execution_digest": "8fcce5a2ba17667fa81fde041dd30ec3393363141d509fbf2c0667190cb9c3cb",
+      "workspace_digest": "7be3dbe320e9431961d40788e86f062268c10aa46dd38ddc3c1adfb52180b64d",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-117",
+        "REQ-plugins-117"
+      ]
     }
   ]
 }
