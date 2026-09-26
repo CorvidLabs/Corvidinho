@@ -15,6 +15,7 @@ import { handleSessionCommand } from "./command-handlers/session.ts";
 import { handleStatusCommand } from "./command-handlers/status.ts";
 import { handleWorkCommand } from "./command-handlers/work.ts";
 import { handleScheduleCommand } from "./command-handlers/schedule.ts";
+import { handleAnnounceCommand } from "./command-handlers/announce.ts";
 import {
   gateChannel,
   gateRateOrMute,
@@ -51,6 +52,8 @@ const COMMAND_HANDLERS = new Map<string, CommandEntry>([
   ["work", { handler: handleWorkCommand }],
   // Mutations re-check ADMIN inside handler so list stays open (ancestor pattern).
   ["schedule", { handler: handleScheduleCommand }],
+  // Mutations re-check ADMIN inside handler (DISCORD-ANNOUNCE-5).
+  ["announce", { handler: handleAnnounceCommand }],
   [
     "mute",
     {

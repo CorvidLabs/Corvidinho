@@ -33,6 +33,13 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-SCHEDULE-4**  Ingress responsiveness stays ≤ ~1 minute for live Discord/GH mentions (existing HEAR + WATCH ~60s poll); schedule ticks must not starve or delay that ingress path.
 - **DISCORD-SCHEDULE-5**  Provenance: steal from archived corvid-agent `server/discord/command-handlers/schedule-commands.ts`, `server/scheduler/`, `server/db/schedules*`, ADR `docs/decisions/001-autonomous-scheduler.md` — skip flock/council/on-chain extras unless separately HI’d.
 
+- **DISCORD-ANNOUNCE-1**  ADMIN slash `/announce channel` sets (or clears) a dedicated ops/dev announcements channel for version bumps, bridge restarts, and ship notes — separate from the dogfood/chat allowlist.
+- **DISCORD-ANNOUNCE-2**  The channel option is Discord’s native **channel picker** (CHANNEL option type / dropdown of guild text channels). Select; never type a snowflake by hand.
+- **DISCORD-ANNOUNCE-3**  `/announce show` (or surface on `/status`) shows the current announcements channel; empty means not configured (default-deny: no announce posts until set).
+- **DISCORD-ANNOUNCE-4**  After every successful bridge restart / version bump, Corvidinho posts the update **only** to the configured announcements channel (not the general allowlisted chat).
+- **DISCORD-ANNOUNCE-5**  Mutations re-check ADMIN at handler time; empty admin = deny-all. Non-admins get existing silent/ephemeral deny.
+- **DISCORD-ANNOUNCE-6**  Config persists on bot VM (file or shared SQLite under corvidinho config/data) across restarts.
+
 ## Notes (not numbered AC)
 
 - Mermaid diagrams stay in **repo docs** (e.g. [`docs/discord.md`](../docs/discord.md)). Discord chat uses embeds, code fences, or PNG — not native Mermaid.
