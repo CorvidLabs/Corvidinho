@@ -81,6 +81,8 @@ files:
   - tests/discord.ask-ping.test.ts
   - src/discord/thin-ack.ts
   - tests/discord.thin-ack.test.ts
+  - src/discord/inflight-replies.ts
+  - tests/discord.inflight-replies.test.ts
 
 db_tables: []
 depends_on:
@@ -123,9 +125,18 @@ outbound `post` forwards `mentionUserIds`. Schedule pings are deduped per
 question: `askPingKey` digests the ask; `Schedule.askPingKey` /
 `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key` (schema
 v7). Sessions persist `pendingAsk` in `discord_sessions.pending_ask` (schema
-v8, `SCHEMA_VERSION` 8). `src/discord/thin-ack.ts` exports `isThinAck` /
+v8). `src/discord/thin-ack.ts` exports `isThinAck` /
 `isCancelAsk` / `ASK_CANCELLED_ACK`: while `pendingAsk` is set, a thin-ack
 continue restates the ask without spawning the agent; cancel clears it.
+
+Interrupted replies (REQ-discord-311, DISCORD-3 / AGENT-3):
+`src/discord/inflight-replies.ts` exports `InflightReplyStore` (`begin`,
+`setProgressMessage`, `end`, `list` over `discord_inflight_replies`, schema
+v9, `SCHEMA_VERSION` 9), `recoverInterruptedReplies`, `buildInterruptedEmbed`,
+`INTERRUPTED_REPLY_TEXT` / `INTERRUPTED_REPLY_STATUS` and the `InflightReply`
+/ `RecoverInterruptedRepliesOptions` / `RecoverInterruptedRepliesResult`
+types. The bridge records a row per message reply and clears it on every exit;
+at start, after the gateway is up, it marks each leftover reply interrupted.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
@@ -176,6 +187,7 @@ SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
+a message reply keeps one `discord_inflight_replies` row (ids + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path; the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 `/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
 Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108).
@@ -220,6 +232,9 @@ No `/memory` slash command.
 | `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
 | `/admin` on unreadable/unparsable file | Ephemeral refusal naming the path; file untouched |
 | `/admin` audit trail unavailable | Ephemeral refusal (SAFE-5 fail closed); nothing changed |
+| Leftover in-flight reply, embed edit fails or no embed id | Reply to the request message with the interrupted text; row deleted |
+| Leftover in-flight reply, edit and reply both fail | Logged as unreachable; row deleted; bridge start continues |
+| In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
 
 ## Dependencies
 

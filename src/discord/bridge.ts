@@ -1,6 +1,8 @@
 /**
  * HEAR bridge orchestrator: gateway → message-router → session stub + agent spawn.
- * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
+ * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager);
+ * a reply a dead process left frozen is marked interrupted on the next start
+ * (inflight-replies.ts, REQ-discord-311).
  * DISCORD-4: thin slash /session /status /agents /work.
  * DISCORD-SCHEDULE: /schedule + cooperative ticker (single-project).
  * SESSION-WORKTREE: per-talk/project git worktree isolation.
@@ -65,6 +67,11 @@ import {
 } from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
+import {
+  InflightReplyStore,
+  recoverInterruptedReplies,
+  type InflightReply,
+} from "./inflight-replies.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import {
   appendAudit,
@@ -247,6 +254,23 @@ export async function startBridge(
       );
     }
   }
+  // REQ-discord-311: replies a dead process left mid-flight. Snapshot before
+  // any new reply starts; the embeds are fixed once the gateway is up.
+  const inflightReplies = db ? new InflightReplyStore(db) : undefined;
+  const inflightBestEffort = <T>(
+    what: string,
+    fn: (s: InflightReplyStore) => T,
+  ): T | undefined => {
+    if (!inflightReplies) return undefined;
+    try {
+      return fn(inflightReplies);
+    } catch (err) {
+      console.warn(`[discord] in-flight reply ${what} failed:`, err);
+      return undefined;
+    }
+  };
+  const interruptedReplies: InflightReply[] =
+    inflightBestEffort("read", (s) => s.list()) ?? [];
   const scheduleStore =
     opts.scheduleStore ?? new ScheduleStore({ db });
   const memoryStore =
@@ -431,162 +455,178 @@ export async function startBridge(
         tickMs: opts.thinkingTickMs,
       });
 
-      await thinking.start({ description: "Working on your request..." });
-
-      // SESSION-WORKTREE: bind isolated cwd on start; reuse on continue (no silent switch).
-      if (action.kind === "start_session" || !session.worktreePath) {
-        const bound = await store.bindWorktree(session);
-        if (!bound.ok) {
-          await thinking.fail(`❌ worktree: ${bound.error}`);
-          if (replyRef.fn) {
-            await replyRef.fn({
-              channelId,
-              content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
-              replyToMessageId: msg.id,
-            });
-          }
-          await store.endSession(session);
-          return;
-        }
-      }
-
-      const sessionCwd = store.cwdFor(session);
-
-      let result;
+      // REQ-discord-311: record the reply while it is in flight so the next
+      // bridge start can mark it interrupted if this process dies mid-reply.
+      // Cleared on every exit path (done, failed, refused, thrown).
+      const inflightId = inflightBestEffort("record", (s) =>
+        s.begin({ sessionId: session.id, channelId, requestMessageId: msg.id }).id,
+      );
       try {
-        // DISCORD-9 — download attachments into the session workspace (bound
-        // above): the agent's file tools only open paths under its cwd
-        // (REQ-discord-013).
-        let enrichedPrompt = await enrichPromptWithImages(
-          agentPrompt,
-          msg.attachments,
-          {
-            messageId: msg.id,
-            cacheDir: attachmentCacheDir(sessionCwd ?? config.projectRoot),
-          },
-        );
-
-        // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
-        const idInject = enrichPromptWithIdentity(enrichedPrompt, {
-          userId: msg.authorId,
-          displayName: msg.authorDisplayName,
-          username: msg.authorUsername,
-          owner: config.owner ?? null,
-        });
-        if (idInject.injected) {
-          console.log(
-            `[discord] identity inject: user ${msg.authorId}` +
-              (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
+        await thinking.start({ description: "Working on your request..." });
+        const progressId = thinking.progressMessageId;
+        if (inflightId && progressId) {
+          inflightBestEffort("update", (s) =>
+            s.setProgressMessage(inflightId, progressId),
           );
-          enrichedPrompt = idInject.prompt;
         }
 
-        // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
-        const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-          ownerUserId: msg.authorId,
-        });
-        if (memInject.injected) {
-          console.log(
-            `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
-          );
-          enrichedPrompt = memInject.prompt;
-        }
-
-        const actingIsAdmin =
-          resolvePermissionLevel({
-            userId: msg.authorId,
-            roleIds: msg.authorRoleIds,
-            allowlist: config.allowlist,
-            adminUserIds: config.adminUserIds,
-            adminRoleIds: config.adminRoleIds,
-            owner: config.owner ?? null,
-            mutedUsers,
-          }) >= PermissionLevel.ADMIN;
-        // Busy while the agent runs: the soft-TTL purge must not park this
-        // worktree mid-run (REQ-discord-204).
-        result = await store.runActive(session, () =>
-          agent.runChat({
-            prompt: enrichedPrompt,
-            // Raw human text (before memory/image enrichment) — the only
-            // source of SAFE-4 confirm tokens.
-            humanText: prompt,
-            sessionId: session.id,
-            resume: action.kind === "continue_session",
-            actingUserId: msg.authorId,
-            actingIsAdmin,
-            cwd: sessionCwd,
-            onStatus: (u) => {
-              void thinking.update({
-                tool: u.tool,
-                tokens: u.tokens,
-                description: u.message ? `⏳ ${u.message}` : undefined,
+        // SESSION-WORKTREE: bind isolated cwd on start; reuse on continue (no silent switch).
+        if (action.kind === "start_session" || !session.worktreePath) {
+          const bound = await store.bindWorktree(session);
+          if (!bound.ok) {
+            await thinking.fail(`❌ worktree: ${bound.error}`);
+            if (replyRef.fn) {
+              await replyRef.fn({
+                channelId,
+                content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
+                replyToMessageId: msg.id,
               });
+            }
+            await store.endSession(session);
+            return;
+          }
+        }
+
+        const sessionCwd = store.cwdFor(session);
+
+        let result;
+        try {
+          // DISCORD-9 — download attachments into the session workspace (bound
+          // above): the agent's file tools only open paths under its cwd
+          // (REQ-discord-013).
+          let enrichedPrompt = await enrichPromptWithImages(
+            agentPrompt,
+            msg.attachments,
+            {
+              messageId: msg.id,
+              cacheDir: attachmentCacheDir(sessionCwd ?? config.projectRoot),
             },
-          }),
-        );
-      } catch (err) {
-        await thinking.fail(
-          `❌ ${err instanceof Error ? err.message : "agent error"}`,
-        );
-        throw err;
-      }
+          );
 
-      const plumbing = result.task
-        ? formatTaskPlumbing({
-            state: result.task.state,
-            verified: result.task.verified,
-            verifySkipped: result.task.verifySkipped,
-            attempts: result.task.attempts,
-            cancelled: result.task.cancelled,
-          })
-        : undefined;
-      const thinkExtras = { plumbing, model: llmModel };
-      // AUTONOMY-1/2/4: needs a human → question; clarify pings requester, stuck pings owner.
-      const ask = result.ask
-        ? formatAskReply({
-            ask: result.ask,
-            owner: config.owner,
-            requesterDiscordId: msg.authorId,
-            context: result.summary,
-            replyHint: true,
-          })
-        : null;
-      if (ask) {
-        store.setPendingAsk(session, result.ask!);
-        await (ask.failed
-          ? thinking.fail(ask.status, thinkExtras)
-          : thinking.done(ask.status, thinkExtras));
-        if (result.ask!.reason === "stuck" && !ask.ownerPinged) {
-          console.warn(ASK_NO_OWNER_WARNING);
+          // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
+          const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+            userId: msg.authorId,
+            displayName: msg.authorDisplayName,
+            username: msg.authorUsername,
+            owner: config.owner ?? null,
+          });
+          if (idInject.injected) {
+            console.log(
+              `[discord] identity inject: user ${msg.authorId}` +
+                (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
+            );
+            enrichedPrompt = idInject.prompt;
+          }
+
+          // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
+          const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
+            ownerUserId: msg.authorId,
+          });
+          if (memInject.injected) {
+            console.log(
+              `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
+            );
+            enrichedPrompt = memInject.prompt;
+          }
+
+          const actingIsAdmin =
+            resolvePermissionLevel({
+              userId: msg.authorId,
+              roleIds: msg.authorRoleIds,
+              allowlist: config.allowlist,
+              adminUserIds: config.adminUserIds,
+              adminRoleIds: config.adminRoleIds,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }) >= PermissionLevel.ADMIN;
+          // Busy while the agent runs: the soft-TTL purge must not park this
+          // worktree mid-run (REQ-discord-204).
+          result = await store.runActive(session, () =>
+            agent.runChat({
+              prompt: enrichedPrompt,
+              // Raw human text (before memory/image enrichment) — the only
+              // source of SAFE-4 confirm tokens.
+              humanText: prompt,
+              sessionId: session.id,
+              resume: action.kind === "continue_session",
+              actingUserId: msg.authorId,
+              actingIsAdmin,
+              cwd: sessionCwd,
+              onStatus: (u) => {
+                void thinking.update({
+                  tool: u.tool,
+                  tokens: u.tokens,
+                  description: u.message ? `⏳ ${u.message}` : undefined,
+                });
+              },
+            }),
+          );
+        } catch (err) {
+          await thinking.fail(
+            `❌ ${err instanceof Error ? err.message : "agent error"}`,
+          );
+          throw err;
         }
-      } else if (result.ok) {
-        if (session.pendingAsk) store.setPendingAsk(session, null);
-        await thinking.done("✅ Done", thinkExtras);
-      } else {
-        if (session.pendingAsk) store.setPendingAsk(session, null);
-        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
-      }
 
-      // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
-      const body = ask
-        ? ask.content
-        : result.ok
-          ? result.summary.slice(0, 1800)
-          : `session ${session.id} failed (exit ${result.exitCode})`;
-
-      if (replyRef.fn) {
-        const sent = await replyRef.fn({
-          channelId,
-          content: body,
-          replyToMessageId: msg.id,
-          ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
-        });
-        if (sent?.messageId) {
-          store.trackBotMessage(sent.messageId, session);
+        const plumbing = result.task
+          ? formatTaskPlumbing({
+              state: result.task.state,
+              verified: result.task.verified,
+              verifySkipped: result.task.verifySkipped,
+              attempts: result.task.attempts,
+              cancelled: result.task.cancelled,
+            })
+          : undefined;
+        const thinkExtras = { plumbing, model: llmModel };
+        // AUTONOMY-1/2/4: needs a human → question; clarify pings requester, stuck pings owner.
+        const ask = result.ask
+          ? formatAskReply({
+              ask: result.ask,
+              owner: config.owner,
+              requesterDiscordId: msg.authorId,
+              context: result.summary,
+              replyHint: true,
+            })
+          : null;
+        if (ask) {
+          store.setPendingAsk(session, result.ask!);
+          await (ask.failed
+            ? thinking.fail(ask.status, thinkExtras)
+            : thinking.done(ask.status, thinkExtras));
+          if (result.ask!.reason === "stuck" && !ask.ownerPinged) {
+            console.warn(ASK_NO_OWNER_WARNING);
+          }
+        } else if (result.ok) {
+          if (session.pendingAsk) store.setPendingAsk(session, null);
+          await thinking.done("✅ Done", thinkExtras);
+        } else {
+          if (session.pendingAsk) store.setPendingAsk(session, null);
+          await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
         }
-      } else {
-        // Dry / test: synthesize bot message id so reply continuity can be tested.
-        store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+
+        // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
+        const body = ask
+          ? ask.content
+          : result.ok
+            ? result.summary.slice(0, 1800)
+            : `session ${session.id} failed (exit ${result.exitCode})`;
+
+        if (replyRef.fn) {
+          const sent = await replyRef.fn({
+            channelId,
+            content: body,
+            replyToMessageId: msg.id,
+            ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
+          });
+          if (sent?.messageId) {
+            store.trackBotMessage(sent.messageId, session);
+          }
+        } else {
+          // Dry / test: synthesize bot message id so reply continuity can be tested.
+          store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+        }
+      } finally {
+        if (inflightId) inflightBestEffort("clear", (s) => s.end(inflightId));
       }
     },
     onSlash: async (interaction) => {
@@ -650,6 +690,19 @@ export async function startBridge(
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
 
   await gateway.start();
+  if (inflightReplies && interruptedReplies.length > 0) {
+    // After login: the REST calls need the token. Sequential, never throws.
+    const outbound = resolveOutbound();
+    const r = await recoverInterruptedReplies({
+      store: inflightReplies,
+      rows: interruptedReplies,
+      editEmbed: (o) => outbound.editEmbed(o),
+      reply: replyRef.fn,
+    });
+    console.log(
+      `[discord] restart recovery: ${interruptedReplies.length} interrupted reply(ies) — ${r.edited} embed(s) marked interrupted, ${r.replied} replied, ${r.failed} unreachable`,
+    );
+  }
   scheduler?.start();
   console.log(
     "[discord] HEAR bridge ready (session stub + thinking status + slash + schedule ticker + announce + rate/mute; no ProcessManager).",

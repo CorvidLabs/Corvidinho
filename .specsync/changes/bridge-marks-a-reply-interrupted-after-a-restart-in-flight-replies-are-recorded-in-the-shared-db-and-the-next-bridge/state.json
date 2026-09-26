@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "bridge-marks-a-reply-interrupted-after-a-restart-in-flight-replies-are-recorded-in-the-shared-db-and-the-next-bridge",
+  "slug": "bridge-marks-a-reply-interrupted-after-a-restart-in-flight-replies-are-recorded-in-the-shared-db-and-the-next-bridge",
+  "title": "Bridge marks a reply interrupted after a restart: in-flight replies are recorded in the shared DB and the next bridge start edits the frozen progress embed to a failed interrupted status (or replies to the request message) instead of leaving it at working forever",
+  "description": "Bridge marks a reply interrupted after a restart: in-flight replies are recorded in the shared DB and the next bridge start edits the frozen progress embed to a failed interrupted status (or replies to the request message) instead of leaving it at working forever",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "aef2cde685e9e9be6f0dc1c4311a916e33981afc",
+  "created_at": 1790463577,
+  "updated_at": 1790463595,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/inflight-replies.ts",
+    "src/discord/bridge.ts",
+    "src/store/db.ts",
+    "tests/discord.inflight-replies.test.ts",
+    "tests/watch.session-store.durable.test.ts",
+    "tests/discord.ask-ping.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "While the bridge works on a reply to a message it keeps one discord_inflight_replies row (session id, channel id, progress embed id once sent, request message id, start time) and deletes it on every exit path (done, failed exit, ask, worktree refused, thrown error); refused/ignored messages never record a row. On the next bridge start each leftover row is handled once, sequentially and best effort: the bot's own progress embed is edited to the red failed status 'interrupted: Corvidinho restarted before this reply finished — please send it again'; if there is no embed id or the edit fails, the bot replies to the request message with the same text in the same channel; the row is then deleted either way and startup never throws. With no leftover rows nothing is posted or edited. Schema v9 adds the table; a v8 DB migrates and keeps its rows. No new slash command or env var."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
