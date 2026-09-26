@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner",
+  "slug": "strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner",
+  "title": "Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set",
+  "description": "Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "a49987d653499f40af938f26961c98e017c7777b",
+  "created_at": 1790453004,
+  "updated_at": 1790453134,
+  "affected_specs": [
+    "discord",
+    "plugins",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/discord/permissions.ts",
+    "src/discord/bridge.ts",
+    "src/discord/config.ts",
+    "src/discord/slash-types.ts",
+    "plugins/memory/commands.ts",
+    "src/cli.ts",
+    "tests",
+    "docs"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "resolvePermissionLevel returns ADMIN only for the configured owner (unless muted/deny-listed); CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES never grant ADMIN in the bridge or the memory handler; no owner means nobody ADMIN; bridge start and doctor warn when the legacy lists are set without echoing ids; fixture tests cover all of this"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

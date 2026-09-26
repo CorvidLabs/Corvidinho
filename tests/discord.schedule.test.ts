@@ -59,6 +59,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     channelIds: over.channelIds ?? ["chan-allowed"],
     adminUserIds: over.adminUserIds,
     adminRoleIds: over.adminRoleIds,
+    owner: over.owner,
     mutedUsers: over.mutedUsers,
   };
 }
@@ -98,7 +99,7 @@ describe("/schedule dispatch", () => {
   });
 
   test("create requires admin; empty admin = deny-all", async () => {
-    const ctx = makeCtx({ adminUserIds: [] });
+    const ctx = makeCtx({ owner: null });
     const ix = memoryInteraction({
       commandName: "schedule",
       subcommand: "create",
@@ -117,7 +118,7 @@ describe("/schedule dispatch", () => {
   });
 
   test("admin create + list + pause + resume + delete", async () => {
-    const ctx = makeCtx({ adminUserIds: ["boss"] });
+    const ctx = makeCtx({ owner: { discordId: "boss" } });
     const createIx = memoryInteraction({
       commandName: "schedule",
       subcommand: "create",
@@ -172,7 +173,7 @@ describe("/schedule dispatch", () => {
   });
 
   test("create rejects non-allowlisted channel and <5m cadence", async () => {
-    const ctx = makeCtx({ adminUserIds: ["boss"] });
+    const ctx = makeCtx({ owner: { discordId: "boss" } });
     const badChan = memoryInteraction({
       commandName: "schedule",
       subcommand: "create",
@@ -213,7 +214,7 @@ describe("/schedule dispatch", () => {
       prompt: "do",
       createdByUserId: "boss",
     });
-    const ctx = makeCtx({ adminUserIds: ["boss"], scheduleStore: store });
+    const ctx = makeCtx({ owner: { discordId: "boss" }, scheduleStore: store });
     const ix = memoryInteraction({
       commandName: "schedule",
       subcommand: "pause",
