@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.0.24
+
+### Discord ask UX tighten (less duplicate noise)
+
+- **DISCORD-ASK-6** — Button asks collapse the thinking embed into one public **Choose** stub (no separate "Needs your input" + stub).
+- **DISCORD-ASK-7** — On success (mention done or after a button pick), edit the existing stub/thinking message into the final answer when practical — no extra ✅ Done + new reply.
+- Ephemeral Choose → options flow unchanged (DISCORD-ASK-1..5).
+- Live gateway: `editMessage` / `deleteMessage`; interaction replies use `MessageFlags.Ephemeral` (drops deprecated `ephemeral: true` warning).
+
+### Ops
+
+- Package version **0.0.24** — restart the Discord bridge after update. No schema bump.
+
+## 0.0.23
+
+### Stop means stop — child process trees (AGENT-3)
+
+- **Process-tree kill + Fledge scoping** — [#185](https://github.com/CorvidLabs/Corvidinho/pull/185) (#112): Fledge runs, delegate workers and spawned chat/schedule agents get their own process group; a timeout, abort, parent exit or unhandled SIGINT/SIGTERM/SIGHUP kills the whole tree (including `setsid` grandchildren found via `/proc`), and signals the process started with ignored (SIGHUP under `nohup`) stay ignored. Daemon shutdown now kills runs abandoned after the grace period (CLI-8 / AUTONOMOUS-4). Model argv goes after `--` in `fledge plugins run`, and Fledge commands are bound to the project root they were discovered for (FLEDGE-4, PLUGIN-2/3).
+
+### Security fixes
+
+- **SAFE-3 `cd` clamp** — [#187](https://github.com/CorvidLabs/Corvidinho/pull/187): `shell-exec` refuses `cd -`, `cd -P /`, `cd -- /etc`, `{ cd /; }`, keyword forms, `pushd`, `builtin`/`command cd`, `eval "cd …"` and `CDPATH` tricks that escaped the project root.
+- **`files-edit` literal `--new`** — [#188](https://github.com/CorvidLabs/Corvidinho/pull/188): `$&`, `$1`, `` $` ``, `$'` and `$$` in the replacement are written literally instead of being expanded.
+- **Scrub before clip** — [#190](https://github.com/CorvidLabs/Corvidinho/pull/190) (SAFE-6): run summaries are secret-scrubbed before every length cap (500/1800/4000), so WATCH GitHub comments, spawn JSONL and Discord replies cannot leak a token or private key cut in half; a `BEGIN … PRIVATE KEY` block with no END line is now redacted (scrub rules version 2 re-scrubs stored rows once).
+- **GitHub gate reads the allowlist file** — [#191](https://github.com/CorvidLabs/Corvidinho/pull/191) (GITHUB-6): `deny_repos` / `deny_orgs` in the allowlist file now apply to every GitHub plugin command and `/work` PRs, not only env overlays; the test suite never reads the operator's real allowlist file.
+
+### Ops
+
+- Package version **0.0.23** — restart the Discord bridge, `corvidinho daemon` and watch after update. No schema bump (still v8). Bridge chat agents now run in their own process group and are killed when the bridge exits.
+
+
 ## 0.0.22
 
 ### Ephemeral Discord button asks + multi-user sessions

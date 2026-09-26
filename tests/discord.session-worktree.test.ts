@@ -423,8 +423,8 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
       });
       expect(seen.midRunDirKept).toBe(true);
       expect(seen.midRunFileKept).toBe(true);
-      // A reply to the bot still continues the same live session.
-      const session = store.getByBotMessage("bot_1");
+      // Session tracked via collapsed thinking message (ASK-7); list is enough here.
+      const session = store.list()[0];
       expect(session?.worktreePath).toBe(seen.cwd);
       await store.endSession(session!);
       await started.stop();

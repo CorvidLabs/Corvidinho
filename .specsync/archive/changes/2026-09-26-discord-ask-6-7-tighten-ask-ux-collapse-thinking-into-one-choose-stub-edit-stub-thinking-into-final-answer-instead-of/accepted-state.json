@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of",
+  "slug": "discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of",
+  "title": "DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23",
+  "description": "DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "faa569f4ac361e7a3eff3ae3a2047227410c803d",
+  "created_at": 1790465199,
+  "updated_at": 1790466011,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "hi/discord.md",
+    "docs/discord.md",
+    "src/discord/thinking-status.ts",
+    "src/discord/gateway.ts",
+    "src/discord/bridge.ts",
+    "src/discord/index.ts",
+    "tests/discord.ask-ephemeral.test.ts",
+    "tests/discord.thinking-bridge.test.ts",
+    "tests/discord.thinking-status.test.ts",
+    "package.json",
+    "CHANGELOG.md",
+    "specs/discord/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Button ask posts one public Choose stub (thinking collapsed into stub, no separate Needs your input). Success/done after mention or button pick edits that stub/thinking into the final answer when practical (no extra Done + new reply). Ephemeral Choose→options unchanged. Package 0.0.23; tests cover collapse paths."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

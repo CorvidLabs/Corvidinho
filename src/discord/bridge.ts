@@ -13,7 +13,8 @@
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
- * DISCORD-ASK: ephemeral button asks; SESSION-MULTI: per-user sessions.
+ * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse thinking↔stub↔answer;
+ * SESSION-MULTI: per-user sessions.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -165,6 +166,14 @@ export type StartBridgeOptions = {
 function memoryThinkingOutbound(): ThinkingOutbound & {
   sends: Array<{ channelId: string; embed: unknown; replyToMessageId?: string; messageId: string }>;
   edits: Array<{ channelId: string; messageId: string; embed: unknown }>;
+  contentEdits: Array<{
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: unknown;
+    components?: unknown[] | null;
+  }>;
+  deletes: Array<{ channelId: string; messageId: string }>;
 } {
   let n = 0;
   const sends: Array<{
@@ -175,9 +184,19 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
   }> = [];
   const edits: Array<{ channelId: string; messageId: string; embed: unknown }> =
     [];
+  const contentEdits: Array<{
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: unknown;
+    components?: unknown[] | null;
+  }> = [];
+  const deletes: Array<{ channelId: string; messageId: string }> = [];
   return {
     sends,
     edits,
+    contentEdits,
+    deletes,
     async sendEmbed({ channelId, embed, replyToMessageId }) {
       n += 1;
       const messageId = `progress_${n}`;
@@ -186,6 +205,28 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
     },
     async editEmbed({ channelId, messageId, embed }) {
       edits.push({ channelId, messageId, embed });
+      return true;
+    },
+    async editMessage(opts) {
+      contentEdits.push({
+        channelId: opts.channelId,
+        messageId: opts.messageId,
+        content: opts.content,
+        embed: opts.embed,
+        components: opts.components,
+      });
+      // Also mirror embed-only edits into `edits` for older assertions.
+      if (opts.embed && opts.embed !== null) {
+        edits.push({
+          channelId: opts.channelId,
+          messageId: opts.messageId,
+          embed: opts.embed,
+        });
+      }
+      return true;
+    },
+    async deleteMessage({ channelId, messageId }) {
+      deletes.push({ channelId, messageId });
       return true;
     },
   };
@@ -305,20 +346,23 @@ export async function startBridge(
   const embedRef: {
     send?: GatewayHandlers["sendEmbed"];
     edit?: GatewayHandlers["editEmbed"];
+    editMessage?: GatewayHandlers["editMessage"];
+    deleteMessage?: GatewayHandlers["deleteMessage"];
   } = {};
 
   const fallbackOutbound = memoryThinkingOutbound();
 
   function resolveOutbound(): ThinkingOutbound {
-    return (
-      opts.thinkingOutbound ??
-      (embedRef.send && embedRef.edit
-        ? {
-            sendEmbed: embedRef.send,
-            editEmbed: embedRef.edit,
-          }
-        : fallbackOutbound)
-    );
+    if (opts.thinkingOutbound) return opts.thinkingOutbound;
+    if (embedRef.send && embedRef.edit) {
+      return {
+        sendEmbed: embedRef.send,
+        editEmbed: embedRef.edit,
+        editMessage: embedRef.editMessage,
+        deleteMessage: embedRef.deleteMessage,
+      };
+    }
+    return fallbackOutbound;
   }
 
   const gitTipSha = tryGitTipShortSha(config.projectRoot);
@@ -630,9 +674,6 @@ export async function startBridge(
 
       if (askBody && pendingToStore) {
         store.setPendingAsk(session, pendingToStore);
-        await (askBody.failed
-          ? thinking.fail(askBody.status, thinkExtras)
-          : thinking.done(askBody.status, thinkExtras));
         if (askRaw!.reason === "stuck" && !askBody.ownerPinged) {
           console.warn(ASK_NO_OWNER_WARNING);
         }
@@ -641,12 +682,8 @@ export async function startBridge(
         if (session.pendingAsk && !session.pendingAsk.options?.length) {
           store.setPendingAsk(session, null);
         }
-        await thinking.done("✅ Done", thinkExtras);
-      } else {
-        if (session.pendingAsk && !session.pendingAsk.options?.length) {
-          store.setPendingAsk(session, null);
-        }
-        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+      } else if (session.pendingAsk && !session.pendingAsk.options?.length) {
+        store.setPendingAsk(session, null);
       }
 
       // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
@@ -656,7 +693,29 @@ export async function startBridge(
           ? result.summary.slice(0, 1800)
           : `session ${session.id} failed (exit ${result.exitCode})`;
 
-      if (replyRef.fn) {
+      // DISCORD-ASK-6/7 — prefer one public message: edit thinking into stub/answer.
+      const collapsed = await thinking.finalizeContent({
+        content: body,
+        components: askBody?.components,
+        mentionUserIds: askBody?.mentionUserIds,
+      });
+      if (collapsed) {
+        store.trackBotMessage(collapsed.messageId, session);
+        if (pendingToStore && askBody?.components) {
+          pendingToStore.stubMessageId = collapsed.messageId;
+          store.setPendingAsk(session, pendingToStore);
+        }
+      } else if (replyRef.fn) {
+        // Fallback when editMessage unavailable: status embed + separate reply.
+        if (askBody && pendingToStore) {
+          await (askBody.failed
+            ? thinking.fail(askBody.status, thinkExtras)
+            : thinking.done(askBody.status, thinkExtras));
+        } else if (result.ok) {
+          await thinking.done("✅ Done", thinkExtras);
+        } else {
+          await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+        }
         const sent = await replyRef.fn({
           channelId,
           content: body,
@@ -672,6 +731,7 @@ export async function startBridge(
           }
         }
       } else {
+        thinking.dispose();
         // Dry / test: synthesize bot message id so reply continuity can be tested.
         store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
       }
@@ -738,10 +798,12 @@ export async function startBridge(
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
+      const stubId = pending.stubMessageId ?? interaction.messageId;
       const thinking = new ThinkingStatus({
         outbound,
         channelId,
-        replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+        replyToMessageId: stubId,
+        existingMessageId: stubId,
         sessionId: session.id,
         model: llmModel,
         debounceMs: opts.thinkingDebounceMs,
@@ -875,13 +937,6 @@ export async function startBridge(
 
       if (askBody && pendingToStore) {
         store.setPendingAsk(session, pendingToStore);
-        await (askBody.failed
-          ? thinking.fail(askBody.status, thinkExtras)
-          : thinking.done(askBody.status, thinkExtras));
-      } else if (result.ok) {
-        await thinking.done("✅ Done", thinkExtras);
-      } else {
-        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
       }
 
       const body = askBody
@@ -890,7 +945,28 @@ export async function startBridge(
           ? result.summary.slice(0, 1800)
           : `session ${session.id} failed (exit ${result.exitCode})`;
 
-      if (replyRef.fn) {
+      // DISCORD-ASK-7 — edit stub/thinking into the final answer (no Done+extra).
+      const collapsed = await thinking.finalizeContent({
+        content: body,
+        components: askBody?.components,
+        mentionUserIds: askBody?.mentionUserIds,
+      });
+      if (collapsed) {
+        store.trackBotMessage(collapsed.messageId, session);
+        if (pendingToStore && askBody?.components) {
+          pendingToStore.stubMessageId = collapsed.messageId;
+          store.setPendingAsk(session, pendingToStore);
+        }
+      } else if (replyRef.fn) {
+        if (askBody && pendingToStore) {
+          await (askBody.failed
+            ? thinking.fail(askBody.status, thinkExtras)
+            : thinking.done(askBody.status, thinkExtras));
+        } else if (result.ok) {
+          await thinking.done("✅ Done", thinkExtras);
+        } else {
+          await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+        }
         const sent = await replyRef.fn({
           channelId,
           content: body,
@@ -905,6 +981,8 @@ export async function startBridge(
             store.setPendingAsk(session, pendingToStore);
           }
         }
+      } else {
+        thinking.dispose();
       }
     },
     onSlash: async (interaction) => {
@@ -937,6 +1015,8 @@ export async function startBridge(
       replyRef.fn = h.reply;
       embedRef.send = h.sendEmbed;
       embedRef.edit = h.editEmbed;
+      embedRef.editMessage = h.editMessage;
+      embedRef.deleteMessage = h.deleteMessage;
       return gw;
     });
 
@@ -966,6 +1046,8 @@ export async function startBridge(
   if (handlers.reply) replyRef.fn = handlers.reply;
   if (handlers.sendEmbed) embedRef.send = handlers.sendEmbed;
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
+  if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
+  if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
 
   await gateway.start();
   scheduler?.start();
