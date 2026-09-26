@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "document-corvidinho-lineage-honoring-corvid-agent-and-merlin-ancestors",
+  "implementation_commit": "e51c8b23cae5d31922c1d0de39a05d04007a7098",
+  "implementation_tree": "e555ada3e6a04c99b9fa201d1ead2b0f8f336bf6",
+  "contract_digest": "e18e11caf4c488aebe1148a90209972897e89b83c3b938f3a22f2a91a454de5e",
+  "workspace_digest": "1da8fdba4056ac8ae998c623011bcaacdfa316015c448206bdbb1cc3e73abc1c",
+  "closing_digest": "d9b982a1f05431dfd7753cb3f9ad1d5e82e284211498c9a91bd020d634b7406c",
+  "review_digest": "690f5a53796b673bb4dcb53a4447672478952347c628a3c0c47c73abc854e494",
+  "finalization_digest": "cd9f69615e459c36ada25bf9ab9b31a283c5748f321b28de63cec9c9caea59af",
+  "timestamp": 1790437058
+}

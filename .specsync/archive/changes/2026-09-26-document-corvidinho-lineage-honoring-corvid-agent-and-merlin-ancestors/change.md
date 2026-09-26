@@ -1,6 +1,6 @@
 ---
 id: document-corvidinho-lineage-honoring-corvid-agent-and-merlin-ancestors
-state: implementing
+state: archived
 type: documentation
 base_commit: c4a650aefb20e8bb1ee7e232cd23cf95a4355c75
 ---
