@@ -1,14 +1,21 @@
 /**
- * Slash command dispatch map (DISCORD-4 / DISCORD-6).
+ * Slash command dispatch map (DISCORD-4 / 6 / 7).
  * Ancestor shape: COMMAND_HANDLERS Map + permission gate before handler.
- * Corvidinho thin: channel allowlist re-check, then mute + rate limit.
+ * Corvidinho: channel allowlist → mute/rate → resolvePermissionLevel +
+ * minPermission re-check (DISCORD-7) → handler.
  */
 
 import { handleAgentsCommand } from "./command-handlers/agents.ts";
+import { handleMuteCommand, handleUnmuteCommand } from "./command-handlers/mute.ts";
 import { handleSessionCommand } from "./command-handlers/session.ts";
 import { handleStatusCommand } from "./command-handlers/status.ts";
 import { handleWorkCommand } from "./command-handlers/work.ts";
-import { gateChannel, gateRateOrMute } from "./permissions.ts";
+import {
+  gateChannel,
+  gateRateOrMute,
+  PermissionLevel,
+  resolvePermissionLevel,
+} from "./permissions.ts";
 import { SLASH_COMMAND_NAMES } from "./slash-commands.ts";
 import type {
   SlashContext,
@@ -22,11 +29,31 @@ type CommandHandler = (
   interaction: SlashInteraction,
 ) => Promise<void>;
 
-const COMMAND_HANDLERS = new Map<string, CommandHandler>([
-  ["session", handleSessionCommand],
-  ["status", handleStatusCommand],
-  ["agents", handleAgentsCommand],
-  ["work", handleWorkCommand],
+type CommandEntry = {
+  handler: CommandHandler;
+  /** Ancestor minPermission — re-checked at run time (DISCORD-7). */
+  minPermission?: number;
+};
+
+const COMMAND_HANDLERS = new Map<string, CommandEntry>([
+  ["session", { handler: handleSessionCommand }],
+  ["status", { handler: handleStatusCommand }],
+  ["agents", { handler: handleAgentsCommand }],
+  ["work", { handler: handleWorkCommand }],
+  [
+    "mute",
+    {
+      handler: handleMuteCommand,
+      minPermission: PermissionLevel.ADMIN,
+    },
+  ],
+  [
+    "unmute",
+    {
+      handler: handleUnmuteCommand,
+      minPermission: PermissionLevel.ADMIN,
+    },
+  ],
 ]);
 
 export function knownSlashCommands(): string[] {
@@ -34,7 +61,8 @@ export function knownSlashCommands(): string[] {
 }
 
 /**
- * Dispatch a slash interaction. Re-checks channel allowlist, then mute/rate.
+ * Dispatch a slash interaction.
+ * Order: channel → mute/rate → permission floor → handler.
  */
 export async function handleSlashInteraction(
   ctx: SlashContext,
@@ -69,8 +97,8 @@ export async function handleSlashInteraction(
     return { ok: false, reason: rateGate.reason, reply: rateGate.reply };
   }
 
-  const handler = COMMAND_HANDLERS.get(interaction.commandName);
-  if (!handler) {
+  const entry = COMMAND_HANDLERS.get(interaction.commandName);
+  if (!entry) {
     await interaction.reply({
       content: `Unknown command: /${interaction.commandName}`,
       ephemeral: true,
@@ -78,6 +106,29 @@ export async function handleSlashInteraction(
     return { ok: false, reason: "unknown_command" };
   }
 
-  await handler(ctx, interaction);
+  // DISCORD-7 — re-check minPermission at run time (never trust UI alone).
+  if (entry.minPermission !== undefined) {
+    const permLevel = resolvePermissionLevel({
+      userId: interaction.userId,
+      roleIds: interaction.roleIds,
+      mutedUsers: ctx.mutedUsers,
+      allowlist: ctx.allowlist,
+      adminUserIds: ctx.adminUserIds,
+      adminRoleIds: ctx.adminRoleIds,
+    });
+    if (permLevel < entry.minPermission) {
+      await interaction.reply({
+        content: NOT_AUTHORIZED,
+        ephemeral: true,
+      });
+      return {
+        ok: false,
+        reason: "insufficient_permission",
+        reply: NOT_AUTHORIZED,
+      };
+    }
+  }
+
+  await entry.handler(ctx, interaction);
   return { ok: true, handled: true };
 }

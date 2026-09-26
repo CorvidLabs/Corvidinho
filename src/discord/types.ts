@@ -1,7 +1,8 @@
 /**
  * HEAR thin types — inbound Discord messages + session stubs.
  * No ProcessManager; no voice/iced/Angular. Slash ops thin (DISCORD-4);
- * rate limits + mutes thin (DISCORD-6).
+ * rate limits + mutes thin (DISCORD-6); admin re-auth (DISCORD-7);
+ * confused-deputy post (DISCORD-8).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -66,6 +67,14 @@ export type BridgeConfig = {
   rateLimitByLevel?: Record<number, number>;
   /** Seed muted Discord user ids (in-memory; DISCORD-6). */
   mutedUserIds: string[];
+  /** DISCORD-7 admin snowflakes (empty = nobody ADMIN; default-deny). */
+  adminUserIds: string[];
+  adminRoleIds: string[];
+  /**
+   * DISCORD-8 — when true, discord-post-message refuses without
+   * requesting_user_id (Merlin require_requester_check analogue).
+   */
+  requireRequesterCheck: boolean;
   /** When true, skip live discord.js connect (tests). */
   dryRun?: boolean;
 };

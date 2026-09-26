@@ -152,6 +152,15 @@ export async function loadBridgeConfig(
   );
   const rateLimitByLevel = parseRateLimitByLevel(env.DISCORD_RATE_LIMIT_BY_LEVEL);
   const mutedUserIds = parseList(env.DISCORD_MUTED_USER_IDS);
+  const adminUserIds = parseList(env.CORVIDINHO_DISCORD_ADMIN_USERS).map((s) =>
+    s.toLowerCase(),
+  );
+  const adminRoleIds = parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES).map((s) =>
+    s.toLowerCase(),
+  );
+  const requireRequesterCheck =
+    env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK === "1" ||
+    env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK?.toLowerCase() === "true";
 
   return {
     ok: true,
@@ -166,6 +175,9 @@ export async function loadBridgeConfig(
       rateLimitMaxMessages,
       rateLimitByLevel,
       mutedUserIds,
+      adminUserIds,
+      adminRoleIds,
+      requireRequesterCheck,
       dryRun: env.CORVIDINHO_DISCORD_DRY_RUN === "1",
     },
   };
@@ -181,6 +193,9 @@ export function goLiveChecklist(): string {
      CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES (or file [discord].users / .roles)
   4. Optional rate/mute (DISCORD-6): DISCORD_RATE_LIMIT_WINDOW_MS (default 60000),
      DISCORD_RATE_LIMIT_MAX (default 10), DISCORD_MUTED_USER_IDS (comma snowflakes)
-  5. Then: corvidinho discord bridge
+  5. Optional admin (DISCORD-7): CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES
+     (empty = nobody ADMIN; default-deny)
+  6. Optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
+  7. Then: corvidinho discord bridge
 Empty channel lists refuse start (not Merlin BASIC). Secrets stay out of the repo.`;
 }

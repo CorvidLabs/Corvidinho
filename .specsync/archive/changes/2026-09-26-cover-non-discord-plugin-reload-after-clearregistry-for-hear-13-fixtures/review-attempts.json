@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "98fdeb466c44e478a10d7d5c268886c963eb5994",
+      "contract_digest": "67987d1add0c688666e7dc55181df35124dc183a53977ef72e092fc7bc6be5cd",
+      "execution_digest": "f78ece7e2136e0a4f068ee371f8828598a8dc89a1645760602877714d458aac2",
+      "workspace_digest": "951d9ae4b66618d589b65f56485cd92bf9af773a1d2d06fe2d891d3c4383db5d",
+      "timestamp": 1790441546
+    }
+  ]
+}

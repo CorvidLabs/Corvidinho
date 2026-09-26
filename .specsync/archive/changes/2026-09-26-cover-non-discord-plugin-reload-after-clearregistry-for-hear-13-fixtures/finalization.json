@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures",
+  "implementation_commit": "98fdeb466c44e478a10d7d5c268886c963eb5994",
+  "implementation_tree": "8ccede3f741f46c029f8583be861ae7393219495",
+  "contract_digest": "67987d1add0c688666e7dc55181df35124dc183a53977ef72e092fc7bc6be5cd",
+  "workspace_digest": "951d9ae4b66618d589b65f56485cd92bf9af773a1d2d06fe2d891d3c4383db5d",
+  "closing_digest": "d8a35eb79379955f060bdd5dd243424b17f1bfe482defa2ac2e6af23cdb7b9ea",
+  "review_digest": "af1ee8d326cf4b7b25240d1f33d23d6a4f0403157e9c6043fdf20ea54675de10",
+  "finalization_digest": "ff1c9cf8598dd0994ba0ed03f2077b5a848c0163ddab3f1708231a26d689bdda",
+  "timestamp": 1790441553
+}

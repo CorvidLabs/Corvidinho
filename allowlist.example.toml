@@ -19,6 +19,9 @@ channels = []
 # Optional — empty = deny-all when user/role gates apply
 roles = []
 users = []
+# Admin-shaped slash (DISCORD-7) uses env (not this file):
+#   CORVIDINHO_DISCORD_ADMIN_USERS / CORVIDINHO_DISCORD_ADMIN_ROLES
+# Empty = nobody is ADMIN (default-deny).
 deny_channels = []
 deny_roles = []
 deny_users = []

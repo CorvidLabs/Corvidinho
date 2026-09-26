@@ -1,15 +1,17 @@
 /**
- * Thin slash command bodies for Discord application commands (DISCORD-4).
+ * Thin slash command bodies for Discord application commands (DISCORD-4 / 7).
  * Plain JSON — no live discord.js required for fixture tests.
  *
- * Steal shape from corvid-agent session/status/agents/work; skip voice,
- * council, schedule, iced UI.
+ * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN.
+ * Skip voice, council, schedule, iced UI.
  */
 
 /** Discord Application Command option type: SUB_COMMAND */
 export const OPT_SUB_COMMAND = 1;
 /** Discord Application Command option type: STRING */
 export const OPT_STRING = 3;
+/** Discord Application Command option type: USER */
+export const OPT_USER = 6;
 
 export type SlashCommandBody = {
   name: string;
@@ -29,7 +31,8 @@ export type SlashCommandBody = {
 };
 
 /**
- * Build the thin useful slash set: /session list|start, /status, /agents, /work.
+ * Build the thin useful slash set: /session list|start, /status, /agents, /work,
+ * plus admin-shaped /mute /unmute (DISCORD-7).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -77,8 +80,39 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
         },
       ],
     },
+    {
+      name: "mute",
+      description: "Mute a user from bot interactions (admin)",
+      options: [
+        {
+          type: OPT_USER,
+          name: "user",
+          description: "User to mute",
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "unmute",
+      description: "Unmute a user (admin)",
+      options: [
+        {
+          type: OPT_USER,
+          name: "user",
+          description: "User to unmute",
+          required: true,
+        },
+      ],
+    },
   ];
 }
 
-export const SLASH_COMMAND_NAMES = ["session", "status", "agents", "work"] as const;
+export const SLASH_COMMAND_NAMES = [
+  "session",
+  "status",
+  "agents",
+  "work",
+  "mute",
+  "unmute",
+] as const;
 export type SlashCommandName = (typeof SLASH_COMMAND_NAMES)[number];

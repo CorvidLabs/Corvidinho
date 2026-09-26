@@ -1,13 +1,20 @@
 /**
  * Discord outbound plugins — discord-post-message is dangerous (externally visible write).
+ * DISCORD-8: confused-deputy requester check (Merlin-primary).
  */
 
 import { checkChannel } from "../../src/allowlist/discord.ts";
 import { loadAllowlist } from "../../src/allowlist/load.ts";
-import { register } from "../../src/plugins/registry.ts";
+import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
+import {
+  requesterCheckFix,
+  setRequesterPermCheckerForTests,
+  verifyRequesterCanSend,
+  type RequesterCheckResult,
+} from "../../src/discord/requester-perms.ts";
 
-let loaded = false;
+export { setRequesterPermCheckerForTests };
 
 function parseFlag(args: string[], name: string): string | undefined {
   const eq = args.find((a) => a.startsWith(`${name}=`));
@@ -17,27 +24,37 @@ function parseFlag(args: string[], name: string): string | undefined {
   return undefined;
 }
 
+function requireRequesterCheck(env: NodeJS.ProcessEnv): boolean {
+  const raw = env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK?.trim();
+  return raw === "1" || raw?.toLowerCase() === "true";
+}
+
 /**
  * Dangerous: posts a message to a Discord channel via REST.
- * Requires token + allowlisted channel. Thin stub — no confused-deputy full path yet (#10+).
+ * Requires token + allowlisted channel. DISCORD-8 requester check when
+ * --requesting-user-id is provided (or strict mode requires it).
  */
 const discordPostMessage: PluginCommand = {
   name: "discord-post-message",
   description:
-    "Post a message to an allowlisted Discord channel (dangerous; DISCORD-5)",
+    "Post a message to an allowlisted Discord channel (dangerous; DISCORD-5/8)",
   dangerous: true,
   minTier: 1,
   async handler(ctx) {
-    const channelId = parseFlag(ctx.args, "--channel") ?? parseFlag(ctx.args, "-c");
+    const channelId =
+      parseFlag(ctx.args, "--channel") ?? parseFlag(ctx.args, "-c");
     const content =
       parseFlag(ctx.args, "--content") ??
       parseFlag(ctx.args, "-m") ??
       ctx.args.filter((a) => !a.startsWith("-")).join(" ").trim();
+    const requestingUserId =
+      parseFlag(ctx.args, "--requesting-user-id") ??
+      parseFlag(ctx.args, "--requester");
 
     if (!channelId) {
       return {
         ok: false,
-        error: "usage: discord-post-message --channel <id> --content <text>",
+        error: "usage: discord-post-message --channel <id> --content <text> [--requesting-user-id <id>]",
         exitCode: 1,
       };
     }
@@ -72,11 +89,42 @@ const discordPostMessage: PluginCommand = {
       };
     }
 
-    // Dry / test: skip network when CORVIDINHO_DISCORD_DRY_RUN=1
-    if (process.env.CORVIDINHO_DISCORD_DRY_RUN === "1") {
+    const dryRun = process.env.CORVIDINHO_DISCORD_DRY_RUN === "1";
+    const strict = requireRequesterCheck(process.env);
+
+    // DISCORD-8 — confused-deputy: check requester can send, not only the bot.
+    if (requestingUserId) {
+      const check = await verifyRequesterCanSend(channelId, requestingUserId, {
+        token,
+        dryRun,
+      });
+      if (!check.ok) {
+        const fix = requesterCheckFix(check, channelId, requestingUserId);
+        return {
+          ok: false,
+          error: `${check.reason} — ${fix}`,
+          exitCode: check.status === 404 ? 4 : 3,
+          data: { status: check.status, reason: check.reason },
+        };
+      }
+    } else if (strict) {
+      return {
+        ok: false,
+        error:
+          "requesting_user_id is required (strict mode). Pass --requesting-user-id <discord-user-id> or unset CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK.",
+        exitCode: 3,
+      };
+    }
+
+    if (dryRun) {
       return {
         ok: true,
-        data: { dryRun: true, channelId, content: content.slice(0, 100) },
+        data: {
+          dryRun: true,
+          channelId,
+          content: content.slice(0, 100),
+          requestingUserId: requestingUserId ?? null,
+        },
         message: `dry-run post to ${channelId}`,
         exitCode: 0,
       };
@@ -117,7 +165,7 @@ const discordPostMessage: PluginCommand = {
 };
 
 export function loadDiscordPlugins(): void {
-  if (loaded) return;
+  // Re-register after clearRegistry() in other tests (module flag would stick).
+  if (get("discord-post-message")) return;
   register(discordPostMessage);
-  loaded = true;
 }

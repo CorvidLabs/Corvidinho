@@ -26,6 +26,8 @@ export type SlashInteraction = {
   channelId: string;
   guildId?: string;
   userId: string;
+  /** Member role ids for DISCORD-7 permission resolve (optional). */
+  roleIds?: string[];
   options: Record<string, SlashOptionValue>;
   reply: (opts: SlashReplyPayload) => Promise<void>;
   deferReply?: (opts?: { ephemeral?: boolean }) => Promise<void>;
@@ -53,6 +55,9 @@ export type SlashContext = {
   rateLimitConfig?: RateLimitConfig;
   /** Optional numeric permission level for rateLimitByLevel. */
   permLevelFor?: (userId: string) => number | undefined;
+  /** DISCORD-7 admin lists (empty = nobody ADMIN). */
+  adminUserIds?: string[];
+  adminRoleIds?: string[];
 };
 
 export type SlashResult =

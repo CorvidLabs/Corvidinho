@@ -47,3 +47,23 @@ describe("discord bridge config", () => {
     expect(merged.sort()).toEqual(["aaa", "bbb"]);
   });
 });
+
+  test("requireRequesterCheck + admin lists from env", async () => {
+    const r = await loadBridgeConfig({
+      env: {
+        DISCORD_TOKEN: "fake-token-for-test",
+        DISCORD_CHANNEL_IDS: "111",
+        CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK: "1",
+        CORVIDINHO_DISCORD_ADMIN_USERS: "boss",
+        CORVIDINHO_DISCORD_ADMIN_ROLES: "ops",
+      },
+      filePath: null,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.config.requireRequesterCheck).toBe(true);
+      expect(r.config.adminUserIds).toContain("boss");
+      expect(r.config.adminRoleIds).toContain("ops");
+    }
+  });
+

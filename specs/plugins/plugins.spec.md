@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 17
+version: 21
 status: draft
 files:
   - src/plugins/types.ts
@@ -38,7 +38,9 @@ Export allowlist load + github/discord gate helpers used by plugins and future H
 
 ## Invariants
 
-discord-post-message is dangerous; empty Discord channel allow = refuse.
+Builtin plugin loaders MAY re-register after an in-process registry clear
+(test seam). Presence of an already-registered command name skips duplicate
+register. No new dangerous commands; SAFE-1 non-interactive deny unchanged.
 
 ## Behavioral Examples
 
@@ -79,5 +81,5 @@ discord-post-message is dangerous; empty Discord channel allow = refuse.
 
 ## Change Log
 
-discord-post-message dangerous plugin (2026-09-26, corvid-agent, #5).
-| 2026-09-26 | hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5: HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify |
+Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
+

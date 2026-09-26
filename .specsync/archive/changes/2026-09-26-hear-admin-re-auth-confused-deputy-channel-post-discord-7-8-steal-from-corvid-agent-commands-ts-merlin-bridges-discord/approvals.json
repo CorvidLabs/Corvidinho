@@ -1,0 +1,53 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790441175,
+      "digest": "98430091b93dfba480abc17413906d04295f108e6fe23e38710c8f3182c5af9a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "hear-admin-re-auth-confused-deputy-channel-post-discord-7-8-steal-from-corvid-agent-commands-ts-merlin-bridges-discord",
+        "title": "HEAR admin re-auth + confused-deputy channel post (DISCORD-7,8) — steal from corvid-agent commands.ts + Merlin bridges/discord requester check; fixture tests; no ProcessManager; STATUS Done for #13",
+        "description": "HEAR admin re-auth + confused-deputy channel post (DISCORD-7,8) — steal from corvid-agent commands.ts + Merlin bridges/discord requester check; fixture tests; no ProcessManager; STATUS Done for #13",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "STATUS.md",
+          "allowlist.example.toml",
+          "docs",
+          "plugins/discord",
+          "specs/discord",
+          "src/discord",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Slash dispatch re-checks resolvePermissionLevel + minPermission before admin-shaped handlers (mute/unmute ADMIN); non-admin refused even if Discord UI showed the command (DISCORD-7). discord-post-message verifies requesting user can ViewChannel+SendMessages on target channel when requesting_user_id provided; strict mode refuses missing requester id (DISCORD-8 / Merlin confused-deputy). Fixture tests no live token; default-deny allowlists unchanged; no ProcessManager; STATUS Done for #13 when merged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "0fdeb3dff280f11836249bc921ae219c954351cb4298138a74a9569ea5b1b2db"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790441570,
+      "digest": "a5361416728626a6cc1f9d323c5d0d5c121808be5248a0a7ee96ff6ae43b84fc",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

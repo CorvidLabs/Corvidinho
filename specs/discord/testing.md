@@ -18,3 +18,11 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 
 - `tests/discord.rate-mute.test.ts` covers checkRateLimit, mute/unmute,
   router + slash per-user independence (no live token).
+
+## Admin re-auth + confused-deputy (DISCORD-7 / 8)
+
+- `tests/discord.admin-reauth.test.ts` — resolvePermissionLevel + mute/unmute
+  minPermission re-check (no live token).
+- `tests/discord.requester-perms.test.ts` — evaluateRequesterCanSend + post
+  plugin requester/strict gates (no live token).
+

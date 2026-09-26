@@ -27,9 +27,21 @@ export {
   defaultRateLimitConfig,
   DEFAULT_RATE_LIMIT_WINDOW_MS,
   DEFAULT_RATE_LIMIT_MAX_MESSAGES,
+  PermissionLevel,
+  resolvePermissionLevel,
   type RateLimitConfig,
   type RateLimitState,
+  type ResolvePermissionOpts,
 } from "./permissions.ts";
+export {
+  evaluateRequesterCanSend,
+  verifyRequesterCanSend,
+  setRequesterPermCheckerForTests,
+  requesterCheckFix,
+  type RequesterCheckResult,
+  type ChannelPermProbe,
+  type RequesterPermChecker,
+} from "./requester-perms.ts";
 export { SessionStore } from "./session-store.ts";
 export { WorkStore, type WorkTaskStub, type WorkTaskStatus } from "./work-store.ts";
 export { routeMessage, type RouterDeps } from "./message-router.ts";
@@ -73,6 +85,7 @@ export {
   SLASH_COMMAND_NAMES,
   OPT_SUB_COMMAND,
   OPT_STRING,
+  OPT_USER,
   type SlashCommandBody,
   type SlashCommandName,
 } from "./slash-commands.ts";

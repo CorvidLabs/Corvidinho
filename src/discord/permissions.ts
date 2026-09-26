@@ -1,6 +1,7 @@
 /**
  * DISCORD-5 — allowlisted channels via existing allowlist helpers.
  * DISCORD-6 — per-user rate limits + mutes (thin steal from corvid-agent).
+ * DISCORD-7 — resolvePermissionLevel + minPermission re-check at run time.
  */
 
 import {
@@ -11,6 +12,66 @@ import {
 } from "../allowlist/discord.ts";
 import type { AllowlistConfig, GateResult } from "../allowlist/types.ts";
 import { MUTED, NOT_AUTHORIZED, RATE_LIMITED } from "./types.ts";
+
+
+/** Ancestor PermissionLevel (corvid-agent / Merlin). Higher = more power. */
+export const PermissionLevel = {
+  BLOCKED: 0,
+  BASIC: 1,
+  STANDARD: 2,
+  ADMIN: 3,
+} as const;
+export type PermissionLevel =
+  (typeof PermissionLevel)[keyof typeof PermissionLevel];
+
+export type ResolvePermissionOpts = {
+  userId: string;
+  /** Member role snowflakes (optional). */
+  roleIds?: string[];
+  /** In-memory muted set (DISCORD-6). */
+  mutedUsers?: Set<string>;
+  allowlist: AllowlistConfig;
+  /** DISCORD-7 — empty ⇒ nobody ADMIN (default-deny). */
+  adminUserIds?: string[];
+  adminRoleIds?: string[];
+};
+
+/**
+ * Resolve caller permission at command run time (DISCORD-7).
+ * Empty adminUserIds/adminRoleIds ⇒ nobody is ADMIN (default-deny).
+ * Denied users are BLOCKED. When users+roles allowlists are both empty,
+ * channel-gated callers get STANDARD (preserve HEAR thin slash).
+ */
+export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionLevel {
+  const id = opts.userId.trim().toLowerCase();
+  const d = opts.allowlist.discord;
+  const adminUsers = (opts.adminUserIds ?? []).map((x) => x.toLowerCase());
+  const adminRoles = (opts.adminRoleIds ?? []).map((x) => x.toLowerCase());
+  if (opts.mutedUsers && opts.mutedUsers.has(opts.userId)) {
+    return PermissionLevel.BLOCKED;
+  }
+  if (d.denyUsers.some((x) => x === id)) {
+    return PermissionLevel.BLOCKED;
+  }
+  const roleIds = (opts.roleIds ?? []).map((r) => r.trim().toLowerCase()).filter(Boolean);
+  if (adminUsers.includes(id)) {
+    return PermissionLevel.ADMIN;
+  }
+  if (roleIds.some((r) => adminRoles.includes(r))) {
+    return PermissionLevel.ADMIN;
+  }
+  if (d.users.some((x) => x === id)) {
+    return PermissionLevel.STANDARD;
+  }
+  if (roleIds.some((r) => d.roles.includes(r))) {
+    return PermissionLevel.STANDARD;
+  }
+  // Empty user+role allowlists: channel gate already applied → STANDARD
+  if (d.users.length === 0 && d.roles.length === 0) {
+    return PermissionLevel.STANDARD;
+  }
+  return PermissionLevel.BLOCKED;
+}
 
 /** Ancestor default: 10 messages / 60s window. */
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;

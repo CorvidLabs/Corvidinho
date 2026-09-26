@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures",
+  "slug": "cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures",
+  "title": "Cover non-discord plugin reload-after-clearRegistry for HEAR #13 fixtures",
+  "description": "Cover non-discord plugin reload-after-clearRegistry for HEAR #13 fixtures",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "3c0fc924bf80cfeaf55e5cfd86aaa6178eca20c6",
+  "created_at": 1790441532,
+  "updated_at": 1790441557,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/plugins/builtins.ts",
+    "plugins/github",
+    "plugins/meta",
+    "plugins/specsync"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Non-discord plugin loaders re-register after clearRegistry for HEAR #13 fixture suite; get()-guard replaces sticky loaded flags."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
