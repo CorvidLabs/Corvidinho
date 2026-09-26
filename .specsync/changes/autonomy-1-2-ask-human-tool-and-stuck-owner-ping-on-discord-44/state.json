@@ -21,7 +21,8 @@
     "src/discord",
     "src/scheduler",
     "tests",
-    "docs/discord.md"
+    "docs/discord.md",
+    "src/store/db.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,
