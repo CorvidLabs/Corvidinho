@@ -7,10 +7,11 @@
   "title": "Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6)",
   "description": "Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "05b269af23ea2be9e9c41966f6cf9ee41dfeac02",
   "created_at": 1790466094,
-  "updated_at": 1790466095,
+  "updated_at": 1790466284,
   "affected_specs": [
     "plugins",
     "discord"

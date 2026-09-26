@@ -1,6 +1,6 @@
 ---
 id: audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 05b269af23ea2be9e9c41966f6cf9ee41dfeac02
 ---
