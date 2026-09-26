@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "identity-durable-owner-record-issue-42-captured-slice-identity-1-identity-3-admin-4-allow-4-owner-discord-snowflake",
+  "implementation_commit": "6a3f46a7f1425eaf012619495465a39eb24bfd82",
+  "implementation_tree": "2a3beab237f1e338d53e5cdf164aba84828041c2",
+  "contract_digest": "0ccaed08a4111fe283769588a04d56d186c824738ec0549a55d3810452fd2b2b",
+  "workspace_digest": "fde1d4a7486cee83819d95c57b6d8703f8002e98fdc03642b2a6f28f640de08a",
+  "closing_digest": "f87381068498b910452bafe2dfae9edbb54bf5ac89623a45d54e725933b6134d",
+  "review_digest": "95e16f6517002d7c3934fd21fc1de168d402e3fdfcea3254e5f98d29e1396411",
+  "finalization_digest": "86d13d320debe382d9becae325be4f41f0d2cd6d1b3fdf818306489e00234ed6",
+  "timestamp": 1790452559
+}

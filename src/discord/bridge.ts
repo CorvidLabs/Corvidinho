@@ -295,6 +295,7 @@ export async function startBridge(
       rateLimitConfig,
       adminUserIds: config.adminUserIds,
       adminRoleIds: config.adminRoleIds,
+      owner: config.owner ?? null,
       env: opts.env,
       gitTipSha,
     };
@@ -383,6 +384,7 @@ export async function startBridge(
             allowlist: config.allowlist,
             adminUserIds: config.adminUserIds,
             adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
             mutedUsers,
           }) >= PermissionLevel.ADMIN;
         result = await agent.runChat({

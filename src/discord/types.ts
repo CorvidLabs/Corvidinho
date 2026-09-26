@@ -7,6 +7,7 @@
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import type { OwnerRecord } from "../identity/owner.ts";
 
 /** Discord file attachment metadata (DISCORD-9; corvid-agent shape). */
 export type DiscordAttachment = {
@@ -96,6 +97,11 @@ export type BridgeConfig = {
   /** DISCORD-7 admin snowflakes (empty = nobody ADMIN; default-deny). */
   adminUserIds: string[];
   adminRoleIds: string[];
+  /**
+   * IDENTITY-1 — durable owner from env CORVIDINHO_OWNER_* / allowlist
+   * `[owner]` (null = no owner; admin lists unchanged). ADMIN-4 re-check.
+   */
+  owner?: OwnerRecord | null;
   /**
    * DISCORD-8 — when true, discord-post-message refuses without
    * requesting_user_id (Merlin require_requester_check analogue).

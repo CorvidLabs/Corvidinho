@@ -10,6 +10,7 @@ import {
   type LoadOptions,
 } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import { loadOwnerConfig } from "../identity/owner.ts";
 import {
   DEFAULT_RATE_LIMIT_MAX_MESSAGES,
   DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -158,6 +159,11 @@ export async function loadBridgeConfig(
   const adminRoleIds = parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES).map((s) =>
     s.toLowerCase(),
   );
+  // IDENTITY-1 — owner from the allowlist file actually loaded + env overlay.
+  const { owner } = await loadOwnerConfig({
+    env,
+    filePath: allowlist.sourcePath,
+  });
   const requireRequesterCheck =
     env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK === "1" ||
     env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK?.toLowerCase() === "true";
@@ -177,6 +183,7 @@ export async function loadBridgeConfig(
       mutedUserIds,
       adminUserIds,
       adminRoleIds,
+      owner,
       requireRequesterCheck,
       dryRun: env.CORVIDINHO_DISCORD_DRY_RUN === "1",
     },
@@ -195,6 +202,8 @@ export function goLiveChecklist(): string {
      DISCORD_RATE_LIMIT_MAX (default 10), DISCORD_MUTED_USER_IDS (comma snowflakes)
   5. Optional admin (DISCORD-7): CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES
      (empty = nobody ADMIN; default-deny)
+     Optional owner (IDENTITY-1; ADMIN unless muted/denied): CORVIDINHO_OWNER_DISCORD_ID
+     (+ _GITHUB_LOGIN, _DISPLAY) or allowlist file [owner] discord_id / github_login / display
   6. Optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
   7. Optional but preferred for slash dogfood: DISCORD_GUILD_ID=<guild snowflake>
      (guild PUT of the six commands + clear globals; avoids duplicate /agents)

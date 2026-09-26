@@ -28,6 +28,7 @@ function requireAdmin(
     allowlist: ctx.allowlist,
     adminUserIds: ctx.adminUserIds,
     adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
   });
   return level >= PermissionLevel.ADMIN;
 }

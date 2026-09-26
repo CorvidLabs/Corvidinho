@@ -9,6 +9,7 @@
  */
 
 import { loadAllowlist } from "../../src/allowlist/load.ts";
+import { isOwnerDiscord, loadOwnerConfig } from "../../src/identity/owner.ts";
 import {
   checkConfirmToken,
   isHumanSuppliedToken,
@@ -149,7 +150,14 @@ export async function actingIsAdmin(
   if (!id || !truthy(env.CORVIDINHO_ACTING_IS_ADMIN)) return false;
   const adminUsers = parseList(env.CORVIDINHO_DISCORD_ADMIN_USERS);
   const adminRoles = parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES);
-  if (adminUsers.length === 0 && adminRoles.length === 0) return false;
+  // IDENTITY-1: the configured owner is ADMIN too (same rule as the bridge).
+  let isOwner = false;
+  try {
+    isOwner = isOwnerDiscord((await loadOwnerConfig({ env })).owner, userId);
+  } catch {
+    isOwner = false;
+  }
+  if (!isOwner && adminUsers.length === 0 && adminRoles.length === 0) return false;
   if (parseList(env.DISCORD_MUTED_USER_IDS).includes(id)) return false;
   try {
     const allow = await loadAllowlist({ env });
@@ -157,7 +165,7 @@ export async function actingIsAdmin(
   } catch {
     return false;
   }
-  return adminUsers.includes(id) || adminRoles.length > 0;
+  return isOwner || adminUsers.includes(id) || adminRoles.length > 0;
 }
 
 function openStore(env: NodeJS.ProcessEnv) {

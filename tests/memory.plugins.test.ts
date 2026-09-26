@@ -22,6 +22,7 @@ const ENV_KEYS = [
   "DISCORD_MUTED_USER_IDS",
   "CORVIDINHO_MEMORY_INMEM",
   "CORVIDINHO_ACTING_CONFIRM_TOKENS",
+  "CORVIDINHO_OWNER_DISCORD_ID",
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
@@ -345,5 +346,27 @@ describe("memory ACL hardening — review follow-ups", () => {
     humanSays((p1.data as { confirmToken: string }).confirmToken);
     const ok = await run("memory-forget", ["--id", id, `--confirm=${(p1.data as { confirmToken: string }).confirmToken}`]);
     expect(ok.ok).toBe(true);
+  });
+});
+
+describe("configured owner is ADMIN for memory (IDENTITY-1 / REQ-plugins-042)", () => {
+  test("owner with the bridge bit may forget; without the bit may not; owner id alone never grants", async () => {
+    process.env.CORVIDINHO_OWNER_DISCORD_ID = "111111111111111111";
+    const id = await storeAs("u1", "k", "v");
+    actAs("111111111111111111", false);
+    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    actAs("111111111111111111", true);
+    const p1 = await run("memory-forget", ["--id", id]);
+    expect(p1.ok).toBe(true);
+    actAs("222222222222222222", true);
+    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+  });
+
+  test("muted or deny-listed owner is not ADMIN", async () => {
+    process.env.CORVIDINHO_OWNER_DISCORD_ID = "111111111111111111";
+    const id = await storeAs("u1", "k", "v");
+    process.env.DISCORD_MUTED_USER_IDS = "111111111111111111";
+    actAs("111111111111111111", true);
+    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
   });
 });
