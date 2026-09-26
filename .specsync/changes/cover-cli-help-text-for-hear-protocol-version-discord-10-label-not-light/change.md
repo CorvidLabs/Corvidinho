@@ -1,6 +1,6 @@
 ---
 id: cover-cli-help-text-for-hear-protocol-version-discord-10-label-not-light
-state: implementing
+state: verifying
 type: documentation
 base_commit: 6116dd1c2c8773880f3f5183dad4b27dfb87303a
 ---
