@@ -330,6 +330,8 @@ export async function startBridge(
         store,
         allowlist: config.allowlist,
         channelOnlyGate: true,
+        // REQ-discord-201 — owner passes the actor gate even when unlisted.
+        owner: config.owner ?? null,
         mutedUsers,
         rateLimit: { state: rateLimitState, config: rateLimitConfig },
       });
