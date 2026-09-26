@@ -1,14 +1,14 @@
 # Corvidinho
 
-Lean Bun/TypeScript Linux CLI for day-to-day Discord and GitHub work — a revamp of corvid-agent without a heavy UI, without on-chain identity in v1, and without a long compile loop.
+Linux-first Bun/TypeScript agent runner from CorvidLabs. Plans to **support Fledge + SpecSync as products**. Bootstrap captures human intent (`hi/`) and a minimal CLI stub so follow-on PRs have a place to land.
 
-**Status:** bootstrap. Human intent lives in [`hi/`](hi/). Steal/defer inventory for humans: [`docs/CORVIDINHO-FEATURE-STEAL.md`](docs/CORVIDINHO-FEATURE-STEAL.md).
+**Status:** see [`STATUS.md`](STATUS.md). Intent: [`hi/`](hi/). Steal/defer notes (not AC): [`docs/CORVIDINHO-FEATURE-STEAL.md`](docs/CORVIDINHO-FEATURE-STEAL.md).
 
 ## Requirements
 
 - Linux
 - [Bun](https://bun.sh) ≥ 1.2
-- Optional on `PATH`: `gh`, `fledge`, `specsync` (reported by `corvidinho doctor`)
+- Optional on `PATH`: `hi`, `gh`, `fledge`, `specsync` (reported by `corvidinho doctor`)
 
 ## Quick start
 
@@ -18,6 +18,7 @@ bun src/cli.ts --help
 bun src/cli.ts version
 bun src/cli.ts doctor
 bun test
+hi check
 ```
 
 Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, GitHub via `gh auth`) stay in the environment — never in the repo or chat logs.
@@ -27,17 +28,21 @@ Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, GitHub via `gh auth`) stay in th
 ```bash
 fledge run smoke
 fledge lanes run pre-commit --non-interactive
-fledge lanes run verify --non-interactive
-fledge lanes run ci --non-interactive
+fledge lanes run verify --non-interactive   # includes spec-check (needs specsync)
 ```
 
-## SpecSync
+## SpecSync seed
 
-Module contracts under `specs/`. Verified change workflow is **off** until deliberately enabled. CI runs `specsync check`.
+Minimal project layout:
+
+- `.specsync/` — `config.toml`, `registry.toml`, `version`, `sdd.json` (change workflow **off**)
+- `specs/cli/` — draft stub for the CLI module + companions
+
+Run `specsync check`. Promote draft specs to `active` when behavior stabilizes. Do not invent ACCESS/bounty/MainNet surfaces.
 
 ## Agent rules
 
-See [`AGENTS.md`](AGENTS.md): HI-first, never merge unless explicitly asked, secrets out of repo, prefer Fledge plugins.
+See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, never merge without ask, secrets out of repo.
 
 ## License
 

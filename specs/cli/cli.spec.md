@@ -13,62 +13,48 @@ depends_on: []
 
 ## Purpose
 
-User-facing entry point for Corvidinho. Bootstrap surface: `--help`, `version`, and `doctor`. No Discord or GitHub writes yet. Secrets are never printed.
+Bootstrap operator surface for Corvidinho on Linux: print help, print version, and run a non-secret doctor check for Discord env presence, `gh` auth, Fledge, and SpecSync on PATH. This module does not yet run the agent loop.
 
 ## Public API
 
-CLI surface — observable contract is the command grammar.
-
-### Commands
-
-| Command | Args | Description | Status |
-|---------|------|-------------|--------|
-| `corvidinho --help` / `-h` / `help` | none | Print usage and exit 0 | shipped |
-| `corvidinho version` / `--version` / `-V` | none | Print semver and exit 0 | shipped |
-| `corvidinho doctor` | none | Report Discord / GitHub / Fledge / SpecSync usability without printing secret values | shipped |
-
 ### Exported Functions
 
-None — binary entry via `bun src/cli.ts` / package `bin`.
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `main` | `argv: string[]` | `Promise<number>` | CLI entry; exit code |
+| `VERSION` | — | `string` | Semver stub |
 
 ### Exported Types
 
-None public beyond the process argv contract.
+| Type | Description |
+|------|-------------|
 
 ## Invariants
 
-1. `--help`, `version`, and unknown-command help paths never read or print Discord/GitHub secret values.
-2. `doctor` reports presence/absence of token env vars and CLI tools; when a token env is set it says so without echoing the value.
-3. Successful `--help` and `version` exit with status 0; unknown commands exit non-zero after printing help.
-4. Linux Bun/TS only; no desktop UI required to run these commands.
+1. Doctor never prints secret values (SAFE-6).
+2. Unknown commands print help and exit non-zero.
+3. `--help` / `help` / bare invoke exit 0.
 
 ## Behavioral Examples
 
-### Scenario: Help exits cleanly
+### Scenario: Help
 
-- **Given** a checkout with Bun installed
-- **When** the user runs `bun src/cli.ts --help`
-- **Then** usage text containing `corvidinho` is printed and the process exits 0
+- **Given** the CLI stub is installed
+- **When** the operator runs `corvidinho --help`
+- **Then** usage text is printed and the process exits 0
 
-### Scenario: Version prints semver
+### Scenario: Version
 
-- **Given** a checkout with Bun installed
-- **When** the user runs `bun src/cli.ts version`
-- **Then** a `X.Y.Z` version string is printed and the process exits 0
-
-### Scenario: Doctor without secrets
-
-- **Given** no `DISCORD_TOKEN` / `DISCORD_BOT_TOKEN` and optional missing `gh` / `fledge` / `specsync`
-- **When** the user runs `bun src/cli.ts doctor`
-- **Then** each of discord, github, fledge, specsync is marked ok or missing with a non-secret detail line, and exit is non-zero if any check failed
+- **Given** the CLI stub is installed
+- **When** the operator runs `corvidinho version`
+- **Then** a semver string is printed and the process exits 0
 
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
-| Unknown command | Print error + help, exit 1 |
-| `gh` missing or `gh auth status` fails | doctor marks github missing, exit 1 if any check failed |
-| Discord token env unset | doctor marks discord missing (does not invent a token) |
+| Unknown command | Print error + help; exit 1 |
+| Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
 
 ## Dependencies
 
@@ -76,17 +62,16 @@ None public beyond the process argv contract.
 
 | Module | What is used |
 |--------|-------------|
-| Bun runtime | `Bun.which`, `Bun.spawn`, process env |
-| External CLIs | `gh`, `fledge`, `specsync` when present on PATH |
+| Bun | runtime, `Bun.which`, `Bun.spawn` |
 
 ### Consumed By
 
 | Module | What is used |
 |--------|-------------|
-| (none yet) | Bootstrap only |
+| — | bootstrap only |
 
 ## Change Log
 
 | Date | Author | Change |
 |------|--------|--------|
-| 2026-09-26 | corvid-agent | Bootstrap CLI stub: help, version, doctor |
+| 2026-09-26 | corvid-agent | Initial draft stub for BOOT HI capture |

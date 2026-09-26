@@ -1,5 +1,9 @@
-# Corvidinho — Bun/TS CLI
+# Corvidinho — Bun/TS Linux agent (bootstrap)
 # Prefer Fledge plugin commands over raw shell when a plugin covers the job.
+#
+# Verify lane: smoke/placeholder + tests + typecheck + spec-check.
+# Note: `spec-check` requires `specsync` on PATH. Until SpecSync is installed,
+# run smoke/test locally; CI installs SpecSync before the verify lane.
 
 [tasks.test]
 cmd = "bun test"
@@ -15,11 +19,15 @@ description = "Typecheck"
 
 [tasks.smoke]
 cmd = "bun src/cli.ts --help"
-description = "CLI --help exits 0"
+description = "CLI --help exits 0 (placeholder/smoke)"
+
+[tasks.hi-check]
+cmd = "hi check"
+description = "Validate hi/ criterion structure (optional if hi not on PATH)"
 
 [tasks.spec-check]
 cmd = "specsync check"
-description = "SpecSync drift check"
+description = "SpecSync drift check — wire into verify; needs specsync binary"
 
 [lanes.pre-commit]
 description = "Run before committing"
@@ -33,5 +41,5 @@ description = "CI pipeline"
 steps = ["lint", "smoke", "test", "spec-check"]
 
 [lanes.verify]
-description = "Required gate before claiming done (AGENT-4 / hi/agent.md)"
+description = "Required gate before claiming done (AGENT-4). Includes smoke + spec-check."
 steps = ["lint", "smoke", "test", "spec-check"]
