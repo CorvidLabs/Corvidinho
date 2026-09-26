@@ -1,6 +1,6 @@
 ---
 id: harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own
-state: draft
+state: implementing
 type: bug_fix
 base_commit: c69e0e2fefdf11d506f55c528035d422973e4f1a
 ---
