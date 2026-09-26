@@ -32,6 +32,38 @@
         }
       ],
       "requirement_ids": []
+    },
+    {
+      "timestamp": 1790452233,
+      "commit": "ca41d19e8e382584d51f36b382ca5ed5c4312f43",
+      "contract_digest": "67ad20cdca831c7c5421c3fadedebc47a1d60678954e15abf9d2cf76892e5ce2",
+      "execution_digest": "afbcbd3546442b83e944decebca53b6bad281507b8989aecfefe1bc8ab3ba2bc",
+      "workspace_digest": "cab9bf815da0989a3d4d88fc594ed23720c780cda493cb8deb7707f6d016577d",
+      "acceptance_input_digest": "fcc0f9aef6b698d710561550ec826dd1ad6aefc391469ffc2dbc67c6f349dd54",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "docs/discord.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "d25e35da550ac3b814c0db1b80c48ce9ea92331b76c56dcf5ffcbb388dc05482",
+            "entry_digest": "7a0b2dc752648b875966d7cd25a0a1a454d7c6881620a69ed5c1e30cabd9aafa",
+            "owners": [
+              "@exact:delivery"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
     }
   ]
 }

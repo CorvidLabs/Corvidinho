@@ -1,6 +1,6 @@
 ---
 id: docs-memory-forget-override-are-operator-only-today-dangerous-tools-are-not-offered-to-the-model-discord-admin-path
-state: implementing
+state: archived
 type: documentation
 base_commit: ebe1f69ba95a9125fb28fdffb7c60324898873ef
 ---

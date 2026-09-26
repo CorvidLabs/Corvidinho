@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-memory-forget-override-are-operator-only-today-dangerous-tools-are-not-offered-to-the-model-discord-admin-path",
+  "implementation_commit": "ca41d19e8e382584d51f36b382ca5ed5c4312f43",
+  "implementation_tree": "7f51214215521a27441e5bd5d957ca32b901331a",
+  "contract_digest": "67ad20cdca831c7c5421c3fadedebc47a1d60678954e15abf9d2cf76892e5ce2",
+  "workspace_digest": "cab9bf815da0989a3d4d88fc594ed23720c780cda493cb8deb7707f6d016577d",
+  "closing_digest": "2a80c1ce1cd0b74831079fe875befd732a1374e2cc12aed89db9efb418f88f11",
+  "review_digest": "5df22fde620dc8271e932e283caccf93767c9a5544e61857360f544b0846ae48",
+  "finalization_digest": "448f2306a88bfcab16bee16a7dc39e9693d545b9269a1844cd82748a7c4a4794",
+  "timestamp": 1790452237
+}
