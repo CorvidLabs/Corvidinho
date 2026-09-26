@@ -7,11 +7,11 @@
   "title": "Docs: operator guide for shipped go-live knobs in DISCORD-GO-LIVE.md (owner-only ADMIN, protocol 2 restart-together, SAFE-1 CORVIDINHO_ALLOWLIST entries with registry flags, daemon under systemd, AUTONOMOUS-1 gate, ROLES-CHAT for non-owners, audit and spawn log locations) plus stale-fact fixes in BOX-UPDATE.md and .env.example (issue #5)",
   "description": "Docs: operator guide for shipped go-live knobs in DISCORD-GO-LIVE.md (owner-only ADMIN, protocol 2 restart-together, SAFE-1 CORVIDINHO_ALLOWLIST entries with registry flags, daemon under systemd, AUTONOMOUS-1 gate, ROLES-CHAT for non-owners, audit and spawn log locations) plus stale-fact fixes in BOX-UPDATE.md and .env.example (issue #5)",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
   "created_at": 1790460125,
-  "updated_at": 1790462395,
+  "updated_at": 1790462503,
   "affected_specs": [],
   "affected_paths": [
     "docs/DISCORD-GO-LIVE.md",
