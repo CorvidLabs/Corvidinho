@@ -124,6 +124,9 @@ describe("update-helpers.sh", () => {
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.17`,
     );
     expect(r.exitCode).toBe(0);
+    // Backfilled #166 / #169 entries belong to the 0.0.17 build.
+    expect(r.stdout).toContain("draft PR");
+    expect(r.stdout).toContain("HEAD commit");
     expect(r.stdout).toContain("STRING + autocomplete");
     expect(r.stdout).toContain("ADMIN-2");
     expect(r.stdout).not.toContain("ROLES-CHAT-2");

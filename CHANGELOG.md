@@ -15,6 +15,18 @@
 - Package version **0.0.17** — presence (DISCORD-12) reads `v0.0.17` after restart.
 - **Restart the Discord bridge** and re-register slash commands so STRING + autocomplete replaces the old CHANNEL options.
 
+_Also in the v0.0.17 build (backfilled — merged just before this cut):_
+
+### `/work` ships a draft PR — [#166](https://github.com/CorvidLabs/Corvidinho/pull/166) (#88)
+
+- After a `/work` run in its git worktree, the bridge commits, pushes the work branch and opens a **draft PR** whose body comes from the real diff (files, diffstat, commits, verify result) — AUTONOMOUS-3 / GITHUB-2.
+- Only when verify passed (or passes on one re-run, AGENT-4), `git-commit` / `git-push` / `github-pr-create` are allowlisted (GITHUB-5), the repo passes GITHUB-6, and the requester is the **owner** (ROLES-CHAT-3). Otherwise one plain line says why and the changes stay on the work branch. Never pushes the base branch or a switched/detached HEAD.
+
+### Project instructions come from the committed tree — [#169](https://github.com/CorvidLabs/Corvidinho/pull/169) (#84)
+
+- In git projects `AGENTS.md` / `CLAUDE.md` are read from the **HEAD commit**, so the agent's own file edits cannot plant instructions for later runs; non-git projects keep the working-tree read.
+- To let `/work` open PRs, allowlist `git-commit`, `git-push` and `github-pr-create` in `CORVIDINHO_ALLOWLIST` (owner-only either way).
+
 ## 0.0.16
 
 ### New tools and a daemon

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "backfill-0-0-17-notes-with-166-work-draft-pr-owner-only-and-169-instructions-from-head-that-shipped-in-the-v0-0-17",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "21078ade5c4b190ddfa0ff4dff58458c32239627",
+  "contract_digest": "f74aa927cb4ae8318892465fe7ed7a2efb1f06a5f4dab0b320f78e1aeb6ced5a",
+  "execution_digest": "0882022fea5da4bd76b436aed501ab025a810f87091eca8585585359fb0949f8",
+  "workspace_digest": "797e419a4b3e833d183296c08cb467cbc318a8583db516789388afa1ff50b8fb",
+  "timestamp": 1790458443
+}
