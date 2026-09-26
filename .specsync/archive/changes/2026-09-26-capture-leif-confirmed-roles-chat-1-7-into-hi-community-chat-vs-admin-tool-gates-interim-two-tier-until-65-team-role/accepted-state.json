@@ -7,11 +7,11 @@
   "title": "Capture Leif-confirmed ROLES-CHAT-1..7 into hi/ (community chat vs ADMIN tool gates); interim two-tier until #65 team role",
   "description": "Capture Leif-confirmed ROLES-CHAT-1..7 into hi/ (community chat vs ADMIN tool gates); interim two-tier until #65 team role",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "19683b6059902c62baeddb9d2110f64f82dc3009",
   "created_at": 1790455483,
-  "updated_at": 1790455571,
+  "updated_at": 1790455706,
   "affected_specs": [],
   "affected_paths": [
     "hi",

@@ -1,6 +1,6 @@
 ---
 id: capture-leif-confirmed-roles-chat-1-7-into-hi-community-chat-vs-admin-tool-gates-interim-two-tier-until-65-team-role
-state: implementing
+state: archived
 type: documentation
 base_commit: 19683b6059902c62baeddb9d2110f64f82dc3009
 ---
