@@ -1,0 +1,38 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790455542,
+      "digest": "2d1be356656c8cc7cceba9e320c9d8b4eacfb2baba8f7de7b64b8227f0b28e66",
+      "note": "Leif-confirmed ROLES-CHAT-1..7 HI capture; gate impl deferred to follow-up PR; #43 after gates",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "capture-leif-confirmed-roles-chat-1-7-into-hi-community-chat-vs-admin-tool-gates-interim-two-tier-until-65-team-role",
+        "title": "Capture Leif-confirmed ROLES-CHAT-1..7 into hi/ (community chat vs ADMIN tool gates); interim two-tier until #65 team role",
+        "description": "Capture Leif-confirmed ROLES-CHAT-1..7 into hi/ (community chat vs ADMIN tool gates); interim two-tier until #65 team role",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "AGENTS.md",
+          "STATUS.md",
+          "docs/hi-drafts",
+          "hi"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "HI capture only into hi/roles.md (+ cross-links); no canonical module behavior change; gate impl follows in a separate PR after capture merges",
+        "acceptance_criteria": [
+          "hi/roles.md has ROLES-CHAT-1..7 exactly as Leif confirmed; docs/hi-drafts/ROLES-CHAT.md marked captured; AGENTS/STATUS note capture; hi check clean; no invented AC; no gate impl code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
