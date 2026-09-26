@@ -7,11 +7,11 @@
   "title": "STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete",
   "description": "STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "33a6c7f74ef2c2521c5c6ea2de8e552551552e0c",
   "created_at": 1790437482,
-  "updated_at": 1790437639,
+  "updated_at": 1790437729,
   "affected_specs": [
     "agent",
     "cli"

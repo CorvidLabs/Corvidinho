@@ -1,6 +1,6 @@
 ---
 id: steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing
-state: implementing
+state: archived
 type: feature
 base_commit: 33a6c7f74ef2c2521c5c6ea2de8e552551552e0c
 ---
