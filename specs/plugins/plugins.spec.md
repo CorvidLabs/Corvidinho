@@ -122,13 +122,6 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
 | sh | shell-exec child via `sh -c` |
 
-### Consumed By
-
-| Module | What is used |
-|--------|-------------|
-| cli | `plugins list` / `plugins run` / doctor count |
-| agent tool loop | OpenAI tools from registry at capability tier |
-
 ## Change Log
 
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
