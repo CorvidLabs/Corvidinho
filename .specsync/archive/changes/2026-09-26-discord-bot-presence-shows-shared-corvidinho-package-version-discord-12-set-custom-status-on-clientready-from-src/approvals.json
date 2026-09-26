@@ -1,0 +1,59 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790445181,
+      "digest": "d36d04a2e878961d76a1d276758ad11813579e6604eb32ce89020b93451995d1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src",
+        "title": "Discord bot presence shows shared Corvidinho package version (DISCORD-12): set Custom Status on ClientReady from src/version.ts; short string e.g. v0.0.3; fixture test; STATUS note; no slash/allowlist churn",
+        "description": "Discord bot presence shows shared Corvidinho package version (DISCORD-12): set Custom Status on ClientReady from src/version.ts; short string e.g. v0.0.3; fixture test; STATUS note; no slash/allowlist churn",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "hi/discord.md",
+          "specs/cli/cli.spec.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/gateway.ts",
+          "src/discord/index.ts",
+          "src/discord/presence.ts",
+          "src/version.ts",
+          "tests/discord.presence.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "On ClientReady (and after restart), Discord presence/custom status shows short version string from shared src/version.ts/package.json (e.g. v0.0.3); prefer ActivityType.Custom; fixture test covers presence payload without live token; slash registration and allowlists unchanged; STATUS notes DISCORD-12; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "1e27c486635a5895573b01b82adbcd4a39d4cf493e93e78ecdc9aee88d9e122a",
+        "discord": "6a11ae9fc928ab5e806b707a20fa078352f96f7fc55c5b5cb139b160e7521f1c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790445229,
+      "digest": "28f49d7b447f34ca92e80b6ffaa31c5fc2baed95966bc5ee910046e484908b02",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

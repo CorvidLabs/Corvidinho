@@ -61,6 +61,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
 | HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → main | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
 | v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
+| Discord presence version | → (this PR) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
 
 ### In flight / next
 

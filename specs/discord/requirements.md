@@ -9,6 +9,7 @@ spec: discord.spec.md
 - As an operator, non-allowlisted channels are refused; empty channel lists refuse start (DISCORD-5; default-deny).
 - As a user, while the agent thinks I see a live status (time, tool, rough tokens) instead of a silent void (DISCORD-3).
 - As an operator, slash commands let me manage sessions, see agents, check status, and drive work tasks without leaving Discord (DISCORD-4).
+- As an operator, under the bot name I see the Corvidinho version as a short Discord presence/custom status (DISCORD-12).
 
 ## Acceptance Criteria
 
@@ -242,3 +243,22 @@ Acceptance Criteria
 - No dual global+guild registration of the same names in one path.
 - No ProcessManager; secrets out of repo; no new slash names.
 
+
+### REQ-discord-017
+
+On Discord gateway `ClientReady` (including after bridge restart), the live
+gateway SHALL set the bot presence/activity to a short version string derived
+from the shared package version (`src/version.ts` / `package.json` — the same
+source as `/status`), so operators can see which Corvidinho build is live under
+the bot name (DISCORD-12). The system SHOULD prefer Custom Status
+(`ActivityType.Custom` / type 4) with state text like `v0.0.3`. The string SHALL
+stay short; the system SHALL NOT invent extra status chrome, new slash commands,
+or allowlist changes. Fixture tests SHALL cover the presence payload builder
+without a live Discord token.
+
+Acceptance Criteria
+- Presence activity state/name uses shared VERSION (e.g. `v0.0.3`), not a hardcoded bridge constant.
+- Custom type (4) preferred with `state` holding the short version string.
+- ClientReady / restart path sets presence; failure to set presence SHALL NOT abort slash registration or the bridge.
+- Slash registration bodies and allowlists unchanged.
+- Fixture test covers `buildVersionPresenceActivity` / format helper without a live token.

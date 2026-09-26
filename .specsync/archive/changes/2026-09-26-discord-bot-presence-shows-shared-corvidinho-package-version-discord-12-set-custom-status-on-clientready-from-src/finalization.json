@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src",
+  "implementation_commit": "c58fde0b20d1db84aa8d78edf54ce0f3047dbfeb",
+  "implementation_tree": "61f1d6e2b1b4812e9e1d99746ce44e9f95131742",
+  "contract_digest": "d36d04a2e878961d76a1d276758ad11813579e6604eb32ce89020b93451995d1",
+  "workspace_digest": "9bde029e6fbecc738867f03372f64ddac3e6acf4944d5039566717452cfa95e2",
+  "closing_digest": "28f49d7b447f34ca92e80b6ffaa31c5fc2baed95966bc5ee910046e484908b02",
+  "review_digest": "6c5f34952a018bb826e01383295545db5f05d8e16164ad3322ce674d315e5c5f",
+  "finalization_digest": "5d0d2ddb47ace27cb74fa74891daa732341a60e78c0379af6bd0114ae45ae607",
+  "timestamp": 1790445229
+}

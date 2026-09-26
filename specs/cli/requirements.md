@@ -14,13 +14,17 @@ spec: cli.spec.md
 
 ### REQ-cli-002
 
-The CLI `version` command SHALL print the semver string read from
+The CLI `version` command and shared exports SHALL read the package version from
 `package.json` via the shared `src/version.ts` helper and SHALL NOT rely on a
-hardcoded constant that can drift from the package.
+hardcoded semver literal in the CLI. `src/version.ts` SHALL also export
+`formatPresenceVersionString` returning a short `vX.Y.Z` string for Discord
+presence (DISCORD-12). Existing `VERSION` / CLI version / `/status` consumers
+SHALL remain compatible.
 
 Acceptance Criteria
-- Printed version matches `package.json` `"version"`.
 - Unit tests cover `readPackageVersion` / exported `VERSION`.
+- `formatPresenceVersionString` returns short `vX.Y.Z` for Discord presence (DISCORD-12).
+- CLI `version` prints the shared package version.
 
 ### REQ-cli-003
 

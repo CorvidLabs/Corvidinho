@@ -142,3 +142,9 @@ export {
   type BridgeConfig,
   type AgentSpawnResult,
 } from "./types.ts";
+
+export {
+  PRESENCE_ACTIVITY_TYPE_CUSTOM,
+  buildVersionPresenceActivity,
+  type VersionPresenceActivity,
+} from "./presence.ts";

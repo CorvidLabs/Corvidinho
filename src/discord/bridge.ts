@@ -5,6 +5,7 @@
  * DISCORD-6: per-user rate limits + mutes.
  * DISCORD-9: image attachments → local files for agent.
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
+ * DISCORD-12: presence/custom status shows shared package version.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -310,7 +311,7 @@ export async function startBridge(
     opts.gatewayFactory ??
     (async (cfg, h) => {
       if (cfg.dryRun) return createNullGateway();
-      const gw = await createLiveGateway(cfg, h);
+      const gw = await createLiveGateway(cfg, h, { version });
       replyRef.fn = h.reply;
       embedRef.send = h.sendEmbed;
       embedRef.edit = h.editEmbed;
