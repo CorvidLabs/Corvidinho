@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate",
+  "slug": "release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate",
+  "title": "Release 0.0.18: ask-human + owner ping, autonomous gate + delegate",
+  "description": "Release 0.0.18: ask-human + owner ping, autonomous gate + delegate",
+  "kind": "operations",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "c69e0e2fefdf11d506f55c528035d422973e4f1a",
+  "created_at": 1790459185,
+  "updated_at": 1790459195,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.18; version prints 0.0.18; CHANGELOG 0.0.18 extractable; STATUS rows"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

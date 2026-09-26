@@ -10,7 +10,8 @@
  */
 
 import { Octokit } from "@octokit/rest";
-import { checkRepoGate, extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
+import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
+import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
@@ -43,8 +44,10 @@ function isResult(x: unknown): x is PluginHandlerResult {
   return Boolean(x) && typeof x === "object" && "ok" in (x as object);
 }
 
-function gateRepo(ctx: PluginHandlerArgs): PluginHandlerResult | Target {
-  const gate = checkRepoGate(extractRepoFromArgs(ctx.args));
+async function gateRepo(
+  ctx: PluginHandlerArgs,
+): Promise<PluginHandlerResult | Target> {
+  const gate = await checkRepoGateForActingRole(extractRepoFromArgs(ctx.args));
   if (!gate.ok) return { ok: false, error: gate.error, exitCode: 3 };
   const parts = splitOwnerRepo(gate.repo);
   if (!parts) {
@@ -228,7 +231,7 @@ function makeDiffCommand(deps: ReviewDeps): PluginCommand {
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const t = gateRepo(ctx);
+      const t = await gateRepo(ctx);
       if (isResult(t)) return t;
       const parsed = parseArgs(ctx.args, ["--file"]);
       if (parsed.error) return { ok: false, error: `${parsed.error}; ${DIFF_USAGE}`, exitCode: 1 };
@@ -325,7 +328,7 @@ function makeFilesCommand(deps: ReviewDeps): PluginCommand {
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const t = gateRepo(ctx);
+      const t = await gateRepo(ctx);
       if (isResult(t)) return t;
       const parsed = parseArgs(ctx.args, ["--limit"]);
       if (parsed.error) return { ok: false, error: `${parsed.error}; ${FILES_USAGE}`, exitCode: 1 };

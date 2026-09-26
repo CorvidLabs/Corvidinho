@@ -34,6 +34,8 @@ export {
   createTaskExecute,
   extractUsage,
   MEMORY_AGENT_SYSTEM_INSTRUCTIONS,
+  IDENTITY_AGENT_SYSTEM_INSTRUCTIONS,
+  PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS,
   loadLlmEnv,
   UNKNOWN_TOOL_LABEL,
 } from "./execute.ts";
@@ -69,7 +71,13 @@ export {
 } from "./ask.ts";
 export type { AskToolDef, AskToolOutcome, ChatToolDef } from "./ask.ts";
 
-export { summarizeTaskResult, summarizeTaskRunOutput } from "./task-summary.ts";
+export {
+  chatBodyFromTaskResult,
+  chatBodyFromTaskRunOutput,
+  formatTaskPlumbing,
+  summarizeTaskResult,
+  summarizeTaskRunOutput,
+} from "./task-summary.ts";
 export type { TaskResultSummaryInput } from "./task-summary.ts";
 
 export {

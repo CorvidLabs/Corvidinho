@@ -258,8 +258,10 @@ describe("spawn client reads the ask from the result frame", () => {
     const good = await run({ ...base, ask: CLARIFY });
     expect(good.ok).toBe(true);
     expect(good.ask).toEqual(CLARIFY);
-    expect(good.summary).toContain("state=blocked");
+    // DISCORD-3.a — spawn summary is chat body only (plumbing lives on the embed).
+    expect(good.summary).not.toContain("state=");
     expect(good.summary).toContain("Needs your input: Postgres or SQLite?");
+    expect(good.task?.state).toBe("blocked");
 
     const bad = await run({ ...base, ask: { reason: "nope", question: "x" } as never });
     expect(bad.ask).toBeUndefined();

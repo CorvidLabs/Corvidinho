@@ -30,6 +30,10 @@ export type InboundMessage = {
   guildId?: string;
   authorId: string;
   authorBot: boolean;
+  /** Discord display name (globalName / displayName) when known — IDENTITY-4. */
+  authorDisplayName?: string;
+  /** Discord username (handle) when known — IDENTITY-4. */
+  authorUsername?: string;
   content: string;
   /** True when the bot user is @mentioned. */
   mentionedBot: boolean;
@@ -125,7 +129,13 @@ export type AgentSpawnResult = {
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).
    */
-  task?: { verified: boolean; verifySkipped: boolean; state?: string };
+  task?: {
+    verified: boolean;
+    verifySkipped: boolean;
+    state?: string;
+    attempts?: number;
+    cancelled?: boolean;
+  };
 };
 
 export const NOT_AUTHORIZED = "not authorized";

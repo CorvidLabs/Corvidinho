@@ -37,7 +37,10 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import { enrichPromptWithImages } from "./image-attachments.ts";
+import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
+import { formatTaskPlumbing } from "../agent/task-summary.ts";
+import { loadLlmEnv } from "../agent/execute.ts";
 import { routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
@@ -73,7 +76,6 @@ import {
 } from "../scheduler/index.ts";
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
-import { loadLlmEnv } from "../agent/execute.ts";
 import { readSpendSnapshot } from "../agent/spend.ts";
 import { formatSpendStatusLine } from "../agent/spend-notice.ts";
 import { AnnounceStore } from "./announce-store.ts";
@@ -373,6 +375,21 @@ export async function startBridge(
         { messageId: msg.id },
       );
 
+      // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
+      const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+        userId: msg.authorId,
+        displayName: msg.authorDisplayName,
+        username: msg.authorUsername,
+        owner: config.owner ?? null,
+      });
+      if (idInject.injected) {
+        console.log(
+          `[discord] identity inject: user ${msg.authorId}` +
+            (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
+        );
+        enrichedPrompt = idInject.prompt;
+      }
+
       // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
       const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
         ownerUserId: msg.authorId,
@@ -385,12 +402,14 @@ export async function startBridge(
       }
 
       const outbound = resolveOutbound();
+      const llmModel = loadLlmEnv(process.env).model;
 
       const thinking = new ThinkingStatus({
         outbound,
         channelId,
         replyToMessageId: msg.id,
         sessionId: session.id,
+        model: llmModel,
         debounceMs: opts.thinkingDebounceMs,
         tickMs: opts.thinkingTickMs,
       });
@@ -451,6 +470,16 @@ export async function startBridge(
         throw err;
       }
 
+      const plumbing = result.task
+        ? formatTaskPlumbing({
+            state: result.task.state,
+            verified: result.task.verified,
+            verifySkipped: result.task.verifySkipped,
+            attempts: result.task.attempts,
+            cancelled: result.task.cancelled,
+          })
+        : undefined;
+      const thinkExtras = { plumbing, model: llmModel };
       // AUTONOMY-1/2: needs a human → question to the requester + owner ping.
       const ask = result.ask
         ? formatAskReply({
@@ -461,19 +490,22 @@ export async function startBridge(
           })
         : null;
       if (ask) {
-        await (ask.failed ? thinking.fail(ask.status) : thinking.done(ask.status));
+        await (ask.failed
+          ? thinking.fail(ask.status, thinkExtras)
+          : thinking.done(ask.status, thinkExtras));
         if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
       } else if (result.ok) {
-        await thinking.done("✅ Done");
+        await thinking.done("✅ Done", thinkExtras);
       } else {
-        await thinking.fail(`❌ exit ${result.exitCode}`);
+        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
       }
 
+      // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
       const body = ask
         ? ask.content
         : result.ok
-        ? result.summary.slice(0, 1800)
-        : `session ${session.id} failed (exit ${result.exitCode})`;
+          ? result.summary.slice(0, 1800)
+          : `session ${session.id} failed (exit ${result.exitCode})`;
 
       if (replyRef.fn) {
         // SAFE-8: an 80% spend warning rides the reply and pings the owner.

@@ -5,6 +5,7 @@
  * Secrets stay in env — never commit.
  */
 
+import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
@@ -76,6 +77,19 @@ export const MEMORY_AGENT_SYSTEM_INSTRUCTIONS =
   "(c) Before claiming you do not know who the user is or facts about them/people/projects, call memory-recall first (or use the injected block). " +
   "(d) Never invent memories that were not injected or returned by memory-recall. ";
 
+/** IDENTITY-4 — never invent Discord user names; trust the inject block. */
+export const IDENTITY_AGENT_SYSTEM_INSTRUCTIONS =
+  "Identity (IDENTITY-4): " +
+  "(a) Trust any [Corvidinho acting Discord user ...] block prepended to the task for who is speaking (discord_user_id + display_name). " +
+  "(b) Address them by that display_name when present. " +
+  "(c) Never invent or guess alternate names (e.g. do not call Leif 'Kyn'). " +
+  "(d) Memory is scoped to the acting Discord user id — do not mix users. ";
+
+/** ROLES-CHAT-8 — community public Q&A posture. */
+export const PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS =
+  "Public Q&A (ROLES-CHAT-8): In community / non-ADMIN Discord sessions, answer from public GitHub, the project site, and the roadmap. " +
+  "Never access private repos or secret paths (.env, keys, keystores). Prefer read-only tools. ";
+
 export type FetchLike = (
   input: string | URL | Request,
   init?: RequestInit,
@@ -103,6 +117,11 @@ export type CreateTaskExecuteOpts = {
   maxToolRounds?: number;
   /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
   includeDangerous?: boolean;
+  /**
+   * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
+   * autonomous mode (AUTONOMOUS-1) and the delegation depth cap is not reached.
+   */
+  autonomous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
   /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
@@ -232,9 +251,16 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     if (roleSessionActive(env)) {
       actingIsAdmin = await resolveActingIsAdmin(env);
     }
+    const autonomous =
+      opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
     const tools = withAskTool(
-      buildOpenAiTools({ tier, includeDangerous, actingIsAdmin }),
+      buildOpenAiTools({
+        tier,
+        includeDangerous,
+        actingIsAdmin,
+        autonomous,
+      }),
     );
     return runToolLoop({
       llm: { ...llm, tier },
@@ -305,6 +331,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
     "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
+    IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
+    PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
     ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.",
@@ -412,6 +440,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               json: true,
               nonInteractive,
               allowlist,
+              tier: llm.tier,
+              signal,
             })
           : {
               ok: false,

@@ -1,3 +1,4 @@
+import { loadAutonomousPlugins } from "../../plugins/autonomous/index.ts";
 import { loadDiscordPlugins } from "../../plugins/discord/index.ts";
 import { loadFilesPlugins } from "../../plugins/files/index.ts";
 import { loadGitPlugins } from "../../plugins/git/index.ts";
@@ -25,5 +26,6 @@ export function loadBuiltins(): void {
   loadShellPlugins();
   loadWebPlugins();
   loadGitPlugins();
+  loadAutonomousPlugins();
   loaded = true;
 }

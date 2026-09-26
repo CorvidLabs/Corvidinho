@@ -28,6 +28,9 @@ files:
   - tests/agent.spend.test.ts
   - tests/agent.spend-ask.test.ts
   - tests/agent.ask.test.ts
+  - src/autonomous/enabled.ts
+  - src/autonomous/delegate.ts
+  - tests/autonomous.enabled.test.ts
 
 db_tables: []
 depends_on:
@@ -78,6 +81,18 @@ warning as a `Text` event and through `onSpendWarning`, and passes every
 attempt's result through `finish`. `HumanAskReason` gains `spend-cap`;
 `TaskResult` gains optional `spendWarning` (`SpendWarning`: integer
 `spentMicroUsd` / `capMicroUsd` and `percent`).
+Autonomous gate + delegation core (REQ-agent-117, issue #117):
+`src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
+`loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
+`src/autonomous/delegate.ts` exports `delegateDepthFromEnv`,
+`canDelegateAtDepth`, `clampChildTier`, `parseDelegateArgs`,
+`buildDelegateTaskText`, `resolveDelegateBin`, `isWorkerEnvDropped`,
+`buildDelegateSpawn`, `createDelegateLimiter`, `runDelegateChild` and the caps
+(`MAX_DELEGATE_DEPTH` 2, `MAX_CONCURRENT_DELEGATES` 2,
+`MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
+`autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
+(default: `autonomousSessionAllowed({ cwd, env })`).
+
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
 `loadProjectInstructions`, `renderProjectInstructions`,
@@ -92,6 +107,15 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
+
+`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
+`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`. Discord/NDJSON
+bridge summaries SHALL use the chat-body helpers so operator plumbing never
+appears in the final chat reply (DISCORD-3.a).
+
+`execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
+blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
+in addition to MEMORY instructions.
 
 Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
 exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
@@ -123,6 +147,17 @@ skipped) — the runner never spends past the cap and never counts an unpriced
 model as free. The 80% warning is recorded at most once per cap value per
 rolling 24 h across processes (`spend_alerts`, same IMMEDIATE transaction as
 its check). Money is integer micro-USD, rounded up.
+Autonomous mode is off unless the project `fledge.toml` sets
+`[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
+left out of the tool catalog unless the session is allowed (enabled, depth
+below 2) and appear at code tier only (SAFE-9). The tool loop passes its tier
+and abort signal to `runPlugin`. A worker never runs above the lead's tier
+(omitted = the lead's), is forced non-interactive with the lead's allowlist,
+no ADMIN and no SAFE-4 confirm tokens, keeps prove-before-done (never
+`--no-verify`, REQ-cli-085), runs one level deeper, and is stopped on
+lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
+These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
+
 Project instructions come only from the project root (nearest `.git` at or
 above cwd, else cwd), never from a parent directory above it. Each file is
 capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
@@ -154,6 +189,18 @@ model.
 - **Then** it embeds MEMORY_AGENT_SYSTEM_INSTRUCTIONS with argv example for
   memory-store
 
+### Scenario: delegate hidden until the project opts in
+
+- **Given** a project whose `fledge.toml` has no `[corvidinho.autonomous]`
+- **When** a code-tier task run builds its tool catalog
+- **Then** `delegate` is not offered, and a model call naming it is refused
+
+### Scenario: lead delegates a subtask
+
+- **Given** `[corvidinho.autonomous] enabled = true` and a code-tier lead
+- **When** the model calls `delegate` with `--skill specsync --task ...`
+- **Then** a worker `task run` runs non-interactive at depth 1 and its summary and filesChanged come back in the tool result for the lead to synthesize
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -167,6 +214,9 @@ model.
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and how to continue (SAFE-8) |
 | Settled call brings 24h spend to ≥80% of the cap for the first time in 24h | one `Text` warning + `TaskResult.spendWarning`; later calls stay quiet (SAFE-8) |
+| Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
+| Delegation depth env malformed | Treated as the cap; no further delegation |
+| Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
 | AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
@@ -183,6 +233,7 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 ## Change Log
 
 Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: chat/plumbing split for Discord summaries; identity + public Q&A system instructions |
 | 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
 | 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
@@ -190,9 +241,12 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene: Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo |
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
 | 2026-09-26 | safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a: SAFE-8 daily spend cap (issue #98 captured slice): optional CORVIDINHO_DAILY_SPEND_CAP_USD caps provider (LLM) spend over a rolling 24h; each OpenAI-compatible call is priced from a per-model table, reserved against a spend_ledger in the shared SQLite DB before it is sent and refused with a clear error when it would break the cap, then settled from provider-reported token usage; unpriced models are refused while a cap is set; no cap means no behavior change; doctor shows spend vs the cap (AUTONOMOUS-8); ledger provider/model columns are SAFE-6 scrubbed; draft SAFE-14..16 (80% warn, per-provider caps, ask at 100%) left for HI capture |
+| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117: AUTONOMOUS-1 `[corvidinho.autonomous]` gate, SAFE-9 catalog hiding, delegation core with depth / tier / fan-out safety defaults (REQ-agent-117) |
+| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho: AUTONOMOUS-1 gate and depth-capped delegate tool (issue #117, AUTONOMOUS-1/5, SAFE-9): autonomous mode off until [corvidinho.autonomous] enabled = true in the project fledge.toml; a code-tier lead can delegate a skill-tagged subtask to a worker (child task run, same-or-lower tier, non-interactive, depth <= 2, capped fan-out) and synthesize its summary; delegate stays hidden from the tool catalog unless the session is allowed |
 | 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
 | 2026-09-26 | safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run: SAFE-8 amended (issue #98): warn at 80% of the daily spend cap and ask at 100% instead of refusing. Once per crossing a run that pushes rolling 24h spend to 80% of CORVIDINHO_DAILY_SPEND_CAP_USD emits a warning (Text event, result spendWarning, Discord reply line with owner ping); a provider call that would pass the cap is stopped before it is sent and the run ends blocked with a spend-cap ask to the owner via the AUTONOMY-1/2 ask path stating spend vs cap and how to continue; doctor and Discord /status show 24h spend vs the cap (AUTONOMOUS-8); Approve card (#96) left for HI capture |
+
