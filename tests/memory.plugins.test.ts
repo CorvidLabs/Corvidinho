@@ -141,7 +141,9 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     for (const [name, args] of attempts) {
       const r = await run(name, args);
       expect(r.ok).toBe(false);
-      expect(r.error).toContain("is not accepted");
+      // Mutating forget/override may hit ROLES-CHAT-3 before argv parse;
+      // store/recall still refuse --user/--admin/--db at the handler.
+      expect(r.error ?? "").toMatch(/is not accepted|not allowed for your role/);
       expect(JSON.stringify(r)).not.toContain("victim private note");
     }
     actAs("victim");
@@ -157,11 +159,11 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     for (const name of ["memory-forget", "memory-override"]) {
       const r = await run(name, ["--id", id, "replacement"]);
       expect(r.ok).toBe(false);
-      expect(r.error).toBe("not authorized");
+      expect(r.error).toMatch(/not authorized|not allowed for your role/);
     }
     const deleted = await run("memory-recall", ["--include-deleted"]);
     expect(deleted.ok).toBe(false);
-    expect(deleted.error).toBe("not authorized");
+    expect(deleted.error).toMatch(/not authorized|not allowed for your role/);
   });
 
   test("self-forget by a non-admin is refused opaquely", async () => {
@@ -170,7 +172,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     actAs("u1");
     const r = await run("memory-forget", ["--id", id]);
     expect(r.ok).toBe(false);
-    expect(r.error).toBe("not authorized");
+    expect(r.error).toMatch(/not authorized|not allowed for your role/);
     expect(JSON.stringify(r)).not.toContain("content-u1");
   });
 
@@ -254,10 +256,10 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     const id = await storeAs("u1", "k", "v");
     process.env.CORVIDINHO_DISCORD_DENY_USERS = BOSS;
     actAs(BOSS, true);
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
     delete process.env.CORVIDINHO_DISCORD_DENY_USERS;
     process.env.DISCORD_MUTED_USER_IDS = BOSS;
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
   });
 
   test("admin user/role lists no longer grant memory ADMIN (IDENTITY-2)", async () => {
@@ -265,9 +267,9 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "mod";
     process.env.CORVIDINHO_DISCORD_ADMIN_ROLES = "role-admin";
     actAs("mod", true);
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
     actAs(BOSS, true);
     expect((await run("memory-forget", ["--id", id])).ok).toBe(true);
   });
@@ -288,7 +290,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     actAs("u1");
     const nonAdmin = await run("memory-recall", ["--include-deleted"]);
     expect(nonAdmin.ok).toBe(false);
-    expect(nonAdmin.error).toBe("not authorized");
+    expect(nonAdmin.error).toMatch(/not authorized|not allowed for your role/);
   });
 
   test("dangerous forget/override still SAFE-1 denied without allowlist", async () => {
@@ -310,7 +312,7 @@ describe("memory ACL hardening — review follow-ups", () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
     const id = await storeAs("u1", "k", "v");
     actAs(BOSS, false);
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
     actAs(BOSS, true);
     expect((await run("memory-forget", ["--id", id])).ok).toBe(true);
   });
@@ -329,7 +331,7 @@ describe("memory ACL hardening — review follow-ups", () => {
     const off = await run("memory-recall", ["--include-deleted=false"]);
     expect(off.ok).toBe(true);
     const on = await run("memory-recall", ["--include-deleted=true"]);
-    expect(on.error).toBe("not authorized");
+    expect(on.error).toMatch(/not authorized|not allowed for your role/);
   });
 
   test("identity-looking words in content are fine after `--` or in --content=", async () => {
@@ -361,12 +363,12 @@ describe("configured owner is ADMIN for memory (IDENTITY-1 / REQ-plugins-042)", 
     process.env.CORVIDINHO_OWNER_DISCORD_ID = "111111111111111111";
     const id = await storeAs("u1", "k", "v");
     actAs("111111111111111111", false);
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
     actAs("111111111111111111", true);
     const p1 = await run("memory-forget", ["--id", id]);
     expect(p1.ok).toBe(true);
     actAs("222222222222222222", true);
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
   });
 
   test("muted or deny-listed owner is not ADMIN", async () => {
@@ -374,6 +376,6 @@ describe("configured owner is ADMIN for memory (IDENTITY-1 / REQ-plugins-042)", 
     const id = await storeAs("u1", "k", "v");
     process.env.DISCORD_MUTED_USER_IDS = "111111111111111111";
     actAs("111111111111111111", true);
-    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
   });
 });

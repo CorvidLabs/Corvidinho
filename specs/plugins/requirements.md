@@ -405,6 +405,85 @@ Acceptance Criteria
 - Happy path against a fake bin: argv has `task run`, `--non-interactive`, no `--no-verify`, the clamped `--tier`, and `--task` last with the skill / depth provenance header; env has depth 1, the worker tier, non-interactive, the lead allowlist, ADMIN 0 and no confirm tokens; data carries skill / tier / depth / state / filesChanged / verified / verifySkipped.
 - A failed worker yields ok=false with its exit code and a SAFE-6 scrubbed summary.
 
+### REQ-plugins-111
+
+The plugin host SHALL provide a typed `web-fetch` builtin (PLUGIN-1) declared
+`dangerous: true` and `minTier: 1` (PLUGIN-2) that performs one HTTP GET and
+returns text. Being dangerous it SHALL need SAFE-1 consent: it is left out of
+the default tool catalog, denied in non-interactive runs unless allowlisted,
+and audited (SAFE-5). It SHALL accept only `http` and `https` URLs without
+embedded credentials, and SHALL refuse, before DNS, any URL (first hop or
+redirect target) that carries a value `scrubSecrets` would redact, raw or
+percent-decoded. Before any connection it SHALL check every address the fetch
+would use (the IP literal, or every DNS answer) and SHALL refuse (SAFE-7)
+loopback, private (RFC 1918), CGNAT (100.64.0.0/10), link-local
+(169.254.0.0/16 including 169.254.169.254, fe80::/10), unique-local
+(fc00::/7), multicast, unspecified, 0.0.0.0/8, reserved/documentation space
+and IPv4-mapped, IPv4-compatible and NAT64 forms of those; one non-public
+answer SHALL refuse the name. The connection SHALL dial only checked IPs, in
+answer order, moving to the next checked address only after a socket-level
+connect failure and within the same deadline, while the Host header and TLS
+SNI keep the original name and the certificate is verified against it, so DNS
+rebinding cannot swap the target. Redirects SHALL be followed manually (at most
+5) with the full check on every hop. The body SHALL be capped at 1 MiB, the
+returned text at 100,000 characters (truncated and flagged) and the whole call
+at 15 seconds. Non-text content types, a Content-Type that is not an RFC 6838
+`type/subtype` token, and compressed bodies SHALL be refused. Returned text
+SHALL have C0/C1 control characters removed (newline and tab kept), SHALL be
+secret-scrubbed (SAFE-6 `scrubSecrets`) and SHALL be fenced as untrusted data
+with a per-call random marker id; the page title SHALL appear only inside the
+fence. Errors SHALL NOT echo server-chosen text (reason phrase or header
+values) and SHALL be single-line, control-free and length-capped.
+
+Acceptance Criteria
+- `plugins list` shows `web-fetch` with dangerous=true, minTier=1; the default tool catalog leaves it out, it is offered at tool/code tier only when dangerous tools are included and never at read tier; a non-interactive run that has not allowlisted it is denied (SAFE-1); no `web-search` command exists.
+- Each blocked range, as an IP literal, a DNS answer or a redirect target, is refused with exit 2 before the transport is called.
+- A URL or redirect Location carrying a vendor-key-shaped value is refused with exit 2 before DNS and before the transport is called.
+- A name that resolves public then private (rebinding) is dialed only at the checked public IP; the private answer on a later hop is refused.
+- When a checked address fails to connect, the next checked address is tried; an unchecked address is never dialed.
+- Non-http schemes, URL credentials and more than 5 redirects are refused.
+- A body over 1 MiB or text over 100,000 characters is truncated and flagged; a stalled transport, body or resolver times out.
+- Non-text or malformed content types are refused before the body is read.
+- Output is fenced as untrusted data, control characters are stripped and vendor-key-looking secrets are redacted; a hostile title, Content-Type or status text never appears outside the fence.
+- HTML-to-text tag stripping repeats to a capped fixpoint, so split or nested tags never reassemble into markup and deeply nested hostile markup stays linear.
+
+### REQ-plugins-093
+
+The system SHALL register read-only typed plugins `github-pr-diff` and
+`github-pr-files` (GITHUB-3 read half, GITHUB-1) that call GitHub through
+Octokit, never shell `gh`. Both SHALL declare `dangerous: false` and
+`minTier: 0` and SHALL apply the same `--repo OWNER/REPO` GITHUB-6 repo gate as
+the other github-* commands before any API call (default-deny, deny wins,
+exit 3).
+
+`github-pr-diff <number> --repo OWNER/REPO [--file PATH]` SHALL return the PR's
+unified diff, capped at 200 KiB of UTF-8 cut on a line boundary, with a clear
+`[corvidinho: diff truncated …]` marker when capped. `--file PATH` SHALL return
+only that file's diff section (matching the new or previous path) and SHALL
+fail with a clear error when the file is not in the PR.
+
+`github-pr-files <number> --repo OWNER/REPO [--limit N]` SHALL list changed
+files with status, additions and deletions (and the previous name for
+renames), paginated up to `--limit` (default 300, max 3000) with a `truncated`
+flag when more files exist.
+
+Returned diff text and file names SHALL be passed through `scrubSecrets`
+(SAFE-6) before capping, and payloads SHALL label the content as untrusted PR
+data, not instructions. Because the diff is written by whoever opened the PR,
+the scrub's work SHALL be bounded: diff text SHALL first be cut to a hard
+limit of 800 KiB (4 × the cap) on a line boundary, dropping a private-key
+block left without its END line, and the scrub patterns SHALL run in time
+linear in their input. `totalBytes` SHALL report the uncut size.
+
+Acceptance Criteria
+- `plugins list` shows `github-pr-diff` and `github-pr-files` with dangerous=false and minTier=0.
+- Empty or deny-listed repo refuses with exit 3 before any Octokit call.
+- A diff over 200 KiB returns at most 200 KiB plus the truncation marker; `--file` returns one file's section.
+- `github-pr-files` pages `pulls.listFiles`, honours `--limit`, and sets `truncated`.
+- Vendor-token-looking strings in diff text are redacted, including one straddling the cap.
+- A hostile diff far over the cap (many private-key openers, no closer) returns quickly; a private key split by the hard cut is not returned.
+- Tests mock Octokit (no network, no token).
+
 ### REQ-plugins-112
 
 The system SHALL discover the Fledge plugins registered for a project through
@@ -470,4 +549,41 @@ Acceptance Criteria
 - `withToolCost` adds `origin`, `schemaChars`, `approxTokens` (= ceil(schemaChars/4)) per entry.
 - `toolSurfaceReport` totals match the per-entry sum, group by origin, and flag over-budget / oversized with small test budgets.
 - The text view prints per-command `~N tok`, the total vs budget with `OVER BUDGET` when exceeded, per-origin subtotals and oversized names.
+
+### REQ-plugins-094
+
+`github-ci-status` SHALL report CI state for either a PR number or a ref
+(branch, tag or commit SHA) (GITHUB-4). A selector of 1–9 digits SHALL be a
+PR number (its head SHA is queried); any other selector SHALL be a ref that
+passes git ref-name rules, and option-looking values (leading `-`) SHALL be
+refused before any API call. The result SHALL carry an overall `verdict`:
+`red` when any check run concluded failure/cancelled/timed_out/
+action_required or any commit status is failure/error; otherwise `pending`
+when any check or status is queued/in progress/pending or has no
+recognised conclusion; otherwise `green` when every row succeeded, was
+skipped or was neutral; `none` when there are no check runs and no commit
+statuses. Legacy combined commit statuses
+(`repos.getCombinedStatusForRef`) SHALL count toward the verdict. A ref
+SHALL be resolved to one commit SHA (`repos.getCommit`) before listing, and
+check runs and commit statuses SHALL both be read for that SHA (a PR uses
+its head SHA), so one verdict never mixes two commits. When paging stops at
+the cap (`truncated: true`) a verdict that would be `green` SHALL be
+reported as `pending`. A 403 on commit statuses that denies the permission
+SHALL degrade to check runs only with a warning; a rate-limit (primary or
+secondary) or SSO/SAML 403 SHALL fail the command instead. Warnings SHALL be
+included in the one-line message for every verdict, `none` included.
+Per-check rows SHALL keep `name`, `state`, `bucket`, `link` (additive fields
+only). The command SHALL stay `dangerous: false`, `minTier: 0`, behind the
+`--repo` gate (GITHUB-6).
+
+Acceptance Criteria
+- `github-ci-status 12 --repo O/R` queries the PR head SHA; `main`, `v1.2.3`, a SHA and `heads/123` are queried as refs.
+- `--flag`-looking and invalid refs (`a..b`, spaces, `x.lock`, `@{`) are refused with exit 1 before a token or API call.
+- Verdict is green / red / pending / none per the rules above, with red winning over pending.
+- A repo that only reports commit status contexts gets a verdict from them.
+- A ref such as `main` is resolved once and every check-run and status page is read by that SHA; `data.sha` is the resolved SHA.
+- A truncated listing whose seen rows all pass reports `pending`, not `green` (check runs or statuses hitting the cap); a seen failure stays `red`.
+- A permission 403 on statuses gives a check-runs-only verdict plus a warning; a rate-limit or SSO 403 fails the command; the warning also shows for verdict `none`.
+- Rows keep `name/state/bucket/link` and add `kind/status/conclusion`; `plugins list` still shows dangerous=false minTier=0; missing or denied `--repo` still exits 3.
+- Tests use a mocked Octokit / stubbed transport only (no network, no real token).
 

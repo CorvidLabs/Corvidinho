@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-15-owner-only-admin-runtime-allowlist-package-bump-changelog-status",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "19c9fd31ccfa8e356280c5961478a44d64227489",
+      "contract_digest": "c7e8316f7f9500eb8ddad90754a01ada31c8fd21118c567cddac6e9fef1c1ca4",
+      "execution_digest": "ba967688bd1661c0aade998a937a74591767abc5be5290555f2120159233341c",
+      "workspace_digest": "9b2a2a3c017ecee33b3f872fe803edfcf62ecea9767b6521a76e05336fced149",
+      "timestamp": 1790457190
+    }
+  ]
+}

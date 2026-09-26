@@ -8,6 +8,7 @@ import { loadMetaPlugins } from "../../plugins/meta/index.ts";
 import { loadSearchPlugins } from "../../plugins/search/index.ts";
 import { loadShellPlugins } from "../../plugins/shell/index.ts";
 import { loadSpecsyncPlugins } from "../../plugins/specsync/index.ts";
+import { loadWebPlugins } from "../../plugins/web/index.ts";
 import { size } from "./registry.ts";
 
 let loaded = false;
@@ -23,6 +24,7 @@ export function loadBuiltins(): void {
   loadFilesPlugins();
   loadSearchPlugins();
   loadShellPlugins();
+  loadWebPlugins();
   loadGitPlugins();
   loadAutonomousPlugins();
   loaded = true;

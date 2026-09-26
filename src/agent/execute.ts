@@ -9,6 +9,10 @@ import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
+import {
+  resolveActingIsAdmin,
+  roleSessionActive,
+} from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
 import type {
   AgentEvent,
@@ -206,9 +210,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       // when this run's catalog may offer dangerous tools.
       await loadFledgePlugins({ cwd, env });
     }
+    let actingIsAdmin = true;
+    if (roleSessionActive(env)) {
+      actingIsAdmin = await resolveActingIsAdmin(env);
+    }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
-    const tools = buildOpenAiTools({ tier, includeDangerous, autonomous });
+    const tools = buildOpenAiTools({
+      tier,
+      includeDangerous,
+      actingIsAdmin,
+      autonomous,
+    });
     return runToolLoop({
       llm: { ...llm, tier },
       fetchImpl,

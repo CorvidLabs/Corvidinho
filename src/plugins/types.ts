@@ -33,6 +33,11 @@ export type PluginCommand = {
   description: string;
   /** When true, blocked in non-interactive unless allowlisted (SAFE-1 / CLI-3). */
   dangerous?: boolean;
+  /**
+   * When true, treated as mutating even if `dangerous` is false (ROLES-CHAT-5).
+   * Non-ADMIN acting sessions never see or run mutating tools.
+   */
+  mutating?: boolean;
   /** Minimum autonomy/trust tier required (PLUGIN-2). Default 0. */
   minTier?: number;
   /**
@@ -50,5 +55,7 @@ export type PluginListEntry = {
   name: string;
   description: string;
   dangerous: boolean;
+  /** Effective mutating (dangerous OR explicit mutating flag). */
+  mutating: boolean;
   minTier: number;
 };
