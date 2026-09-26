@@ -24,6 +24,12 @@ import type {
   ExecuteResult,
 } from "./types.ts";
 import {
+  loadProjectInstructions,
+  projectInstructionsWarning,
+  renderProjectInstructions,
+  withProjectInstructions,
+} from "./project-instructions.ts";
+import {
   loadTierFromEnv,
   type CapabilityTier,
 } from "./tier.ts";
@@ -91,6 +97,8 @@ export type CreateTaskExecuteOpts = {
   includeDangerous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
+  /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
+  projectInstructions?: boolean;
 };
 
 type ChatMessage = {
@@ -163,8 +171,17 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   if (opts.loadPlugins !== false) {
     loadBuiltins();
   }
+  // AGENT-1: the project's own AGENTS.md / CLAUDE.md (src/agent/project-instructions.ts).
+  const project =
+    opts.projectInstructions === false ? null : loadProjectInstructions(cwd);
+  const projectBlock = project ? renderProjectInstructions(project) : "";
+  let projectNote = project ? projectInstructionsWarning(project) : null;
 
   return async ({ attempt, verifyFeedback, signal }) => {
+    if (projectNote) {
+      emit(onEvent, { type: "Text", text: projectNote });
+      projectNote = null;
+    }
     const llm = loadLlmEnv(env);
     const tier: CapabilityTier = opts.tier ?? llm.tier;
 
@@ -182,6 +199,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         signal,
         tools: [],
         onUsage,
+        projectBlock,
       });
     }
 
@@ -201,6 +219,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       onEvent,
       onUsage,
       maxToolRounds,
+      projectBlock,
     });
   };
 }
@@ -219,6 +238,7 @@ type LoopArgs = {
   onEvent?: (event: AgentEvent) => void;
   onUsage?: (usage: AgentTokenUsage) => void;
   maxToolRounds: number;
+  projectBlock: string;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -236,6 +256,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     onEvent,
     onUsage,
     maxToolRounds,
+    projectBlock,
   } = args;
 
   const filesChanged = new Set<string>();
@@ -245,7 +266,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   const offered = new Set(tools.map((t) => t.function.name));
   let lastText = "";
 
-  const system =
+  const system = withProjectInstructions(
     "You are Corvidinho, a Linux-first headless agent CLI. " +
     "Use the provided tools (project plugins) when they help complete the task. " +
     "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
@@ -253,7 +274,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
     ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
-    "Do not claim files were edited unless a tool result reported filesChanged.";
+    "Do not claim files were edited unless a tool result reported filesChanged.",
+    projectBlock,
+  );
 
   const userParts = [
     taskText ? `Task:\n${taskText}` : "Task: (none provided)",
@@ -410,6 +433,7 @@ async function singleChatCompletion(opts: {
   signal: AbortSignal;
   tools: OpenAiToolDef[];
   onUsage?: (usage: AgentTokenUsage) => void;
+  projectBlock: string;
 }): Promise<ExecuteResult> {
   const userParts = [
     opts.taskText ? `Task:\n${opts.taskText}` : "Task: (none provided)",
@@ -421,8 +445,10 @@ async function singleChatCompletion(opts: {
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content:
+      content: withProjectInstructions(
         "You are Corvidinho on the read tier (no tools). Reply with a short plain-text summary only.",
+        opts.projectBlock,
+      ),
     },
     { role: "user", content: userParts.join("") },
   ];

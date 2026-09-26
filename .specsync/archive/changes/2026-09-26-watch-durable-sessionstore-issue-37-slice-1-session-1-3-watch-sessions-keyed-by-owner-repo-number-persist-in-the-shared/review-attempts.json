@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "81075a56c927f9b34c0e313aa604c934dea00667",
+      "contract_digest": "503aeb653a5bb140d8cab647c8f7a98b564d2e96ecea576eaf2888af94815631",
+      "execution_digest": "aa8efadc4802f3ae0d1f75a28fb4d4ef3cf75ed286603a373b8f7993747e8808",
+      "workspace_digest": "7077fef547e7b1c0f3e8ef64a4704ff26a7cc62158e2ea4e00e31473515d4058",
+      "timestamp": 1790454850
+    }
+  ]
+}

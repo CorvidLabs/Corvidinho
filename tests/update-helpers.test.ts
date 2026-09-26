@@ -89,6 +89,26 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("memory ACL");
   });
 
+  test("extract_changelog_section finds 0.0.12", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.12`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("git-status");
+    expect(r.stdout).toContain("watch_sessions");
+    expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
+  });
+
+  test("extract_changelog_section finds 0.0.13", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.13`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Always verify");
+    expect(r.stdout).toContain("REQ-discord-085");
+    expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
+  });
+
   test("extract_changelog_section finds 0.0.11", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.11`,
@@ -142,10 +162,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.11", () => {
+  test("package.json is 0.0.13", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.11");
+    expect(pkg.version).toBe("0.0.13");
   });
 });

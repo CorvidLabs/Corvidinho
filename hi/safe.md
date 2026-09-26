@@ -21,3 +21,7 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
 - **SAFE-7**  Web fetch and search refuse private and link-local targets so the agent is not an SSRF helper.
 - **SAFE-8**  When a daily spend cap is set, provider calls that would break it are refused instead of quietly running up the bill.
 - **SAFE-9**  Expensive cross-agent networking tools stay hidden until a session is allowed to use them, so small models cannot wander off starting councils unprompted.
+
+## Notes (not numbered AC)
+
+- Non-ADMIN sessions refuse mutating tools at catalog + run time even when `dangerous: false` (notably files-write/edit): **ROLES-CHAT-2..5** in [`hi/roles.md`](roles.md).
