@@ -1,6 +1,6 @@
 ---
 id: task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 2ff0598784b5e7c72f2c0eedbb85131324e7e239
 ---
