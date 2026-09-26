@@ -1,0 +1,18 @@
+---
+hi: 1
+families: [ADMIN]
+owner: leif
+---
+
+# Admin
+
+## Intent
+
+From Discord, an ADMIN can approve or add users, add or remove channels, and update safe config without SSHing the box — always re-checked at handler time. Empty admin or owner config stays deny-all.
+
+## Criteria
+
+- **ADMIN-1**  Slash admin commands let me approve and add users to the live allowlists Corvidinho already uses (file/env), without weakening empty=deny-all.
+- **ADMIN-2**  Slash admin can add and remove channels from those allowlists.
+- **ADMIN-3**  Slash admin can show and update safe config knobs already represented in allowlist/env with an audit-friendly reply.
+- **ADMIN-4**  Every admin-shaped command re-checks permission at handler time (DISCORD-7); registration alone is never enough, and empty owner/admin lists mean nobody is ADMIN.

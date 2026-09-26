@@ -2,13 +2,13 @@
 hi-draft: 1
 families: [IDENTITY]
 owner: leif
-status: pending-leif-confirm
+status: confirmed-captured-see-hi
 issue: 42
 ---
 
 # IDENTITY (draft) — owner Leif / 0xLeif
 
-> **DRAFT ONLY.** Not acceptance criteria until Leif confirms. Do not capture into `hi/`.
+> **CAPTURED.** Leif confirmed; live criteria are in `hi/`. This file is historical provenance only.
 > Issue: [#42](https://github.com/CorvidLabs/Corvidinho/issues/42).
 
 ## Intent

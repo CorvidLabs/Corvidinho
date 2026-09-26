@@ -2,13 +2,13 @@
 hi-draft: 1
 families: [AUTONOMY, AUTONOMOUS, AGENT]
 owner: leif
-status: pending-leif-confirm
+status: confirmed-captured-see-hi
 issue: 44
 ---
 
 # AUTONOMY (draft) — clarify + ping when stuck
 
-> **DRAFT ONLY.** Not acceptance criteria until Leif confirms. Do not capture into `hi/`.
+> **CAPTURED.** Leif confirmed; live criteria are in `hi/`. This file is historical provenance only.
 > Issue: [#44](https://github.com/CorvidLabs/Corvidinho/issues/44). Keep building; do not silent-stub. #31 LLM loop remains critical path.
 
 ## Intent

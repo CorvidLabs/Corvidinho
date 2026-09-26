@@ -1,16 +1,17 @@
-# HI drafts (pending Leif confirm)
+# HI drafts (historical)
 
-**Status:** proposals only — **do not** `hi capture` or merge invented criteria into `hi/` until Leif confirms.
+**Status:** **CONFIRMED + CAPTURED** 2026-09-26 (Leif). Acceptance criteria now live under `hi/`:
 
-CoS direction 2026-09-26 (Leif via CoS), post **v0.0.2** / #31 LLM loop:
+| Family | `hi/` file | Issue |
+|--------|------------|-------|
+| MEMORY | [`hi/memory.md`](../../hi/memory.md) | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) |
+| IDENTITY | [`hi/identity.md`](../../hi/identity.md) | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42) |
+| ADMIN | [`hi/admin.md`](../../hi/admin.md) | [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) |
+| AUTONOMY | [`hi/autonomy.md`](../../hi/autonomy.md) | [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) |
+| SESSION | [`hi/session.md`](../../hi/session.md) | [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) add-on |
 
-| Draft | Issue | Family intent |
-|-------|-------|----------------|
-| [MEMORY.md](./MEMORY.md) | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) | SQLite persistence (AGENT-7 flesh) |
-| [IDENTITY.md](./IDENTITY.md) | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42) | Owner Leif / 0xLeif durable config |
-| [ADMIN.md](./ADMIN.md) | [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) | Discord slash admin runtime |
-| [AUTONOMY.md](./AUTONOMY.md) | [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) | Clarifying questions + Discord ping when stuck |
+PROCESS-1..5 are encoded in `AGENTS.md` / `STATUS.md`.
 
-Steal-detail siblings (open): [#36](https://github.com/CorvidLabs/Corvidinho/issues/36) CONTACTS, [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION.
+Files in this folder are **draft provenance only** — do not invent beyond confirmed `hi/` criteria. Implementation of MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION code is **deferred** behind slash guild PUT + GH go-live (Leif/CoS priority flip).
 
-When Leif confirms, promote selected criteria into `hi/` via normal HI capture — not by copying this folder wholesale.
+Drafts originally filed under #47; capture PR supersedes “pending confirm”.

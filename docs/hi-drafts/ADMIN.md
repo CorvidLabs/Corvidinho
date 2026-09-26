@@ -2,13 +2,13 @@
 hi-draft: 1
 families: [ADMIN, DISCORD]
 owner: leif
-status: pending-leif-confirm
+status: confirmed-captured-see-hi
 issue: 43
 ---
 
 # ADMIN (draft) — Discord slash admin runtime
 
-> **DRAFT ONLY.** Not acceptance criteria until Leif confirms. Do not capture into `hi/`.
+> **CAPTURED.** Leif confirmed; live criteria are in `hi/`. This file is historical provenance only.
 > Issue: [#43](https://github.com/CorvidLabs/Corvidinho/issues/43). Expands beyond shipped **DISCORD-7** re-auth (#13→#28).
 
 ## Intent
