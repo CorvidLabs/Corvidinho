@@ -192,7 +192,14 @@ non-ADMIN session with read/chat tools only (ROLES-CHAT-2/3); a lead outside a
 role session (local CLI) SHALL get a worker outside one. At most 2
 workers SHALL run at once and at most 4 SHALL start per lead process; beyond
 that the call is refused, not queued. A worker SHALL be stopped on lead abort
-(AGENT-3), after a 10 minute timeout, or when the lead process exits, and the
+(AGENT-3), after a 10 minute timeout, or when the lead process exits or dies
+of a SIGINT / SIGTERM / SIGHUP it did not start with ignored
+(REQ-plugins-154); it SHALL run in its own process group and
+stopping it SHALL stop its whole process tree (SIGTERM, then SIGKILL after a
+2 s grace or as soon as the worker exits, REQ-plugins-154), so its plugins
+and depth-2 workers never outlive the limit. What the worker left in its
+group as it exited SHALL still be stopped by an abort or timeout during the
+pipe drain, or by the lead exiting. The
 lead SHALL NOT wait on a worker pipe held open by a grandchild beyond a short
 drain after the worker exits. The worker summary returned to the lead SHALL be
 SAFE-6 scrubbed and capped. The depth, tier and fan-out limits are safety
@@ -208,6 +215,8 @@ Acceptance Criteria
 - The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
 - A non-ADMIN role session's catalog leaves out `delegate` even when autonomous mode is allowed; the ADMIN owner's catalog offers it (ROLES-CHAT-2/4).
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
+- Worker timeout and lead abort kill the worker's same-group and `setsid` grandchildren, not just the worker.
+- A lead abort after the worker exited, while its background grandchild still holds the pipe, kills that grandchild.
 
 ### REQ-agent-118
 
@@ -333,4 +342,18 @@ stuck).
 Acceptance Criteria
 - ASK_AGENT_SYSTEM_INSTRUCTIONS mentions AUTONOMY-7 / joke-impossible guidance.
 - Tool description no longer claims owner is always pinged on clarify.
+
+### REQ-agent-045
+
+`ask-human` SHALL accept an optional `options` array of short labels (2–5).
+`askFromToolArguments` / `askFromUnknown` SHALL populate `HumanAsk.options`
+when provided or when the question contains a numbered/lettered choice list
+(`resolveAskOptions`). `ASK_AGENT_SYSTEM_INSTRUCTIONS` SHALL steer the model
+to prefer options for Discord ephemeral buttons and free-text only when
+choices cannot be listed.
+
+Acceptance Criteria
+- Tool args with options:2+ → HumanAsk.options set.
+- Numbered question lines parse into options when structured options absent.
+- Single or empty options do not set HumanAsk.options.
 

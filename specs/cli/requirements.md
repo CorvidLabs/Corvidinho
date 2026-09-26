@@ -313,7 +313,9 @@ another process, SHALL be taken over.
 On SIGTERM or SIGINT the daemon SHALL:
 - stop ticking;
 - wait up to 30 s for in-flight runs;
-- record any run still going as failed (`interrupted: daemon shutdown`);
+- kill the process tree of any run still going (the spawned agent and
+  everything it started, REQ-plugins-154) and record it as failed
+  (`interrupted: daemon shutdown`);
 - remove its lock and exit 0.
 
 A second signal SHALL skip the rest of the wait.
@@ -330,6 +332,7 @@ Acceptance Criteria
 - A lock from a dead or recycled pid is taken over; an unreadable lock younger than 5 s is not.
 - A due schedule is run headlessly and logged as `run.finished`; a non-allowlisted channel is refused without running the agent.
 - Stop after the grace records stragglers as failed and frees the lock; a forced stop skips the grace.
+- A straggler spawned through the real spawn client (fake `sh` bin with a same-group and a `setsid` grandchild) has its whole tree killed at shutdown.
 - Log lines parse as JSON, and secrets in fields are redacted.
 - `--help` lists `daemon`.
 
@@ -376,4 +379,13 @@ Acceptance Criteria
 - `package.json` version is `0.0.18`.
 - CLI `version` prints `0.0.18`.
 - CHANGELOG has a 0.0.18 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-021
+
+The project SHALL ship package version `0.0.21` (security + correctness sweep, council tool, admin/pr-diff edges, operator guide). CLI `version` and Discord presence (DISCORD-12) report `0.0.21` after a restart. CHANGELOG SHALL include verbose 0.0.21 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.21`.
+- CLI `version` prints `0.0.21`.
+- CHANGELOG has a 0.0.21 section that the updater's changelog helper extracts exactly.
 

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-21-security-correctness-sweep-council-tool-admin-pr-diff-edges-operator-guide",
+  "implementation_commit": "517fb61323b76b55d18ad1faae9188fa0b9ea55b",
+  "implementation_tree": "8b33a8d82041fcda5938189fad2a663555b9a36a",
+  "contract_digest": "e76451f9f952089be8d70aa7486672749379d3691b8a6e084ed4792d7783eda7",
+  "workspace_digest": "10c7690afbcbb897edc5ef46fedfb4f44a7b2f0f268d2c4bed6c51876903e906",
+  "closing_digest": "0a6d01063dde23405ea51067dd2a377cc43dbcc3f8914a9b66c18cc57b7b97a7",
+  "review_digest": "6584d6765c4d64bc04ed8a2354ac117e6d08724b275cceb5864d3536e26d0cb2",
+  "finalization_digest": "685ca34e911a4c512d7f3283678148b8be6fcccbd384a8a1ee093b6274bc729a",
+  "timestamp": 1790463173
+}

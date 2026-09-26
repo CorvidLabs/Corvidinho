@@ -1,5 +1,5 @@
 /**
- * Mention / reply / thread → session stub (DISCORD-1 / 2 / 2.a / 5 / 6).
+ * Mention / reply / thread → session stub (DISCORD-1 / 2 / 2.a / 5 / 6 / SESSION-MULTI).
  * Entry after gateway; no ProcessManager.
  * DISCORD-DENY-1..3: outside allowlist → refuse without public reply.
  * REQ-discord-201: every start/continue also gates the actor (gateActor).
@@ -92,52 +92,57 @@ export function routeMessage(
 
   const channelOnly = deps.channelOnlyGate !== false;
 
-  // Thread path (DISCORD-2.a): continue existing thread session if mapped.
+  // Thread path (DISCORD-2.a + SESSION-MULTI-1): continue only the same user's
+  // thread session. Other users fall through so they get their own session.
   if (msg.threadId) {
     const existing = deps.store.getByThread(msg.threadId);
     if (existing) {
-      // Still require parent/thread channel allowlist.
-      if (!isMonitoredChannel(msg.channelId, deps.allowlist) &&
-          !isMonitoredChannel(msg.threadId, deps.allowlist)) {
-        // Thread id may equal channel id for thread channels; if parent
-        // channel was allowlisted at create time, session exists — still
-        // re-check the session's channelId.
-        if (!isMonitoredChannel(existing.channelId, deps.allowlist)) {
-          return silentChannelDeny();
-        }
-      }
+      // Deny-listed / unlisted actors are refused even when they do not own
+      // the thread session (DISCORD-DENY-1 / REQ-discord-201).
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
-      const blocked = refuseRateOrMute(msg, deps);
-      if (blocked) return blocked;
-      deps.store.touch(existing);
-      return {
-        kind: "continue_session",
-        session: existing,
-        prompt: stripMentions(msg.content) || msg.content,
-      };
+      if (existing.userId === msg.authorId) {
+        // Still require parent/thread channel allowlist.
+        if (!isMonitoredChannel(msg.channelId, deps.allowlist) &&
+            !isMonitoredChannel(msg.threadId, deps.allowlist)) {
+          if (!isMonitoredChannel(existing.channelId, deps.allowlist)) {
+            return silentChannelDeny();
+          }
+        }
+        const blocked = refuseRateOrMute(msg, deps);
+        if (blocked) return blocked;
+        deps.store.touch(existing);
+        return {
+          kind: "continue_session",
+          session: existing,
+          prompt: stripMentions(msg.content) || msg.content,
+        };
+      }
     }
-    // No thread session yet — fall through; mention may start one.
+    // No own thread session yet — fall through; mention may start one.
   }
 
-  // Reply to bot message (DISCORD-2).
+  // Reply to bot message (DISCORD-2 + SESSION-MULTI-1): only the session
+  // owner continues; another user cannot hijack via reply.
   if (msg.referencedMessageId) {
     const existing = deps.store.getByBotMessage(msg.referencedMessageId);
     if (existing) {
-      if (!isMonitoredChannel(existing.channelId, deps.allowlist) &&
-          !isMonitoredChannel(msg.channelId, deps.allowlist)) {
-        return silentChannelDeny();
-      }
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
-      const blocked = refuseRateOrMute(msg, deps);
-      if (blocked) return blocked;
-      deps.store.touch(existing);
-      return {
-        kind: "continue_session",
-        session: existing,
-        prompt: stripMentions(msg.content) || msg.content,
-      };
+      if (existing.userId === msg.authorId) {
+        if (!isMonitoredChannel(existing.channelId, deps.allowlist) &&
+            !isMonitoredChannel(msg.channelId, deps.allowlist)) {
+          return silentChannelDeny();
+        }
+        const blocked = refuseRateOrMute(msg, deps);
+        if (blocked) return blocked;
+        deps.store.touch(existing);
+        return {
+          kind: "continue_session",
+          session: existing,
+          prompt: stripMentions(msg.content) || msg.content,
+        };
+      }
     }
   }
 
@@ -171,7 +176,21 @@ export function routeMessage(
   const blocked = refuseRateOrMute(msg, deps);
   if (blocked) return blocked;
 
-  // DISCORD-1 — @mention starts session stub.
+  // DISCORD-1 / SESSION-MULTI-1 — reuse this user's active session in the
+  // channel (or thread) when present; otherwise start a new stub.
+  const existing = deps.store.getByUserChannel(
+    msg.authorId,
+    msg.channelId,
+    msg.threadId,
+  );
+  if (existing) {
+    deps.store.touch(existing);
+    return {
+      kind: "continue_session",
+      session: existing,
+      prompt: stripMentions(msg.content) || msg.content,
+    };
+  }
   const session = deps.store.create({
     channelId: msg.channelId,
     userId: msg.authorId,

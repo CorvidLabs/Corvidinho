@@ -119,6 +119,25 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.22", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.22`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ASK");
+    expect(r.stdout).toContain("SESSION-MULTI");
+    expect(r.stdout).toContain("ephemeral");
+  });
+
+  test("extract_changelog_section finds 0.0.21", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.21`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Council tool");
+    expect(r.stdout).toContain("Soft-TTL purge");
+  });
+
   test("extract_changelog_section finds 0.0.20", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.20`,
@@ -235,10 +254,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.20", () => {
+  test("package.json is 0.0.22", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.20");
+    expect(pkg.version).toBe("0.0.22");
   });
 });
