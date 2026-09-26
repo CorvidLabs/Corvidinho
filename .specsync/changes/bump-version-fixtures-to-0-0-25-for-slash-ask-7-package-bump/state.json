@@ -7,10 +7,11 @@
   "title": "Bump version fixtures to 0.0.25 for slash ASK-7 package bump",
   "description": "Bump version fixtures to 0.0.25 for slash ASK-7 package bump",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "8a337299ee6b396473f43fb5ed8c81de14e025ff",
   "created_at": 1790466593,
-  "updated_at": 1790466599,
+  "updated_at": 1790466602,
   "affected_specs": [],
   "affected_paths": [
     "tests/update-helpers.test.ts",

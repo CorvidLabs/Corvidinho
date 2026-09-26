@@ -1,6 +1,6 @@
 ---
 id: bump-version-fixtures-to-0-0-25-for-slash-ask-7-package-bump
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 8a337299ee6b396473f43fb5ed8c81de14e025ff
 ---
