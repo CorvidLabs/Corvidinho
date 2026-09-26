@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
@@ -13,8 +16,12 @@ const WRITE_CMDS = [
   "github-pr-review",
 ] as const;
 
+/** Missing allowlist file: the gate never reads an operator's real file (ALLOW-4). */
+const NO_ALLOWLIST = join(mkdtempSync(join(tmpdir(), "corvidinho-gh-write-")), "no-allowlist.toml");
+
 const allowEnv = {
   CORVIDINHO_GITHUB_ALLOW_REPOS: "CorvidLabs/Corvidinho",
+  CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
 };
 
 function withEnv(extra: Record<string, string>, fn: () => Promise<void>) {
@@ -64,8 +71,11 @@ describe("github write plugins (GITHUB-2/3/5)", () => {
     loadBuiltins();
     const prev = process.env.CORVIDINHO_GITHUB_ALLOW_REPOS;
     const prevOrgs = process.env.CORVIDINHO_GITHUB_ALLOW_ORGS;
+    const prevFile = process.env.CORVIDINHO_ALLOWLIST_FILE;
     delete process.env.CORVIDINHO_GITHUB_ALLOW_REPOS;
     delete process.env.CORVIDINHO_GITHUB_ALLOW_ORGS;
+    // Empty means empty: no operator allowlist file may admit the repo.
+    process.env.CORVIDINHO_ALLOWLIST_FILE = NO_ALLOWLIST;
     process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
     try {
       const r = await runPlugin({
@@ -82,6 +92,8 @@ describe("github write plugins (GITHUB-2/3/5)", () => {
       else delete process.env.CORVIDINHO_GITHUB_ALLOW_REPOS;
       if (prevOrgs !== undefined) process.env.CORVIDINHO_GITHUB_ALLOW_ORGS = prevOrgs;
       else delete process.env.CORVIDINHO_GITHUB_ALLOW_ORGS;
+      if (prevFile !== undefined) process.env.CORVIDINHO_ALLOWLIST_FILE = prevFile;
+      else delete process.env.CORVIDINHO_ALLOWLIST_FILE;
       delete process.env.CORVIDINHO_GITHUB_DRY_RUN;
     }
   });

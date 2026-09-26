@@ -179,3 +179,11 @@ export type {
   ProjectInstructionFile,
   ProjectInstructions,
 } from "./project-instructions.ts";
+
+export {
+  normalizeAskOptions,
+  parseChoicesFromQuestion,
+  resolveAskOptions,
+  ASK_OPTIONS_MAX,
+} from "./ask-options.ts";
+export type { AskOption } from "./types.ts";

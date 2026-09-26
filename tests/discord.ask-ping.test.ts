@@ -22,6 +22,7 @@ import {
   defangMassMentions,
   formatAskReply,
 } from "../src/discord/ask-ping.ts";
+import { toPendingAsk } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { THINKING_COLORS, type DiscordEmbedPayload } from "../src/discord/thinking-status.ts";
@@ -207,7 +208,7 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     // DISCORD-2: replying to the question continues the same session.
     const session = result.store.getByBotMessage("bot_1");
     expect(session).toBeDefined();
-    expect(session!.pendingAsk).toEqual(CLARIFY);
+    expect(session!.pendingAsk).toMatchObject(CLARIFY);
     await result.stop();
   });
 

@@ -9,8 +9,11 @@
 
 import type { Database } from "bun:sqlite";
 
-/** Bump when PATTERNS tighten so stored rows are re-scrubbed on next open. */
-export const SCRUB_RULES_VERSION = 1;
+/**
+ * Bump when PATTERNS tighten so stored rows are re-scrubbed on next open.
+ * 2 = a private-key block with no END line is redacted too (REQ-discord-066).
+ */
+export const SCRUB_RULES_VERSION = 2;
 const RULES_VERSION_KEY = "scrub_rules_version";
 
 const redacted = (kind: string) => `[redacted:${kind}]`;
@@ -23,11 +26,17 @@ const redacted = (kind: string) => `[redacted:${kind}]`;
  * end of the input is a denial-of-service. The private-key body stops at the
  * next BEGIN line and the JWT header stops at the next `-eyJ`, so each part of
  * the text is scanned by at most one match attempt.
+ *
+ * A private-key block whose END line is missing (text clipped mid-key, or a
+ * key pasted without its footer) is still a key: once a BEGIN … PRIVATE KEY
+ * header matches, the block ends at its END line, else just before the next
+ * BEGIN line, else at the end of the text. A header therefore always yields a
+ * match, so no attempt fails after rescanning the rest of the input.
  */
 const PATTERNS: ReadonlyArray<{ kind: string; re: RegExp; keepPrefix?: boolean }> = [
   {
     kind: "private-key",
-    re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:(?!-----BEGIN )[\s\S])*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+    re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:(?!-----BEGIN )[\s\S])*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|(?=-----BEGIN )|$)/g,
   },
   { kind: "github-token", re: /\bgithub_pat_[A-Za-z0-9_]{20,}/g },
   { kind: "github-token", re: /\bgh[pousr]_[A-Za-z0-9]{20,}/g },

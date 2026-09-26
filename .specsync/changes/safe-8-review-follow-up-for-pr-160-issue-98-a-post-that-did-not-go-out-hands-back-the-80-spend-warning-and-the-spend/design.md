@@ -20,6 +20,11 @@ artifact: design
 - Chat (`src/discord/bridge.ts`): the reply is sent in try/finally; when it
   returned null (or threw) the warning and the cap ping are released; the
   dry-run branch (nothing posted) releases the cap ping too.
+- Button asks (#198, merged from main): the chat reply to a run resumed by
+  a button pick (`onComponent`) gets the same treatment as a chat reply —
+  a spend-cap stop is always free text (no choice buttons; no choice can
+  lift the cap), pings the owner once per episode, is never the pending
+  ask, and the reply carries/hands back the warning and cap ping.
 - Scheduler (`src/scheduler/service.ts`): on a post that resolved `false`
   (or threw) the warning and the cap ping are released and no ping key is
   stored.

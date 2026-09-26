@@ -14,11 +14,13 @@
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import type { OpenAiToolDef } from "./tools.ts";
 import type {
+  AskOption,
   ExecuteResult,
   HumanAsk,
   HumanAskReason,
   TaskResult,
 } from "./types.ts";
+import { resolveAskOptions } from "./ask-options.ts";
 
 export const ASK_TOOL_NAME = "ask-human";
 
@@ -33,11 +35,14 @@ export const ASK_TOOL_RESULT_DETAIL = "question sent to the requester; run stopp
 
 /** Tool-loop system prompt rule (AUTONOMY-1/7). */
 export const ASK_AGENT_SYSTEM_INSTRUCTIONS =
-  "Clarifying questions (AUTONOMY-1): when the task cannot proceed without a human choice " +
+  "Clarifying questions (AUTONOMY-1 / DISCORD-ASK): when the task cannot proceed without a human choice " +
   "(missing intent, an ambiguous requirement, a decision only a human can make), call " +
   `${ASK_TOOL_NAME} with one short, specific question instead of guessing, inventing ` +
   "acceptance criteria, or claiming done. Calling it ends this run and sends the question " +
-  "to the requester. " +
+  "to the requester. When the choice fits a short list (2–5 options), pass an `options` " +
+  "array of short labels (or number the choices in the question) so Discord can show " +
+  "ephemeral buttons — do not ask them to reply with a public MCQ. Free-text only when " +
+  "options cannot be listed. " +
   "Impossible or joke asks (AUTONOMY-7): for clearly impossible or joke requests " +
   '(e.g. "build a free energy / dark matter / zero-point generator"), prefer a witty ' +
   "public-safe decline or a tiny toy demo — do not open with ask-human or a long formal " +
@@ -52,6 +57,11 @@ export type AskToolDef = {
       type: "object";
       properties: {
         question: { type: "string"; description: string };
+        options: {
+          type: "array";
+          description: string;
+          items: { type: "string" };
+        };
       };
       required: ["question"];
     };
@@ -68,14 +78,22 @@ export function buildAskToolDef(): AskToolDef {
       name: ASK_TOOL_NAME,
       description:
         "Ask the human one clarifying question when the task cannot proceed without their choice. " +
-        "Ends this run; the requester sees the question on Discord (owner is pinged only when stuck). " +
+        "Ends this run; the requester sees an ephemeral Discord button UI when you pass options " +
+        "(or number choices in the question). Owner is pinged only when stuck. " +
         "Do not use this as the first response to joke/impossible physics toy asks (AUTONOMY-7).",
       parameters: {
         type: "object",
         properties: {
           question: {
             type: "string",
-            description: "One short, specific question for the human (plain text).",
+            description:
+              "One short, specific question for the human (plain text). Prefer listing 2–5 choices via options.",
+          },
+          options: {
+            type: "array",
+            description:
+              "Short choice labels (2–5) for Discord buttons. Prefer this over asking them to reply with a number.",
+            items: { type: "string" },
           },
         },
         required: ["question"],
@@ -144,7 +162,16 @@ export function askFromToolArguments(raw: string | undefined): AskToolOutcome {
       },
     };
   }
-  return { ok: true, ask: { reason: "clarify", question } };
+  let options: AskOption[] | undefined;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const o = parsed as Record<string, unknown>;
+    options = resolveAskOptions({ options: o.options ?? o.choices, question });
+  } else {
+    options = resolveAskOptions({ question });
+  }
+  const ask: HumanAsk = { reason: "clarify", question };
+  if (options) ask.options = options;
+  return { ok: true, ask };
 }
 
 /** `Needs your input: <question>` */
@@ -205,5 +232,8 @@ export function askFromUnknown(raw: unknown): HumanAsk | undefined {
   if (typeof o.reason !== "string" || !REASONS.has(o.reason)) return undefined;
   const question = normalizeQuestion(o.question);
   if (!question) return undefined;
-  return { reason: o.reason as HumanAskReason, question };
+  const ask: HumanAsk = { reason: o.reason as HumanAskReason, question };
+  const options = resolveAskOptions({ options: o.options ?? o.choices, question });
+  if (options) ask.options = options;
+  return ask;
 }

@@ -33,6 +33,7 @@ import {
 } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
+import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { THINKING_COLORS, type DiscordEmbedPayload } from "../src/discord/thinking-status.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
@@ -515,7 +516,7 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     db.run("INSERT INTO discord_session_bot_messages (bot_message_id, session_id) VALUES ('b_cap', 'sess_cap'), ('b_clarify', 'sess_clarify')");
     const store = new SessionStore({ db });
     expect(store.getByBotMessage("b_cap")?.pendingAsk).toBeNull();
-    expect(store.getByBotMessage("b_clarify")?.pendingAsk).toEqual({ reason: "clarify", question: "A or B?" });
+    expect(store.getByBotMessage("b_clarify")?.pendingAsk).toMatchObject({ reason: "clarify", question: "A or B?" });
   });
 
   test("/work with a clarify ask: blocked, addresses the requester, no owner post (AUTONOMY-4)", async () => {
@@ -678,6 +679,62 @@ describe("a post that did not go out hands back its warning and cap ping (review
     expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(replies[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+
+  test("a run resumed by a button pick that stops at the cap: free-text ask with the owner pinged once, the warning delivered, no pending ask", async () => {
+    let n = 0;
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        n += 1;
+        if (n === 1) {
+          return {
+            ok: true,
+            sessionId,
+            summary: "Needs your input",
+            exitCode: 0,
+            ask: {
+              reason: "clarify",
+              question: "Which DB?",
+              options: [
+                { id: "1", label: "Postgres" },
+                { id: "2", label: "SQLite" },
+              ],
+            },
+            task: { verified: false, verifySkipped: true, state: "blocked" },
+          };
+        }
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const db = openCorvidinhoDb({ memory: true });
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      db,
+    );
+    if (!result.ok) throw new Error("bridge did not start");
+    await handlers.onMessage(MENTION);
+    const askId = result.store.list()[0]!.pendingAsk!.askId;
+    // Another run crosses 80% while the button ask waits.
+    const ledger = new SpendLedger(db);
+    ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    expect(ledger.noteWarning({ capMicroUsd: 1_000_000, now: Date.now() })).not.toBeNull();
+    const pick = (id: string) => ({
+      id,
+      customId: pickCustomId(askId, "1"),
+      channelId: "chan-1",
+      userId: MENTION.authorId,
+      messageId: "bot_1",
+      reply: async () => {},
+    });
+    await handlers.onComponent!(pick("ix-pick"));
+    const last = replies.at(-1)! as Reply & { components?: unknown[] };
+    expect(last.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(last.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(last.mentionUserIds).toEqual([OWNER_ID]);
+    expect(last.components).toBeUndefined();
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
     await result.stop();
   });
 

@@ -39,10 +39,24 @@ export type AgentTokenUsage = {
  */
 export type HumanAskReason = "clarify" | "stuck" | "spend-cap";
 
+/** One selectable choice for Discord button asks (DISCORD-ASK-1). */
+export type AskOption = {
+  /** Stable id for button custom_id (short, no spaces). */
+  id: string;
+  /** Human-visible label (Discord button label ≤80 chars). */
+  label: string;
+};
+
 /** A question surfaced to the requester; bridges also ping the owner. */
 export type HumanAsk = {
   reason: HumanAskReason;
   question: string;
+  /**
+   * Structured choices for ephemeral Discord buttons (DISCORD-ASK-1).
+   * When absent, bridges may parse numbered lists from `question`, or fall
+   * back to free-text clarify (DISCORD-ASK-4).
+   */
+  options?: AskOption[];
 };
 
 export type ExecuteResult = {

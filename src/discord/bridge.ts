@@ -13,6 +13,7 @@
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
+ * DISCORD-ASK: ephemeral button asks; SESSION-MULTI: per-user sessions.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -25,6 +26,19 @@ import {
   formatAskReply,
   withSpendWarningPost,
 } from "./ask-ping.ts";
+import {
+  ASK_CHOICE_EXPIRED,
+  buildChoiceComponents,
+  buildOpenStubComponents,
+  findOptionLabel,
+  formatAskEphemeralContent,
+  formatAskStub,
+  isAskExpired,
+  parseAskCustomId,
+  toPendingAsk,
+  type PendingAsk,
+} from "./ask-buttons.ts";
+import { resolveAskOptions } from "../agent/ask-options.ts";
 import {
   ASK_CANCELLED_ACK,
   isCancelAsk,
@@ -406,19 +420,29 @@ export async function startBridge(
           }
           return;
         }
-        // Thin ack: restate pending question once; do not spawn agent.
-        const restated = formatAskReply({
-          ask: session.pendingAsk,
-          owner: config.owner,
-          requesterDiscordId: msg.authorId,
-          replyHint: true,
-        });
+        // Thin ack: restate once; do not spawn agent.
+        const hasButtons = Boolean(session.pendingAsk.options?.length);
+        const restated = hasButtons
+          ? formatAskStub({
+              ask: session.pendingAsk,
+              ownerDiscordId: config.owner?.discordId,
+              requesterDiscordId: msg.authorId,
+            })
+          : formatAskReply({
+              ask: session.pendingAsk,
+              owner: config.owner,
+              requesterDiscordId: msg.authorId,
+              replyHint: true,
+            });
         if (replyRef.fn) {
           const sent = await replyRef.fn({
             channelId,
             content: restated.content,
             replyToMessageId: msg.id,
             mentionUserIds: restated.mentionUserIds,
+            ...(hasButtons
+              ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
+              : {}),
           });
           if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
         } else {
@@ -427,14 +451,21 @@ export async function startBridge(
         return;
       }
 
-      // AUTONOMY-6: substantive continue clears pending ask and carries context.
+      // AUTONOMY-6 / SESSION-MULTI-3 / DISCORD-ASK:
+      // - free-text pending (no options): substantive continue answers and clears.
+      // - button pending (has options): chat continues; buttons stay until pick/timeout.
       let agentPrompt = prompt;
       if (action.kind === "continue_session" && session.pendingAsk) {
-        const prior = session.pendingAsk.question;
-        agentPrompt =
-          `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
-          `Human answer:\n${prompt}`;
-        store.setPendingAsk(session, null);
+        const pending = session.pendingAsk;
+        if (pending.options?.length) {
+          agentPrompt = prompt;
+        } else {
+          const prior = pending.question;
+          agentPrompt =
+            `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
+            `Human answer:\n${prompt}`;
+          store.setPendingAsk(session, null);
+        }
       }
 
       const outbound = resolveOutbound();
@@ -560,49 +591,102 @@ export async function startBridge(
           })
         : undefined;
       const thinkExtras = { plumbing, model: llmModel };
-      // AUTONOMY-1/2/4: needs a human → question; clarify pings requester,
-      // stuck pings owner; a spend-cap stop pings the owner once per cap
-      // episode (SAFE-8).
-      const askOwner = result.ask
-        ? askPingOwner(result.ask, config.owner, spendAlerts)
-        : null;
-      const ask = result.ask
-        ? formatAskReply({
-            ask: result.ask,
-            owner: askOwner?.owner,
-            requesterDiscordId: msg.authorId,
-            context: result.summary,
-            replyHint: true,
-          })
-        : null;
-      if (ask) {
+      // AUTONOMY-1/2/4 / DISCORD-ASK: needs a human → buttons when options, else free-text.
+      // SAFE-8: a spend-cap stop is always free text (no choice can lift the
+      // cap), pings the owner once per cap episode and is never the pending ask.
+      const askRaw = result.ask;
+      const spendCap = askRaw?.reason === "spend-cap";
+      const askOwner = askRaw ? askPingOwner(askRaw, config.owner, spendAlerts) : null;
+      const resolvedOptions =
+        askRaw && !spendCap
+          ? resolveAskOptions({
+              options: askRaw.options,
+              question: askRaw.question,
+            })
+          : undefined;
+      const useButtons = Boolean(resolvedOptions?.length);
+      let askBody: {
+        content: string;
+        mentionUserIds: string[];
+        status: string;
+        failed: boolean;
+        ownerPinged?: boolean;
+        components?: unknown[];
+      } | null = null;
+      let pendingToStore: PendingAsk | null = null;
+
+      if (askRaw && useButtons && resolvedOptions) {
+        const pending = toPendingAsk({ ...askRaw, options: resolvedOptions });
+        const stub = formatAskStub({
+          ask: pending,
+          ownerDiscordId: config.owner?.discordId,
+          requesterDiscordId: msg.authorId,
+        });
+        askBody = {
+          content: stub.content,
+          mentionUserIds: stub.mentionUserIds,
+          status: stub.status,
+          failed: stub.failed,
+          ownerPinged: Boolean(
+            config.owner?.discordId &&
+              stub.mentionUserIds.includes(config.owner.discordId),
+          ),
+          components: buildOpenStubComponents(pending.askId),
+        };
+        pendingToStore = pending;
+      } else if (askRaw) {
+        const formatted = formatAskReply({
+          ask: askRaw,
+          owner: askOwner?.owner,
+          requesterDiscordId: msg.authorId,
+          context: result.summary,
+          replyHint: true,
+        });
+        askBody = {
+          content: formatted.content,
+          mentionUserIds: formatted.mentionUserIds,
+          status: formatted.status,
+          failed: formatted.failed,
+          ownerPinged: formatted.ownerPinged,
+        };
         // AUTONOMY-5/6: a clarify or stuck ask waits for the requester's
-        // answer. A spend-cap stop is not answerable by a reply (SAFE-8), so
-        // it is never the pending ask: a later "ok" runs normally and a
-        // substantive reply carries no cap text into the prompt.
-        const pendingAsk = result.ask!.reason === "spend-cap" ? null : result.ask!;
-        if (pendingAsk || session.pendingAsk) store.setPendingAsk(session, pendingAsk);
-        await (ask.failed
-          ? thinking.fail(ask.status, thinkExtras)
-          : thinking.done(ask.status, thinkExtras));
+        // answer. A spend-cap stop is not answerable by a reply, so a later
+        // "ok" runs normally and a substantive reply carries no cap text.
+        pendingToStore = spendCap ? null : toPendingAsk(askRaw);
+      }
+
+      if (askBody) {
+        if (pendingToStore) {
+          store.setPendingAsk(session, pendingToStore);
+        } else if (session.pendingAsk && !session.pendingAsk.options?.length) {
+          store.setPendingAsk(session, null);
+        }
+        await (askBody.failed
+          ? thinking.fail(askBody.status, thinkExtras)
+          : thinking.done(askBody.status, thinkExtras));
         if (
-          (result.ask!.reason === "stuck" || result.ask!.reason === "spend-cap") &&
-          !ask.ownerPinged &&
+          (askRaw!.reason === "stuck" || askRaw!.reason === "spend-cap") &&
+          !askBody.ownerPinged &&
           !askOwner?.deduped
         ) {
           console.warn(ASK_NO_OWNER_WARNING);
         }
       } else if (result.ok) {
-        if (session.pendingAsk) store.setPendingAsk(session, null);
+        // SESSION-MULTI-3: button pending asks survive unrelated successful turns.
+        if (session.pendingAsk && !session.pendingAsk.options?.length) {
+          store.setPendingAsk(session, null);
+        }
         await thinking.done("✅ Done", thinkExtras);
       } else {
-        if (session.pendingAsk) store.setPendingAsk(session, null);
+        if (session.pendingAsk && !session.pendingAsk.options?.length) {
+          store.setPendingAsk(session, null);
+        }
         await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
       }
 
       // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
-      const body = ask
-        ? ask.content
+      const body = askBody
+        ? askBody.content
         : result.ok
           ? result.summary.slice(0, 1800)
           : `session ${session.id} failed (exit ${result.exitCode})`;
@@ -618,7 +702,8 @@ export async function startBridge(
                 channelId,
                 content: body,
                 replyToMessageId: msg.id,
-                ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
+                ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+                ...(askBody?.components ? { components: askBody.components } : {}),
               },
               pending?.warning,
               config.owner,
@@ -633,10 +718,269 @@ export async function startBridge(
         }
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
+          if (pendingToStore && askBody?.components) {
+            pendingToStore.stubMessageId = sent.messageId;
+            store.setPendingAsk(session, pendingToStore);
+          }
         }
       } else {
         // Dry / test: synthesize bot message id so reply continuity can be tested.
         store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+        // Nothing was posted: the cap ping stays for the next post.
+        askOwner?.release();
+      }
+    },
+    onComponent: async (interaction) => {
+      const parsed = parseAskCustomId(interaction.customId);
+      if (!parsed) return;
+
+      const session = store.list().find(
+        (s) => s.pendingAsk?.askId === parsed.askId,
+      );
+      const pending = session?.pendingAsk ?? null;
+
+      // Wrong user or unknown ask → short ephemeral, do not leak.
+      if (!session || !pending || session.userId !== interaction.userId) {
+        await interaction.reply({
+          content: "This choice isn’t for you (or it was already answered).",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (isAskExpired(pending)) {
+        store.setPendingAsk(session, null);
+        await interaction.reply({
+          content: ASK_CHOICE_EXPIRED,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (parsed.kind === "open") {
+        const options = pending.options;
+        if (!options?.length) {
+          await interaction.reply({
+            content: "No choices available — reply in the channel instead.",
+            ephemeral: true,
+          });
+          return;
+        }
+        await interaction.reply({
+          content: formatAskEphemeralContent(pending),
+          ephemeral: true,
+          components: buildChoiceComponents(pending.askId, options),
+        });
+        return;
+      }
+
+      // pick
+      const label =
+        findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
+      const prior = pending.question;
+      store.setPendingAsk(session, null);
+      await interaction.reply({
+        content: `Got it — **${label}**. Working on it…`,
+        ephemeral: true,
+        update: true,
+      });
+
+      const channelId = session.threadId ?? session.channelId;
+      const agentPrompt =
+        `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]\n\n` +
+        `Human answer:\n${label}`;
+
+      const outbound = resolveOutbound();
+      const llmModel = loadLlmEnv(process.env).model;
+      const thinking = new ThinkingStatus({
+        outbound,
+        channelId,
+        replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+        sessionId: session.id,
+        model: llmModel,
+        debounceMs: opts.thinkingDebounceMs,
+        tickMs: opts.thinkingTickMs,
+      });
+      await thinking.start({ description: "Working on your request..." });
+
+      if (!session.worktreePath) {
+        const bound = await store.bindWorktree(session);
+        if (!bound.ok) {
+          await thinking.fail(`❌ worktree: ${bound.error}`);
+          return;
+        }
+      }
+      const sessionCwd = store.cwdFor(session);
+
+      let result;
+      try {
+        let enrichedPrompt = agentPrompt;
+        const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+          userId: interaction.userId,
+          owner: config.owner ?? null,
+        });
+        if (idInject.injected) enrichedPrompt = idInject.prompt;
+        const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
+          ownerUserId: interaction.userId,
+        });
+        if (memInject.injected) enrichedPrompt = memInject.prompt;
+
+        const actingIsAdmin =
+          resolvePermissionLevel({
+            userId: interaction.userId,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+          }) >= PermissionLevel.ADMIN;
+
+        result = await store.runActive(session, () =>
+          agent.runChat({
+            prompt: enrichedPrompt,
+            humanText: label,
+            sessionId: session.id,
+            resume: true,
+            actingUserId: interaction.userId,
+            actingIsAdmin,
+            cwd: sessionCwd,
+            onStatus: (u) => {
+              void thinking.update({
+                tool: u.tool,
+                tokens: u.tokens,
+                description: u.message ? `⏳ ${u.message}` : undefined,
+              });
+            },
+          }),
+        );
+      } catch (err) {
+        await thinking.fail(
+          `❌ ${err instanceof Error ? err.message : "agent error"}`,
+        );
+        throw err;
+      }
+
+      const plumbing = result.task
+        ? formatTaskPlumbing({
+            state: result.task.state,
+            verified: result.task.verified,
+            verifySkipped: result.task.verifySkipped,
+            attempts: result.task.attempts,
+            cancelled: result.task.cancelled,
+          })
+        : undefined;
+      const thinkExtras = { plumbing, model: llmModel };
+
+      // SAFE-8: as on a chat reply — a spend-cap stop is free text, pings the
+      // owner once per cap episode and is never the pending ask.
+      const askRaw = result.ask;
+      const spendCap = askRaw?.reason === "spend-cap";
+      const askOwner = askRaw ? askPingOwner(askRaw, config.owner, spendAlerts) : null;
+      const resolvedOptions =
+        askRaw && !spendCap
+          ? resolveAskOptions({
+              options: askRaw.options,
+              question: askRaw.question,
+            })
+          : undefined;
+      const useButtons = Boolean(resolvedOptions?.length);
+      let askBody: {
+        content: string;
+        mentionUserIds: string[];
+        status: string;
+        failed: boolean;
+        ownerPinged?: boolean;
+        components?: unknown[];
+      } | null = null;
+      let pendingToStore: PendingAsk | null = null;
+
+      if (askRaw && useButtons && resolvedOptions) {
+        const next = toPendingAsk({ ...askRaw, options: resolvedOptions });
+        const stub = formatAskStub({
+          ask: next,
+          ownerDiscordId: config.owner?.discordId,
+          requesterDiscordId: interaction.userId,
+        });
+        askBody = {
+          content: stub.content,
+          mentionUserIds: stub.mentionUserIds,
+          status: stub.status,
+          failed: stub.failed,
+          ownerPinged: Boolean(
+            config.owner?.discordId &&
+              stub.mentionUserIds.includes(config.owner.discordId),
+          ),
+          components: buildOpenStubComponents(next.askId),
+        };
+        pendingToStore = next;
+      } else if (askRaw) {
+        const formatted = formatAskReply({
+          ask: askRaw,
+          owner: askOwner?.owner,
+          requesterDiscordId: interaction.userId,
+          context: result.summary,
+          replyHint: true,
+        });
+        askBody = {
+          content: formatted.content,
+          mentionUserIds: formatted.mentionUserIds,
+          status: formatted.status,
+          failed: formatted.failed,
+          ownerPinged: formatted.ownerPinged,
+        };
+        pendingToStore = spendCap ? null : toPendingAsk(askRaw);
+      }
+
+      if (askBody) {
+        if (pendingToStore) store.setPendingAsk(session, pendingToStore);
+        await (askBody.failed
+          ? thinking.fail(askBody.status, thinkExtras)
+          : thinking.done(askBody.status, thinkExtras));
+      } else if (result.ok) {
+        await thinking.done("✅ Done", thinkExtras);
+      } else {
+        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+      }
+
+      const body = askBody
+        ? askBody.content
+        : result.ok
+          ? result.summary.slice(0, 1800)
+          : `session ${session.id} failed (exit ${result.exitCode})`;
+
+      if (replyRef.fn) {
+        // SAFE-8: a pending 80% spend warning rides the reply and pings the owner.
+        const spend = spendAlerts.takeWarning(result.spendWarning);
+        let sent: Awaited<ReturnType<NonNullable<typeof replyRef.fn>>> = null;
+        try {
+          sent = await replyRef.fn(
+            withSpendWarningPost(
+              {
+                channelId,
+                content: body,
+                replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+                ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+                ...(askBody?.components ? { components: askBody.components } : {}),
+              },
+              spend?.warning,
+              config.owner,
+            ),
+          );
+        } finally {
+          // Not posted: the next post carries the warning and the cap ping.
+          if (!sent) {
+            spend?.release();
+            askOwner?.release();
+          }
+        }
+        if (sent?.messageId) {
+          store.trackBotMessage(sent.messageId, session);
+          if (pendingToStore && askBody?.components) {
+            pendingToStore.stubMessageId = sent.messageId;
+            store.setPendingAsk(session, pendingToStore);
+          }
+        }
+      } else {
         // Nothing was posted: the cap ping stays for the next post.
         askOwner?.release();
       }
