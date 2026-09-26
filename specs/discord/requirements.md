@@ -474,15 +474,23 @@ Redaction SHALL be idempotent and leave ordinary text unchanged. Because
 callers also scrub text written by others (PR diffs, REQ-plugins-093), every
 scrub pattern SHALL run in time linear in its input.
 
+A PEM private-key block SHALL be redacted even when its END line is missing
+(text clipped mid-key, or a key pasted without its footer). From its
+`-----BEGIN … PRIVATE KEY-----` header, the redaction SHALL run to the END
+line, else to just before the next `-----BEGIN ` line, else to the end of the
+text. Other PEM blocks (public keys, certificates) SHALL stay unchanged.
+
 When the scrub rules tighten (`SCRUB_RULES_VERSION` increases), the next open
 of the shared DB SHALL re-scrub existing rows once and record the version in
-`schema_meta` (SAFE-6 re-scrub). No CLI or slash surface is added. Outbound
-reply scrubbing and a Discord-admin re-scrub command are draft SAFE-10 and out
-of scope until captured.
+`schema_meta` (SAFE-6 re-scrub). Version 2 adds the open private-key block
+rule. No CLI or slash surface is added. Outbound reply scrubbing beyond the
+spawned-run summary text (REQ-agent-232) and a Discord-admin re-scrub command
+are draft SAFE-10 and out of scope until captured.
 
 Acceptance Criteria
 - Each vendor shape is redacted; ordinary text is untouched; scrub is idempotent.
 - Hostile input (many private-key or JWT openers with no closer) scrubs in linear time.
+- A private-key block with no END line is redacted through the next BEGIN line or the end of the text; full blocks are still redacted one by one; public-key and certificate blocks are unchanged.
 - Sessions, work tasks, schedules, schedule runs and memories persist scrubbed.
 - Rows written before the current rules are re-scrubbed on next open; second open is a no-op.
 - Fixture tests use runtime-built fake secrets only.
@@ -918,6 +926,20 @@ Acceptance Criteria
 - A sibling checkout runs only when its origin passes the GitHub repo allowlist; a denied, unlisted or non-git sibling is refused.
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
+
+### REQ-discord-253
+
+The GITHUB-6 repo gate the `/work` draft-PR step (REQ-discord-088) applies to
+the push remote's OWNER/REPO SHALL, by default, use the allowlist file plus
+env overlays (ALLOW-4, `checkRepoGateAsync`), not env overlays alone, so a
+`deny_repos` / `deny_orgs` entry in the file refuses the PR step even when
+the allow list comes from env, and an allow list only in the file admits the
+repo. A refusal SHALL be reported as `repo-denied` before any commit, push,
+verify or PR call. No new env var, config key, slash command or option.
+
+Acceptance Criteria
+- File deny + env allow: the `/work` PR step says `not opened` with the GITHUB-6 denial, calls no plugin and pushes nothing.
+- File-only allow: the `/work` PR step opens the draft PR (dry run in tests).
 
 ### REQ-discord-311
 

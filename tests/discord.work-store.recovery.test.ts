@@ -58,7 +58,13 @@ describe("bridge start runs restart recovery", () => {
     ws.setStatus(task, "running");
 
     const result = await startBridge({
-      env: { DISCORD_BOT_TOKEN: "fake", DISCORD_CHANNEL_IDS: "chan-1", CORVIDINHO_DISCORD_DRY_RUN: "1" },
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: "chan-1",
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        // Missing file: never read the operator's allowlist (ALLOW-4).
+        CORVIDINHO_ALLOWLIST_FILE: join(projectRoot, "no-allowlist.toml"),
+      },
       projectRoot,
       db,
       skipProtocolCheck: true,
