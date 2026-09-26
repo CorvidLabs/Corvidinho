@@ -63,6 +63,11 @@ export type SessionStub = {
   worktreeBranch?: string;
   /** active | parked | removed */
   worktreeState?: "active" | "parked" | "removed";
+  /**
+   * Pending human ask while the session is blocked (AUTONOMY-5/6).
+   * Cleared on substantive continue or explicit cancel.
+   */
+  pendingAsk?: HumanAsk | null;
   createdAt: number;
   lastActivityAt: number;
 };
