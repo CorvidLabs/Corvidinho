@@ -94,4 +94,4 @@ Consumes agent module for runTask / loadAgentConfig.
 SpecSync CLI forwarding + task --task briefing hook (2026-09-26, corvid-agent).
 | 2026-09-26 | Add canonical attribution helper and `corvidinho attribution` output for outbound PR footers (issue #20). |
 | 2026-09-26 | Add CLI attribution helper and canonical no-handle footer forms. |
-| 2026-09-26 | add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles: Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles |
+
