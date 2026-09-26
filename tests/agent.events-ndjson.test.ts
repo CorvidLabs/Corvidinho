@@ -6,11 +6,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
   NDJSON_LIMITS,
+  collectTaskRunStream,
   createNdjsonParser,
   createNdjsonWriter,
   frameFromEvent,
   parseNdjsonLine,
   progressFromFrame,
+  protocolMismatchSummary,
   readNdjsonStream,
   resultFrame,
   serializeFrame,
@@ -21,6 +23,7 @@ import {
 import {
   createTaskExecute,
   extractUsage,
+  UNKNOWN_TOOL_LABEL,
   type AgentEvent,
   type AgentTokenUsage,
   type TaskResult,
@@ -118,6 +121,24 @@ describe("serializer shape", () => {
       totalTokens: 2,
     });
     expect(resultFrame(RESULT)).toEqual({ protocol: 2, type: "result", result: RESULT });
+  });
+
+  test("result frame caps an oversized summary with a marker; rest of result intact", () => {
+    const max = NDJSON_LIMITS.resultSummary;
+    const big: TaskResult = { ...RESULT, summary: "y".repeat(max + 500) };
+    const frame = resultFrame(big);
+    expect(frame.truncated).toBe(true);
+    expect(frame.result.summary.length).toBe(max + 1);
+    expect(frame.result.summary.endsWith("…")).toBe(true);
+    expect({ ...frame.result, summary: big.summary }).toEqual(big);
+    // Input not mutated; round-trips through the parser with the marker.
+    expect(big.summary.length).toBe(max + 500);
+    const parsed = parseNdjsonLine(serializeFrame(frame));
+    expect(parsed).toEqual(frame);
+    // At the cap exactly: unchanged, no marker.
+    const edge = resultFrame({ ...RESULT, summary: "z".repeat(max) });
+    expect(edge.truncated).toBeUndefined();
+    expect(edge.result.summary.length).toBe(max);
   });
 
   test("multi-line text serializes to exactly one line and round-trips", () => {
@@ -342,15 +363,83 @@ describe("parser robustness", () => {
     const out = await readNdjsonStream(undefined, () => {});
     expect(out).toEqual({ result: undefined, otherText: "", frames: 0 });
   });
+
+  test("frames from another protocol are withheld and flagged, never otherText", async () => {
+    const secretDetail = "private note: door code 4412";
+    const stream = streamOf([
+      "warning: stray stdout\n",
+      JSON.stringify({ protocol: 3, type: "StateChanged", state: "planning" }) + "\n",
+      JSON.stringify({ protocol: 3, type: "ToolResult", name: "memory-recall", success: true, detail: secretDetail }) + "\n",
+      // Same protocol but malformed: frame-shaped content is dropped too.
+      JSON.stringify({ protocol: 2, type: "ToolResult", name: "x", success: "yes", detail: secretDetail }) + "\n",
+      JSON.stringify({ protocol: 3, type: "result", result: { ...RESULT, summary: secretDetail } }) + "\n",
+    ]);
+    const seen: string[] = [];
+    const out = await readNdjsonStream(stream, (f) => seen.push(f.type), { protocol: 2 });
+    expect(seen).toEqual([]);
+    expect(out.frames).toBe(0);
+    expect(out.result).toBeUndefined();
+    expect(out.protocolMismatch).toBe(3);
+    expect(out.otherText).toBe("warning: stray stdout");
+    expect(out.otherText).not.toContain("door code");
+  });
+});
+
+describe("collectTaskRunStream protocol mismatch (DISCORD-10)", () => {
+  test("a protocol-3 ToolResult detail never reaches the summary", async () => {
+    const secretDetail = "private note: door code 4412";
+    const stdout = streamOf([
+      JSON.stringify({ protocol: 3, type: "StateChanged", state: "planning" }) + "\n",
+      JSON.stringify({ protocol: 3, type: "Text", text: secretDetail }) + "\n",
+      JSON.stringify({ protocol: 3, type: "ToolResult", name: "memory-recall", success: true, detail: secretDetail }) + "\n",
+      JSON.stringify({ protocol: 3, type: "result", result: { ...RESULT, summary: secretDetail } }) + "\n",
+    ]);
+    const progress: unknown[] = [];
+    const out = await collectTaskRunStream({
+      stdout,
+      stderr: streamOf([`stderr mentions ${secretDetail}\n`]),
+      exited: Promise.resolve(0),
+      onProgress: (p) => progress.push(p),
+    });
+    expect(out.summary).toBe(protocolMismatchSummary(3, CORVIDINHO_PROTOCOL_VERSION));
+    expect(out.summary).toBe("protocol mismatch: binary 3, bridge 2 — restart the bridge");
+    expect(out.summary).not.toContain("door code");
+    expect(out.protocolMismatch).toBe(3);
+    expect(out.result).toBeUndefined();
+    expect(out.frames).toBe(0);
+    expect(progress).toEqual([]);
+  });
+
+  test("matching stream has no mismatch flag; no frames at all still falls back", async () => {
+    const ok = await collectTaskRunStream({
+      stdout: streamOf([serializeFrame(resultFrame(RESULT)) + "\n"]),
+      stderr: undefined,
+      exited: Promise.resolve(0),
+    });
+    expect(ok.protocolMismatch).toBeUndefined();
+    expect(ok.summary).toBe(
+      "state=done verified=false verifySkipped attempts=1\ndemo task attempt 1",
+    );
+    const plain = await collectTaskRunStream({
+      stdout: streamOf(["plain text only\n"]),
+      stderr: undefined,
+      exited: Promise.resolve(0),
+    });
+    expect(plain.protocolMismatch).toBeUndefined();
+    expect(plain.summary).toBe("plain text only");
+  });
 });
 
 describe("progressFromFrame (AGENT-8 / DISCORD-3)", () => {
   test("states, tools, verify, usage; text/result change nothing", () => {
     const p = (e: AgentEvent) => progressFromFrame(frameFromEvent(e));
+    // A state change clears the current tool (tool: "") so no stale tool shows.
     expect(p({ type: "StateChanged", state: "planning" })).toEqual({
       state: "planning",
+      tool: "",
       message: "planning",
     });
+    expect(p({ type: "StateChanged", state: "verifying" })?.tool).toBe("");
     expect(p({ type: "StateChanged", state: "executing" })?.message).toBe("working");
     expect(p({ type: "StateChanged", state: "verifying" })?.message).toBe("verifying");
     expect(p({ type: "StateChanged", state: "done" })?.message).toBe("done");
@@ -454,6 +543,61 @@ describe("usage running totals (mock fetch, no network)", () => {
     ]);
     // AgentEvent stays frozen: no usage event type leaks into --json events.
     expect(events.map((e) => e.type)).toEqual(["ToolCall", "ToolResult", "Text"]);
+  });
+
+  test("tool events name only offered tools; a made-up name shows as (unknown tool)", async () => {
+    const madeUp = "[click me](https://example.invalid)";
+    let call = 0;
+    const fetchImpl = async () => {
+      call += 1;
+      const message =
+        call === 1
+          ? {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                { id: "c1", type: "function", function: { name: madeUp, arguments: "{}" } },
+                { id: "c2", type: "function", function: { name: "plugins-list", arguments: "{}" } },
+              ],
+            }
+          : { role: "assistant", content: "done" };
+      return new Response(JSON.stringify({ choices: [{ message }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "try tools",
+      env: {
+        CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+      },
+      fetchImpl,
+      tier: "tool",
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 3,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    const tools = events.filter(
+      (e): e is Extract<AgentEvent, { type: "ToolCall" | "ToolResult" }> =>
+        e.type === "ToolCall" || e.type === "ToolResult",
+    );
+    expect(tools.map((e) => [e.type, e.name])).toEqual([
+      ["ToolCall", UNKNOWN_TOOL_LABEL],
+      ["ToolResult", UNKNOWN_TOOL_LABEL],
+      ["ToolCall", "plugins-list"],
+      ["ToolResult", "plugins-list"],
+    ]);
+    // The refusal detail still names what the model asked for (stdout only).
+    const refused = tools[1] as { success: boolean; detail?: string };
+    expect(refused.success).toBe(false);
+    expect(refused.detail).toContain("not offered");
+    // Live status never shows the made-up name.
+    for (const e of tools) {
+      const p = progressFromFrame(frameFromEvent(e));
+      expect(JSON.stringify(p)).not.toContain("example.invalid");
+    }
   });
 
   test("read tier single chat accumulates across attempts; no usage → no callback", async () => {

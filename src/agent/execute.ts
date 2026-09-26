@@ -105,6 +105,9 @@ function demoExecute(attempt: number): ExecuteResult {
   };
 }
 
+/** ToolCall / ToolResult event name for a tool not in this run's catalog. */
+export const UNKNOWN_TOOL_LABEL = "(unknown tool)";
+
 function emit(
   onEvent: ((e: AgentEvent) => void) | undefined,
   event: AgentEvent,
@@ -308,9 +311,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       }
 
       const name = tc.function?.name?.trim() || "(unknown)";
+      // Events feed live bridge status (DISCORD-3): only a catalog name is
+      // shown; a made-up name stays in the refusal detail, not the status.
+      const eventName = offered.has(name) ? name : UNKNOWN_TOOL_LABEL;
       const rawArgs = tc.function?.arguments ?? "{}";
       const argv = argvFromToolArguments(rawArgs);
-      emit(onEvent, { type: "ToolCall", name, args: rawArgs });
+      emit(onEvent, { type: "ToolCall", name: eventName, args: rawArgs });
 
       let result;
       try {
@@ -343,7 +349,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         : truncate(result.error ?? "tool failed", 2000);
       emit(onEvent, {
         type: "ToolResult",
-        name,
+        name: eventName,
         success: Boolean(result.ok),
         detail,
       });

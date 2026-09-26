@@ -106,12 +106,12 @@ describe("Discord spawn client reads the ndjson stream (REQ-discord-073)", () =>
 
       expect(updates.map((x) => x.u)).toEqual([
         { tool: "task run", message: "Spawning agent..." },
-        { message: "planning" },
-        { message: "working" },
+        { tool: "", message: "planning" },
+        { tool: "", message: "working" },
         { tool: "specsync-list", message: "calling tool specsync-list" },
         { tokens: { estimated: 120 } },
         { tool: "specsync-list", message: "tool specsync-list ok" },
-        { message: "done" },
+        { tool: "", message: "done" },
         { tool: "task run", tokens: { estimated: 120 }, message: "Agent finished" },
       ]);
       // Live, not after the fact: the tool update landed while the child slept.
@@ -190,12 +190,12 @@ describe("WATCH spawn client reads the ndjson stream (REQ-watch-073)", () => {
       expect(res.ok).toBe(true);
       expect(res.summary).toBe(summarizeTaskResult(RESULT));
       expect(progress).toEqual([
-        { state: "planning", message: "planning" },
-        { state: "executing", message: "working" },
+        { state: "planning", tool: "", message: "planning" },
+        { state: "executing", tool: "", message: "working" },
         { tool: "specsync-list", message: "calling tool specsync-list" },
         { totalTokens: 120 },
         { tool: "specsync-list", message: "tool specsync-list ok" },
-        { state: "done", message: "done" },
+        { state: "done", tool: "", message: "done" },
       ]);
     },
     SPAWN_TIMEOUT_MS,

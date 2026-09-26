@@ -10,8 +10,15 @@
  * Every frame carries `protocol` (= CORVIDINHO_PROTOCOL_VERSION). AgentEvent
  * frames keep their AgentEvent `type` names; `usage` and `result` are
  * stream-only frames. Raw tool arguments are never streamed: ToolCall frames
- * carry a truncated, secret-scrubbed `argsSummary` (SAFE-6). Free text is
- * scrubbed and capped so one line stays bounded.
+ * carry a truncated, secret-scrubbed `argsSummary` (SAFE-6). Event-frame free
+ * text (Text, ToolResult detail, VerifyResult output) is scrubbed and capped.
+ * The `result` frame carries the same TaskResult as `--json` — not scrubbed,
+ * same exposure as `--json` — except `summary` is capped at
+ * NDJSON_LIMITS.resultSummary (frame then says `truncated: true`) so one line
+ * stays well under the parser's NDJSON_LIMITS.maxLine.
+ *
+ * Consumers never turn frame content into reply text: a frame from another
+ * protocol is withheld and reported as a protocol mismatch (DISCORD-10).
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
@@ -38,6 +45,8 @@ export const NDJSON_LIMITS = {
   toolDetail: 1000,
   /** VerifyResult output (tail kept — failures print last). */
   verifyOutput: 4000,
+  /** `result` frame `result.summary` (head kept; bridges show ≤1800). */
+  resultSummary: 4000,
   /** Whole ToolCall argsSummary. */
   argsSummary: 160,
   /** One argument value inside argsSummary. */
@@ -75,8 +84,13 @@ export type NdjsonUsageFrame = Versioned & { type: "usage" } & AgentTokenUsage;
 
 export type NdjsonResultFrame = Versioned & {
   type: "result";
-  /** Same object `task run --json` prints under `result`. */
+  /**
+   * Same object `task run --json` prints under `result`, except `summary` is
+   * capped at NDJSON_LIMITS.resultSummary (ending in `…`).
+   */
   result: TaskResult;
+  /** Set when `result.summary` was capped. */
+  truncated?: true;
 };
 
 export type NdjsonFrame = NdjsonEventFrame | NdjsonUsageFrame | NdjsonResultFrame;
@@ -252,8 +266,23 @@ export function usageFrame(u: AgentTokenUsage): NdjsonUsageFrame {
   };
 }
 
+/**
+ * Final frame. `summary` is capped (not scrubbed — same as `--json`) so an
+ * oversized reply cannot push the line past the parser cap and blank the
+ * bridge reply.
+ */
 export function resultFrame(result: TaskResult): NdjsonResultFrame {
-  return { protocol: CORVIDINHO_PROTOCOL_VERSION, type: "result", result };
+  const protocol = CORVIDINHO_PROTOCOL_VERSION;
+  const max = NDJSON_LIMITS.resultSummary;
+  if (typeof result.summary !== "string" || result.summary.length <= max) {
+    return { protocol, type: "result", result };
+  }
+  return {
+    protocol,
+    type: "result",
+    result: { ...result, summary: `${result.summary.slice(0, max)}…` },
+    truncated: true,
+  };
 }
 
 /** One frame → one line (no trailing newline; JSON escapes embedded newlines). */
@@ -300,14 +329,10 @@ export type ParseNdjsonOpts = {
   protocol?: number;
 };
 
-/**
- * Parse one stdout line into a frame. Returns null for blank lines, garbage,
- * JSON without an integer `protocol`, unknown `type`, or wrong field types.
- */
-export function parseNdjsonLine(
-  line: string,
-  opts: ParseNdjsonOpts = {},
-): NdjsonFrame | null {
+type VersionedObject = { protocol: number; v: Record<string, unknown> };
+
+/** A JSON object line carrying an integer `protocol` ≥ 1, else null. */
+function parseVersionedObject(line: string): VersionedObject | null {
   const s = line.trim();
   if (!s.startsWith("{") || !s.endsWith("}")) return null;
   let v: unknown;
@@ -321,8 +346,24 @@ export function parseNdjsonLine(
   if (typeof protocol !== "number" || !Number.isInteger(protocol) || protocol < 1) {
     return null;
   }
-  if (opts.protocol !== undefined && protocol !== opts.protocol) return null;
+  return { protocol, v };
+}
 
+/**
+ * Parse one stdout line into a frame. Returns null for blank lines, garbage,
+ * JSON without an integer `protocol`, unknown `type`, or wrong field types.
+ */
+export function parseNdjsonLine(
+  line: string,
+  opts: ParseNdjsonOpts = {},
+): NdjsonFrame | null {
+  const o = parseVersionedObject(line);
+  if (!o) return null;
+  if (opts.protocol !== undefined && o.protocol !== opts.protocol) return null;
+  return frameFromVersioned(o);
+}
+
+function frameFromVersioned({ protocol, v }: VersionedObject): NdjsonFrame | null {
   switch (v.type) {
     case "StateChanged":
       return typeof v.state === "string" && STATES.has(v.state)
@@ -371,7 +412,10 @@ export function parseNdjsonLine(
       const r = v.result;
       if (!isRecord(r)) return null;
       if (typeof r.summary !== "string" || typeof r.state !== "string") return null;
-      return { protocol, type: "result", result: r as unknown as TaskResult };
+      const result = r as unknown as TaskResult;
+      return v.truncated === true
+        ? { protocol, type: "result", result, truncated: true }
+        : { protocol, type: "result", result };
     }
     default:
       return null;
@@ -383,6 +427,12 @@ export type NdjsonLine = {
   line: string;
   /** Parsed frame, or null when the line is not a (matching) frame. */
   frame: NdjsonFrame | null;
+  /**
+   * Set when the line is a versioned JSON object (frame-shaped), even when
+   * `frame` is null because the protocol differs or a field is malformed.
+   * Such lines carry frame content and must never become reply text.
+   */
+  protocol?: number;
 };
 
 export type NdjsonParser = {
@@ -402,7 +452,13 @@ export function createNdjsonParser(opts: ParseNdjsonOpts = {}): NdjsonParser {
   let dropping = false;
   const toLine = (raw: string): NdjsonLine => {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    return { line, frame: parseNdjsonLine(line, opts) };
+    const o = parseVersionedObject(line);
+    if (!o) return { line, frame: null };
+    const frame =
+      opts.protocol !== undefined && o.protocol !== opts.protocol
+        ? null
+        : frameFromVersioned(o);
+    return { line, frame, protocol: o.protocol };
   };
   return {
     push(chunk) {
@@ -454,11 +510,19 @@ export type NdjsonStreamOutcome = {
   otherText: string;
   /** Count of frames delivered to onFrame. */
   frames: number;
+  /**
+   * First `protocol` seen on a frame-shaped line that did not match
+   * `opts.protocol`. Its content is withheld (never in otherText).
+   */
+  protocolMismatch?: number;
 };
 
 /**
  * Read a child's stdout line by line, calling `onFrame` as each frame lands.
  * A throwing `onFrame` never stops the read (status updates are best-effort).
+ * Frame-shaped lines that are not delivered (another protocol, malformed
+ * fields) are dropped rather than kept as fallback text, so frame content
+ * (tool output, text) can never become a bridge reply.
  */
 export async function readNdjsonStream(
   stream: ReadableStream<Uint8Array> | null | undefined,
@@ -470,10 +534,21 @@ export async function readNdjsonStream(
   let otherLen = 0;
   let frames = 0;
   let result: TaskResult | undefined;
+  let protocolMismatch: number | undefined;
 
   const handle = (lines: NdjsonLine[]) => {
-    for (const { line, frame } of lines) {
+    for (const { line, frame, protocol } of lines) {
       if (!frame) {
+        if (protocol !== undefined) {
+          if (
+            opts.protocol !== undefined &&
+            protocol !== opts.protocol &&
+            protocolMismatch === undefined
+          ) {
+            protocolMismatch = protocol;
+          }
+          continue;
+        }
         if (line.trim() && otherLen < NDJSON_LIMITS.otherText) {
           other.push(line);
           otherLen += line.length + 1;
@@ -502,11 +577,13 @@ export async function readNdjsonStream(
     handle(parser.end());
   }
 
-  return {
+  const out: NdjsonStreamOutcome = {
     result,
     otherText: other.join("\n").slice(0, NDJSON_LIMITS.otherText),
     frames,
   };
+  if (protocolMismatch !== undefined) out.protocolMismatch = protocolMismatch;
+  return out;
 }
 
 // ─── Progress (consumer side) ──────────────────────────────────────────────
@@ -516,7 +593,10 @@ export type TaskProgress = {
   state?: AgentState;
   /** Short human line: planning / working / calling tool X / verifying / done. */
   message?: string;
-  /** Current tool (plugin command name). */
+  /**
+   * Current tool (plugin command name). `""` on a state change clears the
+   * previous tool so the status never shows a stale one.
+   */
   tool?: string;
   /** Provider-reported running total tokens. */
   totalTokens?: number;
@@ -535,7 +615,7 @@ const STATE_LABELS: Record<AgentState, string> = {
 export function progressFromFrame(frame: NdjsonFrame): TaskProgress | null {
   switch (frame.type) {
     case "StateChanged":
-      return { state: frame.state, message: STATE_LABELS[frame.state] };
+      return { state: frame.state, tool: "", message: STATE_LABELS[frame.state] };
     case "ToolCall": {
       const tool = clip(frame.name, NDJSON_LIMITS.toolName);
       return { tool, message: `calling tool ${tool}` };
@@ -555,18 +635,29 @@ export function progressFromFrame(frame: NdjsonFrame): TaskProgress | null {
 
 export type TaskRunStreamOutcome = {
   exitCode: number;
-  /** From the result frame, else summarizeTaskRunOutput fallback. */
+  /**
+   * From the result frame; else a protocol-mismatch notice when the binary
+   * streamed another protocol; else summarizeTaskRunOutput fallback.
+   */
   summary: string;
   result?: TaskResult;
   /** Last provider-reported total, when any usage frame arrived. */
   totalTokens?: number;
   frames: number;
+  /** Protocol the binary streamed when it differs from the bridge's. */
+  protocolMismatch?: number;
 };
+
+/** Reply text for a stream from another protocol — no frame content. */
+export function protocolMismatchSummary(binary: number, bridge: number): string {
+  return `protocol mismatch: binary ${binary}, bridge ${bridge} — restart the bridge`;
+}
 
 /**
  * Consume a spawned `task run --output ndjson` child: stream stdout frames to
  * `onProgress`, drain stderr in parallel, and summarize from the result frame
- * (fallback: summarizeTaskRunOutput over non-frame stdout + stderr + exit).
+ * (then protocol-mismatch notice, then summarizeTaskRunOutput over non-frame
+ * stdout + stderr + exit).
  */
 export async function collectTaskRunStream(opts: {
   stdout: ReadableStream<Uint8Array> | null | undefined;
@@ -576,6 +667,7 @@ export async function collectTaskRunStream(opts: {
   protocol?: number;
 }): Promise<TaskRunStreamOutcome> {
   let totalTokens: number | undefined;
+  const expected = opts.protocol ?? CORVIDINHO_PROTOCOL_VERSION;
   const [streamed, stderr, exitCode] = await Promise.all([
     readNdjsonStream(
       opts.stdout,
@@ -585,19 +677,26 @@ export async function collectTaskRunStream(opts: {
         if (p.totalTokens !== undefined) totalTokens = p.totalTokens;
         opts.onProgress?.(p);
       },
-      { protocol: opts.protocol ?? CORVIDINHO_PROTOCOL_VERSION },
+      { protocol: expected },
     ),
     opts.stderr ? new Response(opts.stderr).text() : Promise.resolve(""),
     opts.exited,
   ]);
   const fromResult = streamed.result ? summarizeTaskResult(streamed.result) : "";
   const summary =
-    fromResult || summarizeTaskRunOutput(streamed.otherText, stderr, exitCode);
-  return {
+    fromResult ||
+    (streamed.protocolMismatch !== undefined
+      ? protocolMismatchSummary(streamed.protocolMismatch, expected)
+      : summarizeTaskRunOutput(streamed.otherText, stderr, exitCode));
+  const out: TaskRunStreamOutcome = {
     exitCode,
     summary,
     result: streamed.result,
     totalTokens,
     frames: streamed.frames,
   };
+  if (streamed.protocolMismatch !== undefined) {
+    out.protocolMismatch = streamed.protocolMismatch;
+  }
+  return out;
 }

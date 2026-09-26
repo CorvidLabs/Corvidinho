@@ -32,6 +32,7 @@ export {
   extractUsage,
   MEMORY_AGENT_SYSTEM_INSTRUCTIONS,
   loadLlmEnv,
+  UNKNOWN_TOOL_LABEL,
 } from "./execute.ts";
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
@@ -62,6 +63,7 @@ export {
   NDJSON_LIMITS,
   parseNdjsonLine,
   progressFromFrame,
+  protocolMismatchSummary,
   readNdjsonStream,
   resultFrame,
   serializeFrame,
