@@ -118,6 +118,34 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     }
   });
 
+  test("files-edit writes --new literally; $ replacement patterns are not expanded (REQ-plugins-237)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-files-dollar-"));
+    try {
+      const newStr = "echo $$HOME and $' tail $& $` $1 $<n>";
+      writeFileSync(join(dir, "Makefile"), "run:\n\techo OLD\n");
+      const single = await runPlugin({
+        name: "files-edit",
+        args: ["Makefile", "--old", "echo OLD", "--new", newStr],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(single.ok).toBe(true);
+      expect(readFileSync(join(dir, "Makefile"), "utf8")).toBe(`run:\n\t${newStr}\n`);
+
+      writeFileSync(join(dir, "twice.sh"), "echo OLD\necho OLD\n");
+      const all = await runPlugin({
+        name: "files-edit",
+        args: ["twice.sh", "--old", "echo OLD", "--new", newStr, "--replace-all"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(all.ok).toBe(true);
+      expect(readFileSync(join(dir, "twice.sh"), "utf8")).toBe(`${newStr}\n${newStr}\n`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("SAFE-2: files-write cannot plant a bunfig.toml preload (REQ-plugins-083)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe2-bunfig-"));
     try {
