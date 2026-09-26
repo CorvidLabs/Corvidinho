@@ -25,3 +25,8 @@ Acceptance Criteria
 - Thin ack on blocked session restates question; pendingAsk remains.
 - Cancel clears pendingAsk with a short ack.
 - Substantive continue runs agent; prior question is in the prompt context.
+
+
+## Files
+
+Add `src/discord/thin-ack.ts` and `tests/discord.thin-ack.test.ts` to the discord spec `files:` list.

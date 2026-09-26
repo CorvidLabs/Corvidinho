@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 59
+version: 60
 status: draft
 files:
   - src/discord/types.ts
@@ -79,6 +79,8 @@ files:
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
   - tests/discord.ask-ping.test.ts
+  - src/discord/thin-ack.ts
+  - tests/discord.thin-ack.test.ts
 
 db_tables: []
 depends_on:
