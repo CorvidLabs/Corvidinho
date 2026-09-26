@@ -1,6 +1,6 @@
 ---
 id: spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene
-state: implementing
+state: archived
 type: bug_fix
 base_commit: c3b4d8881ea2d9a5b968eb47b9eda35c6e1b2233
 ---
