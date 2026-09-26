@@ -462,6 +462,40 @@ Acceptance Criteria
 - Output is fenced as untrusted data, control characters are stripped and vendor-key-looking secrets are redacted; a hostile title, Content-Type or status text never appears outside the fence.
 - HTML-to-text tag stripping repeats to a capped fixpoint, so split or nested tags never reassemble into markup and deeply nested hostile markup stays linear.
 
+### REQ-plugins-118
+
+The `council` command SHALL be registered from `plugins/autonomous/` with
+`dangerous: false`, `mutating: true` (a council runs workers, ROLES-CHAT-5),
+`minTier: 2` and `autonomous: true`. It is therefore hidden from the tool
+catalog unless the session is allowed (REQ-agent-117 / SAFE-9), and it is
+never offered to or run for a non-ADMIN role session (ROLES-CHAT-2/3/6). Its
+handler SHALL, in order: parse `[--voices N] [--tier read|tool] --question
+TEXT` (or positional text; `--question` takes the next item even when it
+starts with `-`; N is clamped to 2..5, default 3; the question is at most
+4000 chars) and exit 1 on a usage error or an unknown tier; refuse with exit
+2 and without spawning when the cwd's project has not enabled autonomous mode
+(AUTONOMOUS-1), when the run is not a top-level lead (a delegation depth
+other than 0: a delegated worker never convenes a council, so no voice can
+outlive a worker its lead stops, SAFE-9), when the lead's
+tier (the handler `tier`, else `CORVIDINHO_LLM_TIER`, default `tool`) is
+below code, or when the council budget is spent (one council at a time, at
+most 2 per lead process); otherwise run a council (REQ-agent-118) in the
+plugin cwd with the lead's abort signal. Every voice SHALL get an empty
+allowlist and a non-ADMIN role env, whatever the lead's allowlist or role.
+The result data SHALL carry `voices` (plus `voicesRequested` when clamped),
+`tier`, `tierClamped`, `depth`, `state`, `decision`, `phases`, `transcript`
+(the chair's text replaced by a pointer to `decision`), `filesChanged`,
+`elapsedMs` and, when present, `totalTokens`, `timedOut` and `aborted`. The
+result SHALL be ok (exit 0) only when the chair decided; otherwise it SHALL
+be ok=false with exit 130 when cancelled and exit 1 when failed.
+
+Acceptance Criteria
+- `council` is registered with dangerous=false, mutating=true, minTier=2 and autonomous=true, and is listed in `plugins list`.
+- The default catalog omits `council` at every tier. An allowed code-tier CLI / ADMIN session gets it; tool tier and non-ADMIN sessions do not.
+- Autonomous off, depth 1 (a delegated worker), depth 2, tool tier, an omitted tier with the default env tier, and a spent council budget are refused with exit 2 and spawn nothing. The depth 1 refusal names the top-level-lead rule and spends no council budget. A missing question and an unknown tier exit 1.
+- Against a fake bin, 3 voices make 7 worker runs. Each is `task run --non-interactive --tier read --output ndjson` with `--task` last and no `--no-verify`. Each env has depth 1, tier read, non-interactive, an empty `CORVIDINHO_ALLOWLIST` (even when the lead allowlists dangerous tools), `CORVIDINHO_ACTING_IS_ADMIN=0`, and no GitHub / Discord token or audit key. The data carries the decision and a 7-entry transcript.
+- `--tier code` is clamped to tool. A failed chair gives ok=false, exit 1, with the transcript. The council time cap gives exit 130 and state cancelled. The limiter allows one council at a time and 2 per run. A non-ADMIN role session's `runPlugin council` is refused with "not allowed for your role" and spawns nothing.
+
 ### REQ-plugins-093
 
 The system SHALL register read-only typed plugins `github-pr-diff` and
@@ -475,7 +509,16 @@ exit 3).
 unified diff, capped at 200 KiB of UTF-8 cut on a line boundary, with a clear
 `[corvidinho: diff truncated …]` marker when capped. `--file PATH` SHALL return
 only that file's diff section (matching the new or previous path) and SHALL
-fail with a clear error when the file is not in the PR.
+fail with a clear error when the file is not in the PR. The `--file` value
+SHALL be trimmed and stripped of leading `./`; a `--file` that is empty after
+that (for example `./` or whitespace) SHALL be a usage error (exit 1, no API
+call), never a fallback to the whole-PR diff. A file section rebuilt from
+`pulls.listFiles` SHALL carry `rename from`/`rename to` lines for a renamed
+file and `copy from`/`copy to` lines for a copied file. When GitHub returns no
+patch and reports no changed lines for a renamed, copied, or mode/type-changed
+(`changed`) file, the section SHALL say the content is unchanged (a pure
+rename, copy, or mode change; for rename/copy, unless the file is binary) and
+SHALL NOT describe it as a binary file or a diff that is too large.
 
 `github-pr-files <number> --repo OWNER/REPO [--limit N]` SHALL list changed
 files with status, additions and deletions (and the previous name for
@@ -494,6 +537,8 @@ Acceptance Criteria
 - `plugins list` shows `github-pr-diff` and `github-pr-files` with dangerous=false and minTier=0.
 - Empty or deny-listed repo refuses with exit 3 before any Octokit call.
 - A diff over 200 KiB returns at most 200 KiB plus the truncation marker; `--file` returns one file's section.
+- `--file ./`, `--file "   "`, `--file=./` and `--file " ././ "` each fail with a usage error and make no API call.
+- A pure rename, pure copy, or `changed` (mode) entry with no patch and 0 lines says content unchanged, not binary or too large; a copied file's section has `copy from`/`copy to` lines; entries with line changes but no patch keep the binary/too-large note.
 - `github-pr-files` pages `pulls.listFiles`, honours `--limit`, and sets `truncated`.
 - Vendor-token-looking strings in diff text are redacted, including one straddling the cap.
 - A hostile diff far over the cap (many private-key openers, no closer) returns quickly; a private key split by the hard cut is not returned.
@@ -601,6 +646,28 @@ Acceptance Criteria
 - A permission 403 on statuses gives a check-runs-only verdict plus a warning; a rate-limit or SSO 403 fails the command; the warning also shows for verdict `none`.
 - Rows keep `name/state/bucket/link` and add `kind/status/conclusion`; `plugins list` still shows dangerous=false minTier=0; missing or denied `--repo` still exits 3.
 - Tests use a mocked Octokit / stubbed transport only (no network, no real token).
+
+### REQ-plugins-243
+
+The `files-*`, `search-grep` and `shell-exec` builtins SHALL NOT silently
+drop an argv token because it starts with `--`. A value flag (`--content`,
+`--path`, `--old`, `--new`, `--pattern`, `--include`, `--command`)
+SHALL take the next token verbatim, even one that starts with `--`, or an
+inline `--flag=value`; a value flag with no value SHALL be an error. For
+`files-*` and `search-grep` a token that is not a known flag SHALL stay
+positional, and a bare `--` SHALL end option parsing. `shell-exec` SHALL
+treat only leading `--json`, `--command`, `--cwd` and `--` as its own
+options; every later token SHALL be part of the command verbatim, and words
+left after `--command` SHALL be refused rather than dropped. `files-write`
+SHALL refuse (exit 1, file unchanged) to replace a non-empty file with empty or
+missing content unless `--allow-empty` is passed.
+
+Acceptance Criteria
+- `files-write` with `--content` or positional content that starts with `--` (YAML front matter, SQL comment) writes it verbatim; unknown `--` words in positional content are kept; `--content=value` works; with `--path` every positional is content.
+- `files-write` with missing, empty or dangling `--content` over a non-empty file is refused and the file is unchanged; `--allow-empty` empties it.
+- `files-edit --old / --new` accept values that start with `--`.
+- `shell-exec echo git push --dry-run origin main` runs with `--dry-run` intact; a trailing `--json` stays in the command; leading `--json`/`--command`/`--command=` still work; `--command X --dry-run` is refused before spawn.
+- `search-grep --no-verify src` searches for `--no-verify` under `src`; `--pattern` takes a `--` value, `--path=` works, and with `--pattern` the first positional is the path.
 
 ### REQ-plugins-237
 

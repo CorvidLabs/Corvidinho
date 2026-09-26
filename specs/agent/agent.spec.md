@@ -26,6 +26,7 @@ files:
   - tests/agent.ask.test.ts
   - src/autonomous/enabled.ts
   - src/autonomous/delegate.ts
+  - src/autonomous/council.ts
   - tests/autonomous.enabled.test.ts
 
 db_tables: []
@@ -69,6 +70,20 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
 
+Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
+`src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
+`councilLens`, `capCouncilText`, `buildProposeText`, `buildCritiqueText`,
+`buildDecideText`, `runCouncil`, `formatCouncilPhases`, `COUNCIL_PHASES`
+(`propose`, `critique`, `decide`), `COUNCIL_LENSES` and the caps
+(`COUNCIL_DEFAULT_VOICES` 3, `COUNCIL_MIN_VOICES` 2, `COUNCIL_MAX_VOICES` 5,
+`COUNCIL_QUESTION_MAX` 4000, `COUNCIL_ENTRY_MAX` 1500, `COUNCIL_DECISION_MAX`
+= `DELEGATE_SUMMARY_MAX`, `COUNCIL_TIMEOUT_MS` 15 min,
+`COUNCIL_VOICE_TIMEOUT_MS` 5 min, `MAX_COUNCILS_PER_RUN` 2,
+`COUNCIL_DEFAULT_TIER` read, `COUNCIL_MAX_VOICE_TIER` tool).
+`DelegateChildOutcome` gains optional `resultText` (the worker's own result
+summary, scrubbed and capped at `DELEGATE_SUMMARY_MAX` rather than the
+1800-char chat body).
+
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
 `loadProjectInstructions`, `renderProjectInstructions`,
@@ -93,14 +108,14 @@ appears in the final chat reply (DISCORD-3.a).
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
 in addition to MEMORY instructions.
 
-Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
+Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7): `src/agent/ask.ts`
 exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
 `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
-`ASK_AGENT_SYSTEM_INSTRUCTIONS`. `AgentState` gains `blocked`;
-`ExecuteResult` / `TaskResult` gain optional `ask: { reason: "clarify" |
-"stuck", question }`. A clarify ask ends the run `blocked` (verify skipped,
-exit 0); verify exhaustion stays `failed` and carries a `stuck` ask. Additive
-on the NDJSON wire: protocol stays 2.
+`ASK_AGENT_SYSTEM_INSTRUCTIONS` (includes AUTONOMY-7 joke/impossible guidance).
+`AgentState` gains `blocked`; `ExecuteResult` / `TaskResult` gain optional
+`ask: { reason: "clarify" | "stuck", question }`. A clarify ask ends the run
+`blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
+carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 
 ## Invariants
 
@@ -123,6 +138,16 @@ no ADMIN and no SAFE-4 confirm tokens, keeps prove-before-done (never
 `--no-verify`, REQ-cli-085), runs one level deeper, and is stopped on
 lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
 These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
+
+A council (AUTONOMOUS-6) deliberates in three phases in order — propose,
+critique, decide — and every voice and the chair is a delegate-core worker
+one level deeper than the lead. Voices advise and never act: read tier by
+default, never above tool or the lead, a non-ADMIN role session
+(`CORVIDINHO_ACTING_IS_ADMIN=0`) with an empty SAFE-1 allowlist, so they get
+no mutating tool and every must-ask tool is denied. At most 2 voices run at
+once; each phase entry is SAFE-6 scrubbed and capped; the whole council has
+a wall-clock cap. The council returns a decision and a transcript; it never
+returns a confidence score (draft AUTONOMOUS-11 left for capture).
 
 Project instructions come only from the project root (nearest `.git` at or
 above cwd, else cwd), never from a parent directory above it. Each file is
@@ -167,6 +192,12 @@ model.
 - **When** the model calls `delegate` with `--skill specsync --task ...`
 - **Then** a worker `task run` runs non-interactive at depth 1 and its summary and filesChanged come back in the tool result for the lead to synthesize
 
+### Scenario: lead convenes a council
+
+- **Given** `[corvidinho.autonomous] enabled = true` and a code-tier lead
+- **When** the model calls `council` with `--question ...` (3 voices by default)
+- **Then** 3 read-tier voices propose, each critiques the proposals, a chair decides, and the tool result carries the decision and a bounded transcript
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -181,6 +212,9 @@ model.
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
+| Council: fewer than 2 voices propose | No critique or decide; ok=false with the transcript |
+| Council: chair fails | ok=false, empty decision, transcript kept |
+| Council: time cap or lead abort | Running voices stopped, later phases not started; state cancelled |
 | AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
@@ -209,6 +243,8 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
+| 2026-09-26 | autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package: AUTONOMY-7 joke/impossible guidance in ASK_AGENT_SYSTEM_INSTRUCTIONS |
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
 | 2026-09-26 | spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run: Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1) |
+| 2026-09-26 | council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2: Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed |

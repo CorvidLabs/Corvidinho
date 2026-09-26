@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 58
+version: 60
 status: draft
 files:
   - src/discord/types.ts
@@ -71,6 +71,7 @@ files:
   - tests/discord.schedule.test.ts
   - tests/scheduler.cron.test.ts
   - tests/scheduler.service.test.ts
+  - tests/scheduler.worktree.test.ts
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
@@ -78,6 +79,8 @@ files:
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
   - tests/discord.ask-ping.test.ts
+  - src/discord/thin-ack.ts
+  - tests/discord.thin-ack.test.ts
 
 db_tables: []
 depends_on:
@@ -104,20 +107,25 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
 `ADMIN_AUDIT_SURFACE` (`command-handlers/admin.ts`); `planAdminListChange`,
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
-`setJsonDiscordList`, `writeFileAtomic` (`admin-allowlist.ts`);
+`setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
+`isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
-Questions and owner ping (REQ-discord-044, issue #44, AUTONOMY-1/2):
+Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6):
 `src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
-`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. `AgentSpawnResult`
+`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. Clarify mentions
+`requesterDiscordId`; stuck mentions the configured owner. `AgentSpawnResult`
 gains optional `ask` (validated from the `result` frame); the gateway `reply`
 takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
 users plus the replied-to author); `SchedulerService` takes `owner` and its
-outbound `post` forwards `mentionUserIds`. Schedule owner pings are deduped
-per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey`
-/ `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
-(schema v7, `SCHEMA_VERSION` 7).
+outbound `post` forwards `mentionUserIds`. Schedule pings are deduped per
+question: `askPingKey` digests the ask; `Schedule.askPingKey` /
+`ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key` (schema
+v7). Sessions persist `pendingAsk` in `discord_sessions.pending_ask` (schema
+v8, `SCHEMA_VERSION` 8). `src/discord/thin-ack.ts` exports `isThinAck` /
+`isCancelAsk` / `ASK_CANCELLED_ACK`: while `pendingAsk` is set, a thin-ack
+continue restates the ask without spawning the agent; cancel clears it.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
@@ -254,11 +262,15 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
 | 2026-09-26 | headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord: Headless schedule daemon (issue #108 captured slice CLI-8 / AUTONOMOUS-4): corvidinho daemon ticks schedules without Discord, single-instance lock in the data dir, clean SIGTERM/SIGINT shutdown, JSON-line logs, systemd doc; schedule ticks claim each due run atomically in SQLite so a daemon and a bridge on one data dir never double-fire or clobber each other |
 | 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
+| 2026-09-26 | autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package: AUTONOMY-4..7 requester ping, thin-ack restate, cancel, joke decline |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
 | 2026-09-26 | work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only: /work opens a draft PR from its verified worktree (issue 88, AUTONOMOUS-3, GITHUB-2, GITHUB-5, AGENT-4): after a /work run, only when git-commit, git-push and github-pr-create are allowlisted for non-interactive use, commit and push the talk branch and open a draft PR through the existing git and github plugins with a description built from the real diff and the verify result; otherwise reply plainly why no PR was opened |
 | 2026-09-26 | work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched: /work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD) |
 | 2026-09-26 | discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord: Discord searchable channel STRING+autocomplete for /admin channels add\|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17 |
+| 2026-09-26 | schedule-runs-name-worktrees-and-branches-from-the-full-schedule-and-run-ids-and-stale-branch-cleanup-parks-a-branch: Schedule runs name worktrees and branches from the full schedule and run ids, and stale-branch cleanup parks a branch with commits instead of deleting it (SESSION-WORKTREE-1/3, DISCORD-SCHEDULE-3) |
 | 2026-09-26 | soft-ttl-purge-never-parks-or-drops-a-discord-session-while-its-agent-run-is-in-flight-the-run-end-counts-as-activity: Soft-TTL purge never parks or drops a Discord session while its agent run is in flight; the run end counts as activity (SESSION-2, SESSION-WORKTREE-3) |
 | 2026-09-26 | discord-chat-and-slash-paths-gate-the-actor-against-the-user-role-allowlist-and-deny-lists-not-the-channel-alone: Discord chat and slash paths gate the actor against the user/role allowlist and deny lists, not the channel alone |
 | 2026-09-26 | discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9: Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9) |
 | 2026-09-26 | discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6: Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3) |
+| 2026-09-26 | cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master: CleanupEmptyBranch never force-deletes a branch with commits when the default branch is not main/master |
+| 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
