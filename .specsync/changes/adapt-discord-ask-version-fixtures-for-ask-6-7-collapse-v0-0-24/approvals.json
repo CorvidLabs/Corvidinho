@@ -1,0 +1,39 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "Corvid Agent",
+      "timestamp": 1790465940,
+      "digest": "c10c6e5ea4fa1e5ea7f82fc3bc1657fb43678802a1260c3663729ea4ea6232d5",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "adapt-discord-ask-version-fixtures-for-ask-6-7-collapse-v0-0-24",
+        "title": "Adapt Discord ask/version fixtures for ASK-6/7 collapse (v0.0.24)",
+        "description": "Adapt Discord ask/version fixtures for ASK-6/7 collapse (v0.0.24)",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "tests/discord.ask-ping.test.ts",
+          "tests/discord.session-worktree.test.ts",
+          "tests/discord.thin-ack.test.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Fixture-only updates for collapse UX already HI'd as DISCORD-ASK-6/7; no new canonical requirement text beyond the sibling change.",
+        "acceptance_criteria": [
+          "ask-ping/thin-ack/soft-TTL/version fixtures assert collapse (contentEdits) and package 0.0.24; bun test green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
