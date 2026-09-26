@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of",
+  "implementation_commit": "8c069bbbd89ee1c66d246660cd567d327e7c08f3",
+  "implementation_tree": "517ff25aec9c655d2610be189b90779ebc7e2a9e",
+  "contract_digest": "0b1434cf40282c74358bb4c45f8c08677a3345727cdb2f06bd0c86263b3f4b4f",
+  "workspace_digest": "77ff4fbe66ff8641a046fecefa6edeba0ec19b854ac281580a97c3ff9e7c2467",
+  "closing_digest": "4788c03a5c6d62cc17da70f2a6e3dc8d967b7d46f779e1b8acf887d65613bc00",
+  "review_digest": "27de1755d781760b94e9f22c770b6f286a2c7b9c86017d851614bffc42b39500",
+  "finalization_digest": "35d71403ab4f96f533b81115b1c3c1b3b59c31452aeecb9e88c6278893d760d0",
+  "timestamp": 1790466011
+}

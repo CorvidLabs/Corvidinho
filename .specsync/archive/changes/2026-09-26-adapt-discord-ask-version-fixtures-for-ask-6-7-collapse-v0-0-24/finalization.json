@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "adapt-discord-ask-version-fixtures-for-ask-6-7-collapse-v0-0-24",
+  "implementation_commit": "d48016b11b477263db2dc613f23746ccd16c96d8",
+  "implementation_tree": "7a0b625b98cdf339ede3964f094eacfaf6f44e27",
+  "contract_digest": "c10c6e5ea4fa1e5ea7f82fc3bc1657fb43678802a1260c3663729ea4ea6232d5",
+  "workspace_digest": "77ff4fbe66ff8641a046fecefa6edeba0ec19b854ac281580a97c3ff9e7c2467",
+  "closing_digest": "78ef765e4bfe7191b822282441160eac43e68637fa077c6e67970a430ae8276a",
+  "review_digest": "b23696ec665ef67b3c9e9c9f86d36dcfc6ce82595ac2e858c4af219d9d9bd757",
+  "finalization_digest": "72627ebdde882ae2257546e0db7f5075d6157d8a1230894d9e162b08174bb873",
+  "timestamp": 1790466101
+}

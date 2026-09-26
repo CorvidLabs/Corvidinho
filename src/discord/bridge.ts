@@ -13,6 +13,8 @@
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
+ * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse thinking↔stub↔answer;
+ * SESSION-MULTI: per-user sessions.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -21,6 +23,19 @@ import {
   createSpawnAgentClient,
 } from "./agent-client.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
+import {
+  ASK_CHOICE_EXPIRED,
+  buildChoiceComponents,
+  buildOpenStubComponents,
+  findOptionLabel,
+  formatAskEphemeralContent,
+  formatAskStub,
+  isAskExpired,
+  parseAskCustomId,
+  toPendingAsk,
+  type PendingAsk,
+} from "./ask-buttons.ts";
+import { resolveAskOptions } from "../agent/ask-options.ts";
 import {
   ASK_CANCELLED_ACK,
   isCancelAsk,
@@ -151,6 +166,14 @@ export type StartBridgeOptions = {
 function memoryThinkingOutbound(): ThinkingOutbound & {
   sends: Array<{ channelId: string; embed: unknown; replyToMessageId?: string; messageId: string }>;
   edits: Array<{ channelId: string; messageId: string; embed: unknown }>;
+  contentEdits: Array<{
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: unknown;
+    components?: unknown[] | null;
+  }>;
+  deletes: Array<{ channelId: string; messageId: string }>;
 } {
   let n = 0;
   const sends: Array<{
@@ -161,9 +184,19 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
   }> = [];
   const edits: Array<{ channelId: string; messageId: string; embed: unknown }> =
     [];
+  const contentEdits: Array<{
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: unknown;
+    components?: unknown[] | null;
+  }> = [];
+  const deletes: Array<{ channelId: string; messageId: string }> = [];
   return {
     sends,
     edits,
+    contentEdits,
+    deletes,
     async sendEmbed({ channelId, embed, replyToMessageId }) {
       n += 1;
       const messageId = `progress_${n}`;
@@ -172,6 +205,28 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
     },
     async editEmbed({ channelId, messageId, embed }) {
       edits.push({ channelId, messageId, embed });
+      return true;
+    },
+    async editMessage(opts) {
+      contentEdits.push({
+        channelId: opts.channelId,
+        messageId: opts.messageId,
+        content: opts.content,
+        embed: opts.embed,
+        components: opts.components,
+      });
+      // Also mirror embed-only edits into `edits` for older assertions.
+      if (opts.embed && opts.embed !== null) {
+        edits.push({
+          channelId: opts.channelId,
+          messageId: opts.messageId,
+          embed: opts.embed,
+        });
+      }
+      return true;
+    },
+    async deleteMessage({ channelId, messageId }) {
+      deletes.push({ channelId, messageId });
       return true;
     },
   };
@@ -291,20 +346,23 @@ export async function startBridge(
   const embedRef: {
     send?: GatewayHandlers["sendEmbed"];
     edit?: GatewayHandlers["editEmbed"];
+    editMessage?: GatewayHandlers["editMessage"];
+    deleteMessage?: GatewayHandlers["deleteMessage"];
   } = {};
 
   const fallbackOutbound = memoryThinkingOutbound();
 
   function resolveOutbound(): ThinkingOutbound {
-    return (
-      opts.thinkingOutbound ??
-      (embedRef.send && embedRef.edit
-        ? {
-            sendEmbed: embedRef.send,
-            editEmbed: embedRef.edit,
-          }
-        : fallbackOutbound)
-    );
+    if (opts.thinkingOutbound) return opts.thinkingOutbound;
+    if (embedRef.send && embedRef.edit) {
+      return {
+        sendEmbed: embedRef.send,
+        editEmbed: embedRef.edit,
+        editMessage: embedRef.editMessage,
+        deleteMessage: embedRef.deleteMessage,
+      };
+    }
+    return fallbackOutbound;
   }
 
   const gitTipSha = tryGitTipShortSha(config.projectRoot);
@@ -387,19 +445,29 @@ export async function startBridge(
           }
           return;
         }
-        // Thin ack: restate pending question once; do not spawn agent.
-        const restated = formatAskReply({
-          ask: session.pendingAsk,
-          owner: config.owner,
-          requesterDiscordId: msg.authorId,
-          replyHint: true,
-        });
+        // Thin ack: restate once; do not spawn agent.
+        const hasButtons = Boolean(session.pendingAsk.options?.length);
+        const restated = hasButtons
+          ? formatAskStub({
+              ask: session.pendingAsk,
+              ownerDiscordId: config.owner?.discordId,
+              requesterDiscordId: msg.authorId,
+            })
+          : formatAskReply({
+              ask: session.pendingAsk,
+              owner: config.owner,
+              requesterDiscordId: msg.authorId,
+              replyHint: true,
+            });
         if (replyRef.fn) {
           const sent = await replyRef.fn({
             channelId,
             content: restated.content,
             replyToMessageId: msg.id,
             mentionUserIds: restated.mentionUserIds,
+            ...(hasButtons
+              ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
+              : {}),
           });
           if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
         } else {
@@ -408,14 +476,21 @@ export async function startBridge(
         return;
       }
 
-      // AUTONOMY-6: substantive continue clears pending ask and carries context.
+      // AUTONOMY-6 / SESSION-MULTI-3 / DISCORD-ASK:
+      // - free-text pending (no options): substantive continue answers and clears.
+      // - button pending (has options): chat continues; buttons stay until pick/timeout.
       let agentPrompt = prompt;
       if (action.kind === "continue_session" && session.pendingAsk) {
-        const prior = session.pendingAsk.question;
-        agentPrompt =
-          `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
-          `Human answer:\n${prompt}`;
-        store.setPendingAsk(session, null);
+        const pending = session.pendingAsk;
+        if (pending.options?.length) {
+          agentPrompt = prompt;
+        } else {
+          const prior = pending.question;
+          agentPrompt =
+            `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
+            `Human answer:\n${prompt}`;
+          store.setPendingAsk(session, null);
+        }
       }
 
       const outbound = resolveOutbound();
@@ -541,52 +616,372 @@ export async function startBridge(
           })
         : undefined;
       const thinkExtras = { plumbing, model: llmModel };
-      // AUTONOMY-1/2/4: needs a human → question; clarify pings requester, stuck pings owner.
-      const ask = result.ask
-        ? formatAskReply({
-            ask: result.ask,
-            owner: config.owner,
-            requesterDiscordId: msg.authorId,
-            context: result.summary,
-            replyHint: true,
+      // AUTONOMY-1/2/4 / DISCORD-ASK: needs a human → buttons when options, else free-text.
+      const askRaw = result.ask;
+      const resolvedOptions = askRaw
+        ? resolveAskOptions({
+            options: askRaw.options,
+            question: askRaw.question,
           })
-        : null;
-      if (ask) {
-        store.setPendingAsk(session, result.ask!);
-        await (ask.failed
-          ? thinking.fail(ask.status, thinkExtras)
-          : thinking.done(ask.status, thinkExtras));
-        if (result.ask!.reason === "stuck" && !ask.ownerPinged) {
+        : undefined;
+      const useButtons = Boolean(resolvedOptions?.length);
+      let askBody: {
+        content: string;
+        mentionUserIds: string[];
+        status: string;
+        failed: boolean;
+        ownerPinged?: boolean;
+        components?: unknown[];
+      } | null = null;
+      let pendingToStore: PendingAsk | null = null;
+
+      if (askRaw && useButtons && resolvedOptions) {
+        const pending = toPendingAsk({ ...askRaw, options: resolvedOptions });
+        const stub = formatAskStub({
+          ask: pending,
+          ownerDiscordId: config.owner?.discordId,
+          requesterDiscordId: msg.authorId,
+        });
+        askBody = {
+          content: stub.content,
+          mentionUserIds: stub.mentionUserIds,
+          status: stub.status,
+          failed: stub.failed,
+          ownerPinged: Boolean(
+            config.owner?.discordId &&
+              stub.mentionUserIds.includes(config.owner.discordId),
+          ),
+          components: buildOpenStubComponents(pending.askId),
+        };
+        pendingToStore = pending;
+      } else if (askRaw) {
+        const formatted = formatAskReply({
+          ask: askRaw,
+          owner: config.owner,
+          requesterDiscordId: msg.authorId,
+          context: result.summary,
+          replyHint: true,
+        });
+        askBody = {
+          content: formatted.content,
+          mentionUserIds: formatted.mentionUserIds,
+          status: formatted.status,
+          failed: formatted.failed,
+          ownerPinged: formatted.ownerPinged,
+        };
+        pendingToStore = toPendingAsk(askRaw);
+      }
+
+      if (askBody && pendingToStore) {
+        store.setPendingAsk(session, pendingToStore);
+        if (askRaw!.reason === "stuck" && !askBody.ownerPinged) {
           console.warn(ASK_NO_OWNER_WARNING);
         }
       } else if (result.ok) {
-        if (session.pendingAsk) store.setPendingAsk(session, null);
-        await thinking.done("✅ Done", thinkExtras);
-      } else {
-        if (session.pendingAsk) store.setPendingAsk(session, null);
-        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+        // SESSION-MULTI-3: button pending asks survive unrelated successful turns.
+        if (session.pendingAsk && !session.pendingAsk.options?.length) {
+          store.setPendingAsk(session, null);
+        }
+      } else if (session.pendingAsk && !session.pendingAsk.options?.length) {
+        store.setPendingAsk(session, null);
       }
 
       // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
-      const body = ask
-        ? ask.content
+      const body = askBody
+        ? askBody.content
         : result.ok
           ? result.summary.slice(0, 1800)
           : `session ${session.id} failed (exit ${result.exitCode})`;
 
-      if (replyRef.fn) {
+      // DISCORD-ASK-6/7 — prefer one public message: edit thinking into stub/answer.
+      const collapsed = await thinking.finalizeContent({
+        content: body,
+        components: askBody?.components,
+        mentionUserIds: askBody?.mentionUserIds,
+      });
+      if (collapsed) {
+        store.trackBotMessage(collapsed.messageId, session);
+        if (pendingToStore && askBody?.components) {
+          pendingToStore.stubMessageId = collapsed.messageId;
+          store.setPendingAsk(session, pendingToStore);
+        }
+      } else if (replyRef.fn) {
+        // Fallback when editMessage unavailable: status embed + separate reply.
+        if (askBody && pendingToStore) {
+          await (askBody.failed
+            ? thinking.fail(askBody.status, thinkExtras)
+            : thinking.done(askBody.status, thinkExtras));
+        } else if (result.ok) {
+          await thinking.done("✅ Done", thinkExtras);
+        } else {
+          await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+        }
         const sent = await replyRef.fn({
           channelId,
           content: body,
           replyToMessageId: msg.id,
-          ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
+          ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+          ...(askBody?.components ? { components: askBody.components } : {}),
         });
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
+          if (pendingToStore && askBody?.components) {
+            pendingToStore.stubMessageId = sent.messageId;
+            store.setPendingAsk(session, pendingToStore);
+          }
         }
       } else {
+        thinking.dispose();
         // Dry / test: synthesize bot message id so reply continuity can be tested.
         store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+      }
+    },
+    onComponent: async (interaction) => {
+      const parsed = parseAskCustomId(interaction.customId);
+      if (!parsed) return;
+
+      const session = store.list().find(
+        (s) => s.pendingAsk?.askId === parsed.askId,
+      );
+      const pending = session?.pendingAsk ?? null;
+
+      // Wrong user or unknown ask → short ephemeral, do not leak.
+      if (!session || !pending || session.userId !== interaction.userId) {
+        await interaction.reply({
+          content: "This choice isn’t for you (or it was already answered).",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (isAskExpired(pending)) {
+        store.setPendingAsk(session, null);
+        await interaction.reply({
+          content: ASK_CHOICE_EXPIRED,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (parsed.kind === "open") {
+        const options = pending.options;
+        if (!options?.length) {
+          await interaction.reply({
+            content: "No choices available — reply in the channel instead.",
+            ephemeral: true,
+          });
+          return;
+        }
+        await interaction.reply({
+          content: formatAskEphemeralContent(pending),
+          ephemeral: true,
+          components: buildChoiceComponents(pending.askId, options),
+        });
+        return;
+      }
+
+      // pick
+      const label =
+        findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
+      const prior = pending.question;
+      store.setPendingAsk(session, null);
+      await interaction.reply({
+        content: `Got it — **${label}**. Working on it…`,
+        ephemeral: true,
+        update: true,
+      });
+
+      const channelId = session.threadId ?? session.channelId;
+      const agentPrompt =
+        `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]\n\n` +
+        `Human answer:\n${label}`;
+
+      const outbound = resolveOutbound();
+      const llmModel = loadLlmEnv(process.env).model;
+      const stubId = pending.stubMessageId ?? interaction.messageId;
+      const thinking = new ThinkingStatus({
+        outbound,
+        channelId,
+        replyToMessageId: stubId,
+        existingMessageId: stubId,
+        sessionId: session.id,
+        model: llmModel,
+        debounceMs: opts.thinkingDebounceMs,
+        tickMs: opts.thinkingTickMs,
+      });
+      await thinking.start({ description: "Working on your request..." });
+
+      if (!session.worktreePath) {
+        const bound = await store.bindWorktree(session);
+        if (!bound.ok) {
+          await thinking.fail(`❌ worktree: ${bound.error}`);
+          return;
+        }
+      }
+      const sessionCwd = store.cwdFor(session);
+
+      let result;
+      try {
+        let enrichedPrompt = agentPrompt;
+        const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+          userId: interaction.userId,
+          owner: config.owner ?? null,
+        });
+        if (idInject.injected) enrichedPrompt = idInject.prompt;
+        const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
+          ownerUserId: interaction.userId,
+        });
+        if (memInject.injected) enrichedPrompt = memInject.prompt;
+
+        const actingIsAdmin =
+          resolvePermissionLevel({
+            userId: interaction.userId,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+          }) >= PermissionLevel.ADMIN;
+
+        result = await store.runActive(session, () =>
+          agent.runChat({
+            prompt: enrichedPrompt,
+            humanText: label,
+            sessionId: session.id,
+            resume: true,
+            actingUserId: interaction.userId,
+            actingIsAdmin,
+            cwd: sessionCwd,
+            onStatus: (u) => {
+              void thinking.update({
+                tool: u.tool,
+                tokens: u.tokens,
+                description: u.message ? `⏳ ${u.message}` : undefined,
+              });
+            },
+          }),
+        );
+      } catch (err) {
+        await thinking.fail(
+          `❌ ${err instanceof Error ? err.message : "agent error"}`,
+        );
+        throw err;
+      }
+
+      const plumbing = result.task
+        ? formatTaskPlumbing({
+            state: result.task.state,
+            verified: result.task.verified,
+            verifySkipped: result.task.verifySkipped,
+            attempts: result.task.attempts,
+            cancelled: result.task.cancelled,
+          })
+        : undefined;
+      const thinkExtras = { plumbing, model: llmModel };
+
+      const askRaw = result.ask;
+      const resolvedOptions = askRaw
+        ? resolveAskOptions({
+            options: askRaw.options,
+            question: askRaw.question,
+          })
+        : undefined;
+      const useButtons = Boolean(resolvedOptions?.length);
+      let askBody: {
+        content: string;
+        mentionUserIds: string[];
+        status: string;
+        failed: boolean;
+        ownerPinged?: boolean;
+        components?: unknown[];
+      } | null = null;
+      let pendingToStore: PendingAsk | null = null;
+
+      if (askRaw && useButtons && resolvedOptions) {
+        const next = toPendingAsk({ ...askRaw, options: resolvedOptions });
+        const stub = formatAskStub({
+          ask: next,
+          ownerDiscordId: config.owner?.discordId,
+          requesterDiscordId: interaction.userId,
+        });
+        askBody = {
+          content: stub.content,
+          mentionUserIds: stub.mentionUserIds,
+          status: stub.status,
+          failed: stub.failed,
+          ownerPinged: Boolean(
+            config.owner?.discordId &&
+              stub.mentionUserIds.includes(config.owner.discordId),
+          ),
+          components: buildOpenStubComponents(next.askId),
+        };
+        pendingToStore = next;
+      } else if (askRaw) {
+        const formatted = formatAskReply({
+          ask: askRaw,
+          owner: config.owner,
+          requesterDiscordId: interaction.userId,
+          context: result.summary,
+          replyHint: true,
+        });
+        askBody = {
+          content: formatted.content,
+          mentionUserIds: formatted.mentionUserIds,
+          status: formatted.status,
+          failed: formatted.failed,
+          ownerPinged: formatted.ownerPinged,
+        };
+        pendingToStore = toPendingAsk(askRaw);
+      }
+
+      if (askBody && pendingToStore) {
+        store.setPendingAsk(session, pendingToStore);
+      }
+
+      const body = askBody
+        ? askBody.content
+        : result.ok
+          ? result.summary.slice(0, 1800)
+          : `session ${session.id} failed (exit ${result.exitCode})`;
+
+      // DISCORD-ASK-7 — edit stub/thinking into the final answer (no Done+extra).
+      const collapsed = await thinking.finalizeContent({
+        content: body,
+        components: askBody?.components,
+        mentionUserIds: askBody?.mentionUserIds,
+      });
+      if (collapsed) {
+        store.trackBotMessage(collapsed.messageId, session);
+        if (pendingToStore && askBody?.components) {
+          pendingToStore.stubMessageId = collapsed.messageId;
+          store.setPendingAsk(session, pendingToStore);
+        }
+      } else if (replyRef.fn) {
+        if (askBody && pendingToStore) {
+          await (askBody.failed
+            ? thinking.fail(askBody.status, thinkExtras)
+            : thinking.done(askBody.status, thinkExtras));
+        } else if (result.ok) {
+          await thinking.done("✅ Done", thinkExtras);
+        } else {
+          await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+        }
+        const sent = await replyRef.fn({
+          channelId,
+          content: body,
+          replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+          ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+          ...(askBody?.components ? { components: askBody.components } : {}),
+        });
+        if (sent?.messageId) {
+          store.trackBotMessage(sent.messageId, session);
+          if (pendingToStore && askBody?.components) {
+            pendingToStore.stubMessageId = sent.messageId;
+            store.setPendingAsk(session, pendingToStore);
+          }
+        }
+      } else {
+        thinking.dispose();
       }
     },
     onSlash: async (interaction) => {
@@ -619,6 +1014,8 @@ export async function startBridge(
       replyRef.fn = h.reply;
       embedRef.send = h.sendEmbed;
       embedRef.edit = h.editEmbed;
+      embedRef.editMessage = h.editMessage;
+      embedRef.deleteMessage = h.deleteMessage;
       return gw;
     });
 
@@ -648,6 +1045,8 @@ export async function startBridge(
   if (handlers.reply) replyRef.fn = handlers.reply;
   if (handlers.sendEmbed) embedRef.send = handlers.sendEmbed;
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
+  if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
+  if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
 
   await gateway.start();
   scheduler?.start();

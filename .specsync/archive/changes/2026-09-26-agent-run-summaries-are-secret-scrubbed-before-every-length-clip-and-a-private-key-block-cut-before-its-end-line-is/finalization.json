@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is",
+  "implementation_commit": "0f9090a2ea88a09e0bcb120ac078ba7e5f9bd65d",
+  "implementation_tree": "66abad806358a70fc1b73034545556f24b4c0114",
+  "contract_digest": "d082a8285c38caf04ed4d92394040aa4b4184c5657f2e0347aa6d560e0c8f0b9",
+  "workspace_digest": "1be1ef1d38b2bdf2d70df164c6e4c1d79174f97190917dc0779c894ab6b63974",
+  "closing_digest": "6fa0d7b6b2c22c36347b68b4cdeb4fb21c154c16c40ade29631aa9cddc34e646",
+  "review_digest": "a6c90508564e9ebb08be0193dd74ab849c91e5834ea436e32df5563c11f0ed05",
+  "finalization_digest": "de5d1971e36da149bd234db9486e1c6df207a2a23ec64e42478213079ef5c7fd",
+  "timestamp": 1790464830
+}

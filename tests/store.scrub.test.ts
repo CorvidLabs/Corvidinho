@@ -71,9 +71,6 @@ describe("scrubSecrets (SAFE-6)", () => {
     // Before the linear patterns each of these took seconds: every opener
     // rescanned to the end of the text looking for its closer.
     const hostile = [
-      "+-----BEGIN A PRIVATE KEY-----\n".repeat(20_000),
-      "-----BEGIN A PRIVATE KEY-----".repeat(20_000),
-      "-----BEGIN A PRIVATE KEY-----\n" + "+QUJDREVGR0hJSktMTU5PUA==\n".repeat(20_000),
       "eyJ-".repeat(50_000),
       "eyJ" + "a".repeat(8) + ".eyJ-" + "eyJ-".repeat(50_000),
     ];
@@ -83,6 +80,60 @@ describe("scrubSecrets (SAFE-6)", () => {
       const ms = performance.now() - started;
       expect(out).toBe(text); // nothing here is a complete secret
       expect(ms).toBeLessThan(1_000);
+    }
+    // Private-key openers with no closer are redacted (an open block is a key
+    // cut before its END line, REQ-discord-066), still in linear time.
+    const openKeys = [
+      "+-----BEGIN A PRIVATE KEY-----\n".repeat(20_000),
+      "-----BEGIN A PRIVATE KEY-----".repeat(20_000),
+      "-----BEGIN A PRIVATE KEY-----\n" + "+QUJDREVGR0hJSktMTU5PUA==\n".repeat(20_000),
+      "-----BEGIN A PRIVATE KEY-----\n" + "-----END A B C\n".repeat(20_000),
+      "-----BEGIN A PRIVATE KEY-----\n-----END " + "A ".repeat(100_000),
+    ];
+    for (const text of openKeys) {
+      const started = performance.now();
+      const out = scrubSecrets(text);
+      const ms = performance.now() - started;
+      expect(out).not.toContain("PRIVATE KEY");
+      expect(out).not.toContain("QUJDREVG");
+      expect(out).toContain("[redacted:private-key]");
+      expect(ms).toBeLessThan(1_000);
+    }
+  });
+
+  test("a private-key block cut before its END line is redacted (REQ-discord-066)", () => {
+    const body = a(64);
+    const header = "-----BEGIN " + "RSA PRIVATE KEY-----";
+    const full = `${header}\n${body}\n-----END RSA PRIVATE KEY-----`;
+    const cert = "-----BEGIN CERTIFICATE-----\nCERTBODY\n-----END CERTIFICATE-----";
+
+    // No END line: redact from the header through the end of the text.
+    const open = `keep this\n${header}\n${body}\n${body.slice(0, 20)}`;
+    expect(scrubSecrets(open)).toBe("keep this\n[redacted:private-key]");
+    expect(scrubSecrets(`${header}${body}`)).toBe("[redacted:private-key]");
+    // An open block stops at the next BEGIN line: a following full key is
+    // redacted on its own and a certificate after it is kept.
+    expect(scrubSecrets(`${header}\n${body}\n${full}\ntail`)).toBe(
+      "[redacted:private-key][redacted:private-key]\ntail",
+    );
+    expect(scrubSecrets(`${header}\n${body}\n${cert}\ntail`)).toBe(
+      `[redacted:private-key]${cert}\ntail`,
+    );
+    // Full blocks are still redacted one by one and the text between is kept.
+    expect(scrubSecrets(`a ${full} b ${full} c`)).toBe(
+      "a [redacted:private-key] b [redacted:private-key] c",
+    );
+    const once = scrubSecrets(open);
+    expect(scrubSecrets(once)).toBe(once); // idempotent
+
+    // Text with no private key is unchanged, including other PEM headers.
+    for (const plain of [
+      "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n",
+      `${cert}\n`,
+      "-----BEGIN CERTIFICATE-----\nno end line here",
+      "Paste the key file (it starts with a BEGIN line) into the vault.",
+    ]) {
+      expect(scrubSecrets(plain)).toBe(plain);
     }
   });
 });
@@ -103,7 +154,7 @@ describe("scrub on every write path", () => {
       prompt: `call api with ${FAKE.anthropic}`,
       createdByUserId: "u",
     });
-    const run = schedules.markRunStarted(s);
+    const run = schedules.claimRun(s)!;
     schedules.markRunFinished(s, run, { ok: false, error: `401 for ${FAKE.jwt}` });
     const memory = new MemoryStore({ db });
     const rec = memory.store({ ownerUserId: "u", category: "person", key: `k ${FAKE.google}`, content: `pw ${FAKE.pem}` });

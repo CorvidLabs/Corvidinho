@@ -1,0 +1,72 @@
+{
+  "timestamp": 1790466096,
+  "commit": "d48016b11b477263db2dc613f23746ccd16c96d8",
+  "contract_digest": "c10c6e5ea4fa1e5ea7f82fc3bc1657fb43678802a1260c3663729ea4ea6232d5",
+  "execution_digest": "f446a9a8f05d78aa6c3d33c1b8f551db50ab91a3ecf76bfca157b1ee5e4a8b8a",
+  "workspace_digest": "77ff4fbe66ff8641a046fecefa6edeba0ec19b854ac281580a97c3ff9e7c2467",
+  "acceptance_input_digest": "903182bde4c325de9a7f48480fa366981b3e15a2e0eac4d2cda95dba4a75f7ce",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "tests/discord.ask-ping.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "885d38ff3d98e445d224b0c64c435af8f9a0e8465aa85d0e3ed55528db0eb663",
+        "entry_digest": "2ff7cbf2b2354f1b8b2d7206099ac1a62557279beab7e21baf0895c3c09aa3f8",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.session-worktree.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "42fed5e4d22df644472d22fce2571bfddf992ce71a20b9aa397c8fedd30e3d2d",
+        "entry_digest": "1d88cc60b83bfa50488cdbade2df1206a938bbee238b76a0bb42ace3649d47ab",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.thin-ack.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1c0943787b9e20b33729bed4c2b55db11c4ffbbbafd4cd6817c7213ba0510104",
+        "entry_digest": "7220ca7ed6225d1d6d457ef84117a06c81171447949b0d267fc742acfaadc649",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/update-helpers.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9fb7416c38ea0ca601e101c01a729d14459490cda5d00867032b4eb760eadf07",
+        "entry_digest": "704c8086d3dc5845eec4570e7aae5e4d572dc5107fe895feede76abf252699f8",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/version.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3ae8cbd3acf48cc27de95bd02599f9f3c4095c63193ed7971a8c04f5467056c8",
+        "entry_digest": "0a2cc9d5d7c7d2e261fe5f8623d55cf891427ad0095447dba0e0263edeecf263",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec discord",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

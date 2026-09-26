@@ -98,6 +98,8 @@ type InFlight = {
   schedule: Schedule;
   run: ScheduleRun;
   settled: Promise<void>;
+  /** Aborted when the run is abandoned: stops the spawned agent's process tree. */
+  stop: AbortController;
 };
 
 export class SchedulerService {
@@ -194,13 +196,18 @@ export class SchedulerService {
           continue;
         }
         started.push(schedule.id);
-        const entry: InFlight = { schedule, run, settled: Promise.resolve() };
+        const entry: InFlight = {
+          schedule,
+          run,
+          settled: Promise.resolve(),
+          stop: new AbortController(),
+        };
         this.running.set(schedule.id, entry);
         // Fire-and-forget — do not await (ingress must not wait). Only a
         // shutdown drain() ever handles this promise, so it must never reject
         // (REQ-discord-331).
-        entry.settled = this.runOne(schedule, run).catch((err) =>
-          logSchedulerError("run", err),
+        entry.settled = this.runOne(schedule, run, entry.stop.signal).catch(
+          (err) => logSchedulerError("run", err),
         );
       }
     } finally {
@@ -232,20 +239,26 @@ export class SchedulerService {
 
   /**
    * Record every still-running run as failed with `reason` (shutdown after
-   * the grace period) so history never shows a run stuck at "running".
-   * Returns the abandoned schedule ids.
+   * the grace period) so history never shows a run stuck at "running", and
+   * stop its spawned agent's whole process tree so nothing keeps working
+   * after the shutdown (AGENT-3). Returns the abandoned schedule ids.
    */
   abandonInFlight(reason: string): string[] {
     const ids: string[] = [];
     for (const [id, entry] of this.running) {
       this.finish(entry.schedule, entry.run, { ok: false, error: reason });
+      entry.stop.abort(new Error(reason));
       ids.push(id);
     }
     this.running.clear();
     return ids;
   }
 
-  private async runOne(schedule: Schedule, run: ScheduleRun): Promise<void> {
+  private async runOne(
+    schedule: Schedule,
+    run: ScheduleRun,
+    signal: AbortSignal,
+  ): Promise<void> {
     let workDir: string | undefined;
     let projectDir: string | undefined;
     let workspaceKind: "worktree" | "scoped_dir" | undefined;
@@ -322,6 +335,7 @@ export class SchedulerService {
         actingUserId: schedule.createdByUserId,
         actingIsAdmin: false,
         cwd: workDir,
+        signal,
       });
 
       const summary = result.ok
