@@ -1,8 +1,12 @@
 /**
- * Slash command dispatch map (DISCORD-4 / 6 / 7).
+ * Slash command dispatch map (DISCORD-4 / 6 / 7 / DENY-1..3).
  * Ancestor shape: COMMAND_HANDLERS Map + permission gate before handler.
  * Corvidinho: channel allowlist → mute/rate → resolvePermissionLevel +
  * minPermission re-check (DISCORD-7) → handler.
+ *
+ * Channel deny (DISCORD-DENY-1..3):
+ * - ADMIN → ephemeral allowlist tip (no public leak)
+ * - non-admin → ephemeral zero-width ack (Discord 3s rule; no useful leak)
  */
 
 import { handleAgentsCommand } from "./command-handlers/agents.ts";
@@ -22,7 +26,11 @@ import type {
   SlashInteraction,
   SlashResult,
 } from "./slash-types.ts";
-import { NOT_AUTHORIZED } from "./types.ts";
+import {
+  ALLOWLIST_DENY_TIP,
+  EPHEMERAL_SILENT_ACK,
+  NOT_AUTHORIZED,
+} from "./types.ts";
 
 type CommandHandler = (
   ctx: SlashContext,
@@ -60,6 +68,18 @@ export function knownSlashCommands(): string[] {
   return [...SLASH_COMMAND_NAMES];
 }
 
+function isAdminActor(ctx: SlashContext, interaction: SlashInteraction): boolean {
+  const permLevel = resolvePermissionLevel({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    mutedUsers: ctx.mutedUsers,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+  });
+  return permLevel >= PermissionLevel.ADMIN;
+}
+
 /**
  * Dispatch a slash interaction.
  * Order: channel → mute/rate → permission floor → handler.
@@ -70,11 +90,25 @@ export async function handleSlashInteraction(
 ): Promise<SlashResult> {
   const gate = gateChannel(interaction.channelId, ctx.allowlist);
   if (!gate.ok) {
+    const admin = isAdminActor(ctx, interaction);
+    if (admin) {
+      await interaction.reply({
+        content: ALLOWLIST_DENY_TIP,
+        ephemeral: true,
+      });
+      return {
+        ok: false,
+        reason: "channel_not_allowlisted",
+        reply: ALLOWLIST_DENY_TIP,
+      };
+    }
+    // DISCORD-DENY-3: Discord forces an interaction response within 3s.
+    // Ephemeral zero-width ack — invoker-only, no useful leak.
     await interaction.reply({
-      content: NOT_AUTHORIZED,
+      content: EPHEMERAL_SILENT_ACK,
       ephemeral: true,
     });
-    return { ok: false, reason: "channel_not_allowlisted", reply: NOT_AUTHORIZED };
+    return { ok: false, reason: "channel_not_allowlisted" };
   }
 
   const rateGate = gateRateOrMute({

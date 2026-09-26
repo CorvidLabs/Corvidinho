@@ -20,7 +20,7 @@ import type {
   SlashInteraction,
   SlashReplyPayload,
 } from "../src/discord/slash-types.ts";
-import { NOT_AUTHORIZED } from "../src/discord/types.ts";
+import { ALLOWLIST_DENY_TIP, NOT_AUTHORIZED } from "../src/discord/types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 
 function allowCfg(over: {
@@ -223,6 +223,8 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
     const result = await handleSlashInteraction(ctx, ix);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("channel_not_allowlisted");
+    expect(ix.replies[0]?.ephemeral).toBe(true);
+    expect(ix.replies[0]?.content).toBe(ALLOWLIST_DENY_TIP);
     expect(muted.size).toBe(0);
   });
 

@@ -1,5 +1,7 @@
 # Discord HEAR go-live (Developer Portal + VM)
 
+Slash commands, outbound formats, and deny behavior: [`discord.md`](discord.md).
+
 Corvidinho owns config/setup end-to-end for issue #5. **Secrets never go in the repo or chat.**
 When the bridge is **READY-FOR-SECRETS** (code merged + checklist below ready), CoS/Leif provide the token via the secure secret-request room — never paste tokens into Discord/GitHub/chat.
 

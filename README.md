@@ -40,7 +40,7 @@ export DISCORD_CHANNEL_IDS=…    # non-empty; or CORVIDINHO_DISCORD_ALLOW_CHANN
 bun src/cli.ts discord bridge
 ```
 
-Empty channel allowlists **refuse start** (default-deny; not Merlin BASIC). Without a token the CLI exits cleanly with a checklist — see [`STATUS.md`](STATUS.md). Soft later: issues #10–#14. Templates: [`.env.example`](.env.example), [`allowlist.example.toml`](allowlist.example.toml). Full checklist: [`docs/DISCORD-GO-LIVE.md`](docs/DISCORD-GO-LIVE.md). Box updates: [`docs/UPDATE.md`](docs/UPDATE.md). **READY-FOR-SECRETS** → request token via CoS/Leif secure room only (never chat paste).
+Empty channel allowlists **refuse start** (default-deny; not Merlin BASIC). Without a token the CLI exits cleanly with a checklist — see [`STATUS.md`](STATUS.md). Soft later: issues #10–#14. Templates: [`.env.example`](.env.example), [`allowlist.example.toml`](allowlist.example.toml). Full checklist: [`docs/DISCORD-GO-LIVE.md`](docs/DISCORD-GO-LIVE.md). Slash/outbound/deny UX: [`docs/discord.md`](docs/discord.md). Box updates: [`docs/UPDATE.md`](docs/UPDATE.md). **READY-FOR-SECRETS** → request token via CoS/Leif secure room only (never chat paste).
 
 
 ## GitHub WATCH (poll-first)

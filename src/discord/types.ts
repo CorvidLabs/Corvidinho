@@ -102,6 +102,18 @@ export type AgentSpawnResult = {
 };
 
 export const NOT_AUTHORIZED = "not authorized";
+/**
+ * Ephemeral tip for ADMIN slash deny outside allowlist (DISCORD-DENY-2).
+ * Never post this publicly; MessageCreate has no ephemeral → silent there.
+ */
+export const ALLOWLIST_DENY_TIP =
+  "This channel isn’t allowlisted. Add its id to discord.channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.";
+/**
+ * Ephemeral zero-width ack for non-admin slash deny (DISCORD-DENY-3).
+ * Discord requires an interaction response within 3s; true zero response is
+ * impossible for slash — this leaks nothing useful to the invoker only.
+ */
+export const EPHEMERAL_SILENT_ACK = "\u200b";
 /** Short reply when the user is muted (DISCORD-6). */
 export const MUTED = "You do not have permission to interact with this bot.";
 /** Short reply when the user is rate-limited (DISCORD-6). */

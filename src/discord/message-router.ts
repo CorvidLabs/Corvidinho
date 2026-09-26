@@ -1,6 +1,7 @@
 /**
  * Mention / reply / thread → session stub (DISCORD-1 / 2 / 2.a / 5 / 6).
  * Entry after gateway; no ProcessManager.
+ * DISCORD-DENY-1..3: outside allowlist → refuse without public reply.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -13,7 +14,6 @@ import {
 } from "./permissions.ts";
 import type { SessionStore } from "./session-store.ts";
 import {
-  NOT_AUTHORIZED,
   type InboundMessage,
   type RouteAction,
 } from "./types.ts";
@@ -52,6 +52,11 @@ function refuseRateOrMute(
   return { kind: "refuse", reason: gate.reason, reply: gate.reply };
 }
 
+/** DISCORD-DENY-1: MessageCreate has no ephemeral — never public-reply on deny. */
+function silentChannelDeny(): RouteAction {
+  return { kind: "refuse", reason: "channel_not_allowlisted" };
+}
+
 /**
  * Pure router: given an inbound message, decide start/continue/refuse/ignore.
  */
@@ -76,11 +81,7 @@ export function routeMessage(
         // channel was allowlisted at create time, session exists — still
         // re-check the session's channelId.
         if (!isMonitoredChannel(existing.channelId, deps.allowlist)) {
-          return {
-            kind: "refuse",
-            reason: "channel_not_allowlisted",
-            reply: NOT_AUTHORIZED,
-          };
+          return silentChannelDeny();
         }
       }
       const blocked = refuseRateOrMute(msg, deps);
@@ -101,11 +102,7 @@ export function routeMessage(
     if (existing) {
       if (!isMonitoredChannel(existing.channelId, deps.allowlist) &&
           !isMonitoredChannel(msg.channelId, deps.allowlist)) {
-        return {
-          kind: "refuse",
-          reason: "channel_not_allowlisted",
-          reply: NOT_AUTHORIZED,
-        };
+        return silentChannelDeny();
       }
       const blocked = refuseRateOrMute(msg, deps);
       if (blocked) return blocked;
@@ -118,7 +115,7 @@ export function routeMessage(
     }
   }
 
-  // Channel gate (DISCORD-5) before mention handling.
+  // Channel gate (DISCORD-5 / DENY-1) before mention handling.
   const gate = gateInbound(
     {
       channelId: msg.channelId,
@@ -129,13 +126,9 @@ export function routeMessage(
     deps.allowlist,
   );
   if (!gate.ok) {
-    // Quiet refuse for non-monitored noise; short reply only on mention attempt.
+    // Quiet for noise and for @mention — never public "not authorized".
     if (msg.mentionedBot) {
-      return {
-        kind: "refuse",
-        reason: "channel_not_allowlisted",
-        reply: NOT_AUTHORIZED,
-      };
+      return silentChannelDeny();
     }
     return { kind: "ignore", reason: "channel_not_allowlisted" };
   }

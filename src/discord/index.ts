@@ -133,6 +133,8 @@ export type {
 } from "./slash-types.ts";
 export {
   NOT_AUTHORIZED,
+  ALLOWLIST_DENY_TIP,
+  EPHEMERAL_SILENT_ACK,
   MUTED,
   RATE_LIMITED,
   type DiscordAttachment,

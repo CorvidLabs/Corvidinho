@@ -1,0 +1,55 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790445903,
+      "digest": "b9fa94d861ba22f5797c8adae1a97a06802cdcdde3bf4dbcc6f9eb1720654373",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-deny-polish-discord-deny-1-3-messagecreate-unauthorized-silent-slash-admin-ephemeral-allowlist-tip-non-admin",
+        "title": "Discord deny polish (DISCORD-DENY-1..3): MessageCreate unauthorized silent; slash admin ephemeral allowlist tip, non-admin ephemeral zero-width ack; docs/discord.md with slash inventory + deny mermaid flowchart; no public not-authorized leaks",
+        "description": "Discord deny polish (DISCORD-DENY-1..3): MessageCreate unauthorized silent; slash admin ephemeral allowlist tip, non-admin ephemeral zero-width ack; docs/discord.md with slash inventory + deny mermaid flowchart; no public not-authorized leaks",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "AGENTS.md",
+          "README.md",
+          "STATUS.md",
+          "docs/discord.md",
+          "hi/discord.md",
+          "src/discord/message-router.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/types.ts",
+          "tests/discord.router.test.ts",
+          "tests/discord.slash.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "MessageCreate outside allowlist never public-replies (silent for all); slash outside allowlist: admin gets ephemeral allowlist tip, non-admin gets ephemeral zero-width ack only (Discord 3s rule); no public not-authorized; docs/discord.md covers 6 slash cmds, outbound formats, deny mermaid flowchart, mermaid-docs-only note; links from STATUS/AGENTS/README/hi/discord; fixture tests for router+slash deny; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "96e618dfa02b3f28f1366d31d8af3dabd31950c19b5587313001a8d3a29da0b9"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790445969,
+      "digest": "5564e19a324ba172d6c0af23294d3d46feea8b8ca5c0984e79b04c65121d34bd",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
