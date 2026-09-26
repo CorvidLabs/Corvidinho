@@ -1,6 +1,6 @@
 ---
 module: plugins
-change: cover-plugin-reload-after-clearregistry-helpers-for-hear-13-fixture-suite
+change: cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures
 ---
 
 # Delta — plugins (reload after clearRegistry)
