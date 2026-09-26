@@ -1,6 +1,6 @@
 ---
 id: watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging
-state: verifying
+state: archived
 type: feature
 base_commit: 20fb34ff8db5759a2aad968e74d1d21b4c344b83
 ---
