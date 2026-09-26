@@ -1,6 +1,6 @@
 ---
 id: files-edit-single-occurrence-replace-writes-new-literally-so-dollar-replacement-patterns-cannot-corrupt-the-file
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 3720b97c0dfc6ee65187a6278c13f8e1058632d3
 ---

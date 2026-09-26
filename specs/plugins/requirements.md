@@ -595,3 +595,14 @@ Acceptance Criteria
 - Rows keep `name/state/bucket/link` and add `kind/status/conclusion`; `plugins list` still shows dangerous=false minTier=0; missing or denied `--repo` still exits 3.
 - Tests use a mocked Octokit / stubbed transport only (no network, no real token).
 
+### REQ-plugins-237
+
+`files-edit` SHALL write the `--new` string byte-for-byte in place of the
+`--old` match in both single-occurrence and `--replace-all` modes.
+JavaScript replacement patterns in `--new` (`$$`, `$&`, `$'`, `` $` ``,
+`$1`, `$<name>`) SHALL NOT be expanded; `--new` is literal data.
+
+Acceptance Criteria
+- A single-occurrence edit whose `--new` contains `$$`, `$'`, `$&`, `` $` ``, `$1` and `$<n>` leaves exactly that text in the file.
+- A `--replace-all` edit with the same `--new` writes the same literal text at every match.
+
