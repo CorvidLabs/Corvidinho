@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "enable-specsync-sdd-change-workflow-and-fix-ci-specsync-bun-install",
+  "slug": "enable-specsync-sdd-change-workflow-and-fix-ci-specsync-bun-install",
+  "title": "Enable SpecSync SDD change workflow and fix CI SpecSync/bun install",
+  "description": "Enable SpecSync SDD change workflow and fix CI SpecSync/bun install",
+  "kind": "operations",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "eb9d9c6755d49dc92565a4c6f427f0589451f29a",
+  "created_at": 1790436569,
+  "updated_at": 1790436898,
+  "affected_specs": [],
+  "affected_paths": [
+    ".github/",
+    ".specsync/sdd.json",
+    ".specsync/config.toml",
+    ".specsync/registry.toml",
+    ".specsync/version",
+    ".specsync/adoption-report.json",
+    ".specsync/workflow-v2-baseline.json",
+    "AGENTS.md",
+    "STATUS.md",
+    "package.json",
+    "bun.lock",
+    "tsconfig.json",
+    "fledge.toml",
+    "src/",
+    "tests/",
+    "specs/",
+    "hi/",
+    "docs/"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Ops/policy/CI only: enable SDD, adopt workflow-v2 baseline, fix SpecSync Action and Bun pin. No canonical module contracts change.",
+  "acceptance_criteria": [
+    "Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge in GHA. sdd.json enabled; active change covers BOOT meaningful paths vs main. Fledge verify remains a local/agent gate."
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/cli.ts",
+      "module": "cli",
+      "actor": "corvid-agent",
+      "reason": "cli.ts help text is owned by draft cli module; bind acceptance to cli",
+      "timestamp": 1790436719
+    }
+  ],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

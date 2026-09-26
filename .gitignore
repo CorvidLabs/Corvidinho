@@ -26,7 +26,7 @@ build/
 
 # SpecSync / Fledge local
 .specsync/hashes.json
-.specsync/archive/
+# .specsync/archive/ is committed (SDD finalize evidence)
 .fledge/
 
 # Logs
