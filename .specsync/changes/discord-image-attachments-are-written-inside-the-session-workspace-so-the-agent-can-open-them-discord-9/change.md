@@ -1,6 +1,6 @@
 ---
 id: discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9
-state: draft
+state: implementing
 type: bug_fix
 base_commit: cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f
 ---

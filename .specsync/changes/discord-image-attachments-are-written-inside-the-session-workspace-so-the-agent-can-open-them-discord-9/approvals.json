@@ -1,4 +1,41 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790460696,
+      "digest": "4b50e276b18d03fd5d69c8a0af811ffaedd3420b37e7dacf3eb35e02c2c3af11",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9",
+        "title": "Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9)",
+        "description": "Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/discord/bridge.ts",
+          "src/discord/image-attachments.ts",
+          "tests/discord.image-attachments.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A Discord image attachment is written under <session cwd>/.corvidinho/attachments/ (not /tmp); the prompt cites that path; files-read with cwd = the session cwd opens it; git status in the talk worktree stays clean; ending the session removes the file with the workspace."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "6dc71eaaac24ea3106f66cb8dc34446087569033855c1d4b3697c1fd2ac46576"
+      }
+    }
+  ],
   "reopenings": []
 }
