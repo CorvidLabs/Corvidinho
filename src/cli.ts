@@ -253,6 +253,19 @@ async function doctor(): Promise<number> {
     mark: ownerLoad.owner && ownerLoad.issues.length === 0 ? "ok" : "info",
     detail: formatOwnerDoctorDetail(ownerLoad),
   });
+  // IDENTITY-2 — ADMIN is owner-only; legacy admin lists are ignored.
+  if (
+    (process.env.CORVIDINHO_DISCORD_ADMIN_USERS ?? "").trim() ||
+    (process.env.CORVIDINHO_DISCORD_ADMIN_ROLES ?? "").trim()
+  ) {
+    checks.push({
+      name: "admin-lists",
+      ok: true,
+      mark: "warn",
+      detail:
+        "CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES are ignored — ADMIN is owner-only (IDENTITY-2)",
+    });
+  }
 
   console.log("corvidinho doctor\n");
   let allOk = true;
