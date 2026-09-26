@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { startBridge } from "../src/discord/bridge.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { createNullGateway } from "../src/discord/gateway.ts";

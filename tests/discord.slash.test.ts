@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { formatUptime } from "../src/discord/command-handlers/status.ts";
-import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import {
   buildSlashCommandBodies,

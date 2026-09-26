@@ -3,6 +3,8 @@
  * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
  * DISCORD-4: thin slash /session /status /agents /work.
  * DISCORD-6: per-user rate limits + mutes.
+ * DISCORD-9: image attachments → local files for agent.
+ * DISCORD-10: Merlin-shaped protocol-version lockstep.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -21,6 +23,7 @@ import {
   type DiscordGateway,
   type GatewayHandlers,
 } from "./gateway.ts";
+import { enrichPromptWithImages } from "./image-attachments.ts";
 import { routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
@@ -28,8 +31,8 @@ import {
   unmuteUser as unmuteUserImpl,
   type RateLimitState,
 } from "./permissions.ts";
-import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol.ts";
-import { enforceProtocolVersionOrExit } from "./protocol.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
+import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
 import { SessionStore } from "./session-store.ts";
 import { handleSlashInteraction } from "./slash-dispatch.ts";
 import type { SlashContext } from "./slash-types.ts";
@@ -228,6 +231,13 @@ export async function startBridge(
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
 
+      // DISCORD-9 — download attachments to local files the agent can open.
+      const enrichedPrompt = await enrichPromptWithImages(
+        prompt,
+        msg.attachments,
+        { messageId: msg.id },
+      );
+
       const outbound = resolveOutbound();
 
       const thinking = new ThinkingStatus({
@@ -244,7 +254,7 @@ export async function startBridge(
       let result;
       try {
         result = await agent.runChat({
-          prompt,
+          prompt: enrichedPrompt,
           sessionId: session.id,
           resume: action.kind === "continue_session",
           onStatus: (u) => {

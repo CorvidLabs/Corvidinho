@@ -2,10 +2,23 @@
  * HEAR thin types — inbound Discord messages + session stubs.
  * No ProcessManager; no voice/iced/Angular. Slash ops thin (DISCORD-4);
  * rate limits + mutes thin (DISCORD-6); admin re-auth (DISCORD-7);
- * confused-deputy post (DISCORD-8).
+ * confused-deputy post (DISCORD-8); image attachments (DISCORD-9);
+ * protocol lockstep (DISCORD-10).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+
+/** Discord file attachment metadata (DISCORD-9; corvid-agent shape). */
+export type DiscordAttachment = {
+  id: string;
+  filename: string;
+  content_type?: string;
+  size: number;
+  url: string;
+  proxy_url?: string;
+  width?: number;
+  height?: number;
+};
 
 export type InboundMessage = {
   id: string;
@@ -22,6 +35,8 @@ export type InboundMessage = {
   referencedMessageId?: string;
   /** Role ids of the author (optional; empty user/role lists deny when checked). */
   authorRoleIds?: string[];
+  /** File attachments (DISCORD-9). */
+  attachments?: DiscordAttachment[];
 };
 
 export type SessionStub = {

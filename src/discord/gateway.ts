@@ -217,6 +217,16 @@ export async function createLiveGateway(
           isThread && "parentId" in message.channel
             ? (message.channel.parentId as string | null) ?? message.channelId
             : message.channelId;
+        const attachments = [...message.attachments.values()].map((a) => ({
+          id: a.id,
+          filename: a.name ?? "attachment",
+          content_type: a.contentType ?? undefined,
+          size: a.size,
+          url: a.url,
+          proxy_url: a.proxyURL ?? undefined,
+          width: a.width ?? undefined,
+          height: a.height ?? undefined,
+        }));
         const inbound: InboundMessage = {
           id: message.id,
           channelId: parentId,
@@ -232,6 +242,7 @@ export async function createLiveGateway(
           authorRoleIds: message.member
             ? [...message.member.roles.cache.keys()]
             : [],
+          attachments: attachments.length > 0 ? attachments : undefined,
         };
         Promise.resolve(handlers.onMessage(inbound)).catch((err) => {
           console.error("[discord] message handler error:", err);

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "c45a710078636889540059208f810b3935dcb7d2",
+      "contract_digest": "fb5217d9e29e6a3bb4672948f33907d7b420dc1e3eae7a7d1313d0c3ab5c50b1",
+      "execution_digest": "93e8d6bf132b5ad34810fcf68280792f8f7b45f5d9e13bf163e0ab5244433878",
+      "workspace_digest": "8d1e0c0afb1806d56c449d2d14febead3fe74194f248845757c3001cbfa13728",
+      "timestamp": 1790441924
+    },
+    {
+      "schema_version": 2,
+      "change_id": "hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "716b0cb8b0c59d8ea68ece5a3a2b8c83f5940f3f",
+      "contract_digest": "fb5217d9e29e6a3bb4672948f33907d7b420dc1e3eae7a7d1313d0c3ab5c50b1",
+      "execution_digest": "93e8d6bf132b5ad34810fcf68280792f8f7b45f5d9e13bf163e0ab5244433878",
+      "workspace_digest": "24eaa3ac4d5edb62aa3ec8f741577d42e8e4996675eb9b9a6972a6addeeef95e",
+      "timestamp": 1790441959
+    }
+  ]
+}

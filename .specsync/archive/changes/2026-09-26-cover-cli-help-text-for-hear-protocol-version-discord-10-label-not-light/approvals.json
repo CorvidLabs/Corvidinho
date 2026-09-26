@@ -1,0 +1,72 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790441876,
+      "digest": "05c1b02d62fad32fdf2fb079b32c8e31aa2797bfc998d6e35dad5ac6a66f981c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-cli-help-text-for-hear-protocol-version-discord-10-label-not-light",
+        "title": "Cover CLI help text for HEAR protocol-version (DISCORD-10 label, not light)",
+        "description": "Cover CLI help text for HEAR protocol-version (DISCORD-10 label, not light)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/cli.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Help-only usage line for --protocol-version DISCORD-10 label; no cli module acceptance criteria change",
+        "acceptance_criteria": [
+          "CLI --help labels --protocol-version as DISCORD-10 (not light); no cli module AC change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790442007,
+      "digest": "05c1b02d62fad32fdf2fb079b32c8e31aa2797bfc998d6e35dad5ac6a66f981c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-cli-help-text-for-hear-protocol-version-discord-10-label-not-light",
+        "title": "Cover CLI help text for HEAR protocol-version (DISCORD-10 label, not light)",
+        "description": "Cover CLI help text for HEAR protocol-version (DISCORD-10 label, not light)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/cli.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Help-only usage line for --protocol-version DISCORD-10 label; no cli module acceptance criteria change",
+        "acceptance_criteria": [
+          "CLI --help labels --protocol-version as DISCORD-10 (not light); no cli module AC change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790442015,
+      "digest": "29b1172b4173b145751f2518f28d05d2276f80137de49f1a96ff37f147561c1a",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

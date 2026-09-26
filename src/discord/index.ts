@@ -2,7 +2,24 @@ export {
   CORVIDINHO_PROTOCOL_VERSION,
   checkProtocolVersion,
   enforceProtocolVersionOrExit,
-} from "./protocol.ts";
+} from "./protocol-version.ts";
+export {
+  SUPPORTED_IMAGE_TYPES,
+  MAX_IMAGE_SIZE_BYTES,
+  MAX_IMAGES_PER_MESSAGE,
+  IMAGE_CACHE_DIR,
+  FETCH_TIMEOUT_MS,
+  isImageAttachment,
+  extractImageBlocks,
+  appendAttachmentUrls,
+  buildMultimodalContent,
+  enrichPromptWithImages,
+  type ImageContentBlock,
+  type TextContentBlock,
+  type ContentBlock,
+  type ExtractedImages,
+  type MaterializedImage,
+} from "./image-attachments.ts";
 export {
   loadBridgeConfig,
   mergeChannelIds,
@@ -107,6 +124,7 @@ export {
   NOT_AUTHORIZED,
   MUTED,
   RATE_LIMITED,
+  type DiscordAttachment,
   type InboundMessage,
   type SessionStub,
   type RouteAction,

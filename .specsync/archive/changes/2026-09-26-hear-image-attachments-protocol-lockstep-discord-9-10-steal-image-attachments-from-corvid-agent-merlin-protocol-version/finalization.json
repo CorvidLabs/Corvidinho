@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version",
+  "implementation_commit": "716b0cb8b0c59d8ea68ece5a3a2b8c83f5940f3f",
+  "implementation_tree": "7922d1a500d8bd29f1cd148b04cf7616b54d3447",
+  "contract_digest": "fb5217d9e29e6a3bb4672948f33907d7b420dc1e3eae7a7d1313d0c3ab5c50b1",
+  "workspace_digest": "24eaa3ac4d5edb62aa3ec8f741577d42e8e4996675eb9b9a6972a6addeeef95e",
+  "closing_digest": "95f34a35093e35a25da7784cee23eeecbb5f8bcdb424923f7825d5c52333748e",
+  "review_digest": "35168de7df30fc1838aa411e2ea0c7af366cf5dffeec39a52818e2fb59d7c071",
+  "finalization_digest": "7519538a2f9edacfc1403d0cd5dc46764131d00b15c68faf617f0bb5f9547a30",
+  "timestamp": 1790441968
+}
