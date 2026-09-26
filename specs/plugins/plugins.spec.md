@@ -20,6 +20,8 @@ files:
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/index.ts
+  - plugins/github/review.ts
+  - tests/github.review.plugin.test.ts
   - plugins/meta/index.ts
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts

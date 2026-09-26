@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200",
+  "slug": "github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200",
+  "title": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
+  "description": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
+  "kind": "feature",
+  "state": "draft",
+  "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
+  "created_at": 1790454572,
+  "updated_at": 1790454580,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "plugins/github/review.ts",
+    "plugins/github/index.ts",
+    "tests/github.review.plugin.test.ts",
+    "tests/plugins.list.smoke.test.ts",
+    "specs/plugins/",
+    "docs/WATCH.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "github-pr-diff and github-pr-files are registered read-only typed plugins (dangerous false; minTier 0) behind the same --repo OWNER/REPO GITHUB-6 gate as the other github-* commands; github-pr-diff returns the PR unified diff via Octokit capped at 200 KiB with a clear truncation marker and an optional --file PATH filter; github-pr-files lists changed files with status/additions/deletions paginated up to a cap with a truncated flag; returned text is scrubbed with scrubSecrets (SAFE-6) and labelled as untrusted data; Octokit-mocked fixture tests need no network or token; draft GITHUB-10 confidence score is not built; SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

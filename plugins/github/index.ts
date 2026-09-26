@@ -1,12 +1,11 @@
 import { get, register } from "../../src/plugins/registry.ts";
 import { githubCommands } from "./commands.ts";
+import { githubReviewCommands } from "./review.ts";
 
 export function loadGithubPlugins(): void {
-  const first = githubCommands[0]?.name;
-  if (first && get(first)) return;
-  for (const cmd of githubCommands) {
-    register(cmd);
+  for (const cmd of [...githubCommands, ...githubReviewCommands]) {
+    if (!get(cmd.name)) register(cmd);
   }
 }
 
-export { githubCommands };
+export { githubCommands, githubReviewCommands };
