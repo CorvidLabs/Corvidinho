@@ -201,6 +201,13 @@
         "agent": "75317471a073a9bc33c932c931c9dc5249a6f8b912cc444065a34169ddc73430",
         "discord": "3658c2277ad9f986f850fb318d2060a89401df561ca2a8a649dccba0d76459b8"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790458797,
+      "digest": "af93c6e80ecb1a9c03a7e7b5e7610ab143fe97b9e5dcf5566ce0ea30cca16c7a",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []

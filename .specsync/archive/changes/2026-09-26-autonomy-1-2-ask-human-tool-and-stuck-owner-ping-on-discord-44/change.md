@@ -1,6 +1,6 @@
 ---
 id: autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44
-state: verifying
+state: archived
 type: feature
 base_commit: 8205b1bb66eb18aa63328e4690de3dba0f8b6ecc
 ---
