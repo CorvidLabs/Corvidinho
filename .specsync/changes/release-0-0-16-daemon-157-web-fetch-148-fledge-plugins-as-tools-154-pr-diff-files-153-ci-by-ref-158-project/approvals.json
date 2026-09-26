@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790457696,
+      "digest": "dfb2c7c14338cd1ff3eea3d27b5c2e0bbb9f1d991f9bbe2f479879eb84ac47b1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-16-daemon-157-web-fetch-148-fledge-plugins-as-tools-154-pr-diff-files-153-ci-by-ref-158-project",
+        "title": "Release 0.0.16: daemon (#157), web-fetch (#148), Fledge plugins as tools (#154), PR diff/files (#153), CI by ref (#158), project instructions (#150); package 0.0.16, CHANGELOG, STATUS",
+        "description": "Release 0.0.16: daemon (#157), web-fetch (#148), Fledge plugins as tools (#154), PR diff/files (#153), CI by ref (#158), project instructions (#150); package 0.0.16, CHANGELOG, STATUS",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.16; version prints 0.0.16; CHANGELOG 0.0.16 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "35503270de6b523718b4d55d27ac5861c3e7be7d7bd3f6108810eaa1d73761fc"
+      }
+    }
+  ],
   "reopenings": []
 }
