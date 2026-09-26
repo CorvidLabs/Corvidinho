@@ -648,8 +648,14 @@ when SIGINT, SIGTERM or SIGHUP arrives while no other listener handles that
 signal; the signal SHALL then be re-raised with its default action. The hook
 SHALL run before other listeners and count them, so a process that handles
 the signal itself (the bridge's `once` handler, the daemon's grace) keeps its
-own shutdown, and the exit hook stops what is left. Signal and exit hooks
-SHALL be removed once no child is tracked.
+own shutdown, and the exit hook stops what is left. A signal this process
+started with ignored (the `SigIgn` mask in `/proc/self/status` at load, for
+example SIGHUP under `nohup` or SIGINT in a background job) SHALL NOT be
+hooked, so it stays ignored while a child is tracked and after the last one
+is untracked. A caller MAY give the tracker its latest snapshot of the tree
+(taken as the child exited); the exit and signal hooks SHALL use it, so what
+the child left in its group is still stopped after the child is gone.
+Signal and exit hooks SHALL be removed once no child is tracked.
 
 Acceptance Criteria
 - Real `sh` trees: a hard kill stops the child, a same-group grandchild and a `setsid` grandchild.
@@ -657,4 +663,7 @@ Acceptance Criteria
 - Synthetic `/proc` tables: descendants in any group and orphans in the root's group are members; unrelated processes, a recycled root pid (not our child), a recycled known pid (start time differs), this process and pid 1 are not.
 - A parent that exits, or dies of SIGTERM with no other handler (exit by SIGTERM), leaves no tracked tree behind; a parent with its own SIGTERM or `once` SIGINT handler registered first keeps its grace and its tree dies at exit.
 - Untracking the last child removes the signal hooks.
+- A parent with no other handler dies by SIGHUP after its tracked tree is killed; a parent started with SIGHUP ignored survives SIGHUP while a child is tracked and after it is untracked (SIGHUP still ignored in its `SigIgn`), and SIGTERM still stops its tree.
+- `SigIgn` parsing maps bit n-1 to signal n (SIGHUP, SIGINT, SIGTERM) and treats a missing mask as none.
+- A parent tracking a child with its exit snapshot kills the grandchild that child left in its group when the parent exits.
 
