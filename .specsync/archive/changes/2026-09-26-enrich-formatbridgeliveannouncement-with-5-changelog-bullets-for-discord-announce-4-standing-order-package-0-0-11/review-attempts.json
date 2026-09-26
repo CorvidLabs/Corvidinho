@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "enrich-formatbridgeliveannouncement-with-5-changelog-bullets-for-discord-announce-4-standing-order-package-0-0-11",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "6ba10bd3240aecb2fa8608f4b5eb5aa0426107e4",
+      "contract_digest": "85a0d39230adf9925cb41be271ce92e3b4c6367512e54cb0bd8605663014781e",
+      "execution_digest": "928df4d2a8b7f00d33dcbb2bfd8c0404ed9ffeaa8b60b8a1c39c5a88648673c5",
+      "workspace_digest": "d83568f6032e3cbb26d417cfe8318a96ec376200f0b429cc68a4d297b3dc90d7",
+      "timestamp": 1790454854
+    }
+  ]
+}

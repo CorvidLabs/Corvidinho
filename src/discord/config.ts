@@ -43,7 +43,8 @@ function resolveToken(env: NodeJS.ProcessEnv): string | null {
   return t.length > 0 ? t : null;
 }
 
-function resolveCorvidinhoBin(env: NodeJS.ProcessEnv, projectRoot: string): string {
+/** Agent binary spawned for runs: CORVIDINHO_BIN or <projectRoot>/src/cli.ts (bridge + daemon). */
+export function resolveCorvidinhoBin(env: NodeJS.ProcessEnv, projectRoot: string): string {
   if (env.CORVIDINHO_BIN?.trim()) return env.CORVIDINHO_BIN.trim();
   const local = resolve(projectRoot, "src/cli.ts");
   return local;

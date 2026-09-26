@@ -4,9 +4,9 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) + **v0.0.10** WATCH-RELIABILITY-1..3 + **v0.0.11** enriched bridge-live announce (CHANGELOG bullets) + **v0.0.12** typed git tools (#145) / durable WATCH sessions (#142) + **v0.0.13** always-verify Discord/WATCH (#85 AGENT-4 — no `--no-verify` on spawn) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
-| HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
+| HI | Captured under `hi/` (18 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH/ROLES + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY / ROLES-CHAT compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
@@ -24,6 +24,9 @@ ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1. Do not inv
 **HI confirmed + captured (2026-09-26, schedule/worktree/memory-ACL):** Leif confirmed DISCORD-SCHEDULE-1..5, SESSION-WORKTREE-1..5, MEMORY-ACL-1..5 with amendment **self-forget also requires ADMIN**. Live in `hi/discord.md`, `hi/session.md`, `hi/memory.md` (+ `hi/admin.md` cross-link). Impl: #57 · #58 · #59 — no code in the HI-capture PR.
 
 **HI confirmed + captured (2026-09-26, DISCORD-ANNOUNCE):** Leif confirmed DISCORD-ANNOUNCE-1..6. Live in `hi/discord.md`. Impl: `/announce` channel|show + persist + bridge-live post to announce-only channel — this PR (package **0.0.8**; MEMORY inject already shipped as **0.0.7** on main).
+
+
+**HI confirmed + captured (2026-09-26, ROLES-CHAT):** Leif confirmed ROLES-CHAT-1..7 (community chat vs ADMIN tool gates; two-tier interim until #65). Live in `hi/roles.md` (+ identity/safe/admin cross-links). Gate impl + tests follow in a separate PR before #43 ADMIN slash.
 
 
 ## Process / governance (PROCESS-1..5)
@@ -58,7 +61,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 | HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
 | WATCH poll-first ingress | #19 → [#30](https://github.com/CorvidLabs/Corvidinho/pull/30) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
-| WATCH reliability (auto-ack + poll log) | — | REQ-watch-007: per-cycle counters + caught pollOnce errors; auto-ack comment on mention/comment start/continue (skip own username; once per event id); ignore own mentions; docs note org-search pagination bury risk |
+| WATCH reliability (auto-ack + poll log + summary/spawn/backoff) | — | REQ-watch-007 + **WATCH-RELIABILITY-1..3** (`hi/watch.md`): per-cycle counters; auto-ack; **post-run summary** once/event after successful ack; **spawn outcome** JSONL + structured log; **403 rate-limit backoff** (Retry-After/reset, default 60s); ignore own mentions; pagination bury docs |
 | GitHub writes + assignee ingress | #48 → [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) | Dangerous Octokit writes: issue create/comment, PR create (attribution footer), PR review; SAFE-1 + GITHUB-6 gates; WATCH `assignment` events from assignees; fixtures/dry-run; no live tokens in CI |
 | Discord spawn + dogfood path | → [#32](https://github.com/CorvidLabs/Corvidinho/pull/32) | Always `bun`-invoke `.ts` for protocol + agent spawn (fix EACCES); parse `task run --json` for Discord summary; thin env-gated LLM execute stub |
 | LLM tool loop (DOGFOOD) | #31 → [#33](https://github.com/CorvidLabs/Corvidinho/pull/33) | Interruptible OpenAI-compatible plugin tool loop on `task run` (AGENT-3/5); prove-before-done unchanged; fixture mock HTTP; Discord/WATCH keep `--no-verify` |
@@ -76,10 +79,17 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | SESSION-WORKTREE isolation | #58 → (this PR) | Per-talk/project git worktree isolation (SESSION-WORKTREE-1..5); `src/worktree/`; schema v4 session columns; schedule ticks use project scope; package **0.0.5**; Discord bridge restart needed to pick up |
 | v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
 | Discord presence version | → [#53](https://github.com/CorvidLabs/Corvidinho/pull/53) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
+| Live NDJSON event stream | #73 → [#139](https://github.com/CorvidLabs/Corvidinho/pull/139) | `task run --output ndjson`; Discord/WATCH live state/tool/tokens (AGENT-8 / CLI-7 / DISCORD-3); protocol **2** (DISCORD-10); in the **v0.0.10** build |
+| IDENTITY owner + owner-only ADMIN | #42 → [#138](https://github.com/CorvidLabs/Corvidinho/pull/138), [#141](https://github.com/CorvidLabs/Corvidinho/pull/141) | Durable owner (IDENTITY-1); ADMIN = owner only, no owner ⇒ nobody (IDENTITY-2/3); admin env lists ignored + warned; in the **v0.0.9** build |
+| SAFE-5 audit trail | #95 → [#136](https://github.com/CorvidLabs/Corvidinho/pull/136) | HMAC-chained append-only `audit_log` (schema v5) for dangerous plugin runs; SAFE-17 awaits HI; in the **v0.0.9** build |
+| `--task` argv hardening | → [#143](https://github.com/CorvidLabs/Corvidinho/pull/143) | Untrusted bridge text after `--task` never becomes CLI flags (AGENT-5 / SAFE-1); in the **v0.0.10** build |
+| Typed git tools | #82 → [#145](https://github.com/CorvidLabs/Corvidinho/pull/145) | status/diff/log + dangerous branch-create/commit/push; SAFE-1/2/3, GITHUB-6 push gate; hooks off; package **0.0.12** |
+| Always verify bridges (#85 slice) | #85 → (this PR) | Discord/WATCH spawn without `--no-verify` (AGENT-4 / FLEDGE-2); empty `filesChanged` still skips lane; CLI flag local-only; package **0.0.13**; draft AGENT-14/15 deferred |
+| Durable WATCH sessions | #37 → [#142](https://github.com/CorvidLabs/Corvidinho/pull/142) | Schema v6 `watch_sessions`, soft TTL, restart-safe; clean shutdown + single-flight polls; package **0.0.12** |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |
-| Shell plugin + SAFE-3 cwd clamp | #83 → (this PR) | Typed `shell-exec` dangerous/code; spawn cwd pin + lexical cd/pushd refuse (SAFE-3); SAFE-1 allowlist; package **0.0.9**; WATCH reliability HI draft only under `docs/hi-drafts/WATCH-RELIABILITY.md` |
+| Shell plugin + SAFE-3 cwd clamp | #83 → [#140](https://github.com/CorvidLabs/Corvidinho/pull/140) | Typed `shell-exec` dangerous/code; spawn cwd pin + lexical cd/pushd refuse (SAFE-3); SAFE-1 allowlist; package **0.0.9** |
 | DISCORD-ANNOUNCE slash | → (this PR) | `/announce` channel|show (CHANNEL picker); persist announce channel id on shared SQLite; bridge-live posts **only** to announce channel (not dogfood allowlist); ADMIN mutations; package **0.0.8**; Discord restart + slash re-register |
 | MEMORY Discord auto-recall inject | draft #67 behavior under AGENT-7/MEMORY-2/4 → (this PR) | Spawn prepends recalled memories; system prompt store/recall rules; richer tool argv; package **0.0.7**; Discord restart + channel update |
 
@@ -89,14 +99,17 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 |-------|-------|--------|
 | Done | [#81](https://github.com/CorvidLabs/Corvidinho/issues/81) PLUGIN files/search + SAFE-2 | Shipped [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) — package **0.0.6** |
 | **Done (cut-order)** | MEMORY Discord inject (AGENT-7 / MEMORY-2/4; draft #67) | Shipped this PR — auto-recall prepend + system prompt + tool argv; package **0.0.7** |
-| Done | [#83](https://github.com/CorvidLabs/Corvidinho/issues/83) shell-exec + SAFE-3 | Shipped this PR — package **0.0.9** |
+| Done | [#83](https://github.com/CorvidLabs/Corvidinho/issues/83) shell-exec + SAFE-3 | Shipped [#140](https://github.com/CorvidLabs/Corvidinho/pull/140) — package **0.0.9** |
 | **P0 next** | M3 remaining plugins (git, …) | Next after #83; still HI-gated — do not invent criteria |
 | Done | Slash guild PUT=6 + global `[]` | Landed [#51](https://github.com/CorvidLabs/Corvidinho/pull/51) |
 | Done | Discord deny polish (DENY-1..3) + `docs/discord.md` | Landed prior |
 | Done | [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) SESSION-WORKTREE | Shipped (worktree manager + Discord/schedule wire + schema v4); package **0.0.5** |
 | Ops | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
 | Done | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY + [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) MEMORY-ACL | Shipped [#64](https://github.com/CorvidLabs/Corvidinho/pull/64) (schema v3 + ACL + plugins; package 0.0.4); ACL hardening [#128](https://github.com/CorvidLabs/Corvidinho/pull/128) (0.0.9) |
-| HI captured | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) IDENTITY/ADMIN/AUTONOMY | Criteria in `hi/`; impl still deferred |
+| Done | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42) IDENTITY-1..3 | Owner record [#138](https://github.com/CorvidLabs/Corvidinho/pull/138) + owner-only ADMIN [#141](https://github.com/CorvidLabs/Corvidinho/pull/141); owner extras (#36/#96/#44) await HI |
+| Done | [#73](https://github.com/CorvidLabs/Corvidinho/issues/73) NDJSON stream | [#139](https://github.com/CorvidLabs/Corvidinho/pull/139) |
+| Done (slice) | [#85](https://github.com/CorvidLabs/Corvidinho/issues/85) always-verify bridges | Discord/WATCH drop `--no-verify` (this PR / **0.0.13**); draft AGENT-14/15 still open |
+| In flight | [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) ADMIN-1..3, [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) AUTONOMY-1..3, [#93](https://github.com/CorvidLabs/Corvidinho/issues/93)/[#94](https://github.com/CorvidLabs/Corvidinho/issues/94) GitHub reads, [#111](https://github.com/CorvidLabs/Corvidinho/issues/111) web-fetch, [#112](https://github.com/CorvidLabs/Corvidinho/issues/112) Fledge plugins, [#108](https://github.com/CorvidLabs/Corvidinho/issues/108) daemon, [#117](https://github.com/CorvidLabs/Corvidinho/issues/117) delegate, [#88](https://github.com/CorvidLabs/Corvidinho/issues/88) issue→PR | Captured-HI slices only; drafts wait for Leif |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |
 

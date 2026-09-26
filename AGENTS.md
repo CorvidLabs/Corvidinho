@@ -4,7 +4,7 @@ Linux-only Bun/TypeScript agent runner. CLI-first. No Windows target. No Trust r
 
 ## HI-first
 
-Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, discord, github, fledge, specsync, cli, plugin, safe, autonomous, memory, identity, admin, autonomy, session). Also DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids in those files. Capture confirmed wants with `hi`.
+Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, discord, github, watch, fledge, specsync, cli, plugin, safe, autonomous, memory, identity, admin, autonomy, session, roles). Also DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY / ROLES-CHAT compound ids in those files. Capture confirmed wants with `hi`.
 
 **Do not invent** ACCESS, bounty, or MainNet product surfaces. Do not invent acceptance criteria that are not in `hi/` or that Leif has not confirmed.
 

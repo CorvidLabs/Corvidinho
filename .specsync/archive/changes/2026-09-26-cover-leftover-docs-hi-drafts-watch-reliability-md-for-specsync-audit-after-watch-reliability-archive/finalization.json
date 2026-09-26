@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-docs-hi-drafts-watch-reliability-md-for-specsync-audit-after-watch-reliability-archive",
+  "implementation_commit": "40294339fb90ed2f93bd9bcaecb40ee4e53b26cb",
+  "implementation_tree": "a91031c53037a804ba53889981f00320cd7e2e1e",
+  "contract_digest": "4b268fa4d18d7ccf3eed265a249f59c701e302625a3a94df10e4342e966339b8",
+  "workspace_digest": "15ad278ec43181273ec6e8ac7ed7b4b41ce49de560d8f3df14a787422b2ef15e",
+  "closing_digest": "590e2546db22447f167d28291535d515cca10d26e01d801aa352f2b20d56404c",
+  "review_digest": "12b48bb9860dfa2d2dbfc24f659ed5ee314816e86c3fb0960450216d3aa1eccb",
+  "finalization_digest": "d79aeb4975ad6ec235ab9068efab28618b6c921f2a6525792d016de3d248f951",
+  "timestamp": 1790454140
+}

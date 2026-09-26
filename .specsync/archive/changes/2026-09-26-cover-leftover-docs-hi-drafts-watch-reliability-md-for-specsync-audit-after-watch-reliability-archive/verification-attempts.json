@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790454134,
+      "commit": "4e60e3aba960d0b895ac18e67a328699a24994eb",
+      "contract_digest": "4b268fa4d18d7ccf3eed265a249f59c701e302625a3a94df10e4342e966339b8",
+      "execution_digest": "b819b3a85cca3e57680c36934efb95146f1d92a670bfaff40de58093f0a2ca84",
+      "workspace_digest": "15ad278ec43181273ec6e8ac7ed7b4b41ce49de560d8f3df14a787422b2ef15e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790454134,
+      "commit": "40294339fb90ed2f93bd9bcaecb40ee4e53b26cb",
+      "contract_digest": "4b268fa4d18d7ccf3eed265a249f59c701e302625a3a94df10e4342e966339b8",
+      "execution_digest": "b819b3a85cca3e57680c36934efb95146f1d92a670bfaff40de58093f0a2ca84",
+      "workspace_digest": "15ad278ec43181273ec6e8ac7ed7b4b41ce49de560d8f3df14a787422b2ef15e",
+      "acceptance_input_digest": "0e30ddac41e436fbd49f405aa88fc9b1e5c953008232b8aa937f8ed718746f5f",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "docs/hi-drafts/WATCH-RELIABILITY.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "71e7fa3d798f2b84a5b52020ba2050b62817264bd5f956f355b8796a0a94315e",
+            "entry_digest": "d4e4d0c2632ca8ec935572fb5adeaffafb169ee9812fdccc84f94d14d2fa7cbb",
+            "owners": [
+              "@exact:delivery"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "capture-leif-confirmed-roles-chat-1-7-into-hi-community-chat-vs-admin-tool-gates-interim-two-tier-until-65-team-role",
+  "slug": "capture-leif-confirmed-roles-chat-1-7-into-hi-community-chat-vs-admin-tool-gates-interim-two-tier-until-65-team-role",
+  "title": "Capture Leif-confirmed ROLES-CHAT-1..7 into hi/ (community chat vs ADMIN tool gates); interim two-tier until #65 team role",
+  "description": "Capture Leif-confirmed ROLES-CHAT-1..7 into hi/ (community chat vs ADMIN tool gates); interim two-tier until #65 team role",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "19683b6059902c62baeddb9d2110f64f82dc3009",
+  "created_at": 1790455483,
+  "updated_at": 1790455724,
+  "affected_specs": [],
+  "affected_paths": [
+    "hi",
+    "AGENTS.md",
+    "STATUS.md",
+    "docs/hi-drafts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "HI capture only into hi/roles.md (+ cross-links); no canonical module behavior change; gate impl follows in a separate PR after capture merges",
+  "acceptance_criteria": [
+    "hi/roles.md has ROLES-CHAT-1..7 exactly as Leif confirmed; docs/hi-drafts/ROLES-CHAT.md marked captured; AGENTS/STATUS note capture; hi check clean; no invented AC; no gate impl code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

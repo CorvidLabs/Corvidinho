@@ -45,10 +45,13 @@ Acceptance Criteria
 
 WATCH `createSpawnAgentClient` SHALL spawn via `buildCorvidinhoArgv` so a
 `.ts` corvidinho bin is always invoked with `bun` (never posix_spawn alone).
-Prefer `--no-verify` for ingress latency. Fixture tests SHALL cover argv shape.
+Spawns SHALL NOT pass `--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2)
+is the default for ingress runs; empty `filesChanged` still skips verify
+inside the agent loop. Fixture tests SHALL cover argv shape.
 
 Acceptance Criteria
 - `.ts` → bun-prefixed argv; binary path unchanged when not `.ts`.
+- Spawn argv is `task run --task <prompt> --output ndjson` with **no** `--no-verify`.
 - No ProcessManager; allowlists unchanged.
 
 ### REQ-watch-048
@@ -91,6 +94,28 @@ Discord identity from the watcher's environment.
 Acceptance Criteria
 - WATCH spawn env has an empty acting user, no confirm tokens, `CORVIDINHO_ACTING_IS_ADMIN=0` and `CORVIDINHO_NON_INTERACTIVE=1` even when the parent env sets them.
 
+### REQ-watch-037
+
+WATCH sessions keyed by `owner/repo#number` SHALL persist in the shared
+SQLite DB (`watch_sessions`) when the SessionStore is given a database, and
+SHALL reload on restart so a follow-up on the same issue continues the same
+session. The same soft TTL as Discord sessions (`resolveSessionTtlMs`,
+SESSION-1..3) SHALL apply: activity within the TTL keeps the session; a
+session idle past the TTL is dropped (memory and DB) and the next event on
+that issue starts a fresh session; expired rows are dropped on load. At most
+one session exists per issue key. The stored topic SHALL be SAFE-6 scrubbed.
+`startWatchPoller` SHALL open the shared DB (in-memory for dry-run without
+`CORVIDINHO_DATA_DIR`), accept an injected db or SessionStore, and close a DB
+it opened on stop. Without a database the SessionStore stays in-memory. Turn
+persistence/replay and stored summaries are out of scope.
+
+Acceptance Criteria
+- A session created with a file DB is found by issue after reopening the DB.
+- Activity within the TTL continues the session; idle past the TTL starts a new session and removes the old row.
+- Expired rows are dropped when the store loads.
+- A poller restarted on the same DB continues the same issue session.
+- Stored topic has vendor-key-looking secrets redacted.
+
 ### REQ-watch-073
 
 The WATCH spawn agent client SHALL run
@@ -104,4 +129,44 @@ Acceptance Criteria
 - Fake-bin fixture printing ndjson drives the WATCH `onStatus` and returns the result-frame summary.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
 - Spawn argv ends with `--output ndjson` (no `--json`).
+
+### REQ-watch-009
+
+The system SHALL post a short agent summary comment on the same GitHub thread when the agent run finishes (success or failure), after a successful auto-ack on issue_comment or issues start_session or continue_session, at most once per event id, with Made with Corvidinho attribution (WATCH-RELIABILITY-1).
+
+Acceptance Criteria
+- Summary skipped when auto-ack did not succeed or event already summarized.
+- Summary posted for both ok and non-zero exit runs.
+- Fixture tests need no live GitHub token.
+
+### REQ-watch-010
+
+The system SHALL persist spawn outcome logging (start, exit code or error class, duration_ms) via a structured watch spawn log line and a durable JSONL store under the Corvidinho data dir (override CORVIDINHO_WATCH_SPAWN_LOG) readable without Discord (WATCH-RELIABILITY-2).
+
+Acceptance Criteria
+- Start and outcome log lines emitted per spawn.
+- JSONL append contains eventId, exitCode, errorClass, durationMs.
+- Fixture or temp-dir tests cover store without live Discord.
+
+### REQ-watch-011
+
+The system SHALL back off on GitHub 403 rate-limit (or 429) using Retry-After or x-ratelimit-reset headers, else a documented default of 60s, before the next poll cycle; SHALL NOT tight-loop; SHALL emit a clear watch github rate-limit backoff log line (WATCH-RELIABILITY-3).
+
+Acceptance Criteria
+- Retry-After seconds preferred; else reset; else 60s default.
+- While backoff outstanding, pollOnce skips fetch.
+- Plain 403 without rate-limit signal does not trigger backoff.
+
+### REQ-watch-085
+
+WATCH `createSpawnAgentClient` SHALL always hold ingress runs to the
+prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
+argv MUST NOT include `--no-verify`. Same empty-`filesChanged` skip as Discord.
+Draft AGENT-14/15 out of scope. Package **0.0.13**. Fixture tests without live
+tokens.
+
+Acceptance Criteria
+- WATCH spawn argv never includes `--no-verify`.
+- Package `0.0.13`; docs/WATCH.md updated.
+- Fixture tests + SpecSync + fledge verify green.
 

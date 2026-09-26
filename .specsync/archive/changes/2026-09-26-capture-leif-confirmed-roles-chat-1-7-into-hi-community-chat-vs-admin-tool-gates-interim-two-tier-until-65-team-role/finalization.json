@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-leif-confirmed-roles-chat-1-7-into-hi-community-chat-vs-admin-tool-gates-interim-two-tier-until-65-team-role",
+  "implementation_commit": "70ce3bb4a7a557c5cafec7844a08d60f819a9906",
+  "implementation_tree": "bd0778ed11d8b9a15cc732d9086d6b4a9e2554d1",
+  "contract_digest": "2d1be356656c8cc7cceba9e320c9d8b4eacfb2baba8f7de7b64b8227f0b28e66",
+  "workspace_digest": "eb04e425436e14f137b03ddd859e5d21d16a363a75c2b4790832c267a5fce2b6",
+  "closing_digest": "c6ea1d3d63c874521aba75e5c7e055e696acdedf0380e415d42c472e35c98c70",
+  "review_digest": "4e64055a15cb9789901ee45c4aab49ecafc2e54136b04cf37e6f5f87ac5b904d",
+  "finalization_digest": "d488531edd7d69640c2d5fb7a31700221c7402b1c6bd675ea2020fbf33145809",
+  "timestamp": 1790455706
+}
