@@ -2,8 +2,8 @@
  * /admin — runtime Discord allowlist admin (ADMIN-1..4, issue #43).
  *
  *   /admin users add user:@someone        ADMIN-1 approve/add a user
- *   /admin channels add channel:#picker   ADMIN-2 add a channel
- *   /admin channels remove channel:#…     ADMIN-2 remove a channel
+ *   /admin channels add channel:<search>  ADMIN-2 add a channel (STRING+autocomplete)
+ *   /admin channels remove channel:<…>    ADMIN-2 remove a channel (STRING+autocomplete)
  *   /admin config show                    ADMIN-3 show knobs (read-only view)
  *
  * Owner-only (IDENTITY-2): dispatch enforces minPermission ADMIN and this
@@ -29,6 +29,7 @@ import {
   type AdminListOp,
   type AdminListPlan,
 } from "../admin-allowlist.ts";
+import { resolveChannelOption } from "../channel-autocomplete.ts";
 import { PermissionLevel, resolvePermissionLevel } from "../permissions.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
@@ -60,14 +61,14 @@ const MUTATIONS: Record<string, Mutation> = {
     key: "channels",
     op: "add",
     option: "channel",
-    usage: "usage: /admin channels add channel:#channel",
+    usage: "usage: /admin channels add channel:<name or id> (pick from autocomplete, or paste a snowflake)",
   },
   "channels remove": {
     action: "admin-channels-remove",
     key: "channels",
     op: "remove",
     option: "channel",
-    usage: "usage: /admin channels remove channel:#channel",
+    usage: "usage: /admin channels remove channel:<name or id> (pick from autocomplete, or paste a snowflake)",
   },
 };
 
@@ -156,7 +157,17 @@ async function handleMutation(
   route: string[],
 ): Promise<void> {
   const raw = interaction.options[m.option];
-  const id = typeof raw === "string" ? raw.trim() : "";
+  let id = "";
+  if (m.option === "channel") {
+    const resolved = resolveChannelOption(typeof raw === "string" ? raw : "");
+    if (!resolved.ok) {
+      await interaction.reply({ content: m.usage, ephemeral: true });
+      return;
+    }
+    id = resolved.id;
+  } else {
+    id = typeof raw === "string" ? raw.trim() : "";
+  }
   if (!ADMIN_SNOWFLAKE_RE.test(id)) {
     await interaction.reply({ content: m.usage, ephemeral: true });
     return;

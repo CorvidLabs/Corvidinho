@@ -108,7 +108,7 @@ other new slash command names beyond schedule/announce/admin.
 
 Acceptance Criteria
 - `buildSlashCommandBodies()` includes schedule with list/create/pause/resume/delete.
-- `buildSlashCommandBodies()` includes announce with channel|show and CHANNEL picker.
+- `buildSlashCommandBodies()` includes announce with channel|show and STRING + autocomplete (searchable channel).
 - `buildSlashCommandBodies()` includes admin with users add, channels add|remove and config show groups.
 - Session start + work have optional `project`.
 - Bodies remain fixture-testable without live Discord.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.17
+
+### Searchable channel add/remove (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend)
+
+- **`/admin channels add|remove`** — replace Discord’s limited native **CHANNEL picker** with **STRING + autocomplete**: type a few letters of the channel name (case-insensitive substring, emoji/unicode names ok) or paste a snowflake / `<#id>`; Discord returns ≤25 choices, ranked exact → prefix → substring → id.
+- **`/announce channel`** — same searchable STRING + autocomplete (HI DISCORD-ANNOUNCE-2 amended 2026-09-26).
+- Remove autocomplete scopes to the **live allowlist** when present; add/announce search all guild text channels from the gateway cache (Guilds intent).
+- Handler still re-checks ADMIN (ADMIN-4 / DISCORD-7); persist path unchanged (`allowlist.toml` / announce SQLite).
+- Discord API limits: autocomplete **max 25 choices**, **~3s** respond deadline, choice name/value **≤100** chars.
+
+### Ops
+
+- Package version **0.0.17** — presence (DISCORD-12) reads `v0.0.17` after restart.
+- **Restart the Discord bridge** and re-register slash commands so STRING + autocomplete replaces the old CHANNEL options.
+
 ## 0.0.16
 
 ### New tools and a daemon
