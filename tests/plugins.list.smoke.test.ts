@@ -20,6 +20,8 @@ describe("plugins list smoke", () => {
     expect(out).toContain("github-issue-comment");
     expect(out).toContain("github-pr-create");
     expect(out).toContain("github-pr-review");
+    expect(out).toContain("github-pr-diff");
+    expect(out).toContain("github-pr-files");
     expect(out).toContain("plugins-list");
     expect(out).toContain("files-read");
     expect(out).toContain("files-write");

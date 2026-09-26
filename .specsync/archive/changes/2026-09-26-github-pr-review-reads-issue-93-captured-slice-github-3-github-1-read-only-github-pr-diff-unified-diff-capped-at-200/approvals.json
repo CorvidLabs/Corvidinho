@@ -1,0 +1,94 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454927,
+      "digest": "e657df896c2a719b01390e2abbc133fe2aed69f98f2992eb6b1b6b008dcd13d7",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200",
+        "title": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
+        "description": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/WATCH.md",
+          "plugins/github/index.ts",
+          "plugins/github/review.ts",
+          "specs/plugins/",
+          "tests/github.review.plugin.test.ts",
+          "tests/plugins.list.smoke.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "github-pr-diff and github-pr-files are registered read-only typed plugins (dangerous false; minTier 0) behind the same --repo OWNER/REPO GITHUB-6 gate as the other github-* commands; github-pr-diff returns the PR unified diff via Octokit capped at 200 KiB with a clear truncation marker and an optional --file PATH filter; github-pr-files lists changed files with status/additions/deletions paginated up to a cap with a truncated flag; returned text is scrubbed with scrubSecrets (SAFE-6) and labelled as untrusted data; Octokit-mocked fixture tests need no network or token; draft GITHUB-10 confidence score is not built; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "7ed0ace34a28d1f25f8f8a71596619c7384ba75b36e97fbd5aa314698b9ff37e"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790456825,
+      "digest": "87097adc7a8ec1aacde5605ac8b83ac7b8c58e5667c97c5a66d7d35cc231ab83",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200",
+        "title": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
+        "description": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/WATCH.md",
+          "plugins/github/index.ts",
+          "plugins/github/review.ts",
+          "specs/plugins/",
+          "src/store/scrub.ts",
+          "tests/github.review.plugin.test.ts",
+          "tests/plugins.list.smoke.test.ts",
+          "tests/store.scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "github-pr-diff and github-pr-files are registered read-only typed plugins (dangerous false; minTier 0) behind the same --repo OWNER/REPO GITHUB-6 gate as the other github-* commands; github-pr-diff returns the PR unified diff via Octokit capped at 200 KiB with a clear truncation marker and an optional --file PATH filter; github-pr-files lists changed files with status/additions/deletions paginated up to a cap with a truncated flag; returned text is scrubbed with scrubSecrets (SAFE-6) and labelled as untrusted data; Octokit-mocked fixture tests need no network or token; draft GITHUB-10 confidence score is not built; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "befb746cf929ec98a5fabca8c627e90368d749f9a9fd810c2b063a677528914e",
+        "plugins": "35c09a5f58fcc8e0935e44f4baa8a8d3b32a6672e9bbe3412e63b29797d24c35"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790457004,
+      "digest": "d352e000b0ea3f79af0fa09641d93565a01817f728c311469e14dc51aaa7417c",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
