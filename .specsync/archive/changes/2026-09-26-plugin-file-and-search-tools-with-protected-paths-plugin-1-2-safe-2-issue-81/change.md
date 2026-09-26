@@ -1,6 +1,6 @@
 ---
 id: plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81
-state: implementing
+state: archived
 type: feature
 base_commit: c20fc10318238468d1e6036a8f814759a31f7526
 ---
