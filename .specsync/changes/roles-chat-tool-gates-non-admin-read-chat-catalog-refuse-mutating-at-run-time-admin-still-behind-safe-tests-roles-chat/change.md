@@ -1,6 +1,6 @@
 ---
 id: roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat
-state: implementing
+state: verifying
 type: feature
 base_commit: 70ce3bb4a7a557c5cafec7844a08d60f819a9906
 ---
