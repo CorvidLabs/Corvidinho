@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "c0bdab1e8d5754bc74eb3d849969c1953a67da57",
+  "contract_digest": "9cd8ef3398c12b3bfbc7b8f609a0f129b9e07a7bc70f4816243fc39602f27af4",
+  "execution_digest": "24fb642847846286dd374901305760dd785640e39becd51747a57897d8b47914",
+  "workspace_digest": "2317e911c25253c24045b3949b994241537a47ec31dfa81f6c38f792d9657736",
+  "timestamp": 1790439963
+}

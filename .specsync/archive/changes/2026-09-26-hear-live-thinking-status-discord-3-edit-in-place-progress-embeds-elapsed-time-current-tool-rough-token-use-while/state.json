@@ -7,11 +7,11 @@
   "title": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
   "description": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "f987ded8770b32beffa2ed0a3c96b0ce0bc30906",
   "created_at": 1790439766,
-  "updated_at": 1790439959,
+  "updated_at": 1790439971,
   "affected_specs": [
     "discord"
   ],

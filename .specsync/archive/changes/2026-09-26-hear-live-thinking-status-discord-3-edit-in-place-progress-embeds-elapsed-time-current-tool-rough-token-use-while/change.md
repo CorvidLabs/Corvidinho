@@ -1,6 +1,6 @@
 ---
 id: hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while
-state: implementing
+state: archived
 type: feature
 base_commit: f987ded8770b32beffa2ed0a3c96b0ce0bc30906
 ---

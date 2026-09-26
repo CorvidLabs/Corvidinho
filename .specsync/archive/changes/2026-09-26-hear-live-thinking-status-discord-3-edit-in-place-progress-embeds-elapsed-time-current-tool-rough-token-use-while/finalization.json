@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while",
+  "implementation_commit": "c0bdab1e8d5754bc74eb3d849969c1953a67da57",
+  "implementation_tree": "deb91a857e3c0f54f7c832ab4086678ce4e9910b",
+  "contract_digest": "9cd8ef3398c12b3bfbc7b8f609a0f129b9e07a7bc70f4816243fc39602f27af4",
+  "workspace_digest": "2317e911c25253c24045b3949b994241537a47ec31dfa81f6c38f792d9657736",
+  "closing_digest": "a89fd0bc8530a60ccea447816e4b60cee2b8e842193c735e551fcf22840ae14f",
+  "review_digest": "079419c7388d2e4e1b4ea865a9a848873c7774fb7f1d3e10db44b261e011b994",
+  "finalization_digest": "9aa0e1f227acfaffa39da31c4e88b248a514f0193c1bb2d69cb9d6acb8acce27",
+  "timestamp": 1790439968
+}
