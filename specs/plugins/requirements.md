@@ -414,6 +414,7 @@ Acceptance Criteria
 - A body over 1 MiB or text over 100,000 characters is truncated and flagged; a stalled transport, body or resolver times out.
 - Non-text or malformed content types are refused before the body is read.
 - Output is fenced as untrusted data, control characters are stripped and vendor-key-looking secrets are redacted; a hostile title, Content-Type or status text never appears outside the fence.
+- HTML-to-text tag stripping repeats to a capped fixpoint, so split or nested tags never reassemble into markup and deeply nested hostile markup stays linear.
 
 ### REQ-plugins-112
 

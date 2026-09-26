@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 37
+version: 38
 status: draft
 files:
   - src/plugins/types.ts
@@ -279,3 +279,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |
+| 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |

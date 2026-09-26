@@ -1,6 +1,6 @@
 ---
 id: web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 254350444f30d45e68618de9c38276f6ff4eaba4
 ---

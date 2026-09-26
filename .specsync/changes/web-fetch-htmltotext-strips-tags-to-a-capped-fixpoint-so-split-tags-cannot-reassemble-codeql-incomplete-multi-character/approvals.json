@@ -1,4 +1,40 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790457191,
+      "digest": "64dc981811975d6a7df1f9a65b21c2772055078ae3ac2d053ff088222aa1b58a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character",
+        "title": "Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148)",
+        "description": "web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/web/text.ts",
+          "tests/web.fetch.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "split/nested tags never reassemble into markup; deeply nested hostile markup stays linear and tag-free"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "6e48c609388cadfcb50ddf9e88d8da2e7e2145ef50a903ec9cf1c9ee463d4d38"
+      }
+    }
+  ],
   "reopenings": []
 }
