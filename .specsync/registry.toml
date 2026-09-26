@@ -1,0 +1,5 @@
+[registry]
+name = "Corvidinho"
+
+[specs]
+cli = "specs/cli/cli.spec.md"

@@ -1,0 +1,26 @@
+{
+  "name": "corvidinho",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Lean Bun/TS CLI for Discord and GitHub work — CorvidLabs",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "corvidinho": "./src/cli.ts"
+  },
+  "scripts": {
+    "corvidinho": "bun src/cli.ts",
+    "doctor": "bun src/cli.ts doctor",
+    "version": "bun src/cli.ts version",
+    "test": "bun test",
+    "smoke": "bun src/cli.ts --help",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}

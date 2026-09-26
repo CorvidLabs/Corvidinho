@@ -1,0 +1,12 @@
+# spec-sync configuration — Corvidinho
+# Docs: https://github.com/CorvidLabs/spec-sync
+
+specs_dir = "specs"
+source_dirs = ["src"]
+exclude_dirs = ["__tests__", "tests", "node_modules"]
+exclude_patterns = ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts", "**/tests/**"]
+required_sections = ["Purpose", "Public API", "Invariants", "Behavioral Examples", "Error Cases", "Dependencies", "Change Log"]
+enforcement = "strict"
+
+[lifecycle]
+track_history = false

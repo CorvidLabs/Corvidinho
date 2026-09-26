@@ -1,0 +1,37 @@
+# Corvidinho — Bun/TS CLI
+# Prefer Fledge plugin commands over raw shell when a plugin covers the job.
+
+[tasks.test]
+cmd = "bun test"
+description = "Unit and smoke tests"
+
+[tasks.lint]
+cmd = "bunx tsc --noEmit"
+description = "Typecheck (lint stand-in until a dedicated linter lands)"
+
+[tasks.typecheck]
+cmd = "bunx tsc --noEmit"
+description = "Typecheck"
+
+[tasks.smoke]
+cmd = "bun src/cli.ts --help"
+description = "CLI --help exits 0"
+
+[tasks.spec-check]
+cmd = "specsync check"
+description = "SpecSync drift check"
+
+[lanes.pre-commit]
+description = "Run before committing"
+steps = [
+  { parallel = ["lint", "smoke"] },
+  "test",
+]
+
+[lanes.ci]
+description = "CI pipeline"
+steps = ["lint", "smoke", "test", "spec-check"]
+
+[lanes.verify]
+description = "Required gate before claiming done (AGENT-4 / hi/agent.md)"
+steps = ["lint", "smoke", "test", "spec-check"]
