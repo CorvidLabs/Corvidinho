@@ -12,6 +12,13 @@ artifact: testing
   is a SCRUB_TARGETS entry and re-scrubs; a v5 DB migrates to 6; poller on the
   same data dir continues the same issue session across a restart; injected db
   is not closed; dry-run poller without a data dir stays in-memory.
+- Same file, review hardening: `stop()` mid-cycle starts no further agent spawn
+  and waits for the in-flight run before closing the DB; `stop()` while the ack
+  is in flight skips that event's spawn; concurrent `pollOnce` joins the
+  in-flight cycle and interval ticks are skipped while a long cycle runs (fake
+  timers); a throwing event is logged, marked processed, and later events still
+  run; `touch` after a second watcher replaced the issue row does not throw and
+  does not wedge the poll cycle.
 - Existing `tests/watch.*.test.ts` stay green (in-memory store path).
 
 ## Requirement evidence

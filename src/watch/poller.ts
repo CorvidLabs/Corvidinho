@@ -2,7 +2,9 @@
  * WATCH poll loop: fetch → dedup → allowlist route → session stub.
  * Poll-first for bot/VM (no public URL). No ProcessManager.
  * REQ-watch-007: cycle logging, caught pollOnce errors, auto-ack on mention/comment.
- * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL.
+ * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL;
+ * cycles are single-flight, stop() halts before the next event and waits for
+ * the in-flight cycle, and one failing event never aborts the cycle.
  */
 
 import type { Database } from "bun:sqlite";
@@ -194,7 +196,7 @@ export async function startWatchPoller(
   let timer: ReturnType<typeof setInterval> | null = null;
   let running = true;
 
-  const pollOnce = async (): Promise<PollCycleResult> => {
+  const runCycle = async (): Promise<PollCycleResult> => {
     const result: PollCycleResult = {
       fetched: 0,
       newEvents: 0,
@@ -229,15 +231,12 @@ export async function startWatchPoller(
 
     let triggered = 0;
     for (const event of deduped) {
+      // stop() mid-cycle: no further routing, acks, or agent spawns.
+      if (!running) break;
       if (triggered >= config.maxTriggersPerCycle) {
         result.skipped += 1;
         continue;
       }
-
-      const action = routeEvent(event, {
-        store,
-        allowlist: config.allowlist,
-      });
 
       // Mark related eligible ids for this issue so other search paths don't re-fire.
       const related = eligible
@@ -247,55 +246,82 @@ export async function startWatchPoller(
             e.number === event.number,
         )
         .map((e) => e.id);
-      processed.addMany(related.length > 0 ? related : [event.id]);
+      const relatedIds = related.length > 0 ? related : [event.id];
 
-      if (action.kind === "refuse" || action.kind === "ignore") {
-        result.refused += 1;
-        opts.onAction?.({ kind: action.kind, event });
-        continue;
+      try {
+        const action = routeEvent(event, {
+          store,
+          allowlist: config.allowlist,
+        });
+        processed.addMany(relatedIds);
+
+        if (action.kind === "refuse" || action.kind === "ignore") {
+          result.refused += 1;
+          opts.onAction?.({ kind: action.kind, event });
+          continue;
+        }
+
+        triggered += 1;
+        if (action.kind === "start_session") result.started += 1;
+        if (action.kind === "continue_session") result.continued += 1;
+
+        // Auto-ack BEFORE spawn so the thread sees presence even if spawn is slow.
+        await maybePostWatchAck({
+          event,
+          kind: action.kind,
+          mentionUsername: config.mentionUsername,
+          ackClient,
+          acked,
+          log,
+        });
+
+        // stop() may have landed while the ack was in flight.
+        if (!running) break;
+        const spawn = await agent.runChat({
+          prompt: action.prompt,
+          sessionId: action.session.id,
+          resume: action.kind === "continue_session",
+        });
+        opts.onAction?.({
+          kind: action.kind,
+          event,
+          sessionId: action.session.id,
+          summary: spawn.summary,
+        });
+      } catch (err) {
+        // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
+        // retried forever ahead of later events: log, mark processed, move on.
+        processed.addMany(relatedIds);
+        logError(
+          `[watch] event ${event.repo}#${event.number} (${event.id}) failed; marked processed`,
+          err,
+        );
       }
-
-      triggered += 1;
-      if (action.kind === "start_session") result.started += 1;
-      if (action.kind === "continue_session") result.continued += 1;
-
-      // Auto-ack BEFORE spawn so the thread sees presence even if spawn is slow.
-      await maybePostWatchAck({
-        event,
-        kind: action.kind,
-        mentionUsername: config.mentionUsername,
-        ackClient,
-        acked,
-        log,
-      });
-
-      const spawn = await agent.runChat({
-        prompt: action.prompt,
-        sessionId: action.session.id,
-        resume: action.kind === "continue_session",
-      });
-      opts.onAction?.({
-        kind: action.kind,
-        event,
-        sessionId: action.session.id,
-        summary: spawn.summary,
-      });
     }
 
     log(formatCycleLog(result));
     return result;
   };
 
-  let inflight: Promise<void> | null = null;
-  const schedulePoll = () => {
-    const p = pollOnce()
-      .then(() => undefined)
-      .catch((err) => {
-        logError("[watch] pollOnce error", err);
-      });
+  // Single-flight: at most one cycle runs at a time, so stop() can await it
+  // before closing the DB and an issue is never handled by two cycles at once.
+  let inflight: Promise<PollCycleResult> | null = null;
+  const pollOnce = (): Promise<PollCycleResult> => {
+    if (inflight) return inflight;
+    const p = runCycle();
     inflight = p;
-    void p.finally(() => {
+    const clear = () => {
       if (inflight === p) inflight = null;
+    };
+    p.then(clear, clear);
+    return p;
+  };
+
+  const schedulePoll = () => {
+    // A long agent run outlasts the interval: skip the tick, don't overlap.
+    if (inflight) return;
+    pollOnce().catch((err) => {
+      logError("[watch] pollOnce error", err);
     });
   };
 
@@ -321,7 +347,7 @@ export async function startWatchPoller(
         timer = null;
       }
       // Let an in-flight cycle finish its session writes before closing.
-      if (inflight) await inflight;
+      if (inflight) await inflight.catch(() => undefined);
       if (ownedDb && !dbClosed) {
         dbClosed = true;
         ownedDb.close();

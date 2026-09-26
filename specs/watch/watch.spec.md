@@ -58,7 +58,9 @@ idle past the soft TTL (`resolveSessionTtlMs`, 30–60m, default 45m) is dropped
 and the next event on that issue starts fresh; one session per
 `owner/repo#number`; stored topic is SAFE-6 scrubbed; dry-run without
 `CORVIDINHO_DATA_DIR` stays in-memory; the poller closes a DB it opened on stop
-(REQ-watch-037).
+only after the in-flight cycle ends (REQ-watch-037). Poll cycles are
+single-flight; after stop no further event is routed, acked, or spawned; one
+failing event is logged and marked processed without aborting the cycle.
 
 ## Behavioral Examples
 

@@ -108,31 +108,44 @@ export class SessionStore {
     }
   }
 
+  /**
+   * Upsert the session row. Another process on the same DB (e.g. a second
+   * watcher) may have replaced this issue's row with its own session; the
+   * latest write wins so the UNIQUE issue_key never throws mid-cycle.
+   */
   private persist(session: SessionStub): void {
-    if (!this.db) return;
-    this.db.run(
-      `INSERT INTO watch_sessions
-        (id, issue_key, repo, number, user_id, topic, created_at, last_activity_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         issue_key = excluded.issue_key,
-         repo = excluded.repo,
-         number = excluded.number,
-         user_id = excluded.user_id,
-         topic = excluded.topic,
-         created_at = excluded.created_at,
-         last_activity_at = excluded.last_activity_at`,
-      [
+    const db = this.db;
+    if (!db) return;
+    const key = issueKey(session.repo, session.number);
+    db.transaction(() => {
+      db.run(`DELETE FROM watch_sessions WHERE issue_key = ? AND id != ?`, [
+        key,
         session.id,
-        issueKey(session.repo, session.number),
-        session.repo,
-        session.number,
-        session.userId,
-        scrubOpt(session.topic),
-        session.createdAt,
-        session.lastActivityAt,
-      ],
-    );
+      ]);
+      db.run(
+        `INSERT INTO watch_sessions
+          (id, issue_key, repo, number, user_id, topic, created_at, last_activity_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           issue_key = excluded.issue_key,
+           repo = excluded.repo,
+           number = excluded.number,
+           user_id = excluded.user_id,
+           topic = excluded.topic,
+           created_at = excluded.created_at,
+           last_activity_at = excluded.last_activity_at`,
+        [
+          session.id,
+          key,
+          session.repo,
+          session.number,
+          session.userId,
+          scrubOpt(session.topic),
+          session.createdAt,
+          session.lastActivityAt,
+        ],
+      );
+    })();
   }
 
   /**
@@ -159,12 +172,8 @@ export class SessionStore {
     const key = issueKey(session.repo, session.number);
     const prior = this.byIssueKey.get(key);
     if (prior && prior.id !== session.id) this.remove(prior);
-    // A stale row may exist in the DB without being loaded (e.g. another
-    // process); clear it so the UNIQUE issue_key holds.
-    this.db?.run(`DELETE FROM watch_sessions WHERE issue_key = ? AND id != ?`, [
-      key,
-      session.id,
-    ]);
+    // persist() also clears a stale row for this issue that was never loaded
+    // (e.g. written by another process) so the UNIQUE issue_key holds.
     this.bySessionId.set(session.id, session);
     this.byIssueKey.set(key, session);
     this.persist(session);

@@ -29,6 +29,14 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
   from MEMORY (SESSION-4), not from a long-lived session.
 - Stored topic (issue title) is SAFE-6 scrubbed. Dry-run without
   `CORVIDINHO_DATA_DIR` stays in-memory.
+- Shutdown and overlap: poll cycles are single-flight (an interval tick while a
+  long agent run is still going is skipped). On SIGINT/SIGTERM the in-flight
+  cycle stops before the next event (no new ack or agent spawn), `stop()` waits
+  for the current run, then closes the DB.
+- One failing event (e.g. `SQLITE_BUSY`) is logged as
+  `[watch] event owner/repo#N (id) failed; marked processed` and the cycle moves
+  on. If a second watcher on the same data dir replaced an issue's row, the
+  latest write wins instead of failing on the unique issue key.
 - Not yet: turn persistence/replay, stored conversation summaries, durable
   processed-id/ack dedup (a restart can re-see recent events; they continue the
   persisted session).
