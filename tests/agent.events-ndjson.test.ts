@@ -534,6 +534,8 @@ describe("usage running totals (mock fetch, no network)", () => {
       onEvent: (e) => events.push(e),
       onUsage: (u) => usage.push(u),
       maxToolRounds: 4,
+      // Exact event list below: keep the repo's AGENTS.md note out (REQ-agent-084).
+      projectInstructions: false,
     });
     const r = await exec({ attempt: 1, signal: new AbortController().signal });
     expect(r.summary).toBe("Listed.");
