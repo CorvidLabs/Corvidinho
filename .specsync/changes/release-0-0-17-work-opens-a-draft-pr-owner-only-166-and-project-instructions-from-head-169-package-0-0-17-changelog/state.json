@@ -7,10 +7,11 @@
   "title": "Release 0.0.17: /work opens a draft PR owner-only (#166) and project instructions from HEAD (#169); package 0.0.17, CHANGELOG, STATUS",
   "description": "Release 0.0.17: /work opens a draft PR owner-only (#166) and project instructions from HEAD (#169); package 0.0.17, CHANGELOG, STATUS",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "12c7a6e4ff84e1ca4d49b61cba217ab833af7132",
   "created_at": 1790458313,
-  "updated_at": 1790458314,
+  "updated_at": 1790458316,
   "affected_specs": [
     "cli"
   ],
