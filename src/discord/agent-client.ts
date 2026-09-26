@@ -12,7 +12,12 @@ import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
-import { killProcessTree, trackChildProcess } from "../plugins/proc-group.ts";
+import {
+  collectProcessTree,
+  killProcessTree,
+  trackChildProcess,
+  type ProcEntry,
+} from "../plugins/proc-group.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
@@ -122,9 +127,16 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         // Own process group, so a stop reaches its tools and workers too.
         detached: true,
       });
-      const untrack = trackChildProcess(proc.pid);
+      // What the agent left in its group as it exited (a background process
+      // still holding the output pipe): an abort or this process exiting
+      // still reaches it once the agent pid is gone (as in spawnCapped).
+      let atExit: ProcEntry[] = [];
+      void proc.exited.then(() => {
+        atExit = collectProcessTree(proc.pid, { rootJustExited: true });
+      });
+      const untrack = trackChildProcess(proc.pid, () => atExit);
       const onAbort = () => {
-        killProcessTree(proc.pid);
+        killProcessTree(proc.pid, { known: atExit });
       };
       signal?.addEventListener("abort", onAbort, { once: true });
       const { exitCode, summary, totalTokens, result } = await collectTaskRunStream({

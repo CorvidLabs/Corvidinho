@@ -15,5 +15,7 @@ artifact: tasks
 - [x] Spawn schedule/chat agents in their own process group; abort kills the tree
 - [x] Abort abandoned schedule runs at daemon shutdown
 - [x] Remove unused `ScheduleStore.markRunStarted`
+- [x] Leave signals the process started with ignored (nohup SIGHUP, background SIGINT) unhooked
+- [x] Stop what an exited child left in its group on abort and at parent exit (exit snapshot for agent client, delegate, spawnCapped and the tracker)
 - [x] Regression tests for each fix (fake fledge / fake bins / real sh trees, no network)
 - [x] Deltas, spec file coverage and verify lane green

@@ -21,12 +21,15 @@
  * children are killed when this process exits, and when SIGINT / SIGTERM /
  * SIGHUP would kill it (no other listener): the tree is stopped, then the
  * signal is re-raised with its default action. A process that handles those
- * signals itself (bridge, daemon) keeps its own shutdown and grace.
+ * signals itself (bridge, daemon) keeps its own shutdown and grace. A signal
+ * this process started with ignored (`nohup`, a background job's SIGINT) is
+ * never hooked: it stays ignored, as without this module.
  *
  * Never throws; this process, its own group and pid 1 are never signalled.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
+import { constants } from "node:os";
 
 export type ProcEntry = {
   pid: number;
@@ -197,12 +200,56 @@ export function killProcessTree(
 
 // --- children that must die with this process ------------------------------
 
-const tracked = new Set<number>();
-const FORWARDED = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+/** Latest snapshot of a tracked child's tree (e.g. taken as it exited). */
+export type KnownMembers = () => readonly ProcEntry[];
+
+const tracked = new Map<number, KnownMembers | undefined>();
+
+/**
+ * Signals set to ignored in a `/proc/<pid>/status` text (`SigIgn:` mask, bit
+ * n-1 for signal n). Unreadable or malformed ⇒ none.
+ */
+export function ignoredSignals(
+  status: string,
+  candidates: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"],
+): Set<NodeJS.Signals> {
+  const out = new Set<NodeJS.Signals>();
+  const m = /^SigIgn:\s*([0-9a-fA-F]+)\s*$/m.exec(status);
+  if (!m) return out;
+  const mask = BigInt(`0x${m[1]}`);
+  for (const sig of candidates) {
+    const n = constants.signals[sig as keyof typeof constants.signals];
+    if (typeof n === "number" && n > 0 && ((mask >> BigInt(n - 1)) & 1n) === 1n) out.add(sig);
+  }
+  return out;
+}
+
+function ignoredAtStart(): Set<NodeJS.Signals> {
+  try {
+    return ignoredSignals(readFileSync("/proc/self/status", "utf8"));
+  } catch {
+    return new Set();
+  }
+}
+
+// Read once, before anything here installs a listener: a listener replaces
+// SIG_IGN, and removing the last one restores SIG_DFL, not SIG_IGN.
+const STARTED_IGNORED = ignoredAtStart();
+const FORWARDED = (["SIGINT", "SIGTERM", "SIGHUP"] as const).filter(
+  (sig) => !STARTED_IGNORED.has(sig),
+);
 const signalHandlers = new Map<NodeJS.Signals, (signal: NodeJS.Signals) => void>();
 
+function knownOf(get: KnownMembers | undefined): readonly ProcEntry[] {
+  try {
+    return get?.() ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function killTracked(): void {
-  for (const pid of [...tracked]) killProcessTree(pid);
+  for (const [pid, known] of [...tracked]) killProcessTree(pid, { known: knownOf(known) });
   tracked.clear();
 }
 
@@ -210,8 +257,11 @@ function onExit(): void {
   killTracked();
 }
 
+let hooked = false;
+
 function installHooks(): void {
-  if (signalHandlers.size > 0) return;
+  if (hooked) return;
+  hooked = true;
   process.on("exit", onExit);
   for (const sig of FORWARDED) {
     const handler = (signal: NodeJS.Signals) => {
@@ -230,6 +280,7 @@ function installHooks(): void {
 }
 
 function removeHooks(): void {
+  hooked = false;
   process.off("exit", onExit);
   for (const [sig, handler] of signalHandlers) process.off(sig, handler);
   signalHandlers.clear();
@@ -237,11 +288,14 @@ function removeHooks(): void {
 
 /**
  * Stop `pid`'s tree when this process exits or is interrupted (see module
- * doc). Returns the untrack function; call it once the child is done.
+ * doc). `known` returns the caller's latest snapshot of the tree (taken as
+ * the child exited), so what the child left in its group is still reached
+ * once the child itself is gone. Returns the untrack function; call it once
+ * the child is done.
  */
-export function trackChildProcess(pid: number): () => void {
+export function trackChildProcess(pid: number, known?: KnownMembers): () => void {
   if (!safeTarget(pid)) return () => {};
-  tracked.add(pid);
+  tracked.set(pid, known);
   installHooks();
   let done = false;
   return () => {
@@ -254,5 +308,10 @@ export function trackChildProcess(pid: number): () => void {
 
 /** Test seam: pids currently tracked. */
 export function trackedChildProcesses(): number[] {
-  return [...tracked];
+  return [...tracked.keys()];
+}
+
+/** Test seam: signals the interrupt hook covers (not those started ignored). */
+export function forwardedSignals(): NodeJS.Signals[] {
+  return [...FORWARDED];
 }

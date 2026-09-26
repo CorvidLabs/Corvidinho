@@ -27,5 +27,12 @@ artifact: research
   default Ctrl+C semantics once children are detached.
 - `process.once` listeners are removed before later listeners run, so the
   forwarding hook must be prepended to count the bridge's handler.
+- A signal listener replaces an inherited SIG_IGN, and removing the last
+  listener restores SIG_DFL, not SIG_IGN. Reproduced: a Bun parent under
+  `trap '' HUP` (as `nohup` sets up; docs/BOX-UPDATE.md restarts the bridge
+  that way) survived SIGHUP with nothing tracked but died by SIGHUP with a
+  child tracked, and after untracking. Bun reports the inherited ignore in
+  `/proc/self/status` `SigIgn` (a `nohup … &` job: HUP, INT, QUIT plus Bun's
+  own PIPE/XFSZ), so signals ignored at load are left out of the hook.
 - Other spawn sites with timeouts (shell-exec, verify, protocol-version,
   WATCH client) are out of this change's scope; noted as follow-ups.

@@ -534,6 +534,34 @@ describe("delegate plugin handler (fake bin)", () => {
     expect(await until(() => !running(bg) && !running(sess))).toBe(true);
   });
 
+  test("lead abort after the worker exited kills what it left holding the pipe (REQ-agent-117)", async () => {
+    const done = serializeFrame(resultFrame(DONE));
+    const { bin, dir } = fakeBin(
+      [
+        'd="$(dirname "$0")"',
+        'echo $$ > "$d/run.pid"',
+        `cat <<'EOF'\n${done}\nEOF`,
+        'sleep 30 & echo $! > "$d/bg.pid"',
+        "exit 0",
+      ].join("\n"),
+    );
+    const cmd = createDelegateCommand({ bin, env: BASE_ENV });
+    const ac = new AbortController();
+    const runFile = join(dir, "run.pid");
+    const bgFile = join(dir, "bg.pid");
+    const pidIn = (f: string) => (existsSync(f) ? Number(readFileSync(f, "utf8").trim()) || 0 : 0);
+    let bg = 0;
+    // Abort inside the pipe drain: the worker is gone, its grandchild is not.
+    void until(() => pidIn(runFile) > 0 && pidIn(bgFile) > 0 && !running(pidIn(runFile)), 10_000).then(() => {
+      bg = pidIn(bgFile);
+      ac.abort();
+    });
+    const r = await cmd.handler(ctx({ cwd: project(ENABLED), signal: ac.signal }));
+    expect(r.data).toMatchObject({ aborted: true });
+    expect(bg).toBeGreaterThan(1);
+    expect(await until(() => !running(bg))).toBe(true);
+  });
+
   test("fan-out cap: a spent per-run budget refuses without spawning", async () => {
     const { bin, dir } = fakeBin();
     const cmd = createDelegateCommand({

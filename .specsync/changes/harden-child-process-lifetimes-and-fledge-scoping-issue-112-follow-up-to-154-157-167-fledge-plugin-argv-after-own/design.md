@@ -18,9 +18,14 @@ New module `src/plugins/proc-group.ts` (plugins spec, no deps):
   `killProcessTree(root, { known })` (SIGSTOP rounds until stable, then
   SIGKILL every member and every member-led / root group, never our own
   group).
-- `trackChildProcess(pid)`: exit hook + prepended SIGINT/SIGTERM/SIGHUP hook
-  that acts only when it is the sole listener (then kills tracked trees and
-  re-raises); hooks removed when nothing is tracked.
+- `trackChildProcess(pid, known?)`: exit hook + prepended SIGINT/SIGTERM/SIGHUP
+  hook that acts only when it is the sole listener (then kills tracked trees
+  and re-raises); hooks removed when nothing is tracked. A signal the process
+  started with ignored (`SigIgn` in `/proc/self/status`, read once at load:
+  `nohup`'s SIGHUP, a background job's SIGINT) is never hooked, because a
+  listener replaces SIG_IGN and removing it leaves SIG_DFL. `known` returns
+  the caller's exit snapshot, so the hooks still reach what an exited child
+  left in its group.
 
 Hooks in existing files (small):
 
@@ -35,9 +40,11 @@ Hooks in existing files (small):
 - `src/plugins/registry.ts`: `unregister(name, command)` (identity-checked).
 - `src/autonomous/delegate.ts`: `detached: true`, track; timeout/abort →
   SIGTERM to the tree, SIGKILL sweep after the grace or as soon as the worker
-  exits; old worker-pid-only exit hook removed.
+  exits; a group snapshot at worker exit feeds later stops (abort during the
+  drain, lead exit); old worker-pid-only exit hook removed.
 - `src/discord/agent-client.ts`: `detached: true`, track, optional `signal`
-  → kill tree.
+  → kill tree, using a group snapshot taken as the agent exited (as in
+  `spawnCapped`) so a leftover holding the output pipe is reached.
 - `src/scheduler/service.ts`: per-run `AbortController`; `abandonInFlight`
   aborts it. `src/scheduler/store.ts`: `markRunStarted` removed, `startRun`
   folded into `claimRun`.

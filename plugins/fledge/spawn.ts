@@ -144,15 +144,16 @@ export async function spawnCapped(
   }
 
   const pid = proc.pid;
-  const untrack = trackChildProcess(pid);
   const readers: Reader[] = [];
   let timedOut = false;
   let aborted = false;
   let stopped = false;
   let grace: ReturnType<typeof setTimeout> | undefined;
   // Members of the group left behind when the leader exited (a backgrounded
-  // grandchild holding the pipes): a later timeout still reaches them.
+  // grandchild holding the pipes): a later timeout, abort or this process
+  // exiting still reaches them.
   let atExit: ProcEntry[] = [];
+  const untrack = trackChildProcess(pid, () => atExit);
   let pipesOpen = 2;
   const exited = proc.exited.then((code) => {
     if (pipesOpen > 0) atExit = collectProcessTree(pid, { rootJustExited: true });

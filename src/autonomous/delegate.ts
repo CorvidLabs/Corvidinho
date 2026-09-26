@@ -36,6 +36,7 @@ import {
   type CapabilityTier,
 } from "../agent/tier.ts";
 import {
+  collectProcessTree,
   killProcessTree,
   signalProcessTree,
   trackChildProcess,
@@ -439,16 +440,17 @@ export async function runDelegateChild(opts: {
       aborted: false,
     };
   }
+  // Tree seen at SIGTERM, or left in the worker's group as it exited:
+  // grandchildren orphaned by the worker's exit are still found by a later
+  // stop (SIGKILL sweep, abort during the drain, lead exit).
+  let seen: ProcEntry[] = [];
   // Killed with its whole tree if the lead exits or is interrupted.
-  const untrack = trackChildProcess(proc.pid);
+  const untrack = trackChildProcess(proc.pid, () => seen);
   const stdout = endable(proc.stdout);
   const stderr = endable(proc.stderr);
   let timedOut = false;
   let aborted = false;
   let stopping = false;
-  // Tree seen at SIGTERM: grandchildren orphaned by the worker's exit are
-  // still found for the SIGKILL sweep.
-  let seen: ProcEntry[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
   const hardKill = () => {
     seen = killProcessTree(proc.pid, { known: seen });
@@ -456,7 +458,7 @@ export async function runDelegateChild(opts: {
   const kill = () => {
     if (stopping) return;
     stopping = true;
-    seen = signalProcessTree(proc.pid, "SIGTERM");
+    seen = signalProcessTree(proc.pid, "SIGTERM", { known: seen });
     timers.push(setTimeout(hardKill, DELEGATE_KILL_GRACE_MS));
   };
   timers.push(
@@ -471,6 +473,7 @@ export async function runDelegateChild(opts: {
   };
   opts.signal?.addEventListener("abort", onAbort, { once: true });
   const exitedP = proc.exited.then((code) => {
+    seen = collectProcessTree(proc.pid, { rootJustExited: true, known: seen });
     // Stopped by timeout / abort: nothing of the tree outlives the limit.
     if (stopping) hardKill();
     timers.push(

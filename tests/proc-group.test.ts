@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   collectProcessTree,
+  ignoredSignals,
   killProcessTree,
   parseProcStat,
   signalProcessTree,
@@ -170,21 +171,55 @@ describe("stopping real process trees", () => {
   });
 });
 
+describe("signals started ignored are left alone", () => {
+  test("SigIgn mask: bit n-1 is signal n; malformed means none", () => {
+    // HUP (1), INT (2), QUIT (3), PIPE (13), XFSZ (25): a `nohup … &` job.
+    expect([...ignoredSignals("Name:\tbun\nSigIgn:\t0000000001001007\nSigCgt:\t0\n")].sort()).toEqual([
+      "SIGHUP",
+      "SIGINT",
+    ]);
+    expect([...ignoredSignals("SigIgn:\t0000000000004000\n")]).toEqual(["SIGTERM"]);
+    expect(ignoredSignals("SigIgn:\t0000000001001000\n").size).toBe(0);
+    expect(ignoredSignals("no mask here").size).toBe(0);
+  });
+});
+
 describe("tracked children die with their parent", () => {
-  /** A bun parent: runs `before`, spawns a tracked detached tree, runs `then`. */
-  function parentScript(dir: string, then: string, before = ""): string {
+  type ParentOpts = {
+    /** Shell prefix run before exec'ing the parent (e.g. `trap '' HUP`). */
+    shell?: string;
+    /** The child exits at once, leaving its backgrounded grandchild behind. */
+    childExits?: boolean;
+  };
+
+  /**
+   * A bun parent: runs `before`, spawns a tracked detached tree, runs `then`
+   * (`untrack` and `atExit`, the tree seen as the child exited, in scope).
+   */
+  function parentScript(dir: string, then: string, before = "", opts: ParentOpts = {}): string {
     const path = join(dir, "parent.ts");
+    const childScript = opts.childExits
+      ? `sleep 30 & echo $! > "${dir}/bg.pid"; exit 0`
+      : `sleep 30 & echo $! > "${dir}/bg.pid"; sleep 30`;
     writeFileSync(
       path,
-      `import { trackChildProcess } from ${JSON.stringify(MODULE)};
+      `import { collectProcessTree, trackChildProcess, type ProcEntry } from ${JSON.stringify(MODULE)};
 import { existsSync, writeFileSync } from "node:fs";
 ${before}
-const child = Bun.spawn(["sh", "-c", ${JSON.stringify(
-        `sleep 30 & echo $! > "${dir}/bg.pid"; sleep 30`,
-      )}], { stdin: "ignore", stdout: "ignore", detached: true });
-trackChildProcess(child.pid);
+const child = Bun.spawn(["sh", "-c", ${JSON.stringify(childScript)}], {
+  stdin: "ignore",
+  stdout: "ignore",
+  detached: true,
+});
+let atExit: ProcEntry[] = [];
+void child.exited.then(() => {
+  atExit = collectProcessTree(child.pid, { rootJustExited: true });
+  writeFileSync(${JSON.stringify(join(dir, "child.exited"))}, "1");
+});
+const untrack = trackChildProcess(child.pid, () => atExit);
 writeFileSync(${JSON.stringify(join(dir, "child.pid"))}, String(child.pid));
 while (!existsSync(${JSON.stringify(join(dir, "bg.pid"))})) await Bun.sleep(10);
+${opts.childExits ? `while (!existsSync(${JSON.stringify(join(dir, "child.exited"))})) await Bun.sleep(10);` : ""}
 ${then}
 writeFileSync(${JSON.stringify(join(dir, "ready"))}, "1");
 setInterval(() => {}, 1000);
@@ -193,9 +228,13 @@ setInterval(() => {}, 1000);
     return path;
   }
 
-  async function startParent(then: string, before = "") {
+  async function startParent(then: string, before = "", opts: ParentOpts = {}) {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-procgroup-parent-"));
-    const parent = Bun.spawn([process.execPath, parentScript(dir, then, before)], {
+    const script = parentScript(dir, then, before, opts);
+    const argv = opts.shell
+      ? ["sh", "-c", `${opts.shell}; exec "$0" "$1"`, process.execPath, script]
+      : [process.execPath, script];
+    const parent = Bun.spawn(argv, {
       stdin: "ignore",
       stdout: "ignore",
       stderr: "pipe",
@@ -203,8 +242,17 @@ setInterval(() => {}, 1000);
     await until(() => existsSync(join(dir, "ready")), 10_000);
     const child = await pidFrom(join(dir, "child.pid"));
     const bg = await pidFrom(join(dir, "bg.pid"));
-    await until(() => running(child) && running(bg));
+    await until(() => running(bg) && (opts.childExits === true || running(child)));
     return { parent, child, bg };
+  }
+
+  /** The detached child's group (child plus same-group grandchild). */
+  function killGroup(child: number): void {
+    try {
+      process.kill(-child, "SIGKILL");
+    } catch {
+      /* gone */
+    }
   }
 
   test("parent exit kills the tracked tree", async () => {
@@ -221,6 +269,57 @@ setInterval(() => {}, 1000);
     await parent.exited;
     expect(parent.signalCode).toBe("SIGTERM");
     expect(await until(() => !running(child) && !running(bg))).toBe(true);
+  });
+
+  test("SIGHUP with no other handler: tree killed, parent dies by SIGHUP", async () => {
+    const { parent, child, bg } = await startParent("");
+    parent.kill("SIGHUP");
+    await parent.exited;
+    expect(parent.signalCode).toBe("SIGHUP");
+    expect(await until(() => !running(child) && !running(bg))).toBe(true);
+  });
+
+  test("a parent started with SIGHUP ignored (nohup) survives SIGHUP while tracking", async () => {
+    const { parent, child, bg } = await startParent("", "", { shell: "trap '' HUP" });
+    try {
+      parent.kill("SIGHUP");
+      await Bun.sleep(300);
+      expect(running(parent.pid)).toBe(true);
+      expect(running(child) && running(bg)).toBe(true);
+      // Still covered by the other hooks: SIGTERM stops the tree, then the parent.
+      parent.kill("SIGTERM");
+      await parent.exited;
+      expect(parent.signalCode).toBe("SIGTERM");
+      expect(await until(() => !running(child) && !running(bg))).toBe(true);
+    } finally {
+      parent.kill("SIGKILL");
+      killGroup(child);
+    }
+  });
+
+  test("a parent started with SIGHUP ignored still ignores it after untracking", async () => {
+    const { parent, child } = await startParent("untrack();", "", { shell: "trap '' HUP" });
+    try {
+      parent.kill("SIGHUP");
+      await Bun.sleep(300);
+      expect(running(parent.pid)).toBe(true);
+      expect(ignoredSignals(readFileSync(`/proc/${parent.pid}/status`, "utf8")).has("SIGHUP")).toBe(true);
+    } finally {
+      parent.kill("SIGKILL");
+      killGroup(child);
+    }
+  });
+
+  test("parent exit kills what an exited child left in its group (exit snapshot)", async () => {
+    const { parent, child, bg } = await startParent(
+      `setTimeout(() => process.exit(0), 200);`,
+      "",
+      { childExits: true },
+    );
+    expect(running(child)).toBe(false);
+    expect(running(bg)).toBe(true);
+    expect(await parent.exited).toBe(0);
+    expect(await until(() => !running(bg))).toBe(true);
   });
 
   test("a parent that handles SIGTERM itself keeps its grace; exit still kills", async () => {
