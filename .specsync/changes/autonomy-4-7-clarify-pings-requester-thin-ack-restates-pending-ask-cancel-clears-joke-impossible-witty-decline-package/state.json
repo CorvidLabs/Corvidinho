@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "3af288a04306b7463f1275d4db93001ca51bede2",
   "created_at": 1790462432,
-  "updated_at": 1790462792,
+  "updated_at": 1790462833,
   "affected_specs": [
     "discord",
     "agent"
@@ -21,7 +21,11 @@
     "src/agent",
     "src/scheduler",
     "src/store",
-    "tests"
+    "tests",
+    "hi",
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,
