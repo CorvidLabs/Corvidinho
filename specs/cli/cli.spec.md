@@ -77,4 +77,4 @@ Consumes agent module for runTask / loadAgentConfig.
 ## Change Log
 
 | 2026-09-26 | watch-reliability: STATUS notes WATCH poll logging + auto-ack + own-mention skip + pagination bury docs (REQ-watch-007); no CLI argv change |
-| 2026-09-26 | watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document: WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch) |
+
