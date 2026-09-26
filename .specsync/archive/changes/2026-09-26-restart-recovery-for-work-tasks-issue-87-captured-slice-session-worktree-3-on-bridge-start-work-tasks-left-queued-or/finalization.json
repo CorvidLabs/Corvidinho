@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "restart-recovery-for-work-tasks-issue-87-captured-slice-session-worktree-3-on-bridge-start-work-tasks-left-queued-or",
+  "implementation_commit": "45f13111df97663f3725d8b40eed3f0884b73870",
+  "implementation_tree": "01d3f6638c71f7292b4f13804692d9d53486f6c4",
+  "contract_digest": "45df02e90de3cbcbe927e29c0e98593d318b0d9bb6101340f7bb6a1f327d4c8d",
+  "workspace_digest": "2915238010f13a73f9bdc04370393a6ef9385d32aa5fad141e9652c24e118ef3",
+  "closing_digest": "b88af2f3155e559ac87cabf74cfb71cdc8923fe83434a4e11cf70967d48b7a0b",
+  "review_digest": "35f4d9ee1696674f6f51549bed4fb3e04615b4ab99bf649637af46e45b76584b",
+  "finalization_digest": "d8e316222ddbe37d6887a8b0a16121baa458cd1039007498fc0ec19eaa66dc53",
+  "timestamp": 1790451829
+}

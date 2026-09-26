@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "restart-recovery-for-work-tasks-issue-87-captured-slice-session-worktree-3-on-bridge-start-work-tasks-left-queued-or",
+  "slug": "restart-recovery-for-work-tasks-issue-87-captured-slice-session-worktree-3-on-bridge-start-work-tasks-left-queued-or",
+  "title": "Restart recovery for /work tasks (issue #87 captured slice, SESSION-WORKTREE-3): on bridge start, work tasks left queued or running by a dead process are marked failed with an honest summary and their abandoned talk is ended (worktree parked, session dropped) so /status never shows ghost running work and no later talk reuses the stale cwd; durable queue, repo locks and resume stay draft AUTONOMOUS-14",
+  "description": "Restart recovery for /work tasks (issue #87 captured slice, SESSION-WORKTREE-3): on bridge start, work tasks left queued or running by a dead process are marked failed with an honest summary and their abandoned talk is ended (worktree parked, session dropped) so /status never shows ghost running work and no later talk reuses the stale cwd; durable queue, repo locks and resume stay draft AUTONOMOUS-14",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "1b69c1fa30e33c64a52174a968583323c20658a8",
+  "created_at": 1790451719,
+  "updated_at": 1790451829,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/work-store.ts",
+    "src/discord/bridge.ts",
+    "tests/discord.work-store.recovery.test.ts",
+    "specs/discord/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "WorkStore.recoverAbandoned marks every queued/running task failed with an honest 'abandoned: the bridge restarted while this work was <status>' summary, persisted; completed/failed tasks untouched; idempotent; startBridge (DB-backed, no injected WorkStore) runs it before handling new work and ends each abandoned task's talk session (parks its worktree, drops the session) per SESSION-WORKTREE-3; logs the count; no queue/resume/locks (draft AUTONOMOUS-14); fixture tests + SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
