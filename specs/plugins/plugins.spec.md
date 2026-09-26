@@ -62,7 +62,9 @@ files:
   - tests/git.plugins.test.ts
   - plugins/autonomous/index.ts
   - plugins/autonomous/commands.ts
+  - plugins/autonomous/council.ts
   - tests/autonomous.delegate.test.ts
+  - tests/autonomous.council.test.ts
   - plugins/fledge/index.ts
   - plugins/fledge/discover.ts
   - plugins/fledge/commands.ts
@@ -89,7 +91,9 @@ typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
 task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
 Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
-`delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117).
+`delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117);
+`council` convenes worker voices that propose, critique and decide
+(AUTONOMOUS-6 / REQ-plugins-118).
 
 ## Public API
 
@@ -103,7 +107,9 @@ takes the resolver/transport seams, `webFetch` is the guarded GET core,
 HTTP/1.1 socket transport. Autonomous plugins
 register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
 `createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
-limiter and timeout. `PluginCommand.autonomous?: boolean`;
+limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
+injectable env, bin, limiter, council timeout and per-voice timeout.
+`PluginCommand.autonomous?: boolean`;
 `PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
 
 ## Invariants
@@ -181,6 +187,15 @@ AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
 
+`council` (REQ-plugins-118) declares the same flags as `delegate`
+(`dangerous: false`, `mutating: true`, minTier 2, `autonomous: true`) and
+re-checks the same gates in the same order (usage exit 1; AUTONOMOUS-1, depth
+cap, code-tier lead, council budget exit 2, nothing spawned). One council runs
+at a time and at most 2 per lead run. Its voices are delegate-core workers at
+read tier by default (tool at most), non-ADMIN, with an empty allowlist. It
+returns the voice count, tier, depth, state, decision, phase tallies and a
+bounded transcript; ok only when the chair decided.
+
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
@@ -236,6 +251,12 @@ for dangerous tools. Role is re-checked via owner config each call.
 - **When** `delegate` runs (tool loop or `plugins run`)
 - **Then** it fails with exit 2 citing AUTONOMOUS-1 and no worker is spawned
 
+### Scenario: council voices cannot act
+
+- **Given** an autonomous-enabled project and a code-tier lead whose allowlist names `shell-exec`
+- **When** the lead runs `council --question ...`
+- **Then** every voice runs `task run` at read tier with `CORVIDINHO_ALLOWLIST` empty and `CORVIDINHO_ACTING_IS_ADMIN=0`, and the result carries the chair's decision
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
@@ -276,6 +297,10 @@ for dangerous tools. Role is re-checked via owner config each call.
 | delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
 | delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
+| council while autonomous off / depth cap / below code tier / council budget spent | Refuse (exit 2); nothing spawned |
+| council from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
+| council chair fails / fewer than 2 proposals | ok=false (exit 1) with the transcript |
+| council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
 
 ## Dependencies
 

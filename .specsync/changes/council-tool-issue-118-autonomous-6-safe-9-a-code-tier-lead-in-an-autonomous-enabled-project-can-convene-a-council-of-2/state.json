@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2",
+  "slug": "council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2",
+  "title": "Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed",
+  "description": "Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed",
+  "kind": "feature",
+  "state": "draft",
+  "base_commit": "e92468411ff5a7eee83338af9d6e1f0332245800",
+  "created_at": 1790459322,
+  "updated_at": 1790459330,
+  "affected_specs": [
+    "agent",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/autonomous",
+    "plugins/autonomous",
+    "tests/autonomous.council.test.ts",
+    "fledge.toml"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "The council tool is registered dangerous=false, mutating=true, minTier=2, autonomous=true and is absent from the tool catalog unless the session is allowed (AUTONOMOUS-1 enabled, code tier, depth below cap; non-ADMIN role sessions never see it) (SAFE-9); a code-tier lead can call council with a question and 2-5 voices (default 3) and the council runs structured phases propose (independent answers), critique (each voice sees the proposals), decide (a chair synthesis) as delegated child task runs that reuse delegate spawn, env stripping, depth and concurrency caps; voices run read tier by default (tool at most, never above the lead), as non-ADMIN role sessions with an empty SAFE-1 allowlist so they never get mutating or must-ask tools; each phase entry is SAFE-6 scrubbed and capped and the whole council has a wall-clock cap; the result carries the decision and a bounded transcript; refusals (autonomous off, depth cap, below code tier, budget) spawn nothing; fake-bin tests prove phases, prompts, env, caps and refusals with no network"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

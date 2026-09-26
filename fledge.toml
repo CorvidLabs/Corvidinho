@@ -56,6 +56,8 @@ max_retries = 3
 # When on, a code-tier lead may use `delegate` to hand subtasks to worker runs
 # (AUTONOMOUS-5); otherwise the tool stays hidden (SAFE-9). Workers: same or
 # lower tier, non-interactive, max 2 levels deep, 2 at once, 4 per run.
+# It may also use `council` (AUTONOMOUS-6): 2-5 read-tier worker voices
+# propose, critique, then a chair decides; 2 councils per run, 15 min cap.
 # [corvidinho.autonomous]
 # enabled = true
 

@@ -26,6 +26,7 @@ files:
   - tests/agent.ask.test.ts
   - src/autonomous/enabled.ts
   - src/autonomous/delegate.ts
+  - src/autonomous/council.ts
   - tests/autonomous.enabled.test.ts
 
 db_tables: []
@@ -68,6 +69,19 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
+
+Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
+`src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
+`councilLens`, `capCouncilText`, `buildProposeText`, `buildCritiqueText`,
+`buildDecideText`, `runCouncil`, `formatCouncilPhases`, `COUNCIL_PHASES`
+(`propose`, `critique`, `decide`), `COUNCIL_LENSES` and the caps
+(`COUNCIL_DEFAULT_VOICES` 3, `COUNCIL_MIN_VOICES` 2, `COUNCIL_MAX_VOICES` 5,
+`COUNCIL_QUESTION_MAX` 4000, `COUNCIL_ENTRY_MAX` 1500, `COUNCIL_DECISION_MAX`
+= `DELEGATE_SUMMARY_MAX`, `COUNCIL_TIMEOUT_MS` 15 min,
+`COUNCIL_VOICE_TIMEOUT_MS` 5 min, `MAX_COUNCILS_PER_RUN` 2,
+`COUNCIL_DEFAULT_TIER` read, `COUNCIL_MAX_VOICE_TIER` tool).
+`DelegateChildOutcome` gains optional `resultText` (the worker's own result
+summary, scrubbed and capped, without the status line).
 
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
@@ -115,6 +129,16 @@ no ADMIN and no SAFE-4 confirm tokens, keeps prove-before-done (never
 lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
 These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
 
+A council (AUTONOMOUS-6) deliberates in three phases in order — propose,
+critique, decide — and every voice and the chair is a delegate-core worker
+one level deeper than the lead. Voices advise and never act: read tier by
+default, never above tool or the lead, a non-ADMIN role session
+(`CORVIDINHO_ACTING_IS_ADMIN=0`) with an empty SAFE-1 allowlist, so they get
+no mutating tool and every must-ask tool is denied. At most 2 voices run at
+once; each phase entry is SAFE-6 scrubbed and capped; the whole council has
+a wall-clock cap. The council returns a decision and a transcript; it never
+returns a confidence score (draft AUTONOMOUS-11 left for capture).
+
 Project instructions come only from the project root (nearest `.git` at or
 above cwd, else cwd), never from a parent directory above it. Each file is
 capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
@@ -158,6 +182,12 @@ model.
 - **When** the model calls `delegate` with `--skill specsync --task ...`
 - **Then** a worker `task run` runs non-interactive at depth 1 and its summary and filesChanged come back in the tool result for the lead to synthesize
 
+### Scenario: lead convenes a council
+
+- **Given** `[corvidinho.autonomous] enabled = true` and a code-tier lead
+- **When** the model calls `council` with `--question ...` (3 voices by default)
+- **Then** 3 read-tier voices propose, each critiques the proposals, a chair decides, and the tool result carries the decision and a bounded transcript
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -172,6 +202,9 @@ model.
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
+| Council: fewer than 2 voices propose | No critique or decide; ok=false with the transcript |
+| Council: chair fails | ok=false, empty decision, transcript kept |
+| Council: time cap or lead abort | Running voices stopped, later phases not started; state cancelled |
 | AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
