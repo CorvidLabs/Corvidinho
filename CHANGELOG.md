@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Security — memory ACL hardening (#59 follow-up)
+
+- Memory plugins no longer accept `--user`, `--admin`, or `--db` from argv. In the LLM tool loop argv is model-controlled, so the model could previously read or overwrite any user's memories and self-assert ADMIN (MEMORY-ACL-1..4). The acting user and ADMIN now come only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`).
+- ADMIN is re-checked in the plugin handler: empty `CORVIDINHO_DISCORD_ADMIN_USERS` + `_ROLES` ⇒ nobody (even with the env bit); deny-listed/muted users are never ADMIN; role admins need admin roles configured plus the bridge's per-dispatch bit (ADMIN-4).
+- `memory-forget` / `memory-override` are real two-phase (SAFE-4): run once for a confirm token (no content), then `--confirm TOKEN` from a new turn within 10 minutes. The token is HMAC-bound to op + actor + memory id + row state (+ override content) and is single-use. No schema change.
+- `memory-recall --include-deleted` is ADMIN-only.
+- Discord spawns always overwrite the acting env; WATCH spawns clear it.
+
 ## 0.0.6
 
 ### Files / search plugins (PLUGIN-1/2, SAFE-2 / #81)

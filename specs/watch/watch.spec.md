@@ -46,7 +46,10 @@ Empty github orgs+repos fail-start; empty users = deny-all for triggers;
 allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
 dedup; no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
-watch-username comments/mentions skipped; auto-ack at most once per event id.
+watch-username comments/mentions skipped; auto-ack at most once per event id;
+WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
+`CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
+user (REQ-watch-008).
 
 ## Behavioral Examples
 

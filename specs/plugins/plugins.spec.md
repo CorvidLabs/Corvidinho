@@ -29,7 +29,9 @@ files:
   - plugins/files/resolvePath.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
+  - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
+  - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/search.plugins.test.ts
 
@@ -64,7 +66,12 @@ CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
 Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
 keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
-no in-band override.
+no in-band override. Memory plugins take the acting user and ADMIN
+only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
+`CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
+refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
+`memory-forget` / `memory-override` are two-phase with an HMAC confirm token
+confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 
 ## Behavioral Examples
 

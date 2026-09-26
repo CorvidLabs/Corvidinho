@@ -42,6 +42,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_WATCH_SESSION_ID: sessionId,
+          // GitHub runs have no Discord actor — memory plugins refuse (REQ-watch-008).
+          CORVIDINHO_ACTING_DISCORD_USER_ID: "",
+          CORVIDINHO_ACTING_IS_ADMIN: "0",
         },
       });
       const [exitCode, stdout, stderr] = await Promise.all([

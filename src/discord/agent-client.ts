@@ -49,7 +49,8 @@ export type SpawnAgentClientOpts = {
 /**
  * Spawns: `<bin> task run --no-verify --task <prompt> --json`
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
- * Passes CORVIDINHO_ACTING_DISCORD_USER_ID / CORVIDINHO_ACTING_IS_ADMIN for memory plugins.
+ * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
+ * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011).
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
@@ -79,9 +80,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_DISCORD_SESSION_ID: sessionId,
-          ...(actingUserId
-            ? { CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId }
-            : {}),
+          // Always overwrite: never inherit an actor from the bridge env (REQ-discord-021).
+          CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
