@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.16
+
+### New tools and a daemon
+
+- **`corvidinho daemon`** ([#157](https://github.com/CorvidLabs/Corvidinho/pull/157), #108) — ticks schedules headlessly without Discord (CLI-8 / AUTONOMOUS-4): single-instance lock, claim-once runs safe alongside the bridge ticker, never ADMIN, clean SIGTERM; systemd unit example in `docs/`.
+- **`web-fetch`** ([#148](https://github.com/CorvidLabs/Corvidinho/pull/148), #111) — GET-only, SSRF-guarded (SAFE-7): every resolved address checked, connection pinned to the checked IP with TLS verification on, redirects re-checked, size/time caps, text fenced as untrusted data. Dangerous (SAFE-1): needs consent or an allowlist entry.
+- **Fledge plugins as tools** ([#154](https://github.com/CorvidLabs/Corvidinho/pull/154), #112) — the project's registered Fledge plugins become `fledge-<command>` tools (dangerous by default, argv only, stripped env); `plugins list` shows each tool's schema/context cost (FLEDGE-4/5, PLUGIN-3/6).
+- **`github-pr-diff` / `github-pr-files`** ([#153](https://github.com/CorvidLabs/Corvidinho/pull/153), #93) — read a PR's unified diff (200 KiB cap, optional `--file`) and changed files; scrubbed, marked untrusted (GITHUB-3).
+- **`github-ci-status` by PR or ref** ([#158](https://github.com/CorvidLabs/Corvidinho/pull/158), #94) — branch/tag/SHA plus an overall `green|red|pending|none` verdict incl. legacy statuses (GITHUB-4). `--json` shape is now an object (`data.checks` holds the rows).
+- **Project instructions in the prompt** ([#150](https://github.com/CorvidLabs/Corvidinho/pull/150), #84) — `task run` reads the project's own `AGENTS.md` / `CLAUDE.md` (root-clamped, no symlink escape, 16 KiB cap, scrubbed) into the system prompt (AGENT-1).
+
+### Security
+
+- SAFE-6 scrubber: the PEM and JWT patterns are now linear-time and PR diffs are bounded before scrubbing, so a crafted diff can no longer stall a run (#153).
+
+### Ops
+
+- Package version **0.0.16** — presence (DISCORD-12) reads `v0.0.16` after restart.
+- **Restart the Discord bridge and `github watch`** to pick up the new tools; run `corvidinho daemon` under systemd if you want schedules without the bridge. `web-fetch` and `fledge-*` tools need a SAFE-1 allowlist entry for non-interactive runs.
+
 ## 0.0.15
 
 ### Owner-only `/admin` runtime allowlist (ADMIN-1..4, #43)
