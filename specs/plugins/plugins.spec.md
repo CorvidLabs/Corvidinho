@@ -9,6 +9,9 @@ files:
   - src/plugins/env.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
+  - src/audit/log.ts
+  - src/audit/index.ts
+  - tests/audit.log.test.ts
   - src/allowlist/types.ts
   - src/allowlist/load.ts
   - src/allowlist/github.ts

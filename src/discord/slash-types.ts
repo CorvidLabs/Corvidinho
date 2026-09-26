@@ -46,6 +46,8 @@ export type SlashContext = {
   memoryStore?: MemoryStore;
   /** DISCORD-ANNOUNCE — optional until bridge wires it. */
   announceStore?: AnnounceStore;
+  /** SAFE-5 — one-line audit chain verify summary for /status. */
+  auditLine?: () => string;
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;
