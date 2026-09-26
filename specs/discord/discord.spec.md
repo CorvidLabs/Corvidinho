@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 21
+version: 22
 status: draft
 files:
   - src/discord/types.ts
@@ -76,4 +76,4 @@ src/allowlist/, agent task --no-verify, optional discord.js.
 ## Change Log
 
 DISCORD-6 per-user rate limits + mutes (2026-09-26, corvid-agent, #12).
-
+| 2026-09-26 | hear-rate-limits-mutes-discord-6-steal-from-corvid-agent-per-user-sliding-window-mute-set-fixture-tests-no: HEAR rate limits + mutes (DISCORD-6) — steal from corvid-agent; per-user sliding window + mute set; fixture tests; no ProcessManager; STATUS Done for #12 |
