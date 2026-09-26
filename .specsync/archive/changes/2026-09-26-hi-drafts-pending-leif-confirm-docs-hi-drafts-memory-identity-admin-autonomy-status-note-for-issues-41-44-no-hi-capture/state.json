@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hi-drafts-pending-leif-confirm-docs-hi-drafts-memory-identity-admin-autonomy-status-note-for-issues-41-44-no-hi-capture",
+  "slug": "hi-drafts-pending-leif-confirm-docs-hi-drafts-memory-identity-admin-autonomy-status-note-for-issues-41-44-no-hi-capture",
+  "title": "HI drafts pending Leif confirm: docs/hi-drafts MEMORY IDENTITY ADMIN AUTONOMY + STATUS note for issues 41-44; no hi/ capture",
+  "description": "HI drafts pending Leif confirm: docs/hi-drafts MEMORY IDENTITY ADMIN AUTONOMY + STATUS note for issues 41-44; no hi/ capture",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "28b14a0bc8c278ba90cce100b5f65ea8d21f816d",
+  "created_at": 1790444290,
+  "updated_at": 1790444334,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/hi-drafts",
+    "STATUS.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Docs-only HI drafts under docs/hi-drafts/ + STATUS pending-Leif-confirm note; no src/ or living module contract changes; not hi/ capture",
+  "acceptance_criteria": [
+    "docs/hi-drafts/ has README + MEMORY IDENTITY ADMIN AUTONOMY draft HI (pending Leif confirm, not under hi/); STATUS.md notes pending Leif HI confirm for issues #41-#44 and links drafts; no hi/ capture; SpecSync docs change + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

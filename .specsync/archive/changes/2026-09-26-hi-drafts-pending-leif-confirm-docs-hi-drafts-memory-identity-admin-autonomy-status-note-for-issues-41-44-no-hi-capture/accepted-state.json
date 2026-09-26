@@ -7,11 +7,11 @@
   "title": "HI drafts pending Leif confirm: docs/hi-drafts MEMORY IDENTITY ADMIN AUTONOMY + STATUS note for issues 41-44; no hi/ capture",
   "description": "HI drafts pending Leif confirm: docs/hi-drafts MEMORY IDENTITY ADMIN AUTONOMY + STATUS note for issues 41-44; no hi/ capture",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "28b14a0bc8c278ba90cce100b5f65ea8d21f816d",
   "created_at": 1790444290,
-  "updated_at": 1790444309,
+  "updated_at": 1790444329,
   "affected_specs": [],
   "affected_paths": [
     "docs/hi-drafts",

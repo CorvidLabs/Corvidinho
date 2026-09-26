@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "hi-drafts-pending-leif-confirm-docs-hi-drafts-memory-identity-admin-autonomy-status-note-for-issues-41-44-no-hi-capture",
+  "implementation_commit": "17fac0e0c9d1de3ab224ec6079f08a248896e72e",
+  "implementation_tree": "e3e84b770e3e6c00e9e72ae2c01f219c2f44cb0e",
+  "contract_digest": "e2181474c4c1befa3a4f47f040f10821ccc0ec2d8b254ecd3c95e374d1eadb5c",
+  "workspace_digest": "2a86321325f985dd2dc4fb18b4d03608172b6f1ea977f3cb34652f0192f5de53",
+  "closing_digest": "add21ca261316ef96227dc89fc9e71149513894f814150e9a6b34884f3863f84",
+  "review_digest": "4e1cd52cfaf0599e0c75a8f6c18287f90508438650eab1d9bb23c2ea3585c79f",
+  "finalization_digest": "317759c3f76e7fa891c12835257b157884a090d735ceca8cab264e383fc94471",
+  "timestamp": 1790444329
+}

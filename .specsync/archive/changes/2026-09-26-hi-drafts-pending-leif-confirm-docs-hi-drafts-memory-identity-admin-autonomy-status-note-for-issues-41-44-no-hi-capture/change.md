@@ -1,6 +1,6 @@
 ---
 id: hi-drafts-pending-leif-confirm-docs-hi-drafts-memory-identity-admin-autonomy-status-note-for-issues-41-44-no-hi-capture
-state: implementing
+state: archived
 type: documentation
 base_commit: 28b14a0bc8c278ba90cce100b5f65ea8d21f816d
 ---
