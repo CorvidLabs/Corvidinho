@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-15-owner-only-admin-runtime-allowlist-package-bump-changelog-status",
+  "implementation_commit": "19c9fd31ccfa8e356280c5961478a44d64227489",
+  "implementation_tree": "756646f4ca3950a4e2bff052399b2be7e18ee0a8",
+  "contract_digest": "c7e8316f7f9500eb8ddad90754a01ada31c8fd21118c567cddac6e9fef1c1ca4",
+  "workspace_digest": "9b2a2a3c017ecee33b3f872fe803edfcf62ecea9767b6521a76e05336fced149",
+  "closing_digest": "112dcf4dce4e0e05b08e32734df2fab1311d8dae4bedd4eb54243ac708080caa",
+  "review_digest": "1dcea92515559daf079996681c1fa0c9a8adf0ff825a8ed54a92df3825608583",
+  "finalization_digest": "7c1c4ec9ee7e8f7184063509c1b11ca58ceb34d9aa4151ad5fdbfca34bd2f885",
+  "timestamp": 1790457201
+}
