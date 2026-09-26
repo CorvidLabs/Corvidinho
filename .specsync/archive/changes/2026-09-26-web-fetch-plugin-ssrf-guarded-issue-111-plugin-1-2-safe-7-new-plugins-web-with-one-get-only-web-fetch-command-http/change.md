@@ -1,6 +1,6 @@
 ---
 id: web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http
-state: verifying
+state: archived
 type: feature
 base_commit: 20fb34ff8db5759a2aad968e74d1d21b4c344b83
 ---
