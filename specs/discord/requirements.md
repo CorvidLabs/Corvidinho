@@ -611,3 +611,18 @@ Acceptance Criteria
 - A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
 - Spawn argv ends with `--output ndjson` (no `--json`).
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
+
+### REQ-discord-098
+
+The shared SQLite store SHALL treat the module-owned `spend_ledger` table
+(created by `src/agent/spend.ts` with CREATE TABLE IF NOT EXISTS, no schema
+version bump) like every other persisted table under SAFE-6: its free-text
+`provider` and `model` columns SHALL be written through `scrubSecrets` and
+SHALL be listed in `SCRUB_TARGETS`, so a scrub-rules re-scrub also covers
+them.
+
+Acceptance Criteria
+- A ledger row written with a vendor-key-looking provider or model persists redacted.
+- `SCRUB_TARGETS` contains `spend_ledger` with `provider` and `model`.
+- `rescrubDatabase` re-scrubs a raw `spend_ledger` row.
+
