@@ -1,6 +1,9 @@
 ---
 module: cli
-version: 10status: draftfiles:  - src/cli.ts
+version: 10
+status: draft
+files:
+  - src/cli.ts
 
 db_tables: []
 depends_on:
