@@ -60,6 +60,26 @@
         "REQ-plugins-roles-001",
         "REQ-plugins-roles-002"
       ]
+    },
+    {
+      "timestamp": 1790456067,
+      "commit": "5d22d434bae7b2f01dae104110fe2279c302ad10",
+      "contract_digest": "b901da413a5b8423d973486f8976ec4f341315b50882438b7019cf4112b376e3",
+      "execution_digest": "18dfee3f6c1bf725fa55f7c98c8057a61a572c01608e64f82531bff2c6b902db",
+      "workspace_digest": "c16096c9b0d653db7b44cdd65e7baeedf463dab41bfcb2a664959b4cd0af9e56",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-roles-001",
+        "REQ-plugins-roles-001",
+        "REQ-plugins-roles-002"
+      ]
     }
   ]
 }
