@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "tool-loop-dispatches-only-tools-offered-in-the-run-s-catalog-safe-1-agent-5-pr-128-review-follow-up-a-registered-but",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "808a88df1c08b8f6d7b4f9ee8b1a48f57ea7bc6d",
+  "contract_digest": "b144940d509b3fcf2568d2fe22b89d474cd7b99990e403fb0908754a348e4a6c",
+  "execution_digest": "2381d4b8877f84c4c4e49ddc25873cf8be0e02152a4a1fd055b06101e968939a",
+  "workspace_digest": "fd6a9622fb44b1bebbe9a4552eb9dd848ddec37e95586c02e8f2dbce98e33dd6",
+  "timestamp": 1790451266
+}
