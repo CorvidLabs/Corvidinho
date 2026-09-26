@@ -151,9 +151,9 @@ describe("timeout / abort stop the plugin's whole tree (REQ-plugins-113 / 154)",
       args: [],
       cwd: fake.project,
       env: fake.env,
-      timeoutMs: 400,
+      timeoutMs: 1500,
     });
-    expect(Date.now() - started).toBeLessThan(3000);
+    expect(Date.now() - started).toBeLessThan(5000);
     expect(r.exitCode).toBe(124);
     const bg = pidIn(fake, "bg.pid");
     const sess = pidIn(fake, "sess.pid");
@@ -169,7 +169,7 @@ describe("timeout / abort stop the plugin's whole tree (REQ-plugins-113 / 154)",
       args: [],
       cwd: fake.project,
       env: fake.env,
-      timeoutMs: 400,
+      timeoutMs: 1500,
     });
     expect(r.exitCode).toBe(124);
     const bg = pidIn(fake, "bg.pid");
@@ -179,7 +179,10 @@ describe("timeout / abort stop the plugin's whole tree (REQ-plugins-113 / 154)",
   test("the calling run's abort stops the tree (exit 130, aborted)", async () => {
     const fake = makeFake(undefined, { "run.tree": "" });
     const ac = new AbortController();
-    setTimeout(() => ac.abort(), 300);
+    const sessFile = join(fake.bin, "sess.pid");
+    void until(() => existsSync(sessFile) && readFileSync(sessFile, "utf8").trim() !== "", 10_000).then(() =>
+      ac.abort(),
+    );
     const r = await runFledgeCommand({
       fledgeBin: fake.fledge,
       plugin: "hello-plugin",

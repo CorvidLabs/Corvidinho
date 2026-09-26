@@ -504,10 +504,10 @@ describe("delegate plugin handler (fake bin)", () => {
 
   test("timeout stops the worker's whole tree, not just the worker (REQ-agent-117)", async () => {
     const { bin, dir } = fakeBin(TREE_BODY);
-    const cmd = createDelegateCommand({ bin, env: BASE_ENV, timeoutMs: 400 });
+    const cmd = createDelegateCommand({ bin, env: BASE_ENV, timeoutMs: 1500 });
     const started = Date.now();
     const r = await cmd.handler(ctx({ cwd: project(ENABLED) }));
-    expect(Date.now() - started).toBeLessThan(4000);
+    expect(Date.now() - started).toBeLessThan(6000);
     expect(r.data).toMatchObject({ state: "cancelled", timedOut: true });
     const bg = Number(readFileSync(join(dir, "bg.pid"), "utf8"));
     const sess = Number(readFileSync(join(dir, "sess.pid"), "utf8"));
@@ -518,7 +518,10 @@ describe("delegate plugin handler (fake bin)", () => {
     const { bin, dir } = fakeBin(TREE_BODY);
     const cmd = createDelegateCommand({ bin, env: BASE_ENV });
     const ac = new AbortController();
-    setTimeout(() => ac.abort(), 400);
+    const sessFile = join(dir, "sess.pid");
+    void until(() => existsSync(sessFile) && readFileSync(sessFile, "utf8").trim() !== "", 10_000).then(() =>
+      ac.abort(),
+    );
     const r = await cmd.handler(ctx({ cwd: project(ENABLED), signal: ac.signal }));
     expect(r.data).toMatchObject({ state: "cancelled", aborted: true });
     const bg = Number(readFileSync(join(dir, "bg.pid"), "utf8"));

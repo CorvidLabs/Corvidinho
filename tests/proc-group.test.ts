@@ -40,8 +40,18 @@ async function until(cond: () => boolean, ms = 3000): Promise<boolean> {
   return cond();
 }
 
-function readPid(path: string): number {
-  return Number(readFileSync(path, "utf8").trim());
+/** Pid written to `path` by a fixture, once the write is complete. */
+async function pidFrom(path: string): Promise<number> {
+  let pid = 0;
+  await until(() => {
+    try {
+      pid = Number(readFileSync(path, "utf8").trim());
+    } catch {
+      pid = 0;
+    }
+    return Number.isInteger(pid) && pid > 1;
+  }, 5000);
+  return pid;
 }
 
 /** sh child in its own group: a same-group grandchild and a setsid one. */
@@ -63,9 +73,8 @@ async function spawnTree(): Promise<{
     stderr: "ignore",
     detached: true,
   });
-  await until(() => existsSync(join(dir, "bg.pid")) && existsSync(join(dir, "sess.pid")));
-  const bg = readPid(join(dir, "bg.pid"));
-  const sess = readPid(join(dir, "sess.pid"));
+  const bg = await pidFrom(join(dir, "bg.pid"));
+  const sess = await pidFrom(join(dir, "sess.pid"));
   await until(() => running(bg) && running(sess));
   return { proc, dir, bg, sess };
 }
@@ -150,8 +159,7 @@ describe("stopping real process trees", () => {
     // The child ignores nothing: SIGTERM kills it, the TERM-proof grandchild lives on.
     const script = `(trap '' TERM; exec sleep 30) & echo $! > "${dir}/bg.pid"\nsleep 30`;
     const proc = Bun.spawn(["sh", "-c", script], { stdin: "ignore", stdout: "ignore", detached: true });
-    await until(() => existsSync(join(dir, "bg.pid")));
-    const bg = readPid(join(dir, "bg.pid"));
+    const bg = await pidFrom(join(dir, "bg.pid"));
     await until(() => running(bg));
     const seen = signalProcessTree(proc.pid, "SIGTERM");
     await proc.exited;
@@ -169,14 +177,16 @@ describe("tracked children die with their parent", () => {
     writeFileSync(
       path,
       `import { trackChildProcess } from ${JSON.stringify(MODULE)};
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 ${before}
 const child = Bun.spawn(["sh", "-c", ${JSON.stringify(
         `sleep 30 & echo $! > "${dir}/bg.pid"; sleep 30`,
       )}], { stdin: "ignore", stdout: "ignore", detached: true });
 trackChildProcess(child.pid);
 writeFileSync(${JSON.stringify(join(dir, "child.pid"))}, String(child.pid));
+while (!existsSync(${JSON.stringify(join(dir, "bg.pid"))})) await Bun.sleep(10);
 ${then}
+writeFileSync(${JSON.stringify(join(dir, "ready"))}, "1");
 setInterval(() => {}, 1000);
 `,
     );
@@ -190,9 +200,9 @@ setInterval(() => {}, 1000);
       stdout: "ignore",
       stderr: "pipe",
     });
-    await until(() => existsSync(join(dir, "child.pid")) && existsSync(join(dir, "bg.pid")), 5000);
-    const child = readPid(join(dir, "child.pid"));
-    const bg = readPid(join(dir, "bg.pid"));
+    await until(() => existsSync(join(dir, "ready")), 10_000);
+    const child = await pidFrom(join(dir, "child.pid"));
+    const bg = await pidFrom(join(dir, "bg.pid"));
     await until(() => running(child) && running(bg));
     return { parent, child, bg };
   }
@@ -237,17 +247,21 @@ setInterval(() => {}, 1000);
   });
 
   test("untrack removes the hooks once no child is tracked", () => {
+    // Another file's run may still track a child: then the hooks stay on.
+    const others = trackedChildProcesses().length;
     const before = process.listenerCount("SIGTERM");
+    const hooked = others === 0 ? before + 1 : before;
     const untrackA = trackChildProcess(2_147_483_000);
     const untrackB = trackChildProcess(2_147_483_001);
-    expect(process.listenerCount("SIGTERM")).toBe(before + 1);
+    expect(process.listenerCount("SIGTERM")).toBe(hooked);
     expect(trackedChildProcesses()).toContain(2_147_483_000);
     untrackA();
     untrackA();
-    expect(process.listenerCount("SIGTERM")).toBe(before + 1);
+    expect(trackedChildProcesses()).not.toContain(2_147_483_000);
+    expect(process.listenerCount("SIGTERM")).toBe(hooked);
     untrackB();
+    expect(trackedChildProcesses()).not.toContain(2_147_483_001);
     expect(process.listenerCount("SIGTERM")).toBe(before);
-    expect(trackedChildProcesses()).toEqual([]);
     expect(trackChildProcess(process.pid)()).toBeUndefined();
   });
 });
