@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.11
+
+### Discord announce enrichment (DISCORD-ANNOUNCE-4 standing order)
+
+- **DISCORD-ANNOUNCE-4** — `formatBridgeLiveAnnouncement` posts version header plus ≤5 CHANGELOG bullets for what shipped (REQ-discord-025).
+- Prefer `CHANGELOG.md` section for the package version; fall back to package description or a single tip line when missing.
+- Still posts **only** to the configured announce channel via `postAnnouncement` — never dogfood allowlist by default.
+- Fixture tests for formatter + announce-channel-only post.
+
+### Ops
+
+- Package version **0.0.11** — presence (DISCORD-12) reads `v0.0.11` after restart.
+- **Restart the Discord bridge** so ClientReady posts the richer bridge-live note.
+
 ## 0.0.10
 
 ### ⚠ Upgrade notes
