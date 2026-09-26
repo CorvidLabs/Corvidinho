@@ -9,4 +9,4 @@ artifact: tasks
 - [x] release.yml idempotent
 - [x] docs/UPDATE.md + CHANGELOG + 0.0.3 STATUS
 - [x] tests
-- [ ] SpecSync ship + tag
+- [x] SpecSync ship + tag

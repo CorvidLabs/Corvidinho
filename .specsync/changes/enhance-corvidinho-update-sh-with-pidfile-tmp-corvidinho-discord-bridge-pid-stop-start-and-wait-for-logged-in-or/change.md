@@ -1,6 +1,6 @@
 ---
 id: enhance-corvidinho-update-sh-with-pidfile-tmp-corvidinho-discord-bridge-pid-stop-start-and-wait-for-logged-in-or
-state: approved
+state: implementing
 type: operations
 base_commit: 92519c3c18fa98a6c895cb55196b5529b77c711b
 ---
