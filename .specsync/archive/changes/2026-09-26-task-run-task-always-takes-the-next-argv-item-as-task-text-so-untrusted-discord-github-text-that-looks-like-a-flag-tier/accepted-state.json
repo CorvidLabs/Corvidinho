@@ -7,11 +7,11 @@
   "title": "Task run --task always takes the next argv item as task text, so untrusted Discord/GitHub text that looks like a flag (--tier=code, --no-verify) can never be parsed as a CLI flag; --task=TEXT may span lines",
   "description": "task run --task always takes the next argv item as task text, so untrusted Discord/GitHub text that looks like a flag (--tier=code, --no-verify) can never be parsed as a CLI flag; --task=TEXT may span lines",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "20fb34ff8db5759a2aad968e74d1d21b4c344b83",
   "created_at": 1790453427,
-  "updated_at": 1790453555,
+  "updated_at": 1790453581,
   "affected_specs": [
     "cli"
   ],

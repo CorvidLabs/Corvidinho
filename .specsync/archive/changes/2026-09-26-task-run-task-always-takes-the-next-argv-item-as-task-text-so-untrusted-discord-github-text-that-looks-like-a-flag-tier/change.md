@@ -1,6 +1,6 @@
 ---
 id: task-run-task-always-takes-the-next-argv-item-as-task-text-so-untrusted-discord-github-text-that-looks-like-a-flag-tier
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 20fb34ff8db5759a2aad968e74d1d21b4c344b83
 ---
