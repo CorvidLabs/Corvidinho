@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory",
+  "slug": "memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory",
+  "title": "Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners",
+  "description": "Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "5f1db8a2a44464694bdde6d4695f6c186d29cfc0",
+  "created_at": 1790452497,
+  "updated_at": 1790452499,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "plugins/memory/commands.ts",
+    "tests/memory.plugins.test.ts",
+    "specs/plugins/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "The memory plugins' handler-time ADMIN check returns true for the configured owner's Discord snowflake (owner env or allowlist [owner]) when the bridge admin bit is set, even with empty admin user/role lists; false without the bit, for other ids, and for a muted or deny-listed owner; fixture tests + SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "research",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
