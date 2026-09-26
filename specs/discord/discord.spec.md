@@ -81,6 +81,10 @@ files:
   - tests/discord.ask-ping.test.ts
   - src/discord/thin-ack.ts
   - tests/discord.thin-ack.test.ts
+  - src/discord/ask-buttons.ts
+  - src/agent/ask-options.ts
+  - tests/discord.ask-buttons.test.ts
+  - tests/discord.ask-ephemeral.test.ts
 
 db_tables: []
 depends_on:
@@ -112,20 +116,22 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
-Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6):
-`src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
-`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. Clarify mentions
-`requesterDiscordId`; stuck mentions the configured owner. `AgentSpawnResult`
-gains optional `ask` (validated from the `result` frame); the gateway `reply`
-takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
-users plus the replied-to author); `SchedulerService` takes `owner` and its
-outbound `post` forwards `mentionUserIds`. Schedule pings are deduped per
-question: `askPingKey` digests the ask; `Schedule.askPingKey` /
-`ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key` (schema
-v7). Sessions persist `pendingAsk` in `discord_sessions.pending_ask` (schema
-v8, `SCHEMA_VERSION` 8). `src/discord/thin-ack.ts` exports `isThinAck` /
-`isCancelAsk` / `ASK_CANCELLED_ACK`: while `pendingAsk` is set, a thin-ack
-continue restates the ask without spawning the agent; cancel clears it.
+Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6 /
+DISCORD-ASK / SESSION-MULTI): `src/discord/ask-ping.ts` exports `formatAskReply`,
+`defangMassMentions`, `ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`.
+Clarify mentions `requesterDiscordId`; stuck mentions the configured owner.
+When an ask has structured options (or a numbered list in the question),
+`src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
+an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
+`ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
+`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
+Gateway `reply` accepts optional `components`; `onComponent` handles button
+custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
+in `discord_sessions.pending_ask` (schema v8). Button pending asks are NOT
+cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
+substantive continue. Message router keys sessions by Discord user id + channel
+(SESSION-MULTI-1); reply/thread continue only for the session owner.
+`src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
@@ -178,7 +184,7 @@ SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 `/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
-Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108).
+Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
@@ -274,4 +280,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6: Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3) |
 | 2026-09-26 | cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master: CleanupEmptyBranch never force-deletes a branch with commits when the default branch is not main/master |
 | 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
+| 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
+| 2026-09-26 | discord-ask-ephemeral-buttons-session-multi: DISCORD-ASK-1..5 ephemeral button asks + SESSION-MULTI-1..4 per-user sessions (package 0.0.22) |
+| 2026-09-26 | discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22: DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22 |
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
