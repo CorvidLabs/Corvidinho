@@ -9,8 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 import { Database as SqliteDatabase } from "bun:sqlite";
+import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
+import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   createNullGateway,
@@ -161,7 +163,12 @@ describe("InflightReplyStore", () => {
     let t = 100;
     const s1 = new InflightReplyStore(db1, () => t++);
     const a = s1.begin({ sessionId: "sess_a", channelId: "chan-1", requestMessageId: "m1" });
-    const b = s1.begin({ sessionId: "sess_b", channelId: "thread-9", requestMessageId: "m2" });
+    const b = s1.begin({
+      sessionId: "sess_b",
+      channelId: "thread-9",
+      parentChannelId: "chan-1",
+      requestMessageId: "m2",
+    });
     expect(a.progressMessageId).toBeNull();
     s1.setProgressMessage(a.id, "progress_a");
     db1.close();
@@ -174,6 +181,7 @@ describe("InflightReplyStore", () => {
         id: a.id,
         sessionId: "sess_a",
         channelId: "chan-1",
+        parentChannelId: null,
         progressMessageId: "progress_a",
         requestMessageId: "m1",
         startedAt: 100,
@@ -182,6 +190,7 @@ describe("InflightReplyStore", () => {
         id: b.id,
         sessionId: "sess_b",
         channelId: "thread-9",
+        parentChannelId: "chan-1",
         progressMessageId: null,
         requestMessageId: "m2",
         startedAt: 101,
@@ -214,6 +223,24 @@ describe("bridge records in-flight replies and clears them on every exit", () =>
     expect(row.request_message_id).toBe("m1");
     expect(row.progress_message_id).toBe(outbound.sends[0]!.messageId);
     expect(r.store.get(row.session_id as string)).toBeDefined();
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("thread message: row targets the thread and keeps the allowlisted parent", async () => {
+    const db = memDb();
+    const seen: Array<Array<Record<string, unknown>>> = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        seen.push(inflightRows(db));
+        return { ok: true, sessionId, summary: "done", exitCode: 0 };
+      },
+    };
+    const { box, gatewayFactory } = fakeDiscord();
+    await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage({ ...mention("m1t"), threadId: "thread-1" });
+    expect(seen[0]).toHaveLength(1);
+    expect(seen[0]![0]!.channel_id).toBe("thread-1");
+    expect(seen[0]![0]!.parent_channel_id).toBe("chan-1");
     expect(inflightRows(db)).toEqual([]);
   });
 
@@ -288,6 +315,54 @@ describe("bridge records in-flight replies and clears them on every exit", () =>
     expect(inflightRows(db)).toEqual([]);
   });
 
+  test("button pick (DISCORD-ASK): row kept while the resumed run works, cleared after", async () => {
+    const db = memDb();
+    const ask: HumanAsk = {
+      reason: "clarify",
+      question: "Which DB?",
+      options: [
+        { id: "1", label: "Postgres" },
+        { id: "2", label: "SQLite" },
+      ],
+    };
+    let n = 0;
+    const seen: Array<Array<Record<string, unknown>>> = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        n += 1;
+        if (n === 1) {
+          return { ok: true, sessionId, summary: "need input", exitCode: 0, ask };
+        }
+        seen.push(inflightRows(db));
+        return { ok: true, sessionId, summary: "Using Postgres", exitCode: 0 };
+      },
+    };
+    const { box, calls, gatewayFactory } = fakeDiscord();
+    const r = await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage(mention("m7"));
+    expect(inflightRows(db)).toEqual([]);
+    const session = r.store.list()[0]!;
+    const pending = session.pendingAsk!;
+    expect(pending.stubMessageId).toBe("reply_1");
+
+    await box.handlers!.onComponent!({
+      id: "ix-pick",
+      customId: pickCustomId(pending.askId!, "1"),
+      channelId: "chan-1",
+      userId: "u1",
+      messageId: "reply_1",
+      reply: async () => {},
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toHaveLength(1);
+    const row = seen[0]![0]!;
+    expect(row.channel_id).toBe("chan-1");
+    expect(row.request_message_id).toBe("reply_1");
+    expect(row.progress_message_id).toBe(`sent_${calls.sends.length}`);
+    expect(calls.replies.at(-1)?.content).toContain("Using Postgres");
+    expect(inflightRows(db)).toEqual([]);
+  });
+
   test("ignored / refused messages never record a row", async () => {
     const db = memDb();
     const { box, calls, gatewayFactory } = fakeDiscord();
@@ -344,7 +419,12 @@ describe("bridge start recovers replies a dead process left (REQ-discord-311)", 
   test("a failed edit falls back to a reply to the request message", async () => {
     const db = memDb();
     const store = new InflightReplyStore(db);
-    const row = store.begin({ sessionId: "sess_x", channelId: "thread-7", requestMessageId: "req-2" });
+    const row = store.begin({
+      sessionId: "sess_x",
+      channelId: "thread-7",
+      parentChannelId: "chan-1",
+      requestMessageId: "req-2",
+    });
     store.setProgressMessage(row.id, "progress_gone");
     const { calls, gatewayFactory } = fakeDiscord({ editEmbed: async () => false });
     await start(db, { gatewayFactory });
@@ -383,6 +463,42 @@ describe("bridge start recovers replies a dead process left (REQ-discord-311)", 
     await start(db, { gatewayFactory });
     expect(calls.edits).toHaveLength(1);
     expect(calls.replies).toHaveLength(1);
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("channel no longer allowlisted (DISCORD-5): nothing edited or posted, row deleted", async () => {
+    const db = memDb();
+    const store = new InflightReplyStore(db);
+    const gone = store.begin({ sessionId: "s", channelId: "chan-old", requestMessageId: "req-5" });
+    store.setProgressMessage(gone.id, "p5");
+    store.begin({
+      sessionId: "s",
+      channelId: "thread-old",
+      parentChannelId: "chan-old",
+      requestMessageId: "req-6",
+    });
+    const { calls, gatewayFactory } = fakeDiscord();
+    await start(db, { gatewayFactory });
+    expect(calls.edits).toHaveLength(0);
+    expect(calls.replies).toHaveLength(0);
+    expect(calls.sends).toHaveLength(0);
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("thread row whose parent channel is allowlisted is recovered in the thread", async () => {
+    const db = memDb();
+    const store = new InflightReplyStore(db);
+    const row = store.begin({
+      sessionId: "s",
+      channelId: "thread-2",
+      parentChannelId: "chan-1",
+      requestMessageId: "req-7",
+    });
+    store.setProgressMessage(row.id, "p7");
+    const { calls, gatewayFactory } = fakeDiscord();
+    await start(db, { gatewayFactory });
+    expect(calls.edits.map((e) => [e.channelId, e.messageId])).toEqual([["thread-2", "p7"]]);
+    expect(calls.replies).toHaveLength(0);
     expect(inflightRows(db)).toEqual([]);
   });
 
@@ -426,7 +542,35 @@ describe("recoverInterruptedReplies", () => {
     });
     expect(order).toEqual(["edit:p1", "edit:p2", "reply:q2", "reply:q3"]);
     expect(maxActive).toBe(1);
-    expect(result).toEqual({ edited: 1, replied: 1, failed: 1 });
+    expect(result).toEqual({ edited: 1, replied: 1, failed: 1, skipped: 0 });
+    expect(store.list()).toEqual([]);
+  });
+
+  test("mayPost false or throwing skips the row without any Discord call", async () => {
+    const db = memDb();
+    const store = new InflightReplyStore(db);
+    const a = store.begin({ sessionId: "s1", channelId: "c1", requestMessageId: "q1" });
+    store.setProgressMessage(a.id, "p1");
+    store.begin({ sessionId: "s2", channelId: "c2", requestMessageId: "q2" });
+    let discordCalls = 0;
+    const result = await recoverInterruptedReplies({
+      store,
+      rows: store.list(),
+      mayPost: (row) => {
+        if (row.channelId === "c2") throw new Error("allowlist unreadable");
+        return false;
+      },
+      editEmbed: async () => {
+        discordCalls += 1;
+        return true;
+      },
+      reply: async () => {
+        discordCalls += 1;
+        return { messageId: "r" };
+      },
+    });
+    expect(discordCalls).toBe(0);
+    expect(result).toEqual({ edited: 0, replied: 0, failed: 0, skipped: 2 });
     expect(store.list()).toEqual([]);
   });
 });

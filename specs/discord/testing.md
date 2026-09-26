@@ -55,8 +55,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/discord.inflight-replies.test.ts` — schema v9 table + v8→v9
   migration; `InflightReplyStore` lifecycle across a reopen; the bridge keeps a
   row (with the progress embed id) while the agent runs and clears it on
-  success, failed exit, thrown error and worktree refusal; a crashed bridge's
-  frozen embed is edited to the red interrupted status by the next start; a
-  failed edit or missing embed id falls back to a reply to the request
-  message; edit and reply both throwing still starts and deletes the row; no
-  rows → nothing posted; recovery is sequential (no live Discord).
+  success, failed exit, ask, thrown error and worktree refusal, for a message
+  (thread rows keep the parent channel) and for a button pick's resumed run;
+  a crashed bridge's frozen embed is edited to the red interrupted status by
+  the next start; a failed edit or missing embed id falls back to a reply to
+  the request message; a channel no longer allowlisted gets nothing; edit and
+  reply both throwing still starts and deletes the row; no rows → nothing
+  posted; recovery is sequential (no live Discord).

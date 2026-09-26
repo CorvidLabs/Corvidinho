@@ -64,6 +64,7 @@ import { loadLlmEnv } from "../agent/execute.ts";
 import { routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
+  isMonitoredChannel,
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
   PermissionLevel,
@@ -490,7 +491,12 @@ export async function startBridge(
       // bridge start can mark it interrupted if this process dies mid-reply.
       // Cleared on every exit path (done, failed, refused, thrown).
       const inflightId = inflightBestEffort("record", (s) =>
-        s.begin({ sessionId: session.id, channelId, requestMessageId: msg.id }).id,
+        s.begin({
+          sessionId: session.id,
+          channelId,
+          parentChannelId: msg.threadId ? msg.channelId : null,
+          requestMessageId: msg.id,
+        }).id,
       );
       try {
         await thinking.start({ description: "Working on your request..." });
@@ -778,172 +784,196 @@ export async function startBridge(
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
+      const replyToMessageId = pending.stubMessageId ?? interaction.messageId;
       const thinking = new ThinkingStatus({
         outbound,
         channelId,
-        replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+        replyToMessageId,
         sessionId: session.id,
         model: llmModel,
         debounceMs: opts.thinkingDebounceMs,
         tickMs: opts.thinkingTickMs,
       });
-      await thinking.start({ description: "Working on your request..." });
 
-      if (!session.worktreePath) {
-        const bound = await store.bindWorktree(session);
-        if (!bound.ok) {
-          await thinking.fail(`❌ worktree: ${bound.error}`);
-          return;
-        }
-      }
-      const sessionCwd = store.cwdFor(session);
-
-      let result;
+      // REQ-discord-311: a button pick runs the agent like a message reply, so
+      // it is recorded while in flight too and cleared on every exit path.
+      const inflightId = replyToMessageId
+        ? inflightBestEffort("record", (s) =>
+            s.begin({
+              sessionId: session.id,
+              channelId,
+              parentChannelId: session.threadId ? session.channelId : null,
+              requestMessageId: replyToMessageId,
+            }).id,
+          )
+        : undefined;
       try {
-        let enrichedPrompt = agentPrompt;
-        const idInject = enrichPromptWithIdentity(enrichedPrompt, {
-          userId: interaction.userId,
-          owner: config.owner ?? null,
-        });
-        if (idInject.injected) enrichedPrompt = idInject.prompt;
-        const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-          ownerUserId: interaction.userId,
-        });
-        if (memInject.injected) enrichedPrompt = memInject.prompt;
+        await thinking.start({ description: "Working on your request..." });
+        const progressId = thinking.progressMessageId;
+        if (inflightId && progressId) {
+          inflightBestEffort("update", (s) =>
+            s.setProgressMessage(inflightId, progressId),
+          );
+        }
 
-        const actingIsAdmin =
-          resolvePermissionLevel({
-            userId: interaction.userId,
-            allowlist: config.allowlist,
-            adminUserIds: config.adminUserIds,
-            adminRoleIds: config.adminRoleIds,
-            owner: config.owner ?? null,
-            mutedUsers,
-          }) >= PermissionLevel.ADMIN;
-
-        result = await store.runActive(session, () =>
-          agent.runChat({
-            prompt: enrichedPrompt,
-            humanText: label,
-            sessionId: session.id,
-            resume: true,
-            actingUserId: interaction.userId,
-            actingIsAdmin,
-            cwd: sessionCwd,
-            onStatus: (u) => {
-              void thinking.update({
-                tool: u.tool,
-                tokens: u.tokens,
-                description: u.message ? `⏳ ${u.message}` : undefined,
-              });
-            },
-          }),
-        );
-      } catch (err) {
-        await thinking.fail(
-          `❌ ${err instanceof Error ? err.message : "agent error"}`,
-        );
-        throw err;
-      }
-
-      const plumbing = result.task
-        ? formatTaskPlumbing({
-            state: result.task.state,
-            verified: result.task.verified,
-            verifySkipped: result.task.verifySkipped,
-            attempts: result.task.attempts,
-            cancelled: result.task.cancelled,
-          })
-        : undefined;
-      const thinkExtras = { plumbing, model: llmModel };
-
-      const askRaw = result.ask;
-      const resolvedOptions = askRaw
-        ? resolveAskOptions({
-            options: askRaw.options,
-            question: askRaw.question,
-          })
-        : undefined;
-      const useButtons = Boolean(resolvedOptions?.length);
-      let askBody: {
-        content: string;
-        mentionUserIds: string[];
-        status: string;
-        failed: boolean;
-        ownerPinged?: boolean;
-        components?: unknown[];
-      } | null = null;
-      let pendingToStore: PendingAsk | null = null;
-
-      if (askRaw && useButtons && resolvedOptions) {
-        const next = toPendingAsk({ ...askRaw, options: resolvedOptions });
-        const stub = formatAskStub({
-          ask: next,
-          ownerDiscordId: config.owner?.discordId,
-          requesterDiscordId: interaction.userId,
-        });
-        askBody = {
-          content: stub.content,
-          mentionUserIds: stub.mentionUserIds,
-          status: stub.status,
-          failed: stub.failed,
-          ownerPinged: Boolean(
-            config.owner?.discordId &&
-              stub.mentionUserIds.includes(config.owner.discordId),
-          ),
-          components: buildOpenStubComponents(next.askId),
-        };
-        pendingToStore = next;
-      } else if (askRaw) {
-        const formatted = formatAskReply({
-          ask: askRaw,
-          owner: config.owner,
-          requesterDiscordId: interaction.userId,
-          context: result.summary,
-          replyHint: true,
-        });
-        askBody = {
-          content: formatted.content,
-          mentionUserIds: formatted.mentionUserIds,
-          status: formatted.status,
-          failed: formatted.failed,
-          ownerPinged: formatted.ownerPinged,
-        };
-        pendingToStore = toPendingAsk(askRaw);
-      }
-
-      if (askBody && pendingToStore) {
-        store.setPendingAsk(session, pendingToStore);
-        await (askBody.failed
-          ? thinking.fail(askBody.status, thinkExtras)
-          : thinking.done(askBody.status, thinkExtras));
-      } else if (result.ok) {
-        await thinking.done("✅ Done", thinkExtras);
-      } else {
-        await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
-      }
-
-      const body = askBody
-        ? askBody.content
-        : result.ok
-          ? result.summary.slice(0, 1800)
-          : `session ${session.id} failed (exit ${result.exitCode})`;
-
-      if (replyRef.fn) {
-        const sent = await replyRef.fn({
-          channelId,
-          content: body,
-          replyToMessageId: pending.stubMessageId ?? interaction.messageId,
-          ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-          ...(askBody?.components ? { components: askBody.components } : {}),
-        });
-        if (sent?.messageId) {
-          store.trackBotMessage(sent.messageId, session);
-          if (pendingToStore && askBody?.components) {
-            pendingToStore.stubMessageId = sent.messageId;
-            store.setPendingAsk(session, pendingToStore);
+        if (!session.worktreePath) {
+          const bound = await store.bindWorktree(session);
+          if (!bound.ok) {
+            await thinking.fail(`❌ worktree: ${bound.error}`);
+            return;
           }
         }
+        const sessionCwd = store.cwdFor(session);
+
+        let result;
+        try {
+          let enrichedPrompt = agentPrompt;
+          const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+            userId: interaction.userId,
+            owner: config.owner ?? null,
+          });
+          if (idInject.injected) enrichedPrompt = idInject.prompt;
+          const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
+            ownerUserId: interaction.userId,
+          });
+          if (memInject.injected) enrichedPrompt = memInject.prompt;
+
+          const actingIsAdmin =
+            resolvePermissionLevel({
+              userId: interaction.userId,
+              allowlist: config.allowlist,
+              adminUserIds: config.adminUserIds,
+              adminRoleIds: config.adminRoleIds,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }) >= PermissionLevel.ADMIN;
+
+          result = await store.runActive(session, () =>
+            agent.runChat({
+              prompt: enrichedPrompt,
+              humanText: label,
+              sessionId: session.id,
+              resume: true,
+              actingUserId: interaction.userId,
+              actingIsAdmin,
+              cwd: sessionCwd,
+              onStatus: (u) => {
+                void thinking.update({
+                  tool: u.tool,
+                  tokens: u.tokens,
+                  description: u.message ? `⏳ ${u.message}` : undefined,
+                });
+              },
+            }),
+          );
+        } catch (err) {
+          await thinking.fail(
+            `❌ ${err instanceof Error ? err.message : "agent error"}`,
+          );
+          throw err;
+        }
+
+        const plumbing = result.task
+          ? formatTaskPlumbing({
+              state: result.task.state,
+              verified: result.task.verified,
+              verifySkipped: result.task.verifySkipped,
+              attempts: result.task.attempts,
+              cancelled: result.task.cancelled,
+            })
+          : undefined;
+        const thinkExtras = { plumbing, model: llmModel };
+
+        const askRaw = result.ask;
+        const resolvedOptions = askRaw
+          ? resolveAskOptions({
+              options: askRaw.options,
+              question: askRaw.question,
+            })
+          : undefined;
+        const useButtons = Boolean(resolvedOptions?.length);
+        let askBody: {
+          content: string;
+          mentionUserIds: string[];
+          status: string;
+          failed: boolean;
+          ownerPinged?: boolean;
+          components?: unknown[];
+        } | null = null;
+        let pendingToStore: PendingAsk | null = null;
+
+        if (askRaw && useButtons && resolvedOptions) {
+          const next = toPendingAsk({ ...askRaw, options: resolvedOptions });
+          const stub = formatAskStub({
+            ask: next,
+            ownerDiscordId: config.owner?.discordId,
+            requesterDiscordId: interaction.userId,
+          });
+          askBody = {
+            content: stub.content,
+            mentionUserIds: stub.mentionUserIds,
+            status: stub.status,
+            failed: stub.failed,
+            ownerPinged: Boolean(
+              config.owner?.discordId &&
+                stub.mentionUserIds.includes(config.owner.discordId),
+            ),
+            components: buildOpenStubComponents(next.askId),
+          };
+          pendingToStore = next;
+        } else if (askRaw) {
+          const formatted = formatAskReply({
+            ask: askRaw,
+            owner: config.owner,
+            requesterDiscordId: interaction.userId,
+            context: result.summary,
+            replyHint: true,
+          });
+          askBody = {
+            content: formatted.content,
+            mentionUserIds: formatted.mentionUserIds,
+            status: formatted.status,
+            failed: formatted.failed,
+            ownerPinged: formatted.ownerPinged,
+          };
+          pendingToStore = toPendingAsk(askRaw);
+        }
+
+        if (askBody && pendingToStore) {
+          store.setPendingAsk(session, pendingToStore);
+          await (askBody.failed
+            ? thinking.fail(askBody.status, thinkExtras)
+            : thinking.done(askBody.status, thinkExtras));
+        } else if (result.ok) {
+          await thinking.done("✅ Done", thinkExtras);
+        } else {
+          await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+        }
+
+        const body = askBody
+          ? askBody.content
+          : result.ok
+            ? result.summary.slice(0, 1800)
+            : `session ${session.id} failed (exit ${result.exitCode})`;
+
+        if (replyRef.fn) {
+          const sent = await replyRef.fn({
+            channelId,
+            content: body,
+            replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+            ...(askBody?.components ? { components: askBody.components } : {}),
+          });
+          if (sent?.messageId) {
+            store.trackBotMessage(sent.messageId, session);
+            if (pendingToStore && askBody?.components) {
+              pendingToStore.stubMessageId = sent.messageId;
+              store.setPendingAsk(session, pendingToStore);
+            }
+          }
+        }
+      } finally {
+        if (inflightId) inflightBestEffort("clear", (s) => s.end(inflightId));
       }
     },
     onSlash: async (interaction) => {
@@ -1013,11 +1043,16 @@ export async function startBridge(
     const r = await recoverInterruptedReplies({
       store: inflightReplies,
       rows: interruptedReplies,
+      // DISCORD-5: only channels (or a thread's parent) still allowlisted now.
+      mayPost: (row) =>
+        isMonitoredChannel(row.channelId, config.allowlist) ||
+        (row.parentChannelId != null &&
+          isMonitoredChannel(row.parentChannelId, config.allowlist)),
       editEmbed: (o) => outbound.editEmbed(o),
       reply: replyRef.fn,
     });
     console.log(
-      `[discord] restart recovery: ${interruptedReplies.length} interrupted reply(ies) — ${r.edited} embed(s) marked interrupted, ${r.replied} replied, ${r.failed} unreachable`,
+      `[discord] restart recovery: ${interruptedReplies.length} interrupted reply(ies) — ${r.edited} embed(s) marked interrupted, ${r.replied} replied, ${r.failed} unreachable, ${r.skipped} skipped (channel not allowlisted)`,
     );
   }
   scheduler?.start();

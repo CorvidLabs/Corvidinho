@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS discord_inflight_replies (
   id TEXT PRIMARY KEY NOT NULL,
   session_id TEXT NOT NULL,
   channel_id TEXT NOT NULL,
+  parent_channel_id TEXT,
   progress_message_id TEXT,
   request_message_id TEXT NOT NULL,
   started_at INTEGER NOT NULL
