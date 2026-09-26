@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 20
+version: 21
 status: draft
 files:
   - src/plugins/types.ts
@@ -82,4 +82,4 @@ register. No new dangerous commands; SAFE-1 non-interactive deny unchanged.
 ## Change Log
 
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
-
+| 2026-09-26 | cover-non-discord-plugin-reload-after-clearregistry-for-hear-13-fixtures: Cover non-discord plugin reload-after-clearRegistry for HEAR #13 fixtures |
