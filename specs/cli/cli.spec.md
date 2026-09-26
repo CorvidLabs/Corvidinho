@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 16
+version: 17
 status: draft
 files:
   - src/cli.ts
@@ -71,4 +71,4 @@ Consumes agent module for runTask / loadAgentConfig.
 ## Change Log
 
 discord bridge + --protocol-version HEAR surface (2026-09-26, corvid-agent, #5).
-
+| 2026-09-26 | hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5: HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify |
