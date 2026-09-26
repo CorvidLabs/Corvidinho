@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "a19c1df2339268e66fefa91b604d91707cfa6739",
   "created_at": 1790440330,
-  "updated_at": 1790440448,
+  "updated_at": 1790440503,
   "affected_specs": [],
   "affected_paths": [
     "src/cli.ts"
@@ -26,6 +26,17 @@
     "docs"
   ],
   "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/cli.ts",
+      "module": "cli",
+      "actor": "corvid-agent",
+      "reason": "src/cli.ts is owned by cli module; assign canonical owner for help-only cover",
+      "timestamp": 1790440498
+    }
+  ],
   "answers": {
     "architecture_risk": "no",
     "public_contract": "no"
