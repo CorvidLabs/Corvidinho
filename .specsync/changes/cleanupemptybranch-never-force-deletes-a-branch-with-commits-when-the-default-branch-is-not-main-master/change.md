@@ -1,6 +1,6 @@
 ---
 id: cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 0f81c13648593457803513b59068008ddd07d6db
 ---
