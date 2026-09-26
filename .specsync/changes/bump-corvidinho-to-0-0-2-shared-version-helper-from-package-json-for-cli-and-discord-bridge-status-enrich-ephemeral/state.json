@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "4ef180b31cf719ac1e1661d209b37360781dd026",
   "created_at": 1790443783,
-  "updated_at": 1790443952,
+  "updated_at": 1790444045,
   "affected_specs": [
     "discord",
     "cli"
@@ -25,7 +25,8 @@
     "src/discord/slash-types.ts",
     "STATUS.md",
     "tests/version.test.ts",
-    "tests/discord.slash.test.ts"
+    "tests/discord.slash.test.ts",
+    "src/discord/index.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,
