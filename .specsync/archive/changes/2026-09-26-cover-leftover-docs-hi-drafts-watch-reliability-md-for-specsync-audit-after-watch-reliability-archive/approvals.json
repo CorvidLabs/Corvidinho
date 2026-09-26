@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454133,
+      "digest": "4b268fa4d18d7ccf3eed265a249f59c701e302625a3a94df10e4342e966339b8",
+      "note": "Cover leftover draft-pointer path for SpecSync audit after WATCH-RELIABILITY archive",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-leftover-docs-hi-drafts-watch-reliability-md-for-specsync-audit-after-watch-reliability-archive",
+        "title": "Cover leftover docs/hi-drafts/WATCH-RELIABILITY.md for SpecSync audit after WATCH-RELIABILITY archive",
+        "description": "cover leftover docs/hi-drafts/WATCH-RELIABILITY.md for SpecSync audit after WATCH-RELIABILITY archive",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "docs/hi-drafts/WATCH-RELIABILITY.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Draft pointer status flip only; live AC already in hi/watch.md and REQ-watch-009..011 archived on this PR",
+        "acceptance_criteria": [
+          "docs/hi-drafts/WATCH-RELIABILITY.md is marked captured pointing at hi/watch.md; SpecSync change audit green on this PR"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790454140,
+      "digest": "590e2546db22447f167d28291535d515cca10d26e01d801aa352f2b20d56404c",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

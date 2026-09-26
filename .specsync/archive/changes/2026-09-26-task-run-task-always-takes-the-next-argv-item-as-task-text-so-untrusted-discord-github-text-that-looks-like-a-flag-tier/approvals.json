@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790453553,
+      "digest": "e4bdd78816ed1424db3755def3803019a76fcbc92f3a609d0013566cde1afe87",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "task-run-task-always-takes-the-next-argv-item-as-task-text-so-untrusted-discord-github-text-that-looks-like-a-flag-tier",
+        "title": "Task run --task always takes the next argv item as task text, so untrusted Discord/GitHub text that looks like a flag (--tier=code, --no-verify) can never be parsed as a CLI flag; --task=TEXT may span lines",
+        "description": "task run --task always takes the next argv item as task text, so untrusted Discord/GitHub text that looks like a flag (--tier=code, --no-verify) can never be parsed as a CLI flag; --task=TEXT may span lines",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "src/cli.ts",
+          "tests/cli.task-argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A --task value starting with - is kept as task text; tier/max-retries/verify flags inside task text are never applied; multi-line --task= keeps all lines; fixture tests"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "751f7c11c415ab9480d902deb0f9441724682e4e3a7d8d86565110f644fecade"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790453581,
+      "digest": "d3077487f1b713eb0b09619f19afe9cb9d02dd34ab5eb106604cfd664908fe23",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

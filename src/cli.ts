@@ -112,7 +112,13 @@ function envPresent(name: string): boolean {
   return typeof v === "string" && v.length > 0;
 }
 
-function parseGlobalFlags(args: string[]): {
+/**
+ * `--task` always takes the next argv item as the task text, even when it
+ * starts with `-`: the bridges pass untrusted Discord / GitHub text there, and
+ * a message like `--tier=code` or `--no-verify` must stay task text, never
+ * become a flag (AGENT-5 / SAFE-1). `--task=TEXT` may span lines.
+ */
+export function parseGlobalFlags(args: string[]): {
   rest: string[];
   nonInteractiveFlag: boolean;
   json: boolean;
@@ -143,14 +149,13 @@ function parseGlobalFlags(args: string[]): {
       continue;
     }
     if (a === "--task") {
-      const next = args[i + 1];
-      if (next && !next.startsWith("-")) {
-        taskText = next;
+      if (i + 1 < args.length) {
+        taskText = args[i + 1];
         i++;
       }
       continue;
     }
-    const tf = a.match(/^--task=(.+)$/);
+    const tf = a.match(/^--task=(.+)$/s);
     if (tf) {
       taskText = tf[1];
       continue;

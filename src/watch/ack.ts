@@ -139,9 +139,16 @@ function splitRepo(repo: string): { owner: string; name: string } | null {
   return { owner: parts[0], name: parts[1] };
 }
 
+export type AckAttemptResult = {
+  /** Whether an ack was attempted (eligible + not duplicate). */
+  attempted: boolean;
+  /** Whether the ack comment was posted successfully (incl. dry-run ok). */
+  posted: boolean;
+};
+
 /**
  * Post ack for a start/continue action when eligible and not yet acked.
- * Returns true if an ack was attempted (posted or dry-run).
+ * `posted` is true only on a successful createIssueComment (WATCH-RELIABILITY-1 gate).
  */
 export async function maybePostWatchAck(opts: {
   event: DetectedEvent;
@@ -150,17 +157,19 @@ export async function maybePostWatchAck(opts: {
   ackClient: AckClient;
   acked: AckedIdStore;
   log?: (msg: string) => void;
-}): Promise<boolean> {
+}): Promise<AckAttemptResult> {
   const { event, kind, mentionUsername, ackClient, acked, log } = opts;
-  if (!shouldAckEvent(event, mentionUsername)) return false;
+  if (!shouldAckEvent(event, mentionUsername)) {
+    return { attempted: false, posted: false };
+  }
   if (acked.has(event.id)) {
     log?.(`[watch] ack skip duplicate id=${event.id}`);
-    return false;
+    return { attempted: false, posted: false };
   }
   const parts = splitRepo(event.repo);
   if (!parts) {
     log?.(`[watch] ack skip bad repo=${event.repo}`);
-    return false;
+    return { attempted: false, posted: false };
   }
   const body = buildAckBody(kind);
   const res = await ackClient.createIssueComment({
@@ -176,8 +185,8 @@ export async function maybePostWatchAck(opts: {
       `[watch] ack ${res.dryRun ? "dry-run" : "posted"} ${event.repo}#${event.number} id=${event.id}` +
         (res.url ? ` url=${res.url}` : ""),
     );
-  } else {
-    log?.(`[watch] ack failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`);
+    return { attempted: true, posted: true };
   }
-  return true;
+  log?.(`[watch] ack failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`);
+  return { attempted: true, posted: false };
 }

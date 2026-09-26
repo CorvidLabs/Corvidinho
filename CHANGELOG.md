@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.10
+
+### WATCH reliability (WATCH-RELIABILITY-1..3)
+
+- **WATCH-RELIABILITY-1** — After a successful auto-ack on mention/comment start/continue, post a short agent summary comment on the same GitHub thread when the run finishes (success or failure), once per event id (Made with Corvidinho footer).
+- **WATCH-RELIABILITY-2** — Persist spawn outcome logging (start, exit code / error class, duration) as a structured `[watch] spawn …` log line and durable JSONL (`CORVIDINHO_WATCH_SPAWN_LOG` or `~/.local/share/corvidinho/watch-spawn.jsonl`) — readable without Discord.
+- **WATCH-RELIABILITY-3** — On GitHub **403 rate-limit**, back off using `Retry-After` / `x-ratelimit-reset` (documented default **60s**); skip tight re-poll loops; clear `[watch] github rate-limit backoff` log line.
+- HI captured in [`hi/watch.md`](hi/watch.md) (not draft).
+
+### Ops
+
+- Package version **0.0.10** — presence (DISCORD-12) reads `v0.0.10` after restart.
+- **Restart `github watch`** to pick up summary comments, spawn JSONL, and rate-limit backoff.
+
 ## 0.0.9
 
 ### Security — memory ACL hardening (#59 follow-up) — [#128](https://github.com/CorvidLabs/Corvidinho/pull/128)

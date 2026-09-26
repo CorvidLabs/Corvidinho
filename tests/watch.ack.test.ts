@@ -75,7 +75,8 @@ describe("maybePostWatchAck dedup", () => {
       acked,
       log: (m) => logs.push(m),
     });
-    expect(first).toBe(true);
+    expect(first.attempted).toBe(true);
+    expect(first.posted).toBe(true);
     expect(client.posts).toHaveLength(1);
     expect(client.posts[0]!.body).toContain(ACK_START);
 
@@ -87,7 +88,8 @@ describe("maybePostWatchAck dedup", () => {
       acked,
       log: (m) => logs.push(m),
     });
-    expect(second).toBe(false);
+    expect(second.attempted).toBe(false);
+    expect(second.posted).toBe(false);
     expect(client.posts).toHaveLength(1);
     expect(logs.some((l) => l.includes("duplicate"))).toBe(true);
 
@@ -99,7 +101,8 @@ describe("maybePostWatchAck dedup", () => {
       acked,
       log: (m) => logs.push(m),
     });
-    expect(own).toBe(false);
+    expect(own.attempted).toBe(false);
+    expect(own.posted).toBe(false);
     expect(client.posts).toHaveLength(1);
   });
 });
@@ -198,7 +201,10 @@ describe("poller cycle log + auto-ack integration", () => {
     expect(cycle.started).toBe(1);
     expect(logs.some((l) => l.startsWith("[watch] poll cycle"))).toBe(true);
     expect(logs.some((l) => l.includes("fetched=1"))).toBe(true);
-    expect(ack.posts).toHaveLength(1);
+    expect(ack.posts.length).toBeGreaterThanOrEqual(1);
+    expect(ack.posts[0]!.body).toContain("Ack —");
+    // WATCH-RELIABILITY-1 also posts a run summary after spawn.
+    expect(ack.posts.some((p) => p.body.includes("run summary"))).toBe(true);
     expect(formatCycleLog(cycle)).toContain("started=1");
     await result.stop();
   });
