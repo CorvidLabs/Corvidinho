@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 52
+version: 53
 status: draft
 files:
   - src/cli.ts
@@ -67,6 +67,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 
 task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
+`plugins run <name> [--json] [-- ...args]`: every argv item after the first `--` that follows the name reaches the plugin verbatim; global flags, `--json` and help are read only before it (REQ-cli-186).
 Attribution output uses only the project name and repository link and contains no account handle.
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
 
@@ -77,6 +78,12 @@ Attribution output uses only the project name and repository link and contains n
 - **Given** no GITHUB_TOKEN / GH_TOKEN
 - **When** the operator runs `corvidinho github watch`
 - **Then** exit non-zero naming the token env and go-live checklist
+
+### Scenario: Plugin args that look like Corvidinho flags
+
+- **Given** `CORVIDINHO_ALLOWLIST=shell-exec`
+- **When** the operator runs `corvidinho plugins run shell-exec --json -- ls -h --json`
+- **Then** the plugin gets `ls -h --json` and the result prints as JSON, not help
 
 ### Scenario: Second daemon on one data dir
 
@@ -117,3 +124,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | release-0-0-16-daemon-157-web-fetch-148-fledge-plugins-as-tools-154-pr-diff-files-153-ci-by-ref-158-project: Release 0.0.16: daemon (#157), web-fetch (#148), Fledge plugins as tools (#154), PR diff/files (#153), CI by ref (#158), project instructions (#150); package 0.0.16, CHANGELOG, STATUS |
 | 2026-09-26 | release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate: Release 0.0.18: ask-human + owner ping, autonomous gate + delegate |
+| 2026-09-26 | plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json: Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI |

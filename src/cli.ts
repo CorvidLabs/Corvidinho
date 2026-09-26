@@ -72,7 +72,7 @@ Usage:
                                     one per data dir; JSON-line logs; systemd: docs/DAEMON.md)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
-                                    Run a typed plugin command
+                                    Run a typed plugin command (args after -- reach it verbatim)
   corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N]
@@ -126,9 +126,14 @@ function envPresent(name: string): boolean {
  * starts with `-`: the bridges pass untrusted Discord / GitHub text there, and
  * a message like `--tier=code` or `--no-verify` must stay task text, never
  * become a flag (AGENT-5 / SAFE-1). `--task=TEXT` may span lines.
+ *
+ * In `plugins run <name>`, the first `--` after the name ends Corvidinho's
+ * flags: every later argv item is returned verbatim as `pluginArgs` and
+ * never parsed as a global flag, `--json` or help (REQ-cli-186).
  */
 export function parseGlobalFlags(args: string[]): {
   rest: string[];
+  pluginArgs: string[] | undefined;
   nonInteractiveFlag: boolean;
   json: boolean;
   noVerify: boolean;
@@ -137,6 +142,7 @@ export function parseGlobalFlags(args: string[]): {
   tier: CapabilityTier | undefined;
 } {
   const rest: string[] = [];
+  let pluginArgs: string[] | undefined;
   let nonInteractiveFlag = false;
   let json = false;
   let noVerify = false;
@@ -145,6 +151,10 @@ export function parseGlobalFlags(args: string[]): {
   let tier: CapabilityTier | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    if (a === "--" && rest.length >= 3 && rest[0] === "plugins" && rest[1] === "run") {
+      pluginArgs = args.slice(i + 1);
+      break;
+    }
     if (a === "--non-interactive") {
       nonInteractiveFlag = true;
       continue;
@@ -197,7 +207,7 @@ export function parseGlobalFlags(args: string[]): {
     }
     rest.push(a);
   }
-  return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier };
+  return { rest, pluginArgs, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier };
 }
 
 async function doctor(): Promise<number> {
@@ -366,31 +376,6 @@ async function pluginsRun(
     console.log(typeof result.data === "string" ? result.data : JSON.stringify(result.data, null, 2));
   }
   return result.exitCode ?? 0;
-}
-
-function splitRunArgs(args: string[]): { name: string | undefined; pluginArgs: string[]; json: boolean } {
-  let json = false;
-  const filtered: string[] = [];
-  for (const a of args) {
-    if (a === "--json") {
-      json = true;
-      continue;
-    }
-    filtered.push(a);
-  }
-  const dd = filtered.indexOf("--");
-  if (dd >= 0) {
-    return {
-      name: filtered[0],
-      pluginArgs: filtered.slice(dd + 1),
-      json,
-    };
-  }
-  return {
-    name: filtered[0],
-    pluginArgs: filtered.slice(1),
-    json,
-  };
 }
 
 const TASK_RUN_USAGE =
@@ -658,6 +643,7 @@ export async function main(argv: string[]): Promise<number> {
   const raw = argv.slice(2);
   const {
     rest,
+    pluginArgs,
     nonInteractiveFlag,
     json: globalJson,
     noVerify,
@@ -667,10 +653,12 @@ export async function main(argv: string[]): Promise<number> {
   } = parseGlobalFlags(raw);
   const nonInteractive = isNonInteractive({ nonInteractiveFlag });
 
+  // `rest` excludes the `--task` value and plugin args after `--`, so help
+  // text there is data, not a request for help (REQ-cli-143 / REQ-cli-186).
   if (
     rest.length === 0 ||
-    raw.includes("--help") ||
-    raw.includes("-h") ||
+    rest.includes("--help") ||
+    rest.includes("-h") ||
     rest[0] === "help"
   ) {
     printHelp();
@@ -726,9 +714,8 @@ export async function main(argv: string[]): Promise<number> {
       return pluginsList(globalJson || rest.includes("--json"));
     }
     if (sub === "run") {
-      const { name, pluginArgs, json } = splitRunArgs(rest.slice(2));
-      return pluginsRun(name, pluginArgs, {
-        json: globalJson || json,
+      return pluginsRun(rest[2], pluginArgs ?? rest.slice(3), {
+        json: globalJson,
         nonInteractive,
       });
     }

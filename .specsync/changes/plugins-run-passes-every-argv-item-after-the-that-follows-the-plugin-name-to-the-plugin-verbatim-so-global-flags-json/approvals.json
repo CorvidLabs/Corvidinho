@@ -1,0 +1,40 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790462353,
+      "digest": "1b680686d824e58af017a62a79eeb32d889b390a07939bdc45033ed638ffb61a",
+      "note": "Agent definition approval under PROCESS-3 (Claude Code session)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json",
+        "title": "Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI",
+        "description": "Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "src/cli.ts",
+          "tests/cli.plugins-run-argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Every argv item after the first -- that follows plugins run <name> reaches the plugin verbatim, including --json, --no-verify, --non-interactive, --task, --tier, --max-retries, --help, -h and a second --; global flags and --json before that -- still apply; --help before it still prints help; task run --task -h runs the task instead of printing help; fixture tests fail before the fix and pass after"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "30f4fd967268095baa86cf70e1cfd6e5daf2a28362d8b40ef4e33385f2bbddee"
+      }
+    }
+  ],
+  "reopenings": []
+}
