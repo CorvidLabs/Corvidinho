@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 11
+version: 14
 status: draft
 files:
   - src/agent/types.ts
@@ -12,7 +12,10 @@ files:
   - src/agent/task-summary.ts
   - src/agent/execute.ts
   - src/agent/spawn-argv.ts
+  - src/agent/tier.ts
+  - src/agent/tools.ts
   - tests/agent.execute.test.ts
+  - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
 
 db_tables: []
@@ -24,58 +27,45 @@ depends_on:
 
 ## Purpose
 
-Prove-before-done agent task loop with SpecSync-aware Planning briefing and SpecSync check on the verify lane.
+Prove-before-done agent task loop with SpecSync-aware Planning and an interruptible LLM plugin tool loop when an API key is configured.
 
 ## Public API
 
-Also export `selectRelevantSpecs`, `extractConstraintSections`, `loadRelevantSpecs` (or equivalent),
-`buildCorvidinhoArgv`, `createTaskExecute`, `loadLlmEnv`, `summarizeTaskRunOutput` from the agent module.
+Also export `selectRelevantSpecs`, `extractConstraintSections`, `loadRelevantSpecs`, `buildCorvidinhoArgv`, `createTaskExecute`, `loadLlmEnv`, `summarizeTaskRunOutput`, `parseCapabilityTier`, `loadTierFromEnv`, `tierAllowsPlugin`, `buildOpenAiTools`, `argvFromToolArguments`, `filesChangedFromToolData` from the agent module. AgentEvent includes ToolCall and ToolResult.
 
 ## Invariants
 
-Planning loads specs before execute when possible; SpecSync check participates in done-gate via fledge verify lane; no SpecSync cloud key; no Trust/attest.
+Planning loads specs before execute when possible; SpecSync check participates in done-gate via fledge verify lane; LLM tool loop honors AbortSignal and SAFE-1 dangerous deny; no SpecSync cloud key; no Trust/attest.
 
 ## Behavioral Examples
 
-### Scenario: Verify pass
+#### Scenario: Tool loop calls plugin then finishes
 
-- **Given** verify_before_complete is on and execute reports files changed
-- **When** verify runner returns success
-- **Then** TaskResult has verified=true and state done
+- **Given** an API key and tool/code tier with mocked chat completions
+- **When** the model returns a tool_call for an allowlisted plugin then a final text message
+- **Then** the plugin runs via runPlugin, ToolCall/ToolResult events emit, and ExecuteResult.summary is the final text
 
-### Scenario: Verify fail with retry then pass
+#### Scenario: Read tier has no tools
 
-- **Given** first verify fails and retries remain
-- **When** execute runs again with verifyFeedback and second verify passes
-- **Then** TaskResult has verified=true and attempts >= 2
-
-### Scenario: Skip verify
-
-- **Given** --no-verify or empty filesChanged
-- **When** runTask completes
-- **Then** verifySkipped=true and verify runner is not called
-
-### Scenario: Planning SpecSync briefing
-
-- **Given** a task description that mentions a registered module
-- **When** runTask enters Planning
-- **Then** a Text event includes `# Spec: <module>` constraint sections (and companions when present)
+- **Given** an API key and tier=read
+- **When** createTaskExecute runs
+- **Then** the chat request omits tools and returns assistant text only
 
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | Verify exhausted | state failed, verified=false, summary includes verifier output |
-| AbortSignal fired | cancelled=true, state failed |
+| AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
+| Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 
 ## Dependencies
 
-Spawns `fledge` for the default verify runner (lane includes `spec-check`). Reads SpecSync registry/specs via plugin helpers. No Trust/attest.
+Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via plugin helpers. Dispatches allowlisted plugins via `runPlugin` during the LLM tool loop. No Trust/attest.
 
 ## Change Log
 
-STEAL SpecSync agent wiring: plan-time list/read + verify-lane spec-check (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated |
-| 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: Always bun-invoke .ts spawn argv; thin env-gated LLM execute; task-run JSON summary helper; dogfood STATUS + #31 |
+Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |

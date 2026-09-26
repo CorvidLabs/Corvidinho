@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai",
+  "slug": "flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai",
+  "title": "Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP)",
+  "description": "Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP)",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "4ef180b31cf719ac1e1661d209b37360781dd026",
+  "created_at": 1790443482,
+  "updated_at": 1790443728,
+  "affected_specs": [
+    "agent",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/agent/execute.ts",
+    "src/agent/tier.ts",
+    "src/agent/tools.ts",
+    "src/agent/types.ts",
+    "src/agent/index.ts",
+    "src/cli.ts",
+    "tests/agent.tool-loop.test.ts",
+    ".env.example",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "When CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY) is set and tier is tool|code, task run runs an interruptible OpenAI-compatible tool loop over allowlisted plugins; read tier stays chat-only; no key keeps demo stub; AbortSignal stops promptly; SAFE-1 dangerous deny unchanged; prove-before-done still gates when filesChanged reported; fixture tests mock HTTP (no live key); Discord/WATCH keep --no-verify; STATUS DOGFOOD updated; SpecSync + fledge verify green; no #9; no invented ACCESS/bounty/MainNet HI"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

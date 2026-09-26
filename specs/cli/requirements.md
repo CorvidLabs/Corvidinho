@@ -57,14 +57,10 @@ Acceptance Criteria
 
 ### REQ-cli-007
 
-`corvidinho task run` SHALL drive the prove-before-done loop with an injectable
-execute path: demo stub when no LLM key is configured; thin env-gated
-OpenAI-compatible chat when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is
-set. `--no-verify` remains for bridge latency. `--json` emits structured
-result+events for Discord/WATCH callers to parse.
+`corvidinho task run` SHALL drive the prove-before-done loop with an injectable execute path: demo stub when no LLM key is configured; when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is set, OpenAI-compatible execute including the plugin tool loop (tier tool|code) or read-tier chat. `--no-verify` remains for bridge latency. `--json` emits structured result+events for Discord/WATCH callers to parse.
 
 Acceptance Criteria
-- Help still documents task run / --no-verify / --json.
+- Help still documents task run / --no-verify / --json / --tier.
 - Without LLM key, demo execute behaves as before (verify gate exercise).
 - With key env documented in `.env.example` (no secret values).
 
@@ -103,4 +99,12 @@ The CLI SHALL expose `corvidinho github watch` to start the poll loop and SHALL 
 
 Acceptance Criteria
 - Help lists `github watch`; missing token exits non-zero with checklist.
+
+### REQ-cli-009
+
+The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop. Bridges SHALL keep `--no-verify` available for latency; the verify gate SHALL remain available when not skipped.
+
+Acceptance Criteria
+- Help documents `--tier` and LLM env vars (no secrets).
+- task run forwards ToolCall/ToolResult when not `--json`.
 
