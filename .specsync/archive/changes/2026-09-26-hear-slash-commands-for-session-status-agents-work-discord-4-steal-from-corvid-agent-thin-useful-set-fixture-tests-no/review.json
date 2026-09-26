@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-slash-commands-for-session-status-agents-work-discord-4-steal-from-corvid-agent-thin-useful-set-fixture-tests-no",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "70380ed3306431c06e80d73e919279b801800604",
+  "contract_digest": "c0f074499d24dfc5f8edee7af846789ca8acfa68a28bac8872d94c81841e2b06",
+  "execution_digest": "66a432b542364e0d86104acb7532dbfadfd92b9c0d7689dc446f2669fd6f6e43",
+  "workspace_digest": "c71c6c78d2829bdf44cb5859d129a15ecb1ca374160f8cca53ef63e6880519d5",
+  "timestamp": 1790440617
+}

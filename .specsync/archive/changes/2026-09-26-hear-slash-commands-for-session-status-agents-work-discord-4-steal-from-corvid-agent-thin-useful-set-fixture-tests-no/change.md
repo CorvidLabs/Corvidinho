@@ -1,6 +1,6 @@
 ---
 id: hear-slash-commands-for-session-status-agents-work-discord-4-steal-from-corvid-agent-thin-useful-set-fixture-tests-no
-state: implementing
+state: archived
 type: feature
 base_commit: 8d6976d8f2317ba95d061733739247ec4bf6ed2a
 ---
