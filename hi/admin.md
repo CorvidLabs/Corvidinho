@@ -16,3 +16,7 @@ From Discord, an ADMIN can approve or add users, add or remove channels, and upd
 - **ADMIN-2**  Slash admin can add and remove channels from those allowlists.
 - **ADMIN-3**  Slash admin can show and update safe config knobs already represented in allowlist/env with an audit-friendly reply.
 - **ADMIN-4**  Every admin-shaped command re-checks permission at handler time (DISCORD-7); registration alone is never enough, and empty owner/admin lists mean nobody is ADMIN.
+
+## Notes (not numbered AC)
+
+- Memory forget/override (own or another user’s) requires ADMIN at handler time — see **MEMORY-ACL-3..4** in `hi/memory.md` (Leif amendment: self-forget is ADMIN too). Empty admin/owner = deny-all (**ADMIN-4**).

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "capture-leif-confirmed-discord-schedule-session-worktree-memory-acl-into-hi-with-amendment-self-forget-requires-admin",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "52362206b959fd0e21131f58a45ef9c692a3a187",
+      "contract_digest": "6c6999c4d9ae597411dc2b5ced69b40454fdcd34060380d48c20b984a4f4e7e8",
+      "execution_digest": "4c7cdbb8459c31979261eabdaca3095b70aa74ecd96e7dce74a55d74544b1917",
+      "workspace_digest": "c7ec12253096809601b737e28094a4ee87e90d3667184d7110d70ec9e8e485f5",
+      "timestamp": 1790447208
+    }
+  ]
+}
