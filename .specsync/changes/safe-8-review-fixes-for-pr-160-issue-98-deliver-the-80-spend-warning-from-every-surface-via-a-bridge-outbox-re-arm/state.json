@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "ede5f461fdd16166e8cfee218b0bf8e860fa5499",
   "created_at": 1790463159,
-  "updated_at": 1790463311,
+  "updated_at": 1790463690,
   "affected_specs": [],
   "affected_paths": [
     "src/agent/spend-alerts.ts",
