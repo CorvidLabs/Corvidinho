@@ -1,0 +1,32 @@
+{
+  "timestamp": 1790454006,
+  "commit": "5c347e0ec048ca02ec7a38764c17c87b1ef408f8",
+  "contract_digest": "9c4cb38035572fe666ce3fbf6cae5f6ebcebe52fd5d364b0eb866808fe7db56f",
+  "execution_digest": "a44bb424e11c1315904c48b492c732e50f66e78e11f79c783e002b216ebf39aa",
+  "workspace_digest": "d5e22b8eb52a9b42a890b65be151d538adad3d6be2f720c20083354bea17e45b",
+  "acceptance_input_digest": "3548535491dc8d9b5872c31533be6a1013379e4dbf13115ba9187ce39adc4877",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "tests/discord.slash.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8f8fd4a77d32f5eeefd8f088cdb5ec37c179b6a76d3e4a0b15b8dd74f11245c4",
+        "entry_digest": "beb7d9331213c9acab367ad2541314928f96d2dbb98b5b458d3c3b74d04f0962",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}
