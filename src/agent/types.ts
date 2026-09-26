@@ -48,6 +48,11 @@ export type ExecuteResult = {
   filesChanged: string[];
   /** Set when the tool loop stopped to ask the human (ask-human). */
   ask?: HumanAsk;
+  /**
+   * Set when the attempt failed outright (provider / HTTP / network error,
+   * malformed reply): runTask ends the run "failed", never "done" (AGENT-4/8).
+   */
+  error?: boolean;
 };
 
 export type ExecuteContext = {

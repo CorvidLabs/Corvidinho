@@ -119,7 +119,10 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       signal,
     });
     summary = exec.summary;
-    filesChanged = [...exec.filesChanged];
+    // AGENT-4: union across attempts. Files from an attempt whose verify
+    // failed stay in the gate, so a retry that changes nothing is verified
+    // again and can never be reported done.
+    filesChanged = [...new Set([...filesChanged, ...exec.filesChanged])];
 
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -128,7 +131,21 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     // AUTONOMY-1: the agent asked the human — blocked, not done, no verify.
     if (exec.ask) {
       setState(onEvent, "blocked");
-      return blockedTaskResult({ ...exec, ask: exec.ask }, attempts);
+      return blockedTaskResult({ ...exec, filesChanged, ask: exec.ask }, attempts);
+    }
+
+    // AGENT-4/8: a provider / HTTP failure is a failed run, never done.
+    if (exec.error) {
+      setState(onEvent, "failed");
+      return {
+        summary,
+        filesChanged,
+        verified: false,
+        verifySkipped: false,
+        cancelled: false,
+        state: "failed",
+        attempts,
+      };
     }
 
     const wantVerify =
