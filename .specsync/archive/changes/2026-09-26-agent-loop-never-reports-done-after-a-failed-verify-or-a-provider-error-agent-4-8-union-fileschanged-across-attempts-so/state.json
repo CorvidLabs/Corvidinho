@@ -7,11 +7,11 @@
   "title": "Agent loop never reports done after a failed verify or a provider error (AGENT-4/8): union filesChanged across attempts so a retry that changes nothing is re-verified, and provider/HTTP failures return an execute error flag that ends the run failed",
   "description": "Agent loop never reports done after a failed verify or a provider error (AGENT-4/8): union filesChanged across attempts so a retry that changes nothing is re-verified, and provider/HTTP failures return an execute error flag that ends the run failed",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "e8bbd215036e7dc8739ac9159afa19f17ae943c6",
   "created_at": 1790464103,
-  "updated_at": 1790464359,
+  "updated_at": 1790464534,
   "affected_specs": [
     "agent"
   ],
