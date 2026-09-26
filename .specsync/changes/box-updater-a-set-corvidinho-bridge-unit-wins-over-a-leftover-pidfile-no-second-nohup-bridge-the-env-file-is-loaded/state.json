@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "box-updater-a-set-corvidinho-bridge-unit-wins-over-a-leftover-pidfile-no-second-nohup-bridge-the-env-file-is-loaded",
+  "slug": "box-updater-a-set-corvidinho-bridge-unit-wins-over-a-leftover-pidfile-no-second-nohup-bridge-the-env-file-is-loaded",
+  "title": "Box updater: a set CORVIDINHO_BRIDGE_UNIT wins over a leftover pidfile (no second nohup bridge), the env file is loaded once before doctor and every restart/rollback path, and CORVIDINHO_BRIDGE_CMD runs with its text off the shell argv so pkill -f cannot kill its own shell",
+  "description": "Box updater: a set CORVIDINHO_BRIDGE_UNIT wins over a leftover pidfile (no second nohup bridge), the env file is loaded once before doctor and every restart/rollback path, and CORVIDINHO_BRIDGE_CMD runs with its text off the shell argv so pkill -f cannot kill its own shell",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "2ff0598784b5e7c72f2c0eedbb85131324e7e239",
+  "created_at": 1790464312,
+  "updated_at": 1790464406,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "scripts/corvidinho-update.sh",
+    "tests/update-helpers.test.ts",
+    "docs/BOX-UPDATE.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With CORVIDINHO_BRIDGE_UNIT set, a leftover pidfile no longer selects pidfile mode: the updater runs systemctl restart and starts no nohup bridge; a stale pidfile is removed and a live pid in it is never signalled. Without a unit, a leftover pidfile still selects pidfile mode. CORVIDINHO_ENV_FILE is sourced once after bun install and before doctor, so doctor, the unit/pidfile/command restart and every rollback restart (including after a failed bun install) see it; bun install does not. CORVIDINHO_BRIDGE_CMD runs with its text passed through the environment, so a pkill -f pattern in it cannot kill its own shell; docs/BOX-UPDATE.md pkill examples use an anchored pattern that matches the bridge process but not a shell holding the text."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
