@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 9
+version: 10
 status: draft
 files:
   - src/watch/types.ts
@@ -12,6 +12,9 @@ files:
   - src/watch/agent-client.ts
   - src/watch/poller.ts
   - src/watch/ack.ts
+  - src/watch/summary.ts
+  - src/watch/spawn-log.ts
+  - src/watch/rate-limit.ts
   - src/watch/index.ts
 
 db_tables: []
@@ -31,14 +34,20 @@ allowlisted targets (ALLOW-1). Assignment when watch username is in issue/PR
 assignees (#48). Poll-first for bot/VM; webhook deferred. Reliability harden:
 per-cycle poll logging, caught pollOnce errors, auto-ack GitHub comment on
 mention/comment start/continue (skip own username; once per event id), ignore
-own mentions in search, document org-search pagination bury risk.
+own mentions in search, document org-search pagination bury risk; plus
+WATCH-RELIABILITY-1..3 — post-run summary after successful auto-ack, durable
+spawn outcome logging, and GitHub 403 rate-limit backoff.
 
 ## Public API
 
 loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
 agent helpers, createFixtureSearchClient / createOctokitSearchClient,
-ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore).
+ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),
+summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
+SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
+rate-limit helpers (parseGithubRateLimit, GithubRateLimitError,
+computeRateLimitBackoffMs).
 
 ## Invariants
 
@@ -47,6 +56,9 @@ allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
 dedup; no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
+run summary at most once per event id and only after successful auto-ack;
+spawn outcomes logged structurally and appended to durable JSONL; on GitHub
+403 rate-limit back off via Retry-After/reset (default 60s) without tight loop;
 WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
 `CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
 user (REQ-watch-008).
@@ -57,12 +69,14 @@ Allowlisted mention or assignment→start_session; same repo#number→continue_s
 non-allowlisted user/repo→refuse quiet; duplicate id→skip; missing token /
 empty repos refuse start cleanly; poll cycle logs six counters; mention/comment
 start/continue posts ack unless sender is watch username or already acked;
-own-username comment omitted from events.
+own-username comment omitted from events; after successful ack + spawn finish,
+summary comment once per event id; spawn start/outcome log + JSONL row; 403
+rate-limit schedules backoff and skips tight re-poll.
 
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
-(user/repo); already processed.
+(user/repo); already processed; GitHub 403 rate-limit backoff.
 
 ## Dependencies
 
@@ -79,4 +93,5 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-26 | watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document: poll logging + error catch, auto-ack, ignore own mentions, pagination bury docs (REQ-watch-007) |
 | 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
+| 2026-09-26 | watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging: WATCH-RELIABILITY-1..3 — post-run summary, spawn outcome JSONL, 403 rate-limit backoff; package 0.0.10 |
 | 2026-09-26 | always-verify-issue-85-agent-4-agent-4-a-fledge-2-discord-and-watch-spawns-stop-passing-no-verify-so-chat-slash: Always verify (issue #85, AGENT-4 / AGENT-4.a / FLEDGE-2): Discord and WATCH spawns stop passing --no-verify so chat, slash, schedule and GitHub-started changes run the project verify lane; the gate also fires on a real worktree delta so edits no tool reported cannot skip it; every task result carries a plain verification line and failed Discord and schedule replies surface the FAILED line instead of only an exit code |
