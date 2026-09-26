@@ -67,10 +67,10 @@ export type SlashContext = {
   rateLimitConfig?: RateLimitConfig;
   /** Optional numeric permission level for rateLimitByLevel. */
   permLevelFor?: (userId: string) => number | undefined;
-  /** DISCORD-7 admin lists (empty = nobody ADMIN). */
+  /** Legacy admin lists — ignored for ADMIN (owner-only, IDENTITY-2). */
   adminUserIds?: string[];
   adminRoleIds?: string[];
-  /** IDENTITY-1 — configured owner (ADMIN unless muted/deny-listed). */
+  /** IDENTITY-1/2 — configured owner, the only ADMIN (unless muted/deny-listed). */
   owner?: OwnerRecord | null;
   /** Optional env for LLM status line (tests inject). */
   env?: NodeJS.ProcessEnv;

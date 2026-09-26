@@ -224,14 +224,14 @@ model-controlled in the tool loop). `--user`, `--admin`, and `--db`
 
 ADMIN for `memory-forget`, `memory-override`, and `memory-recall
 --include-deleted` SHALL be re-checked inside the handler at call time
-(ADMIN-4 / DISCORD-7): empty `CORVIDINHO_DISCORD_ADMIN_USERS` and
-`CORVIDINHO_DISCORD_ADMIN_ROLES` ⇒ nobody is ADMIN even when
-`CORVIDINHO_ACTING_IS_ADMIN=1` (MEMORY-ACL-4). The bridge's per-dispatch
+(ADMIN-4 / DISCORD-7). The bridge's per-dispatch
 `CORVIDINHO_ACTING_IS_ADMIN=1` is required on every path (a scheduled run
-spawned with it off never gets ADMIN), and the live config must agree:
-deny-listed or muted users are never ADMIN; a user id in the admin users list
-is ADMIN; otherwise only when admin roles are configured. Self-forget stays
-ADMIN-only.
+spawned with it off never gets ADMIN), and the live config must agree: ADMIN
+is owner-only (IDENTITY-2) — the acting user must be the configured owner;
+no owner ⇒ nobody is ADMIN even when `CORVIDINHO_ACTING_IS_ADMIN=1`
+(IDENTITY-3 / MEMORY-ACL-4); `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES`
+never grant ADMIN; deny-listed or muted users are never ADMIN. Self-forget
+stays ADMIN-only.
 Refusals stay opaque and never include memory content (MEMORY-ACL-2).
 
 Forget and override SHALL be two-phase (SAFE-4). Phase 1 (no `--confirm`)
@@ -249,8 +249,8 @@ version bump).
 Acceptance Criteria
 - `--user` / `--admin` / `--db` refused on all memory commands.
 - No acting user env ⇒ refused; other actors never see a user's memories.
-- Empty admin lists + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
-- Admin user id without the bridge bit (scheduled runs) refused; deny-listed or muted admin refused; role admin needs roles configured + env bit.
+- No owner + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
+- Owner id without the bridge bit (scheduled runs) refused; deny-listed or muted owner refused; admin user/role lists + env bit refused.
 - Phase 1 returns a token without content; same-turn confirm refused; a token the human did not supply refused; new-turn human-supplied confirm succeeds; replay refused.
 - Token for another memory, another actor, or changed override content refused; expired token refused.
 - `--include-deleted` refused for non-admins; `--include-deleted=false` is off.
@@ -280,15 +280,16 @@ Acceptance Criteria
 ### REQ-plugins-042
 
 The memory plugins' handler-time ADMIN re-check (REQ-plugins-011) SHALL treat
-the configured owner (IDENTITY-1; matched by Discord snowflake from the owner
-env or the allowlist `[owner]` section) as ADMIN, under the same conditions as
-the bridge: the per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` bit is still
-required, and a muted or deny-listed owner is not ADMIN. With no owner and
-empty admin lists nobody is ADMIN.
+only the configured owner (IDENTITY-1/2; matched by Discord snowflake from the
+owner env or the allowlist `[owner]` section) as ADMIN, under the same
+conditions as the bridge: the per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` bit
+is still required, and a muted or deny-listed owner is not ADMIN. With no
+owner nobody is ADMIN; the admin user/role lists are ignored.
 
 Acceptance Criteria
-- Owner + bridge bit may run memory forget phase 1 with empty admin lists.
-- Owner without the bit, a non-owner id, and a muted owner are refused.
+- Owner + bridge bit may run memory forget phase 1.
+- Owner without the bit, a non-owner id, a muted owner, and an admin-list user or role holder are refused.
+
 ### REQ-plugins-086
 
 The system SHALL register typed plugin `shell-exec` (PLUGIN-1). It SHALL declare

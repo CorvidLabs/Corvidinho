@@ -90,6 +90,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     gitTipSha: over.gitTipSha,
     adminUserIds: over.adminUserIds,
     adminRoleIds: over.adminRoleIds,
+    owner: over.owner,
     mutedUsers: over.mutedUsers,
   };
 }
@@ -137,7 +138,7 @@ describe("slash dispatch gates", () => {
   });
 
   test("non-allowlisted channel admin → ephemeral allowlist tip (DISCORD-DENY-2)", async () => {
-    const ctx = makeCtx({ adminUserIds: ["boss"] });
+    const ctx = makeCtx({ owner: { discordId: "boss" } });
     const ix = memoryInteraction({
       commandName: "status",
       channelId: "chan-other",

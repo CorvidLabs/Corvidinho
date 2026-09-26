@@ -203,10 +203,16 @@ GitHub login, or any token. Owner config problems (for example a non-snowflake
 Discord id) SHALL be named without echoing the value. A missing owner is
 informational and SHALL NOT change the doctor exit code.
 
+Because ADMIN is owner-only (IDENTITY-2), doctor SHALL print a
+`[warn] admin-lists` line when `CORVIDINHO_DISCORD_ADMIN_USERS` or
+`CORVIDINHO_DISCORD_ADMIN_ROLES` is set, saying they are ignored. The line
+SHALL NOT echo their values and SHALL NOT change the exit code.
+
 Acceptance Criteria
 - Doctor prints an `owner` line with configured yes/no plus the display name only.
 - Doctor never prints the owner Discord id, GitHub login, or tokens.
 - A missing owner does not flip the doctor exit code.
+- Legacy admin lists produce a `[warn] admin-lists` line without their values and without changing the exit code.
 - Fixture test runs doctor with a temp allowlist file / env (no network).
 ### REQ-cli-015
 

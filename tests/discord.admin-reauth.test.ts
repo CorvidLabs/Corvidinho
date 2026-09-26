@@ -72,13 +72,14 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     mutedUsers: over.mutedUsers ?? new Set(),
     adminUserIds: over.adminUserIds,
     adminRoleIds: over.adminRoleIds,
+    owner: over.owner,
     thinkingDebounceMs: 0,
     thinkingTickMs: 60_000,
   };
 }
 
 describe("resolvePermissionLevel (DISCORD-7)", () => {
-  test("empty admin lists ⇒ never ADMIN", () => {
+  test("no owner ⇒ never ADMIN (IDENTITY-3)", () => {
     const cfg = allowCfg();
     expect(
       resolvePermissionLevel({ userId: "anyone", allowlist: cfg }),
@@ -88,15 +89,22 @@ describe("resolvePermissionLevel (DISCORD-7)", () => {
     ).not.toBe(PermissionLevel.ADMIN);
   });
 
-  test("admin user → ADMIN; admin role → ADMIN", () => {
+  test("owner → ADMIN; admin user/role lists no longer grant ADMIN (IDENTITY-2)", () => {
     const cfg = allowCfg();
+    expect(
+      resolvePermissionLevel({
+        userId: "boss",
+        allowlist: cfg,
+        owner: { discordId: "boss" },
+      }),
+    ).toBe(PermissionLevel.ADMIN);
     expect(
       resolvePermissionLevel({
         userId: "boss",
         allowlist: cfg,
         adminUserIds: ["boss"],
       }),
-    ).toBe(PermissionLevel.ADMIN);
+    ).toBe(PermissionLevel.STANDARD);
     expect(
       resolvePermissionLevel({
         userId: "peon",
@@ -104,7 +112,7 @@ describe("resolvePermissionLevel (DISCORD-7)", () => {
         allowlist: cfg,
         adminRoleIds: ["role-admin"],
       }),
-    ).toBe(PermissionLevel.ADMIN);
+    ).toBe(PermissionLevel.STANDARD);
   });
 
   test("muted or deny user → BLOCKED", () => {
@@ -114,7 +122,7 @@ describe("resolvePermissionLevel (DISCORD-7)", () => {
         userId: "boss",
         mutedUsers: new Set(["boss"]),
         allowlist: cfg,
-        adminUserIds: ["boss"],
+        owner: { discordId: "boss" },
       }),
     ).toBe(PermissionLevel.BLOCKED);
     expect(
@@ -128,7 +136,7 @@ describe("resolvePermissionLevel (DISCORD-7)", () => {
       resolvePermissionLevel({
         userId: "alice",
         allowlist: cfg,
-        adminUserIds: ["boss"],
+        owner: { discordId: "boss" },
       }),
     ).toBe(PermissionLevel.STANDARD);
   });
@@ -149,7 +157,7 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
     const ctx = makeCtx({
       allowlist: allowCfg(),
       mutedUsers: muted,
-      adminUserIds: ["boss"],
+      owner: { discordId: "boss" },
     });
     const ix = memoryInteraction({
       commandName: "mute",
@@ -168,7 +176,7 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
     const ctx = makeCtx({
       allowlist: allowCfg(),
       mutedUsers: muted,
-      adminUserIds: ["boss"],
+      owner: { discordId: "boss" },
     });
     const muteIx = memoryInteraction({
       commandName: "mute",
@@ -189,7 +197,7 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
     expect(muted.has("victim")).toBe(false);
   });
 
-  test("admin role grants mute", async () => {
+  test("admin role no longer grants mute (IDENTITY-2)", async () => {
     const muted = new Set<string>();
     const ctx = makeCtx({
       allowlist: allowCfg(),
@@ -203,8 +211,9 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
       options: { user: "victim" },
     });
     const result = await handleSlashInteraction(ctx, ix);
-    expect(result.ok).toBe(true);
-    expect(muted.has("victim")).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("insufficient_permission");
+    expect(muted.size).toBe(0);
   });
 
   test("channel deny still wins before permission re-check", async () => {
@@ -212,7 +221,7 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
     const ctx = makeCtx({
       allowlist: allowCfg(),
       mutedUsers: muted,
-      adminUserIds: ["boss"],
+      owner: { discordId: "boss" },
     });
     const ix = memoryInteraction({
       commandName: "mute",
@@ -228,10 +237,10 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
     expect(muted.size).toBe(0);
   });
 
-  test("empty admin lists ⇒ /mute refused for everyone", async () => {
+  test("no owner ⇒ /mute refused for everyone (IDENTITY-3)", async () => {
     const muted = new Set<string>();
     const ctx = makeCtx({
-      allowlist: allowCfg(), // no adminUsers
+      allowlist: allowCfg(), // no owner
       mutedUsers: muted,
     });
     const ix = memoryInteraction({
@@ -247,7 +256,7 @@ describe("admin re-auth at run time (DISCORD-7)", () => {
   test("non-admin still can /status (no minPermission)", async () => {
     const ctx = makeCtx({
       allowlist: allowCfg(),
-      adminUserIds: ["boss"],
+      owner: { discordId: "boss" },
     });
     const ix = memoryInteraction({
       commandName: "status",

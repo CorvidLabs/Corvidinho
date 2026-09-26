@@ -200,10 +200,10 @@ export function goLiveChecklist(): string {
      CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES (or file [discord].users / .roles)
   4. Optional rate/mute (DISCORD-6): DISCORD_RATE_LIMIT_WINDOW_MS (default 60000),
      DISCORD_RATE_LIMIT_MAX (default 10), DISCORD_MUTED_USER_IDS (comma snowflakes)
-  5. Optional admin (DISCORD-7): CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES
-     (empty = nobody ADMIN; default-deny)
-     Optional owner (IDENTITY-1; ADMIN unless muted/denied): CORVIDINHO_OWNER_DISCORD_ID
-     (+ _GITHUB_LOGIN, _DISPLAY) or allowlist file [owner] discord_id / github_login / display
+  5. Owner = the only ADMIN (IDENTITY-1/2/3): CORVIDINHO_OWNER_DISCORD_ID
+     (+ _GITHUB_LOGIN, _DISPLAY) or allowlist file [owner] discord_id / github_login / display.
+     No owner = nobody ADMIN (default-deny). CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES
+     no longer grant ADMIN (ignored; the bridge warns if set).
   6. Optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
   7. Optional but preferred for slash dogfood: DISCORD_GUILD_ID=<guild snowflake>
      (guild PUT of the six commands + clear globals; avoids duplicate /agents)
