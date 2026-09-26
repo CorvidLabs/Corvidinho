@@ -1,6 +1,6 @@
 ---
 id: call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the
-state: draft
+state: implementing
 type: feature
 base_commit: 8747a9abb99c2322ea67c40da96fb60bc69172bc
 ---
