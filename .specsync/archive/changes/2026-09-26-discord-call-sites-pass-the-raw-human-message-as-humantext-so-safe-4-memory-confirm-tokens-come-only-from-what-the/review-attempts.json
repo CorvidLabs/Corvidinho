@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-call-sites-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-come-only-from-what-the",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "1eab6b863a89e4ef9fc766655e8dd75ba8059b15",
+      "contract_digest": "9cb4f43aaee122ccfc26700354ce17f21bbee9a35474168f3f30d722d82b902a",
+      "execution_digest": "72e6267119b27762195783b8af4ae8ff021e82de8b6d8b4df52b615737f1bb42",
+      "workspace_digest": "5658887469eea211231309832f9486a8aa2249a5a428b66d12ac3a4efcb72099",
+      "timestamp": 1790451336
+    }
+  ]
+}

@@ -7,11 +7,11 @@
   "title": "Discord call sites pass the raw human message as humanText so SAFE-4 memory confirm tokens come only from what the human typed (PR #128, after #131 memory inject)",
   "description": "Discord call sites pass the raw human message as humanText so SAFE-4 memory confirm tokens come only from what the human typed (PR #128, after #131 memory inject)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "a2fff442b44fef198ec6f6a6246eb361c5a8d12b",
   "created_at": 1790451332,
-  "updated_at": 1790451336,
+  "updated_at": 1790451353,
   "affected_specs": [
     "discord"
   ],
