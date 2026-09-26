@@ -164,6 +164,11 @@ consented tool such as `git-commit` (SAFE-1), changes what later runs see. A
 symlinks are followed only as paths inside the commit, never through the
 filesystem.
 
+The Planning SpecSync briefing reaches the model on every execute attempt
+(`ExecuteContext.specBriefing`, AGENT-2 / REQ-agent-004) in the user message,
+never the system prompt: spec files are working-tree data, so the block is
+labelled as project data, fenced, SAFE-6 scrubbed and capped at 8000 chars.
+
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
