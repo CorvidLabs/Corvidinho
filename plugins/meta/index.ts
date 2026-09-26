@@ -1,7 +1,5 @@
-import { list, register } from "../../src/plugins/registry.ts";
+import { get, list, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
-
-let loaded = false;
 
 const pluginsList: PluginCommand = {
   name: "plugins-list",
@@ -41,8 +39,7 @@ const dangerPing: PluginCommand = {
 };
 
 export function loadMetaPlugins(): void {
-  if (loaded) return;
+  if (get("plugins-list")) return;
   register(pluginsList);
   register(dangerPing);
-  loaded = true;
 }

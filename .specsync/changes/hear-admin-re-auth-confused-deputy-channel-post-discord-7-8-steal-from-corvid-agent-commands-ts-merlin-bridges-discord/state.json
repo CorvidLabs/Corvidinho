@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hear-admin-re-auth-confused-deputy-channel-post-discord-7-8-steal-from-corvid-agent-commands-ts-merlin-bridges-discord",
+  "slug": "hear-admin-re-auth-confused-deputy-channel-post-discord-7-8-steal-from-corvid-agent-commands-ts-merlin-bridges-discord",
+  "title": "HEAR admin re-auth + confused-deputy channel post (DISCORD-7,8) — steal from corvid-agent commands.ts + Merlin bridges/discord requester check; fixture tests; no ProcessManager; STATUS Done for #13",
+  "description": "HEAR admin re-auth + confused-deputy channel post (DISCORD-7,8) — steal from corvid-agent commands.ts + Merlin bridges/discord requester check; fixture tests; no ProcessManager; STATUS Done for #13",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "4fe4905f7108a76040cfda937e83bb0133857309",
+  "created_at": 1790441117,
+  "updated_at": 1790441325,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "plugins/discord",
+    "tests",
+    "STATUS.md",
+    ".env.example",
+    "allowlist.example.toml",
+    "docs",
+    "specs/discord"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Slash dispatch re-checks resolvePermissionLevel + minPermission before admin-shaped handlers (mute/unmute ADMIN); non-admin refused even if Discord UI showed the command (DISCORD-7). discord-post-message verifies requesting user can ViewChannel+SendMessages on target channel when requesting_user_id provided; strict mode refuses missing requester id (DISCORD-8 / Merlin confused-deputy). Fixture tests no live token; default-deny allowlists unchanged; no ProcessManager; STATUS Done for #13 when merged"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

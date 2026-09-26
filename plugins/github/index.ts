@@ -1,14 +1,12 @@
-import { register } from "../../src/plugins/registry.ts";
+import { get, register } from "../../src/plugins/registry.ts";
 import { githubCommands } from "./commands.ts";
 
-let loaded = false;
-
 export function loadGithubPlugins(): void {
-  if (loaded) return;
+  const first = githubCommands[0]?.name;
+  if (first && get(first)) return;
   for (const cmd of githubCommands) {
     register(cmd);
   }
-  loaded = true;
 }
 
 export { githubCommands };

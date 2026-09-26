@@ -107,6 +107,7 @@ export async function createLiveGateway(
     channelId: string;
     guildId: string | null;
     user: { id: string };
+    member?: { roles?: { cache?: { keys: () => IterableIterator<string> } } | string[] } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
       data: Array<{ name: string; value?: unknown; type?: number; options?: Array<{ name: string; value?: unknown }> }>;
@@ -161,6 +162,17 @@ export async function createLiveGateway(
       }
     };
 
+    const roleIds: string[] = [];
+    const member = interaction.member;
+    if (member?.roles) {
+      const roles = member.roles;
+      if (Array.isArray(roles)) {
+        roleIds.push(...roles);
+      } else if (roles.cache && typeof roles.cache.keys === "function") {
+        roleIds.push(...roles.cache.keys());
+      }
+    }
+
     return {
       id: interaction.id,
       commandName: interaction.commandName,
@@ -168,6 +180,7 @@ export async function createLiveGateway(
       channelId: interaction.channelId,
       guildId: interaction.guildId ?? undefined,
       userId: interaction.user.id,
+      roleIds,
       options,
       reply: async (opts) => {
         await send(opts, "reply");

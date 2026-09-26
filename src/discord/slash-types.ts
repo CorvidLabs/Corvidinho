@@ -26,6 +26,8 @@ export type SlashInteraction = {
   channelId: string;
   guildId?: string;
   userId: string;
+  /** Member role ids for DISCORD-7 permission resolve (optional). */
+  roleIds?: string[];
   options: Record<string, SlashOptionValue>;
   reply: (opts: SlashReplyPayload) => Promise<void>;
   deferReply?: (opts?: { ephemeral?: boolean }) => Promise<void>;

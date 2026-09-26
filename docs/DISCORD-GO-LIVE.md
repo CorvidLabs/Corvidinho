@@ -25,6 +25,8 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional: CORVIDINHO_ALLOWLIST_FILE=/path/to/allowlist.toml
 # optional DISCORD-6: DISCORD_RATE_LIMIT_WINDOW_MS=60000 DISCORD_RATE_LIMIT_MAX=10
 # optional DISCORD-6 mute seed: DISCORD_MUTED_USER_IDS=
+# optional DISCORD-7 admin: CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES (empty = nobody ADMIN)
+# optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
 ```
 
 Repo templates (no secrets):
@@ -50,4 +52,5 @@ corvidinho discord bridge
 # or: CORVIDINHO_DISCORD_DRY_RUN=1 corvidinho discord bridge   # no live connect
 ```
 
-Soft later (out of scope for #5 thin): issues #13–#14 (rate/mute #12 shipped separately).
+Soft later (out of scope for #5 thin): issue #14. Rate/mute #12 and admin re-auth /
+confused-deputy #13 ship as separate polish PRs.

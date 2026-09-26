@@ -19,6 +19,9 @@ export type DiscordAllowlists = {
   channels: string[];
   roles: string[];
   users: string[];
+  /** Admin-shaped slash (DISCORD-7). Empty = nobody is ADMIN (default-deny). */
+  adminUsers: string[];
+  adminRoles: string[];
   denyChannels: string[];
   denyRoles: string[];
   denyUsers: string[];
@@ -51,6 +54,8 @@ export function emptyDiscord(): DiscordAllowlists {
     channels: [],
     roles: [],
     users: [],
+    adminUsers: [],
+    adminRoles: [],
     denyChannels: [],
     denyRoles: [],
     denyUsers: [],

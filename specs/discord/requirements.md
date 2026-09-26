@@ -69,7 +69,7 @@ Acceptance Criteria
 
 ## Out of Scope
 
-Soft later #13–14. No voice, Angular, AlgoChat, iced, ProcessManager, SQLite mute table.
+Soft later #14. No voice, Angular, AlgoChat, iced, ProcessManager, SQLite mute table.
 
 ### REQ-discord-008
 
@@ -123,4 +123,39 @@ Acceptance Criteria
 - `rateLimitByLevel` override applies when permLevel provided.
 - Mention/reply/thread continue and slash share the same per-user limits/mutes.
 - No ProcessManager; secrets out of repo; default-deny allowlists unchanged.
+
+### REQ-discord-011
+
+The slash dispatcher SHALL resolve the caller's permission level at run time
+and SHALL refuse before invoking the handler when the resolved level is below
+the command's declared `minPermission` (DISCORD-7). Admin-shaped commands
+`/mute` and `/unmute` SHALL require ADMIN. Empty admin user/role allowlists
+SHALL mean nobody is ADMIN (default-deny). Discord application-command
+registration alone SHALL NOT authorize admin actions. Fixture tests SHALL cover
+non-admin refuse without a live Discord token. The bridge SHALL NOT introduce
+ProcessManager or weaken channel/user/role default-deny allowlists.
+
+Acceptance Criteria
+- Non-admin `/mute`/`/unmute` → not authorized; mute set unchanged.
+- Admin user or admin role → mute/unmute mutates in-memory set.
+- Channel allowlist refuse still wins before permission re-check.
+- Empty admin lists ⇒ no ADMIN; secrets out of repo; no ProcessManager.
+
+### REQ-discord-012
+
+When posting to a Discord channel on a user's behalf (`discord-post-message`
+with requesting user id), the system SHALL verify that the requesting user
+could post there (ViewChannel + SendMessages) — not only that the bot could
+(DISCORD-8 / Merlin confused-deputy). Channel allowlist SHALL still gate first.
+Optional strict mode SHALL refuse posts missing requesting user id. Archive
+cross-channel-guard advisory SHALL NOT be treated as the ACL. Fixture tests
+SHALL cover allow/deny without a live Discord token. The bridge SHALL NOT
+introduce ProcessManager or weaken allowlists.
+
+Acceptance Criteria
+- Requester lacks send/view → refuse; no post.
+- Requester has View+Send + allowlisted channel → may post (dry-run ok in tests).
+- Strict mode + missing requesting_user_id → refuse.
+- Allowlist deny still wins before requester check.
+- No ProcessManager; secrets out of repo; default-deny unchanged.
 
