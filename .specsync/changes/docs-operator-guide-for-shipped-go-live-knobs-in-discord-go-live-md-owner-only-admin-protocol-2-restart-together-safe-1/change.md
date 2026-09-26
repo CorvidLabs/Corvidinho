@@ -1,6 +1,6 @@
 ---
 id: docs-operator-guide-for-shipped-go-live-knobs-in-discord-go-live-md-owner-only-admin-protocol-2-restart-together-safe-1
-state: draft
+state: implementing
 type: documentation
 base_commit: cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f
 ---
