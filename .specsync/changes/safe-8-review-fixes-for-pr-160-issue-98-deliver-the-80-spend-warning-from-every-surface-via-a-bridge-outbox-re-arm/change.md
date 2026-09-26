@@ -1,6 +1,6 @@
 ---
 id: safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm
-state: approved
+state: implementing
 type: bug_fix
 base_commit: ede5f461fdd16166e8cfee218b0bf8e860fa5499
 ---
