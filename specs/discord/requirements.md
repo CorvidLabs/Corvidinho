@@ -474,15 +474,23 @@ Redaction SHALL be idempotent and leave ordinary text unchanged. Because
 callers also scrub text written by others (PR diffs, REQ-plugins-093), every
 scrub pattern SHALL run in time linear in its input.
 
+A PEM private-key block SHALL be redacted even when its END line is missing
+(text clipped mid-key, or a key pasted without its footer). From its
+`-----BEGIN … PRIVATE KEY-----` header, the redaction SHALL run to the END
+line, else to just before the next `-----BEGIN ` line, else to the end of the
+text. Other PEM blocks (public keys, certificates) SHALL stay unchanged.
+
 When the scrub rules tighten (`SCRUB_RULES_VERSION` increases), the next open
 of the shared DB SHALL re-scrub existing rows once and record the version in
-`schema_meta` (SAFE-6 re-scrub). No CLI or slash surface is added. Outbound
-reply scrubbing and a Discord-admin re-scrub command are draft SAFE-10 and out
-of scope until captured.
+`schema_meta` (SAFE-6 re-scrub). Version 2 adds the open private-key block
+rule. No CLI or slash surface is added. Outbound reply scrubbing beyond the
+spawned-run summary text (REQ-agent-232) and a Discord-admin re-scrub command
+are draft SAFE-10 and out of scope until captured.
 
 Acceptance Criteria
 - Each vendor shape is redacted; ordinary text is untouched; scrub is idempotent.
 - Hostile input (many private-key or JWT openers with no closer) scrubs in linear time.
+- A private-key block with no END line is redacted through the next BEGIN line or the end of the text; full blocks are still redacted one by one; public-key and certificate blocks are unchanged.
 - Sessions, work tasks, schedules, schedule runs and memories persist scrubbed.
 - Rows written before the current rules are re-scrubbed on next open; second open is a no-op.
 - Fixture tests use runtime-built fake secrets only.
@@ -790,24 +798,50 @@ Acceptance Criteria
 
 ### REQ-discord-044
 
-Amend: clarify asks SHALL mention the requester Discord id
-(`requesterDiscordId`), not the owner by default. Stuck asks SHALL mention
-the configured owner (AUTONOMY-2/4). When the requester is the owner, clarify
-naturally pings the owner.
-
-Sessions SHALL persist `pendingAsk` (schema v8 `pending_ask`). While set,
-a thin-ack continue SHALL restate the ask via `formatAskReply` and SHALL NOT
-spawn the agent to done (AUTONOMY-5). An explicit cancel clears pending ask
-(AUTONOMY-6). A substantive continue clears pending and runs the agent with
-prior-question context.
-
-The discord spec `files:` list SHALL include `src/discord/thin-ack.ts` and `tests/discord.thin-ack.test.ts`.
+Sessions SHALL persist `pendingAsk` (including askId / expiresAt / optional
+options). While set, a thin-ack continue SHALL restate the ask (stub+Choose
+when options; formatAskReply when free-text) and SHALL NOT spawn the agent.
+An explicit cancel SHALL clear pending ask. For free-text pending (no
+options), a substantive continue SHALL clear pending and run the agent with
+prior-question context. For button pending (has options), ordinary chat SHALL
+continue the conversation WITHOUT clearing pending; only button pick, cancel,
+or expiry SHALL clear it. Clarify asks SHALL mention the requester; stuck
+asks SHALL mention the configured owner.
 
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
-- Thin ack on blocked session restates question; pendingAsk remains.
-- Cancel clears pendingAsk with a short ack.
-- Substantive continue runs agent; prior question is in the prompt context.
+- Thin ack restates; pendingAsk remains.
+- Cancel clears pendingAsk.
+- Free-text substantive continue clears pending and runs agent.
+- Button pending survives unrelated chat turns until pick/cancel/expiry.
+
+### REQ-discord-045
+
+When an ask has two or more options (from ask-human `options` or a numbered
+list parsed from the question), the bridge SHALL post a short public Choose
+stub with a button, and on requester press SHALL reply with an ephemeral
+interaction listing the option buttons. Button prompts SHALL expire after
+about 30 minutes; a late press SHALL get a short "that choice expired".
+Free-text clarify SHALL be used only when options cannot be listed.
+
+Acceptance Criteria
+- Structured or numbered options → stub + components; ephemeral open shows choices.
+- Pick resumes the requester session with the chosen label.
+- Expired press returns ASK_CHOICE_EXPIRED and clears pending.
+- Question without listable options keeps the free-text ask-ping path.
+
+### REQ-discord-046
+
+Concurrent users in one channel SHALL each have their own session keyed by
+Discord user id (+ channel / thread). Reply-to-bot and thread continue SHALL
+only resume when the message author owns that session. Other users talking
+while one has an open button ask SHALL not share history or invalidate the
+other's buttons. Memory inject SHALL remain scoped to the acting Discord user.
+
+Acceptance Criteria
+- Two @mentions from different users yield two session ids.
+- A non-owner reply to another user's bot message does not continue that session.
+- Same user @mention reuses their active session in the channel.
 
 ### REQ-discord-203
 
@@ -892,4 +926,45 @@ Acceptance Criteria
 - A sibling checkout runs only when its origin passes the GitHub repo allowlist; a denied, unlisted or non-git sibling is refused.
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
+
+### REQ-discord-253
+
+The GITHUB-6 repo gate the `/work` draft-PR step (REQ-discord-088) applies to
+the push remote's OWNER/REPO SHALL, by default, use the allowlist file plus
+env overlays (ALLOW-4, `checkRepoGateAsync`), not env overlays alone, so a
+`deny_repos` / `deny_orgs` entry in the file refuses the PR step even when
+the allow list comes from env, and an allow list only in the file admits the
+repo. A refusal SHALL be reported as `repo-denied` before any commit, push,
+verify or PR call. No new env var, config key, slash command or option.
+
+Acceptance Criteria
+- File deny + env allow: the `/work` PR step says `not opened` with the GITHUB-6 denial, calls no plugin and pushes nothing.
+- File-only allow: the `/work` PR step opens the draft PR (dry run in tests).
+
+### REQ-discord-047
+
+When the bridge posts a button ask (Choose stub + components), it SHALL NOT leave a
+separate thinking embed whose primary status is "Needs your input" (or stuck
+equivalent) as the public UX. It SHALL prefer a single public Choose stub by
+editing the thinking progress message into that stub (clearing the embed) when
+`editMessage` is available (DISCORD-ASK-6).
+
+Acceptance Criteria
+- Button ask path: one tracked public message with Choose components; no parallel
+  "Needs your input" Done embed when collapse succeeds.
+- Fallback when editMessage unavailable: prior status embed + separate stub reply.
+
+### REQ-discord-048
+
+On successful completion after a button pick, or on a normal successful mention
+done, the bridge SHALL prefer editing the existing stub or thinking progress
+message into the final answer content instead of posting an extra "✅ Done"
+thinking status plus a new reply, when `editMessage` is available (DISCORD-ASK-7).
+Ephemeral Choose → options remains unchanged (DISCORD-ASK-1..5).
+
+Acceptance Criteria
+- Mention success: progress message becomes the answer body when collapse succeeds.
+- Button pick success: stub (reused as thinking) becomes the answer when collapse succeeds.
+- Fallback preserves Done embed + separate reply when editMessage is unavailable.
+
 

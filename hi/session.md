@@ -22,3 +22,8 @@ Sessions stay short-lived by default. Soft TTL keeps an active conversation; idl
 - **SESSION-WORKTREE-3**  Ending or abandoning a talk cleans up or parks its worktree safely (no silent leftover that another talk accidentally reuses as cwd).
 - **SESSION-WORKTREE-4**  Project selection (“run this on project X”) is explicit per talk/schedule; default project never silently switches mid-conversation.
 - **SESSION-WORKTREE-5**  Provenance: steal corvid-agent worktree isolation (`server/lib/worktree*`, Discord `/session` worktree, work-task worktrees, CHANGELOG worktree rows) — Linux headless only; no iced/desktop.
+
+- **SESSION-MULTI-1**  Concurrent users in one channel each have their own session keyed by Discord user id (+ channel); no shared history across people.
+- **SESSION-MULTI-2**  Other users can talk while one has an open button ask; both work independently; open buttons stay valid until press or timeout.
+- **SESSION-MULTI-3**  The same user can keep chatting while buttons are open; new messages continue their conversation; buttons remain until press or timeout (do not replace pending ask on a new message).
+- **SESSION-MULTI-4**  Memory stays scoped to the acting Discord user (IDENTITY-4 / MEMORY ACL).

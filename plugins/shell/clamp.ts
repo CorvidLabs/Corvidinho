@@ -1,6 +1,6 @@
 /**
  * SAFE-3 lexical cd/pushd clamp — steal Merlin fledge-plugin-shell (#570).
- * Conservative: ~ / $VAR / bare cd → refuse; no shell evaluation.
+ * Conservative: ~ / $VAR / globs / `cd -` / bare cd → refuse; no shell evaluation.
  */
 
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
@@ -77,26 +77,88 @@ export function isCdEscape(target: string, root: string): boolean {
   return false;
 }
 
+/** Drop quote and backslash characters (approximate shell quote removal). */
+function dequote(s: string): string {
+  return s.replace(/["'\\]/g, "");
+}
+
+/**
+ * Words that can sit in front of `cd` in the same fragment and still run it
+ * in this shell: reserved words, `{ }`, `!`, and builtin/command/eval.
+ */
+const PREFIX_WORDS = new Set([
+  "!", "{", "}", "if", "then", "else", "elif", "do", "while", "until", "time",
+  "builtin", "command", "eval",
+]);
+
+/** `NAME=value` assignment prefix (`X=1 cd /` still runs the cd builtin). */
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/** Targets the shell would expand ($VAR, `cmd`, globs, braces) — not lexical. */
+const EXPANSION = /[$`*?[{]/;
+
 /**
  * First offending cd/pushd target in `cmd`, or null when every cd-like is safe.
  * Splits on common shell metachars (; & | newline parens) — conservative lexer.
+ * Skips prefix words and assignments to find the command word, skips cd/pushd
+ * options to find the target, and refuses `-` (OLDPWD), expansions, and
+ * CDPATH-searched targets when the command sets CDPATH.
  */
 export function firstDisallowedCd(cmd: string, root: string): string | null {
   const separators = /[;&|\n()]/;
+  const setsCdpath = /\bCDPATH\b/.test(dequote(cmd));
   for (const rawFrag of cmd.split(separators)) {
-    const frag = rawFrag.trim();
-    if (!frag) continue;
-    const tokens = frag.split(/\s+/).filter(Boolean);
-    const head = tokens[0];
+    const tokens = rawFrag.split(/\s+/).filter(Boolean).map(dequote);
+    let i = 0;
+    while (i < tokens.length) {
+      const t = tokens[i]!;
+      if (PREFIX_WORDS.has(t)) {
+        i++;
+        // `command -p`, `time -p` …
+        while (i < tokens.length && tokens[i]!.startsWith("-")) i++;
+        continue;
+      }
+      if (t === "function") {
+        i += 2; // `function name { …`
+        continue;
+      }
+      if (ASSIGNMENT.test(t)) {
+        i++;
+        continue;
+      }
+      break;
+    }
+    const head = tokens[i];
     if (head !== "cd" && head !== "pushd") continue;
-    const targetRaw = tokens[1];
-    if (targetRaw == null) {
-      // Bare `cd` → home — escape
+    let j = i + 1;
+    while (j < tokens.length) {
+      const a = tokens[j]!;
+      if (a === "--") {
+        j++;
+        break;
+      }
+      if (/^-[A-Za-z@]+$/.test(a)) {
+        j++; // -P / -L / -e / -@ / -n
+        continue;
+      }
+      break;
+    }
+    const target = tokens[j];
+    if (target == null || target === "") {
+      // Bare `cd` (or only options) → home — escape
       return "$HOME";
     }
-    const stripped = stripQuotes(targetRaw);
-    if (isCdEscape(stripped, root)) {
-      return stripped;
+    if (target === "-") return "$OLDPWD";
+    if (EXPANSION.test(target)) return target;
+    if (
+      setsCdpath &&
+      !isAbsolute(target) &&
+      !/^\.\.?(\/|$)/.test(target)
+    ) {
+      return `$CDPATH/${target}`;
+    }
+    if (isCdEscape(target, root)) {
+      return target;
     }
   }
   return null;

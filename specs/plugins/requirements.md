@@ -366,11 +366,22 @@ Acceptance Criteria
 whose lexically-resolved `cd` or `pushd` target would land outside that root
 (SAFE-3). Refusals include absolute paths outside the root, `..` chains that
 escape, `~` / `~user`, `$VAR` references, and bare `cd` (home). Relative `cd`
-that stays under root and absolute `cd` under root SHALL be allowed.
+that stays under root and absolute `cd` under root SHALL be allowed. The clamp
+SHALL find a `cd` or `pushd` behind prefix words (`{`, `}`, `!`, `if`, `then`,
+`else`, `elif`, `do`, `while`, `until`, `time`, `builtin`, `command`, `eval`,
+`function NAME`) and `NAME=value` assignments, SHALL remove quotes and
+backslashes from words before checking them, and SHALL skip `cd` / `pushd`
+options (`-P`, `-L`, `-e`, `-@`, `-n`, `--`) to reach the real target. It SHALL
+refuse `-` (OLDPWD), a target containing `$`, a backtick, a glob or a brace,
+and, when the command mentions `CDPATH`, a relative target whose first
+component is not `.` or `..`. The spawned shell SHALL NOT inherit `CDPATH` or
+`OLDPWD` from the bot's environment.
 
 Acceptance Criteria
 - Unit fixtures cover allow/refuse cases above.
 - Integration: `cd /tmp && …` and `cd ..` from root refuse with exit 2 and SAFE-3 message; `cd sub && …` inside project succeeds when allowlisted.
+- `cd - && ls`, `cd -P / && …`, `{ cd /; …; }`, `if true; then cd /; …; fi` and `CDPATH=/ && cd tmp` refuse; `builtin` / `command` / `eval` / assignment-prefixed and quoted-head `cd /` refuse; `cd -P sub`, `cd -- sub` and `{ cd sub; }` stay allowed.
+- With `OLDPWD` set outside the root in the bot's environment, `cd -` is refused before spawn; with `CDPATH` set outside the root, `cd sub && pwd` prints the in-root `sub`.
 
 ### REQ-plugins-088
 
@@ -733,6 +744,32 @@ Acceptance Criteria
 - `files-edit --old / --new` accept values that start with `--`.
 - `shell-exec echo git push --dry-run origin main` runs with `--dry-run` intact; a trailing `--json` stays in the command; leading `--json`/`--command`/`--command=` still work; `--command X --dry-run` is refused before spawn.
 - `search-grep --no-verify src` searches for `--no-verify` under `src`; `--pattern` takes a `--` value, `--path=` works, and with `--pattern` the first positional is the path.
+
+### REQ-plugins-253
+
+The GITHUB-6 repo gate used by every GitHub plugin (plugins/github commands
+and review reads) SHALL build its allowlist with the ALLOW-4 loader
+(`loadAllowlist`: the allowlist file — `CORVIDINHO_ALLOWLIST_FILE` or
+~/.config/corvidinho/allowlist.toml|json — plus env overlays), the same
+loader WATCH ingress uses, and SHALL NOT fall back to env overlays alone.
+`deny_repos` / `deny_orgs` from the file SHALL win over an allow list from env
+(and over the community public-repo path), and an allow list only in the file
+SHALL admit matching repos. A missing, unreadable or malformed allowlist file
+SHALL contribute nothing (none of its allow or deny entries apply) while env
+overlays still apply, so with no env allow list the gate refuses
+(default-deny). `checkRepoGateAsync` SHALL expose the same file + env gate to
+other callers. The test suite SHALL NOT read the operator's allowlist file:
+the bun test preload points `CORVIDINHO_ALLOWLIST_FILE` at a missing file,
+and tests that hand a custom env object to a loader pass a missing file too.
+No new env var, config key, slash command or plugin.
+
+Acceptance Criteria
+- With deny lists only in the file and the allow list only in env, github-issue-create, github-issue-comment, github-pr-create, github-pr-review and the review reads refuse the denied repo or org with exit 3 and a GITHUB-6 error; nothing is posted.
+- With the allow list only in the file, allowed repos pass and unlisted repos are still refused.
+- A non-admin role session is refused for a file-denied repo even when it is public.
+- `corvidinho plugins run` with ~/.config/corvidinho/allowlist.toml honors its deny lists.
+- With a malformed (truncated JSON) or unreadable (a directory) allowlist file and no env allow list, the gate and github-issue-create refuse with exit 3 (allowlist empty); with env `CORVIDINHO_GITHUB_ALLOW_ORGS` the env allow list applies and none of the file's entries do.
+- With an operator allowlist file admitting corvidlabs (via `CORVIDINHO_ALLOWLIST_FILE` or ~/.config/corvidinho/allowlist.toml), `bun test` has no failures and no test sends a request to api.github.com while a GitHub token is set.
 
 ### REQ-plugins-237
 
