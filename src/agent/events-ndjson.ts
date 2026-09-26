@@ -314,6 +314,7 @@ const STATES: ReadonlySet<string> = new Set<AgentState>([
   "verifying",
   "done",
   "failed",
+  "blocked",
 ]);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -609,6 +610,7 @@ const STATE_LABELS: Record<AgentState, string> = {
   verifying: "verifying",
   done: "done",
   failed: "failed",
+  blocked: "needs input",
 };
 
 /** Map one frame to a status update; null for frames that change nothing shown. */

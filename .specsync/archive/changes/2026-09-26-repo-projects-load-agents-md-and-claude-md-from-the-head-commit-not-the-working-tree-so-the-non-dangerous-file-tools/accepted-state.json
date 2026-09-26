@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools",
+  "slug": "repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools",
+  "title": "Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150)",
+  "description": "Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "6e7cbd5d8511c765824f70f11b59b5e2d7da36b5",
+  "created_at": 1790457236,
+  "updated_at": 1790457916,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/project-instructions.ts",
+    "src/agent/index.ts",
+    "tests/agent.project-instructions.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "In a project root that holds .git, task run loads AGENTS.md / CLAUDE.md only from the HEAD commit: a working-tree overwrite by files-write never reaches the system prompt (the committed copy is loaded and the run note says working-tree changes were not loaded); an instruction file that exists only in the working tree (untracked, or unborn HEAD) is refused as not committed; a .git that git cannot use refuses present files instead of falling back to the working tree; committed symlinks are followed only inside the commit (outside, broken, directory-hop and looping links refused); cap/UTF-8/binary/scrub rules unchanged; a plain folder with no .git still reads the working tree; local git fixture tests"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "docs",
+    "plan",
+    "requirements",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

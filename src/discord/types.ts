@@ -6,6 +6,7 @@
  * protocol lockstep (DISCORD-10).
  */
 
+import type { HumanAsk } from "../agent/types.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 
@@ -116,6 +117,13 @@ export type AgentSpawnResult = {
   sessionId: string;
   summary: string;
   exitCode: number;
+  /** The run needs a human (AUTONOMY-1/2): question + owner ping. */
+  ask?: HumanAsk;
+  /**
+   * Verify facts from the child's `result` frame (AGENT-4); absent when no
+   * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).
+   */
+  task?: { verified: boolean; verifySkipped: boolean; state?: string };
 };
 
 export const NOT_AUTHORIZED = "not authorized";
@@ -124,7 +132,7 @@ export const NOT_AUTHORIZED = "not authorized";
  * Never post this publicly; MessageCreate has no ephemeral → silent there.
  */
 export const ALLOWLIST_DENY_TIP =
-  "This channel isn’t allowlisted. From an allowlisted channel run `/admin channels add` and pick it (live, no restart), or add its id to [discord].channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_ALLOW_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.";
+  "This channel isn’t allowlisted. From an allowlisted channel run `/admin channels add` and search/pick it (live, no restart), or add its id to [discord].channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_ALLOW_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.";
 /**
  * Ephemeral zero-width ack for non-admin slash deny (DISCORD-DENY-3).
  * Discord requires an interaction response within 3s; true zero response is

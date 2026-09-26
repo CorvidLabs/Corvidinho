@@ -1,0 +1,44 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790458440,
+      "digest": "f74aa927cb4ae8318892465fe7ed7a2efb1f06a5f4dab0b320f78e1aeb6ced5a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "backfill-0-0-17-notes-with-166-work-draft-pr-owner-only-and-169-instructions-from-head-that-shipped-in-the-v0-0-17",
+        "title": "Backfill 0.0.17 notes with #166 (/work draft PR, owner-only) and #169 (instructions from HEAD) that shipped in the v0.0.17 build",
+        "description": "Backfill 0.0.17 notes with #166 (/work draft PR, owner-only) and #169 (instructions from HEAD) that shipped in the v0.0.17 build",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "tests/update-helpers.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Docs-only CHANGELOG/STATUS backfill plus a changelog-helper test assertion",
+        "acceptance_criteria": [
+          "0.0.17 section lists #166 and #169; helper test asserts it"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790458447,
+      "digest": "7a47a169be920c6134224c88c7a2c567568e40b82c8fe9bcd2a70ad06a6062ed",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

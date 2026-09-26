@@ -28,11 +28,11 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/schedule pause` | `schedule` (id) | yes | Pause (ADMIN) |
 | `/schedule resume` | `schedule` (id) | yes | Resume (ADMIN) |
 | `/schedule delete` | `schedule` (id) | yes | Delete (ADMIN) |
-| `/announce channel` | `channel` (CHANNEL picker), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
+| `/announce channel` | `channel` (STRING + autocomplete), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
 | `/announce show` | — | yes | Show current announcements channel; empty = not configured (DISCORD-ANNOUNCE-3) |
 | `/admin users add` | `user` (user picker, required) | yes | Approve a user: add to `[discord].users` in the allowlist file + live (owner only; ADMIN-1) |
-| `/admin channels add` | `channel` (CHANNEL picker, guild text, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
-| `/admin channels remove` | `channel` (CHANNEL picker, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
+| `/admin channels add` | `channel` (STRING + autocomplete by name/id, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
+| `/admin channels remove` | `channel` (STRING + autocomplete from allowlist / name/id, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
@@ -51,7 +51,7 @@ flowchart TD
   B -->|no| C[Skip — default-deny]
   B -->|yes| D[postAnnouncement to announce channel only]
   D --> E[Never post to dogfood allowlist by default]
-  F["/announce channel CHANNEL picker"] --> G{ADMIN re-check}
+  F["/announce channel STRING+autocomplete"] --> G{ADMIN re-check}
   G -->|deny| H[Ephemeral not authorized]
   G -->|allow| I[Persist channel id in SQLite]
   J["/announce show or /status"] --> K[Show channel or not configured]
@@ -107,6 +107,15 @@ Live source (AGENT-8 / DISCORD-3, #73; AGENT-4 / #85): the bridge spawns `task r
 ### Session replies (mention / continue)
 
 After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced to the user message. Summary comes from the stream's final `result` frame (same `result` as `task run --json`), falling back to the raw output summary. No attribution footer on Discord outbound today.
+
+### Questions and owner ping (AUTONOMY-1/2)
+
+When a run needs a human, the reply is a question instead of a summary. Two cases:
+
+- **Clarify** — the agent called its `ask-human` tool (the task cannot go on without a human choice). The run ends in state `blocked` (never `done`, verify not run).
+- **Stuck** — verification still fails after every retry. The run stays `failed` (AGENT-4) and asks how to proceed.
+
+The reply quotes the question, mentions the configured owner (`CORVIDINHO_OWNER_DISCORD_ID` / allowlist `[owner]`, IDENTITY-1) on its first line, and for mentions ends with "Reply to this message to answer." — replying continues the same session (DISCORD-2). The post limits allowed mentions to the owner plus the replied-to user; `@everyone` / `@here` in the model's text are defanged and secrets scrubbed. No owner configured means no ping (IDENTITY-3); the question still posts and the bridge logs a warning. Scheduled runs post the same question (prefixed with the schedule line) to the schedule's channel and ping the owner once per question: a schedule stuck on the same question keeps posting it each tick without a mention until a run succeeds, the schedule is paused/resumed, or the question changes (digest kept in the schedule row, schema v7). Pings go only where the bridge already posts — no DMs. `/work` and `/session start` show the question in their summary text but do not ping yet; a `/work` run waiting on an answer opens no PR.
 
 ### Slash replies
 
@@ -165,6 +174,7 @@ flowchart TD
 - Presence: `src/discord/presence.ts`
 - Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
 - Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
+- Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
 
 
 ## Session worktrees (SESSION-WORKTREE-1..5)
@@ -187,3 +197,25 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 Ops: restart the Discord bridge after deploying **0.0.5** so presence and spawn
 paths pick up the build. Do not leave abandoned worktrees under the base dir
 from crashed runs — prune via `git worktree prune` in the project if needed.
+
+### `/work` → draft PR (AUTONOMOUS-3, GITHUB-2/5, REQ-discord-088)
+
+After a `/work` run finishes, its reply carries one `PR:` line. A draft PR is
+opened only when every gate holds; otherwise the line says plainly why not.
+
+| Gate | When it fails |
+|------|---------------|
+| Run finished cleanly, verify did not fail | `PR: not opened — …` (nothing verified to ship) |
+| Run did not stop to ask a human (state `blocked`, AUTONOMY-1) | `PR: not opened — the work run is waiting for your answer to its question.` |
+| Ran in a git worktree with changes | `PR: not opened — …` / `PR: none — …` |
+| `git-commit` (dirty tree only), `git-push`, `github-pr-create` allowlisted (`CORVIDINHO_ALLOWLIST`, GITHUB-5) | Nothing is committed or pushed; the changes stay on `talk/…` |
+| Remote `OWNER/REPO` passes the repo gate (GITHUB-6) | Gate error, nothing pushed |
+| Tree passed `fledge lanes run verify --non-interactive` (from the run's result frame, else re-run once) | Nothing pushed (AGENT-4) |
+
+Steps run through the existing typed plugins (`git-commit` → `git-push` →
+`github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
+is built from the real diff against the remote default branch (name-status,
+diffstat, commits) plus the verify result, with repo/model text in code fences
+and secrets scrubbed. Allowlisting these plugins is process-wide: the spawned
+agent can call them too.
+

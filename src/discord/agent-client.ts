@@ -6,6 +6,7 @@
  * Injectable for tests; no ProcessManager.
  */
 
+import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
@@ -107,7 +108,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
         },
       });
-      const { exitCode, summary, totalTokens } = await collectTaskRunStream({
+      const { exitCode, summary, totalTokens, result } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
@@ -131,11 +132,24 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         tokens: { estimated: finalTok },
         message: "Agent finished",
       });
+      // AUTONOMY-1/2: a validated ask from the result frame, if any.
+      const ask = askFromUnknown(result?.ask);
       return {
         ok: exitCode === 0,
         sessionId,
         summary,
         exitCode,
+        ...(ask ? { ask } : {}),
+        // Verify facts for the /work PR gate (REQ-discord-088).
+        ...(result
+          ? {
+              task: {
+                verified: result.verified === true,
+                verifySkipped: result.verifySkipped === true,
+                state: result.state,
+              },
+            }
+          : {}),
       };
     },
   };

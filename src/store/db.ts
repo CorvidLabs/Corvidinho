@@ -167,7 +167,14 @@ CREATE INDEX IF NOT EXISTS idx_watch_sessions_activity
   ON watch_sessions(last_activity_at);
 `;
 
-export const SCHEMA_VERSION = 6;
+/**
+ * v7 — schedule owner-ping dedupe (AUTONOMY-2, #44): digest of the question
+ * the owner was last pinged about for a schedule, so a stuck schedule pings
+ * once instead of every tick. A digest only, never the question text.
+ */
+const SCHEMA_V7_COLUMNS = ["ask_ping_key"] as const;
+
+export const SCHEMA_VERSION = 7;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -225,6 +232,17 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V6_SQL);
     db.run("UPDATE schema_meta SET value = '6' WHERE key = 'version'");
     version = 6;
+  }
+  if (version < 7) {
+    for (const col of SCHEMA_V7_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedules ADD COLUMN ${col} TEXT`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.run("UPDATE schema_meta SET value = '7' WHERE key = 'version'");
+    version = 7;
   }
 }
 

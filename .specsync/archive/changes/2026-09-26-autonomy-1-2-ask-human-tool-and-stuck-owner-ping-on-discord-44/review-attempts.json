@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "beed94fa09135d9d3411a2eaca7e5256994646cb",
+      "contract_digest": "a1992cc875f3c85a37d07273720c47e6ebffb8042d7b492374d3fb425710ad56",
+      "execution_digest": "54b5dac317b822bccbe201d9e9149db1451d893647cdc7cd539ce564745c4c11",
+      "workspace_digest": "f79cb189ade8b0e1e83d76d10c9027a0787ed016311f60b9537657792f55ddbe",
+      "timestamp": 1790458788
+    }
+  ]
+}

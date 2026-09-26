@@ -3,6 +3,10 @@
  * Tests inject InboundMessage / SlashInteraction — no ProcessManager.
  */
 
+import {
+  buildChannelAutocompleteChoices,
+  type ChannelCandidate,
+} from "./channel-autocomplete.ts";
 import { buildSlashCommandBodies } from "./slash-commands.ts";
 import { registerSlashCommandsLive } from "./register-commands.ts";
 import type {
@@ -19,12 +23,22 @@ export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
   /** Slash commands (DISCORD-4). */
   onSlash?: (interaction: SlashInteraction) => void | Promise<void>;
+  /**
+   * Live allowlisted channel ids for `/admin channels remove` autocomplete.
+   * Bridge wires `config.channelIds` (mutated in place by /admin).
+   */
+  getAllowlistedChannelIds?: () => readonly string[];
   onReady?: (botUserId: string) => void;
   /** Optional outbound helper used by bridge after agent reply. */
   reply?: (opts: {
     channelId: string;
     content: string;
     replyToMessageId?: string;
+    /**
+     * When set, only these users (plus the replied-to author) may be pinged
+     * by this post — used for the AUTONOMY-2 owner ping.
+     */
+    mentionUserIds?: string[];
   }) => Promise<{ messageId: string } | null>;
   /** Progress embeds (DISCORD-3). */
   sendEmbed?: (opts: {
@@ -327,6 +341,14 @@ export async function createLiveGateway(
       });
 
       client.on(Events.InteractionCreate, (interaction) => {
+        if (interaction.isAutocomplete()) {
+          Promise.resolve(
+            respondChannelAutocomplete(interaction as never, handlers, ChannelType),
+          ).catch((err) => {
+            console.error("[discord] autocomplete handler error:", err);
+          });
+          return;
+        }
         if (!interaction.isChatInputCommand()) return;
         if (!handlers.onSlash) return;
         const adapted = adaptChatInput(interaction as never);
@@ -347,7 +369,7 @@ export async function createLiveGateway(
   };
 
   // Attach reply helper for bridge
-  handlers.reply = async ({ channelId, content, replyToMessageId }) => {
+  handlers.reply = async ({ channelId, content, replyToMessageId, mentionUserIds }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
@@ -358,6 +380,15 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        ...(mentionUserIds
+          ? {
+              allowedMentions: {
+                parse: [],
+                users: mentionUserIds,
+                repliedUser: true,
+              },
+            }
+          : {}),
       });
       return { messageId: sent.id };
     } catch (err) {
@@ -414,6 +445,101 @@ export async function createLiveGateway(
   };
 
   return gateway;
+}
+
+
+/** Discord autocomplete deadline is 3s; skip stale replies (corvid-agent pattern). */
+const AUTOCOMPLETE_DEADLINE_MS = 2500;
+
+type ChannelTypeEnum = { GuildText: number };
+
+/**
+ * Live autocomplete for STRING channel options on /admin channels add|remove
+ * and /announce channel. Lists guild text channels from cache (Guilds intent);
+ * remove scopes to the live allowlist when provided.
+ */
+async function respondChannelAutocomplete(
+  interaction: {
+    commandName: string;
+    createdTimestamp: number;
+    guild: {
+      channels: {
+        cache: { values: () => IterableIterator<{ id: string; name: string; type: number }> };
+      };
+    } | null;
+    options: {
+      getFocused: (full?: boolean) => { name: string; value: string | number } | string;
+      getSubcommand: (required?: boolean) => string | null;
+      getSubcommandGroup?: (required?: boolean) => string | null;
+    };
+    respond: (choices: { name: string; value: string }[]) => Promise<unknown>;
+  },
+  handlers: GatewayHandlers,
+  ChannelType: ChannelTypeEnum,
+): Promise<void> {
+  const started = interaction.createdTimestamp;
+  let choices: { name: string; value: string }[] = [];
+  try {
+    const focusedRaw = interaction.options.getFocused(true);
+    const focused =
+      typeof focusedRaw === "string"
+        ? { name: "channel", value: focusedRaw }
+        : focusedRaw;
+    if (!focused || focused.name !== "channel") {
+      await interaction.respond([]);
+      return;
+    }
+    const query = String(focused.value ?? "");
+    let group: string | null = null;
+    let sub: string | null = null;
+    try {
+      group = interaction.options.getSubcommandGroup?.(false) ?? null;
+    } catch {
+      /* no group */
+    }
+    try {
+      sub = interaction.options.getSubcommand(false);
+    } catch {
+      /* no sub */
+    }
+
+    const guild = interaction.guild;
+    const candidates: ChannelCandidate[] = [];
+    if (guild?.channels?.cache) {
+      for (const ch of guild.channels.cache.values()) {
+        if (ch.type === ChannelType.GuildText) {
+          candidates.push({ id: ch.id, name: ch.name ?? "", type: ch.type });
+        }
+      }
+    }
+
+    const isRemove =
+      interaction.commandName === "admin" && group === "channels" && sub === "remove";
+    const allowlisted = handlers.getAllowlistedChannelIds?.() ?? [];
+    const opts = isRemove
+      ? { idAllowlist: allowlisted, textOnly: true as const }
+      : { textOnly: true as const };
+
+    // If remove allowlist is empty, still offer nothing useful rather than all channels.
+    if (isRemove && allowlisted.length === 0) {
+      choices = [];
+    } else {
+      choices = buildChannelAutocompleteChoices(candidates, query, opts);
+    }
+  } catch (err) {
+    console.error("[discord] autocomplete build failed:", err);
+    choices = [];
+  }
+
+  if (Date.now() - started >= AUTOCOMPLETE_DEADLINE_MS) {
+    console.warn("[discord] autocomplete skipped (deadline exceeded)");
+    return;
+  }
+  try {
+    await interaction.respond(choices);
+  } catch (err) {
+    console.error("[discord] autocomplete respond failed:", err);
+  }
 }
 
 /** No-op gateway for dry-run / missing-token paths that still want orchestration tests. */

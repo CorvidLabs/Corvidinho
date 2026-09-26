@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.0.17
+
+### Searchable channel add/remove (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend)
+
+- **`/admin channels add|remove`** — replace Discord’s limited native **CHANNEL picker** with **STRING + autocomplete**: type a few letters of the channel name (case-insensitive substring, emoji/unicode names ok) or paste a snowflake / `<#id>`; Discord returns ≤25 choices, ranked exact → prefix → substring → id.
+- **`/announce channel`** — same searchable STRING + autocomplete (HI DISCORD-ANNOUNCE-2 amended 2026-09-26).
+- Remove autocomplete scopes to the **live allowlist** when present; add/announce search all guild text channels from the gateway cache (Guilds intent).
+- Handler still re-checks ADMIN (ADMIN-4 / DISCORD-7); persist path unchanged (`allowlist.toml` / announce SQLite).
+- Discord API limits: autocomplete **max 25 choices**, **~3s** respond deadline, choice name/value **≤100** chars.
+
+### Ops
+
+- Package version **0.0.17** — presence (DISCORD-12) reads `v0.0.17` after restart.
+- **Restart the Discord bridge** and re-register slash commands so STRING + autocomplete replaces the old CHANNEL options.
+
+_Also in the v0.0.17 build (backfilled — merged just before this cut):_
+
+### `/work` ships a draft PR — [#166](https://github.com/CorvidLabs/Corvidinho/pull/166) (#88)
+
+- After a `/work` run in its git worktree, the bridge commits, pushes the work branch and opens a **draft PR** whose body comes from the real diff (files, diffstat, commits, verify result) — AUTONOMOUS-3 / GITHUB-2.
+- Only when verify passed (or passes on one re-run, AGENT-4), `git-commit` / `git-push` / `github-pr-create` are allowlisted (GITHUB-5), the repo passes GITHUB-6, and the requester is the **owner** (ROLES-CHAT-3). Otherwise one plain line says why and the changes stay on the work branch. Never pushes the base branch or a switched/detached HEAD.
+
+### Project instructions come from the committed tree — [#169](https://github.com/CorvidLabs/Corvidinho/pull/169) (#84)
+
+- In git projects `AGENTS.md` / `CLAUDE.md` are read from the **HEAD commit**, so the agent's own file edits cannot plant instructions for later runs; non-git projects keep the working-tree read.
+- To let `/work` open PRs, allowlist `git-commit`, `git-push` and `github-pr-create` in `CORVIDINHO_ALLOWLIST` (owner-only either way).
+
 ## 0.0.16
 
 ### New tools and a daemon

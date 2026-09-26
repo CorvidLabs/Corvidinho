@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord",
+  "implementation_commit": "8b5c7fa9c350d79d8b4e067b8e0f2dc4c5fcabe8",
+  "implementation_tree": "d31dd1dc57b1270b10b972b976a4c2ce0141d152",
+  "contract_digest": "a6cb90dac342d40208a1c9dcf471826d70e59ca4c213d7f438870d031a04370c",
+  "workspace_digest": "133cbdd217381b732ea348c59d6a895a44570fed2befa4c7fc3565424ef5d11a",
+  "closing_digest": "9fb33787af9d04a985659518d26f9959512d58c1788f4e883ba4e61bf58c4756",
+  "review_digest": "1d4a1f6e58a4c60afa9b447245bbed1b5aa0a9f773c88468858007c70702755d",
+  "finalization_digest": "10db03f0f6e01dca7276c6ca662d70ed67e4e71d1a6e7e52f489ede550cd003f",
+  "timestamp": 1790458213
+}
