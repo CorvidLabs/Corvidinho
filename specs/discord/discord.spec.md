@@ -13,6 +13,8 @@ files:
   - src/store/index.ts
   - src/store/paths.ts
   - src/store/session-ttl.ts
+  - src/store/scrub.ts
+  - tests/store.scrub.test.ts
   - src/worktree/index.ts
   - src/worktree/manager.ts
   - src/worktree/cleanup.ts

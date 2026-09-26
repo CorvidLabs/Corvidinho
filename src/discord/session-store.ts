@@ -6,6 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { scrubOpt } from "../store/scrub.ts";
 import {
   isSessionExpired,
   resolveSessionTtlMs,
@@ -212,7 +213,7 @@ export class SessionStore {
         session.channelId,
         session.threadId ?? null,
         session.userId,
-        session.topic ?? null,
+        scrubOpt(session.topic),
         session.project ?? null,
         session.worktreePath ?? null,
         session.worktreeBranch ?? null,
