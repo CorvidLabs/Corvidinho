@@ -79,7 +79,25 @@ jobs:
           echo "pkg_version=${PKG_VER}" >> "$GITHUB_OUTPUT"
           echo "body_path=/tmp/corvidinho-release-body.md" >> "$GITHUB_OUTPUT"
 
+      - name: Idempotency — skip create if release exists
+        id: exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          echo "::group::gh release view ${TAG}"
+          if gh release view "$TAG" --repo "${{ github.repository }}"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release ${TAG} already exists — idempotent success."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existing release for ${TAG}; will create."
+          fi
+          echo "::endgroup::"
+
       - name: Create GitHub Release
+        if: steps.exists.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
@@ -90,3 +108,14 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verbose summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          echo "::group::Final release view"
+          gh release view "$TAG" --repo "${{ github.repository }}"
+          echo "::endgroup::"
+          echo "::notice::release job complete for ${TAG} (exists_was=${{ steps.exists.outputs.exists }})"
