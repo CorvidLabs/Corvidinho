@@ -1,0 +1,41 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790444529,
+      "digest": "3682d22deaa065d6f4e588eed443583aed908d19db7e02d70c891bfba7b30d59",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "enhance-corvidinho-update-sh-with-pidfile-tmp-corvidinho-discord-bridge-pid-stop-start-and-wait-for-logged-in-or",
+        "title": "Enhance corvidinho-update.sh with pidfile /tmp/corvidinho-discord-bridge.pid stop/start and wait for logged-in or protocol OK else rollback; docs/UPDATE.md pointer; release workflow idempotent if release exists; helper tests; bump 0.0.3",
+        "description": "Enhance corvidinho-update.sh with pidfile /tmp/corvidinho-discord-bridge.pid stop/start and wait for logged-in or protocol OK else rollback; docs/UPDATE.md pointer; release workflow idempotent if release exists; helper tests; bump 0.0.3",
+        "kind": "operations",
+        "affected_specs": [],
+        "affected_paths": [
+          ".github/workflows/release.yml",
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/UPDATE.md",
+          "package.json",
+          "scripts",
+          "tests"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Ops polish on #45: pidfile + ready-wait + UPDATE.md + release idempotency + tests + 0.0.3. No HI/canonical spec behavior change.",
+        "acceptance_criteria": [
+          "1) update script stops/starts bridge via /tmp/corvidinho-discord-bridge.pid (keeps systemd/BRIDGE_CMD); waits for [discord] logged in or protocol OK in log within timeout else rollback+restart; never Discord panic. 2) docs/UPDATE.md short pointer to BOX-UPDATE + pidfile/ready notes. 3) release.yml idempotent when release exists. 4) helper unit tests. 5) package 0.0.3 + STATUS/CHANGELOG."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}

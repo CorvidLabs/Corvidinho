@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI captured** (MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION) — impl deferred behind slash guild PUT + GH go-live |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater pidfile/ready + release idempotency |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -12,7 +12,7 @@
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
 | Trust / Augur / Attest | **Not** wired — do not re-add Trust thrash on this bootstrap |
 | Merge policy | Merge when verify + SpecSync change cycle are green (Leif/CoS standing order) |
-| Box update | `scripts/corvidinho-update.sh` + `docs/BOX-UPDATE.md` — pull/install/doctor/restart + rollback; no Discord panic spam |
+| Box update | `scripts/corvidinho-update.sh` + `docs/BOX-UPDATE.md` / `docs/UPDATE.md` — pidfile ready-wait + rollback; no Discord panic spam |
 | Releases | Tag `v*` → `.github/workflows/release.yml` creates GitHub Release with verbose notes |
 
 ## Not inventing
@@ -58,6 +58,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HI drafts folder | #41–#44 → [#47](https://github.com/CorvidLabs/Corvidinho/pull/47) | `docs/hi-drafts/` proposals (superseded by capture) |
 | Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
 | HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → (this PR) | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
+| v0.0.3 updater polish | → (this PR) | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
 
 ### In flight / next
 
@@ -132,6 +133,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 - For Discord callers: HEAR (#5) **live on Leif's box** (token + allowlists); bun-spawn for `.ts` fixed this PR
 - For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later
 - Attribution (#20→#24) on outbound PRs — **shipped**
+- Package **0.0.3** — updater pidfile/ready + release idempotency + `docs/UPDATE.md`
 - Package **0.0.2** + richer Discord `/status` (shared version, LLM mode without key, slash names, optional git tip) — [#34](https://github.com/CorvidLabs/Corvidinho/pull/34)
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 

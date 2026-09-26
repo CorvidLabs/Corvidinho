@@ -1,28 +1,36 @@
 #!/usr/bin/env bash
 # Safe Corvidinho box update: fetch → checkout → bun install → doctor → restart bridge.
-# On failure after checkout/install: attempt rollback to previous tip. Never Discord-spam.
+# On failure after checkout/install/ready-wait: rollback to previous tip. Never Discord-spam.
 #
 # Usage:
-#   ./scripts/corvidinho-update.sh                 # update to origin/main
-#   CORVIDINHO_REF=v0.0.2 ./scripts/corvidinho-update.sh
+#   ./scripts/corvidinho-update.sh
+#   CORVIDINHO_REF=v0.0.3 ./scripts/corvidinho-update.sh
 #   CORVIDINHO_UPDATE_DRY_RUN=1 ./scripts/corvidinho-update.sh
 #
 # Env:
-#   CORVIDINHO_REF          git ref (tag/branch/sha); default origin/main
-#   CORVIDINHO_ROOT         repo root; default script's parent parent or cwd if .git
-#   CORVIDINHO_BRIDGE_UNIT  systemd unit name; default empty (skip systemctl)
-#   CORVIDINHO_BRIDGE_CMD   restart command when unit unset; default empty (skip restart)
-#   CORVIDINHO_UPDATE_DRY_RUN=1  plan only; no checkout/install/restart
-#   CORVIDINHO_SKIP_DOCTOR=1      skip doctor gate (not recommended)
-#   CORVIDINHO_SKIP_RESTART=1     skip restart even if unit/cmd set
+#   CORVIDINHO_REF            git ref (tag/branch/sha); default origin/main
+#   CORVIDINHO_ROOT           repo root
+#   CORVIDINHO_ENV_FILE       secrets env to source before start (default ~/.config/corvidinho/env)
+#   CORVIDINHO_PIDFILE        default /tmp/corvidinho-discord-bridge.pid
+#   CORVIDINHO_BRIDGE_LOG     default /tmp/corvidinho-discord-bridge.log
+#   CORVIDINHO_READY_TIMEOUT  seconds (default 60)
+#   CORVIDINHO_USE_PIDFILE=1  force pidfile stop/start (default: use pidfile if file exists or no UNIT/CMD)
+#   CORVIDINHO_BRIDGE_UNIT    systemd unit (optional)
+#   CORVIDINHO_BRIDGE_CMD     restart command when no unit (optional)
+#   CORVIDINHO_UPDATE_DRY_RUN=1
+#   CORVIDINHO_SKIP_DOCTOR=1
+#   CORVIDINHO_SKIP_RESTART=1
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/update-helpers.sh
+source "${SCRIPT_DIR}/lib/update-helpers.sh"
 
 log() { printf '[corvidinho-update] %s\n' "$*"; }
 die() { printf '[corvidinho-update] ERROR: %s\n' "$*" >&2; exit 1; }
 
 ROOT="${CORVIDINHO_ROOT:-}"
 if [ -z "$ROOT" ]; then
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   CANDIDATE="$(cd "$SCRIPT_DIR/.." && pwd)"
   if [ -d "$CANDIDATE/.git" ] || [ -f "$CANDIDATE/package.json" ]; then
     ROOT="$CANDIDATE"
@@ -41,32 +49,133 @@ SKIP_DOCTOR="${CORVIDINHO_SKIP_DOCTOR:-0}"
 SKIP_RESTART="${CORVIDINHO_SKIP_RESTART:-0}"
 UNIT="${CORVIDINHO_BRIDGE_UNIT:-}"
 BRIDGE_CMD="${CORVIDINHO_BRIDGE_CMD:-}"
+ENV_FILE="${CORVIDINHO_ENV_FILE:-${HOME}/.config/corvidinho/env}"
+PIDFILE="${CORVIDINHO_PIDFILE:-/tmp/corvidinho-discord-bridge.pid}"
+BRIDGE_LOG="${CORVIDINHO_BRIDGE_LOG:-/tmp/corvidinho-discord-bridge.log}"
+READY_TIMEOUT="${CORVIDINHO_READY_TIMEOUT:-60}"
+USE_PIDFILE="${CORVIDINHO_USE_PIDFILE:-}"
 
 PREV_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
 [ -n "$PREV_SHA" ] || die "not a git checkout (no HEAD)"
 
-log "root=$ROOT"
-log "ref=$REF"
-log "prev=$PREV_SHA"
-log "dry_run=$DRY"
+log "root=$ROOT ref=$REF prev=$PREV_SHA dry_run=$DRY"
 
 if [ "$DRY" = "1" ]; then
-  log "DRY RUN: would fetch, checkout $REF, bun install, doctor, restart (unit=${UNIT:-none})"
+  log "DRY RUN: would fetch, checkout $REF, bun install, doctor, restart (pidfile=$PIDFILE unit=${UNIT:-none})"
   git fetch --tags --prune origin || true
-  log "DRY RUN: fetch ok (best-effort)"
   exit 0
 fi
 
+load_env_file() {
+  if [ -f "$ENV_FILE" ]; then
+    log "sourcing env file: $ENV_FILE (secrets not logged)"
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+  else
+    log "env file not found ($ENV_FILE) — using process environment"
+  fi
+}
+
+want_pidfile() {
+  if [ "${USE_PIDFILE}" = "1" ] || [ "${USE_PIDFILE,,}" = "true" ]; then
+    return 0
+  fi
+  if [ -f "$PIDFILE" ]; then
+    return 0
+  fi
+  # Prefer pidfile when neither systemd nor custom cmd configured
+  if [ -z "$UNIT" ] && [ -z "$BRIDGE_CMD" ]; then
+    return 0
+  fi
+  return 1
+}
+
+stop_via_pidfile() {
+  if [ ! -f "$PIDFILE" ]; then
+    log "no pidfile at $PIDFILE"
+    return 0
+  fi
+  local pid
+  pid="$(tr -d '[:space:]' < "$PIDFILE" || true)"
+  if [ -z "$pid" ] || ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+    log "invalid pidfile — removing"
+    rm -f "$PIDFILE"
+    return 0
+  fi
+  if ! kill -0 "$pid" 2>/dev/null; then
+    log "stale pid $pid — removing pidfile"
+    rm -f "$PIDFILE"
+    return 0
+  fi
+  log "stopping bridge pid=$pid (SIGTERM)"
+  kill -TERM "$pid" 2>/dev/null || true
+  local i=0
+  while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 20 ]; do
+    sleep 0.25
+    i=$((i + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    log "SIGKILL pid=$pid"
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  rm -f "$PIDFILE"
+  log "bridge stopped"
+}
+
+start_via_pidfile() {
+  load_env_file
+  mkdir -p "$(dirname "$BRIDGE_LOG")"
+  : > "$BRIDGE_LOG"
+  local bin="${CORVIDINHO_BIN:-${ROOT}/src/cli.ts}"
+  log "starting bridge via pidfile (log=$BRIDGE_LOG)"
+  (
+    cd "$ROOT"
+    nohup bun "$bin" discord bridge >>"$BRIDGE_LOG" 2>&1 &
+    echo $! > "$PIDFILE"
+  )
+  log "spawned pid=$(tr -d '[:space:]' < "$PIDFILE")"
+}
+
+wait_for_ready() {
+  local deadline=$((SECONDS + READY_TIMEOUT))
+  log "waiting up to ${READY_TIMEOUT}s for ready in $BRIDGE_LOG"
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ -f "$BRIDGE_LOG" ] && log_indicates_ready "$(cat "$BRIDGE_LOG" 2>/dev/null || true)"; then
+      log "ready signal observed"
+      return 0
+    fi
+    if [ -f "$PIDFILE" ]; then
+      local pid
+      pid="$(tr -d '[:space:]' < "$PIDFILE" || true)"
+      if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+        log "bridge exited before ready"
+        return 1
+      fi
+    fi
+    sleep 0.5
+  done
+  log "ready timeout — log only (no Discord panic)"
+  return 1
+}
+
 rollback() {
   local reason="$1"
-  log "ROLLBACK: $reason → $PREV_SHA"
+  log "ROLLBACK: $reason → $PREV_SHA (no Discord panic post)"
   if git checkout --force "$PREV_SHA" >/dev/null 2>&1; then
     bun install --frozen-lockfile >/dev/null 2>&1 || bun install >/dev/null 2>&1 || true
     log "ROLLBACK: checkout restored to $PREV_SHA"
+    if [ "$SKIP_RESTART" != "1" ] && want_pidfile; then
+      stop_via_pidfile || true
+      start_via_pidfile || true
+      wait_for_ready || log "ROLLBACK: ready wait failed after restore"
+    elif [ "$SKIP_RESTART" != "1" ] && [ -n "$UNIT" ]; then
+      systemctl restart "$UNIT" >/dev/null 2>&1 || true
+    fi
   else
     log "ROLLBACK: FAILED to restore $PREV_SHA — manual intervention required"
   fi
-  # Deliberately no Discord notify — operators read exit code / logs.
   exit 1
 }
 
@@ -103,29 +212,30 @@ if [ "$SKIP_RESTART" = "1" ]; then
 fi
 
 restart_ok=0
-if [ -n "$UNIT" ]; then
+if want_pidfile; then
+  stop_via_pidfile
+  start_via_pidfile
+  if wait_for_ready; then
+    restart_ok=1
+  else
+    log "pidfile start ready-wait failed"
+  fi
+elif [ -n "$UNIT" ]; then
   log "restarting systemd unit $UNIT…"
   if systemctl restart "$UNIT"; then
     sleep 2
     if systemctl is-active --quiet "$UNIT"; then
       restart_ok=1
       log "unit $UNIT active"
-    else
-      log "unit $UNIT not active after restart"
     fi
-  else
-    log "systemctl restart $UNIT failed"
   fi
 elif [ -n "$BRIDGE_CMD" ]; then
   log "running CORVIDINHO_BRIDGE_CMD…"
-  # shellcheck disable=SC2086
   if bash -lc "$BRIDGE_CMD"; then
     restart_ok=1
-  else
-    log "BRIDGE_CMD failed"
   fi
 else
-  log "no CORVIDINHO_BRIDGE_UNIT / CORVIDINHO_BRIDGE_CMD — skip restart"
+  log "no restart target configured"
   restart_ok=1
 fi
 

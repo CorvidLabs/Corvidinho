@@ -48,3 +48,5 @@ the script never prints them.
 
 Pushing an annotated tag `v*` runs `.github/workflows/release.yml`, which opens a
 GitHub Release with verbose notes (commits since previous tag + upgrade pointer).
+
+Also see short pointer: [`docs/UPDATE.md`](UPDATE.md) (pidfile + ready-wait).
