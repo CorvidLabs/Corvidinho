@@ -71,4 +71,4 @@ Spawns `fledge` for the default verify runner (lane includes `spec-check`). Read
 ## Change Log
 
 STEAL SpecSync agent wiring: plan-time list/read + verify-lane spec-check (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated |
+
