@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "identity-durable-owner-record-issue-42-captured-slice-identity-1-identity-3-admin-4-allow-4-owner-discord-snowflake",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "6a3f46a7f1425eaf012619495465a39eb24bfd82",
+  "contract_digest": "0ccaed08a4111fe283769588a04d56d186c824738ec0549a55d3810452fd2b2b",
+  "execution_digest": "5ded38d155ce0a9543759deed60c2cc2645b4773f24704b6557fc8dfc68fcbd7",
+  "workspace_digest": "fde1d4a7486cee83819d95c57b6d8703f8002e98fdc03642b2a6f28f640de08a",
+  "timestamp": 1790452556
+}
