@@ -104,6 +104,10 @@ One embed edited in place: description + color + footer (`sess · phase · elaps
 
 Live source (AGENT-8 / DISCORD-3, #73; AGENT-4 / #85): the bridge spawns `task run --task <prompt> --output ndjson` (no `--no-verify`; empty `filesChanged` still skips verify in the loop) and reads one versioned frame per stdout line as the agent works. The description follows the agent state (`⏳ planning` / `working` / `calling tool <name>` / `verifying` / `done`), the footer shows the current tool, and `~tok` is the provider-reported running total when the LLM returns `usage` (rough estimate otherwise). Tool arguments are never streamed raw. The bridge requires protocol 2 (DISCORD-10): restart the bridge and the corvidinho checkout together after upgrading. If the binary streams another protocol mid-run, its frames are withheld and the reply is a "protocol mismatch — restart the bridge" notice. The final `result.summary` is capped at 4000 characters (Discord shows at most ~1800).
 
+### Mentions in outbound posts (DISCORD-8)
+
+Every post the bridge makes — chat replies, `/session start` and `/work` replies, other slash replies, schedule and announce posts, thinking embeds — and the agent's `discord-post-message` parses **no** mentions from its text (`allowedMentions.parse = []`, also the discord.js client default). Model text is untrusted (a chatter's prompt, public GitHub content), so `@everyone`, `@here`, `<@&role>` and `<@user>` in a summary never ping; `@everyone` / `@here` are also defanged with a zero-width space. A reply still pings the person it answers. The only other ping is the owner on a question (below). Source: `src/discord/allowed-mentions.ts` (REQ-discord-205).
+
 ### Session replies (mention / continue)
 
 After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced to the user message. Summary comes from the stream's final `result` frame (same `result` as `task run --json`), falling back to the raw output summary. No attribution footer on Discord outbound today.
@@ -175,6 +179,7 @@ flowchart TD
 - Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
 - Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
 - Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
+- Outbound mention safety: `src/discord/allowed-mentions.ts`
 
 
 ## Session worktrees (SESSION-WORKTREE-1..5)

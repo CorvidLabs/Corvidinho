@@ -214,7 +214,7 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2)", () => {
     await result.stop();
   });
 
-  test("ordinary runs keep the plain reply (no mention restriction added)", async () => {
+  test("ordinary runs keep the plain reply (no user added to allowed mentions)", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: "all good", exitCode: 0 };
@@ -321,7 +321,7 @@ describe("scheduler tick asks + pings (AUTONOMY-2)", () => {
     expect(posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
   });
 
-  test("no ask → unchanged ✅ post without mention restriction", async () => {
+  test("no ask → unchanged ✅ post with no user added to allowed mentions", async () => {
     const posts = await tickWith(undefined, OWNER);
     expect(posts).toHaveLength(1);
     expect(posts[0]!.content).toStartWith("✅ Schedule **Nightly**");

@@ -1,8 +1,19 @@
 /**
  * Thin Discord gateway (discord.js). Live connect only when token present.
  * Tests inject InboundMessage / SlashInteraction — no ProcessManager.
+ *
+ * Every outbound post (channel send, reply, embed edit, slash reply/editReply)
+ * parses no mentions from its content: the client default and each payload
+ * set `allowedMentions.parse = []`, and `@everyone` / `@here` are defanged in
+ * the text, so model-written summaries cannot ping a role, `@everyone`,
+ * `@here` or a user (DISCORD-8 confused deputy, REQ-discord-205).
  */
 
+import type * as DiscordJs from "discord.js";
+import {
+  defangMassMentions,
+  outboundAllowedMentions,
+} from "./allowed-mentions.ts";
 import {
   buildChannelAutocompleteChoices,
   type ChannelCandidate,
@@ -29,14 +40,18 @@ export type GatewayHandlers = {
    */
   getAllowlistedChannelIds?: () => readonly string[];
   onReady?: (botUserId: string) => void;
-  /** Optional outbound helper used by bridge after agent reply. */
+  /**
+   * Optional outbound helper used by bridge after agent reply. The live
+   * gateway parses no mentions from `content` (REQ-discord-205); only the
+   * replied-to author and `mentionUserIds` may be pinged.
+   */
   reply?: (opts: {
     channelId: string;
     content: string;
     replyToMessageId?: string;
     /**
-     * When set, only these users (plus the replied-to author) may be pinged
-     * by this post — used for the AUTONOMY-2 owner ping.
+     * Users (besides the replied-to author) this post may ping — used for
+     * the AUTONOMY-2 owner ping. Omitted ⇒ nobody else.
      */
     mentionUserIds?: string[];
   }) => Promise<{ messageId: string } | null>;
@@ -118,6 +133,8 @@ export function flattenSlashOptions(data: readonly RawSlashOption[]): {
 export type LiveGatewayOptions = {
   /** Shared package version for Discord presence (DISCORD-12). */
   version?: string;
+  /** discord.js module override (tests inject a fake; default dynamic import). */
+  discord?: typeof DiscordJs;
 };
 
 export async function createLiveGateway(
@@ -125,7 +142,7 @@ export async function createLiveGateway(
   handlers: GatewayHandlers,
   opts?: LiveGatewayOptions,
 ): Promise<DiscordGateway> {
-  const discord = await import("discord.js");
+  const discord = opts?.discord ?? (await import("discord.js"));
   const {
     Client,
     GatewayIntentBits,
@@ -141,6 +158,8 @@ export async function createLiveGateway(
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
     ],
+    // REQ-discord-205: default for any payload that omits allowedMentions.
+    allowedMentions: outboundAllowedMentions({ repliedUser: true }),
   });
 
   let botUserId: string | null = null;
@@ -224,8 +243,13 @@ export async function createLiveGateway(
     subcommandGroup = subcommandGroup ?? flat.subcommandGroup;
 
     const send = async (opts: SlashReplyPayload, mode: "reply" | "edit") => {
-      const payload: Record<string, unknown> = {};
-      if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
+      // REQ-discord-205: /session start and /work carry model-written text.
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions(),
+      };
+      if (opts.content !== undefined) {
+        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+      }
       if (opts.embeds?.length) {
         payload.embeds = opts.embeds.map((e) => ({
           description: e.description,
@@ -399,20 +423,17 @@ export async function createLiveGateway(
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
         return null;
       }
+      // REQ-discord-205: never parse mentions from (model-written) content;
+      // only the replied-to author and mentionUserIds (owner ask) may ping.
       const sent = await channel.send({
-        content: content.slice(0, 1900),
+        content: defangMassMentions(content).slice(0, 1900),
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
-        ...(mentionUserIds
-          ? {
-              allowedMentions: {
-                parse: [],
-                users: mentionUserIds,
-                repliedUser: true,
-              },
-            }
-          : {}),
+        allowedMentions: outboundAllowedMentions({
+          users: mentionUserIds,
+          repliedUser: true,
+        }),
       });
       return { messageId: sent.id };
     } catch (err) {
@@ -438,6 +459,7 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        allowedMentions: outboundAllowedMentions({ repliedUser: true }),
       });
       return { messageId: sent.id };
     } catch (err) {
@@ -460,6 +482,7 @@ export async function createLiveGateway(
             footer: embed.footer,
           },
         ],
+        allowedMentions: outboundAllowedMentions({ repliedUser: true }),
       });
       return true;
     } catch (err) {

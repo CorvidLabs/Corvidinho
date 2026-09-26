@@ -27,6 +27,10 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   minPermission re-check (no live token).
 - `tests/discord.requester-perms.test.ts` — evaluateRequesterCanSend + post
   plugin requester/strict gates (no live token).
+- `tests/discord.allowed-mentions.test.ts` — REQ-discord-205: fake discord.js
+  injected into the live gateway; chat mention/reply-continue, `/session
+  start`, `/work`, slash, embeds, schedule tick and `discord-post-message`
+  (stubbed fetch) all send `parse: []`; ask keeps owner-only (no live token).
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 

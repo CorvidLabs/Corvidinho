@@ -77,6 +77,8 @@ files:
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
   - tests/discord.ask-ping.test.ts
+  - src/discord/allowed-mentions.ts
+  - tests/discord.allowed-mentions.test.ts
 
 db_tables: []
 depends_on:
@@ -118,6 +120,15 @@ per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey
 / `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
 (schema v7, `SCHEMA_VERSION` 7).
 
+Outbound mention safety (REQ-discord-205, DISCORD-8):
+`src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
+repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
+`ask-ping.ts`). The live gateway's `Client` defaults `allowedMentions` to
+`{ parse: [], repliedUser: true }` and every `reply` / embed send / embed
+edit / slash `reply` / `editReply` payload sets it explicitly; `reply` adds
+only `mentionUserIds` as `users`. `LiveGatewayOptions.discord` optionally
+injects the discord.js module (tests); default is the dynamic import.
+
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
@@ -153,6 +164,10 @@ secrets out of repo; discord-post-message dangerous; thinking status edits one
 progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms;
+every outbound Discord post (gateway reply, embeds, slash reply/editReply,
+discord-post-message) parses no mentions from its content (`parse: []`,
+`@everyone` / `@here` defanged); only the replied-to author and the ask's
+owner may be pinged (REQ-discord-205);
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's

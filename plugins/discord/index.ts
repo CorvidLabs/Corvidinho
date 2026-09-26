@@ -1,12 +1,14 @@
 /**
  * Discord outbound plugins — discord-post-message is dangerous (externally visible write).
- * DISCORD-8: confused-deputy requester check (Merlin-primary).
+ * DISCORD-8: confused-deputy requester check (Merlin-primary). The content is
+ * model-written, so the post parses no mentions (REQ-discord-205).
  */
 
 import { checkChannel } from "../../src/allowlist/discord.ts";
 import { loadAllowlist } from "../../src/allowlist/load.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
+import { defangMassMentions } from "../../src/discord/allowed-mentions.ts";
 import {
   requesterCheckFix,
   setRequesterPermCheckerForTests,
@@ -139,7 +141,11 @@ const discordPostMessage: PluginCommand = {
             Authorization: `Bot ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ content: content.slice(0, 1900) }),
+          // REQ-discord-205: no @everyone/@here, role or user ping from text.
+          body: JSON.stringify({
+            content: defangMassMentions(content).slice(0, 1900),
+            allowed_mentions: { parse: [] },
+          }),
         },
       );
       if (!res.ok) {
