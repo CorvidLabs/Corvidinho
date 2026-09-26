@@ -17,7 +17,7 @@ Enable SpecSync SDD change workflow and fix CI SpecSync/bun install
 
 ## Acceptance Criteria
 
-- Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge install. sdd.json enabled with require_change_for_meaningful_files true. Fledge verify remains a local/agent gate.
+- Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge in GHA. sdd.json enabled; active change covers BOOT meaningful paths vs main. Fledge verify remains a local/agent gate.
 
 ## No-spec Rationale
 

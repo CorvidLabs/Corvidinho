@@ -11,24 +11,32 @@
   "canonical_applied": true,
   "base_commit": "eb9d9c6755d49dc92565a4c6f427f0589451f29a",
   "created_at": 1790436569,
-  "updated_at": 1790436818,
+  "updated_at": 1790436860,
   "affected_specs": [],
   "affected_paths": [
-    ".github/workflows/ci.yml",
+    ".github/",
     ".specsync/sdd.json",
-    "AGENTS.md",
-    "STATUS.md",
+    ".specsync/config.toml",
+    ".specsync/registry.toml",
+    ".specsync/version",
     ".specsync/adoption-report.json",
     ".specsync/workflow-v2-baseline.json",
-    "src/cli.ts",
-    ".github/workflows/spec-sync.yml",
+    "AGENTS.md",
+    "STATUS.md",
+    "package.json",
+    "bun.lock",
+    "tsconfig.json",
     "fledge.toml",
-    "specs/cli/cli.spec.md"
+    "src/",
+    "tests/",
+    "specs/",
+    "hi/",
+    "docs/"
   ],
   "no_spec_change": true,
   "no_spec_change_rationale": "Ops/policy/CI only: enable SDD, adopt workflow-v2 baseline, fix SpecSync Action and Bun pin. No canonical module contracts change.",
   "acceptance_criteria": [
-    "Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge install. sdd.json enabled with require_change_for_meaningful_files true. Fledge verify remains a local/agent gate."
+    "Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge in GHA. sdd.json enabled; active change covers BOOT meaningful paths vs main. Fledge verify remains a local/agent gate."
   ],
   "selected_artifacts": [
     "context",

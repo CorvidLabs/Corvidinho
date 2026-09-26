@@ -222,6 +222,53 @@
         }
       },
       "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790436853,
+      "digest": "3aefab0789d1a89b11db1b2a89601ea92cd0038a627526a6ed625bc836e2fa1e",
+      "note": "Renew: cover BOOT prefixes vs main so change audit passes under SDD ON",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "enable-specsync-sdd-change-workflow-and-fix-ci-specsync-bun-install",
+        "title": "Enable SpecSync SDD change workflow and fix CI SpecSync/bun install",
+        "description": "Enable SpecSync SDD change workflow and fix CI SpecSync/bun install",
+        "kind": "operations",
+        "affected_specs": [],
+        "affected_paths": [
+          ".github/",
+          ".specsync/adoption-report.json",
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          ".specsync/sdd.json",
+          ".specsync/version",
+          ".specsync/workflow-v2-baseline.json",
+          "AGENTS.md",
+          "STATUS.md",
+          "bun.lock",
+          "docs/",
+          "fledge.toml",
+          "hi/",
+          "package.json",
+          "specs/",
+          "src/",
+          "tests/",
+          "tsconfig.json"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Ops/policy/CI only: enable SDD, adopt workflow-v2 baseline, fix SpecSync Action and Bun pin. No canonical module contracts change.",
+        "acceptance_criteria": [
+          "Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge in GHA. sdd.json enabled; active change covers BOOT meaningful paths vs main. Fledge verify remains a local/agent gate."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
     }
   ],
   "reopenings": []
