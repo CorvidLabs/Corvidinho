@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790452912,
+      "digest": "39733e4dfb6f55d32586000d07b605a0baae7fc66e1277ee3221990c6a124a63",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9",
+        "title": "Shell-exec plugin with SAFE-3 project-root cwd clamp (PLUGIN-1/2 SAFE-3 issue #83) package 0.0.9",
+        "description": "shell-exec plugin with SAFE-3 project-root cwd clamp (PLUGIN-1/2 SAFE-3 issue #83) package 0.0.9",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/hi-drafts/WATCH-RELIABILITY.md",
+          "package.json",
+          "plugins/shell/",
+          "specs/cli/",
+          "specs/plugins/",
+          "src/plugins/builtins.ts",
+          "src/version.ts",
+          "tests/plugins.list.smoke.test.ts",
+          "tests/shell.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "shell-exec registered as typed dangerous plugin minTier=code (PLUGIN-1/2); pins spawn cwd to project root; refuses cd/pushd targets that lexically escape root including ~ $VAR bare-cd and .. (SAFE-3); SAFE-1 deny in non-interactive without allowlist; happy-path + escape fixture tests green; STATUS/CHANGELOG + package 0.0.9"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "4efd43f7464d906c7ad475533f3d09a0e546a97d932f8ca7aff5eb0b22cd40ec",
+        "plugins": "e9f9a0b1db058acf8a6fe0ce9b7134f4aff1891727880c9d7f1bf4a1c955c0c7"
+      }
+    }
+  ],
+  "reopenings": []
+}

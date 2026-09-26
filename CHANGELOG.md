@@ -39,6 +39,16 @@
 - Operators running `corvidinho plugins run memory-*` by hand now set `CORVIDINHO_ACTING_DISCORD_USER_ID` (+ admin env for forget/override) instead of `--user`/`--admin`; forget/override confirm tokens must be supplied by a human.
 - Bot config belongs in the VM env / `~/.config/corvidinho/` — a `.env` inside a worked-on project is ignored by spawned agents.
 
+### Shell plugin + SAFE-3 cwd clamp (#83)
+
+- Typed builtin `shell-exec` (PLUGIN-1): `sh -c` with stdout/stderr merged; **dangerous** + `minTier: code` (PLUGIN-2); SAFE-1 allowlist in non-interactive.
+- **SAFE-3:** spawn cwd pinned to plugin/project root; lexical refuse of `cd`/`pushd` that would escape (absolute outside, `..`, `~`, `$VAR`, bare `cd`) before spawn — Merlin steal.
+- Exports `CORVIDINHO_PROJECT_ROOT` into the child env for nested tools.
+- Fixture tests: happy path, SAFE-1 deny, SAFE-3 escape refuse, relative-within-root allow.
+- `docs/hi-drafts/WATCH-RELIABILITY.md` — draft only for Leif (post-ack summary, spawn outcome log, 403 backoff); **not** captured to `hi/`.
+- After restart, typed `shell-exec` + SAFE-3 cwd clamp are available to the LLM tool loop.
+
+
 ## 0.0.8
 
 ### Discord `/announce` (DISCORD-ANNOUNCE-1..6)
