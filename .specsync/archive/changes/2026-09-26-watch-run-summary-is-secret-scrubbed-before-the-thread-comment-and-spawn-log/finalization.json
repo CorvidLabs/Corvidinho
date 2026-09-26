@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log",
+  "implementation_commit": "3d8f2ee5d6f2b75c1f2309ceca17580f84f54e36",
+  "implementation_tree": "38d29eb838fb38c569ff0c59116ca05d71e49413",
+  "contract_digest": "c31a2678798bed07f81576efcd6134ada45dac91e3924e2318dea6e2ceb98cf0",
+  "workspace_digest": "c4101aabcf6f4e6262db0674b74721b8a251b6db004a666481f2a48b8ce790b8",
+  "closing_digest": "00a4aab429b538737753ef4d38a033ee89dec0e8b69ae3af8f8b721eaac396df",
+  "review_digest": "bb41019f8fc97c2e0bd98b6b2a5e7a5ce65bd978209a57c8576d3622c78391ba",
+  "finalization_digest": "c8890fd72bfff6ad53678476118e3e4712438b58f0bb999442c93d428d71dba9",
+  "timestamp": 1790462809
+}

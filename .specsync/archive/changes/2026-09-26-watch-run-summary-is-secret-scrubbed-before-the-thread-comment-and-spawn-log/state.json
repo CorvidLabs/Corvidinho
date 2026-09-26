@@ -7,11 +7,11 @@
   "title": "WATCH run summary is secret-scrubbed before the thread comment and spawn log",
   "description": "WATCH run summary is secret-scrubbed before the thread comment and spawn log",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "3af288a04306b7463f1275d4db93001ca51bede2",
   "created_at": 1790462483,
-  "updated_at": 1790462728,
+  "updated_at": 1790462859,
   "affected_specs": [
     "watch"
   ],
