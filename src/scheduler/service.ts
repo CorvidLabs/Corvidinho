@@ -17,6 +17,7 @@ import {
   formatAskReply,
 } from "../discord/ask-ping.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
+import { scrubSecrets } from "../store/scrub.ts";
 import {
   ensureTalkWorkspace,
   parkWorktree,
@@ -27,6 +28,15 @@ import type { Schedule, ScheduleRun, ScheduleStore } from "./store.ts";
 export const DEFAULT_POLL_INTERVAL_MS = 60_000;
 export const DEFAULT_MAX_CONCURRENT = 2;
 export const FAILURE_AUTO_PAUSE = 5;
+
+/**
+ * Log a tick or run error that nothing else would catch (REQ-discord-331).
+ * Only the scrubbed message is logged (SAFE-6), never a stack.
+ */
+function logSchedulerError(where: "tick" | "run", err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`[scheduler] ${where} failed: ${scrubSecrets(msg).slice(0, 500)}`);
+}
 
 export type SchedulerOutbound = {
   /** Post schedule result to a Discord channel (optional). */
@@ -120,7 +130,10 @@ export class SchedulerService {
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      void this.tick();
+      // REQ-discord-331: a tick that throws (e.g. SQLITE_BUSY from another
+      // process on the data dir) is logged; the next tick still runs. Left
+      // uncaught it is an unhandled rejection, which exits the bridge.
+      this.tick().catch((err) => logSchedulerError("tick", err));
     }, this.pollIntervalMs);
     // Unref so the timer alone does not keep the process alive in tests/CLI.
     if (typeof this.timer === "object" && "unref" in this.timer) {
@@ -144,6 +157,9 @@ export class SchedulerService {
    * Scan due schedules and fire async work without awaiting agents.
    * Returns immediately after scheduling starts (DISCORD-SCHEDULE-4).
    * `skipped` includes due runs another ticker on the same data dir claimed.
+   * Rejects when the store throws (the `start()` interval and the daemon
+   * catch it); the tick lock is released either way, so the next tick runs,
+   * and runs already claimed by this tick keep going.
    */
   async tick(): Promise<{ started: string[]; skipped: string[] }> {
     if (this.tickInFlight) return { started: [], skipped: [] };
@@ -172,8 +188,12 @@ export class SchedulerService {
         started.push(schedule.id);
         const entry: InFlight = { schedule, run, settled: Promise.resolve() };
         this.running.set(schedule.id, entry);
-        // Fire-and-forget — do not await (ingress must not wait).
-        entry.settled = this.runOne(schedule, run);
+        // Fire-and-forget — do not await (ingress must not wait). Only a
+        // shutdown drain() ever handles this promise, so it must never reject
+        // (REQ-discord-331).
+        entry.settled = this.runOne(schedule, run).catch((err) =>
+          logSchedulerError("run", err),
+        );
       }
     } finally {
       this.tickInFlight = false;
@@ -362,15 +382,19 @@ export class SchedulerService {
       const msg = err instanceof Error ? err.message : String(err);
       this.finish(schedule, run, { ok: false, error: msg });
     } finally {
-      // Park/remove so another talk never silently reuses this cwd.
-      if (workDir && projectDir) {
-        await parkWorktree(projectDir, workDir, {
-          kind: workspaceKind,
-          branchName,
-        });
-      }
-      if (this.running.get(schedule.id)?.run.id === run.id) {
-        this.running.delete(schedule.id);
+      try {
+        // Park/remove so another talk never silently reuses this cwd.
+        if (workDir && projectDir) {
+          await parkWorktree(projectDir, workDir, {
+            kind: workspaceKind,
+            branchName,
+          });
+        }
+      } finally {
+        // Always free the slot, or a failed park wedges this schedule.
+        if (this.running.get(schedule.id)?.run.id === run.id) {
+          this.running.delete(schedule.id);
+        }
       }
     }
   }

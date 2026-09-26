@@ -72,6 +72,7 @@ files:
   - tests/scheduler.cron.test.ts
   - tests/scheduler.service.test.ts
   - tests/scheduler.worktree.test.ts
+  - tests/scheduler.tick-errors.test.ts
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
