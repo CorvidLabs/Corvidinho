@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "soft-ttl-purge-never-parks-or-drops-a-discord-session-while-its-agent-run-is-in-flight-the-run-end-counts-as-activity",
+  "slug": "soft-ttl-purge-never-parks-or-drops-a-discord-session-while-its-agent-run-is-in-flight-the-run-end-counts-as-activity",
+  "title": "Soft-TTL purge never parks or drops a Discord session while its agent run is in flight; the run end counts as activity (SESSION-2, SESSION-WORKTREE-3)",
+  "description": "Soft-TTL purge never parks or drops a Discord session while its agent run is in flight; the run end counts as activity (SESSION-2, SESSION-WORKTREE-3)",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
+  "created_at": 1790460001,
+  "updated_at": 1790460279,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/session-store.ts",
+    "src/discord/command-handlers/work.ts",
+    "src/discord/command-handlers/session.ts",
+    "src/discord/bridge.ts",
+    "tests/discord.session-worktree.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A session whose agent run is in flight (bridge chat, /work, /session start) is never dropped or worktree-parked by the soft-TTL purge on get/getByThread/getByBotMessage/list; the run end refreshes lastActivityAt; an idle session past the TTL after its run still purges and parks; fixture tests with a real temp git repo and injected clock"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

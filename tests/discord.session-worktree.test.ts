@@ -16,6 +16,14 @@ import {
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
+import type { AgentClient } from "../src/discord/agent-client.ts";
+import { startBridge } from "../src/discord/bridge.ts";
+import { handleSessionStart } from "../src/discord/command-handlers/session.ts";
+import { handleWorkCommand } from "../src/discord/command-handlers/work.ts";
+import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
+import type { SlashContext, SlashReplyPayload } from "../src/discord/slash-types.ts";
+import { WorkStore } from "../src/discord/work-store.ts";
 
 function initGitRepo(dir: string): void {
   mkdirSync(dir, { recursive: true });
@@ -237,5 +245,195 @@ describe("schedule tick uses project worktree (SESSION-WORKTREE + DISCORD-SCHEDU
       delete process.env.WORKTREE_BASE_DIR;
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
+  const TTL = 45 * 60 * 1000;
+
+  type Seen = {
+    cwd?: string;
+    midRunListed?: number;
+    midRunDirKept?: boolean;
+    midRunFileKept?: boolean;
+  };
+
+  /**
+   * Agent that writes a half-done edit into its cwd, then, still running,
+   * lets 46 minutes pass while someone runs /status or /session list
+   * (store.list()) and an id lookup.
+   */
+  function slowAgent(store: SessionStore, clock: { now: number }, seen: Seen): AgentClient {
+    return {
+      runChat: async ({ sessionId, cwd }) => {
+        seen.cwd = cwd;
+        writeFileSync(join(cwd!, "half-done.ts"), "export const x = 1;\n");
+        clock.now += TTL + 60_000;
+        seen.midRunListed = store.list().length;
+        store.get(sessionId);
+        await Bun.sleep(100); // let any fire-and-forget park finish
+        seen.midRunDirKept = existsSync(cwd!);
+        seen.midRunFileKept = existsSync(join(cwd!, "half-done.ts"));
+        return { ok: true, sessionId, summary: "did it", exitCode: 0 };
+      },
+    };
+  }
+
+  function slashCtx(store: SessionStore, agent: AgentClient): SlashContext {
+    const allow = emptyConfig();
+    allow.discord.channels = ["chan-allowed"];
+    return {
+      store,
+      workStore: new WorkStore(),
+      allowlist: allow,
+      agent,
+      version: "0.0.0",
+      protocolVersion: CORVIDINHO_PROTOCOL_VERSION,
+      startedAt: Date.now(),
+      channelIds: ["chan-allowed"],
+      // Acting user is not the owner, so /work never runs the PR step here.
+      owner: { discordId: "owner-x" },
+    };
+  }
+
+  function slashIx(commandName: string, options: Record<string, string>, subcommand?: string) {
+    const edits: SlashReplyPayload[] = [];
+    return {
+      edits,
+      ix: {
+        id: "ix",
+        commandName,
+        subcommand,
+        channelId: "chan-allowed",
+        userId: "user-1",
+        options,
+        reply: async (p: SlashReplyPayload) => {
+          edits.push(p);
+        },
+        deferReply: async () => {},
+        editReply: async (p: SlashReplyPayload) => {
+          edits.push(p);
+        },
+      },
+    };
+  }
+
+  /** Temp git repo + temp worktree base (talk/* branches live only there). */
+  async function withRepo(
+    prefix: string,
+    fn: (project: string, clock: { now: number }, store: SessionStore) => Promise<void>,
+  ): Promise<void> {
+    const root = mkdtempSync(join(tmpdir(), prefix));
+    try {
+      const project = join(root, "proj");
+      initGitRepo(project);
+      process.env.WORKTREE_BASE_DIR = join(root, "wts");
+      const clock = { now: 1_000_000 };
+      const store = new SessionStore({
+        db: openCorvidinhoDb({ memory: true }),
+        ttlMs: TTL,
+        now: () => clock.now,
+        defaultProjectRoot: project,
+      });
+      await fn(project, clock, store);
+    } finally {
+      delete process.env.WORKTREE_BASE_DIR;
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("/work: a lookup past the TTL mid-run keeps the worktree and the agent's edits", async () => {
+    await withRepo("corvidinho-busy-work-", async (_project, clock, store) => {
+      const seen: Seen = {};
+      const { ix, edits } = slashIx("work", { description: "Long task" });
+      await handleWorkCommand(slashCtx(store, slowAgent(store, clock, seen)), ix);
+
+      expect(seen.cwd).toBeTruthy();
+      expect(seen.midRunListed).toBe(1);
+      expect(seen.midRunDirKept).toBe(true);
+      expect(seen.midRunFileKept).toBe(true);
+      const body = edits.at(-1)?.content ?? "";
+      expect(body).toContain("(completed)");
+      expect(body).toContain(`Worktree: \`${seen.cwd}\``);
+      // The end of the run counts as activity, so the talk is still live.
+      const [session] = store.list();
+      expect(session?.worktreePath).toBe(seen.cwd);
+      expect(session?.lastActivityAt).toBe(clock.now);
+      await store.endSession(session!);
+    });
+  });
+
+  test("/session start: a lookup past the TTL mid-run keeps the worktree", async () => {
+    await withRepo("corvidinho-busy-sess-", async (_project, clock, store) => {
+      const seen: Seen = {};
+      const { ix, edits } = slashIx("session", { topic: "Long talk" }, "start");
+      await handleSessionStart(slashCtx(store, slowAgent(store, clock, seen)), ix);
+
+      expect(seen.midRunDirKept).toBe(true);
+      expect(seen.midRunFileKept).toBe(true);
+      expect(edits.at(-1)?.content ?? "").toContain(`Worktree: \`${seen.cwd}\``);
+      const [session] = store.list();
+      expect(session?.worktreePath).toBe(seen.cwd);
+      await store.endSession(session!);
+    });
+  });
+
+  test("bridge mention: a lookup past the TTL mid-run keeps the worktree", async () => {
+    await withRepo("corvidinho-busy-bridge-", async (project, clock, store) => {
+      const seen: Seen = {};
+      const box: { handlers: GatewayHandlers | null } = { handlers: null };
+      const started = await startBridge({
+        env: {
+          DISCORD_BOT_TOKEN: "fake",
+          DISCORD_CHANNEL_IDS: "chan-1",
+          CORVIDINHO_DISCORD_DRY_RUN: "1",
+        },
+        projectRoot: project,
+        skipProtocolCheck: true,
+        sessionStore: store,
+        workStore: new WorkStore(),
+        agent: slowAgent(store, clock, seen),
+        gatewayFactory: async (_cfg, handlers) => {
+          box.handlers = handlers;
+          handlers.reply = async () => ({ messageId: "bot_1" });
+          return createNullGateway();
+        },
+      });
+      expect(started.ok).toBe(true);
+      if (started.ok !== true) return;
+      await box.handlers!.onMessage({
+        id: "m1",
+        channelId: "chan-1",
+        authorId: "u1",
+        authorBot: false,
+        content: "@bot long job",
+        mentionedBot: true,
+      });
+      expect(seen.midRunDirKept).toBe(true);
+      expect(seen.midRunFileKept).toBe(true);
+      // A reply to the bot still continues the same live session.
+      const session = store.getByBotMessage("bot_1");
+      expect(session?.worktreePath).toBe(seen.cwd);
+      await store.endSession(session!);
+      await started.stop();
+    });
+  });
+
+  test("once the run ends, an idle session past the TTL is still purged and parked", async () => {
+    await withRepo("corvidinho-busy-idle-", async (_project, clock, store) => {
+      const created = await store.createWithWorktree({ channelId: "c", userId: "u" });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const wt = created.session.worktreePath!;
+      await store.runActive(created.session, async () => {
+        clock.now += TTL + 60_000;
+        expect(store.get(created.session.id)).toBe(created.session);
+      });
+      expect(store.get(created.session.id)).toBe(created.session);
+      clock.now += TTL + 1000;
+      expect(store.list()).toEqual([]);
+      await Bun.sleep(50);
+      expect(existsSync(wt)).toBe(false);
+    });
   });
 });
