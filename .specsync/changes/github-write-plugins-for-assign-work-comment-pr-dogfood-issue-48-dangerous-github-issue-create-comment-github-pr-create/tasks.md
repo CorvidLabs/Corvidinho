@@ -10,4 +10,4 @@ artifact: tasks
 - [x] WATCH assignment events from assignees + fixture
 - [x] Specs/docs/STATUS updates
 - [x] Fixture tests (no live tokens); fledge lane verify
-- [ ] SpecSync finalize + PR closes #48; merge when green
+- [x] SpecSync finalize + PR closes #48; merge when green
