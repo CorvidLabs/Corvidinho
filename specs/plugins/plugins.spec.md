@@ -82,11 +82,18 @@ confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
+
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
 
 ## Behavioral Examples
+
+### Scenario: memory-store description shows argv example
+
+- **Given** builtins are loaded
+- **When** an operator or the tool loop inspects `memory-store`
+- **Then** the description includes `--category` / `person` / `identity` example argv
 
 ### Scenario: SAFE-3 refuse cd outside root
 
