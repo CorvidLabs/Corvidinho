@@ -34,6 +34,10 @@ export type SlashInteraction = {
   channelId: string;
   guildId?: string;
   userId: string;
+  /** Discord display name when known (IDENTITY-4). */
+  userDisplayName?: string;
+  /** Discord username when known (IDENTITY-4). */
+  userUsername?: string;
   /** Member role ids for DISCORD-7 permission resolve (optional). */
   roleIds?: string[];
   options: Record<string, SlashOptionValue>;

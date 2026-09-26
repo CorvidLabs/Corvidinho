@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 20
+version: 21
 status: draft
 files:
   - src/agent/types.ts
@@ -129,6 +129,7 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 ## Change Log
 
 Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | dogfood-ux chat/plumbing split: chatBodyFromTaskResult / formatTaskPlumbing; NDJSON Discord summary is chat-only (DISCORD-3.a) |
 | 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
 | 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |

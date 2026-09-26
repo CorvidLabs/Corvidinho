@@ -175,8 +175,17 @@ export async function createLiveGateway(
     commandName: string;
     channelId: string;
     guildId: string | null;
-    user: { id: string };
-    member?: { roles?: { cache?: { keys: () => IterableIterator<string> } } | string[] } | null;
+    user: {
+      id: string;
+      username?: string | null;
+      globalName?: string | null;
+      displayName?: string | null;
+    };
+    member?: {
+      displayName?: string | null;
+      nickname?: string | null;
+      roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+    } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
       getSubcommandGroup?: (required?: boolean) => string | null;
@@ -250,6 +259,13 @@ export async function createLiveGateway(
       channelId: interaction.channelId,
       guildId: interaction.guildId ?? undefined,
       userId: interaction.user.id,
+      userDisplayName:
+        (interaction.member?.displayName ??
+          interaction.member?.nickname ??
+          interaction.user.globalName ??
+          interaction.user.displayName ??
+          undefined)?.trim() || undefined,
+      userUsername: interaction.user.username?.trim() || undefined,
       roleIds,
       options,
       reply: async (opts) => {
@@ -320,6 +336,14 @@ export async function createLiveGateway(
           guildId: message.guildId ?? undefined,
           authorId: message.author.id,
           authorBot: message.author.bot,
+          authorDisplayName:
+            (
+              message.member?.displayName ??
+              message.author.globalName ??
+              message.author.displayName ??
+              undefined
+            )?.trim() || undefined,
+          authorUsername: message.author.username?.trim() || undefined,
           content: message.content ?? "",
           mentionedBot: botUserId
             ? message.mentions.users.has(botUserId)

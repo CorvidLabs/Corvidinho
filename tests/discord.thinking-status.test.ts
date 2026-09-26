@@ -81,6 +81,44 @@ describe("thinking-status builders (DISCORD-3)", () => {
   });
 });
 
+describe("DISCORD-3.a model + plumbing in footer", () => {
+  test("footer includes model and done plumbing", () => {
+    const footer = buildThinkingFooter({
+      phase: "done",
+      sessionId: "sess_abcdefgh",
+      elapsedMs: 12_000,
+      model: "gpt-4o-mini",
+      plumbing: "state=done verified=false verifySkipped attempts=1",
+    });
+    expect(footer).toContain("sess_abc");
+    expect(footer).toContain("done");
+    expect(footer).toContain("gpt-4o-mini");
+    expect(footer).toContain("state=done verified=false");
+  });
+
+  test("done() writes plumbing into the embed footer only", async () => {
+    const { outbound, sends, edits } = mockOutbound();
+    const status = new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_test1234",
+      model: "gpt-4o-mini",
+      debounceMs: 0,
+      tickMs: 60_000,
+      now: () => 1_000_000,
+    });
+    await status.start();
+    await status.done("✅ Done", {
+      plumbing: "state=done verified=false attempts=1",
+    });
+    const last = edits[edits.length - 1]!.embed;
+    expect(last.description).toBe("✅ Done");
+    expect(last.description).not.toContain("state=");
+    expect(last.footer?.text).toContain("gpt-4o-mini");
+    expect(last.footer?.text).toContain("state=done verified=false");
+  });
+});
+
 describe("ThinkingStatus controller", () => {
   test("start → update → done: one send then edits", async () => {
     const { outbound, sends, edits } = mockOutbound();

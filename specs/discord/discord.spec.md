@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 55
+version: 56
 status: draft
 files:
   - src/discord/types.ts
@@ -9,6 +9,8 @@ files:
   - src/discord/image-attachments.ts
   - src/discord/memory-inject.ts
   - tests/discord.memory-inject.test.ts
+  - src/discord/identity-inject.ts
+  - tests/discord.identity-inject.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
   - src/identity/index.ts
@@ -181,6 +183,7 @@ No `/memory` slash command.
 
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
+| 2026-09-26 | dogfood-ux-identity-embed-public-qa: IDENTITY-4 inject; DISCORD-3.a plumbing in thinking footer + clean chat body; model in footer |
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
 | 2026-09-26 | bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral: Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands |

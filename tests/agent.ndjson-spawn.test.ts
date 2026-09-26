@@ -14,7 +14,7 @@ import {
   usageFrame,
   type TaskProgress,
 } from "../src/agent/events-ndjson.ts";
-import { summarizeTaskResult } from "../src/agent/task-summary.ts";
+import { chatBodyFromTaskResult } from "../src/agent/task-summary.ts";
 import type { TaskResult } from "../src/agent/types.ts";
 import {
   createSpawnAgentClient as createDiscordClient,
@@ -102,7 +102,7 @@ describe("Discord spawn client reads the ndjson stream (REQ-discord-073)", () =>
       expect(readFileSync(join(dir, "argv.txt"), "utf8")).not.toContain("--no-verify");
       expect(res.ok).toBe(true);
       expect(res.exitCode).toBe(0);
-      expect(res.summary).toBe(summarizeTaskResult(RESULT));
+      expect(res.summary).toBe(chatBodyFromTaskResult(RESULT));
 
       expect(updates.map((x) => x.u)).toEqual([
         { tool: "task run", message: "Spawning agent..." },
@@ -161,7 +161,7 @@ describe("Discord spawn client reads the ndjson stream (REQ-discord-073)", () =>
         sessionId: "sess-ndjson-3",
         cwd: dir,
       });
-      expect(res.summary).toBe(summarizeTaskResult(RESULT));
+      expect(res.summary).toBe(chatBodyFromTaskResult(RESULT));
     },
     SPAWN_TIMEOUT_MS,
   );
@@ -188,7 +188,7 @@ describe("WATCH spawn client reads the ndjson stream (REQ-watch-073)", () => {
       ]);
       expect(readFileSync(join(dir, "argv.txt"), "utf8")).not.toContain("--no-verify");
       expect(res.ok).toBe(true);
-      expect(res.summary).toBe(summarizeTaskResult(RESULT));
+      expect(res.summary).toBe(chatBodyFromTaskResult(RESULT));
       expect(progress).toEqual([
         { state: "planning", tool: "", message: "planning" },
         { state: "executing", tool: "", message: "working" },

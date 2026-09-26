@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 38
+version: 39
 status: draft
 files:
   - src/plugins/types.ts
@@ -11,6 +11,9 @@ files:
   - src/plugins/roles.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
+  - src/plugins/githubPublic.ts
+  - tests/github.public.community.test.ts
+  - tests/files.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
@@ -268,6 +271,7 @@ for dangerous tools. Role is re-checked via owner config each call.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
+| 2026-09-26 | dogfood-ux ROLES-CHAT-8: community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
 | 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |
 | 2026-09-26 | plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81: files-read/write/edit/glob/list/delete + search-grep; SAFE-2 protected paths; path clamp; package 0.0.6 |
