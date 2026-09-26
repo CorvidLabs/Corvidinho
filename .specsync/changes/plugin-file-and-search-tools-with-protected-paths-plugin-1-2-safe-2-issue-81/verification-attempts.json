@@ -87,6 +87,28 @@
         "REQ-plugins-083",
         "REQ-plugins-084"
       ]
+    },
+    {
+      "timestamp": 1790449608,
+      "commit": "61beb325ae6190c7088207402840255d3a8ae348",
+      "contract_digest": "cfab5d1a3446f02dac78e7f02fa889f01a5b120240b0bdcea3bb3318d139c465",
+      "execution_digest": "57085d79c030fd5b8d2c0c637045b11e6c8141f96da0c5449c9608cae42b60fc",
+      "workspace_digest": "478fee600fb0ed6120907474dbb2f2ba62b34ba02f2328fdf274a4bdcb02afc6",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-013",
+        "REQ-plugins-081",
+        "REQ-plugins-082",
+        "REQ-plugins-083",
+        "REQ-plugins-084"
+      ]
     }
   ]
 }
