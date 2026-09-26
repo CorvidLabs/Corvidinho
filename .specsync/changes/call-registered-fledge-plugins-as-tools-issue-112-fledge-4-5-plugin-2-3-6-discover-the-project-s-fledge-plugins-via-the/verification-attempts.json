@@ -22,6 +22,28 @@
         "REQ-plugins-113",
         "REQ-plugins-114"
       ]
+    },
+    {
+      "timestamp": 1790455077,
+      "commit": "4c1f33dc0aa92eb029adf57472e7e5ea3acb54ff",
+      "contract_digest": "3fcf8bcfebb1d694643cd2f3432f83633e5109144b89c3ee8f9ba37846a5cdfb",
+      "execution_digest": "4563217ee4e82fc1c1ddcfb3ba224fc993ea716d238dd6ad4015259cb899afb1",
+      "workspace_digest": "daf933187c90ffb4783595a49138ebdeb2cf66c3fdc5ae41bb4ab5e2ac70b641",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-112",
+        "REQ-cli-112",
+        "REQ-plugins-112",
+        "REQ-plugins-113",
+        "REQ-plugins-114"
+      ]
     }
   ]
 }
