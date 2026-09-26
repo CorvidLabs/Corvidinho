@@ -2,6 +2,7 @@ export type {
   AgentConfig,
   AgentEvent,
   AgentState,
+  AgentTokenUsage,
   ExecuteContext,
   ExecuteFn,
   ExecuteResult,
@@ -28,8 +29,10 @@ export type { LoadRelevantSpecsOptions, SpecRef } from "./specLoader.ts";
 export { buildCorvidinhoArgv } from "./spawn-argv.ts";
 export {
   createTaskExecute,
+  extractUsage,
   MEMORY_AGENT_SYSTEM_INSTRUCTIONS,
   loadLlmEnv,
+  UNKNOWN_TOOL_LABEL,
 } from "./execute.ts";
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
@@ -48,7 +51,40 @@ export {
 } from "./tools.ts";
 export type { BuildToolsOpts, OpenAiToolDef } from "./tools.ts";
 
-export { summarizeTaskRunOutput } from "./task-summary.ts";
+export { summarizeTaskResult, summarizeTaskRunOutput } from "./task-summary.ts";
+export type { TaskResultSummaryInput } from "./task-summary.ts";
+
+export {
+  collectTaskRunStream,
+  CORVIDINHO_PROTOCOL_VERSION,
+  createNdjsonParser,
+  createNdjsonWriter,
+  frameFromEvent,
+  NDJSON_LIMITS,
+  parseNdjsonLine,
+  progressFromFrame,
+  protocolMismatchSummary,
+  readNdjsonStream,
+  resultFrame,
+  serializeFrame,
+  summarizeToolArgs,
+  TASK_OUTPUT_MODES,
+  usageFrame,
+} from "./events-ndjson.ts";
+export type {
+  NdjsonEventFrame,
+  NdjsonFrame,
+  NdjsonLine,
+  NdjsonParser,
+  NdjsonResultFrame,
+  NdjsonStreamOutcome,
+  NdjsonUsageFrame,
+  NdjsonWriter,
+  ParseNdjsonOpts,
+  TaskOutputMode,
+  TaskProgress,
+  TaskRunStreamOutcome,
+} from "./events-ndjson.ts";
 
 export {
   describeProjectInstructions,
