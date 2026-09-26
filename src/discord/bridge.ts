@@ -2,6 +2,7 @@
  * HEAR bridge orchestrator: gateway → message-router → session stub + agent spawn.
  * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
  * DISCORD-4: thin slash /session /status /agents /work.
+ * DISCORD-6: per-user rate limits + mutes.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -21,6 +22,12 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import { routeMessage } from "./message-router.ts";
+import {
+  defaultRateLimitConfig,
+  muteUser as muteUserImpl,
+  unmuteUser as unmuteUserImpl,
+  type RateLimitState,
+} from "./permissions.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol.ts";
 import { enforceProtocolVersionOrExit } from "./protocol.ts";
 import { SessionStore } from "./session-store.ts";
@@ -42,6 +49,10 @@ export type StartBridgeResult =
       config: BridgeConfig;
       store: SessionStore;
       workStore: WorkStore;
+      mutedUsers: Set<string>;
+      rateLimitState: RateLimitState;
+      muteUser: (userId: string) => void;
+      unmuteUser: (userId: string) => void;
       stop: () => Promise<void>;
     }
   | { ok: false; exitCode: number; message: string };
@@ -126,6 +137,13 @@ export async function startBridge(
   const config = loaded.config;
   const store = new SessionStore();
   const workStore = new WorkStore();
+  const mutedUsers = new Set<string>(config.mutedUserIds);
+  const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
+  const rateLimitConfig = defaultRateLimitConfig({
+    windowMs: config.rateLimitWindowMs,
+    maxMessages: config.rateLimitMaxMessages,
+    rateLimitByLevel: config.rateLimitByLevel,
+  });
   const startedAt = opts.startedAt ?? Date.now();
   const version = opts.version ?? BRIDGE_VERSION;
   const agent =
@@ -176,6 +194,9 @@ export async function startBridge(
       thinkingOutbound: resolveOutbound(),
       thinkingDebounceMs: opts.thinkingDebounceMs,
       thinkingTickMs: opts.thinkingTickMs,
+      mutedUsers,
+      rateLimitState,
+      rateLimitConfig,
     };
   }
 
@@ -185,6 +206,8 @@ export async function startBridge(
         store,
         allowlist: config.allowlist,
         channelOnlyGate: true,
+        mutedUsers,
+        rateLimit: { state: rateLimitState, config: rateLimitConfig },
       });
 
       if (action.kind === "ignore") return;
@@ -288,7 +311,7 @@ export async function startBridge(
 
   await gateway.start();
   console.log(
-    "[discord] HEAR bridge ready (session stub + thinking status + slash; no ProcessManager).",
+    "[discord] HEAR bridge ready (session stub + thinking status + slash + rate/mute; no ProcessManager).",
   );
 
   return {
@@ -296,6 +319,10 @@ export async function startBridge(
     config,
     store,
     workStore,
+    mutedUsers,
+    rateLimitState,
+    muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),
+    unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       await gateway.stop();
     },

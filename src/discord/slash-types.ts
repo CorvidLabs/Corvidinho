@@ -7,6 +7,7 @@ import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { AgentClient } from "./agent-client.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { DiscordEmbedPayload, ThinkingOutbound } from "./thinking-status.ts";
+import type { RateLimitConfig, RateLimitState } from "./permissions.ts";
 import type { WorkStore } from "./work-store.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
@@ -46,6 +47,12 @@ export type SlashContext = {
   thinkingTickMs?: number;
   /** Track bot reply message ids for DISCORD-2 continuity after slash start/work. */
   trackBotMessage?: (messageId: string, sessionId: string) => void;
+  /** DISCORD-6 — shared with message path. */
+  mutedUsers?: Set<string>;
+  rateLimitState?: RateLimitState;
+  rateLimitConfig?: RateLimitConfig;
+  /** Optional numeric permission level for rateLimitByLevel. */
+  permLevelFor?: (userId: string) => number | undefined;
 };
 
 export type SlashResult =

@@ -19,6 +19,16 @@ export {
   checkRole,
   checkUser,
   checkDiscordAction,
+  checkRateLimit,
+  muteUser,
+  unmuteUser,
+  isMuted,
+  gateRateOrMute,
+  defaultRateLimitConfig,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
+  DEFAULT_RATE_LIMIT_MAX_MESSAGES,
+  type RateLimitConfig,
+  type RateLimitState,
 } from "./permissions.ts";
 export { SessionStore } from "./session-store.ts";
 export { WorkStore, type WorkTaskStub, type WorkTaskStatus } from "./work-store.ts";
@@ -82,6 +92,8 @@ export type {
 } from "./slash-types.ts";
 export {
   NOT_AUTHORIZED,
+  MUTED,
+  RATE_LIMITED,
   type InboundMessage,
   type SessionStub,
   type RouteAction,

@@ -23,6 +23,8 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # DISCORD_CHANNEL_IDS=…          # or rely on allowlist file / CORVIDINHO_DISCORD_ALLOW_CHANNELS
 # optional: CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES  (empty = deny-all when checked)
 # optional: CORVIDINHO_ALLOWLIST_FILE=/path/to/allowlist.toml
+# optional DISCORD-6: DISCORD_RATE_LIMIT_WINDOW_MS=60000 DISCORD_RATE_LIMIT_MAX=10
+# optional DISCORD-6 mute seed: DISCORD_MUTED_USER_IDS=
 ```
 
 Repo templates (no secrets):
@@ -48,4 +50,4 @@ corvidinho discord bridge
 # or: CORVIDINHO_DISCORD_DRY_RUN=1 corvidinho discord bridge   # no live connect
 ```
 
-Soft later (out of scope for #5 thin): issues #10–#14.
+Soft later (out of scope for #5 thin): issues #13–#14 (rate/mute #12 shipped separately).

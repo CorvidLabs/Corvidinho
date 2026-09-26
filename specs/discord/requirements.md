@@ -69,7 +69,7 @@ Acceptance Criteria
 
 ## Out of Scope
 
-Soft later #12–14. No voice, Angular, AlgoChat, iced, ProcessManager.
+Soft later #13–14. No voice, Angular, AlgoChat, iced, ProcessManager, SQLite mute table.
 
 ### REQ-discord-008
 
@@ -103,5 +103,24 @@ Acceptance Criteria
 - `/session list` reflects SessionStore; `/session start` creates stub + agent run.
 - `/status` reports version/uptime/sessions/work/channels/protocol.
 - `/agents` lists local Corvidinho agent; `/work` creates work stub + agent run.
+- No ProcessManager; secrets out of repo; default-deny allowlists unchanged.
+
+### REQ-discord-010
+
+The bridge SHALL apply per-user sliding-window rate limits and an in-memory
+mute set so one user cannot melt the box without punishing everyone else
+(DISCORD-6). Rate limit and mute checks SHALL run on mention/reply/thread
+continue and on slash dispatch after the channel allowlist gate. Optional
+`rateLimitByLevel` SHALL override max messages for a numeric permission level
+when provided. Mute seed MAY load from env; mute/unmute helpers mutate the
+in-memory set (no SQLite in this thin slice). The bridge SHALL NOT introduce
+ProcessManager or weaken allowlists. Fixture tests SHALL cover per-user
+independence without a live Discord token.
+
+Acceptance Criteria
+- Default window 60s / max 10; env override for window/max + muted seed.
+- User A rate-limited or muted → refuse A; user B still served.
+- `rateLimitByLevel` override applies when permLevel provided.
+- Mention/reply/thread continue and slash share the same per-user limits/mutes.
 - No ProcessManager; secrets out of repo; default-deny allowlists unchanged.
 

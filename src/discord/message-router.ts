@@ -1,10 +1,16 @@
 /**
- * Mention / reply / thread → session stub (DISCORD-1 / 2 / 2.a / 5).
+ * Mention / reply / thread → session stub (DISCORD-1 / 2 / 2.a / 5 / 6).
  * Entry after gateway; no ProcessManager.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
-import { gateInbound, isMonitoredChannel } from "./permissions.ts";
+import {
+  gateInbound,
+  gateRateOrMute,
+  isMonitoredChannel,
+  type RateLimitConfig,
+  type RateLimitState,
+} from "./permissions.ts";
 import type { SessionStore } from "./session-store.ts";
 import {
   NOT_AUTHORIZED,
@@ -24,7 +30,27 @@ export type RouterDeps = {
    * start/continue; user/role lists still apply if you pass checkUsers.
    */
   channelOnlyGate?: boolean;
+  /** DISCORD-6 — in-memory muted users. */
+  mutedUsers?: Set<string>;
+  /** DISCORD-6 — sliding-window rate limit state + config. */
+  rateLimit?: { state: RateLimitState; config: RateLimitConfig; permLevel?: number };
+  /** Injectable clock for tests. */
+  nowMs?: number;
 };
+
+function refuseRateOrMute(
+  msg: InboundMessage,
+  deps: RouterDeps,
+): RouteAction | null {
+  const gate = gateRateOrMute({
+    userId: msg.authorId,
+    mutedUsers: deps.mutedUsers,
+    rateLimit: deps.rateLimit,
+    nowMs: deps.nowMs,
+  });
+  if (gate.ok) return null;
+  return { kind: "refuse", reason: gate.reason, reply: gate.reply };
+}
 
 /**
  * Pure router: given an inbound message, decide start/continue/refuse/ignore.
@@ -57,6 +83,8 @@ export function routeMessage(
           };
         }
       }
+      const blocked = refuseRateOrMute(msg, deps);
+      if (blocked) return blocked;
       deps.store.touch(existing);
       return {
         kind: "continue_session",
@@ -79,6 +107,8 @@ export function routeMessage(
           reply: NOT_AUTHORIZED,
         };
       }
+      const blocked = refuseRateOrMute(msg, deps);
+      if (blocked) return blocked;
       deps.store.touch(existing);
       return {
         kind: "continue_session",
@@ -113,6 +143,10 @@ export function routeMessage(
   if (!msg.mentionedBot) {
     return { kind: "ignore", reason: "no_mention" };
   }
+
+  // DISCORD-6 — mute / rate limit before starting a session.
+  const blocked = refuseRateOrMute(msg, deps);
+  if (blocked) return blocked;
 
   // DISCORD-1 — @mention starts session stub.
   const session = deps.store.create({

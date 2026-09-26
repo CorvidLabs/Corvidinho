@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hear-rate-limits-mutes-discord-6-steal-from-corvid-agent-per-user-sliding-window-mute-set-fixture-tests-no",
+  "slug": "hear-rate-limits-mutes-discord-6-steal-from-corvid-agent-per-user-sliding-window-mute-set-fixture-tests-no",
+  "title": "HEAR rate limits + mutes (DISCORD-6) — steal from corvid-agent; per-user sliding window + mute set; fixture tests; no ProcessManager; STATUS Done for #12",
+  "description": "HEAR rate limits + mutes (DISCORD-6) — steal from corvid-agent; per-user sliding window + mute set; fixture tests; no ProcessManager; STATUS Done for #12",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "435556dcaedb9817bef4466404825147c9da817e",
+  "created_at": 1790440758,
+  "updated_at": 1790440886,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/ tests/discord* STATUS.md specs/discord/ docs/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Per-user sliding-window rate limit and in-memory mute set refuse only that user on mention/reply/slash (DISCORD-6); other users unaffected; rateLimitByLevel override optional; env knobs for window/max + muted seed; fixture tests no live token; allowlists stay default-deny; no ProcessManager; STATUS Done for #12 when merged"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

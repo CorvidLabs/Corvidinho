@@ -1,6 +1,7 @@
 /**
  * HEAR thin types — inbound Discord messages + session stubs.
- * No ProcessManager; no voice/iced/Angular. Slash ops are thin (DISCORD-4).
+ * No ProcessManager; no voice/iced/Angular. Slash ops thin (DISCORD-4);
+ * rate limits + mutes thin (DISCORD-6).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -58,6 +59,13 @@ export type BridgeConfig = {
   projectRoot: string;
   /** Optional guild id for fast slash command registration. */
   guildId?: string;
+  /** Per-user rate limit (DISCORD-6). Defaults: 10 / 60s. */
+  rateLimitWindowMs: number;
+  rateLimitMaxMessages: number;
+  /** Optional tiered overrides keyed by numeric permission level. */
+  rateLimitByLevel?: Record<number, number>;
+  /** Seed muted Discord user ids (in-memory; DISCORD-6). */
+  mutedUserIds: string[];
   /** When true, skip live discord.js connect (tests). */
   dryRun?: boolean;
 };
@@ -70,3 +78,7 @@ export type AgentSpawnResult = {
 };
 
 export const NOT_AUTHORIZED = "not authorized";
+/** Short reply when the user is muted (DISCORD-6). */
+export const MUTED = "You do not have permission to interact with this bot.";
+/** Short reply when the user is rate-limited (DISCORD-6). */
+export const RATE_LIMITED = "Slow down! Please wait before sending more messages.";
