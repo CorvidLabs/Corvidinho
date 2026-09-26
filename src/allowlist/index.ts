@@ -16,9 +16,14 @@ export {
   githubFromEnv,
   loadAllowlist,
   loadAllowlistFile,
+  parseAllowlistText,
   parseSimpleToml,
   resolveAllowlistPath,
+  scanSimpleToml,
+  tryLoadAllowlist,
   type LoadOptions,
+  type SimpleTomlEntry,
+  type SimpleTomlScan,
 } from "./load.ts";
 export {
   checkGithubRepo,

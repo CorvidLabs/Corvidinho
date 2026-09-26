@@ -41,8 +41,29 @@ Acceptance Criteria
 
 The bridge SHALL load allowlists from file and env. It SHALL require a non-empty channel allowlist and SHALL fail to start if the channel list is empty.
 
+When the allowlist file exists but cannot be read or parsed (REQ-plugins-006),
+`loadBridgeConfig` SHALL return `code: "allowlist"` and the bridge SHALL NOT
+start; it SHALL NOT fall back to env channels alone. Multi-line
+`[discord]` arrays (`channels`, `users`, `deny_*`) SHALL load in full.
+`/admin` (REQ-discord-043) SHALL read a multi-line `users` / `channels`
+array in full and SHALL refuse (not rewrite) a file it cannot parse. It SHALL
+find the lines to edit with the loader's own reader, so a `]` or `#` inside a
+quoted item neither ends an array nor starts a comment, and a key it adds goes
+after the closing `]` of any multi-line array. Before any write it SHALL
+re-read the new text exactly as the loader will after a restart and SHALL
+refuse, writing nothing, unless it loads, the edited list reads back as
+intended and every other list and key (`[owner]` included) is unchanged — so
+a file it rewrites always reloads with every existing entry and every other
+list intact.
+
 Acceptance Criteria
 - DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
+- A malformed allowlist file → `allowlist` error; the bridge does not start.
+- A multi-line `deny_channels` loads and refuses its channel.
+- `/admin users add` on a file with a multi-line `users` array keeps the existing entries, and the reloaded file keeps `deny_users` and `[github].deny_repos`.
+- `/admin users add` on a file whose `[discord]` has only a multi-line `channels` array (LF and CRLF), and `/admin channels add` after a multi-line `deny_users`, put the new key after the closing `]`; the file reloads with every list intact.
+- A `]` or `#` inside a quoted item survives an `/admin` rewrite; the comment on the edited key's first line is kept.
+- A rewrite that would not reload as intended (an entry the one-line writer cannot quote) is refused and the file is left byte-for-byte unchanged.
 
 ### REQ-discord-005
 
