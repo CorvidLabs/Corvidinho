@@ -1,6 +1,6 @@
 ---
 id: release-0-0-17-work-opens-a-draft-pr-owner-only-166-and-project-instructions-from-head-169-package-0-0-17-changelog
-state: implementing
+state: archived
 type: operations
 base_commit: 12c7a6e4ff84e1ca4d49b61cba217ab833af7132
 ---

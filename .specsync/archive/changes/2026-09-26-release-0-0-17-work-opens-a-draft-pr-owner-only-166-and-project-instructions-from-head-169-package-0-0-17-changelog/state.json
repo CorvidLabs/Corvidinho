@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-17-work-opens-a-draft-pr-owner-only-166-and-project-instructions-from-head-169-package-0-0-17-changelog",
+  "slug": "release-0-0-17-work-opens-a-draft-pr-owner-only-166-and-project-instructions-from-head-169-package-0-0-17-changelog",
+  "title": "Release 0.0.17: /work opens a draft PR owner-only (#166) and project instructions from HEAD (#169); package 0.0.17, CHANGELOG, STATUS",
+  "description": "Release 0.0.17: /work opens a draft PR owner-only (#166) and project instructions from HEAD (#169); package 0.0.17, CHANGELOG, STATUS",
+  "kind": "operations",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "12c7a6e4ff84e1ca4d49b61cba217ab833af7132",
+  "created_at": 1790458313,
+  "updated_at": 1790458351,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.17; version prints 0.0.17; CHANGELOG 0.0.17 extractable; STATUS rows"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

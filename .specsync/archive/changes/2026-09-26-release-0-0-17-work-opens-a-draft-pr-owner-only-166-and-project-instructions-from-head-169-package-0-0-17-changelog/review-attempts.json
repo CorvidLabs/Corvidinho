@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-17-work-opens-a-draft-pr-owner-only-166-and-project-instructions-from-head-169-package-0-0-17-changelog",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "33822813e0aafae4f60f88335ab3df397c414066",
+      "contract_digest": "aebf3556e9f8c0e81db8657c2640914514dd5b553771a315d6650b39405d28fd",
+      "execution_digest": "076a75139d55dcfb02259530db8a78a5005afddf5e19b80b3e93abf79d51b80f",
+      "workspace_digest": "2c856248179a85f74f2a2cb684e514f68bf14d73c528195d4f847128a94dbcef",
+      "timestamp": 1790458318
+    }
+  ]
+}

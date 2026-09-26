@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-17-work-opens-a-draft-pr-owner-only-166-and-project-instructions-from-head-169-package-0-0-17-changelog",
+  "implementation_commit": "33822813e0aafae4f60f88335ab3df397c414066",
+  "implementation_tree": "86f873e49790fde6cd37027c452e761297511c92",
+  "contract_digest": "aebf3556e9f8c0e81db8657c2640914514dd5b553771a315d6650b39405d28fd",
+  "workspace_digest": "2c856248179a85f74f2a2cb684e514f68bf14d73c528195d4f847128a94dbcef",
+  "closing_digest": "861ac18e538baa0385974b25aaf9a28bb8f826bfaf7622bf1400705ba5e94eb5",
+  "review_digest": "4a45b705ae25188c21fa980d7d0fe971181ffac2f19d194cc1a701ae007e85e0",
+  "finalization_digest": "053fa9171d65b137384aa01edd2895803c7182d3221b83c7595e50a6439c3b93",
+  "timestamp": 1790458322
+}
