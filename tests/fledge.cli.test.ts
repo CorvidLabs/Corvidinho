@@ -23,6 +23,7 @@ case "$1 $2" in
   "plugins run")
     shift 2
     echo "cmd=$1"; shift
+    [ "$1" = "--" ] && shift
     for a in "$@"; do printf 'arg=[%s]\\n' "$a"; done
     echo "pwd=$(pwd)"
     ;;

@@ -4,7 +4,18 @@
  * argv arrays only (no shell), stdin closed, hard timeout, capped output, and a
  * child env without Corvidinho's own secrets. Never throws: spawn failures come
  * back as `spawnError` so discovery can degrade cleanly.
+ *
+ * The child runs in its own process group; a timeout or abort kills its whole
+ * tree (native plugins and their children included), and so does this
+ * process exiting or being interrupted (src/plugins/proc-group.ts, AGENT-3).
  */
+
+import {
+  collectProcessTree,
+  killProcessTree,
+  trackChildProcess,
+  type ProcEntry,
+} from "../../src/plugins/proc-group.ts";
 
 export type SpawnCappedOptions = {
   cwd: string;
@@ -12,6 +23,8 @@ export type SpawnCappedOptions = {
   timeoutMs: number;
   /** Per-stream byte cap; bytes past it are drained and dropped. */
   maxBytes: number;
+  /** Stops the run (and its process tree) like a timeout, reported as `aborted`. */
+  signal?: AbortSignal;
 };
 
 export type SpawnCappedResult = {
@@ -19,6 +32,8 @@ export type SpawnCappedResult = {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  /** Stopped because `signal` aborted. */
+  aborted: boolean;
   truncated: boolean;
   spawnError?: string;
 };
@@ -102,6 +117,9 @@ export async function spawnCapped(
   argv: string[],
   opts: SpawnCappedOptions,
 ): Promise<SpawnCappedResult> {
+  if (opts.signal?.aborted) {
+    return { code: 130, stdout: "", stderr: "", timedOut: false, aborted: true, truncated: false };
+  }
   let proc: ReturnType<typeof Bun.spawn>;
   try {
     proc = Bun.spawn(argv, {
@@ -110,6 +128,8 @@ export async function spawnCapped(
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
+      // Own process group: a timeout can then stop grandchildren too.
+      detached: true,
     });
   } catch (e) {
     return {
@@ -117,42 +137,69 @@ export async function spawnCapped(
       stdout: "",
       stderr: "",
       timedOut: false,
+      aborted: false,
       truncated: false,
       spawnError: e instanceof Error ? e.message : String(e),
     };
   }
 
+  const pid = proc.pid;
   const readers: Reader[] = [];
   let timedOut = false;
+  let aborted = false;
+  let stopped = false;
   let grace: ReturnType<typeof setTimeout> | undefined;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    try {
-      proc.kill("SIGKILL");
-    } catch {
-      /* already gone */
-    }
-    // A grandchild may still hold the pipes open; stop waiting for it.
+  // Members of the group left behind when the leader exited (a backgrounded
+  // grandchild holding the pipes): a later timeout, abort or this process
+  // exiting still reaches them.
+  let atExit: ProcEntry[] = [];
+  const untrack = trackChildProcess(pid, () => atExit);
+  let pipesOpen = 2;
+  const exited = proc.exited.then((code) => {
+    if (pipesOpen > 0) atExit = collectProcessTree(pid, { rootJustExited: true });
+    return code;
+  });
+  const drained = <T,>(p: Promise<T>) =>
+    p.finally(() => {
+      pipesOpen -= 1;
+    });
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    killProcessTree(pid, { known: atExit });
+    // A grandchild outside our reach may still hold the pipes; stop waiting.
     grace = setTimeout(() => {
       for (const r of readers) r.cancel().catch(() => {});
     }, PIPE_GRACE_MS);
+  };
+  const timer = setTimeout(() => {
+    timedOut = true;
+    stop();
   }, opts.timeoutMs);
+  const onAbort = () => {
+    aborted = true;
+    stop();
+  };
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
 
   try {
     const [out, err, code] = await Promise.all([
-      readCapped(proc.stdout as ReadableStream<Uint8Array>, opts.maxBytes, readers),
-      readCapped(proc.stderr as ReadableStream<Uint8Array>, opts.maxBytes, readers),
-      proc.exited,
+      drained(readCapped(proc.stdout as ReadableStream<Uint8Array>, opts.maxBytes, readers)),
+      drained(readCapped(proc.stderr as ReadableStream<Uint8Array>, opts.maxBytes, readers)),
+      exited,
     ]);
     return {
       code: typeof code === "number" ? code : 1,
       stdout: out.text,
       stderr: err.text,
       timedOut,
+      aborted: aborted && !timedOut,
       truncated: out.truncated || err.truncated,
     };
   } finally {
     clearTimeout(timer);
     if (grace) clearTimeout(grace);
+    opts.signal?.removeEventListener("abort", onAbort);
+    untrack();
   }
 }
