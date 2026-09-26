@@ -37,7 +37,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR slash commands | #11 → [#26](https://github.com/CorvidLabs/Corvidinho/pull/26) | DISCORD-4 thin `/session` `/status` `/agents` `/work`; channel re-check; no ProcessManager |
 | HEAR rate limits + mutes | #12 → [#27](https://github.com/CorvidLabs/Corvidinho/pull/27) | DISCORD-6 per-user sliding window + in-memory mute; peers unaffected; no ProcessManager |
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
-| HEAR image attachments + protocol lockstep | #14 → [_PR pending_](https://github.com/CorvidLabs/Corvidinho/pulls) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
+| HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
 
 ### In flight / next
 
@@ -117,7 +117,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 4. **Discord HEAR** — #5 → #23 thin shipped (go-live = token + allowlists on VM)
 5. **Attribution** — #20 → #24 shipped
 6. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
-7. **Discord polish** — #10→#25 thinking; #11→#26 slash; #12→#27 rate/mute; #13→#28 admin; #14 image+protocol (PR pending)
+7. **Discord polish** — #10→#25 thinking; #11→#26 slash; #12→#27 rate/mute; #13→#28 admin; #14→#29 image+protocol
 8. **GH write / review / mention** — #19 + later GITHUB-2/3/5
 9. **Deferred** — #9, wallets
 
