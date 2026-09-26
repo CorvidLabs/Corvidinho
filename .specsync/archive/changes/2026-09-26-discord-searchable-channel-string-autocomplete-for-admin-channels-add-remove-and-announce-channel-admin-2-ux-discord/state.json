@@ -7,11 +7,11 @@
   "title": "Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.16",
   "description": "Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.16",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "8a1cdd4fe4cb49bab490a1dcbad8f0d07c372e44",
   "created_at": 1790457831,
-  "updated_at": 1790458197,
+  "updated_at": 1790458237,
   "affected_specs": [
     "discord"
   ],

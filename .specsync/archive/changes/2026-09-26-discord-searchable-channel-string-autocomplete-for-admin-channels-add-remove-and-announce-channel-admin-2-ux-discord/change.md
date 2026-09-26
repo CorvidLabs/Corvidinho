@@ -1,6 +1,6 @@
 ---
 id: discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord
-state: implementing
+state: archived
 type: feature
 base_commit: 8a1cdd4fe4cb49bab490a1dcbad8f0d07c372e44
 ---
