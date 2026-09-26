@@ -6,7 +6,7 @@
 |------|--------|
 | Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) + **v0.0.10** WATCH-RELIABILITY-1..3 + **v0.0.11** enriched bridge-live announce (CHANGELOG bullets) + **v0.0.12** typed git tools (#145) / durable WATCH sessions (#142) + **v0.0.13** always-verify Discord/WATCH (#85 AGENT-4 — no `--no-verify` on spawn) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
-| HI | Captured under `hi/` (17 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
+| HI | Captured under `hi/` (18 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH/ROLES + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY / ROLES-CHAT compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
@@ -24,6 +24,9 @@ ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1. Do not inv
 **HI confirmed + captured (2026-09-26, schedule/worktree/memory-ACL):** Leif confirmed DISCORD-SCHEDULE-1..5, SESSION-WORKTREE-1..5, MEMORY-ACL-1..5 with amendment **self-forget also requires ADMIN**. Live in `hi/discord.md`, `hi/session.md`, `hi/memory.md` (+ `hi/admin.md` cross-link). Impl: #57 · #58 · #59 — no code in the HI-capture PR.
 
 **HI confirmed + captured (2026-09-26, DISCORD-ANNOUNCE):** Leif confirmed DISCORD-ANNOUNCE-1..6. Live in `hi/discord.md`. Impl: `/announce` channel|show + persist + bridge-live post to announce-only channel — this PR (package **0.0.8**; MEMORY inject already shipped as **0.0.7** on main).
+
+
+**HI confirmed + captured (2026-09-26, ROLES-CHAT):** Leif confirmed ROLES-CHAT-1..7 (community chat vs ADMIN tool gates; two-tier interim until #65). Live in `hi/roles.md` (+ identity/safe/admin cross-links). Gate impl + tests follow in a separate PR before #43 ADMIN slash.
 
 
 ## Process / governance (PROCESS-1..5)

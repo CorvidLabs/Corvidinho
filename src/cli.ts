@@ -28,6 +28,7 @@ import {
   goLiveChecklist as watchGoLiveChecklist,
   startWatchPoller,
 } from "./watch/index.ts";
+import { runDaemon } from "./daemon/index.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
@@ -67,6 +68,8 @@ Usage:
   corvidinho discord register-commands
                                     Full-overwrite slash set (guild PUT + clear globals)
   corvidinho github watch           Start WATCH GitHub mention poll (ALLOW-1; poll-first)
+  corvidinho daemon                 Tick schedules headlessly, no Discord needed (CLI-8 / AUTONOMOUS-4;
+                                    one per data dir; JSON-line logs; systemd: docs/DAEMON.md)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
@@ -712,6 +715,10 @@ export async function main(argv: string[]): Promise<number> {
     console.error("usage: corvidinho github watch\n");
     printHelp();
     return 1;
+  }
+  if (cmd === "daemon") {
+    // CLI-8 / AUTONOMOUS-4: headless schedule ticker (src/daemon/).
+    return runDaemon({ projectRoot: process.cwd() });
   }
   if (cmd === "plugins") {
     const sub = rest[1];
