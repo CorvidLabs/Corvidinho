@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-cli-help-text-for-hear-protocol-version-discord-10-label-not-light",
+  "slug": "cover-cli-help-text-for-hear-protocol-version-discord-10-label-not-light",
+  "title": "Cover CLI help text for HEAR protocol-version (DISCORD-10 label, not light)",
+  "description": "Cover CLI help text for HEAR protocol-version (DISCORD-10 label, not light)",
+  "kind": "documentation",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "6116dd1c2c8773880f3f5183dad4b27dfb87303a",
+  "created_at": 1790441871,
+  "updated_at": 1790442015,
+  "affected_specs": [],
+  "affected_paths": [
+    "src/cli.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Help-only usage line for --protocol-version DISCORD-10 label; no cli module acceptance criteria change",
+  "acceptance_criteria": [
+    "CLI --help labels --protocol-version as DISCORD-10 (not light); no cli module AC change"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/cli.ts",
+      "module": "cli",
+      "actor": "corvid-agent",
+      "reason": "Help-only CLI path is owned by cli module; no-spec cover still needs canonical owner for production source",
+      "timestamp": 1790442005
+    }
+  ],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

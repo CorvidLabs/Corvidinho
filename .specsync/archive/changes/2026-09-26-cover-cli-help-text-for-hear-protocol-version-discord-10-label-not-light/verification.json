@@ -1,0 +1,32 @@
+{
+  "timestamp": 1790442012,
+  "commit": "cb5aaebe31e50a97cd302298c452abbfec5e486e",
+  "contract_digest": "05c1b02d62fad32fdf2fb079b32c8e31aa2797bfc998d6e35dad5ac6a66f981c",
+  "execution_digest": "9b994806776bf9de62ff710d22945231c43fbb89849e4a540387e069ac3f1927",
+  "workspace_digest": "24eaa3ac4d5edb62aa3ec8f741577d42e8e4996675eb9b9a6972a6addeeef95e",
+  "acceptance_input_digest": "21e3e9c1ed2c4337cfcc8dc9d438280c8b32150e2fb9ac28678764aa9633d656",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "src/cli.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8ea9e40f52a883f050bd2b6c79bef940d20768678b16fcac8a9d4c1bce99196f",
+        "entry_digest": "feb8eab21d77bd83bf17388f274fde6c36d6a9b347a617c1b2f707159f1a11be",
+        "owners": [
+          "cli"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

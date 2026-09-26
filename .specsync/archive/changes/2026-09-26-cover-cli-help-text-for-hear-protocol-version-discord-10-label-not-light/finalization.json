@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-cli-help-text-for-hear-protocol-version-discord-10-label-not-light",
+  "implementation_commit": "cb5aaebe31e50a97cd302298c452abbfec5e486e",
+  "implementation_tree": "d8e559c327cc74ba3c883fa75d82239b1959b270",
+  "contract_digest": "05c1b02d62fad32fdf2fb079b32c8e31aa2797bfc998d6e35dad5ac6a66f981c",
+  "workspace_digest": "24eaa3ac4d5edb62aa3ec8f741577d42e8e4996675eb9b9a6972a6addeeef95e",
+  "closing_digest": "29b1172b4173b145751f2518f28d05d2276f80137de49f1a96ff37f147561c1a",
+  "review_digest": "c117d9a00945ee722a32a1db455bef45993a2f73fad23f81f397cffbd9270191",
+  "finalization_digest": "d7d5f8ec14408adbc6da56dbb1e8f72da64d7f114fd1446a67c92e6db9767036",
+  "timestamp": 1790442015
+}
