@@ -1,6 +1,6 @@
 ---
 id: fix-discordembedpayload-title-access-in-slash-ask-7-fixture-for-tsc
-state: implementing
+state: archived
 type: bug_fix
 base_commit: d40400015fdcb4ae5b7ccfc19a2a8fc7b20a7cff
 ---
