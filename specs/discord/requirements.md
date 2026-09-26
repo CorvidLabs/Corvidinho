@@ -588,9 +588,15 @@ allowlist file the bridge already reads (the loaded file, else
 `CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml`,
 created 0600 when missing), written atomically (temp file in the same
 directory, fsync, rename; mode kept) with every other line, section and
-comment kept. The live allowlist SHALL be recomputed as file ∪ env and
-updated in place so it applies without a restart. Env values SHALL NOT be
-written to the file or changed at runtime; the reply SHALL say so.
+comment kept. The file SHALL be read and written as JSON exactly when the
+allowlist loader reads it as JSON (one shared rule, `isJsonAllowlistPath`: a
+case-sensitive `.json` suffix), else as TOML, so an edit always matches what
+the next load reads. When that path is a symlink whose target does not
+resolve (dangling or looping), the mutation, the atomic write and
+`config show` SHALL refuse with a clear error, and the link SHALL NOT be
+replaced by a regular file. The live allowlist SHALL be recomputed as file ∪
+env and updated in place so it applies without a restart. Env values SHALL
+NOT be written to the file or changed at runtime; the reply SHALL say so.
 
 Empty SHALL stay deny-all: adding a deny-listed id SHALL be refused, and
 removing an env-only channel SHALL be refused, as SHALL removing a channel
@@ -601,9 +607,12 @@ SHALL warn that unlisted callers now resolve to BLOCKED. Replies SHALL be
 ephemeral, show before/after counts and never contain tokens or secrets.
 `config show` SHALL list live/file/env counts, owner configured yes/no plus
 display, and which knobs are updatable. Each mutation SHALL append SAFE-5
-audit rows (`started` before the write, failing closed when the trail is
-unavailable, then `ok`/`error`); refusals SHALL append `denied`. The gateway
-SHALL flatten subcommand-group options.
+audit rows (`started` before the write, then `ok`/`error`); refusals SHALL
+append `denied`. A mutation SHALL fail closed with the same
+`audit log unavailable (SAFE-5)` refusal, writing nothing, both when the
+trail throws and when no trail is wired (a bridge without a DB); it SHALL
+never write an unaudited change. The gateway SHALL flatten subcommand-group
+options.
 
 Acceptance Criteria
 - Non-owner and no-owner callers get ephemeral `not authorized` at dispatch and at the handler; the file is not written.
@@ -612,6 +621,9 @@ Acceptance Criteria
 - Deny-listed ids are refused; unreadable/unparsable files are refused untouched; JSON with lossy numeric ids is refused.
 - `/admin config show` shows counts by source and updatable knobs, and no token, key or owner id.
 - Mutations append `started` + `ok` audit rows with an args digest only; an unavailable audit trail refuses the change.
+- With no audit trail wired (`recordAudit` unset), `users add` and `channels add` reply `audit log unavailable (SAFE-5)`, and the file and live lists are unchanged; `config show` still works.
+- `allowlist.JSON` (TOML text) is edited as TOML, matching the loader, and reloads with the new entry; `allowlistFileFormat` agrees with `isJsonAllowlistPath` for every path.
+- A dangling or looping symlink at the allowlist path is refused by `/admin`, `writeFileAtomic` and `config show`; the link stays a symlink and its target is not created.
 - Fixture tests only; no live Discord token or network.
 
 ### REQ-discord-037
@@ -809,6 +821,27 @@ Acceptance Criteria
 - A changed question or reason pings again; a clean run or pause/resume re-arms the ping; a failed run keeps the marker.
 - The marker persists in SQLite (schema v7) across a restart or a second ticker on one data dir.
 - A blocked `/work` run opens no PR, says it is waiting for an answer, and makes no repository, plugin or verify call.
+
+### REQ-discord-203
+
+Each `/schedule` run SHALL get its own git worktree directory and `talk/`
+branch named from the full schedule id and run id, never a shortened prefix,
+so one run never reuses or removes the worktree or branch of another run of
+the same schedule, or of another schedule running at the same time
+(SESSION-WORKTREE-1 / SESSION-WORKTREE-3 / DISCORD-SCHEDULE-3). When creating a
+worktree finds a stale branch of the same name, it SHALL delete that branch
+only when it has no commits off the project HEAD; a branch with its own
+commits SHALL be renamed aside to `<branch>-parked-<ms>` and SHALL NOT be
+force-deleted. Removing or parking a worktree with branch cleanup SHALL
+likewise delete its branch only when the branch has no commits off the project
+HEAD, whatever the default branch is called; any git error SHALL count as
+having commits and keep the branch.
+
+Acceptance Criteria
+- Two runs of one schedule use different worktree dirs and branches; a parked run's commits survive the next run.
+- Two schedules whose ids share a prefix, running at once, get different worktrees; neither run's setup removes the other's live working tree.
+- A stale branch with commits off HEAD is kept under `<branch>-parked-<ms>`; a stale branch with no commits of its own is deleted as before.
+- In a repo whose default branch is `trunk` (no `main`/`master`), removing or parking a worktree keeps a branch with a commit of its own and still deletes a branch with none.
 
 ### REQ-discord-204
 

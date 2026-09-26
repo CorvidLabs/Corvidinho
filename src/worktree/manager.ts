@@ -10,6 +10,7 @@ import { isRepoAllowed } from "../allowlist/github.ts";
 import type { GithubAllowlists } from "../allowlist/types.ts";
 import {
   branchExists,
+  branchHasOwnCommits,
   cleanStaleWorktreeState,
   deleteBranch,
   forceRemoveWorktree,
@@ -30,7 +31,7 @@ export type CreateWorktreeResult = {
 };
 
 export type RemoveWorktreeOptions = {
-  /** Delete branch when zero commits ahead of main (keep if has work). */
+  /** Delete branch only when it has zero commits off the project HEAD (keep if it has work or git errors). */
   cleanBranch?: boolean;
 };
 
@@ -304,39 +305,20 @@ async function detectWorktreeBranch(
   return undefined;
 }
 
+/**
+ * Delete a talk branch only when it has no commits off the project HEAD.
+ * Any git error counts as "has commits", so a branch is never force-deleted
+ * on a guess (e.g. a repo whose default branch is not `main`/`master`).
+ */
 async function cleanupEmptyBranch(
   projectWorkingDir: string,
   branchName: string,
 ): Promise<void> {
   try {
-    const logProc = Bun.spawn(
-      ["git", "log", `main..${branchName}`, "--oneline"],
-      {
-        cwd: projectWorkingDir,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    const logOutput = (await new Response(logProc.stdout).text()).trim();
-    await logProc.exited;
-    if (logOutput.length > 0) return;
-    // Try master as fallback base
-    const log2 = Bun.spawn(
-      ["git", "log", `master..${branchName}`, "--oneline"],
-      {
-        cwd: projectWorkingDir,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    const out2 = (await new Response(log2.stdout).text()).trim();
-    await log2.exited;
-    // If main failed and master also has nothing / failed, still try delete when main log empty
-    if (logOutput.length === 0 && out2.length > 0) return;
-
+    if (await branchHasOwnCommits(projectWorkingDir, branchName)) return;
     await deleteBranch(projectWorkingDir, branchName);
   } catch {
-    // Non-fatal
+    // Non-fatal — keep the branch.
   }
 }
 

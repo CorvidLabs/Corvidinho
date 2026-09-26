@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2",
+  "implementation_commit": "72c9e9c3dca13bc06e60324ec0675d583f8b0420",
+  "implementation_tree": "906e80205836fa7909db30b45c64c214b63061cc",
+  "contract_digest": "a3ffc72d3d78e39d3df29b9df7a907f3c0363fdc6af0ba8c79bdb9c20521f2ce",
+  "workspace_digest": "3eeb364d1a8652796e6076d93131a2d564402a0d709295eea2417cfd166422a4",
+  "closing_digest": "e2772a2809d5576785bfaeab10cdb001ff4425d5ff134844a0c4e63e0ff65105",
+  "review_digest": "4ba27d9de4dd1ee07a9355081916838934c5170238dbe7e46bdd025df2b7d093",
+  "finalization_digest": "eda924f0d521a6247ee6348bab083e4dc2ed53e0bc1e60eb9e8052d934ff9158",
+  "timestamp": 1790462515
+}
