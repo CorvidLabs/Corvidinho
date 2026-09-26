@@ -18,6 +18,24 @@
       "requirement_ids": [
         "REQ-plugins-111"
       ]
+    },
+    {
+      "timestamp": 1790457194,
+      "commit": "8303aafd7c27df6b8402a73c2764fbad42d4e40f",
+      "contract_digest": "64dc981811975d6a7df1f9a65b21c2772055078ae3ac2d053ff088222aa1b58a",
+      "execution_digest": "cf0bc1c98b972d5fa7e31de06b5065bf789a2e462103758f9ea9742db274f37e",
+      "workspace_digest": "e86b49d34e930359d793b898c7f70eb73846f9c00f046814aaaa9b60d477bb93",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-111"
+      ]
     }
   ]
 }
