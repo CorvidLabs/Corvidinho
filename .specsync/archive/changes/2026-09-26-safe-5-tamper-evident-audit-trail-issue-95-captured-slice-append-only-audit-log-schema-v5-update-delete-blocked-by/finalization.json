@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by",
+  "implementation_commit": "2b1e9a15564c27e1583cf2021dcc3f328faa6b1f",
+  "implementation_tree": "5611a5447901351faab78bb4b76caa0737879adb",
+  "contract_digest": "c7568922d9b00d65f9a0537d271ace03f13bbaa9da2c1c60519a08a46e83941e",
+  "workspace_digest": "63a22051a96d0551bc5cbe2126ce689ec1a61109d38a6ec2ddf35a549192fecc",
+  "closing_digest": "8263c0b3c883c0ddcb0b45ed5fcdf9bf83d4703467576a391fdb13100fbe7b8a",
+  "review_digest": "dd4a9f6dd5a48bcb1361c9888a7a4d72d890a22cab740871d531ba299cd2a4eb",
+  "finalization_digest": "1d4ef1456ea24bc7458cdef97e0a6854f7e250728a7fad2b099bfc50be23813e",
+  "timestamp": 1790452306
+}

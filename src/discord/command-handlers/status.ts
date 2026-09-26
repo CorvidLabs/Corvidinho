@@ -38,6 +38,8 @@ export type StatusReportInput = {
   slashNames?: readonly string[];
   /** DISCORD-ANNOUNCE-3 — surface current announcements channel. */
   announceChannelId?: string | null;
+  /** SAFE-5 — audit chain verify line (bridge supplies). */
+  auditLine?: string;
 };
 
 /** Pure formatter for `/status` body — fixture-friendly. */
@@ -57,6 +59,9 @@ export function formatStatusReport(input: StatusReportInput): string {
     `Slash commands: ${names.join(", ")}`,
     formatAnnounceChannelLine(input.announceChannelId),
   ];
+  if (input.auditLine) {
+    lines.push(input.auditLine);
+  }
   if (input.gitTipSha) {
     lines.push(`Git tip: ${input.gitTipSha}`);
   }
@@ -85,6 +90,7 @@ export async function handleStatusCommand(
     env: ctx.env,
     gitTipSha: ctx.gitTipSha,
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
+    auditLine: ctx.auditLine?.(),
   });
 
   await interaction.reply({

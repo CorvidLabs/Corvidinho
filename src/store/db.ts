@@ -120,7 +120,33 @@ CREATE INDEX IF NOT EXISTS idx_memories_deleted
 
 
 
-export const SCHEMA_VERSION = 4;
+/**
+ * v5 — SAFE-5 append-only audit chain (src/audit/). UPDATE/DELETE are blocked
+ * by triggers; rows hold digests and outcomes, never raw args or content.
+ */
+const SCHEMA_V5_SQL = `
+CREATE TABLE IF NOT EXISTS audit_log (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  surface TEXT NOT NULL,
+  args_digest TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  exit_code INTEGER,
+  keyed INTEGER NOT NULL,
+  prev_hash TEXT NOT NULL,
+  hash TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS audit_log_no_update
+  BEFORE UPDATE ON audit_log
+  BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
+  BEFORE DELETE ON audit_log
+  BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+`;
+
+export const SCHEMA_VERSION = 5;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -166,10 +192,13 @@ export function migrateCorvidinhoDb(db: Database): void {
         // Column already present
       }
     }
-    db.run(
-      "UPDATE schema_meta SET value = ? WHERE key = 'version'",
-      [String(SCHEMA_VERSION)],
-    );
+    db.run("UPDATE schema_meta SET value = '4' WHERE key = 'version'");
+    version = 4;
+  }
+  if (version < 5) {
+    db.exec(SCHEMA_V5_SQL);
+    db.run("UPDATE schema_meta SET value = '5' WHERE key = 'version'");
+    version = 5;
   }
 }
 
@@ -186,6 +215,9 @@ export function openCorvidinhoDb(opts: OpenDbOptions = {}): Database {
   const path = opts.path ?? defaultDbPath(opts);
   mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { create: true });
+  // Bridge, spawned agents and plugins share one file: wait briefly for a
+  // writer instead of failing with "database is locked".
+  db.exec("PRAGMA busy_timeout = 5000;");
   migrateCorvidinhoDb(db);
   // SAFE-6: re-scrub stored rows once whenever the scrub rules tighten.
   ensureScrubbed(db);

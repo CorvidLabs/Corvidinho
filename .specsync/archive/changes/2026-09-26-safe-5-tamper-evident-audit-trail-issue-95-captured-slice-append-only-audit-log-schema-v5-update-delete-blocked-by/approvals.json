@@ -1,0 +1,59 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790452064,
+      "digest": "c7568922d9b00d65f9a0537d271ace03f13bbaa9da2c1c60519a08a46e83941e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by",
+        "title": "SAFE-5 tamper-evident audit trail (issue #95 captured slice): append-only audit_log (schema v5, UPDATE/DELETE blocked by triggers) with an HMAC-SHA256 chain keyed by CORVIDINHO_AUDIT_HMAC_KEY from the bot VM env (plain SHA-256 integrity chain when unset); runPlugin records every dangerous plugin run (started then ok/error, fail closed if the intent cannot be recorded) and denied close calls, storing action, actor, surface, args digest and outcome, never raw args; verify at bridge start and a chain-status line in /status; busy_timeout on the shared DB; tests isolate the data dir; draft SAFE-17 Discord verify command left for HI capture",
+        "description": "SAFE-5 tamper-evident audit trail (issue #95 captured slice): append-only audit_log (schema v5, UPDATE/DELETE blocked by triggers) with an HMAC-SHA256 chain keyed by CORVIDINHO_AUDIT_HMAC_KEY from the bot VM env (plain SHA-256 integrity chain when unset); runPlugin records every dangerous plugin run (started then ok/error, fail closed if the intent cannot be recorded) and denied close calls, storing action, actor, surface, args digest and outcome, never raw args; verify at bridge start and a chain-status line in /status; busy_timeout on the shared DB; tests isolate the data dir; draft SAFE-17 Discord verify command left for HI capture",
+        "kind": "feature",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "bunfig.toml",
+          "specs/discord/",
+          "specs/plugins/",
+          "src/audit/",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/status.ts",
+          "src/discord/slash-types.ts",
+          "src/plugins/run.ts",
+          "src/store/db.ts",
+          "tests/audit.log.test.ts",
+          "tests/memory.store.test.ts",
+          "tests/preload.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Dangerous plugin runs append started then ok/error rows to an append-only audit_log hash chain (HMAC-SHA256 with CORVIDINHO_AUDIT_HMAC_KEY, SHA-256 when unset); a dangerous run whose intent cannot be recorded is refused (fail closed); non-interactive denials are logged best-effort; rows store action, actor, surface, args digest, outcome, exit code — never raw args or content; UPDATE/DELETE blocked by triggers; verifyAudit detects the first tampered row and cannot pass keyed rows without the key; bridge logs the verify result at start and /status shows it; shared DB sets busy_timeout; bun test preload isolates CORVIDINHO_DATA_DIR; fixture tests + SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "c46852fc573117a95612c0e6a73c5110ca0a3c9af7ce0cc9dfae5d807caf8278",
+        "plugins": "98c7c12b5a6ec6c03ecdfa509d36bfc1db70f84655786f68e5ace27a40fe29dc"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790452305,
+      "digest": "8263c0b3c883c0ddcb0b45ed5fcdf9bf83d4703467576a391fdb13100fbe7b8a",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
