@@ -1,0 +1,36 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790436993,
+      "digest": "e18e11caf4c488aebe1148a90209972897e89b83c3b938f3a22f2a91a454de5e",
+      "note": "Approve lineage docs: ORIGIN.md + README pointer",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "document-corvidinho-lineage-honoring-corvid-agent-and-merlin-ancestors",
+        "title": "Document Corvidinho lineage honoring corvid-agent and Merlin ancestors",
+        "description": "Document Corvidinho lineage honoring corvid-agent and Merlin ancestors",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "README.md",
+          "docs/ORIGIN.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Docs-only lineage and README pointer; no src/ or living module contract changes",
+        "acceptance_criteria": [
+          "docs/ORIGIN.md records the three-generation lineage (corvid-agent → merlin → Corvidinho) honoring ancestors without trashing them; README has a short Lineage section linking to it; local specsync check, change audit, and fledge lanes run verify --non-interactive stay green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
