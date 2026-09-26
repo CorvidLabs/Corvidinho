@@ -78,6 +78,45 @@ export function isCdEscape(target: string, root: string): boolean {
 }
 
 /**
+ * Quoting / expansion characters left in a word after `stripQuotes`. The
+ * lexical clamp cannot tell what the shell turns such a word into
+ * (`""/etc`, `\/etc`, `"$(…)"`, backticks, `{a,b}`), so it fails closed.
+ */
+const UNPARSEABLE_WORD = /["'`\\${}]/;
+
+/**
+ * Offending target for one cd/pushd invocation (`args` = words after the
+ * head), or null when it stays inside `root`. Skips option words (`-P`,
+ * `-L`, `-e`, `-@`, `-PL`, pushd `-n`, …) and a terminating `--` before
+ * taking the target. Lone `-` (OLDPWD), no target (home) and unparseable
+ * words refuse (fail closed).
+ */
+function cdArgsOffending(args: string[], root: string): string | null {
+  let i = 0;
+  for (; i < args.length; i++) {
+    const word = stripQuotes(args[i]!);
+    if (UNPARSEABLE_WORD.test(word)) return word;
+    if (word === "--") {
+      i++;
+      break;
+    }
+    if (word === "-") return "$OLDPWD";
+    if (!word.startsWith("-")) break;
+    // Option word — skip.
+  }
+  const targetRaw = args[i];
+  if (targetRaw == null) {
+    // Bare `cd` (or options only) → home — escape
+    return "$HOME";
+  }
+  const target = stripQuotes(targetRaw);
+  // `cd -- -` still means OLDPWD in bash.
+  if (target === "-") return "$OLDPWD";
+  if (UNPARSEABLE_WORD.test(target)) return target;
+  return isCdEscape(target, root) ? target : null;
+}
+
+/**
  * First offending cd/pushd target in `cmd`, or null when every cd-like is safe.
  * Splits on common shell metachars (; & | newline parens) — conservative lexer.
  */
@@ -89,15 +128,8 @@ export function firstDisallowedCd(cmd: string, root: string): string | null {
     const tokens = frag.split(/\s+/).filter(Boolean);
     const head = tokens[0];
     if (head !== "cd" && head !== "pushd") continue;
-    const targetRaw = tokens[1];
-    if (targetRaw == null) {
-      // Bare `cd` → home — escape
-      return "$HOME";
-    }
-    const stripped = stripQuotes(targetRaw);
-    if (isCdEscape(stripped, root)) {
-      return stripped;
-    }
+    const offending = cdArgsOffending(tokens.slice(1), root);
+    if (offending != null) return offending;
   }
   return null;
 }

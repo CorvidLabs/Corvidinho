@@ -147,3 +147,111 @@ describe("shell plugins (REQ-plugins-086..088 / SAFE-3)", () => {
     }
   });
 });
+
+describe("shell clamp skips cd/pushd options (REQ-plugins-341 / SAFE-3)", () => {
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  const root = "/Users/x/proj";
+
+  test("options and -- before an outside target still refuse", () => {
+    expect(firstDisallowedCd("cd -P /etc && pwd", root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -L /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -- /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -PL /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -e /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -@ /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -P -L -- /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd('cd "-P" /etc', root)).toBe("/etc");
+    expect(firstDisallowedCd("cd -P ../../etc", root)).toBe("../../etc");
+    expect(firstDisallowedCd("cd -P ~/secrets", root)).toBe("~/secrets");
+    expect(firstDisallowedCd("ls && cd -P /Users/x/projx", root)).toBe(
+      "/Users/x/projx",
+    );
+    expect(firstDisallowedCd("pushd -n /etc", root)).toBe("/etc");
+    expect(firstDisallowedCd("pushd -- /tmp", root)).toBe("/tmp");
+  });
+
+  test("lone - (OLDPWD) refuses in every position", () => {
+    expect(firstDisallowedCd("cd - && pwd", root)).toBe("$OLDPWD");
+    expect(firstDisallowedCd("cd -P -", root)).toBe("$OLDPWD");
+    expect(firstDisallowedCd("cd -- -", root)).toBe("$OLDPWD");
+    expect(firstDisallowedCd("pushd -", root)).toBe("$OLDPWD");
+  });
+
+  test("options with no target are bare cd (home) and refuse", () => {
+    expect(firstDisallowedCd("cd -P", root)).toBe("$HOME");
+    expect(firstDisallowedCd("cd -- && pwd", root)).toBe("$HOME");
+    expect(firstDisallowedCd("pushd -n", root)).toBe("$HOME");
+  });
+
+  test("unparseable words (quoting / expansion the lexer cannot resolve) refuse", () => {
+    expect(firstDisallowedCd('cd ""/etc', root)).toBe('""/etc');
+    expect(firstDisallowedCd("cd ''/etc", root)).toBe("''/etc");
+    expect(firstDisallowedCd("cd \\/etc", root)).toBe("\\/etc");
+    expect(firstDisallowedCd('cd "$(echo /etc)"', root)).toBe('"$');
+    expect(firstDisallowedCd("cd `echo /etc`", root)).toBe("`echo");
+    expect(firstDisallowedCd("cd {/etc,}", root)).toBe("{/etc,}");
+    expect(firstDisallowedCd("cd $OPT /etc", root)).toBe("$OPT");
+  });
+
+  test("options before a target inside root stay allowed", () => {
+    expect(firstDisallowedCd("cd sub/dir && ls", root)).toBeNull();
+    expect(firstDisallowedCd("cd -P sub/dir", root)).toBeNull();
+    expect(firstDisallowedCd("cd -L ./crates", root)).toBeNull();
+    expect(firstDisallowedCd("cd -- sub", root)).toBeNull();
+    expect(firstDisallowedCd("cd -- -P", root)).toBeNull();
+    expect(firstDisallowedCd("cd -P /Users/x/proj/sub", root)).toBeNull();
+    expect(firstDisallowedCd('cd "sub"', root)).toBeNull();
+    expect(firstDisallowedCd("pushd -n sub", root)).toBeNull();
+  });
+
+  test("shell-exec refuses cd -P /etc and --command 'cd -- /etc' before spawn", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-shell-cdopt-"));
+    try {
+      for (const args of [
+        ["cd -P /etc && pwd"],
+        ["--command", "cd -- /etc && pwd"],
+        ["cd -L /etc && pwd"],
+      ]) {
+        const result = await runPlugin({
+          name: "shell-exec",
+          args,
+          cwd: dir,
+          nonInteractive: true,
+          allowlist: ["shell-exec"],
+        });
+        expect(result.ok).toBe(false);
+        expect(result.exitCode).toBe(2);
+        expect(result.error ?? "").toContain("SAFE-3");
+        expect(result.error ?? "").toContain("/etc");
+        expect((result.data as { refused?: boolean } | undefined)?.refused).toBe(
+          true,
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("shell-exec still runs cd -P sub inside the project", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-shell-cdopt-ok-"));
+    try {
+      mkdirSync(join(dir, "sub"));
+      writeFileSync(join(dir, "sub", "marker.txt"), "ok-opt\n");
+      const result = await runPlugin({
+        name: "shell-exec",
+        args: ["cd -P sub && cat marker.txt"],
+        cwd: dir,
+        nonInteractive: true,
+        allowlist: ["shell-exec"],
+      });
+      expect(result.ok).toBe(true);
+      expect(result.message ?? "").toContain("ok-opt");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
