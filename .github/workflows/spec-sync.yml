@@ -1,0 +1,39 @@
+name: Spec Sync
+
+# Official CorvidLabs/spec-sync@v6 Action only — no curl|bash install.sh.
+# Visible dedicated job (SDD ON). Draft bootstrap specs: strict off so the
+# draft-status warning is not a hard error; require-coverage stays 100.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: spec-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  spec-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: spec-sync check
+        id: specsync
+        uses: CorvidLabs/spec-sync@v6
+        with:
+          version: "6.0.0"
+          strict: false
+          comment: false
+          require-coverage: "100"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: SDD change audit
+        run: specsync change audit

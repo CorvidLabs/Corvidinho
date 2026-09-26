@@ -1,0 +1,45 @@
+# Corvidinho — Bun/TS Linux agent (bootstrap)
+# Prefer Fledge plugin commands over raw shell when a plugin covers the job.
+#
+# Verify lane: lint + smoke + tests. SpecSync is gated by the dedicated
+# `.github/workflows/spec-sync.yml` job (CorvidLabs/spec-sync@v6 Action), not
+# buried inside this lane.
+
+[tasks.test]
+cmd = "bun test"
+description = "Unit and smoke tests"
+
+[tasks.lint]
+cmd = "bunx tsc --noEmit"
+description = "Typecheck (lint stand-in until a dedicated linter lands)"
+
+[tasks.typecheck]
+cmd = "bunx tsc --noEmit"
+description = "Typecheck"
+
+[tasks.smoke]
+cmd = "bun src/cli.ts --help"
+description = "CLI --help exits 0 (placeholder/smoke)"
+
+[tasks.hi-check]
+cmd = "hi check"
+description = "Validate hi/ criterion structure (optional if hi not on PATH)"
+
+[tasks.spec-check]
+cmd = "specsync check"
+description = "SpecSync drift check — local/optional; CI uses Spec Sync workflow"
+
+[lanes.pre-commit]
+description = "Run before committing"
+steps = [
+  { parallel = ["lint", "smoke"] },
+  "test",
+]
+
+[lanes.ci]
+description = "CI pipeline (Bun). SpecSync is a separate workflow."
+steps = ["lint", "smoke", "test"]
+
+[lanes.verify]
+description = "Required gate before claiming done (AGENT-4). SpecSync is separate."
+steps = ["lint", "smoke", "test"]

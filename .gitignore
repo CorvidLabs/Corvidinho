@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*
+secrets*
+
+# Build / cache
+dist/
+build/
+*.tsbuildinfo
+.cache/
+.tmp/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# SpecSync / Fledge local
+.specsync/hashes.json
+# .specsync/archive/ is committed (SDD finalize evidence)
+.fledge/
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "enabled": true,
+  "require_change_for_meaningful_files": true,
+  "meaningful_paths": [
+    "src/",
+    "tests/",
+    "site/",
+    ".github/",
+    "Cargo.toml",
+    "Cargo.lock",
+    "action.yml",
+    "package.json",
+    "bun.lock",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "Package.swift",
+    "Package.resolved",
+    "go.mod",
+    "go.sum",
+    "pyproject.toml",
+    "uv.lock",
+    "requirements.txt",
+    ".specsync/sdd.json",
+    ".specsync/config.toml",
+    ".specsync/config.json",
+    ".specsync/registry.toml",
+    ".specsync/version",
+    "hi/",
+    "docs/",
+    "fledge.toml",
+    "tsconfig.json"
+  ],
+  "ignored_paths": [
+    "specs/",
+    ".specsync/changes/",
+    ".specsync/archive/"
+  ],
+  "verification_commands": [
+    "bun test",
+    "bun src/cli.ts --help",
+    "bunx tsc --noEmit"
+  ],
+  "custom_artifacts": {},
+  "principles_file": null
+}

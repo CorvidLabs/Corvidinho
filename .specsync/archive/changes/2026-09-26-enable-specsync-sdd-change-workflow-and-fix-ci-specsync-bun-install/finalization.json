@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "enable-specsync-sdd-change-workflow-and-fix-ci-specsync-bun-install",
+  "implementation_commit": "c4b209a2691a4771ba6dae92aa048104fab47965",
+  "implementation_tree": "3bf1d5a56f9d9e211deece4e5466f9b5c26a5ad0",
+  "contract_digest": "3aefab0789d1a89b11db1b2a89601ea92cd0038a627526a6ed625bc836e2fa1e",
+  "workspace_digest": "6c229383057f2eefcf0e46f41a37678b08983dc19a88c9866ff3faf4a96c4653",
+  "closing_digest": "66ec68f1986be3076b44833166c450d3300758b28aac6df0653d0b9073e440eb",
+  "review_digest": "e85a90b711919fd80d74bb841ed7c665c30808413522ef0d622fca8334bc0c23",
+  "finalization_digest": "6cf2a2da01f8e83a48f74dfb52e73c7f2405f6a247e8bcb8d89c009b0fe25f21",
+  "timestamp": 1790436897
+}
