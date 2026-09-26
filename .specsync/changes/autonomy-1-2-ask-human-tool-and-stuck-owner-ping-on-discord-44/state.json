@@ -20,7 +20,8 @@
     "src/agent",
     "src/discord",
     "src/scheduler",
-    "tests"
+    "tests",
+    "docs/discord.md"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,
