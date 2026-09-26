@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "ee8faafac4c8a8ab6b53a7aaa7dde1974a23e805",
+  "contract_digest": "d00636126af30938f04e1ccf4182f71c391f5fdafda93774343a54214ed683e8",
+  "execution_digest": "6db51dda806aa0d1df223beca8584f2450904e19e66ebf83ad5103becc1568a3",
+  "workspace_digest": "576180c0f3ecdf9e1f083dd118e1cb85f0235a1af59f8957efcd297f8bef4bc5",
+  "timestamp": 1790462475
+}
