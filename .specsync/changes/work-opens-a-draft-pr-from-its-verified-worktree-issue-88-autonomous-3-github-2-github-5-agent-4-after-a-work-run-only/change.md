@@ -1,6 +1,6 @@
 ---
 id: work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only
-state: draft
+state: implementing
 type: feature
 base_commit: 19683b6059902c62baeddb9d2110f64f82dc3009
 ---
