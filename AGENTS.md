@@ -4,11 +4,22 @@ Linux-only Bun/TypeScript agent runner. CLI-first. No Windows target. No Trust r
 
 ## HI-first
 
-Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, discord, github, fledge, specsync, cli, plugin, safe, autonomous). Capture confirmed wants with `hi`.
+Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, discord, github, fledge, specsync, cli, plugin, safe, autonomous, memory, identity, admin, autonomy, session). Capture confirmed wants with `hi`.
 
 **Do not invent** ACCESS, bounty, or MainNet product surfaces. Do not invent acceptance criteria that are not in `hi/` or that Leif has not confirmed.
 
 Human inventory notes (not acceptance criteria): `docs/CORVIDINHO-FEATURE-STEAL.md`, `docs/CORVIDINHO-HI-DRAFT-FULL.md`.
+
+
+## Process / governance (PROCESS-1..5)
+
+Standing order (Leif confirm 2026-09-26):
+
+1. **PROCESS-1 — HI-first.** Draft → human confirm → capture into `hi/`; never invent acceptance criteria.
+2. **PROCESS-2 — SpecSync SDD + CI Action.** Full change cycle (change → verify → approve → archive); `.github/workflows/spec-sync.yml` required in CI.
+3. **PROCESS-3 — Autonomous merge on Corvidinho.** Agents may approve/merge own work when verify + SpecSync are green (peer to human for changes on this repo).
+4. **PROCESS-4 — Respect CODEOWNERS elsewhere.** No bypass of protected paths/owners outside Corvidinho.
+5. **PROCESS-5 — Fledge Actions deferred.** Prefer local `fledge lanes run verify --non-interactive` in the agent loop; do not invent Fledge Actions product surface yet.
 
 ## Merge policy
 

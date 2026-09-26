@@ -2,13 +2,13 @@
 hi-draft: 1
 families: [MEMORY, AGENT]
 owner: leif
-status: pending-leif-confirm
+status: confirmed-captured-see-hi
 issue: 41
 ---
 
 # MEMORY (draft) — SQLite persistence
 
-> **DRAFT ONLY.** Not acceptance criteria until Leif confirms. Do not capture into `hi/`.
+> **CAPTURED.** Leif confirmed; live criteria are in `hi/`. This file is historical provenance only.
 > Issue: [#41](https://github.com/CorvidLabs/Corvidinho/issues/41). Steals AGENT-7 flesh from corvid-agent local SQLite. **No on-chain.**
 
 ## Intent

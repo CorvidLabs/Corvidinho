@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "capture-leif-confirmed-hi-into-hi-memory-identity-admin-autonomy-session-process-notes-supersede-docs-hi-drafts-pending",
+  "slug": "capture-leif-confirmed-hi-into-hi-memory-identity-admin-autonomy-session-process-notes-supersede-docs-hi-drafts-pending",
+  "title": "Capture Leif-confirmed HI into hi/ (MEMORY IDENTITY ADMIN AUTONOMY SESSION) + PROCESS notes; supersede docs/hi-drafts pending; MEMORY code deferred for slash guild PUT and GH go-live priority",
+  "description": "Capture Leif-confirmed HI into hi/ (MEMORY IDENTITY ADMIN AUTONOMY SESSION) + PROCESS notes; supersede docs/hi-drafts pending; MEMORY code deferred for slash guild PUT and GH go-live priority",
+  "kind": "documentation",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "92519c3c18fa98a6c895cb55196b5529b77c711b",
+  "created_at": 1790444524,
+  "updated_at": 1790444533,
+  "affected_specs": [],
+  "affected_paths": [
+    "hi",
+    "AGENTS.md",
+    "STATUS.md",
+    "docs/hi-drafts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "HI + AGENTS/STATUS/docs only; no canonical module behavior change this PR; MEMORY impl deferred per Leif/CoS priority flip",
+  "acceptance_criteria": [
+    "hi/memory.md identity.md admin.md autonomy.md session.md match Leif-confirmed criteria only; AGENTS.md+STATUS encode PROCESS-1..5 and drop pending-confirm; docs/hi-drafts marked historical; no MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION code; hi check clean; SpecSync+fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

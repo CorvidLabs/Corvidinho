@@ -4,9 +4,9 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress + Discord go-live + LLM tool-loop dogfood (#31) + **v0.0.2** + **HI drafts pending Leif confirm** (#41–#44) |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI captured** (MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION) — impl deferred behind slash guild PUT + GH go-live |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
-| HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
+| HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
@@ -19,7 +19,16 @@
 
 ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1. Do not invent HI/AC.
 
-**HI drafts pending Leif confirm:** `docs/hi-drafts/` (MEMORY / IDENTITY / ADMIN / AUTONOMY) ↔ issues #41–#44. Proposals only — not captured under `hi/`.
+**HI confirmed + captured (2026-09-26):** Leif approved MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS. Live acceptance criteria are under `hi/` (`memory.md`, `identity.md`, `admin.md`, `autonomy.md`, `session.md`). `docs/hi-drafts/` is historical — do not treat as pending.
+
+## Process / governance (PROCESS-1..5)
+
+1. HI-first (draft → confirm → capture)
+2. SpecSync SDD + CI Spec Sync Action
+3. Autonomous merge on Corvidinho when verify+SpecSync green
+4. Respect CODEOWNERS elsewhere
+5. Fledge Actions deferred; local `fledge lanes run verify`
+
 
 ## ROADMAP (living)
 
@@ -46,16 +55,20 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Discord spawn + dogfood path | → [#32](https://github.com/CorvidLabs/Corvidinho/pull/32) | Always `bun`-invoke `.ts` for protocol + agent spawn (fix EACCES); parse `task run --json` for Discord summary; thin env-gated LLM execute stub |
 | LLM tool loop (DOGFOOD) | #31 → [#33](https://github.com/CorvidLabs/Corvidinho/pull/33) | Interruptible OpenAI-compatible plugin tool loop on `task run` (AGENT-3/5); prove-before-done unchanged; fixture mock HTTP; Discord/WATCH keep `--no-verify` |
 | v0.0.2 dogfood polish | → [#34](https://github.com/CorvidLabs/Corvidinho/pull/34) | Shared `src/version.ts` from package.json; enriched ephemeral `/status` (LLM model+host / demo stub, slash names, optional git tip); no new slash commands |
+| HI drafts folder | #41–#44 → [#47](https://github.com/CorvidLabs/Corvidinho/pull/47) | `docs/hi-drafts/` proposals (superseded by capture) |
+| Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
+| HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → (this PR) | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
-| **Pending Leif HI confirm** | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY · [#42](https://github.com/CorvidLabs/Corvidinho/issues/42) IDENTITY · [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) ADMIN · [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) AUTONOMY | CoS next-evolution drafts under `docs/hi-drafts/` — **do not** capture into `hi/` until Leif confirms. Steal-detail siblings #36 CONTACTS, #37 SESSION |
-| Defer invent | — | Do not invent HI/AC into `hi/`; drafts-only until confirm |
-| Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** + **live on Leif's box** (corvid-agent#1110) | Token + channel allowlists on VM; bun-spawn fix for `.ts` protocol/agent (this PR) |
-| Go-live | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH poll **shipped** (code) | Needs Leif: `GITHUB_TOKEN` + `CORVIDINHO_WATCH_USERNAME` + non-empty GH allowlists; webhook follow-up when public URL exists |
-| Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
+| **P0 now** | Slash guild PUT=6 + global `[]` | Leif/CoS priority flip — finish Discord slash registration before deeper MEMORY |
+| **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live | Token + `CORVIDINHO_WATCH_USERNAME` + non-empty GH allowlists + `github watch` |
+| HI captured | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) + [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION | Criteria in `hi/`; **impl deferred** (MEMORY code not in this PR) |
+| Later | #41 MEMORY impl · #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #37 SESSION soft-TTL · #36 CONTACTS | After slash + GH go-live |
+| Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
+| Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |
 
 ### Leif config moments
 

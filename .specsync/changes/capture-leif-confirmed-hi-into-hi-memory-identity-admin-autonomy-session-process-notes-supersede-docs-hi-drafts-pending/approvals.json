@@ -1,0 +1,38 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790444531,
+      "digest": "1ff8f6c35df185ee3ced29aef18ef8d616d0b654f60c6ead72674b788b68049e",
+      "note": "Leif-confirmed HI capture only; MEMORY code deferred for slash+GH priority",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "capture-leif-confirmed-hi-into-hi-memory-identity-admin-autonomy-session-process-notes-supersede-docs-hi-drafts-pending",
+        "title": "Capture Leif-confirmed HI into hi/ (MEMORY IDENTITY ADMIN AUTONOMY SESSION) + PROCESS notes; supersede docs/hi-drafts pending; MEMORY code deferred for slash guild PUT and GH go-live priority",
+        "description": "Capture Leif-confirmed HI into hi/ (MEMORY IDENTITY ADMIN AUTONOMY SESSION) + PROCESS notes; supersede docs/hi-drafts pending; MEMORY code deferred for slash guild PUT and GH go-live priority",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "AGENTS.md",
+          "STATUS.md",
+          "docs/hi-drafts",
+          "hi"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "HI + AGENTS/STATUS/docs only; no canonical module behavior change this PR; MEMORY impl deferred per Leif/CoS priority flip",
+        "acceptance_criteria": [
+          "hi/memory.md identity.md admin.md autonomy.md session.md match Leif-confirmed criteria only; AGENTS.md+STATUS encode PROCESS-1..5 and drop pending-confirm; docs/hi-drafts marked historical; no MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION code; hi check clean; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
