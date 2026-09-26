@@ -29,27 +29,3 @@ jobs:
 
       - name: typecheck
         run: bunx tsc --noEmit
-
-      # CorvidLabs/fledge@v1 floating major is not published yet (action.yml
-      # landed after the v1.7.2 tag). Install the pinned release binary with
-      # checksum verification — zero API calls, same contract as the action.
-      - name: Install Fledge v1.7.2
-        env:
-          FLEDGE_VERSION: "1.7.2"
-          FLEDGE_ASSET: fledge-linux-x86_64
-          FLEDGE_SHA256: bebbd9b9f377468b377ee1e177aef96992ee8f8d9f075f9fe2323153f2e165ec
-        run: |
-          set -euo pipefail
-          dir="$RUNNER_TEMP/fledge-$FLEDGE_VERSION"
-          mkdir -p "$dir"
-          curl -fsSL --retry 3 -o "$dir/$FLEDGE_ASSET" \
-            "https://github.com/CorvidLabs/fledge/releases/download/v$FLEDGE_VERSION/$FLEDGE_ASSET"
-          echo "$FLEDGE_SHA256  $dir/$FLEDGE_ASSET" | sha256sum -c -
-          install -m 755 "$dir/$FLEDGE_ASSET" "$dir/fledge"
-          echo "$dir" >> "$GITHUB_PATH"
-
-      - name: Verify Fledge
-        run: fledge --version
-
-      - name: fledge verify lane
-        run: fledge lanes run verify --non-interactive

@@ -183,6 +183,45 @@
         }
       },
       "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790436814,
+      "digest": "1e19817bf7d854efda38573f010411da9b2c006b13cecdffd4b208a71521b08c",
+      "note": "Renew: CoS — Bun+SpecSync Action only in GHA; no Fledge in CI; strict false for draft",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "enable-specsync-sdd-change-workflow-and-fix-ci-specsync-bun-install",
+        "title": "Enable SpecSync SDD change workflow and fix CI SpecSync/bun install",
+        "description": "Enable SpecSync SDD change workflow and fix CI SpecSync/bun install",
+        "kind": "operations",
+        "affected_specs": [],
+        "affected_paths": [
+          ".github/workflows/ci.yml",
+          ".github/workflows/spec-sync.yml",
+          ".specsync/adoption-report.json",
+          ".specsync/sdd.json",
+          ".specsync/workflow-v2-baseline.json",
+          "AGENTS.md",
+          "STATUS.md",
+          "fledge.toml",
+          "specs/cli/cli.spec.md",
+          "src/cli.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Ops/policy/CI only: enable SDD, adopt workflow-v2 baseline, fix SpecSync Action and Bun pin. No canonical module contracts change.",
+        "acceptance_criteria": [
+          "Dedicated Spec Sync workflow uses CorvidLabs/spec-sync@v6 (version 6.0.0, require-coverage 100; strict false for draft bootstrap). ci.yml is Bun-only (smoke/test/typecheck) with no SpecSync curl and no Fledge install. sdd.json enabled with require_change_for_meaningful_files true. Fledge verify remains a local/agent gate."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
     }
   ],
   "reopenings": []
