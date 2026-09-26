@@ -9,55 +9,33 @@ import {
   PathEscapeError,
   resolveProjectPath,
 } from "../files/resolvePath.ts";
-
-function flagValue(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name);
-  if (idx < 0) return undefined;
-  const v = args[idx + 1];
-  return v != null && !v.startsWith("--") ? v : undefined;
-}
-
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name);
-}
-
-function positional(args: string[], valueFlags: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (valueFlags.includes(a)) {
-      i++;
-      continue;
-    }
-    if (a === "--json") continue;
-    if (a.startsWith("--")) continue;
-    out.push(a);
-  }
-  return out;
-}
+import { ArgvError, parseArgv } from "../files/argv.ts";
 
 export const searchCommands: PluginCommand[] = [
   {
     name: "search-grep",
     description:
-      "Recursive grep under project cwd; skips binaries and build dirs. Args: <pattern> [path] [--include rs,ts] [--json]",
+      "Recursive grep under project cwd; skips binaries and build dirs. Args: <pattern> [path] [--include rs,ts] [--json]. A pattern may start with '--'.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
       try {
-        const pos = positional(ctx.args, [
-          "--pattern",
-          "--path",
-          "--include",
-        ]);
-        const pattern = flagValue(ctx.args, "--pattern") ?? pos[0];
+        const argv = parseArgv(
+          ctx.args,
+          ["--pattern", "--path", "--include"],
+          ["--json"],
+        );
+        const flaggedPattern = argv.values.get("--pattern");
+        const pattern = flaggedPattern ?? argv.positional[0];
         if (!pattern) {
           return { ok: false, error: "missing pattern", exitCode: 1 };
         }
+        // Positional path follows the pattern (or comes first when --pattern is used).
+        const posPath = argv.positional[flaggedPattern != null ? 0 : 1];
         const pathArg =
-          flagValue(ctx.args, "--path") ??
-          (pos[1] && pos[1].length > 0 ? pos[1] : ".");
-        const include = flagValue(ctx.args, "--include") ?? "";
+          argv.values.get("--path") ??
+          (posPath && posPath.length > 0 ? posPath : ".");
+        const include = argv.values.get("--include") ?? "";
 
         const absPath = resolveProjectPath(ctx.cwd, pathArg);
 
@@ -98,7 +76,7 @@ export const searchCommands: PluginCommand[] = [
           return { file: m[1]!, line: Number(m[2]), text: m[3]! };
         });
         const data = { count: matches.length, matches };
-        if (ctx.json || hasFlag(ctx.args, "--json")) {
+        if (ctx.json || argv.flags.has("--json")) {
           return {
             ok: true,
             data,
@@ -110,7 +88,7 @@ export const searchCommands: PluginCommand[] = [
           (lines.length ? lines.join("\n") + "\n" : "");
         return { ok: true, data, message };
       } catch (err) {
-        if (err instanceof PathEscapeError) {
+        if (err instanceof PathEscapeError || err instanceof ArgvError) {
           return { ok: false, error: err.message, exitCode: 1 };
         }
         return {
