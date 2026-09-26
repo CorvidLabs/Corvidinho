@@ -7,11 +7,11 @@
   "title": "Enrich formatBridgeLiveAnnouncement with ≤5 CHANGELOG bullets for DISCORD-ANNOUNCE-4 standing order; package 0.0.11",
   "description": "Enrich formatBridgeLiveAnnouncement with ≤5 CHANGELOG bullets for DISCORD-ANNOUNCE-4 standing order; package 0.0.11",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
   "created_at": 1790454616,
-  "updated_at": 1790454771,
+  "updated_at": 1790454859,
   "affected_specs": [
     "discord"
   ],
