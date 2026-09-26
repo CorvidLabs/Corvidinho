@@ -75,6 +75,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     channelIds: over.channelIds ?? ["chan-allowed"],
     adminUserIds: over.adminUserIds,
     adminRoleIds: over.adminRoleIds,
+    owner: over.owner,
     mutedUsers: over.mutedUsers,
   };
 }
@@ -162,7 +163,7 @@ describe("/announce dispatch", () => {
   });
 
   test("channel requires admin; empty admin = deny-all", async () => {
-    const ctx = makeCtx({ adminUserIds: [] });
+    const ctx = makeCtx({ owner: null });
     const ix = memoryInteraction({
       commandName: "announce",
       subcommand: "channel",
@@ -175,7 +176,7 @@ describe("/announce dispatch", () => {
   });
 
   test("admin sets channel via picker snowflake value", async () => {
-    const ctx = makeCtx({ adminUserIds: ["admin-1"] });
+    const ctx = makeCtx({ owner: { discordId: "admin-1" } });
     const ix = memoryInteraction({
       commandName: "announce",
       subcommand: "channel",
@@ -200,7 +201,7 @@ describe("/announce dispatch", () => {
   test("admin clear", async () => {
     const store = new AnnounceStore(memoryDb());
     store.setChannelId("111");
-    const ctx = makeCtx({ adminUserIds: ["admin-1"], announceStore: store });
+    const ctx = makeCtx({ owner: { discordId: "admin-1" }, announceStore: store });
     const ix = memoryInteraction({
       commandName: "announce",
       subcommand: "channel",

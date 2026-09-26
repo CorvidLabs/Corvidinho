@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -79,6 +79,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |
+| Shell plugin + SAFE-3 cwd clamp | #83 → (this PR) | Typed `shell-exec` dangerous/code; spawn cwd pin + lexical cd/pushd refuse (SAFE-3); SAFE-1 allowlist; package **0.0.9**; WATCH reliability HI draft only under `docs/hi-drafts/WATCH-RELIABILITY.md` |
 | DISCORD-ANNOUNCE slash | → (this PR) | `/announce` channel|show (CHANNEL picker); persist announce channel id on shared SQLite; bridge-live posts **only** to announce channel (not dogfood allowlist); ADMIN mutations; package **0.0.8**; Discord restart + slash re-register |
 | MEMORY Discord auto-recall inject | draft #67 behavior under AGENT-7/MEMORY-2/4 → (this PR) | Spawn prepends recalled memories; system prompt store/recall rules; richer tool argv; package **0.0.7**; Discord restart + channel update |
 
@@ -88,7 +89,8 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 |-------|-------|--------|
 | Done | [#81](https://github.com/CorvidLabs/Corvidinho/issues/81) PLUGIN files/search + SAFE-2 | Shipped [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) — package **0.0.6** |
 | **Done (cut-order)** | MEMORY Discord inject (AGENT-7 / MEMORY-2/4; draft #67) | Shipped this PR — auto-recall prepend + system prompt + tool argv; package **0.0.7** |
-| **P0 next** | M3 remaining plugins (shell, git, …) | Next after #81; still HI-gated — do not invent criteria |
+| Done | [#83](https://github.com/CorvidLabs/Corvidinho/issues/83) shell-exec + SAFE-3 | Shipped this PR — package **0.0.9** |
+| **P0 next** | M3 remaining plugins (git, …) | Next after #83; still HI-gated — do not invent criteria |
 | Done | Slash guild PUT=6 + global `[]` | Landed [#51](https://github.com/CorvidLabs/Corvidinho/pull/51) |
 | Done | Discord deny polish (DENY-1..3) + `docs/discord.md` | Landed prior |
 | Done | [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) SESSION-WORKTREE | Shipped (worktree manager + Discord/schedule wire + schema v4); package **0.0.5** |

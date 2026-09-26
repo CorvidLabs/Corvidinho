@@ -203,9 +203,27 @@ GitHub login, or any token. Owner config problems (for example a non-snowflake
 Discord id) SHALL be named without echoing the value. A missing owner is
 informational and SHALL NOT change the doctor exit code.
 
+Because ADMIN is owner-only (IDENTITY-2), doctor SHALL print a
+`[warn] admin-lists` line when `CORVIDINHO_DISCORD_ADMIN_USERS` or
+`CORVIDINHO_DISCORD_ADMIN_ROLES` is set, saying they are ignored. The line
+SHALL NOT echo their values and SHALL NOT change the exit code.
+
 Acceptance Criteria
 - Doctor prints an `owner` line with configured yes/no plus the display name only.
 - Doctor never prints the owner Discord id, GitHub login, or tokens.
 - A missing owner does not flip the doctor exit code.
+- Legacy admin lists produce a `[warn] admin-lists` line without their values and without changing the exit code.
 - Fixture test runs doctor with a temp allowlist file / env (no network).
+### REQ-cli-015
+
+The project SHALL ship package version `0.0.9` with shell-exec + SAFE-3
+(issue #83 / PLUGIN-1,2 / SAFE-3). CLI `version` and Discord presence
+(DISCORD-12) report `0.0.9` after bridge update. CHANGELOG SHALL include
+verbose 0.0.9 notes. STATUS.md SHALL mark #83 done.
+
+Acceptance Criteria
+- `package.json` version is `0.0.9`.
+- CLI `version` prints `0.0.9`.
+- CHANGELOG has a 0.0.9 section covering shell-exec + SAFE-3.
+- STATUS ROADMAP marks #83 done; next = remaining M3 plugins (git, …).
 

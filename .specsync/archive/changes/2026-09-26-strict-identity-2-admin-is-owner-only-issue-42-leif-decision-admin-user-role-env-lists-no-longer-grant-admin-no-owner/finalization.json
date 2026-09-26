@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner",
+  "implementation_commit": "643045504b50040e1a1b48bc6cc5beb9d6c3985e",
+  "implementation_tree": "b7e6ad0673a349a1dacbd682221b1a62ccb94b13",
+  "contract_digest": "969687376db8805f3b6e1f944fd6fec0e79fd89b2bdcb8d2579b1a0fe2c68cf4",
+  "workspace_digest": "34e4b8b1fee695044a49c917e50a538535a3617c0e1f1b291f09b438a40ea6c7",
+  "closing_digest": "b2ff86a778aabccfdb59309b17aba9fa6bca4a6136d2645ea7134b248c1b98bf",
+  "review_digest": "0cf5bc56a716dc66423fc4b6a5ccb29ec946920d056fdc52bdc7a0d887352fe5",
+  "finalization_digest": "2f1c9f4cfa43dffa7adbd303f18f4af3d509a459a016bf0481b3fd3dbcbe1e91",
+  "timestamp": 1790453118
+}

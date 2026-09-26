@@ -5,6 +5,7 @@ import { loadGithubPlugins } from "../../plugins/github/index.ts";
 import { loadMemoryPlugins } from "../../plugins/memory/index.ts";
 import { loadMetaPlugins } from "../../plugins/meta/index.ts";
 import { loadSearchPlugins } from "../../plugins/search/index.ts";
+import { loadShellPlugins } from "../../plugins/shell/index.ts";
 import { loadSpecsyncPlugins } from "../../plugins/specsync/index.ts";
 import { size } from "./registry.ts";
 
@@ -20,6 +21,7 @@ export function loadBuiltins(): void {
   loadMemoryPlugins();
   loadFilesPlugins();
   loadSearchPlugins();
+  loadShellPlugins();
   loadGitPlugins();
   loaded = true;
 }

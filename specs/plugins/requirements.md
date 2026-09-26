@@ -224,14 +224,14 @@ model-controlled in the tool loop). `--user`, `--admin`, and `--db`
 
 ADMIN for `memory-forget`, `memory-override`, and `memory-recall
 --include-deleted` SHALL be re-checked inside the handler at call time
-(ADMIN-4 / DISCORD-7): empty `CORVIDINHO_DISCORD_ADMIN_USERS` and
-`CORVIDINHO_DISCORD_ADMIN_ROLES` ⇒ nobody is ADMIN even when
-`CORVIDINHO_ACTING_IS_ADMIN=1` (MEMORY-ACL-4). The bridge's per-dispatch
+(ADMIN-4 / DISCORD-7). The bridge's per-dispatch
 `CORVIDINHO_ACTING_IS_ADMIN=1` is required on every path (a scheduled run
-spawned with it off never gets ADMIN), and the live config must agree:
-deny-listed or muted users are never ADMIN; a user id in the admin users list
-is ADMIN; otherwise only when admin roles are configured. Self-forget stays
-ADMIN-only.
+spawned with it off never gets ADMIN), and the live config must agree: ADMIN
+is owner-only (IDENTITY-2) — the acting user must be the configured owner;
+no owner ⇒ nobody is ADMIN even when `CORVIDINHO_ACTING_IS_ADMIN=1`
+(IDENTITY-3 / MEMORY-ACL-4); `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES`
+never grant ADMIN; deny-listed or muted users are never ADMIN. Self-forget
+stays ADMIN-only.
 Refusals stay opaque and never include memory content (MEMORY-ACL-2).
 
 Forget and override SHALL be two-phase (SAFE-4). Phase 1 (no `--confirm`)
@@ -249,8 +249,8 @@ version bump).
 Acceptance Criteria
 - `--user` / `--admin` / `--db` refused on all memory commands.
 - No acting user env ⇒ refused; other actors never see a user's memories.
-- Empty admin lists + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
-- Admin user id without the bridge bit (scheduled runs) refused; deny-listed or muted admin refused; role admin needs roles configured + env bit.
+- No owner + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
+- Owner id without the bridge bit (scheduled runs) refused; deny-listed or muted owner refused; admin user/role lists + env bit refused.
 - Phase 1 returns a token without content; same-turn confirm refused; a token the human did not supply refused; new-turn human-supplied confirm succeeds; replay refused.
 - Token for another memory, another actor, or changed override content refused; expired token refused.
 - `--include-deleted` refused for non-admins; `--include-deleted=false` is off.
@@ -280,15 +280,15 @@ Acceptance Criteria
 ### REQ-plugins-042
 
 The memory plugins' handler-time ADMIN re-check (REQ-plugins-011) SHALL treat
-the configured owner (IDENTITY-1; matched by Discord snowflake from the owner
-env or the allowlist `[owner]` section) as ADMIN, under the same conditions as
-the bridge: the per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` bit is still
-required, and a muted or deny-listed owner is not ADMIN. With no owner and
-empty admin lists nobody is ADMIN.
+only the configured owner (IDENTITY-1/2; matched by Discord snowflake from the
+owner env or the allowlist `[owner]` section) as ADMIN, under the same
+conditions as the bridge: the per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` bit
+is still required, and a muted or deny-listed owner is not ADMIN. With no
+owner nobody is ADMIN; the admin user/role lists are ignored.
 
 Acceptance Criteria
-- Owner + bridge bit may run memory forget phase 1 with empty admin lists.
-- Owner without the bit, a non-owner id, and a muted owner are refused.
+- Owner + bridge bit may run memory forget phase 1.
+- Owner without the bit, a non-owner id, a muted owner, and an admin-list user or role holder are refused.
 
 ### REQ-plugins-182
 
@@ -333,3 +333,37 @@ Acceptance Criteria
 - A plugin cwd that is a subdirectory of a repository (not the top level) is refused; unknown flags are refused.
 - git-push to a local bare remote is refused when OWNER/REPO is not allowlisted or is denied (exit 3) and succeeds when allowlisted; force/refspec args are refused (exit 2); a non-fast-forward push is rejected without force and the remote ref is unchanged; detached HEAD is refused.
 
+### REQ-plugins-086
+
+The system SHALL register typed plugin `shell-exec` (PLUGIN-1). It SHALL declare
+`dangerous: true` and `minTier: 2` (code) (PLUGIN-2). Non-interactive runs
+without `shell-exec` on the allowlist SHALL deny (SAFE-1).
+
+Acceptance Criteria
+- `plugins list` includes `shell-exec` with dangerous=true and minTier=2.
+- Non-interactive without allowlist returns exit 2 / SAFE-1.
+
+### REQ-plugins-087
+
+`shell-exec` SHALL pin the spawned shell's initial cwd to the plugin cwd
+(project root / task worktree) and SHALL refuse, before spawn, any command
+whose lexically-resolved `cd` or `pushd` target would land outside that root
+(SAFE-3). Refusals include absolute paths outside the root, `..` chains that
+escape, `~` / `~user`, `$VAR` references, and bare `cd` (home). Relative `cd`
+that stays under root and absolute `cd` under root SHALL be allowed.
+
+Acceptance Criteria
+- Unit fixtures cover allow/refuse cases above.
+- Integration: `cd /tmp && …` and `cd ..` from root refuse with exit 2 and SAFE-3 message; `cd sub && …` inside project succeeds when allowlisted.
+
+### REQ-plugins-088
+
+Builtins SHALL load shell plugins. Happy-path + SAFE-3 refuse + SAFE-1 deny
+fixture tests SHALL pass without live tokens. Package version SHALL be `0.0.9`.
+STATUS.md ROADMAP and CHANGELOG SHALL record the slice. A WATCH reliability
+HI draft MAY live under `docs/hi-drafts/` only (not `hi/`).
+
+Acceptance Criteria
+- `package.json` version is `0.0.9`; CLI `version` prints `0.0.9`.
+- CHANGELOG has a 0.0.9 section; STATUS marks #83 done.
+- `docs/hi-drafts/WATCH-RELIABILITY.md` exists as draft.
