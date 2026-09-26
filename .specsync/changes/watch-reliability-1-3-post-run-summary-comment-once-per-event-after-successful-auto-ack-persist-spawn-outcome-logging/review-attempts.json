@@ -16,6 +16,22 @@
       "execution_digest": "5d426e3cae2c5de3a7058e77543d2e17eed7a519b8e8f6842141fa6dda1cd611",
       "workspace_digest": "09f31d24e87e54b4851046787c29ba4d7419f363b7738996565793eb88ae6c43",
       "timestamp": 1790453660
+    },
+    {
+      "schema_version": 2,
+      "change_id": "watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "b603b7e54edef9bf4bb635f221cc5bdbe4fae380",
+      "contract_digest": "a0ffe1880a774284cec99044054fca11b8f2f90dccde4823237951f775a75c4c",
+      "execution_digest": "1a2d17b401a4e532f778d6ba85892a7e70ec524295b0c61533d0346ecfa848c3",
+      "workspace_digest": "1e5a14bc3bb21cc070d4b8d148e7bfd08c26df2e8accf7cb8f66551e3ba62a7d",
+      "timestamp": 1790453693
     }
   ]
 }
