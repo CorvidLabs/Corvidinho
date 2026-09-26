@@ -28,7 +28,7 @@ spec: cli.spec.md
 
 ## Out of Scope
 
-- Discord gateway, GitHub write plugins, autonomous mode (later PRs).
+- Soft Discord polish (#10–14), GitHub write plugins, autonomous mode (later PRs).
 
 ### REQ-cli-004
 
@@ -63,3 +63,14 @@ Acceptance Criteria
 - `corvidinho specsync list` exits 0 and prints registered modules.
 - Help documents the `specsync` surface.
 - `task run` Planning can load specs when a task description is provided (`--task`).
+
+
+### REQ-cli-008
+
+The CLI SHALL expose `discord bridge` to start the HEAR bridge and `--protocol-version` printing the wire protocol integer. Doctor SHALL note Discord token and allowlist go-live requirements without printing secret values.
+
+Acceptance Criteria
+- `corvidinho --protocol-version` prints `1` and exits 0.
+- `corvidinho discord bridge` without token exits non-zero with clean explanation.
+- Help documents `discord bridge` and Discord env/allowlist vars.
+

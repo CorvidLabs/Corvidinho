@@ -11,6 +11,11 @@ import {
   type AgentEvent,
   type TaskResult,
 } from "./agent/index.ts";
+import {
+  CORVIDINHO_PROTOCOL_VERSION,
+  goLiveChecklist,
+  startBridge,
+} from "./discord/index.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { list, size } from "./plugins/registry.ts";
@@ -33,7 +38,9 @@ Usage:
   corvidinho --help                 Show this help
   corvidinho help                   Same as --help
   corvidinho version                Print version
+  corvidinho --protocol-version     Print wire protocol integer (DISCORD-10 light)
   corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
+  corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/5)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
@@ -50,8 +57,10 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_ALLOWLIST_FILE                             path to allowlist.toml|json on the bot VM
   CORVIDINHO_GITHUB_ALLOW_REPOS / _ORGS / _USERS        default-deny; deny wins (GITHUB-6)
   CORVIDINHO_GITHUB_DENY_REPOS / _ORGS / _USERS         always refuse these
-  CORVIDINHO_DISCORD_ALLOW_CHANNELS / _ROLES / _USERS   stub for HEAR; empty = refuse posts/listens
+  CORVIDINHO_DISCORD_ALLOW_CHANNELS / _ROLES / _USERS   HEAR allowlists; empty = refuse (deny-all)
   CORVIDINHO_DISCORD_DENY_CHANNELS / _ROLES / _USERS    deny overrides
+  DISCORD_TOKEN / DISCORD_BOT_TOKEN                     required for discord bridge (never commit)
+  DISCORD_CHANNEL_IDS                                   non-empty channel ids (union with allowlist)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -136,12 +145,17 @@ async function doctor(): Promise<number> {
   const checks: DoctorCheck[] = [];
 
   const discordTokenSet = envPresent("DISCORD_TOKEN") || envPresent("DISCORD_BOT_TOKEN");
+  const discordChannels =
+    envPresent("DISCORD_CHANNEL_IDS") ||
+    envPresent("CORVIDINHO_DISCORD_ALLOW_CHANNELS");
   checks.push({
     name: "discord",
-    ok: discordTokenSet,
+    ok: discordTokenSet && discordChannels,
     detail: discordTokenSet
-      ? "token env present (value not shown)"
-      : "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN",
+      ? discordChannels
+        ? "token + channel allowlist env present (values not shown)"
+        : "token present but channel allowlist empty — set DISCORD_CHANNEL_IDS or CORVIDINHO_DISCORD_ALLOW_CHANNELS"
+      : "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN (go-live: token + non-empty Discord allowlists)",
   });
 
   const tokenOk = envPresent("GITHUB_TOKEN") || envPresent("GH_TOKEN");
@@ -189,6 +203,10 @@ async function doctor(): Promise<number> {
   console.log(
     "One or more checks failed. Install/configure the missing pieces; secrets stay out of the repo.",
   );
+  if (!discordTokenSet || !discordChannels) {
+    console.log("");
+    console.log(goLiveChecklist());
+  }
   return 1;
 }
 
@@ -349,6 +367,30 @@ async function specsyncCli(
   return pluginsRun(map[sub], args, opts);
 }
 
+
+async function discordBridge(): Promise<number> {
+  const result = await startBridge({ projectRoot: process.cwd() });
+  if (!result.ok) {
+    console.error(result.message);
+    return result.exitCode;
+  }
+  // Keep process alive until signal.
+  await new Promise<void>((resolve) => {
+    const stop = async () => {
+      console.log("[discord] shutting down...");
+      await result.stop();
+      resolve();
+    };
+    process.once("SIGINT", () => {
+      void stop();
+    });
+    process.once("SIGTERM", () => {
+      void stop();
+    });
+  });
+  return 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
   const raw = argv.slice(2);
   const {
@@ -376,8 +418,21 @@ export async function main(argv: string[]): Promise<number> {
     console.log(VERSION);
     return 0;
   }
+  if (cmd === "--protocol-version") {
+    console.log(String(CORVIDINHO_PROTOCOL_VERSION));
+    return 0;
+  }
   if (cmd === "doctor") {
     return doctor();
+  }
+  if (cmd === "discord") {
+    const sub = rest[1];
+    if (sub === "bridge") {
+      return discordBridge();
+    }
+    console.error("usage: corvidinho discord bridge\n");
+    printHelp();
+    return 1;
   }
   if (cmd === "plugins") {
     const sub = rest[1];

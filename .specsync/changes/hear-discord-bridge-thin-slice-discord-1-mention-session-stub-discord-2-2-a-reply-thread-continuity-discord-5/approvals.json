@@ -1,0 +1,105 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438496,
+      "digest": "bc2a9f9e84754b9727eee903d6d54004bef828393184feb095431b56aacd2c47",
+      "note": "HEAR thin DISCORD-1/2/2.a/5; gateway→router→session stub; no ProcessManager; empty=deny-all",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5",
+        "title": "HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify",
+        "description": "HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          "AGENTS.md",
+          "README.md",
+          "STATUS.md",
+          "fledge.toml",
+          "package.json",
+          "plugins",
+          "specs/discord",
+          "src/cli.ts",
+          "src/discord",
+          "src/plugins",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "In allowlisted channel, @mention starts session stub (DISCORD-1); reply/thread continues same session id (DISCORD-2/2.a); non-allowlisted channel refused quietly/short not-authorized (DISCORD-5); missing token → clean doctor-style exit (no crash); empty channel allowlist → fail start; discord-post-message marked dangerous; chat spawn uses --no-verify; fixture/unit tests green without live token; STATUS/README go-live checklist (token + non-empty Discord allowlists); SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "8b0f8bc9e9c870ab1e63591d3f2a40d8b5a4483fa5e765f44214cd7d059bdbb2",
+        "discord": "469f8524342c47109f85a7850c6f0831c59de3f739a2ca9ad953e12fba034ec0",
+        "plugins": "976ff2e6b26ed3e93a08b4de986c41d338b0f2dc4c2dbb59a4493ffc77cc4c4c"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438682,
+      "digest": "bc2a9f9e84754b9727eee903d6d54004bef828393184feb095431b56aacd2c47",
+      "note": "Re-approve deltas with AC on discord MODIFIED requirements",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5",
+        "title": "HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify",
+        "description": "HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          "AGENTS.md",
+          "README.md",
+          "STATUS.md",
+          "fledge.toml",
+          "package.json",
+          "plugins",
+          "specs/discord",
+          "src/cli.ts",
+          "src/discord",
+          "src/plugins",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "In allowlisted channel, @mention starts session stub (DISCORD-1); reply/thread continues same session id (DISCORD-2/2.a); non-allowlisted channel refused quietly/short not-authorized (DISCORD-5); missing token → clean doctor-style exit (no crash); empty channel allowlist → fail start; discord-post-message marked dangerous; chat spawn uses --no-verify; fixture/unit tests green without live token; STATUS/README go-live checklist (token + non-empty Discord allowlists); SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "41fe397e971416295d0b84d1f997454545fd07e9555fa54cde9ac0083e8c893b",
+        "discord": "ba189fa74476c4bfa545ad9eaa8a5d403df01a43722f44c5d01a1c91931c28ef",
+        "plugins": "737906033662cd2268431c39e715663597ca836743e75b3cb3dd4db2446ef19c"
+      }
+    }
+  ],
+  "reopenings": []
+}

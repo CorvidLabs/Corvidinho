@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI capture + default-deny allowlists + prove-before-done |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -36,7 +36,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 
 | Order | Issue | Notes |
 |-------|-------|--------|
-| Next | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR Discord thin (DISCORD-1,2,5) | **Blocked** on Discord token + non-empty channel (+ user/role) allowlists |
+| Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
 | Polish | [#10](https://github.com/CorvidLabs/Corvidinho/issues/10)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Discord polish after thin slice |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
 | Brand | [#20](https://github.com/CorvidLabs/Corvidinho/issues/20) DOGFOOD: “Made with Corvidinho” | Plain-text + link footer on PR bodies (**no @handles**) — **can land ASAP** even pre-runner |
@@ -49,10 +49,12 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 - Draft `~/.config/corvidinho/allowlist.toml` (copy shape from **Allowlists** below) for GH orgs/repos/users and Discord channels/roles/users — write the file **empty/deny-all** today; fill lists when ready
 - Decide Discord channel IDs + admin/user IDs + GH allowlists offline
 
-**WAIT until HEAR #5 wiring:**
+**GO-LIVE for Discord HEAR (#5 thin shipped):**
 
-- `DISCORD_TOKEN` / bot token in VM env/secret store (never commit)
-- Non-empty Discord channel (+ user/role as needed) allowlists — empty = deny-all; bot refuses until set
+- `DISCORD_TOKEN` or `DISCORD_BOT_TOKEN` in VM env/secret store (never commit)
+- Non-empty Discord channel allowlist: `DISCORD_CHANNEL_IDS` and/or `CORVIDINHO_DISCORD_ALLOW_CHANNELS` / `~/.config/corvidinho/allowlist.toml` `[discord].channels` — empty = refuse start (not Merlin BASIC)
+- Optional user/role allowlists (empty = deny-all when those gates apply)
+- Then: `corvidinho discord bridge` (or `CORVIDINHO_DISCORD_DRY_RUN=1` for local dry-run)
 
 **GitHub secrets useful when:**
 
@@ -61,7 +63,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 
 ### Discord @bot + reply → session
 
-Expected **after #5** thin slice lands **and** the VM has token + non-empty allowlists. Not before.
+Thin slice **landed** (`corvidinho discord bridge`). Live @bot works **only after** the VM has token + non-empty Discord allowlists (see go-live below).
 
 ### GitHub mention → agent response
 
@@ -107,7 +109,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 1. **Foundation** — done (#1, #2, #15, #18)
 2. **Prove loop** — done (#17)
 3. **SpecSync wiring** — #8 → #22 (landing; CLI usefulness for live callers)
-4. **Discord HEAR** — #5 (Discord as a caller of the same CLI)
+4. **Discord HEAR** — #5 thin shipped (go-live = token + allowlists on VM)
 5. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
 6. **Discord polish** — #10–#14
 7. **GH write / review / mention** — #19 + later GITHUB-2/3/5
@@ -148,11 +150,40 @@ Secrets (`DISCORD_TOKEN`, `GITHUB_TOKEN`, …) stay in env/secret store — neve
 
 WALLET-1..3 captured in `hi/allow.md`. **No wallet ACT** until an approved-wallet allowlist exists. HEAR (#5) must wire Discord channel/user allowlist checks before go-live.
 
+
+
+## READY-FOR-SECRETS (Discord HEAR)
+
+**Milestone:** bridge code accepts token + non-empty allowlists end-to-end; docs/templates shipped; doctor/bridge fail cleanly without secrets.
+
+| Gate | State |
+|------|--------|
+| `corvidinho discord bridge` thin slice | **Shipped** (this PR / #5) |
+| `.env.example` + `allowlist.example.toml` | **Shipped** (no secret values) |
+| `docs/DISCORD-GO-LIVE.md` (Developer Portal + VM paths) | **Shipped** |
+| Doctor: missing token / empty channels | **Shipped** (clear exit / refuse start) |
+| Live token in VM | **Waiting** — CoS/Leif via **secure secret-request room only** (never chat/GitHub paste) |
+| Non-empty channel IDs on VM | **Waiting** — same secure path / offline handoff of snowflakes |
+
+**Ping CoS/Leif for secrets ONLY when this milestone is green in code** (merge + doctor checklist ready). Do not ask for tokens before READY-FOR-SECRETS.
+
+## Discord HEAR go-live checklist
+
+Code for #5 is in-tree. Live Discord still needs secrets on the bot VM:
+
+1. `export DISCORD_TOKEN=…` or `DISCORD_BOT_TOKEN=…` (secret store; never commit)
+2. Non-empty channels: `DISCORD_CHANNEL_IDS=…` **or** allowlist file / `CORVIDINHO_DISCORD_ALLOW_CHANNELS`
+3. Optional: `CORVIDINHO_DISCORD_ALLOW_USERS` / `_ROLES` (empty = deny-all for those checks)
+4. `corvidinho doctor` — Discord check should go green
+5. `corvidinho discord bridge`
+
+Fixture/unit tests cover mention→session, reply/thread continuity, and allowlist refuse without a live token. Do not block merge on missing token.
+
 ## Next
 
 See **ROADMAP** above. Short pointers:
 
-- #8 SpecSync agent wiring lands in this PR (#22) — then #5 HEAR unlocks Discord callers; first DOGFOOD flip = CoS bot execs headless CLI
+- #5 HEAR thin shipped — set token + non-empty Discord allowlists on VM for live @bot; first DOGFOOD flip = CoS bot execs headless CLI
 - Flesh full LLM tool loop on top of prove-before-done + SpecSync plugins
 - #19 GH mention/listen ingress; #20 attribution ASAP (footer on PR bodies)
 - #10–#14 Discord polish after #5; #9 / wallets deferred

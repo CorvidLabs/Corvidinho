@@ -89,3 +89,14 @@ Acceptance Criteria
 - `specsync-read <module>` returns `specs/<module>/<module>.spec.md` contents.
 - `specsync-check` runs project `spec-check` (fledge task or `specsync check` fallback) and fails non-zero on drift.
 - `specsync-brief <module>` returns companion files when present.
+
+
+### REQ-plugins-009
+
+The system SHALL register `discord-post-message` as a **dangerous** plugin (externally visible write). Non-interactive runs SHALL deny unless allowlisted (SAFE-1). Channel target MUST pass Discord channel allowlist (DISCORD-5 / ALLOW-3).
+
+Acceptance Criteria
+- `plugins list` shows `discord-post-message` with dangerous=true.
+- Non-interactive without allowlist → deny (exit 2).
+- Missing/empty channel allowlist or non-allowlisted channel → not authorized.
+
