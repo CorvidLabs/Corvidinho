@@ -55,6 +55,9 @@ export type SlashContext = {
   rateLimitConfig?: RateLimitConfig;
   /** Optional numeric permission level for rateLimitByLevel. */
   permLevelFor?: (userId: string) => number | undefined;
+  /** DISCORD-7 admin lists (empty = nobody ADMIN). */
+  adminUserIds?: string[];
+  adminRoleIds?: string[];
 };
 
 export type SlashResult =

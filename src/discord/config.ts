@@ -152,6 +152,12 @@ export async function loadBridgeConfig(
   );
   const rateLimitByLevel = parseRateLimitByLevel(env.DISCORD_RATE_LIMIT_BY_LEVEL);
   const mutedUserIds = parseList(env.DISCORD_MUTED_USER_IDS);
+  const adminUserIds = parseList(env.CORVIDINHO_DISCORD_ADMIN_USERS).map((s) =>
+    s.toLowerCase(),
+  );
+  const adminRoleIds = parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES).map((s) =>
+    s.toLowerCase(),
+  );
   const requireRequesterCheck =
     env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK === "1" ||
     env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK?.toLowerCase() === "true";
@@ -169,6 +175,8 @@ export async function loadBridgeConfig(
       rateLimitMaxMessages,
       rateLimitByLevel,
       mutedUserIds,
+      adminUserIds,
+      adminRoleIds,
       requireRequesterCheck,
       dryRun: env.CORVIDINHO_DISCORD_DRY_RUN === "1",
     },

@@ -31,17 +31,22 @@ export type ResolvePermissionOpts = {
   /** In-memory muted set (DISCORD-6). */
   mutedUsers?: Set<string>;
   allowlist: AllowlistConfig;
+  /** DISCORD-7 — empty ⇒ nobody ADMIN (default-deny). */
+  adminUserIds?: string[];
+  adminRoleIds?: string[];
 };
 
 /**
  * Resolve caller permission at command run time (DISCORD-7).
- * Empty adminUsers/adminRoles ⇒ nobody is ADMIN (default-deny).
+ * Empty adminUserIds/adminRoleIds ⇒ nobody is ADMIN (default-deny).
  * Denied users are BLOCKED. When users+roles allowlists are both empty,
  * channel-gated callers get STANDARD (preserve HEAR thin slash).
  */
 export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionLevel {
   const id = opts.userId.trim().toLowerCase();
   const d = opts.allowlist.discord;
+  const adminUsers = (opts.adminUserIds ?? []).map((x) => x.toLowerCase());
+  const adminRoles = (opts.adminRoleIds ?? []).map((x) => x.toLowerCase());
   if (opts.mutedUsers && opts.mutedUsers.has(opts.userId)) {
     return PermissionLevel.BLOCKED;
   }
@@ -49,10 +54,10 @@ export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionL
     return PermissionLevel.BLOCKED;
   }
   const roleIds = (opts.roleIds ?? []).map((r) => r.trim().toLowerCase()).filter(Boolean);
-  if (d.adminUsers.some((x) => x === id)) {
+  if (adminUsers.includes(id)) {
     return PermissionLevel.ADMIN;
   }
-  if (roleIds.some((r) => d.adminRoles.includes(r))) {
+  if (roleIds.some((r) => adminRoles.includes(r))) {
     return PermissionLevel.ADMIN;
   }
   if (d.users.some((x) => x === id)) {

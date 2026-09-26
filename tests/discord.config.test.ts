@@ -62,8 +62,8 @@ describe("discord bridge config", () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.config.requireRequesterCheck).toBe(true);
-      expect(r.config.allowlist.discord.adminUsers).toContain("boss");
-      expect(r.config.allowlist.discord.adminRoles).toContain("ops");
+      expect(r.config.adminUserIds).toContain("boss");
+      expect(r.config.adminRoleIds).toContain("ops");
     }
   });
 

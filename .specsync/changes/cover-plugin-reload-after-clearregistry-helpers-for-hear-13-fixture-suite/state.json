@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-plugin-reload-after-clearregistry-helpers-for-hear-13-fixture-suite",
+  "slug": "cover-plugin-reload-after-clearregistry-helpers-for-hear-13-fixture-suite",
+  "title": "Cover plugin reload-after-clearRegistry helpers for HEAR #13 fixture suite",
+  "description": "Cover plugin reload-after-clearRegistry helpers for HEAR #13 fixture suite",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "23cecb17c46912e839b640d7783bdaef1ebb6042",
+  "created_at": 1790441491,
+  "updated_at": 1790441500,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/plugins/builtins.ts",
+    "plugins/github",
+    "plugins/meta",
+    "plugins/specsync",
+    "plugins/discord"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Plugin loaders (builtins + github/meta/specsync/discord) re-register after clearRegistry so HEAR #13 fixture tests find discord-post-message; registry get()-guard replaces sticky module loaded flags."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

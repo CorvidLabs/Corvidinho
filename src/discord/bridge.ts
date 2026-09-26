@@ -197,6 +197,8 @@ export async function startBridge(
       mutedUsers,
       rateLimitState,
       rateLimitConfig,
+      adminUserIds: config.adminUserIds,
+      adminRoleIds: config.adminRoleIds,
     };
   }
 

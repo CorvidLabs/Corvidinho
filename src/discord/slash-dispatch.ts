@@ -113,6 +113,8 @@ export async function handleSlashInteraction(
       roleIds: interaction.roleIds,
       mutedUsers: ctx.mutedUsers,
       allowlist: ctx.allowlist,
+      adminUserIds: ctx.adminUserIds,
+      adminRoleIds: ctx.adminRoleIds,
     });
     if (permLevel < entry.minPermission) {
       await interaction.reply({

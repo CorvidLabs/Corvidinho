@@ -82,8 +82,6 @@ function discordFromObj(o: Record<string, string[]> | undefined): DiscordAllowli
   d.channels = lower(normList(o.channels));
   d.roles = lower(normList(o.roles));
   d.users = lower(normList(o.users));
-  d.adminUsers = lower(normList(o.admin_users ?? o.adminusers));
-  d.adminRoles = lower(normList(o.admin_roles ?? o.adminroles));
   d.denyChannels = lower(normList(o.deny_channels ?? o.denychannels));
   d.denyRoles = lower(normList(o.deny_roles ?? o.denyroles));
   d.denyUsers = lower(normList(o.deny_users ?? o.denyusers));
@@ -110,8 +108,6 @@ function mergeDiscord(base: DiscordAllowlists, over: Partial<DiscordAllowlists>)
     channels: pick(base.channels, over.channels),
     roles: pick(base.roles, over.roles),
     users: pick(base.users, over.users),
-    adminUsers: pick(base.adminUsers, over.adminUsers),
-    adminRoles: pick(base.adminRoles, over.adminRoles),
     denyChannels: pick(base.denyChannels, over.denyChannels),
     denyRoles: pick(base.denyRoles, over.denyRoles),
     denyUsers: pick(base.denyUsers, over.denyUsers),
@@ -137,8 +133,6 @@ function finalize(cfg: AllowlistConfig): AllowlistConfig {
       channels: dedupe(cfg.discord.channels),
       roles: dedupe(cfg.discord.roles),
       users: dedupe(cfg.discord.users),
-      adminUsers: dedupe(cfg.discord.adminUsers),
-      adminRoles: dedupe(cfg.discord.adminRoles),
       denyChannels: dedupe(cfg.discord.denyChannels),
       denyRoles: dedupe(cfg.discord.denyRoles),
       denyUsers: dedupe(cfg.discord.denyUsers),
@@ -218,8 +212,6 @@ export function discordFromEnv(env: NodeJS.ProcessEnv): Partial<DiscordAllowlist
     channels: lower(parseList(env.CORVIDINHO_DISCORD_ALLOW_CHANNELS)),
     roles: lower(parseList(env.CORVIDINHO_DISCORD_ALLOW_ROLES)),
     users: lower(parseList(env.CORVIDINHO_DISCORD_ALLOW_USERS)),
-    adminUsers: lower(parseList(env.CORVIDINHO_DISCORD_ADMIN_USERS)),
-    adminRoles: lower(parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES)),
     denyChannels: lower(parseList(env.CORVIDINHO_DISCORD_DENY_CHANNELS)),
     denyRoles: lower(parseList(env.CORVIDINHO_DISCORD_DENY_ROLES)),
     denyUsers: lower(parseList(env.CORVIDINHO_DISCORD_DENY_USERS)),

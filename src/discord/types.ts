@@ -67,6 +67,9 @@ export type BridgeConfig = {
   rateLimitByLevel?: Record<number, number>;
   /** Seed muted Discord user ids (in-memory; DISCORD-6). */
   mutedUserIds: string[];
+  /** DISCORD-7 admin snowflakes (empty = nobody ADMIN; default-deny). */
+  adminUserIds: string[];
+  adminRoleIds: string[];
   /**
    * DISCORD-8 — when true, discord-post-message refuses without
    * requesting_user_id (Merlin require_requester_check analogue).
