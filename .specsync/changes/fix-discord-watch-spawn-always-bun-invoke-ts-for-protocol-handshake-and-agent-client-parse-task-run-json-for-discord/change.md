@@ -1,6 +1,6 @@
 ---
 id: fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: a8068ad5073cb7401518f9f996b988db9740f00c
 ---

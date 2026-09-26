@@ -5,6 +5,8 @@ status: draft
 files:
   - src/cli.ts
   - src/attribution.ts
+  - .env.example
+  - STATUS.md
 
 db_tables: []
 depends_on:

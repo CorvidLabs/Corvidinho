@@ -12,6 +12,8 @@ files:
   - src/agent/task-summary.ts
   - src/agent/execute.ts
   - src/agent/spawn-argv.ts
+  - tests/agent.execute.test.ts
+  - tests/spawn.argv.test.ts
 
 db_tables: []
 depends_on:

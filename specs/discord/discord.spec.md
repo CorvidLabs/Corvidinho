@@ -26,6 +26,7 @@ files:
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
+  - tests/discord.protocol-version.test.ts
 
 db_tables: []
 depends_on:
