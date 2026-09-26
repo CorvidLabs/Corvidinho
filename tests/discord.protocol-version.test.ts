@@ -65,3 +65,15 @@ describe("checkProtocolVersion (DISCORD-10)", () => {
     }
   }, SPAWN_TIMEOUT_MS);
 });
+
+describe("checkProtocolVersion bun-invokes .ts", () => {
+  test("live src/cli.ts probe returns match (no EACCES)", async () => {
+    const root = import.meta.dir + "/..";
+    const bin = `${root}/src/cli.ts`;
+    const result = await checkProtocolVersion(bin, undefined, PROBE_TIMEOUT_MS);
+    expect(result.kind).toBe("match");
+    if (result.kind === "match") {
+      expect(result.version).toBe(CORVIDINHO_PROTOCOL_VERSION);
+    }
+  }, SPAWN_TIMEOUT_MS);
+});

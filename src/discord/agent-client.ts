@@ -3,6 +3,9 @@
  * Injectable for tests; no ProcessManager.
  */
 
+import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { summarizeTaskRunOutput } from "../agent/task-summary.ts";
+export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
 
@@ -40,19 +43,14 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
   return {
     async runChat({ prompt, sessionId, onStatus }) {
       onStatus?.({ tool: "task run", message: "Spawning agent..." });
-      const args = [
-        opts.bin.endsWith(".ts") ? opts.bin : opts.bin,
+      const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
         "--no-verify",
         "--task",
         prompt,
         "--json",
-      ];
-      // When bin is a .ts file, invoke via bun.
-      const cmd = opts.bin.endsWith(".ts")
-        ? ["bun", ...args]
-        : args;
+      ]);
 
       const proc = Bun.spawn(cmd, {
         cwd: opts.cwd,
@@ -69,10 +67,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),
       ]);
-      const summary =
-        stdout.trim().slice(0, 1800) ||
-        stderr.trim().slice(0, 500) ||
-        `(exit ${exitCode})`;
+      const summary = summarizeTaskRunOutput(stdout, stderr, exitCode);
       // Rough token stand-in from summary length until real usage events exist.
       const roughTok = Math.max(1, Math.ceil(summary.length / 4));
       onStatus?.({

@@ -1,0 +1,161 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790442929,
+      "digest": "534b922e2ccba96f1375bed5e790929ee2ee5859716c49dd30a2ff4874583999",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord",
+        "title": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+        "description": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spawn-argv.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/protocol-version.ts",
+          "src/watch/agent-client.ts",
+          "tests/agent.execute.test.ts",
+          "tests/discord.protocol-version.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "buildCorvidinhoArgv always prefixes bun for .ts bins; protocol-version + discord/watch createSpawnAgentClient use it (no EACCES posix_spawn of .ts alone); fixture tests assert spawn argv shape; Discord surfaces parsed task run --json summary (state/summary) not raw dump; thin env-gated LLM execute when CORVIDINHO_LLM_API_KEY set else demo stub; .env.example documents CORVIDINHO_LLM_* without secrets; STATUS notes Discord go-live done + LLM gap/issue; SpecSync + fledge verify green; no #9; allowlists unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "16be956eee0318508e928899e3196e772ae066b1b1778c02ed2832b456c8f3db",
+        "cli": "f64f1ddeb7d66bc2f026a37973d3db0707b07b604798cbaf7e6736cb316ad66a",
+        "discord": "64226bc707e524fa0e7e931a9d02a90cb9df1b9b395606d49e75e5cad3321e11",
+        "watch": "c740e1a7045cb776f569c6d6d7855eb27c3aee6c7fd7c0a884a42573e2c45f63"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790443027,
+      "digest": "829071e5807130c87d7f723c26a01be4cdc980ba5ebf2b8b483b5ebacaf03e22",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord",
+        "title": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+        "description": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spawn-argv.ts",
+          "src/agent/task-summary.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/protocol-version.ts",
+          "src/watch/agent-client.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "buildCorvidinhoArgv always prefixes bun for .ts bins; protocol-version + discord/watch createSpawnAgentClient use it (no EACCES posix_spawn of .ts alone); fixture tests assert spawn argv shape; Discord surfaces parsed task run --json summary (state/summary) not raw dump; thin env-gated LLM execute when CORVIDINHO_LLM_API_KEY set else demo stub; .env.example documents CORVIDINHO_LLM_* without secrets; STATUS notes Discord go-live done + LLM gap/issue; SpecSync + fledge verify green; no #9; allowlists unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "16be956eee0318508e928899e3196e772ae066b1b1778c02ed2832b456c8f3db",
+        "cli": "f64f1ddeb7d66bc2f026a37973d3db0707b07b604798cbaf7e6736cb316ad66a",
+        "discord": "64226bc707e524fa0e7e931a9d02a90cb9df1b9b395606d49e75e5cad3321e11",
+        "watch": "c740e1a7045cb776f569c6d6d7855eb27c3aee6c7fd7c0a884a42573e2c45f63"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790443151,
+      "digest": "4d587718607e2039fc5da991af05b16da9f0e1f1b68ab8658cbf95fb12783d7d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord",
+        "title": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+        "description": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "STATUS.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spawn-argv.ts",
+          "src/agent/task-summary.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/protocol-version.ts",
+          "src/watch/agent-client.ts",
+          "tests/agent.execute.test.ts",
+          "tests/discord.protocol-version.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "buildCorvidinhoArgv always prefixes bun for .ts bins; protocol-version + discord/watch createSpawnAgentClient use it (no EACCES posix_spawn of .ts alone); fixture tests assert spawn argv shape; Discord surfaces parsed task run --json summary (state/summary) not raw dump; thin env-gated LLM execute when CORVIDINHO_LLM_API_KEY set else demo stub; .env.example documents CORVIDINHO_LLM_* without secrets; STATUS notes Discord go-live done + LLM gap/issue; SpecSync + fledge verify green; no #9; allowlists unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "16be956eee0318508e928899e3196e772ae066b1b1778c02ed2832b456c8f3db",
+        "cli": "f64f1ddeb7d66bc2f026a37973d3db0707b07b604798cbaf7e6736cb316ad66a",
+        "discord": "64226bc707e524fa0e7e931a9d02a90cb9df1b9b395606d49e75e5cad3321e11",
+        "watch": "c740e1a7045cb776f569c6d6d7855eb27c3aee6c7fd7c0a884a42573e2c45f63"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790443201,
+      "digest": "4ceba8aadf8db784d6aa3d527b19ac9369a27a87c342ed736fe4b8e37183c9f4",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

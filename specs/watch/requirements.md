@@ -39,3 +39,14 @@ Processed event ids SHALL be deduplicated. No ProcessManager; no auto-merge in t
 Acceptance Criteria
 - Second pass with same ids does not spawn; bun test green offline.
 
+
+
+### REQ-watch-006
+
+WATCH `createSpawnAgentClient` SHALL spawn via `buildCorvidinhoArgv` so a
+`.ts` corvidinho bin is always invoked with `bun` (never posix_spawn alone).
+Prefer `--no-verify` for ingress latency. Fixture tests SHALL cover argv shape.
+
+Acceptance Criteria
+- `.ts` → bun-prefixed argv; binary path unchanged when not `.ts`.
+- No ProcessManager; allowlists unchanged.

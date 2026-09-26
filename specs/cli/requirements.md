@@ -57,13 +57,16 @@ Acceptance Criteria
 
 ### REQ-cli-007
 
-The CLI SHALL expose a thin `specsync` subcommand (`list|read|check|brief|coverage|change-list|ship-status`) that forwards to the SpecSync plugins for operator ergonomics (SPECSYNC-1/2/3/5).
+`corvidinho task run` SHALL drive the prove-before-done loop with an injectable
+execute path: demo stub when no LLM key is configured; thin env-gated
+OpenAI-compatible chat when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is
+set. `--no-verify` remains for bridge latency. `--json` emits structured
+result+events for Discord/WATCH callers to parse.
 
 Acceptance Criteria
-- `corvidinho specsync list` exits 0 and prints registered modules.
-- Help documents the `specsync` surface.
-- `task run` Planning can load specs when a task description is provided (`--task`).
-
+- Help still documents task run / --no-verify / --json.
+- Without LLM key, demo execute behaves as before (verify gate exercise).
+- With key env documented in `.env.example` (no secret values).
 
 ### REQ-cli-008
 

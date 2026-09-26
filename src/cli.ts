@@ -6,6 +6,7 @@
  */
 
 import {
+  createTaskExecute,
   loadAgentConfig,
   runTask,
   type AgentEvent,
@@ -54,7 +55,7 @@ Usage:
   corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--no-verify] [--max-retries N] [--json]
-                                    Demo execute + prove-before-done verify gate (AGENT-4)
+                                    Execute (demo or env-gated LLM) + prove-before-done verify gate (AGENT-4)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --no-verify ...        Skip verify gate (bridges / WATCH latency)
 
@@ -347,15 +348,11 @@ async function taskRun(opts: {
         console.error(`verify: ${e.success ? "pass" : "fail"}`);
       }
     },
-    execute: async ({ attempt, verifyFeedback }) => {
-      if (verifyFeedback && !opts.json) {
-        console.error(`(attempt ${attempt}) feedback:\n${verifyFeedback.slice(0, 500)}`);
+    execute: async (ctx) => {
+      if (ctx.verifyFeedback && !opts.json) {
+        console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
       }
-      // Demo execute reports a file change so the gate runs when enabled.
-      return {
-        summary: `demo task attempt ${attempt}`,
-        filesChanged: ["src/cli.ts"],
-      };
+      return createTaskExecute({ taskText: opts.taskText })(ctx);
     },
   });
 

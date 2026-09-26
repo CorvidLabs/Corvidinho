@@ -3,6 +3,8 @@
  * Injectable for tests; no ProcessManager.
  */
 
+import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 
 export type AgentRunChatOpts = {
@@ -24,16 +26,14 @@ export type SpawnAgentClientOpts = {
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
     async runChat({ prompt, sessionId }) {
-      const args = [
-        opts.bin,
+      const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
         "--no-verify",
         "--task",
         prompt,
         "--json",
-      ];
-      const cmd = opts.bin.endsWith(".ts") ? ["bun", ...args] : args;
+      ]);
       const proc = Bun.spawn(cmd, {
         cwd: opts.cwd,
         stdout: "pipe",
@@ -49,10 +49,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),
       ]);
-      const summary =
-        stdout.trim().slice(0, 1800) ||
-        stderr.trim().slice(0, 500) ||
-        `(exit ${exitCode})`;
+      const summary = summarizeTaskRunOutput(stdout, stderr, exitCode);
       return {
         ok: exitCode === 0,
         sessionId,

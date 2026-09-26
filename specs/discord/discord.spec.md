@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 30
+version: 31
 status: draft
 files:
   - src/discord/types.ts
@@ -26,6 +26,7 @@ files:
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
+  - tests/discord.protocol-version.test.ts
 
 db_tables: []
 depends_on:
@@ -54,7 +55,7 @@ thinking-status builders/controller, slash command bodies + dispatch
 (handleSlashInteraction, buildSlashCommandBodies including mute/unmute);
 loadDiscordPlugins registers discord-post-message (requester check);
 isImageAttachment, extractImageBlocks, enrichPromptWithImages,
-checkProtocolVersion, enforceProtocolVersionOrExit.
+checkProtocolVersion, enforceProtocolVersionOrExit, summarizeTaskRunOutput.
 
 ## Invariants
 
@@ -66,7 +67,8 @@ minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
-unverifiable soft-continues.
+unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
+Discord replies prefer parsed `task run --json` summaries.
 
 ## Behavioral Examples
 
@@ -94,3 +96,4 @@ src/allowlist/, agent task --no-verify, optional discord.js.
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
+| 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |

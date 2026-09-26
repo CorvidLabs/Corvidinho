@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 1
+version: 2
 status: draft
 files:
   - src/watch/types.ts
@@ -61,4 +61,4 @@ src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify.
 WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/issue_comment → allowlist → session stub; webhook deferred.
 
 | 2026-09-26 | watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions: WATCH poll-first thin (#19) — mention/review_request/issue_comment → allowlist → session stub; webhook deferred |
-
+| 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: WATCH spawn uses buildCorvidinhoArgv (bun for .ts) |
