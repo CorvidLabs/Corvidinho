@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "be445a51dcf3d12e81b3f8a687aa27d94a73a02a",
+      "contract_digest": "4b50e276b18d03fd5d69c8a0af811ffaedd3420b37e7dacf3eb35e02c2c3af11",
+      "execution_digest": "a83f86d96fa8d90d0221764f9bd874037f6f8e6b7594147cbac8d3d8018d54b0",
+      "workspace_digest": "b1e1936b656da62e147fc70e597278815031bc13769427b3518d6b2aee2d5d5f",
+      "timestamp": 1790460796
+    }
+  ]
+}

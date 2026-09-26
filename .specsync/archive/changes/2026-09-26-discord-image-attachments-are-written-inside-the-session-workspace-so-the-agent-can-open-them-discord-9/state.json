@@ -7,11 +7,11 @@
   "title": "Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9)",
   "description": "Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
   "created_at": 1790460491,
-  "updated_at": 1790460703,
+  "updated_at": 1790460841,
   "affected_specs": [
     "discord"
   ],
