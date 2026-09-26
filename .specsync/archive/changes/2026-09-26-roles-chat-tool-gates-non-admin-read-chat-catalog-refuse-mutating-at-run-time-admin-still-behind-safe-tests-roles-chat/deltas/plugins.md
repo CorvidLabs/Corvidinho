@@ -1,77 +1,13 @@
 ---
 module: plugins
-version: 36
-status: draft
-files:
-  - src/plugins/types.ts
-  - src/plugins/registry.ts
-  - src/plugins/run.ts
-  - src/plugins/env.ts
-  - src/plugins/mutating.ts
-  - src/plugins/roles.ts
-  - src/plugins/builtins.ts
-  - src/plugins/githubDeny.ts
-  - src/audit/log.ts
-  - src/audit/index.ts
-  - tests/audit.log.test.ts
-  - src/allowlist/types.ts
-  - src/allowlist/load.ts
-  - src/allowlist/github.ts
-  - src/allowlist/discord.ts
-  - src/allowlist/index.ts
-  - plugins/github/api.ts
-  - plugins/github/commands.ts
-  - plugins/github/index.ts
-  - plugins/meta/index.ts
-  - plugins/specsync/api.ts
-  - plugins/specsync/commands.ts
-  - plugins/specsync/index.ts
-  - plugins/memory/index.ts
-  - plugins/memory/commands.ts
-  - plugins/files/index.ts
-  - plugins/files/commands.ts
-  - plugins/files/protectedPaths.ts
-  - plugins/files/resolvePath.ts
-  - plugins/search/index.ts
-  - plugins/search/commands.ts
-  - src/memory/confirm.ts
-  - tests/memory.plugins.test.ts
-  - tests/memory.confirm.test.ts
-  - tests/files.plugins.test.ts
-  - tests/search.plugins.test.ts
-  - plugins/shell/index.ts
-  - plugins/shell/commands.ts
-  - plugins/shell/clamp.ts
-  - tests/shell.plugins.test.ts
-  - plugins/git/index.ts
-  - plugins/git/commands.ts
-  - plugins/git/exec.ts
-  - plugins/git/parse.ts
-  - tests/git.plugins.test.ts
-db_tables: []
-depends_on: []
+change: roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat
 ---
 
-# Plugins
+# Delta — plugins (ROLES-CHAT mutating gates)
 
-## Purpose
+## Modified
 
-Plugin host includes Discord outbound post, GitHub write plugins as dangerous
-(GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
-file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
-`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088), and
-typed git plugins (`git-status|diff|log|branch-list` reads;
-`git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
-task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
-
-## Public API
-
-Export allowlist load + github/discord gate helpers used by plugins and future
-HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
-Shell plugins register via `loadShellPlugins` (`shell-exec`). Git plugins
-register via `loadGitPlugins` (`plugins/git/index.ts`).
-
-## Invariants
+### SPEC SECTION Invariants
 
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
@@ -125,7 +61,7 @@ non-ADMIN callers are refused for every mutating plugin at run time with a
 "not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
 for dangerous tools. Role is re-checked via owner config each call.
 
-## Behavioral Examples
+### SPEC SECTION Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
 
@@ -164,7 +100,7 @@ for dangerous tools. Role is re-checked via owner config each call.
 - **When** the agent runs `files-write` under non-interactive
 - **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
 
-## Error Cases
+### SPEC SECTION Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
@@ -184,17 +120,7 @@ for dangerous tools. Role is re-checked via owner config each call.
 | git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
 | git-push non-fast-forward | Fail (exit 1); never retried with force |
 
-## Dependencies
-
-| Module | What is used |
-|--------|-------------|
-| Bun | `Bun.which`, `Bun.spawn`, `Bun.file`, `Bun.write` |
-| @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
-| node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
-| sh | shell-exec child via `sh -c` |
-| git (system binary) | git plugins via `Bun.spawn` argv arrays |
-
-## Change Log
+### SPEC SECTION Change Log
 
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
@@ -212,3 +138,24 @@ and current rows for plugins host evolution.
 | 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
 | 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |
+
+## Added
+
+### REQUIREMENT REQ-plugins-roles-001
+
+Plugin commands MAY declare `mutating: true`. `isMutatingPlugin` SHALL treat
+`dangerous: true` OR `mutating: true` as mutating. `files-write` and
+`files-edit` SHALL set `mutating: true`.
+
+Acceptance Criteria
+- `tests/roles.chat.gates.test.ts` asserts files-write/edit mutating and non-admin refuse.
+
+### REQUIREMENT REQ-plugins-roles-002
+
+When `CORVIDINHO_ACTING_IS_ADMIN` is present in the environment, `runPlugin`
+SHALL refuse mutating plugins unless `resolveActingIsAdmin` returns true
+(owner re-check). Refusal message SHALL include "not allowed for your role".
+
+Acceptance Criteria
+- Non-admin refuses files-write/shell/github-pr-create/memory-forget.
+- Admin reaches files-write; shell still SAFE-1 without allowlist.

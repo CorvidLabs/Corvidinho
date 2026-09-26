@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat",
+  "implementation_commit": "f504d46d5abec092d12dc8347483d64d84221702",
+  "implementation_tree": "0b214499ab5a8f229f5bac6fff0ef64dcb41d9c3",
+  "contract_digest": "b901da413a5b8423d973486f8976ec4f341315b50882438b7019cf4112b376e3",
+  "workspace_digest": "75b194c085ac48e951ee3093527c97f9ac4120315fd279d5670ab95b9f2bd861",
+  "closing_digest": "0b14a028136eff021d8f8510df8ecaa9a61b9d038a17bdf277186a918323dea4",
+  "review_digest": "797d6e5e6372239dcb9343a955cc3514609c27a36507104b1f07632c31d69db9",
+  "finalization_digest": "b06532782e6459682c20b153a8ad39c70e0d3b54a62ec3304d9e661f4260f5d9",
+  "timestamp": 1790456582
+}
