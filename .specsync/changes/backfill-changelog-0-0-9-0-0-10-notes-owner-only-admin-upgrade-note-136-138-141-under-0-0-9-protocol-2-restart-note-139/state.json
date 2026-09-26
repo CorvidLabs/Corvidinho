@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "backfill-changelog-0-0-9-0-0-10-notes-owner-only-admin-upgrade-note-136-138-141-under-0-0-9-protocol-2-restart-note-139",
+  "slug": "backfill-changelog-0-0-9-0-0-10-notes-owner-only-admin-upgrade-note-136-138-141-under-0-0-9-protocol-2-restart-note-139",
+  "title": "Backfill CHANGELOG 0.0.9/0.0.10 notes: owner-only ADMIN upgrade note + #136/#138/#141 under 0.0.9; protocol-2 restart note + #139/#143 under 0.0.10; STATUS rows",
+  "description": "Backfill CHANGELOG 0.0.9/0.0.10 notes: owner-only ADMIN upgrade note + #136/#138/#141 under 0.0.9; protocol-2 restart note + #139/#143 under 0.0.10; STATUS rows",
+  "kind": "documentation",
+  "state": "draft",
+  "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
+  "created_at": 1790454582,
+  "updated_at": 1790454583,
+  "affected_specs": [],
+  "affected_paths": [
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Docs-only: CHANGELOG/STATUS backfill and a changelog-helper test; no behavior or spec change",
+  "acceptance_criteria": [
+    "0.0.10 notes include the protocol-2 restart note, #139 and #143; 0.0.9 notes include the owner-only ADMIN upgrade note, #138/#141 and #136; changelog-helper tests assert both"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
