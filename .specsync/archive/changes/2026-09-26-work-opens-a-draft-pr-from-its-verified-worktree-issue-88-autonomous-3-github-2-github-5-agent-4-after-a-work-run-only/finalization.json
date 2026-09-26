@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only",
+  "implementation_commit": "428f7c01b7ab04645c3ed798e93fe586ed77e6a7",
+  "implementation_tree": "9239383d31f3946300aa1a231914b62c98f99bfe",
+  "contract_digest": "9817eeefbd2035eb1172dca66adcbb8de47124d883e58c22f47a1a654f18294c",
+  "workspace_digest": "95cf2f655b51524cac281c16c1106386bf6b12903c128b5848c6ec45e638a778",
+  "closing_digest": "c58b5b02ff14cebe6e557839c17ec8d105ec9671977af55e24f686b5ce6b71f8",
+  "review_digest": "b00d3ee6572958144ba38141cfeb038f64e7e4d2ac5fa3395e6dcc147ff2f5bf",
+  "finalization_digest": "b8d2529b31936e750189110918079e3a19d166fb929e0ca4303e695180f441e4",
+  "timestamp": 1790457917
+}
