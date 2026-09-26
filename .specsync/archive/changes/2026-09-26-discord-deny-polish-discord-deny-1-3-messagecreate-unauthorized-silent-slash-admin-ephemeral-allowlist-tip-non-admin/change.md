@@ -1,6 +1,6 @@
 ---
 id: discord-deny-polish-discord-deny-1-3-messagecreate-unauthorized-silent-slash-admin-ephemeral-allowlist-tip-non-admin
-state: implementing
+state: archived
 type: feature
 base_commit: 261fe6a9cb5028b2c4250eaee15ad259b6353057
 ---

@@ -7,11 +7,11 @@
   "title": "Discord deny polish (DISCORD-DENY-1..3): MessageCreate unauthorized silent; slash admin ephemeral allowlist tip, non-admin ephemeral zero-width ack; docs/discord.md with slash inventory + deny mermaid flowchart; no public not-authorized leaks",
   "description": "Discord deny polish (DISCORD-DENY-1..3): MessageCreate unauthorized silent; slash admin ephemeral allowlist tip, non-admin ephemeral zero-width ack; docs/discord.md with slash inventory + deny mermaid flowchart; no public not-authorized leaks",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "261fe6a9cb5028b2c4250eaee15ad259b6353057",
   "created_at": 1790445812,
-  "updated_at": 1790445935,
+  "updated_at": 1790445976,
   "affected_specs": [
     "discord"
   ],

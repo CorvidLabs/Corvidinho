@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-deny-polish-discord-deny-1-3-messagecreate-unauthorized-silent-slash-admin-ephemeral-allowlist-tip-non-admin",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "d1505eb4bc356bd5f373fb6639c03c0eef05238e",
+  "contract_digest": "b9fa94d861ba22f5797c8adae1a97a06802cdcdde3bf4dbcc6f9eb1720654373",
+  "execution_digest": "e78d6b15fe15d00ffa3ea759b9243065c819824e86c7ae5eff6cd26e0427d342",
+  "workspace_digest": "889d2df559a5eba6a6c08c75710646ade2b634c873148be86075a079e75514bd",
+  "timestamp": 1790445946
+}
