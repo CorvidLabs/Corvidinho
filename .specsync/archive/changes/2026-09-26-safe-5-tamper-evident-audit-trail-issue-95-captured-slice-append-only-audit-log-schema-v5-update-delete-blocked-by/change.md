@@ -1,6 +1,6 @@
 ---
 id: safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by
-state: implementing
+state: archived
 type: feature
 base_commit: c6d37cfbb3a2c3adccb9faa9ffe3765e8d379955
 ---
