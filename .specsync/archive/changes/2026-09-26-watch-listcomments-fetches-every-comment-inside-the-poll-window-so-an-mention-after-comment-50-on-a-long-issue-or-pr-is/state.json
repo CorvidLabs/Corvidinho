@@ -7,11 +7,11 @@
   "title": "WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected",
   "description": "WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "aef2cde685e9e9be6f0dc1c4311a916e33981afc",
   "created_at": 1790463391,
-  "updated_at": 1790463688,
+  "updated_at": 1790463849,
   "affected_specs": [
     "watch"
   ],
