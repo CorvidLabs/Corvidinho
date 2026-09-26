@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord",
+  "slug": "discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord",
+  "title": "Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.16",
+  "description": "Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.16",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "8a1cdd4fe4cb49bab490a1dcbad8f0d07c372e44",
+  "created_at": 1790457831,
+  "updated_at": 1790457865,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "tests",
+    "docs/discord.md",
+    "hi/admin.md",
+    "hi/discord.md",
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "STRING+autocomplete on /admin channels add|remove and /announce channel matches guild text channels by case-insensitive name (emoji/unicode ok) or snowflake, returns ≤25 ranked choices; remove may scope to live allowlist; ADMIN-4 re-check unchanged; persist paths unchanged; package 0.0.16; fixture tests; dogfood by typing channel name letters"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
