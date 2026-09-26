@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured",
+  "implementation_commit": "c851879f4aefe9e31990e55cf2bbe915496ba9e4",
+  "implementation_tree": "498375efb5a4cb3eb2ab1b0ea707f46ccf8f0e3a",
+  "contract_digest": "f57369d36c6091150947419a23bb1a8f6a5d3bd8c087c17f0d8aee1df9046a4e",
+  "workspace_digest": "6798edd39f68f5ecd5e6a2a33f0a28d64b93acddb235cc1c91e35979c6c1c069",
+  "closing_digest": "8702ed1cc456b024bad6dfff5a4967308e6696512ec94f24d390852fc38dd92a",
+  "review_digest": "abf0482bbd6d3c44e47c635b552ba9fb1103c322db0c6cfaf279834f8c26ea84",
+  "finalization_digest": "6bf26d07cbabd8fddeb29327208610cf103d2e7076ff1805dd5e16aa23c3fc58",
+  "timestamp": 1790456286
+}

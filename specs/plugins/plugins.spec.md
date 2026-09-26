@@ -21,6 +21,8 @@ files:
   - src/allowlist/index.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
+  - plugins/github/ciStatus.ts
+  - tests/github.ci-status.test.ts
   - plugins/github/index.ts
   - plugins/meta/index.ts
   - plugins/specsync/api.ts
@@ -280,3 +282,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |
 | 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |
+| 2026-09-26 | github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured: github-ci-status takes a PR number or a ref (branch/tag/SHA; git ref-name validation, option-looking refused) and reports verdict green/red/pending/none over check runs plus legacy commit statuses; rows keep name/state/bucket/link (REQ-plugins-094, GITHUB-4 / #94 captured slice; draft GITHUB-11 left for HI capture) |
