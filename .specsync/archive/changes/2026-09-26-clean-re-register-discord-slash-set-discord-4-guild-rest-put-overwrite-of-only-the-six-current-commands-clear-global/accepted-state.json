@@ -7,11 +7,11 @@
   "title": "Clean re-register Discord slash set (DISCORD-4): guild REST PUT overwrite of only the six current commands, clear global applicationCommands to [], prefer DISCORD_GUILD_ID dogfood scope, CLI discord register-commands, fixture tests for putCommands guild-then-clear-globals; no new slash names",
   "description": "Clean re-register Discord slash set (DISCORD-4): guild REST PUT overwrite of only the six current commands, clear global applicationCommands to [], prefer DISCORD_GUILD_ID dogfood scope, CLI discord register-commands, fixture tests for putCommands guild-then-clear-globals; no new slash names",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "2cfad2f0919ce11a9b964c474ed90eab8025f008",
   "created_at": 1790444460,
-  "updated_at": 1790444593,
+  "updated_at": 1790444668,
   "affected_specs": [
     "discord",
     "cli"

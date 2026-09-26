@@ -1,6 +1,6 @@
 ---
 id: clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 2cfad2f0919ce11a9b964c474ed90eab8025f008
 ---
