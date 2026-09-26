@@ -7,10 +7,11 @@
   "title": "Github-ci-status for a PR or ref with an overall CI verdict incl. legacy commit statuses (GITHUB-4, issue #94 captured slice)",
   "description": "github-ci-status for a PR or ref with an overall CI verdict incl. legacy commit statuses (GITHUB-4, issue #94 captured slice)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
   "created_at": 1790454997,
-  "updated_at": 1790455003,
+  "updated_at": 1790455166,
   "affected_specs": [
     "plugins"
   ],
