@@ -34,6 +34,11 @@ export type ComponentInteraction = {
     components?: unknown[];
     update?: boolean;
   }) => Promise<void>;
+  /**
+   * DISCORD-ASK-8 — drop the ephemeral choice / "Got it" message after pick
+   * or when resume finishes (discord.js deleteReply after update/reply).
+   */
+  deleteReply?: () => Promise<void>;
 };
 
 export type GatewayHandlers = {
@@ -71,6 +76,19 @@ export type GatewayHandlers = {
     channelId: string;
     messageId: string;
     embed: DiscordEmbedPayload;
+  }) => Promise<boolean>;
+  /** Richer in-place edit (DISCORD-ASK-6/7 collapse). */
+  editMessage?: (opts: {
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: DiscordEmbedPayload | null;
+    components?: unknown[] | null;
+    mentionUserIds?: string[];
+  }) => Promise<boolean>;
+  deleteMessage?: (opts: {
+    channelId: string;
+    messageId: string;
   }) => Promise<boolean>;
 };
 
@@ -153,6 +171,7 @@ export async function createLiveGateway(
     Events,
     ChannelType,
     ActivityType,
+    MessageFlags,
   } = discord;
   const presenceVersion = opts?.version ?? PACKAGE_VERSION;
 
@@ -220,6 +239,7 @@ export async function createLiveGateway(
     reply: (opts: unknown) => Promise<unknown>;
     deferReply: (opts?: unknown) => Promise<unknown>;
     editReply: (opts: unknown) => Promise<unknown>;
+    deleteReply?: () => Promise<unknown>;
     deferred: boolean;
     replied: boolean;
   }): SlashInteraction {
@@ -255,7 +275,7 @@ export async function createLiveGateway(
         }));
       }
       if (mode === "reply") {
-        if (opts.ephemeral) payload.ephemeral = true;
+        if (opts.ephemeral) payload.flags = MessageFlags.Ephemeral;
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply(payload);
         } else {
@@ -299,11 +319,20 @@ export async function createLiveGateway(
       },
       deferReply: async (opts) => {
         if (!interaction.deferred && !interaction.replied) {
-          await interaction.deferReply({ ephemeral: opts?.ephemeral ?? false });
+          await interaction.deferReply(
+            opts?.ephemeral
+              ? { flags: MessageFlags.Ephemeral }
+              : {},
+          );
         }
       },
       editReply: async (opts) => {
         await send(opts, "edit");
+      },
+      deleteReply: async () => {
+        if (typeof interaction.deleteReply === "function") {
+          await interaction.deleteReply();
+        }
       },
     };
   }
@@ -504,6 +533,75 @@ export async function createLiveGateway(
     }
   };
 
+  handlers.editMessage = async ({
+    channelId,
+    messageId,
+    content,
+    embed,
+    components,
+    mentionUserIds,
+  }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (
+        channel as {
+          messages: {
+            fetch: (id: string) => Promise<{ edit: (p: unknown) => Promise<unknown> }>;
+          };
+        }
+      ).messages;
+      const msg = await messages.fetch(messageId);
+      const payload: Record<string, unknown> = {};
+      if (content === null) payload.content = null;
+      else if (content !== undefined) payload.content = content.slice(0, 1900);
+      if (embed === null) payload.embeds = [];
+      else if (embed) {
+        payload.embeds = [
+          {
+            description: embed.description,
+            color: embed.color,
+            footer: embed.footer,
+          },
+        ];
+      }
+      if (components === null) payload.components = [];
+      else if (components) payload.components = components;
+      if (mentionUserIds) {
+        payload.allowedMentions = {
+          parse: [],
+          users: mentionUserIds,
+          repliedUser: true,
+        };
+      }
+      await msg.edit(payload);
+      return true;
+    } catch (err) {
+      console.error("[discord] editMessage failed:", err);
+      return false;
+    }
+  };
+
+  handlers.deleteMessage = async ({ channelId, messageId }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (
+        channel as {
+          messages: {
+            fetch: (id: string) => Promise<{ delete: () => Promise<unknown> }>;
+          };
+        }
+      ).messages;
+      const msg = await messages.fetch(messageId);
+      await msg.delete();
+      return true;
+    } catch (err) {
+      console.error("[discord] deleteMessage failed:", err);
+      return false;
+    }
+  };
+
   return gateway;
 }
 
@@ -520,6 +618,7 @@ function adaptComponent(interaction: {
   replied: boolean;
   reply: (opts: unknown) => Promise<unknown>;
   update: (opts: unknown) => Promise<unknown>;
+  deleteReply?: () => Promise<unknown>;
 }): ComponentInteraction {
   return {
     id: interaction.id,
@@ -531,17 +630,28 @@ function adaptComponent(interaction: {
     reply: async (opts) => {
       const payload: Record<string, unknown> = {};
       if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
-      if (opts.components) payload.components = opts.components as never;
+      // Explicit empty array clears buttons (DISCORD-ASK-8); do not use truthiness.
+      if (opts.components !== undefined) {
+        payload.components = opts.components as never;
+      }
       if (opts.update) {
         await interaction.update(payload);
         return;
       }
-      if (opts.ephemeral) payload.ephemeral = true;
+      if (opts.ephemeral) {
+        // MessageFlags.Ephemeral (64) — avoid deprecated ephemeral: true warning.
+        payload.flags = 64;
+      }
       if (interaction.deferred || interaction.replied) {
         // Already acknowledged — follow-up style via reply() still works for ephemeral.
         await interaction.reply(payload);
       } else {
         await interaction.reply(payload);
+      }
+    },
+    deleteReply: async () => {
+      if (typeof interaction.deleteReply === "function") {
+        await interaction.deleteReply();
       }
     },
   };

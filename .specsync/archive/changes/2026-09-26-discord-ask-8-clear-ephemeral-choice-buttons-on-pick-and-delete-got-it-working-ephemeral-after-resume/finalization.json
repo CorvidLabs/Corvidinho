@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-ask-8-clear-ephemeral-choice-buttons-on-pick-and-delete-got-it-working-ephemeral-after-resume",
+  "implementation_commit": "8d3a57fa7fcb6d6265380bee8f695a7a125d9d00",
+  "implementation_tree": "744590e0422fb0de1d06df998801b2a5d2485ef3",
+  "contract_digest": "d3b2f844325632c76a72cea88547fa8878f47a7353281f70af2eeb3ea4043dbe",
+  "workspace_digest": "c4de13f79c286a60794de4655a0ee189b422d69138783d71ee4bdb82de3f2c9b",
+  "closing_digest": "23b1cd8fdddaa0934641baa7a2cd9118784c5965b686665e5b495b769c737cc0",
+  "review_digest": "6a3825185e89023b7566ccf291c300c6e2e046a8a876bd25dca58b9ed8b87d2d",
+  "finalization_digest": "d9311994acee2d00229c56950b04947359949515083780da9de6788655230f59",
+  "timestamp": 1790466897
+}

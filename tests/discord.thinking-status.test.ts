@@ -15,6 +15,12 @@ function mockOutbound() {
     [];
   const edits: Array<{ messageId: string; embed: ReturnType<typeof buildThinkingEmbed> }> =
     [];
+  const contentEdits: Array<{
+    messageId: string;
+    content?: string | null;
+    embed?: unknown;
+    components?: unknown[] | null;
+  }> = [];
   let n = 0;
   const outbound: ThinkingOutbound = {
     async sendEmbed({ embed }) {
@@ -27,8 +33,20 @@ function mockOutbound() {
       edits.push({ messageId, embed });
       return true;
     },
+    async editMessage(opts) {
+      contentEdits.push({
+        messageId: opts.messageId,
+        content: opts.content,
+        embed: opts.embed,
+        components: opts.components,
+      });
+      if (opts.embed) {
+        edits.push({ messageId: opts.messageId, embed: opts.embed });
+      }
+      return true;
+    },
   };
-  return { outbound, sends, edits };
+  return { outbound, sends, edits, contentEdits };
 }
 
 describe("thinking-status builders (DISCORD-3)", () => {
@@ -166,5 +184,47 @@ describe("ThinkingStatus controller", () => {
     await status.fail("❌ boom");
     expect(edits.at(-1)!.embed.color).toBe(THINKING_COLORS.error);
     expect(edits.at(-1)!.embed.description).toContain("boom");
+  });
+});
+
+describe("DISCORD-ASK-6/7 finalizeContent", () => {
+  test("finalizeContent clears embed and writes content + components", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_test1234",
+      debounceMs: 0,
+      tickMs: 60_000,
+    });
+    await status.start();
+    const collapsed = await status.finalizeContent({
+      content: "❓ Choose",
+      components: [{ type: 1, components: [] }],
+    });
+    expect(collapsed?.messageId).toBe("msg_1");
+    expect(contentEdits).toHaveLength(1);
+    expect(contentEdits[0]!.content).toContain("Choose");
+    expect(contentEdits[0]!.embed).toBeNull();
+    expect(contentEdits[0]!.components).toBeDefined();
+  });
+
+  test("start with existingMessageId reuses stub via editMessage", async () => {
+    const { outbound, sends, contentEdits } = mockOutbound();
+    const status = new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_test1234",
+      existingMessageId: "stub_9",
+      debounceMs: 0,
+      tickMs: 60_000,
+    });
+    await status.start({ description: "Working on your request..." });
+    expect(sends).toHaveLength(0);
+    expect(status.progressMessageId).toBe("stub_9");
+    expect(contentEdits[0]!.messageId).toBe("stub_9");
+    expect(contentEdits[0]!.content).toBeNull();
+    expect(contentEdits[0]!.embed).toBeDefined();
+    status.dispose();
   });
 });

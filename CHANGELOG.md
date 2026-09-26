@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.0.25
+
+### Discord ask UX — slash ASK-7 + ephemeral pick cleanup (ASK-8)
+
+- **DISCORD-ASK-7** — `/session start` and `/work` collapse the thinking progress message into the final answer (same as mention/button pick) and delete the deferred slash reply when `editMessage` is available — no extra ✅ Done embed + full interaction reply.
+- **DISCORD-ASK-8** — After an ephemeral choice pick: clear option buttons immediately (`components: []`), keep `pendingAsk` cleared so a re-press is expired/no-op, and delete the ephemeral "Got it — Working on it…" once resume finishes.
+- `finalizeContent` only closes the thinking controller on a successful edit so Done/fail fallback still works when `editMessage` is missing.
+- HI + REQ-discord-048/049.
+
+### Ops
+
+- Package version **0.0.25** — restart the Discord bridge after update. No schema bump.
+
+## 0.0.24
+
+### Discord ask UX tighten (less duplicate noise)
+
+- **DISCORD-ASK-6** — Button asks collapse the thinking embed into one public **Choose** stub (no separate "Needs your input" + stub).
+- **DISCORD-ASK-7** — On success (mention done or after a button pick), edit the existing stub/thinking message into the final answer when practical — no extra ✅ Done + new reply.
+- Ephemeral Choose → options flow unchanged (DISCORD-ASK-1..5).
+- Live gateway: `editMessage` / `deleteMessage`; interaction replies use `MessageFlags.Ephemeral` (drops deprecated `ephemeral: true` warning).
+
+### Ops
+
+- Package version **0.0.24** — restart the Discord bridge after update. No schema bump.
+
 ## 0.0.23
 
 ### Stop means stop — child process trees (AGENT-3)
@@ -16,6 +42,7 @@
 ### Ops
 
 - Package version **0.0.23** — restart the Discord bridge, `corvidinho daemon` and watch after update. No schema bump (still v8). Bridge chat agents now run in their own process group and are killed when the bridge exits.
+
 
 ## 0.0.22
 
