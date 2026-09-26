@@ -248,3 +248,19 @@ Acceptance Criteria
 - `--json` output still parses as one JSON document with `result` and `events`.
 - `--output bogus` exits 1 with a usage line.
 - `--protocol-version` prints `2`.
+
+### REQ-cli-143
+
+`task run --task <text>` SHALL treat the next argv item as the task text even
+when it starts with `-`, and `--task=<text>` SHALL keep text that spans
+lines. The bridges pass untrusted Discord and GitHub text as that value, so
+text that looks like a flag (for example `--tier=code`, `--no-verify`,
+`--max-retries=9`) SHALL NOT be parsed as a CLI flag and SHALL NOT change
+the capability tier, verify, or retry settings (AGENT-5, SAFE-1).
+
+Acceptance Criteria
+- A `--task` value starting with `-` is kept verbatim as the task text.
+- Flag-looking task text never sets tier, max-retries, JSON, or no-verify.
+- `--task=` with newlines keeps every line.
+- Normal `--task TEXT --tier code --json` parsing is unchanged.
+
