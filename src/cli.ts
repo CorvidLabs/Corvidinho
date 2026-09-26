@@ -40,7 +40,7 @@ Usage:
   corvidinho help                   Same as --help
   corvidinho version                Print version
   corvidinho attribution             Print the canonical attribution footer
-  corvidinho --protocol-version     Print wire protocol integer (DISCORD-10 light)
+  corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
   corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)

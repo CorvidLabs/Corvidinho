@@ -26,3 +26,10 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 - `tests/discord.requester-perms.test.ts` — evaluateRequesterCanSend + post
   plugin requester/strict gates (no live token).
 
+## Image attachments + protocol lockstep (DISCORD-9 / 10)
+
+- `tests/discord.image-attachments.test.ts` — MIME allowlist, size/count caps,
+  base64 blocks, localPath write, enrichPromptWithImages (no live token).
+- `tests/discord.protocol-version.test.ts` — Merlin-shaped handshake match /
+  mismatch / unverifiable / timeout (stub binaries; no live token).
+

@@ -158,4 +158,3 @@ Acceptance Criteria
 - Strict mode + missing requesting_user_id → refuse.
 - Allowlist deny still wins before requester check.
 - No ProcessManager; secrets out of repo; default-deny unchanged.
-

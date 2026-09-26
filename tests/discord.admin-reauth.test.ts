@@ -8,7 +8,7 @@ import {
   PermissionLevel,
   resolvePermissionLevel,
 } from "../src/discord/permissions.ts";
-import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import {
   buildSlashCommandBodies,

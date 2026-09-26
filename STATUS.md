@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth / confused-deputy |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -37,13 +37,13 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR slash commands | #11 → [#26](https://github.com/CorvidLabs/Corvidinho/pull/26) | DISCORD-4 thin `/session` `/status` `/agents` `/work`; channel re-check; no ProcessManager |
 | HEAR rate limits + mutes | #12 → [#27](https://github.com/CorvidLabs/Corvidinho/pull/27) | DISCORD-6 per-user sliding window + in-memory mute; peers unaffected; no ProcessManager |
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
+| HEAR image attachments + protocol lockstep | #14 → [_PR pending_](https://github.com/CorvidLabs/Corvidinho/pulls) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
-| Polish | [#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Remaining Discord polish after admin re-auth (#13) |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
 
@@ -117,7 +117,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 4. **Discord HEAR** — #5 → #23 thin shipped (go-live = token + allowlists on VM)
 5. **Attribution** — #20 → #24 shipped
 6. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
-7. **Discord polish** — #10→#25 thinking; #11→#26 slash; #12→#27 rate/mute; #13 admin re-auth; then #14
+7. **Discord polish** — #10→#25 thinking; #11→#26 slash; #12→#27 rate/mute; #13→#28 admin; #14 image+protocol (PR pending)
 8. **GH write / review / mention** — #19 + later GITHUB-2/3/5
 9. **Deferred** — #9, wallets
 

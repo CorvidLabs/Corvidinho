@@ -1,5 +1,5 @@
 /**
- * DISCORD-10 light — wire protocol handshake with corvidinho binary.
+ * DISCORD-10 — Merlin-shaped wire protocol handshake with corvidinho binary.
  * Soft-continue if unverifiable; hard-fail on verifiable mismatch.
  */
 
