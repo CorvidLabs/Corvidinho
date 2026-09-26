@@ -1,0 +1,40 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790467036,
+      "digest": "2a154cfb7b4999ded58debba712b6c90da4cfba26177206234f9eb3e8badc9da",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide",
+        "title": "WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention",
+        "description": "WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "watch"
+        ],
+        "affected_paths": [
+          "src/watch/searcher.ts",
+          "tests/watch.comments-pagination.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "On a thread with more than 10 pages (1000+) of comments inside the poll window, createOctokitSearchClient listComments reads page 1 plus the newest pages up to the 10-page cap (via the Link rel=last page number), so an @mention posted after a flood of older in-window comments still becomes an issue_comment event; requests per thread stay capped at 10; without rel=last it follows rel=next up to the cap; since, per_page=100, the fixture client and event shapes are unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "watch": "fc3c802a012c952f0fdfd88aa474bd89471419e7d7cc5109c4584466fa70e167"
+      }
+    }
+  ],
+  "reopenings": []
+}

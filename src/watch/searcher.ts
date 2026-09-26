@@ -4,9 +4,9 @@
  * Assignment events: when watch username is in issue/PR assignees (#48).
  * Own watch-username mentions/comments skipped (REQ-watch-007).
  * Search per_page=100; org-wide results can still bury pings beyond one page.
- * Issue/PR comments: `since` = poll window, 100 per page, up to
- * MAX_COMMENT_PAGES pages (REQ-watch-234) so a new @mention on a long thread
- * is not hidden behind the oldest comments.
+ * Issue/PR comments: `since` = poll window, 100 per page, page 1 plus the
+ * newest pages up to MAX_COMMENT_PAGES (REQ-watch-234) so a new @mention on a
+ * long thread is not hidden behind the oldest comments.
  */
 
 import { Octokit } from "@octokit/rest";
@@ -128,8 +128,29 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
   };
 }
 
-/** Page cap for one issue's comments inside the poll window (100 per page). */
+/** Page size and page cap for one issue's comments inside the poll window. */
+const COMMENT_PAGE_SIZE = 100;
 const MAX_COMMENT_PAGES = 10;
+
+/** Page number of a GitHub `Link` header relation (`next` / `last`), if any. */
+function linkPage(
+  link: string | undefined,
+  rel: "next" | "last",
+): number | null {
+  if (!link) return null;
+  for (const part of link.split(",")) {
+    if (!part.includes(`rel="${rel}"`)) continue;
+    const href = part.match(/<([^>]+)>/)?.[1];
+    if (!href) continue;
+    try {
+      const page = Number(new URL(href).searchParams.get("page"));
+      if (Number.isInteger(page) && page >= 1) return page;
+    } catch {
+      // Malformed URL: treat as absent.
+    }
+  }
+  return null;
+}
 
 async function withRateLimitRethrow<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -180,32 +201,47 @@ export function createOctokitSearchClient(token: string): SearchClient {
     },
     async listComments(owner, repo, number, since) {
       return withRateLimitRethrow(async () => {
-        // GitHub lists comments oldest-first and cannot sort descending:
-        // bound by `since` and follow pages so the newest are reached.
-        const out: Awaited<ReturnType<SearchClient["listComments"]>> = [];
-        let pages = 0;
-        for await (const res of octokit.paginate.iterator(
-          octokit.rest.issues.listComments,
-          {
+        // GitHub lists an issue's comments oldest-first and cannot sort
+        // descending: bound by `since`, then read page 1 plus the NEWEST pages
+        // up to the cap (via rel="last"), so a flood of older comments inside
+        // the window cannot hide the newest @mention.
+        const get = (page: number) =>
+          octokit.rest.issues.listComments({
             owner,
             repo,
             issue_number: number,
-            per_page: 100,
+            per_page: COMMENT_PAGE_SIZE,
+            page,
             ...(since ? { since } : {}),
-          },
-        )) {
-          for (const c of res.data) {
-            out.push({
-              id: c.id,
-              body: c.body ?? "",
-              user: c.user?.login ?? "unknown",
-              htmlUrl: c.html_url,
-              createdAt: c.created_at,
-            });
+          });
+        const first = await get(1);
+        const raw = [...first.data];
+        const last = linkPage(first.headers.link, "last");
+        if (last !== null) {
+          const from = Math.max(2, last - MAX_COMMENT_PAGES + 2);
+          for (let page = from; page <= last; page++) {
+            raw.push(...(await get(page)).data);
           }
-          if (++pages >= MAX_COMMENT_PAGES) break;
+        } else {
+          // No rel="last": follow rel="next" up to the cap.
+          let next = linkPage(first.headers.link, "next");
+          for (
+            let pages = 1;
+            next !== null && pages < MAX_COMMENT_PAGES;
+            pages++
+          ) {
+            const res = await get(next);
+            raw.push(...res.data);
+            next = linkPage(res.headers.link, "next");
+          }
         }
-        return out;
+        return raw.map((c) => ({
+          id: c.id,
+          body: c.body ?? "",
+          user: c.user?.login ?? "unknown",
+          htmlUrl: c.html_url,
+          createdAt: c.created_at,
+        }));
       });
     },
     async listReviewRequests(owner, repo, number) {

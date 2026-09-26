@@ -33,8 +33,16 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-/** Emulate GitHub search + ascending, paginated, since-filtered issue comments. */
-function stubGithub(comments: Comment[]): string[] {
+/**
+ * Emulate GitHub search + ascending, paginated, since-filtered issue comments.
+ * Like GitHub, every page but the last carries `rel="next"` and `rel="last"`;
+ * `withLast: false` drops `rel="last"` to exercise the next-only fallback.
+ */
+function stubGithub(
+  comments: Comment[],
+  opts: { withLast?: boolean } = {},
+): string[] {
+  const withLast = opts.withLast ?? true;
   const urls: string[] = [];
   const json = (body: unknown, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), {
@@ -74,7 +82,16 @@ function stubGithub(comments: Comment[]): string[] {
       if (page * perPage < matching.length) {
         const next = new URL(url);
         next.searchParams.set("page", String(page + 1));
-        headers.link = `<${next.toString()}>; rel="next"`;
+        const links = [`<${next.toString()}>; rel="next"`];
+        if (withLast) {
+          const last = new URL(url);
+          last.searchParams.set(
+            "page",
+            String(Math.ceil(matching.length / perPage)),
+          );
+          links.push(`<${last.toString()}>; rel="last"`);
+        }
+        headers.link = links.join(", ");
       }
       return json(
         slice.map((c) => ({
@@ -134,5 +151,27 @@ describe("WATCH listComments on long threads (REQ-watch-234)", () => {
     stubGithub(comments);
     const events = await run();
     expect(events.filter((e) => e.type === "issue_comment")).toEqual([]);
+  });
+
+  test("a flood of older comments past the page cap cannot hide the newest @mention", async () => {
+    // 1100 comments inside the window = 11 pages; the mention is #1100.
+    const urls = stubGithub(thread(1100, 0));
+    const events = await run();
+    expect(events.map((e) => e.id)).toContain("comment-2099");
+    const pages = urls
+      .filter((u) => u.includes("/issues/7/comments"))
+      .map((u) => Number(new URL(u, API).searchParams.get("page") ?? "1"));
+    // Still bounded to 10 requests: page 1 plus the 9 newest pages.
+    expect(pages).toEqual([1, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  });
+
+  test("without rel=last the client follows rel=next, still capped at 10 pages", async () => {
+    const urls = stubGithub(thread(150, 0), { withLast: false });
+    expect((await run()).map((e) => e.id)).toContain("comment-1149");
+    expect(urls.filter((u) => u.includes("/issues/7/comments")).length).toBe(2);
+
+    const capped = stubGithub(thread(1500, 0), { withLast: false });
+    await run();
+    expect(capped.filter((u) => u.includes("/issues/7/comments")).length).toBe(10);
   });
 });

@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 13
+version: 14
 status: draft
 files:
   - src/watch/types.ts
@@ -112,3 +112,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
 | 2026-09-26 | watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log: WATCH run summary is secret-scrubbed before the thread comment and spawn log |
 | 2026-09-26 | watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is: WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected |
+| 2026-09-26 | watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide: WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention |
