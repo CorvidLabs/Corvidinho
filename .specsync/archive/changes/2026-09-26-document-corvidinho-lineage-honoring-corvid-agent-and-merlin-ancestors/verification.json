@@ -1,0 +1,42 @@
+{
+  "timestamp": 1790436998,
+  "commit": "abc397dbf313c9c7aeb3ba15756db7b2eff14060",
+  "contract_digest": "e18e11caf4c488aebe1148a90209972897e89b83c3b938f3a22f2a91a454de5e",
+  "execution_digest": "4b47bfc95deba939b325c902c39c789503452f50fa6de726e07eee6679cc8a6b",
+  "workspace_digest": "1da8fdba4056ac8ae998c623011bcaacdfa316015c448206bdbb1cc3e73abc1c",
+  "acceptance_input_digest": "6947b310fb46a46f3542f3c7ec18168fedf4e997282a8f9ce3b1e3e99ca15362",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "README.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f75e139126e0fd3f9d6fad729f8530f8d79a2cf9d7323d4b0b0eb77dc7a2e80e",
+        "entry_digest": "f6238a480c2a4f7996fd16d8c5dd7c1d58ecbb14fd4e3728e1fe8d197fae3d4e",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/ORIGIN.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1960c0f92ec3367eabf12015159734830c8c453276671ac91a27ed94fd5e6af7",
+        "entry_digest": "15b1a592d0a7c28044cb4590c6c4e152887653483e0767b59d02bd659c5d3c3a",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}
