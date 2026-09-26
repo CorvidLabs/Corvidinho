@@ -688,3 +688,14 @@ Acceptance Criteria
 - A non-admin role session is refused for a file-denied repo even when it is public.
 - `corvidinho plugins run` with ~/.config/corvidinho/allowlist.toml honors its deny lists.
 
+### REQ-plugins-237
+
+`files-edit` SHALL write the `--new` string byte-for-byte in place of the
+`--old` match in both single-occurrence and `--replace-all` modes.
+JavaScript replacement patterns in `--new` (`$$`, `$&`, `$'`, `` $` ``,
+`$1`, `$<name>`) SHALL NOT be expanded; `--new` is literal data.
+
+Acceptance Criteria
+- A single-occurrence edit whose `--new` contains `$$`, `$'`, `$&`, `` $` ``, `$1` and `$<n>` leaves exactly that text in the file.
+- A `--replace-all` edit with the same `--new` writes the same literal text at every match.
+
