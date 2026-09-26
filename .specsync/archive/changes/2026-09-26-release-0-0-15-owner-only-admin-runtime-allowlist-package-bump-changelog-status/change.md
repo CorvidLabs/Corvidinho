@@ -1,6 +1,6 @@
 ---
 id: release-0-0-15-owner-only-admin-runtime-allowlist-package-bump-changelog-status
-state: implementing
+state: archived
 type: operations
 base_commit: 42370b6d06944cc7b01fab42b1c8fdce74efb390
 ---
