@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "f504d46d5abec092d12dc8347483d64d84221702",
+  "contract_digest": "b901da413a5b8423d973486f8976ec4f341315b50882438b7019cf4112b376e3",
+  "execution_digest": "18dfee3f6c1bf725fa55f7c98c8057a61a572c01608e64f82531bff2c6b902db",
+  "workspace_digest": "75b194c085ac48e951ee3093527c97f9ac4120315fd279d5670ab95b9f2bd861",
+  "timestamp": 1790456577
+}
