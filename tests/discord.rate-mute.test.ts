@@ -15,6 +15,7 @@ import { SessionStore } from "../src/discord/session-store.ts";
 import { handleSlashInteraction } from "../src/discord/slash-dispatch.ts";
 import type { SlashContext, SlashInteraction } from "../src/discord/slash-types.ts";
 import {
+  EPHEMERAL_SILENT_ACK,
   MUTED,
   NOT_AUTHORIZED,
   RATE_LIMITED,
@@ -261,7 +262,7 @@ describe("slash-dispatch mute + rate limit", () => {
     const r = await handleSlashInteraction(baseCtx({ mutedUsers: muted }), ix);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("channel_not_allowlisted");
-    expect(ix.replies[0]).toBe(NOT_AUTHORIZED);
+    expect(ix.replies[0]).toBe(EPHEMERAL_SILENT_ACK);
   });
 
   test("muted user slash refused; peer ok", async () => {
