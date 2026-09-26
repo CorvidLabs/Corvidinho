@@ -7,11 +7,11 @@
   "title": "Planning SpecSync briefing reaches the model: runTask passes the loaded spec constraints and companions to every execute attempt and the LLM user message carries them fenced as project data (AGENT-2, SPECSYNC-1/5)",
   "description": "Planning SpecSync briefing reaches the model: runTask passes the loaded spec constraints and companions to every execute attempt and the LLM user message carries them fenced as project data (AGENT-2, SPECSYNC-1/5)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "e8bbd215036e7dc8739ac9159afa19f17ae943c6",
   "created_at": 1790464076,
-  "updated_at": 1790464487,
+  "updated_at": 1790464614,
   "affected_specs": [
     "agent"
   ],

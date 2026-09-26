@@ -1,6 +1,6 @@
 ---
 id: planning-specsync-briefing-reaches-the-model-runtask-passes-the-loaded-spec-constraints-and-companions-to-every-execute
-state: implementing
+state: archived
 type: bug_fix
 base_commit: e8bbd215036e7dc8739ac9159afa19f17ae943c6
 ---
