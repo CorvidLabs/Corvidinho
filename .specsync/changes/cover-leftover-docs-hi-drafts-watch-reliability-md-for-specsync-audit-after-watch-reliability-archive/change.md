@@ -1,6 +1,6 @@
 ---
 id: cover-leftover-docs-hi-drafts-watch-reliability-md-for-specsync-audit-after-watch-reliability-archive
-state: approved
+state: implementing
 type: documentation
 base_commit: 5bb72ba7aa32cad682a63b4eca25d3c66bc8c60a
 ---

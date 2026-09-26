@@ -7,10 +7,11 @@
   "title": "Cover leftover docs/hi-drafts/WATCH-RELIABILITY.md for SpecSync audit after WATCH-RELIABILITY archive",
   "description": "cover leftover docs/hi-drafts/WATCH-RELIABILITY.md for SpecSync audit after WATCH-RELIABILITY archive",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "5bb72ba7aa32cad682a63b4eca25d3c66bc8c60a",
   "created_at": 1790454121,
-  "updated_at": 1790454133,
+  "updated_at": 1790454134,
   "affected_specs": [],
   "affected_paths": [
     "docs/hi-drafts/WATCH-RELIABILITY.md"
