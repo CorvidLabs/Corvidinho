@@ -105,7 +105,8 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
 `ADMIN_AUDIT_SURFACE` (`command-handlers/admin.ts`); `planAdminListChange`,
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
-`setJsonDiscordList`, `writeFileAtomic` (`admin-allowlist.ts`);
+`setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
+`isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
@@ -265,3 +266,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9: Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9) |
 | 2026-09-26 | discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6: Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3) |
 | 2026-09-26 | cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master: CleanupEmptyBranch never force-deletes a branch with commits when the default branch is not main/master |
+| 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
