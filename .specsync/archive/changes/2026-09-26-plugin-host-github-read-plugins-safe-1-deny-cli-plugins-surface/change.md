@@ -1,6 +1,6 @@
 ---
 id: plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface
-state: implementing
+state: archived
 type: feature
 base_commit: bfd880ea9645d1444aa4e4cc11e7fcded4c35eb8
 ---

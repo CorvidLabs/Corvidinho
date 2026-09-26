@@ -7,11 +7,11 @@
   "title": "WATCH: plugin host + GitHub read + repo deny gate",
   "description": "WATCH slice: typed plugin host, GitHub read tools, SAFE-1 deny, GITHUB-6 repo gate, SpecSync SDD",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "bfd880ea9645d1444aa4e4cc11e7fcded4c35eb8",
   "created_at": 1790436944,
-  "updated_at": 1790437250,
+  "updated_at": 1790437333,
   "affected_specs": [
     "plugins",
     "cli"
