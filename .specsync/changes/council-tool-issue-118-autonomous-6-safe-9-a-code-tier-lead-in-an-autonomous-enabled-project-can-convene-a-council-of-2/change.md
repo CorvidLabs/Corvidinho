@@ -1,6 +1,6 @@
 ---
 id: council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2
-state: draft
+state: implementing
 type: feature
 base_commit: e92468411ff5a7eee83338af9d6e1f0332245800
 ---
