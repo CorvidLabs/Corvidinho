@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { attribution } from "../../src/attribution.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { checkRepoGate, extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
@@ -78,7 +80,38 @@ function argsWithoutRepo(args: string[]): string[] {
   return out;
 }
 
-/** Read-only GitHub plugins via Octokit (GITHUB-1/4). Write/create omitted. */
+
+function githubDryRun(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CORVIDINHO_GITHUB_DRY_RUN === "1";
+}
+
+function takeBody(args: string[]): { value: string | undefined; rest: string[] } {
+  const fromFlag = takeFlag(args, "--body");
+  if (fromFlag.value !== undefined) return fromFlag;
+  const fromM = takeFlag(args, "-m");
+  if (fromM.value !== undefined) return fromM;
+  return { value: undefined, rest: args };
+}
+
+function withAttribution(body: string | undefined): string {
+  const base = (body ?? "").trimEnd();
+  const foot = attribution("markdown");
+  if (!base) return foot;
+  if (base.includes("Made with") && base.includes("Corvidinho")) return base;
+  return `${base}\n\n---\n${foot}`;
+}
+
+function currentGitBranch(cwd: string): string | undefined {
+  const r = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    cwd,
+    encoding: "utf8",
+  });
+  if (r.status !== 0) return undefined;
+  const b = (r.stdout || "").trim();
+  return b && b !== "HEAD" ? b : undefined;
+}
+
+/** GitHub plugins via Octokit — reads (GITHUB-1/4) + dangerous writes (GITHUB-2/3/5). */
 export const githubCommands: PluginCommand[] = [
   {
     name: "github-pr-list",
@@ -250,6 +283,259 @@ export const githubCommands: PluginCommand[] = [
                 : { name: l.name, id: String(l.id ?? ""), description: l.description ?? "", color: l.color ?? "" },
             ),
           }));
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  },
+  {
+    name: "github-issue-create",
+    description: "Create an issue (Octokit issues.create; dangerous GITHUB-5)",
+    dangerous: true,
+    minTier: 1,
+    async handler(ctx) {
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
+      const { value: title, rest: rest2 } = takeFlag(rest, "--title");
+      const { value: body, rest: rest3 } = takeBody(rest2);
+      if (rest3.length) {
+        return { ok: false, error: `unexpected args: ${rest3.join(" ")}`, exitCode: 1 };
+      }
+      if (!title?.trim()) {
+        return {
+          ok: false,
+          error: "usage: github-issue-create --repo OWNER/REPO --title <text> [--body <text>]",
+          exitCode: 1,
+        };
+      }
+      if (githubDryRun()) {
+        const data = {
+          dryRun: true,
+          owner,
+          repo: name,
+          title: title.trim(),
+          body: body ?? "",
+        };
+        return okResult(ctx, data);
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const res = await octokit.rest.issues.create({
+          owner,
+          repo: name,
+          title: title.trim(),
+          body: body ?? undefined,
+        });
+        const data = {
+          number: res.data.number,
+          title: res.data.title,
+          url: res.data.html_url,
+          state: res.data.state.toUpperCase(),
+        };
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  },
+  {
+    name: "github-issue-comment",
+    description: "Comment on an issue or PR (Octokit issues.createComment; dangerous GITHUB-3/5)",
+    dangerous: true,
+    minTier: 1,
+    async handler(ctx) {
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
+      const { value: body, rest: rest2 } = takeBody(rest);
+      const selector = rest2[0];
+      const leftover = rest2.slice(1);
+      if (leftover.length) {
+        return { ok: false, error: `unexpected args: ${leftover.join(" ")}`, exitCode: 1 };
+      }
+      const issue_number = Number(selector);
+      if (!selector || !Number.isFinite(issue_number) || !body?.trim()) {
+        return {
+          ok: false,
+          error:
+            "usage: github-issue-comment <number> --repo OWNER/REPO --body <text>",
+          exitCode: 1,
+        };
+      }
+      if (githubDryRun()) {
+        return okResult(ctx, {
+          dryRun: true,
+          owner,
+          repo: name,
+          issue_number,
+          body: body.trim(),
+        });
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const res = await octokit.rest.issues.createComment({
+          owner,
+          repo: name,
+          issue_number,
+          body: body.trim(),
+        });
+        const data = {
+          id: res.data.id,
+          url: res.data.html_url,
+          issue_number,
+        };
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  },
+  {
+    name: "github-pr-create",
+    description: "Open a PR from a branch/worktree (Octokit pulls.create; dangerous GITHUB-2/5)",
+    dangerous: true,
+    minTier: 1,
+    async handler(ctx) {
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
+      const { value: title, rest: rest2 } = takeFlag(rest, "--title");
+      const { value: body, rest: rest3 } = takeBody(rest2);
+      const { value: headFlag, rest: rest4 } = takeFlag(rest3, "--head");
+      const { value: baseFlag, rest: rest5 } = takeFlag(rest4, "--base");
+      const draft = rest5.includes("--draft");
+      const rest6 = rest5.filter((a) => a !== "--draft");
+      if (rest6.length) {
+        return { ok: false, error: `unexpected args: ${rest6.join(" ")}`, exitCode: 1 };
+      }
+      if (!title?.trim()) {
+        return {
+          ok: false,
+          error:
+            "usage: github-pr-create --repo OWNER/REPO --title <text> [--body <text>] [--head <branch>] [--base <branch>] [--draft]",
+          exitCode: 1,
+        };
+      }
+      const head = headFlag?.trim() || currentGitBranch(ctx.cwd);
+      if (!head) {
+        return {
+          ok: false,
+          error: "missing --head and could not detect current git branch",
+          exitCode: 1,
+        };
+      }
+      const base = baseFlag?.trim() || "main";
+      const bodyWithAttr = withAttribution(body);
+      if (githubDryRun()) {
+        return okResult(ctx, {
+          dryRun: true,
+          owner,
+          repo: name,
+          title: title.trim(),
+          body: bodyWithAttr,
+          head,
+          base,
+          draft,
+        });
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const res = await octokit.rest.pulls.create({
+          owner,
+          repo: name,
+          title: title.trim(),
+          body: bodyWithAttr,
+          head,
+          base,
+          draft,
+        });
+        const data = {
+          number: res.data.number,
+          title: res.data.title,
+          url: res.data.html_url,
+          state: res.data.state.toUpperCase(),
+          isDraft: res.data.draft ?? false,
+          headRefName: res.data.head.ref,
+          baseRefName: res.data.base.ref,
+        };
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  },
+  {
+    name: "github-pr-review",
+    description: "Submit a PR review comment (Octokit pulls.createReview; dangerous GITHUB-3/5)",
+    dangerous: true,
+    minTier: 1,
+    async handler(ctx) {
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
+      const { value: body, rest: rest2 } = takeBody(rest);
+      const { value: eventFlag, rest: rest3 } = takeFlag(rest2, "--event");
+      const selector = rest3[0];
+      const leftover = rest3.slice(1);
+      if (leftover.length) {
+        return { ok: false, error: `unexpected args: ${leftover.join(" ")}`, exitCode: 1 };
+      }
+      const pull_number = Number(selector);
+      if (!selector || !Number.isFinite(pull_number) || !body?.trim()) {
+        return {
+          ok: false,
+          error:
+            "usage: github-pr-review <number> --repo OWNER/REPO --body <text> [--event COMMENT|APPROVE|REQUEST_CHANGES]",
+          exitCode: 1,
+        };
+      }
+      const evRaw = (eventFlag || "COMMENT").toUpperCase();
+      const event =
+        evRaw === "APPROVE" || evRaw === "REQUEST_CHANGES" || evRaw === "COMMENT"
+          ? evRaw
+          : null;
+      if (!event) {
+        return {
+          ok: false,
+          error: `--event must be COMMENT, APPROVE, or REQUEST_CHANGES (got ${eventFlag})`,
+          exitCode: 1,
+        };
+      }
+      if (githubDryRun()) {
+        return okResult(ctx, {
+          dryRun: true,
+          owner,
+          repo: name,
+          pull_number,
+          body: body.trim(),
+          event,
+        });
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const res = await octokit.rest.pulls.createReview({
+          owner,
+          repo: name,
+          pull_number,
+          body: body.trim(),
+          event,
+        });
+        const data = {
+          id: res.data.id,
+          state: res.data.state,
+          html_url: res.data.html_url,
+          pull_number,
+        };
         return okResult(ctx, data);
       } catch (e) {
         return fail(e);

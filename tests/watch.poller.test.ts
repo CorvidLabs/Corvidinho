@@ -61,7 +61,7 @@ describe("containsMention + dedup", () => {
 });
 
 describe("fixture searcher → events", () => {
-  test("fetchWatchEvents finds comment, issue mention, review_request", async () => {
+  test("fetchWatchEvents finds comment, issue mention, review_request, assignment", async () => {
     const client = createFixtureSearchClient(bundle);
     const events = await fetchWatchEvents({
       client,
@@ -72,7 +72,11 @@ describe("fixture searcher → events", () => {
     expect(types.has("issue_comment")).toBe(true);
     expect(types.has("issues")).toBe(true);
     expect(types.has("review_request")).toBe(true);
+    expect(types.has("assignment")).toBe(true);
     expect(events.some((e) => e.id === "comment-9001")).toBe(true);
+    expect(events.some((e) => e.id === "assign-CorvidLabs/Corvidinho#48")).toBe(
+      true,
+    );
   });
 });
 

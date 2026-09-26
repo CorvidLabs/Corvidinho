@@ -1,6 +1,7 @@
 /**
  * WATCH searcher — injectable client; Octokit live path; fixtures for CI.
  * Steals DetectedMention shapes from corvid-agent; uses typed API not shell gh.
+ * Assignment events: when watch username is in issue/PR assignees (#48).
  */
 
 import { Octokit } from "@octokit/rest";
@@ -29,6 +30,7 @@ export type SearchClient = {
     updatedAt: string;
     isPullRequest: boolean;
     repo: string;
+    assignees: string[];
   }>>;
   listComments(
     owner: string,
@@ -59,6 +61,7 @@ export type FixtureBundle = {
     updated_at?: string;
     pull_request?: boolean;
     repo: string;
+    assignees?: string[];
   }>;
   comments?: Record<
     string,
@@ -96,6 +99,7 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
           updatedAt: it.updated_at ?? it.created_at ?? new Date().toISOString(),
           isPullRequest: !!it.pull_request,
           repo: it.repo,
+          assignees: it.assignees ?? [],
         }));
     },
     async listComments(owner, repo, number) {
@@ -145,6 +149,9 @@ export function createOctokitSearchClient(token: string): SearchClient {
           updatedAt: it.updated_at,
           isPullRequest: !!it.pull_request,
           repo,
+          assignees: (it.assignees ?? [])
+            .map((a) => a?.login)
+            .filter((x): x is string => !!x),
         };
       });
     },
@@ -217,6 +224,26 @@ export async function fetchWatchEvents(opts: {
           title: item.title,
           htmlUrl: item.htmlUrl,
           createdAt: item.createdAt,
+          isPullRequest: item.isPullRequest,
+        });
+      }
+
+      // Assignment (assignee ingress for dogfood tag/assign → work)
+      if (
+        item.assignees.some(
+          (a) => a.toLowerCase() === username.toLowerCase(),
+        )
+      ) {
+        events.push({
+          id: `assign-${item.repo}#${item.number}`,
+          type: "assignment",
+          body: item.body || `assigned to @${username}`,
+          sender: item.user,
+          repo: item.repo,
+          number: item.number,
+          title: item.title,
+          htmlUrl: item.htmlUrl,
+          createdAt: item.updatedAt,
           isPullRequest: item.isPullRequest,
         });
       }

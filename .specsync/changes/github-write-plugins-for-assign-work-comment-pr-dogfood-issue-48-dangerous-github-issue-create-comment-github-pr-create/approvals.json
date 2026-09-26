@@ -1,0 +1,52 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790444711,
+      "digest": "12f3f8408eac6543a5cfa3a9d91a742680e22b2c7c8d87e359250398e0679496",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create",
+        "title": "GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens",
+        "description": "GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "docs/WATCH.md",
+          "plugins/github/commands.ts",
+          "specs/plugins/plugins.spec.md",
+          "specs/watch/watch.spec.md",
+          "src/watch/searcher.ts",
+          "src/watch/types.ts",
+          "tests/fixtures/github/",
+          "tests/fixtures/watch/mentions.json",
+          "tests/github.write.plugin.test.ts",
+          "tests/plugins.list.smoke.test.ts",
+          "tests/watch.poller.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Dangerous github-issue-create, github-issue-comment, github-pr-create, github-pr-review plugins land with dangerous:true minTier:1; SAFE-1 denies them in non-interactive without CORVIDINHO_ALLOWLIST; empty GitHub repo allowlist still refuses writes (GITHUB-6/ALLOW-1); github-pr-create appends plain Made with Corvidinho attribution without @handles; WATCH emits assignment events when watch username is in assignees; fixture/dry-run tests pass with no live tokens; STATUS/WATCH.md document dogfood path; fledge lane verify + SpecSync green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "a226d6c3e6b8a871c3ad416a5d3d55c5ecae5a5dbc37e06cc080673ef34308cd",
+        "watch": "6b1dd8d6ff10f44f2fca5c1ddf9a921d40e679b75f3b0ff4a9b3ac393f4d1e87"
+      }
+    }
+  ],
+  "reopenings": []
+}
