@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "task-run-task-always-takes-the-next-argv-item-as-task-text-so-untrusted-discord-github-text-that-looks-like-a-flag-tier",
+  "slug": "task-run-task-always-takes-the-next-argv-item-as-task-text-so-untrusted-discord-github-text-that-looks-like-a-flag-tier",
+  "title": "Task run --task always takes the next argv item as task text, so untrusted Discord/GitHub text that looks like a flag (--tier=code, --no-verify) can never be parsed as a CLI flag; --task=TEXT may span lines",
+  "description": "task run --task always takes the next argv item as task text, so untrusted Discord/GitHub text that looks like a flag (--tier=code, --no-verify) can never be parsed as a CLI flag; --task=TEXT may span lines",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "20fb34ff8db5759a2aad968e74d1d21b4c344b83",
+  "created_at": 1790453427,
+  "updated_at": 1790453428,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "src/cli.ts",
+    "tests/cli.task-argv.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A --task value starting with - is kept as task text; tier/max-retries/verify flags inside task text are never applied; multi-line --task= keeps all lines; fixture tests"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
