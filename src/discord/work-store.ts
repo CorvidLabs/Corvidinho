@@ -146,6 +146,27 @@ export class WorkStore {
     return [...this.byId.values()].sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  /**
+   * Restart recovery (SESSION-WORKTREE-3 hygiene): work left queued/running by
+   * a process that died can never finish. Mark it failed with an honest
+   * summary instead of showing it "running" forever. No resume (the durable
+   * queue is draft AUTONOMOUS-14). Call once at bridge start, before new work.
+   */
+  recoverAbandoned(): WorkTaskStub[] {
+    const recovered: WorkTaskStub[] = [];
+    for (const task of this.byId.values()) {
+      if (task.status !== "queued" && task.status !== "running") continue;
+      const was = task.status;
+      this.setStatus(
+        task,
+        "failed",
+        `abandoned: the bridge restarted while this work was ${was}; it was not resumed`,
+      );
+      recovered.push(task);
+    }
+    return recovered;
+  }
+
   countByStatus(status: WorkTaskStatus): number {
     let n = 0;
     for (const t of this.byId.values()) {

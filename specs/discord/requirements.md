@@ -369,6 +369,17 @@ memories SHALL be refused without leaking the other user’s content
 (MEMORY-ACL-2). Soft-delete MAY retain audit fields (`deleted_at`,
 `deleted_by_user_id`).
 
+The Discord agent spawn SHALL always overwrite `CORVIDINHO_ACTING_DISCORD_USER_ID`
+(empty when the run has no acting user) and `CORVIDINHO_ACTING_IS_ADMIN`, so a
+value in the bridge's own environment never leaks into a spawned run. Memory
+plugins SHALL read identity only from that env, never from argv
+(REQ-plugins-011). The spawn SHALL run non-interactive
+(`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1 / CLI-3) and pass only the confirm
+tokens found in the human's message as `CORVIDINHO_ACTING_CONFIRM_TOKENS`
+(SAFE-4). Re-storing an existing memory key SHALL keep the prior content as a
+soft-deleted row (retrievable by ADMIN) rather than overwrite it, so an update
+is never a non-admin forget path (MEMORY-ACL-4).
+
 No Discord slash `/memory` SHALL be invented in this requirement — exposure is
 via `MemoryStore` + memory plugins used by the agent/session path. Categories
 SHALL be `conversation` | `entity` | `person` | `personality`. Fixture tests
@@ -382,6 +393,8 @@ Acceptance Criteria
 - Admin forget soft-deletes with audit fields; refuse path leaks no content.
 - No on-chain memory; no new slash command; no ProcessManager.
 - Bridge opens MemoryStore on shared DB; package version bumped for ship.
+- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries only human-typed confirm tokens.
+- Re-storing a key soft-deletes the prior row instead of overwriting it.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-022
@@ -528,4 +541,30 @@ Acceptance Criteria
 - Empty or invalid owner config leaves the admin env lists and default-deny unchanged.
 - `/status` (ephemeral) and `corvidinho doctor` show owner configured yes/no plus the display name only.
 - Fixture tests only; no live Discord token or network.
+
+### REQ-discord-128
+
+Discord call sites that spawn an agent run on behalf of a human (message
+path, `/session start`, `/work`) SHALL pass the human's own words as
+`humanText`, separate from the memory/image-enriched prompt. SAFE-4 memory
+confirm tokens SHALL be taken only from `humanText`; scheduler runs pass none.
+
+Acceptance Criteria
+- A confirm token present only in the enriched prompt (e.g. recalled memory) is not passed as human-supplied.
+- Bridge, `/session start` and `/work` pass `humanText`.
+
+### REQ-discord-087
+
+On bridge start with a SQLite-backed WorkStore, work tasks left `queued` or
+`running` by a previous process SHALL be marked `failed` with an honest
+"abandoned: the bridge restarted while this work was <status>" summary before
+any new work is accepted, and each abandoned task's talk session SHALL be
+ended (worktree parked, session dropped) so no later talk silently reuses it
+as cwd (SESSION-WORKTREE-3). Recovery is idempotent. Resuming work, a durable
+queue, priorities and repo locks are out of scope (draft AUTONOMOUS-14).
+
+Acceptance Criteria
+- Queued/running tasks from a dead process become failed with an honest summary; completed tasks are untouched.
+- A second recovery pass changes nothing.
+- Bridge start fails abandoned work and ends its talk session.
 

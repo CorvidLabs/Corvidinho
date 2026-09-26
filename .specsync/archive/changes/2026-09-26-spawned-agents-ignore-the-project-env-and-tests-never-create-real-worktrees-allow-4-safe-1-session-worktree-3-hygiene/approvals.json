@@ -1,0 +1,90 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790450880,
+      "digest": "b78ebad651e9e0f3a1481acb69dbe9db841711fa840360769504796c5039f424",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene",
+        "title": "Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo",
+        "description": "Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "specs/agent/",
+          "src/agent/spawn-argv.ts",
+          "tests/discord.bridge.cli.test.ts",
+          "tests/discord.slash.test.ts",
+          "tests/discord.thinking-bridge.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "buildCorvidinhoArgv invokes .ts entrypoints as bun --no-env-file <bin> so a .env in the spawn cwd (project worktree) never reaches the spawned agent; config comes only from the parent's explicit env (ALLOW-4, SAFE-1); a fixture proves a cwd .env value does not reach the child; bridge and slash fixture tests use temp non-git project roots so bun test creates no talk/* worktrees or branches in the repo; fixture tests + SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "97e001317d0431491be4108e1a39f3d08ac70989fc53035f9de3a77810d4cc7d"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790451086,
+      "digest": "b78ebad651e9e0f3a1481acb69dbe9db841711fa840360769504796c5039f424",
+      "note": "renumber REQ-agent-010 -> REQ-agent-133 after #131",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene",
+        "title": "Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo",
+        "description": "Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "specs/agent/",
+          "src/agent/spawn-argv.ts",
+          "tests/discord.bridge.cli.test.ts",
+          "tests/discord.slash.test.ts",
+          "tests/discord.thinking-bridge.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "buildCorvidinhoArgv invokes .ts entrypoints as bun --no-env-file <bin> so a .env in the spawn cwd (project worktree) never reaches the spawned agent; config comes only from the parent's explicit env (ALLOW-4, SAFE-1); a fixture proves a cwd .env value does not reach the child; bridge and slash fixture tests use temp non-git project roots so bun test creates no talk/* worktrees or branches in the repo; fixture tests + SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "0a874b1c6c7648ef1b9ce45255ed0f1e85cc89aa7c2aba27810ea7d223c4d4d5"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790451376,
+      "digest": "18cf439d41f53d3ce85f64c4d6bc56d0a1bf66f6d89b9aa887c401c8ce7f9410",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
