@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "document-corvidinho-lineage-honoring-corvid-agent-and-merlin-ancestors",
+  "slug": "document-corvidinho-lineage-honoring-corvid-agent-and-merlin-ancestors",
+  "title": "Document Corvidinho lineage honoring corvid-agent and Merlin ancestors",
+  "description": "Document Corvidinho lineage honoring corvid-agent and Merlin ancestors",
+  "kind": "documentation",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "c4a650aefb20e8bb1ee7e232cd23cf95a4355c75",
+  "created_at": 1790436997,
+  "updated_at": 1790437024,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/ORIGIN.md",
+    "README.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Docs-only lineage and README pointer; no src/ or living module contract changes",
+  "acceptance_criteria": [
+    "docs/ORIGIN.md records the three-generation lineage (corvid-agent → merlin → Corvidinho) honoring ancestors without trashing them; README has a short Lineage section linking to it; local specsync check, change audit, and fledge lanes run verify --non-interactive stay green."
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
