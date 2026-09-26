@@ -24,6 +24,7 @@
     "bun": ">=1.2.0"
   },
   "dependencies": {
-    "@octokit/rest": "^22.0.1"
+    "@octokit/rest": "^22.0.1",
+    "discord.js": "^14.16.0"
   }
 }

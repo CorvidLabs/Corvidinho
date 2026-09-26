@@ -1,3 +1,4 @@
+import { loadDiscordPlugins } from "../../plugins/discord/index.ts";
 import { loadGithubPlugins } from "../../plugins/github/index.ts";
 import { loadMetaPlugins } from "../../plugins/meta/index.ts";
 import { loadSpecsyncPlugins } from "../../plugins/specsync/index.ts";
@@ -10,5 +11,6 @@ export function loadBuiltins(): void {
   loadGithubPlugins();
   loadMetaPlugins();
   loadSpecsyncPlugins();
+  loadDiscordPlugins();
   loaded = true;
 }

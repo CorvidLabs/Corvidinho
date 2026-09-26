@@ -35,9 +35,11 @@ bun install
 bun src/cli.ts --help
 bun src/cli.ts doctor
 bun src/cli.ts version
+bun src/cli.ts --protocol-version
 bun src/cli.ts plugins list
 bun src/cli.ts specsync list
 bun src/cli.ts task run --task "touch agent loop" --no-verify --json
+bun src/cli.ts discord bridge   # needs DISCORD_TOKEN + non-empty channel allowlist
 bun test
 hi check
 fledge lanes run verify --non-interactive

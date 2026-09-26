@@ -49,3 +49,8 @@ steps = ["lint", "smoke", "test", "spec-check"]
 [corvidinho]
 verify_before_complete = true
 max_retries = 3
+
+# Discord HEAR — local smoke without live token (CI uses bun test fixtures).
+[tasks.bridge-smoke]
+cmd = "bun src/cli.ts --protocol-version"
+description = "Protocol version print (DISCORD-10 light)"

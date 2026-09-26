@@ -1,0 +1,69 @@
+---
+spec: discord.spec.md
+---
+
+## User Stories
+
+- As Leif, I @mention the bot in an allowlisted Discord channel and get a real session stub on my Linux host (DISCORD-1).
+- As a user, replies and thread messages continue the same session without hunting for an id (DISCORD-2 / 2.a).
+- As an operator, non-allowlisted channels are refused; empty channel lists refuse start (DISCORD-5; default-deny).
+
+## Acceptance Criteria
+
+### REQ-discord-001
+
+The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run --no-verify` (or echo); it SHALL NOT port ProcessManager.
+
+Acceptance Criteria
+- `routeMessage` on mention in allowed channel returns `kind: "start_session"` with new session id.
+- Session stub recorded in SessionStore; no ProcessManager.
+
+### REQ-discord-002
+
+The system SHALL continue the same session id when a user replies to a bot message (DISCORD-2). Inside a Discord thread the system SHALL keep one session id for that thread (DISCORD-2.a).
+
+Acceptance Criteria
+- Reply referencing a tracked bot message resumes that session id.
+- Thread id map keeps one session per thread.
+
+### REQ-discord-003
+
+The system SHALL only listen and post in allowlisted channels; messages in other channels SHALL be refused quietly or with a short not-authorized reply (DISCORD-5). Checks SHALL use existing `src/allowlist/` Discord helpers where empty channel/user/role lists mean deny-all.
+
+Acceptance Criteria
+- Non-allowlisted channel → `kind: "refuse"` / not authorized; no session created.
+- `loadBridgeConfig` errors when channels list empty.
+
+### REQ-discord-004
+
+The bridge SHALL load allowlists from file and env. It SHALL require a non-empty channel allowlist and SHALL fail to start if the channel list is empty.
+
+Acceptance Criteria
+- DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
+
+### REQ-discord-005
+
+When DISCORD_TOKEN and DISCORD_BOT_TOKEN are both missing, the CLI/doctor/bridge SHALL explain the requirement and exit cleanly without crashing. Secrets SHALL never be committed to the repo.
+
+Acceptance Criteria
+- `corvidinho discord bridge` without token exits non-zero naming DISCORD_TOKEN / DISCORD_BOT_TOKEN and go-live checklist.
+
+### REQ-discord-006
+
+The bridge SHALL check wire protocol version against `corvidinho --protocol-version` (DISCORD-10 light): hard-fail on a verifiable mismatch; soft-continue if unverifiable.
+
+Acceptance Criteria
+- `corvidinho --protocol-version` prints `1`.
+- Verifiable mismatch refuses start.
+
+### REQ-discord-007
+
+The system SHALL register `discord-post-message` as a dangerous plugin (externally visible write). Non-interactive runs SHALL deny it unless allowlisted (SAFE-1).
+
+Acceptance Criteria
+- `plugins list` shows dangerous=true.
+- Non-interactive without allowlist → exit 2.
+
+## Out of Scope
+
+Soft later #10–14. No voice, Angular, AlgoChat, iced, ProcessManager.

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-hear-5-go-live-docs-discord-go-live-env-allowlist-templates-and-bun-lock-from-discord-js",
+  "slug": "cover-hear-5-go-live-docs-discord-go-live-env-allowlist-templates-and-bun-lock-from-discord-js",
+  "title": "Cover HEAR #5 go-live docs (DISCORD-GO-LIVE), env/allowlist templates, and bun.lock from discord.js",
+  "description": "Cover HEAR #5 go-live docs (DISCORD-GO-LIVE), env/allowlist templates, and bun.lock from discord.js",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "8609cc16f73198c35f4a17c4d8a775900561ff77",
+  "created_at": 1790438716,
+  "updated_at": 1790438857,
+  "affected_specs": [],
+  "affected_paths": [
+    "bun.lock",
+    "docs/DISCORD-GO-LIVE.md",
+    "allowlist.example.toml",
+    ".env.example",
+    "docs/"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Go-live docs, env/allowlist templates, and bun.lock from discord.js for HEAR #5; no canonical spec text changes beyond the primary HEAR change",
+  "acceptance_criteria": [
+    "docs/DISCORD-GO-LIVE.md Developer Portal+VM checklist; .env.example + allowlist.example.toml (empty=deny-all); bun.lock includes discord.js; READY-FOR-SECRETS documented in STATUS; no secret values in repo"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

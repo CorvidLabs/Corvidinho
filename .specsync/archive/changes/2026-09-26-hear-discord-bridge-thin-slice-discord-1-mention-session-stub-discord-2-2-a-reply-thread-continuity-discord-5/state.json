@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5",
+  "slug": "hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5",
+  "title": "HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify",
+  "description": "HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "8609cc16f73198c35f4a17c4d8a775900561ff77",
+  "created_at": 1790438454,
+  "updated_at": 1790438845,
+  "affected_specs": [
+    "discord",
+    "cli",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "src/cli.ts",
+    "src/plugins",
+    "plugins",
+    "tests",
+    "STATUS.md",
+    "README.md",
+    "package.json",
+    "fledge.toml",
+    ".specsync/config.toml",
+    ".specsync/registry.toml",
+    "AGENTS.md",
+    "specs/discord"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "In allowlisted channel, @mention starts session stub (DISCORD-1); reply/thread continues same session id (DISCORD-2/2.a); non-allowlisted channel refused quietly/short not-authorized (DISCORD-5); missing token → clean doctor-style exit (no crash); empty channel allowlist → fail start; discord-post-message marked dangerous; chat spawn uses --no-verify; fixture/unit tests green without live token; STATUS/README go-live checklist (token + non-empty Discord allowlists); SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

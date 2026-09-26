@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "42d0210a0226528058c9bdd5ff00f3fa2b8a8474",
+      "contract_digest": "bc2a9f9e84754b9727eee903d6d54004bef828393184feb095431b56aacd2c47",
+      "execution_digest": "0d31f9de937b9ded69c90ee1f4c78373a078d23b889a28b6cc4ee48554684a0b",
+      "workspace_digest": "91d440b3ae1695b3882a20b98466d2a272aad0cd7d4b10c20dd6203b8f822a29",
+      "timestamp": 1790438762
+    }
+  ]
+}

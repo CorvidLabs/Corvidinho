@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 14
+version: 17
 status: draft
 files:
   - src/plugins/types.ts
@@ -30,7 +30,7 @@ depends_on: []
 
 ## Purpose
 
-Typed plugin host including GitHub reads and SpecSync list/read/check/brief tools for the agent loop.
+Plugin host includes Discord outbound post as dangerous.
 
 ## Public API
 
@@ -38,7 +38,7 @@ Export allowlist load + github/discord gate helpers used by plugins and future H
 
 ## Invariants
 
-Empty allowlists deny all targeted GH/Discord actions; deny overrides win; file+env load; no Merlin empty→BASIC.
+discord-post-message is dangerous; empty Discord channel allow = refuse.
 
 ## Behavioral Examples
 
@@ -79,5 +79,5 @@ Empty allowlists deny all targeted GH/Discord actions; deny overrides win; file+
 
 ## Change Log
 
-STEAL SpecSync plugins list/read/check/brief (+ coverage/change-list/ship-status) (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated |
+discord-post-message dangerous plugin (2026-09-26, corvid-agent, #5).
+| 2026-09-26 | hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5: HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify |

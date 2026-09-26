@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438725,
+      "digest": "71dce0bbded8c84896f40c86878c864eb27618a3869c73f1122bcc1da08a5774",
+      "note": "Cover HEAR #5 go-live docs/templates/lockfile; no-spec",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-hear-5-go-live-docs-discord-go-live-env-allowlist-templates-and-bun-lock-from-discord-js",
+        "title": "Cover HEAR #5 go-live docs (DISCORD-GO-LIVE), env/allowlist templates, and bun.lock from discord.js",
+        "description": "Cover HEAR #5 go-live docs (DISCORD-GO-LIVE), env/allowlist templates, and bun.lock from discord.js",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          ".env.example",
+          "allowlist.example.toml",
+          "bun.lock",
+          "docs/",
+          "docs/DISCORD-GO-LIVE.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Go-live docs, env/allowlist templates, and bun.lock from discord.js for HEAR #5; no canonical spec text changes beyond the primary HEAR change",
+        "acceptance_criteria": [
+          "docs/DISCORD-GO-LIVE.md Developer Portal+VM checklist; .env.example + allowlist.example.toml (empty=deny-all); bun.lock includes discord.js; READY-FOR-SECRETS documented in STATUS; no secret values in repo"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790438854,
+      "digest": "bb709cac873c59bb18344375940d4b5743e311573f5d7940417e7f3789184dca",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

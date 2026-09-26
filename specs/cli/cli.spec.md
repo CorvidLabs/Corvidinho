@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 15
+version: 18
 status: draft
 files:
   - src/cli.ts
@@ -15,7 +15,7 @@ depends_on:
 
 ## Purpose
 
-Operator surface includes plugins, task run, and SpecSync list/read/check/brief.
+Operator surface includes Discord HEAR bridge entrypoints.
 
 ## Public API
 
@@ -33,8 +33,7 @@ Operator surface includes plugins, task run, and SpecSync list/read/check/brief.
 
 ## Invariants
 
-task run honors --no-verify and agent config; bridges may skip verify for latency.
-plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
+discord bridge never logs token values; missing token is a clean exit; empty channels refuse start.
 
 ## Behavioral Examples
 
@@ -71,5 +70,5 @@ Consumes agent module for runTask / loadAgentConfig.
 
 ## Change Log
 
-SpecSync CLI forwarding + task --task briefing hook (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated |
+discord bridge + --protocol-version HEAR surface (2026-09-26, corvid-agent, #5).
+| 2026-09-26 | hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5: HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify |

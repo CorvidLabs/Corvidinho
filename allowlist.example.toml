@@ -1,0 +1,24 @@
+# Corvidinho allowlist example — copy to ~/.config/corvidinho/allowlist.toml on the bot VM.
+# NEVER commit real secrets or production IDs with tokens.
+#
+# Default-deny: empty allow lists REFUSE (not Merlin empty→BASIC).
+# Deny overrides always win.
+
+[github]
+orgs = []
+repos = []
+users = []
+deny_repos = []
+deny_orgs = []
+deny_users = []
+
+[discord]
+# REQUIRED non-empty for HEAR bridge start (also via DISCORD_CHANNEL_IDS env).
+# Paste snowflake channel IDs from Discord (Developer Mode → Copy Channel ID).
+channels = []
+# Optional — empty = deny-all when user/role gates apply
+roles = []
+users = []
+deny_channels = []
+deny_roles = []
+deny_users = []
