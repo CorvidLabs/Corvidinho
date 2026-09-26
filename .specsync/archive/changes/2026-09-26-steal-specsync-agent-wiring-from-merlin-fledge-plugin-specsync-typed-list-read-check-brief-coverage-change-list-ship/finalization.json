@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
+  "implementation_commit": "0985c8387899c1c5661240e6cdecaad9d56d9840",
+  "implementation_tree": "54c25fd3d12b5e7792bc88b41155308f3b2fcda6",
+  "contract_digest": "b1998e8c552d28bd1bd13e3538f7a594f7470a3b5100a947a459dde30b5ef93b",
+  "workspace_digest": "a7d1f93f381eba404e48766b6f4f84d19852012146ceca396465069af1adca10",
+  "closing_digest": "d2a012592fc1238d8d26025ad5981f5f4a9be8c6ac4b1acf5a82c77ee31c0917",
+  "review_digest": "04d734ff6b78e15277d1159b99bc8d1a6cc91c5dd4f7bb53c26af29bf3ab9686",
+  "finalization_digest": "48fcf579293c3173328c321c39fad710ff41028bf849820663555dee0f5c69aa",
+  "timestamp": 1790438247
+}

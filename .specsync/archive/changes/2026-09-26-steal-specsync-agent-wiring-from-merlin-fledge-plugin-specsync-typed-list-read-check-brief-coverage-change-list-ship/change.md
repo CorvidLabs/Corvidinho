@@ -1,6 +1,6 @@
 ---
 id: steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship
-state: implementing
+state: archived
 type: feature
 base_commit: b55ff627783de1b7d5ce5c0ed9c75c618d9b546b
 ---
