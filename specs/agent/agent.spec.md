@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 2
+version: 3
 status: draft
 files:
   - src/agent/types.ts
@@ -62,4 +62,4 @@ Spawns `fledge` for the default verify runner. No Trust/attest.
 ## Change Log
 
 STEAL prove-before-done gate (AGENT-4 / FLEDGE-2) (2026-09-26, corvid-agent).
-
+| 2026-09-26 | steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing: STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete |
