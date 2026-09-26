@@ -232,11 +232,13 @@ Who is who in an allowlisted channel:
 - Owner ⇒ ADMIN (unless muted or on `deny_users`).
 - Everyone else ⇒ non-ADMIN. Muted users are refused (the mute and rate gate runs on chat and
   on every slash command).
-- `[discord].users` / `.roles` / `deny_users` decide the permission level: once `users` or
-  `roles` has entries, unlisted non-owners resolve to blocked (`/admin users add` warns when it
-  adds the first user). On `main`, chat (mention/reply), `/session` and `/work` check only the channel allowlist,
-  mute and rate limit, not these lists; gating them on the user/role/deny lists is in
-  review in #176.
+- `[discord].users` / `.roles` / `deny_users` / `deny_roles` gate every @mention, reply-to-bot,
+  thread continuation and slash command, after the channel gate. A user on `deny_users` or
+  holding a `deny_roles` role is refused (deny always wins). Once `users` or `roles` has
+  entries, only listed users, holders of a listed role and the owner pass (`/admin users add`
+  warns when it adds the first user); with both empty, anyone in an allowlisted channel may
+  chat. A refused chat message gets no reply, session or run; a refused slash command gets only
+  an ephemeral zero-width ack.
 
 Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled runs):
 
