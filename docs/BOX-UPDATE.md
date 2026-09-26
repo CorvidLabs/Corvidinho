@@ -29,10 +29,11 @@ CORVIDINHO_UPDATE_DRY_RUN=1 ./scripts/corvidinho-update.sh
 
 The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `doctor` — so
 `doctor`, every restart path (pidfile, systemd, command) and a rollback restart all see the
-same env. Every doctor
-check must pass there — `discord`, `github`, `github-watch`, `fledge`, `specsync`, `plugins` —
-or the update rolls back. If the env file is missing, the updater's own environment is used;
-set `CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
+same env. A systemd unit's bridge still takes its env from the unit's own `EnvironmentFile=`,
+not from the updater (`systemctl` does not pass the caller's env on), so keep the two in step.
+Every doctor check must pass there — `discord`, `github`, `github-watch`, `fledge`,
+`specsync`, `plugins` — or the update rolls back. If the env file is missing, the updater's own
+environment is used; set `CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
 
 ## Restart configuration
 
@@ -45,7 +46,9 @@ The script picks one restart mode:
    `[discord] logged in` or `protocol version N OK` in the log.
 2. **systemd** — `systemctl restart $CORVIDINHO_BRIDGE_UNIT`, then checks the unit is active.
    A set unit wins over a leftover pidfile (no second `nohup` bridge next to the unit's): a
-   stale pidfile is removed; one naming a live pid is left alone with a log line.
+   stale pidfile is removed; one naming a live pid is left alone with a log line. If that pid
+   is a second bridge an earlier update started next to the unit's, stop it by hand
+   (`kill <pid>`) and remove the pidfile.
 3. **command** — runs `CORVIDINHO_BRIDGE_CMD` in `bash -lc`, passing the command text through
    the environment (not the shell's argv), so a `pkill -f` pattern in it cannot match that shell.
 
