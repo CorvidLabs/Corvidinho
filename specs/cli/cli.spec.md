@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 7
+version: 8
 status: draft
 files:
   - src/cli.ts
@@ -52,4 +52,4 @@ Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
 ## Change Log
 
 Document default-deny allowlists + wallet deferral (2026-09-26, corvid-agent).
-
+| 2026-09-26 | safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm: SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5 |

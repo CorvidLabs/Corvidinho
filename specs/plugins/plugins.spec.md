@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 7
+version: 8
 status: draft
 files:
   - src/plugins/types.ts
@@ -77,4 +77,4 @@ Empty allowlists deny all targeted GH/Discord actions; deny overrides win; file+
 ## Change Log
 
 Default-deny allowlists file+env; Discord stub; empty≠BASIC (2026-09-26, corvid-agent).
-
+| 2026-09-26 | safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm: SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5 |
