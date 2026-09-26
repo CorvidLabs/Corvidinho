@@ -7,11 +7,11 @@
   "title": "Bump Corvidinho to 0.0.4 for Discord /schedule that landed on main (#62 / 7d81edc) without a version bump; verbose CHANGELOG covering /schedule list|create|pause|resume|delete single-project 5m min SQLite schedules ~60s ticker plus SESSION durable (#61); keep presence reading package.json via shared version helper",
   "description": "Bump Corvidinho to 0.0.4 for Discord /schedule that landed on main (#62 / 7d81edc) without a version bump; verbose CHANGELOG covering /schedule list|create|pause|resume|delete single-project 5m min SQLite schedules ~60s ticker plus SESSION durable (#61); keep presence reading package.json via shared version helper",
   "kind": "operations",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "7d81edc9d105fbea329e71deca99bfe05f100a27",
   "created_at": 1790448266,
-  "updated_at": 1790448492,
+  "updated_at": 1790448605,
   "affected_specs": [],
   "affected_paths": [
     "package.json",

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "bump-corvidinho-to-0-0-4-for-discord-schedule-that-landed-on-main-62-7d81edc-without-a-version-bump-verbose-changelog",
+  "implementation_commit": "b359f2f18adbac58616388b2442fb6ef20b018cb",
+  "implementation_tree": "ef43c80ea4f14fd3a46cd45478ee2dde308f0546",
+  "contract_digest": "b2c96e06220e872800040f0299cbcc9c82e4b6a87565fad443add8688418d116",
+  "workspace_digest": "1b2b266f6ec7c2b480a0e0d175e792398a74adacd3b4ff7a7d8ac96b2364c88c",
+  "closing_digest": "1f8424caec229925ac31b92e0f2c6d871b58c3e7c02b1c2ec702d0f340268555",
+  "review_digest": "d893a2884c7758515e2c56c2cd00a8da6a3e86fbf34c00a3474bcd1cf98de1dc",
+  "finalization_digest": "ce23e9630aad8b80a9bcf317f41296d7d32063aba4d4555d16747b3fd18a331f",
+  "timestamp": 1790448595
+}

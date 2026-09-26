@@ -1,6 +1,6 @@
 ---
 id: bump-corvidinho-to-0-0-4-for-discord-schedule-that-landed-on-main-62-7d81edc-without-a-version-bump-verbose-changelog
-state: verifying
+state: archived
 type: operations
 base_commit: 7d81edc9d105fbea329e71deca99bfe05f100a27
 ---
