@@ -31,13 +31,17 @@ export const ASK_SUMMARY_PREFIX = "Needs your input:";
 /** ToolResult detail when ask-human ends the run. */
 export const ASK_TOOL_RESULT_DETAIL = "question sent to the requester; run stopped";
 
-/** Tool-loop system prompt rule (AUTONOMY-1). */
+/** Tool-loop system prompt rule (AUTONOMY-1/7). */
 export const ASK_AGENT_SYSTEM_INSTRUCTIONS =
   "Clarifying questions (AUTONOMY-1): when the task cannot proceed without a human choice " +
   "(missing intent, an ambiguous requirement, a decision only a human can make), call " +
   `${ASK_TOOL_NAME} with one short, specific question instead of guessing, inventing ` +
   "acceptance criteria, or claiming done. Calling it ends this run and sends the question " +
-  "to the requester. ";
+  "to the requester. " +
+  "Impossible or joke asks (AUTONOMY-7): for clearly impossible or joke requests " +
+  '(e.g. "build a free energy / dark matter / zero-point generator"), prefer a witty ' +
+  "public-safe decline or a tiny toy demo — do not open with ask-human or a long formal " +
+  "MCQ unless they clearly want a real utility. ";
 
 export type AskToolDef = {
   type: "function";
@@ -64,7 +68,8 @@ export function buildAskToolDef(): AskToolDef {
       name: ASK_TOOL_NAME,
       description:
         "Ask the human one clarifying question when the task cannot proceed without their choice. " +
-        "Ends this run; the requester sees the question and the configured owner is pinged on Discord.",
+        "Ends this run; the requester sees the question on Discord (owner is pinged only when stuck). " +
+        "Do not use this as the first response to joke/impossible physics toy asks (AUTONOMY-7).",
       parameters: {
         type: "object",
         properties: {

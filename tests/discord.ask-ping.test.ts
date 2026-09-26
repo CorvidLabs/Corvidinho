@@ -35,27 +35,48 @@ const OWNER_ID = "111122223333444455";
 const OWNER = { discordId: OWNER_ID, display: "Leif" };
 const CLARIFY: HumanAsk = { reason: "clarify", question: "Postgres or SQLite?" };
 
-describe("formatAskReply (AUTONOMY-1/2)", () => {
-  test("clarify: question quoted, owner pinged on the first line", () => {
-    const r = formatAskReply({ ask: CLARIFY, owner: OWNER, replyHint: true });
+describe("formatAskReply (AUTONOMY-1/2/4)", () => {
+  const REQUESTER_ID = "222233334444555566";
+
+  test("clarify: question quoted, requester pinged (not owner) on the first line", () => {
+    const r = formatAskReply({
+      ask: CLARIFY,
+      owner: OWNER,
+      requesterDiscordId: REQUESTER_ID,
+      replyHint: true,
+    });
     const lines = r.content.split("\n");
     expect(lines[0]).toContain("I need your input");
-    expect(lines[0]).toContain(`<@${OWNER_ID}>`);
+    expect(lines[0]).toContain(`<@${REQUESTER_ID}>`);
+    expect(lines[0]).not.toContain(`<@${OWNER_ID}>`);
     expect(r.content).toContain("> Postgres or SQLite?");
     expect(r.content).toContain(ASK_REPLY_HINT);
-    expect(r.mentionUserIds).toEqual([OWNER_ID]);
-    expect(r.ownerPinged).toBe(true);
+    expect(r.mentionUserIds).toEqual([REQUESTER_ID]);
+    expect(r.ownerPinged).toBe(false);
+    expect(r.pinged).toBe(true);
     expect(r.failed).toBe(false);
     expect(r.status).toContain("Needs your input");
   });
 
-  test("no owner configured → question still posts, nobody pinged", () => {
-    for (const owner of [null, undefined, { discordId: "" }]) {
+  test("clarify when requester is owner → owner pinged", () => {
+    const r = formatAskReply({
+      ask: CLARIFY,
+      owner: OWNER,
+      requesterDiscordId: OWNER_ID,
+    });
+    expect(r.mentionUserIds).toEqual([OWNER_ID]);
+    expect(r.ownerPinged).toBe(true);
+    expect(r.content).toContain(`<@${OWNER_ID}>`);
+  });
+
+  test("clarify with no requester → question posts, nobody pinged", () => {
+    for (const owner of [null, undefined, OWNER, { discordId: "" }]) {
       const r = formatAskReply({ ask: CLARIFY, owner });
       expect(r.content).toContain("> Postgres or SQLite?");
       expect(r.content).not.toContain("<@");
       expect(r.mentionUserIds).toEqual([]);
       expect(r.ownerPinged).toBe(false);
+      expect(r.pinged).toBe(false);
     }
   });
 
@@ -94,7 +115,7 @@ describe("formatAskReply (AUTONOMY-1/2)", () => {
     expect(r.content).not.toContain(`ghp_${"a".repeat(36)}`);
     expect(r.content).toContain("[redacted:");
     expect(r.content.length).toBeLessThanOrEqual(ASK_REPLY_MAX);
-    expect(r.content.split("\n")[0]).toContain(`<@${OWNER_ID}>`);
+    expect(r.content.split("\n")[0]).not.toContain("<@");
     expect(defangMassMentions("hi @Here")).toBe("hi @​Here");
   });
 });
@@ -163,8 +184,8 @@ const MENTION = {
   mentionedBot: true,
 };
 
-describe("bridge mention path asks + pings (AUTONOMY-1/2)", () => {
-  test("clarify ask → question reply to requester, owner pinged, thread continues", async () => {
+describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
+  test("clarify ask → question reply pings requester (not owner), pendingAsk set", async () => {
     const { result, handlers, outbound, replies } = await bridgeWith(askingAgent(CLARIFY), {
       CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
     });
@@ -174,9 +195,10 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2)", () => {
     const r = replies[0]!;
     expect(r.replyToMessageId).toBe("m1");
     expect(r.content).toContain("> Postgres or SQLite?");
-    expect(r.content).toContain(`<@${OWNER_ID}>`);
+    expect(r.content).toContain(`<@${MENTION.authorId}>`);
+    expect(r.content).not.toContain(`<@${OWNER_ID}>`);
     expect(r.content).toContain(ASK_REPLY_HINT);
-    expect(r.mentionUserIds).toEqual([OWNER_ID]);
+    expect(r.mentionUserIds).toEqual([MENTION.authorId]);
 
     const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
     expect(last.description).toContain("Needs your input");
@@ -185,6 +207,7 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2)", () => {
     // DISCORD-2: replying to the question continues the same session.
     const session = result.store.getByBotMessage("bot_1");
     expect(session).toBeDefined();
+    expect(session!.pendingAsk).toEqual(CLARIFY);
     await result.stop();
   });
 
@@ -204,13 +227,13 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2)", () => {
     await result.stop();
   });
 
-  test("no owner configured → question posts with no mention (IDENTITY-3)", async () => {
+  test("no owner configured → clarify still pings requester (AUTONOMY-4)", async () => {
     const { result, handlers, replies } = await bridgeWith(askingAgent(CLARIFY), {});
     await handlers.onMessage(MENTION);
     expect(replies).toHaveLength(1);
     expect(replies[0]!.content).toContain("> Postgres or SQLite?");
-    expect(replies[0]!.content).not.toContain("<@");
-    expect(replies[0]!.mentionUserIds).toEqual([]);
+    expect(replies[0]!.content).toContain(`<@${MENTION.authorId}>`);
+    expect(replies[0]!.mentionUserIds).toEqual([MENTION.authorId]);
     await result.stop();
   });
 
@@ -311,14 +334,15 @@ describe("scheduler tick asks + pings (AUTONOMY-2)", () => {
     return posts;
   }
 
-  test("ask → schedule post carries the question and pings the owner", async () => {
+  test("clarify ask → schedule post pings the creator (requester), not owner", async () => {
     const posts = await tickWith(CLARIFY, OWNER);
     expect(posts).toHaveLength(1);
     expect(posts[0]!.content.split("\n")[0]).toContain("Schedule **Nightly**");
     expect(posts[0]!.content).toContain("> Postgres or SQLite?");
-    expect(posts[0]!.content).toContain(`<@${OWNER_ID}>`);
+    expect(posts[0]!.content).toContain("<@admin>");
+    expect(posts[0]!.content).not.toContain(`<@${OWNER_ID}>`);
     expect(posts[0]!.content).not.toContain(ASK_REPLY_HINT);
-    expect(posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(posts[0]!.mentionUserIds).toEqual(["admin"]);
   });
 
   test("no ask → unchanged ✅ post without mention restriction", async () => {
@@ -399,13 +423,15 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     return { store, schedule, svc, tick, posts, clock };
   }
 
-  function pinged(p: Post): boolean {
-    return p.content.includes(`<@${OWNER_ID}>`) && (p.mentionUserIds ?? []).includes(OWNER_ID);
+  function pinged(p: Post, who: string = OWNER_ID): boolean {
+    return p.content.includes(`<@${who}>`) && (p.mentionUserIds ?? []).includes(who);
   }
 
   function silent(p: Post): boolean {
     return !p.content.includes("<@") && (p.mentionUserIds ?? []).length === 0;
   }
+
+  const CREATOR = "admin";
 
   test("the same question pings once; repeats still post the question, unpinged and unwarned", async () => {
     const h = harness();
@@ -414,7 +440,7 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
       const first = await h.tick(CLARIFY);
       const second = await h.tick(CLARIFY);
       const third = await h.tick(CLARIFY);
-      expect(pinged(first)).toBe(true);
+      expect(pinged(first, CREATOR)).toBe(true);
       for (const p of [second, third]) {
         expect(p.content).toContain("> Postgres or SQLite?");
         expect(p.content).toContain("Schedule **Nightly**");
@@ -430,8 +456,8 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
 
   test("a changed question (or reason) pings again", async () => {
     const h = harness();
-    expect(pinged(await h.tick(CLARIFY))).toBe(true);
-    expect(pinged(await h.tick({ reason: "clarify", question: "Which port?" }))).toBe(true);
+    expect(pinged(await h.tick(CLARIFY), CREATOR)).toBe(true);
+    expect(pinged(await h.tick({ reason: "clarify", question: "Which port?" }), CREATOR)).toBe(true);
     expect(pinged(await h.tick(STUCK))).toBe(true);
     expect(silent(await h.tick(STUCK))).toBe(true);
     h.svc.stop();
@@ -439,22 +465,22 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
 
   test("a failed run keeps the marker; a clean run re-arms the ping", async () => {
     const h = harness();
-    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    expect(pinged(await h.tick(CLARIFY), CREATOR)).toBe(true);
     expect((await h.tick("fail")).content).toStartWith("❌");
     expect(silent(await h.tick(CLARIFY))).toBe(true);
     expect((await h.tick("ok")).content).toStartWith("✅");
     expect(h.store.get(h.schedule.id)!.askPingKey).toBeUndefined();
-    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    expect(pinged(await h.tick(CLARIFY), CREATOR)).toBe(true);
     h.svc.stop();
   });
 
   test("pause/resume re-arms the ping", async () => {
     const h = harness();
-    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    expect(pinged(await h.tick(CLARIFY), CREATOR)).toBe(true);
     h.store.setStatus(h.schedule.id, "paused", h.clock.now);
     expect(h.store.get(h.schedule.id)!.askPingKey).toBeUndefined();
     h.store.setStatus(h.schedule.id, "active", h.clock.now);
-    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    expect(pinged(await h.tick(CLARIFY), CREATOR)).toBe(true);
     h.svc.stop();
   });
 
@@ -462,7 +488,7 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     const db = openCorvidinhoDb({ memory: true });
     const clock = { now: Date.parse("2026-09-26T10:30:00Z") };
     const a = harness({ db, clock });
-    expect(pinged(await a.tick(CLARIFY))).toBe(true);
+    expect(pinged(await a.tick(CLARIFY), CREATOR)).toBe(true);
     a.svc.stop();
     const row = db
       .query("SELECT ask_ping_key FROM schedules WHERE id = ?")
@@ -477,12 +503,12 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     // Pause elsewhere is seen via refresh and re-arms the ping.
     a.store.setStatus(a.schedule.id, "paused", clock.now);
     a.store.setStatus(a.schedule.id, "active", clock.now);
-    expect(pinged(await b.tick(CLARIFY))).toBe(true);
+    expect(pinged(await b.tick(CLARIFY), CREATOR)).toBe(true);
     b.svc.stop();
     db.close();
   });
 
-  test("no owner configured never records a marker", async () => {
+  test("no owner + clarify still pings creator and records marker (AUTONOMY-4)", async () => {
     const store = new ScheduleStore();
     const s = store.create({
       name: "Nightly",
@@ -511,6 +537,44 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
         await new Promise((res) => setTimeout(res, 10));
       }
       expect(posts).toHaveLength(1);
+      expect(pinged(posts[0]!, "admin")).toBe(true);
+      expect(warn.mock.calls.some((c) => c[0] === ASK_NO_OWNER_WARNING)).toBe(false);
+      expect(store.get(s.id)!.askPingKey).toBe(askPingKey(CLARIFY));
+    } finally {
+      warn.mockRestore();
+      svc.stop();
+    }
+  });
+
+  test("no owner + stuck → no ping, warning, no marker (AUTONOMY-2)", async () => {
+    const store = new ScheduleStore();
+    const s = store.create({
+      name: "Nightly",
+      cronExpression: "0 * * * *",
+      project: "proj-a",
+      prompt: "do thing",
+      createdByUserId: "admin",
+      channelId: "chan-allowed",
+      now: Date.now() - 2 * HOUR,
+    });
+    s.nextRunAt = Date.now() - 60_000;
+    const posts: Post[] = [];
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    const svc = new SchedulerService({
+      store,
+      agent: stepAgent({ next: STUCK }),
+      allowlist: allowCfg(),
+      manual: true,
+      useWorktrees: false,
+      owner: null,
+      outbound: { post: async (p) => void posts.push(p) },
+    });
+    try {
+      await svc.tick();
+      for (let i = 0; i < 50 && svc.runningIds().length > 0; i++) {
+        await new Promise((res) => setTimeout(res, 10));
+      }
+      expect(posts).toHaveLength(1);
       expect(silent(posts[0]!)).toBe(true);
       expect(warn.mock.calls.some((c) => c[0] === ASK_NO_OWNER_WARNING)).toBe(true);
       expect(store.get(s.id)!.askPingKey).toBeUndefined();
@@ -527,25 +591,25 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     expect(askPingKey({ reason: "stuck", question: CLARIFY.question })).not.toBe(k);
   });
 
-  test("schema v7 adds schedules.ask_ping_key and migrates a v6 DB", () => {
-    expect(SCHEMA_VERSION).toBe(7);
+  test("schema v8 adds discord_sessions.pending_ask and migrates a v7 DB", () => {
+    expect(SCHEMA_VERSION).toBe(8);
     const db = new SqliteDatabase(":memory:");
     migrateCorvidinhoDb(db);
-    db.exec("ALTER TABLE schedules DROP COLUMN ask_ping_key");
-    db.run("UPDATE schema_meta SET value = '6' WHERE key = 'version'");
+    db.exec("ALTER TABLE discord_sessions DROP COLUMN pending_ask");
+    db.run("UPDATE schema_meta SET value = '7' WHERE key = 'version'");
     db.run(
-      `INSERT INTO schedules (id, name, cron_expression, project, prompt, created_by_user_id, created_at, updated_at)
-       VALUES ('sched_x', 'n', '0 * * * *', 'p', 'q', 'u', 1, 1)`,
+      `INSERT INTO discord_sessions (id, channel_id, user_id, created_at, last_activity_at)
+       VALUES ('sess_x', 'c', 'u', 1, 1)`,
     );
     migrateCorvidinhoDb(db);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
-    expect(v.value).toBe("7");
-    const row = db.query("SELECT ask_ping_key FROM schedules WHERE id = 'sched_x'").get() as {
-      ask_ping_key: string | null;
+    expect(v.value).toBe("8");
+    const row = db.query("SELECT pending_ask FROM discord_sessions WHERE id = 'sess_x'").get() as {
+      pending_ask: string | null;
     };
-    expect(row.ask_ping_key).toBeNull();
+    expect(row.pending_ask).toBeNull();
     db.close();
   });
 });

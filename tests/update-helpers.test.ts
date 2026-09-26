@@ -119,6 +119,27 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.21", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.21`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Council tool");
+    expect(r.stdout).toContain("Soft-TTL purge");
+  });
+
+  test("extract_changelog_section finds 0.0.20", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.20`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("AUTONOMY-4");
+    expect(r.stdout).toContain("AUTONOMY-5");
+    expect(r.stdout).toContain("thin replies");
+    expect(r.stdout).toContain("schema **v8**");
+    expect(r.stdout).not.toContain("IDENTITY-4");
+  });
+
   test("extract_changelog_section finds 0.0.19", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.19`,
@@ -223,10 +244,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.19", () => {
+  test("package.json is 0.0.21", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.19");
+    expect(pkg.version).toBe("0.0.21");
   });
 });

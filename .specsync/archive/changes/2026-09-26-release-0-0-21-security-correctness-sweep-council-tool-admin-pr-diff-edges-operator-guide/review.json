@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-21-security-correctness-sweep-council-tool-admin-pr-diff-edges-operator-guide",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "517fb61323b76b55d18ad1faae9188fa0b9ea55b",
+  "contract_digest": "e76451f9f952089be8d70aa7486672749379d3691b8a6e084ed4792d7783eda7",
+  "execution_digest": "f1491e665895b18e3a26505675eb2f8faa9b09d614be7a4b07e1ed3f5bed4eb0",
+  "workspace_digest": "10c7690afbcbb897edc5ef46fedfb4f44a7b2f0f268d2c4bed6c51876903e906",
+  "timestamp": 1790463167
+}
