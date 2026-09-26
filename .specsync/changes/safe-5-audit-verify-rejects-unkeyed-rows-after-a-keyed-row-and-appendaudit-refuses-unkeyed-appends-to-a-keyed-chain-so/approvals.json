@@ -1,4 +1,40 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790466193,
+      "digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-5-audit-verify-rejects-unkeyed-rows-after-a-keyed-row-and-appendaudit-refuses-unkeyed-appends-to-a-keyed-chain-so",
+        "title": "SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256",
+        "description": "SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/audit/log.ts",
+          "tests/audit.keyed-downgrade.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With CORVIDINHO_AUDIT_HMAC_KEY supplied, verifyAudit fails (ok false, brokenAtSeq = first such row, /status says chain BROKEN) on any unkeyed row that follows a keyed row, so a keyed row edited and relinked with its tail as unkeyed SHA-256 links is detected at the edited row; appendAudit without a key refuses to append after a keyed row (throws, so runPlugin fails closed for dangerous plugins) and the chain stays verifiable; a legacy unkeyed prefix followed by keyed rows still verifies as chain OK (mixed keyed/unkeyed)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "be5de4518de3bea0b2465ba6d231052f49b02324a21b3fc974966ea1bd3b80b9"
+      }
+    }
+  ],
   "reopenings": []
 }

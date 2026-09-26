@@ -1,6 +1,6 @@
 ---
 id: safe-5-audit-verify-rejects-unkeyed-rows-after-a-keyed-row-and-appendaudit-refuses-unkeyed-appends-to-a-keyed-chain-so
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 05b269af23ea2be9e9c41966f6cf9ee41dfeac02
 ---

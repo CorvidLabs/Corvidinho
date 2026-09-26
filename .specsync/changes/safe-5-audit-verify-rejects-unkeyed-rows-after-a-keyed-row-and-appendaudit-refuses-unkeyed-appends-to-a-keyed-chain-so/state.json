@@ -7,10 +7,11 @@
   "title": "SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256",
   "description": "SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "05b269af23ea2be9e9c41966f6cf9ee41dfeac02",
   "created_at": 1790465987,
-  "updated_at": 1790465994,
+  "updated_at": 1790466199,
   "affected_specs": [
     "plugins"
   ],
