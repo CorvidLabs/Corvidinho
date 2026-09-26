@@ -1,6 +1,6 @@
 ---
 id: safe-6-secret-scrub-before-persist-automatic-re-scrub-issue-66-captured-slice-scrub-vendor-key-looking-secrets-github
-state: approved
+state: implementing
 type: feature
 base_commit: c3b4d8881ea2d9a5b968eb47b9eda35c6e1b2233
 ---
