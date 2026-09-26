@@ -48,3 +48,26 @@ the script never prints them.
 
 Pushing an annotated tag `v*` runs `.github/workflows/release.yml`, which opens a
 GitHub Release with verbose notes (commits since previous tag + upgrade pointer).
+
+## Discord slash ghosts / duplicates
+
+If Discord shows outdated or duplicated slash commands (e.g. two `/agents`),
+the API likely still has **stale guild** commands from an older bot plus
+**globals** from Corvidinho. Guild PUT never clears globals.
+
+1. Set `DISCORD_GUILD_ID` to the dogfood guild snowflake (channel → Copy Server ID).
+2. Re-register (does not need a full LLM restart if only fixing commands):
+
+```bash
+cd /path/to/Corvidinho   # or Corvidinho-run checkout
+export DISCORD_GUILD_ID=...   # do not echo the token
+bun src/cli.ts discord register-commands
+# or restart the bridge so ClientReady re-registers:
+# pkill -f 'discord bridge' || true; nohup bun src/cli.ts discord bridge &
+```
+
+3. Confirm with Discord API (source of truth): guild commands = exactly the six
+   (`session`, `status`, `agents`, `work`, `mute`, `unmute`); globals = empty.
+4. Discord **client cache** can lag — leave/rejoin the server or wait a minute
+   if the UI still shows ghosts after the API is clean.
+

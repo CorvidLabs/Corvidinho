@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global",
+  "slug": "clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global",
+  "title": "Clean re-register Discord slash set (DISCORD-4): guild REST PUT overwrite of only the six current commands, clear global applicationCommands to [], prefer DISCORD_GUILD_ID dogfood scope, CLI discord register-commands, fixture tests for putCommands guild-then-clear-globals; no new slash names",
+  "description": "Clean re-register Discord slash set (DISCORD-4): guild REST PUT overwrite of only the six current commands, clear global applicationCommands to [], prefer DISCORD_GUILD_ID dogfood scope, CLI discord register-commands, fixture tests for putCommands guild-then-clear-globals; no new slash names",
+  "kind": "bug_fix",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "2cfad2f0919ce11a9b964c474ed90eab8025f008",
+  "created_at": 1790444460,
+  "updated_at": 1790444563,
+  "affected_specs": [
+    "discord",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "src/cli.ts",
+    "docs/BOX-UPDATE.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With DISCORD_GUILD_ID set, startup and `corvidinho discord register-commands` REST PUT guild applicationGuildCommands to exactly the six bodies (session/status/agents/work/mute/unmute) then PUT applicationCommands to [] clearing globals; without guild id, PUT globals to the six and warn that stale guild commands are not cleared; fixture tests assert putCommands guild-then-clear-globals order without live token; BOX-UPDATE/STATUS document re-register + Discord client cache tip; no new slash names; fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

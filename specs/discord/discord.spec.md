@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 32
+version: 33
 status: draft
 files:
   - src/discord/types.ts
@@ -16,6 +16,7 @@ files:
   - src/discord/bridge.ts
   - src/discord/thinking-status.ts
   - src/discord/slash-commands.ts
+  - src/discord/register-commands.ts
   - src/discord/slash-types.ts
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
@@ -52,7 +53,7 @@ goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, RATE_LIMITED,
 MUTED, PermissionLevel, resolvePermissionLevel, checkRateLimit, muteUser,
 unmuteUser, isMuted, evaluateRequesterCanSend, agent/gateway helpers,
 thinking-status builders/controller, slash command bodies + dispatch
-(handleSlashInteraction, buildSlashCommandBodies including mute/unmute);
+(handleSlashInteraction, buildSlashCommandBodies including mute/unmute, registerSlashCommandSet / registerSlashCommandsLive);
 loadDiscordPlugins registers discord-post-message (requester check);
 isImageAttachment, extractImageBlocks, enrichPromptWithImages,
 checkProtocolVersion, enforceProtocolVersionOrExit, summarizeTaskRunOutput.
@@ -68,7 +69,8 @@ outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
-Discord replies prefer parsed `task run --json` summaries.
+Discord replies prefer parsed `task run --json` summaries;
+slash registration with guild id PUTs guild commands then clears globals.
 
 ## Behavioral Examples
 
@@ -98,3 +100,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
 | 2026-09-26 | bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral: Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands |
+| 2026-09-26 | clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global: guild PUT of six + clear globals (REQ-discord-016); discord register-commands CLI |

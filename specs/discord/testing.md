@@ -13,6 +13,8 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 
 - `tests/discord.slash.test.ts` covers command bodies, dispatch gates, and
   session/status/agents/work handlers with fixture interactions (no live token).
+- `tests/discord.register-commands.test.ts` covers guild PUT then clear-globals
+  put order (REQ-discord-016; injectable put; no live token).
 
 ## Rate limits + mutes (DISCORD-6)
 

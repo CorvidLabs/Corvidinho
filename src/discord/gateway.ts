@@ -4,6 +4,7 @@
  */
 
 import { buildSlashCommandBodies } from "./slash-commands.ts";
+import { registerSlashCommandsLive } from "./register-commands.ts";
 import type {
   SlashInteraction,
   SlashOptionValue,
@@ -77,24 +78,29 @@ export async function createLiveGateway(
   let botUserId: string | null = null;
 
   async function registerSlashCommands(): Promise<void> {
-    const bodies = buildSlashCommandBodies();
     try {
       if (!client.application) {
         console.warn("[discord] slash register skipped: application not ready");
         return;
       }
-      const guildId = config.guildId?.trim();
-      if (guildId) {
-        const guild = await client.guilds.fetch(guildId);
-        await guild.commands.set(bodies);
+      const applicationId = client.application.id;
+      const result = await registerSlashCommandsLive({
+        token: config.token,
+        applicationId,
+        guildId: config.guildId,
+        bodies: buildSlashCommandBodies(),
+      });
+      if (result.scope === "guild") {
         console.log(
-          `[discord] registered ${bodies.length} guild slash command(s) on ${guildId}`,
+          `[discord] registered ${result.registeredCount} guild slash command(s) on ${result.guildId} (globals cleared)`,
         );
       } else {
-        await client.application.commands.set(bodies);
         console.log(
-          `[discord] registered ${bodies.length} global slash command(s)`,
+          `[discord] registered ${result.registeredCount} global slash command(s)`,
         );
+        if (result.warnNoGuildId) {
+          console.warn(`[discord] ${result.warnNoGuildId}`);
+        }
       }
     } catch (err) {
       console.error("[discord] slash command registration failed:", err);

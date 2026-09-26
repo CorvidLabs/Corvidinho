@@ -1,0 +1,44 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790444493,
+      "digest": "bd88da25ed6d586496c805177b9033c875c98a45517279f705b14335338dfc95",
+      "note": "DISCORD-4 slash re-register: guild PUT six + clear globals; no new slash names",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global",
+        "title": "Clean re-register Discord slash set (DISCORD-4): guild REST PUT overwrite of only the six current commands, clear global applicationCommands to [], prefer DISCORD_GUILD_ID dogfood scope, CLI discord register-commands, fixture tests for putCommands guild-then-clear-globals; no new slash names",
+        "description": "Clean re-register Discord slash set (DISCORD-4): guild REST PUT overwrite of only the six current commands, clear global applicationCommands to [], prefer DISCORD_GUILD_ID dogfood scope, CLI discord register-commands, fixture tests for putCommands guild-then-clear-globals; no new slash names",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "docs/BOX-UPDATE.md",
+          "src/cli.ts",
+          "src/discord"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With DISCORD_GUILD_ID set, startup and `corvidinho discord register-commands` REST PUT guild applicationGuildCommands to exactly the six bodies (session/status/agents/work/mute/unmute) then PUT applicationCommands to [] clearing globals; without guild id, PUT globals to the six and warn that stale guild commands are not cleared; fixture tests assert putCommands guild-then-clear-globals order without live token; BOX-UPDATE/STATUS document re-register + Discord client cache tip; no new slash names; fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "5aab868234a51bba253e498470900ccb66af450e3e5de22de7b7d0e42facb3b4",
+        "discord": "fcae412818d8c9e446d6a6da6d57bc5e417ad7496933a11881b2ad8742140b98"
+      }
+    }
+  ],
+  "reopenings": []
+}
