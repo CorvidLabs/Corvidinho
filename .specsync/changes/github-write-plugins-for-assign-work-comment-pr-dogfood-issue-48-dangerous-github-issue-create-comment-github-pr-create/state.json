@@ -7,10 +7,11 @@
   "title": "GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens",
   "description": "GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "92519c3c18fa98a6c895cb55196b5529b77c711b",
   "created_at": 1790444672,
-  "updated_at": 1790444711,
+  "updated_at": 1790444742,
   "affected_specs": [
     "plugins",
     "watch"

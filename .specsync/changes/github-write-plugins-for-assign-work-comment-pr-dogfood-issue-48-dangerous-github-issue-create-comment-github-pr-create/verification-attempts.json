@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790444742,
+      "commit": "fcea97afa4a052e9877c905201539ec3ffc16871",
+      "contract_digest": "12f3f8408eac6543a5cfa3a9d91a742680e22b2c7c8d87e359250398e0679496",
+      "execution_digest": "1589a5a032d8f29c58bfb91d87e7e79e7bc47840de5509f1de0b92599fabc5f8",
+      "workspace_digest": "465d5c4f9b881fbdf1bb23cf8a0bfa16012c8d6f52dbb3919239dcc961fc527d",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-048",
+        "REQ-plugins-049",
+        "REQ-plugins-050",
+        "REQ-plugins-051",
+        "REQ-plugins-052",
+        "REQ-plugins-053",
+        "REQ-watch-048"
+      ]
+    }
+  ]
+}

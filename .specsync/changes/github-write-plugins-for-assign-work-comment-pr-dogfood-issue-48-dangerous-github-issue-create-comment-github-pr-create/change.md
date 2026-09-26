@@ -1,6 +1,6 @@
 ---
 id: github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create
-state: approved
+state: implementing
 type: feature
 base_commit: 92519c3c18fa98a6c895cb55196b5529b77c711b
 ---

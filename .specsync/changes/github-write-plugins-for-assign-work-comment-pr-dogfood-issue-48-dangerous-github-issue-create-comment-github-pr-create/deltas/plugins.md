@@ -36,11 +36,22 @@ CORVIDINHO_GITHUB_DRY_RUN=1.
 
 | Module | What is used |
 |--------|-------------|
+| Bun | `Bun.which`, `Bun.spawn` |
 | @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
+
+### Consumed By
+
+| Module | What is used |
+|--------|-------------|
+| cli | `plugins list` / `plugins run` / doctor count |
 
 ### SPEC SECTION Change Log
 
+Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
+
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
+
+## Added
 
 ### REQUIREMENT REQ-plugins-048
 
@@ -76,3 +87,10 @@ When CORVIDINHO_GITHUB_DRY_RUN=1 the write handlers SHALL return success without
 
 Acceptance Criteria
 - dry-run tests pass without GITHUB_TOKEN.
+
+### REQUIREMENT REQ-plugins-053
+
+STATUS.md and docs/WATCH.md SHALL document the GitHub write plugins and assignee ingress dogfood path for issue #48.
+
+Acceptance Criteria
+- STATUS Done row and WATCH.md mention write plugins + assignment events.
