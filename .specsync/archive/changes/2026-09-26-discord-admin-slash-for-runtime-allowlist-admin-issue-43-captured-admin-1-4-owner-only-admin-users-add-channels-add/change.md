@@ -1,6 +1,6 @@
 ---
 id: discord-admin-slash-for-runtime-allowlist-admin-issue-43-captured-admin-1-4-owner-only-admin-users-add-channels-add
-state: verifying
+state: archived
 type: feature
 base_commit: 20fb34ff8db5759a2aad968e74d1d21b4c344b83
 ---

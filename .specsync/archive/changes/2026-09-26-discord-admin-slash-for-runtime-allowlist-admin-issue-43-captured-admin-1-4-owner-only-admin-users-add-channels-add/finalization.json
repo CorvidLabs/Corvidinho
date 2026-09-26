@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-admin-slash-for-runtime-allowlist-admin-issue-43-captured-admin-1-4-owner-only-admin-users-add-channels-add",
+  "implementation_commit": "e25e1f9a232ed9dcee03f5b2ba245f90c63a50e8",
+  "implementation_tree": "659e60b3dce1be84126cb7e2c1e761513ab4d36d",
+  "contract_digest": "83bf338444f8d0f6374a6d88e0be545a4c73759343f98e755b14b8c6d207d391",
+  "workspace_digest": "36153202a4ccac81da4d0f4488cf312667e79207b2dc25056c5c08545fd57a2b",
+  "closing_digest": "ec7e58a57b99400fc14e5cc7ed9c898335dfd5ac60de4f9a9e5ecd8c0cd5d73f",
+  "review_digest": "91ce97203d3ea8354bc931772ba5cf283dca9682699006fdb80f267c9bb95ce6",
+  "finalization_digest": "378717800bed59418123049afd138efc2ad94469f0869fbbc34ad0498c7c8b88",
+  "timestamp": 1790456278
+}
