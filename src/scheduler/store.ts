@@ -5,6 +5,7 @@
 
 import type { Database } from "bun:sqlite";
 import { getNextCronDate } from "./cron.ts";
+import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
 
 export type ScheduleStatus = "active" | "paused";
 
@@ -170,11 +171,11 @@ export class ScheduleStore {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         s.id,
-        s.name,
-        s.description,
+        scrubSecrets(s.name),
+        scrubSecrets(s.description),
         s.cronExpression,
         s.project,
-        s.prompt,
+        scrubSecrets(s.prompt),
         s.channelId ?? null,
         s.createdByUserId,
         s.status,
@@ -197,11 +198,11 @@ export class ScheduleStore {
         last_run_at = ?, next_run_at = ?, updated_at = ?
       WHERE id = ?`,
       [
-        s.name,
-        s.description,
+        scrubSecrets(s.name),
+        scrubSecrets(s.description),
         s.cronExpression,
         s.project,
-        s.prompt,
+        scrubSecrets(s.prompt),
         s.channelId ?? null,
         s.status,
         s.executionCount,
@@ -299,8 +300,8 @@ export class ScheduleStore {
          WHERE id = ?`,
         [
           run.status,
-          run.summary ?? null,
-          run.error ?? null,
+          scrubOpt(run.summary),
+          scrubOpt(run.error),
           run.completedAt,
           run.id,
         ],

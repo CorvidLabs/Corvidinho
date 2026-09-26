@@ -4,6 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
+import { scrubSecrets } from "../store/scrub.ts";
 import {
   isMemoryCategory,
   MemoryAclError,
@@ -99,8 +100,9 @@ export class MemoryStore {
         `category must be one of: conversation, entity, person, personality`,
       );
     }
-    const key = input.key.trim();
-    const content = input.content;
+    // SAFE-6: scrub before persist (key and content).
+    const key = scrubSecrets(input.key.trim());
+    const content = scrubSecrets(input.content);
     if (!key) throw new MemoryValidationError("key required");
     if (!content.trim()) throw new MemoryValidationError("content required");
 
@@ -220,7 +222,7 @@ export class MemoryStore {
     const ts = this.now();
     this.db.run(
       `UPDATE memories SET content = ?, updated_at = ? WHERE id = ?`,
-      [input.content, ts, input.id],
+      [scrubSecrets(input.content), ts, input.id],
     );
     const updated = this.db
       .query(`SELECT * FROM memories WHERE id = ?`)

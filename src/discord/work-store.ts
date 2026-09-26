@@ -4,6 +4,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
 
 export type WorkTaskStatus = "queued" | "running" | "completed" | "failed";
 
@@ -99,14 +100,14 @@ export class WorkStore {
          summary = excluded.summary`,
       [
         task.id,
-        task.description,
+        scrubSecrets(task.description),
         task.userId,
         task.channelId,
         task.sessionId ?? null,
         task.status,
         task.createdAt,
         task.updatedAt,
-        task.summary ?? null,
+        scrubOpt(task.summary),
       ],
     );
   }

@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 46
+version: 48
 status: draft
 files:
   - src/discord/types.ts
@@ -15,6 +15,8 @@ files:
   - src/store/index.ts
   - src/store/paths.ts
   - src/store/session-ttl.ts
+  - src/store/scrub.ts
+  - tests/store.scrub.test.ts
   - src/worktree/index.ts
   - src/worktree/manager.ts
   - src/worktree/cleanup.ts
@@ -41,6 +43,10 @@ files:
   - src/discord/command-handlers/work.ts
   - src/discord/command-handlers/mute.ts
   - src/discord/command-handlers/schedule.ts
+  - src/discord/command-handlers/announce.ts
+  - src/discord/announce-store.ts
+  - src/discord/announce.ts
+  - tests/discord.announce.test.ts
   - src/scheduler/cron.ts
   - src/scheduler/store.ts
   - src/scheduler/service.ts
@@ -67,12 +73,12 @@ depends_on:
 
 HEAR Discord bridge also auto-recalls MEMORY for the acting Discord user on
 spawn and prepends an inject block to the agent prompt (AGENT-7 / MEMORY-2/4 /
-REQ-discord-023), alongside image attachments, schedule, presence, and
+REQ-discord-023) and `/announce` ops channel (DISCORD-ANNOUNCE-1..6 / REQ-discord-024), alongside image attachments, schedule, presence, and
 session worktrees.
 
 ## Public API
 
-Export `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
+Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`).
 
@@ -130,3 +136,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | session-worktree-per-talk-project-git-worktree-isolation-session-worktree-1-5-issue-58-package-v0-0-5-discord-cli-talks: SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5 |
 | 2026-09-26 | memory-discord-inject: auto-recall prepend on spawn (REQ-discord-023 / AGENT-7 / MEMORY-2/4); package 0.0.7 |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
+| 2026-09-26 | safe-6-secret-scrub-before-persist-automatic-re-scrub-issue-66-captured-slice-scrub-vendor-key-looking-secrets-github: SAFE-6 secret scrub before persist + automatic re-scrub (issue #66 captured slice): scrub vendor-key-looking secrets (GitHub, OpenAI-compatible, Anthropic, Discord bot, Slack, AWS, Google, JWT, bearer, private-key blocks) on every SQLite write path (sessions, work tasks, schedules + runs, memories) and re-scrub existing rows automatically when the scrub rules version increases; no new CLI or slash surface; draft SAFE-10 outbound/Discord-admin re-scrub and Algorand mnemonics left for HI capture |
+| 2026-09-26 | discord-announce-slash: DISCORD-ANNOUNCE-1..6 `/announce` + REQ-discord-024; package 0.0.8 |
+| 2026-09-26 | discord-announce-slash-discord-announce-1-6-channel-picker-persist-bridge-live-announce-only-package-0-0-8-req-discord: Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024 |

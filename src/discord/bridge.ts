@@ -9,6 +9,7 @@
  * MEMORY: auto-recall inject on spawn (AGENT-7 / MEMORY-2/4).
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
  * DISCORD-12: presence/custom status shows shared package version.
+ * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -57,6 +58,11 @@ import {
 } from "../scheduler/index.ts";
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
+import { AnnounceStore } from "./announce-store.ts";
+import {
+  formatBridgeLiveAnnouncement,
+  postAnnouncement,
+} from "./announce.ts";
 
 export type StartBridgeResult =
   | {
@@ -66,6 +72,7 @@ export type StartBridgeResult =
       workStore: WorkStore;
       scheduleStore: ScheduleStore;
       memoryStore?: MemoryStore;
+      announceStore?: AnnounceStore;
       mutedUsers: Set<string>;
       rateLimitState: RateLimitState;
       muteUser: (userId: string) => void;
@@ -111,6 +118,8 @@ export type StartBridgeOptions = {
   scheduleStore?: ScheduleStore;
   /** MEMORY store (REQ-discord-021); default opens from shared db. */
   memoryStore?: MemoryStore;
+  /** DISCORD-ANNOUNCE store; default opens from shared db. */
+  announceStore?: AnnounceStore;
   /** Disable cooperative scheduler ticker (tests). */
   disableScheduler?: boolean;
   /** Scheduler poll interval override (tests). */
@@ -195,6 +204,8 @@ export async function startBridge(
     opts.scheduleStore ?? new ScheduleStore({ db });
   const memoryStore =
     opts.memoryStore ?? (db ? new MemoryStore({ db }) : undefined);
+  const announceStore =
+    opts.announceStore ?? (db ? new AnnounceStore(db) : undefined);
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -247,6 +258,7 @@ export async function startBridge(
       workStore,
       scheduleStore,
       memoryStore,
+      announceStore,
       allowlist: config.allowlist,
       agent,
       version,
@@ -402,6 +414,19 @@ export async function startBridge(
     },
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
+      // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel.
+      if (announceStore && replyRef.fn) {
+        const note = formatBridgeLiveAnnouncement(version);
+        void postAnnouncement(announceStore, replyRef.fn, note).then((r) => {
+          if (r.ok) {
+            console.log(`[discord] announce posted to ${r.channelId}: ${note}`);
+          } else if (r.reason === "not_configured") {
+            console.log("[discord] announce channel not set — skipping bridge-live note");
+          } else {
+            console.warn(`[discord] announce post skipped: ${r.reason}`);
+          }
+        });
+      }
     },
   };
 
@@ -445,7 +470,7 @@ export async function startBridge(
   await gateway.start();
   scheduler?.start();
   console.log(
-    "[discord] HEAR bridge ready (session stub + thinking status + slash + schedule ticker + rate/mute; no ProcessManager).",
+    "[discord] HEAR bridge ready (session stub + thinking status + slash + schedule ticker + announce + rate/mute; no ProcessManager).",
   );
 
   return {
@@ -454,7 +479,8 @@ export async function startBridge(
     store,
     workStore,
     scheduleStore,
-      memoryStore,
+    memoryStore,
+    announceStore,
     mutedUsers,
     rateLimitState,
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),

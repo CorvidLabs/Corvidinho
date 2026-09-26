@@ -33,7 +33,7 @@ jobs:
             CHANGELOG="$(git log --pretty=format:'- %s (%h)' -n 40)"
           fi
           TAG_NOTES="$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)"
-          SLASH='/session (list|start) · /status · /agents · /work · /mute · /unmute'
+          SLASH='/session (list|start) · /status · /agents · /work · /mute · /unmute · /schedule · /announce'
           {
             echo "## Corvidinho ${TAG}"
             echo
