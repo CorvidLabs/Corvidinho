@@ -1,6 +1,6 @@
 ---
 id: box-updater-a-set-corvidinho-bridge-unit-wins-over-a-leftover-pidfile-no-second-nohup-bridge-the-env-file-is-loaded
-state: draft
+state: approved
 type: bug_fix
 base_commit: 2ff0598784b5e7c72f2c0eedbb85131324e7e239
 ---

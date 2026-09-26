@@ -1,4 +1,41 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790464558,
+      "digest": "78cf782f8020aa7d2fdc06c9041014a2d522c2d493ce9f8cb48212e7149f6376",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "box-updater-a-set-corvidinho-bridge-unit-wins-over-a-leftover-pidfile-no-second-nohup-bridge-the-env-file-is-loaded",
+        "title": "Box updater: a set CORVIDINHO_BRIDGE_UNIT wins over a leftover pidfile (no second nohup bridge), the env file is loaded once before doctor and every restart/rollback path, and CORVIDINHO_BRIDGE_CMD runs with its text off the shell argv so pkill -f cannot kill its own shell",
+        "description": "Box updater: a set CORVIDINHO_BRIDGE_UNIT wins over a leftover pidfile (no second nohup bridge), the env file is loaded once before doctor and every restart/rollback path, and CORVIDINHO_BRIDGE_CMD runs with its text off the shell argv so pkill -f cannot kill its own shell",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "docs/BOX-UPDATE.md",
+          "scripts/corvidinho-update.sh",
+          "tests/update-helpers.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With CORVIDINHO_BRIDGE_UNIT set, a leftover pidfile no longer selects pidfile mode: the updater runs systemctl restart and starts no nohup bridge; a stale pidfile is removed and a live pid in it is never signalled. Without a unit, a leftover pidfile still selects pidfile mode. CORVIDINHO_ENV_FILE is sourced once after bun install and before doctor, so doctor, the unit/pidfile/command restart and every rollback restart (including after a failed bun install) see it; bun install does not. CORVIDINHO_BRIDGE_CMD runs with its text passed through the environment, so a pkill -f pattern in it cannot kill its own shell; docs/BOX-UPDATE.md pkill examples use an anchored pattern that matches the bridge process but not a shell holding the text."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "12b3256e5659040310004ccb4257ae3b3addedd599a91baf13a01ab6524ac306"
+      }
+    }
+  ],
   "reopenings": []
 }
