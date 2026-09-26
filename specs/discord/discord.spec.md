@@ -26,6 +26,7 @@ files:
   - src/worktree/cleanup.ts
   - tests/worktree.test.ts
   - tests/discord.session-worktree.test.ts
+  - tests/worktree.project-scope.test.ts
   - src/memory/types.ts
   - src/memory/store.ts
   - src/memory/index.ts

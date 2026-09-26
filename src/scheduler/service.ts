@@ -225,8 +225,10 @@ export class SchedulerService {
 
       // SESSION-WORKTREE: resolve schedule.project → isolated cwd.
       if (this.useWorktrees) {
+        // REQ-discord-202: same project scope as /work (DISCORD-SCHEDULE-3).
         const resolved = resolveProjectDir(schedule.project, {
           defaultProjectRoot: this.defaultProjectRoot,
+          github: this.allowlist.github,
         });
         if (!resolved.ok) {
           this.finish(schedule, run, {

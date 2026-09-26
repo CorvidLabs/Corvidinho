@@ -215,6 +215,7 @@ export async function startBridge(
       db,
       ttlMs,
       defaultProjectRoot: config.projectRoot,
+      allowlist: config.allowlist,
     });
   const workStore = opts.workStore ?? new WorkStore({ db });
   if (!opts.workStore && db) {

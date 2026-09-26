@@ -6,6 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import type { AllowlistConfig } from "../allowlist/types.ts";
 import { scrubOpt } from "../store/scrub.ts";
 import {
   isSessionExpired,
@@ -37,6 +38,11 @@ export type SessionStoreOptions = {
    */
   defaultProjectRoot?: string;
   /**
+   * Bridge allowlist: its GitHub repo list gates an explicit project outside
+   * `defaultProjectRoot` (REQ-discord-202). Absent ⇒ such projects refused.
+   */
+  allowlist?: AllowlistConfig;
+  /**
    * When true (default), create an isolated worktree/scoped dir on session
    * create for repo work. Tests may disable.
    */
@@ -55,6 +61,7 @@ export class SessionStore {
   readonly ttlMs: number;
   private readonly now: () => number;
   readonly defaultProjectRoot: string | undefined;
+  private readonly allowlist: AllowlistConfig | undefined;
   private readonly ensureWorktreeOnCreate: boolean;
 
   constructor(opts: SessionStoreOptions = {}) {
@@ -62,6 +69,7 @@ export class SessionStore {
     this.ttlMs = opts.ttlMs ?? resolveSessionTtlMs();
     this.now = opts.now ?? (() => Date.now());
     this.defaultProjectRoot = opts.defaultProjectRoot;
+    this.allowlist = opts.allowlist;
     this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
     if (this.db) {
       this.loadFromDb();
@@ -282,12 +290,12 @@ export class SessionStore {
       if (opts?.project?.trim()) {
         const resolved = resolveProjectDir(opts.project, {
           defaultProjectRoot: session.project ?? this.defaultProjectRoot ?? process.cwd(),
+          github: this.allowlist?.github,
         });
-        if (
-          resolved.ok &&
-          session.project &&
-          resolved.dir !== session.project
-        ) {
+        if (!resolved.ok) {
+          return { ok: false, error: resolved.error };
+        }
+        if (session.project && resolved.dir !== session.project) {
           return {
             ok: false,
             error: `project already set to ${session.project}; refusing mid-conversation switch`,
@@ -311,6 +319,7 @@ export class SessionStore {
       this.defaultProjectRoot ?? session.project ?? process.cwd();
     const resolved = resolveProjectDir(opts?.project ?? session.project, {
       defaultProjectRoot: defaultRoot,
+      github: this.allowlist?.github,
     });
     if (!resolved.ok) {
       return { ok: false, error: resolved.error };
@@ -361,6 +370,7 @@ export class SessionStore {
     if (opts.project?.trim() || this.defaultProjectRoot) {
       const resolved = resolveProjectDir(opts.project, {
         defaultProjectRoot: this.defaultProjectRoot ?? process.cwd(),
+        github: this.allowlist?.github,
       });
       if (resolved.ok) {
         session.project = resolved.dir;
