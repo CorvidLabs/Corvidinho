@@ -5,7 +5,8 @@
  * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN
  * + /schedule list|create|pause|resume|delete (single-project; skip templates)
  * + /admin users|channels|config (corvid-agent admin-commands.ts, trimmed to
- * the captured ADMIN-1..3 surface).
+ * the captured ADMIN-1..3 surface). Channel options use STRING + autocomplete
+ * (searchable names/ids) instead of the limited native CHANNEL picker.
  */
 
 /** Discord Application Command option type: SUB_COMMAND */
@@ -28,8 +29,10 @@ export type SlashOptionDef = {
   name: string;
   description: string;
   required?: boolean;
-  /** Restrict CHANNEL picker (e.g. [0] = guild text). */
+  /** Restrict CHANNEL picker (e.g. [0] = guild text). Legacy; prefer STRING+autocomplete. */
   channel_types?: number[];
+  /** Enable Discord autocomplete (STRING/INTEGER/NUMBER). Max 25 choices. */
+  autocomplete?: boolean;
   options?: SlashOptionDef[];
 };
 
@@ -225,11 +228,11 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
           description: "Set or clear the announcements channel (admin)",
           options: [
             {
-              type: OPT_CHANNEL,
+              type: OPT_STRING,
               name: "channel",
-              description: "Guild text channel (picker — do not type a snowflake)",
+              description: "Search guild text channels by name or paste a snowflake id",
               required: false,
-              channel_types: [CHANNEL_TYPE_GUILD_TEXT],
+              autocomplete: true,
             },
             {
               type: OPT_BOOLEAN,
@@ -281,11 +284,11 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
               description: "Add a channel to [discord].channels (owner only)",
               options: [
                 {
-                  type: OPT_CHANNEL,
+                  type: OPT_STRING,
                   name: "channel",
-                  description: "Guild text channel (picker)",
+                  description: "Search guild text channels by name or paste a snowflake id",
                   required: true,
-                  channel_types: [CHANNEL_TYPE_GUILD_TEXT],
+                  autocomplete: true,
                 },
               ],
             },
@@ -295,10 +298,11 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
               description: "Remove a channel from [discord].channels (owner only)",
               options: [
                 {
-                  type: OPT_CHANNEL,
+                  type: OPT_STRING,
                   name: "channel",
-                  description: "Channel to remove (picker)",
+                  description: "Search allowlisted channels by name or paste a snowflake id",
                   required: true,
+                  autocomplete: true,
                 },
               ],
             },

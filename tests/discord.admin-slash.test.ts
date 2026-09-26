@@ -40,7 +40,7 @@ import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts"
 import { SessionStore } from "../src/discord/session-store.ts";
 import {
   buildSlashCommandBodies,
-  OPT_CHANNEL,
+  OPT_STRING,
   OPT_SUB_COMMAND,
   OPT_SUB_COMMAND_GROUP,
   OPT_USER,
@@ -197,7 +197,8 @@ describe("/admin command body (ADMIN-1..3)", () => {
     const userOpt = groups[0]?.options?.[0]?.options?.[0];
     expect(userOpt).toMatchObject({ type: OPT_USER, name: "user", required: true });
     const chanAdd = groups[1]?.options?.[0]?.options?.[0];
-    expect(chanAdd).toMatchObject({ type: OPT_CHANNEL, name: "channel", required: true, channel_types: [0] });
+    expect(chanAdd).toMatchObject({ type: OPT_STRING, name: "channel", required: true, autocomplete: true });
+    expect(chanAdd).not.toHaveProperty("channel_types");
   });
 
   test("flattenSlashOptions handles groups, subcommands and top-level options", () => {

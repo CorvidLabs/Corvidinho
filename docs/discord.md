@@ -28,11 +28,11 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/schedule pause` | `schedule` (id) | yes | Pause (ADMIN) |
 | `/schedule resume` | `schedule` (id) | yes | Resume (ADMIN) |
 | `/schedule delete` | `schedule` (id) | yes | Delete (ADMIN) |
-| `/announce channel` | `channel` (CHANNEL picker), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
+| `/announce channel` | `channel` (STRING + autocomplete), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
 | `/announce show` | — | yes | Show current announcements channel; empty = not configured (DISCORD-ANNOUNCE-3) |
 | `/admin users add` | `user` (user picker, required) | yes | Approve a user: add to `[discord].users` in the allowlist file + live (owner only; ADMIN-1) |
-| `/admin channels add` | `channel` (CHANNEL picker, guild text, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
-| `/admin channels remove` | `channel` (CHANNEL picker, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
+| `/admin channels add` | `channel` (STRING + autocomplete by name/id, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
+| `/admin channels remove` | `channel` (STRING + autocomplete from allowlist / name/id, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
@@ -51,7 +51,7 @@ flowchart TD
   B -->|no| C[Skip — default-deny]
   B -->|yes| D[postAnnouncement to announce channel only]
   D --> E[Never post to dogfood allowlist by default]
-  F["/announce channel CHANNEL picker"] --> G{ADMIN re-check}
+  F["/announce channel STRING+autocomplete"] --> G{ADMIN re-check}
   G -->|deny| H[Ephemeral not authorized]
   G -->|allow| I[Persist channel id in SQLite]
   J["/announce show or /status"] --> K[Show channel or not configured]

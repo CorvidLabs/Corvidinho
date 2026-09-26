@@ -34,7 +34,7 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-SCHEDULE-5**  Provenance: steal from archived corvid-agent `server/discord/command-handlers/schedule-commands.ts`, `server/scheduler/`, `server/db/schedules*`, ADR `docs/decisions/001-autonomous-scheduler.md` — skip flock/council/on-chain extras unless separately HI’d.
 
 - **DISCORD-ANNOUNCE-1**  ADMIN slash `/announce channel` sets (or clears) a dedicated ops/dev announcements channel for version bumps, bridge restarts, and ship notes — separate from the dogfood/chat allowlist.
-- **DISCORD-ANNOUNCE-2**  The channel option is Discord’s native **channel picker** (CHANNEL option type / dropdown of guild text channels). Select; never type a snowflake by hand.
+- **DISCORD-ANNOUNCE-2**  The channel option is a searchable **STRING + autocomplete** over guild text channels (match by case-insensitive name substring, including emoji/unicode in names, or by raw snowflake / `<#id>`). Discord returns ≤25 choices; prefer exact/prefix matches. (Amended 2026-09-26: replaces the limited native CHANNEL picker — same pain as `/admin channels add`.)
 - **DISCORD-ANNOUNCE-3**  `/announce show` (or surface on `/status`) shows the current announcements channel; empty means not configured (default-deny: no announce posts until set).
 - **DISCORD-ANNOUNCE-4**  After every successful bridge restart / version bump, Corvidinho posts the update **only** to the configured announcements channel (not the general allowlisted chat).
 - **DISCORD-ANNOUNCE-5**  Mutations re-check ADMIN at handler time; empty admin = deny-all. Non-admins get existing silent/ephemeral deny.
@@ -42,6 +42,7 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 
 ## Notes (not numbered AC)
 
+- **Searchable channel add (2026-09-26):** Leif — native Discord CHANNEL picker only showed a limited subset with no useful search; typing a channel id failed. `/admin channels add|remove` and `/announce channel` use STRING + autocomplete instead (ADMIN-2 UX under existing AC; DISCORD-ANNOUNCE-2 amended above).
 - Mermaid diagrams stay in **repo docs** (e.g. [`docs/discord.md`](../docs/discord.md)). Discord chat uses embeds, code fences, or PNG — not native Mermaid.
 - Operator UX inventory (slash set, outbound formats, deny flowchart): [`docs/discord.md`](../docs/discord.md).
 
