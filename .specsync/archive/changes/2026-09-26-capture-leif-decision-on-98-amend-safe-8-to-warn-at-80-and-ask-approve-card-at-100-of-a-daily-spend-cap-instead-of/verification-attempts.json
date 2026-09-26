@@ -32,6 +32,38 @@
         }
       ],
       "requirement_ids": []
+    },
+    {
+      "timestamp": 1790456044,
+      "commit": "55576d0c83e48c597c4b0dd7a704fce783739b69",
+      "contract_digest": "d6eced61b65d6ac3b64e76245336b7e9608fb0860f9b9d04b039f472ec662cc8",
+      "execution_digest": "1f9e4f2a4295d38ae2aa8c1647c07d2b18dde95e509c3368c085f3f1df2aee09",
+      "workspace_digest": "81484df1dc07565577e3ce04b82f3383b39322d5b3a58d0c2ef750dad0608374",
+      "acceptance_input_digest": "b6d2f7451ae4edf492d468a74e5d5328b9c7dae7ed55a608797721e9384a9042",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "hi/safe.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "981da067e02a3fd257ab2741367d97fb3e3ea0b3df968558a1df1aa2e4590e8e",
+            "entry_digest": "2396c5487cabe27b64f293a5b1fba022b0dc50f48f4127b73dc145735302f8cc",
+            "owners": [
+              "@exact:delivery"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
     }
   ]
 }
