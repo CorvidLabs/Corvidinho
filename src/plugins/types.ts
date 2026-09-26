@@ -29,6 +29,8 @@ export type PluginCommand = {
   dangerous?: boolean;
   /** Minimum autonomy/trust tier required (PLUGIN-2). Default 0. */
   minTier?: number;
+  /** Where the command comes from (PLUGIN-6): "builtin" (default) or "fledge:<plugin>@<version>". */
+  origin?: string;
   handler: (ctx: PluginHandlerArgs) => Promise<PluginHandlerResult>;
 };
 

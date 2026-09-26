@@ -41,6 +41,13 @@ files:
   - plugins/shell/commands.ts
   - plugins/shell/clamp.ts
   - tests/shell.plugins.test.ts
+  - plugins/fledge/index.ts
+  - plugins/fledge/discover.ts
+  - plugins/fledge/commands.ts
+  - plugins/fledge/spawn.ts
+  - src/plugins/toolCost.ts
+  - tests/fledge.plugins.test.ts
+  - tests/fledge.cli.test.ts
 db_tables: []
 depends_on: []
 ---
