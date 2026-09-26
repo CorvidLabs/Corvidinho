@@ -58,15 +58,28 @@ Acceptance Criteria
 
 ### REQ-agent-007
 
-`task run` SHALL use a thin provider-agnostic execute hook: when
-`CORVIDINHO_LLM_API_KEY` (or documented fallback such as `OPENAI_API_KEY`) is
-set, call an OpenAI-compatible chat completions endpoint
-(`CORVIDINHO_LLM_BASE_URL` / `CORVIDINHO_LLM_MODEL`); otherwise keep the demo
-execute stub that reports a synthetic file change for the verify-gate exercise.
-This SHALL NOT invent a full LLM tool loop (follow-up issue). Secrets SHALL stay
-in env; never commit real keys.
+The execute hook for `task run` SHALL call an OpenAI-compatible chat completions endpoint when `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (`CORVIDINHO_LLM_BASE_URL` / `CORVIDINHO_LLM_MODEL`), and SHALL keep the demo execute stub (synthetic filesChanged for the verify-gate exercise) when no key is set. Secrets SHALL stay in env and SHALL never be committed.
 
 Acceptance Criteria
 - No API key → demo summary + filesChanged for gate exercise.
-- Key present → chat call; summary from assistant text; filesChanged empty (no tool loop).
-- Fixture tests cover no-key path; key path may mock fetch (no live API in CI).
+- Key present → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
+- Fixture tests cover no-key path; key path mocks fetch (no live API in CI).
+
+### REQ-agent-008
+
+The system SHALL run an interruptible OpenAI-compatible tool loop when an LLM API key is set and the capability tier is `tool` or `code`: it SHALL expose non-dangerous registered plugins as `tools`, SHALL dispatch `tool_calls` via `runPlugin` under SAFE-1 non-interactive deny unless allowlisted, SHALL emit `ToolCall` and `ToolResult` events, SHALL stop promptly on AbortSignal (AGENT-3), and SHALL collect `filesChanged` only when a tool result reports them so prove-before-done stays honest (AGENT-4).
+
+Acceptance Criteria
+- Mock HTTP fixture: tool_call → plugin runs → final text summary.
+- Dangerous plugin without allowlist → ToolResult success=false under non-interactive.
+- Aborted signal mid-loop returns without claiming success completion of further rounds.
+- filesChanged empty unless a tool payload includes filesChanged.
+
+### REQ-agent-009
+
+The system SHALL accept capability tier `read|tool|code` via `--tier` or `CORVIDINHO_LLM_TIER` (default `tool`) so read-shaped work gets no tools and tool/code tiers filter plugins by `minTier` (AGENT-5). The default tool catalog SHALL omit dangerous plugins; runtime SAFE-1 SHALL still apply when dangerous tools are included.
+
+Acceptance Criteria
+- read → no tools in chat request.
+- tool/code → buildOpenAiTools filters by minTier; dangerous omitted by default.
+

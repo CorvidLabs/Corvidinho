@@ -1,6 +1,6 @@
 /**
- * Prove-before-done agent types (Merlin AGENT-4 / AGENT-8 steal).
- * Lean slice: no Trust/attest, no LLM yet.
+ * Prove-before-done agent types (Merlin AGENT-3/4/5/8 steal).
+ * Lean: OpenAI-compatible tool loop; no Trust/attest.
  */
 
 export type AgentState =
@@ -14,6 +14,8 @@ export type AgentState =
 export type AgentEvent =
   | { type: "StateChanged"; state: AgentState }
   | { type: "Text"; text: string }
+  | { type: "ToolCall"; name: string; args: string }
+  | { type: "ToolResult"; name: string; success: boolean; detail?: string }
   | { type: "VerifyResult"; success: boolean; output: string };
 
 export type ExecuteResult = {

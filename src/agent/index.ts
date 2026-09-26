@@ -32,4 +32,19 @@ export {
 } from "./execute.ts";
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
+export {
+  loadTierFromEnv,
+  parseCapabilityTier,
+  tierAllowsPlugin,
+  TIER_RANK,
+} from "./tier.ts";
+export type { CapabilityTier } from "./tier.ts";
+
+export {
+  argvFromToolArguments,
+  buildOpenAiTools,
+  filesChangedFromToolData,
+} from "./tools.ts";
+export type { BuildToolsOpts, OpenAiToolDef } from "./tools.ts";
+
 export { summarizeTaskRunOutput } from "./task-summary.ts";

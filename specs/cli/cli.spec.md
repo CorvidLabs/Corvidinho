@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 23
+version: 25
 status: draft
 files:
   - src/cli.ts
@@ -18,7 +18,7 @@ depends_on:
 
 ## Purpose
 
-Operator surface includes Discord HEAR bridge, GitHub WATCH poll, and canonical attribution output for outbound PR bodies.
+Operator surface includes Discord HEAR, GitHub WATCH, attribution, and task run with optional LLM plugin tool loop.
 
 ## Public API
 
@@ -46,10 +46,9 @@ Operator surface includes Discord HEAR bridge, GitHub WATCH poll, and canonical 
 
 ## Invariants
 
-task run honors --no-verify and agent config; bridges may skip verify for latency.
+task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
-Attribution output uses only the project name and repository link and contains no
-account handle.
+Attribution output uses only the project name and repository link and contains no account handle.
 
 ## Behavioral Examples
 
@@ -75,7 +74,5 @@ Consumes agent module for runTask / loadAgentConfig.
 
 ## Change Log
 
-WATCH `github watch` CLI (#19, 2026-09-26).
-
-| 2026-09-26 | watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions: Add `corvidinho github watch` poll-first ingress CLI (#19) |
-| 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: task run uses createTaskExecute (demo or env-gated LLM) |
+task run LLM tool loop + --tier (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |

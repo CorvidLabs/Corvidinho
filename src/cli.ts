@@ -8,8 +8,10 @@
 import {
   createTaskExecute,
   loadAgentConfig,
+  parseCapabilityTier,
   runTask,
   type AgentEvent,
+  type CapabilityTier,
   type TaskResult,
 } from "./agent/index.ts";
 import { attribution } from "./attribution.ts";
@@ -54,8 +56,8 @@ Usage:
                                     Run a typed plugin command
   corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
-  corvidinho task run [--task TEXT] [--no-verify] [--max-retries N] [--json]
-                                    Execute (demo or env-gated LLM) + prove-before-done verify gate (AGENT-4)
+  corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N] [--json]
+                                    LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --no-verify ...        Skip verify gate (bridges / WATCH latency)
 
@@ -74,6 +76,9 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_WATCH_USERNAME                             GitHub login to listen for (WATCH)
   CORVIDINHO_WATCH_INTERVAL_MS                          poll interval (default 60000, min 30000)
   CORVIDINHO_WATCH_DRY_RUN=1                            echo agent; no spawn
+  CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
+  CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
+  CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -101,6 +106,7 @@ function parseGlobalFlags(args: string[]): {
   noVerify: boolean;
   maxRetries: number | undefined;
   taskText: string | undefined;
+  tier: CapabilityTier | undefined;
 } {
   const rest: string[] = [];
   let nonInteractiveFlag = false;
@@ -108,6 +114,7 @@ function parseGlobalFlags(args: string[]): {
   let noVerify = false;
   let maxRetries: number | undefined;
   let taskText: string | undefined;
+  let tier: CapabilityTier | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--non-interactive") {
@@ -135,6 +142,19 @@ function parseGlobalFlags(args: string[]): {
       taskText = tf[1];
       continue;
     }
+    if (a === "--tier") {
+      const next = args[i + 1];
+      if (next && !next.startsWith("-")) {
+        tier = parseCapabilityTier(next, "tool");
+        i++;
+      }
+      continue;
+    }
+    const tr = a.match(/^--tier=(.+)$/);
+    if (tr) {
+      tier = parseCapabilityTier(tr[1], "tool");
+      continue;
+    }
     if (a === "--max-retries") {
       const next = args[i + 1];
       if (next && /^\d+$/.test(next)) {
@@ -150,7 +170,7 @@ function parseGlobalFlags(args: string[]): {
     }
     rest.push(a);
   }
-  return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText };
+  return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier };
 }
 
 async function doctor(): Promise<number> {
@@ -328,31 +348,49 @@ async function taskRun(opts: {
   noVerify: boolean;
   maxRetries: number | undefined;
   taskText: string | undefined;
+  tier: CapabilityTier | undefined;
+  nonInteractive: boolean;
 }): Promise<number> {
   const cwd = process.cwd();
   const config = loadAgentConfig(cwd);
   const events: AgentEvent[] = [];
+  const handleEvent = (e: AgentEvent) => {
+    events.push(e);
+    if (opts.json) return;
+    if (e.type === "StateChanged") {
+      console.error(`→ ${e.state}`);
+    } else if (e.type === "Text") {
+      console.error(e.text);
+    } else if (e.type === "ToolCall") {
+      console.error(`▸ ${e.name} ${e.args.slice(0, 200)}`);
+    } else if (e.type === "ToolResult") {
+      console.error(
+        `${e.name} → ${e.success ? "ok" : "fail"}${e.detail ? `: ${e.detail.slice(0, 120)}` : ""}`,
+      );
+    } else if (e.type === "VerifyResult") {
+      console.error(`verify: ${e.success ? "pass" : "fail"}`);
+    }
+  };
+  const execute = createTaskExecute({
+    taskText: opts.taskText,
+    cwd,
+    tier: opts.tier,
+    nonInteractive: opts.nonInteractive,
+    allowlist: allowlistFromEnv(),
+    onEvent: handleEvent,
+  });
   const result: TaskResult = await runTask({
     cwd,
     task: opts.taskText,
     config,
     verifyBeforeComplete: opts.noVerify ? false : undefined,
     maxRetries: opts.maxRetries,
-    onEvent: (e) => {
-      events.push(e);
-      if (!opts.json && e.type === "StateChanged") {
-        console.error(`→ ${e.state}`);
-      } else if (!opts.json && e.type === "Text") {
-        console.error(e.text);
-      } else if (!opts.json && e.type === "VerifyResult") {
-        console.error(`verify: ${e.success ? "pass" : "fail"}`);
-      }
-    },
+    onEvent: handleEvent,
     execute: async (ctx) => {
       if (ctx.verifyFeedback && !opts.json) {
         console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
       }
-      return createTaskExecute({ taskText: opts.taskText })(ctx);
+      return execute(ctx);
     },
   });
 
@@ -455,6 +493,7 @@ export async function main(argv: string[]): Promise<number> {
     noVerify,
     maxRetries,
     taskText,
+    tier,
   } = parseGlobalFlags(raw);
   const nonInteractive = isNonInteractive({ nonInteractiveFlag });
 
@@ -532,9 +571,11 @@ export async function main(argv: string[]): Promise<number> {
         noVerify,
         maxRetries,
         taskText,
+        tier,
+        nonInteractive,
       });
     }
-    console.error("usage: corvidinho task run [--task TEXT] [--no-verify] [--max-retries N] [--json]\n");
+    console.error("usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N] [--json]\n");
     printHelp();
     return 1;
   }

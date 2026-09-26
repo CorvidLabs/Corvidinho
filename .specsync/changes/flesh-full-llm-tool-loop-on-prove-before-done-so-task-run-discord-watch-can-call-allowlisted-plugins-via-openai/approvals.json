@@ -1,0 +1,49 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790443567,
+      "digest": "642e79df82a83d69143cafe917cb06351f036e22475dda99ed58207abf513961",
+      "note": "Issue #31 dogfood ship: thin LLM tool-loop MVP on prove-before-done (Leif standing order + explicit task)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai",
+        "title": "Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP)",
+        "description": "Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "STATUS.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/tier.ts",
+          "src/agent/tools.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "tests/agent.tool-loop.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY) is set and tier is tool|code, task run runs an interruptible OpenAI-compatible tool loop over allowlisted plugins; read tier stays chat-only; no key keeps demo stub; AbortSignal stops promptly; SAFE-1 dangerous deny unchanged; prove-before-done still gates when filesChanged reported; fixture tests mock HTTP (no live key); Discord/WATCH keep --no-verify; STATUS DOGFOOD updated; SpecSync + fledge verify green; no #9; no invented ACCESS/bounty/MainNet HI"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "f871ab40b79b763824fe17938205c0f44ab3fa2d31e752e1ccb0d9d151dc71a5",
+        "cli": "95da19d3990d1dab023b37354f2f090bf1276edb138d8ba2fb6c5ce30ff7c997"
+      }
+    }
+  ],
+  "reopenings": []
+}
