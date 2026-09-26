@@ -19,7 +19,6 @@
     "src/agent",
     "src/discord",
     "src/scheduler",
-    "src/cli.ts",
     "tests"
   ],
   "no_spec_change": false,
