@@ -5,10 +5,9 @@ artifact: tasks
 
 # Tasks
 
-- [ ] `src/memory/confirm.ts` HMAC confirm tokens (no schema change)
-- [ ] Harden memory plugins (argv refusal, env actor, handler-time ADMIN, two-phase, include-deleted admin-only)
-- [ ] Discord + WATCH spawn env hygiene
-- [ ] Fixture tests (plugins, confirm, spawn env)
-- [ ] Spec deltas + CHANGELOG / STATUS / docs
-- [ ] SpecSync check + fledge verify
-- [ ] PR as corvid-agent (Made with Corvidinho)
+- [x] `src/memory/confirm.ts` HMAC confirm tokens (no schema change)
+- [x] Harden memory plugins (argv refusal, env actor, handler-time ADMIN, two-phase, include-deleted admin-only)
+- [x] Discord + WATCH spawn env hygiene
+- [x] Fixture tests (plugins, confirm, spawn env)
+- [x] Spec deltas + CHANGELOG / STATUS / docs
+- [x] SpecSync check + fledge verify
