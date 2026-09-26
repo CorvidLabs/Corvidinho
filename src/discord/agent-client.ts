@@ -1,5 +1,6 @@
 /**
- * Spawn corvidinho for chat with --no-verify (bridge latency).
+ * Spawn corvidinho for chat with prove-before-done (AGENT-4 / FLEDGE-2 / #85).
+ * Does not pass --no-verify; empty filesChanged still skips verify in the loop.
  * Reads the `task run --output ndjson` event stream so the thinking status
  * shows real state / current tool / token counts (AGENT-8 / DISCORD-3, #73).
  * Injectable for tests; no ProcessManager.
@@ -59,9 +60,9 @@ export type SpawnAgentClientOpts = {
 };
 
 /**
- * Spawns: `<bin> task run --no-verify --task <prompt> --output ndjson`
- * and reads stdout line by line; the summary comes from the `result` frame
- * (fallback: summarizeTaskRunOutput).
+ * Spawns: `<bin> task run --task <prompt> --output ndjson` (no --no-verify;
+ * REQ-discord-085 / AGENT-4) and reads stdout line by line; the summary comes
+ * from the `result` frame (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
  * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
  * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011).
@@ -81,7 +82,6 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
-        "--no-verify",
         "--task",
         prompt,
         "--output",

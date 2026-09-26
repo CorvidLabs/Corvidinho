@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.13
+
+### Always verify on Discord / WATCH (#85 captured slice — AGENT-4 / FLEDGE-2)
+
+- Discord and WATCH spawn clients **no longer pass `--no-verify`** (REQ-discord-085 / REQ-watch-085). Prove-before-done is the default for chat and ingress.
+- Plain chat with no file edits still stays fast: the agent loop skips the verify lane when `filesChanged` is empty (honest `verifySkipped`).
+- CLI `--no-verify` remains for **local/operator opt-out only** (REQ-cli-085). Draft AGENT-14/15 (remove the flag entirely; real git porcelain / deleted-test detection) wait for HI capture; SAFE-22 still draft after #82.
+- Fixture tests assert spawn argv has no `--no-verify`.
+
+### Ops
+
+- Package version **0.0.13** — presence (DISCORD-12) reads `v0.0.13` after restart.
+- **Restart the Discord bridge and `github watch`** so spawns pick up prove-before-done (no slash churn).
+
 ## 0.0.12
 
 ### Typed git tools (#82) — [#145](https://github.com/CorvidLabs/Corvidinho/pull/145)
