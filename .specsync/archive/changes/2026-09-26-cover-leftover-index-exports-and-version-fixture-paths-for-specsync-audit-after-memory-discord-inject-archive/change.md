@@ -1,6 +1,6 @@
 ---
 id: cover-leftover-index-exports-and-version-fixture-paths-for-specsync-audit-after-memory-discord-inject-archive
-state: implementing
+state: archived
 type: bug_fix
 base_commit: b425f4ab09cc089c33f4914054a9183c68737040
 ---

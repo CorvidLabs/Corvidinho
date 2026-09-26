@@ -7,11 +7,11 @@
   "title": "Cover leftover index exports and version fixture paths for SpecSync audit after memory-discord-inject archive",
   "description": "Cover leftover index exports and version fixture paths for SpecSync audit after memory-discord-inject archive",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "b425f4ab09cc089c33f4914054a9183c68737040",
   "created_at": 1790450708,
-  "updated_at": 1790450718,
+  "updated_at": 1790450732,
   "affected_specs": [
     "agent",
     "discord",
