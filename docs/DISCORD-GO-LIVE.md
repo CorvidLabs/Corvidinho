@@ -106,7 +106,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` grant nothing. The bridge logs a warning and
   `doctor` shows an `admin-lists` warning when they are set.
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
-  memory forget/override, mutating tools in a chat session (E.6), and the `/work` draft-PR step (E.3).
+  memory forget/override (via `corvidinho plugins run` only, with the acting env set; Discord chat
+  cannot reach them, see [`discord.md`](discord.md) Memory), mutating tools in a chat session (E.6),
+  and the `/work` draft-PR step (E.3).
 - When a run asks for a human (AUTONOMY-1/2), the owner is the only user it can ping. With no
   owner the question still posts and the bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
@@ -139,26 +141,28 @@ and a `denied` row goes to the audit chain.
 
 Set it in the environment of the process that runs the tool. Spawned runs inherit the
 bridge's environment, so one `CORVIDINHO_ALLOWLIST` in the bridge's `EnvironmentFile` covers
-the bridge's own `/work` PR step and the runs it spawns. The allowlist file
+the bridge's own `/work` PR step and reaches every run it spawns (where it unlocks nothing
+today, see below). The allowlist file
 (`CORVIDINHO_ALLOWLIST_FILE`) holds the `[github]` / `[discord]` lists and `[owner]`, not tool names.
 
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
-project's Fledge plugins; re-check any time with `corvidinho plugins list`):
+project's Fledge plugins; re-check any time with `corvidinho plugins list`). Outside the `/work`
+draft-PR step, an entry only affects `corvidinho plugins run` (see "What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
-| `web-fetch` | true | 1 | true | you run web fetches non-interactively (GET-only, SSRF-guarded, SAFE-7) |
-| `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | one entry per Fledge command you trust; names come from `plugins list` |
+| `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
+| `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
-| `git-branch-create` | true | 2 | true | you create branches with `plugins run` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | you run shell commands non-interactively (cwd clamped to the project, SAFE-3) |
-| `memory-forget` | true | 1 | true | the owner forgets memories (two-phase confirm, SAFE-4; see [`discord.md`](discord.md) Memory) |
-| `memory-override` | true | 1 | true | the owner rewrites memories (two-phase confirm, SAFE-4) |
-| `files-delete` | true | 2 | true | you delete files non-interactively (SAFE-2 protected paths always refused) |
-| `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | you write to GitHub non-interactively |
-| `discord-post-message` | true | 1 | true | you post to an allowlisted channel from a run (DISCORD-5/8) |
+| `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3) |
+| `memory-forget` | true | 1 | true | an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
+| `memory-override` | true | 1 | true | an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
+| `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
+| `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | an operator runs `corvidinho plugins run <name>` non-interactively |
+| `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8) |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6):
@@ -175,11 +179,11 @@ What an entry unlocks **today**:
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass, the requester
   to be the owner, and the repo to pass GITHUB-6.
-- `delegate` workers get the lead's allowlist and nothing more.
-
-`task run` does not offer dangerous plugins to the model yet: its tool catalog leaves them
-out, and a call to a tool that is not offered is refused. So an allowlist entry does **not**
-make `web-fetch`, `shell-exec`, `fledge-*` or `git-*` callable from Discord chat on its own.
+- Nothing else. `task run` does not offer dangerous plugins to the model yet: its tool catalog
+  leaves them out, and a call to a tool that is not offered is refused. So an allowlist entry
+  does **not** make any dangerous tool callable from Discord chat, schedules, WATCH or
+  `delegate` workers. A worker is passed the lead's effective allowlist (never a wider one),
+  but it is a plain `task run` child, so the allowlist unlocks nothing there today.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 
