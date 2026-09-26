@@ -1,6 +1,6 @@
 ---
 id: cover-plugin-reload-after-clearregistry-helpers-for-hear-13-fixture-suite
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 23cecb17c46912e839b640d7783bdaef1ebb6042
 ---

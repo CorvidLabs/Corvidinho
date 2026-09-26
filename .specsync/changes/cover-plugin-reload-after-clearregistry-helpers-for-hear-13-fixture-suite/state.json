@@ -7,10 +7,11 @@
   "title": "Cover plugin reload-after-clearRegistry helpers for HEAR #13 fixture suite",
   "description": "Cover plugin reload-after-clearRegistry helpers for HEAR #13 fixture suite",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "23cecb17c46912e839b640d7783bdaef1ebb6042",
   "created_at": 1790441491,
-  "updated_at": 1790441500,
+  "updated_at": 1790441504,
   "affected_specs": [
     "plugins"
   ],
