@@ -19,10 +19,12 @@ ADMIN for `memory-forget`, `memory-override`, and `memory-recall
 --include-deleted` SHALL be re-checked inside the handler at call time
 (ADMIN-4 / DISCORD-7): empty `CORVIDINHO_DISCORD_ADMIN_USERS` and
 `CORVIDINHO_DISCORD_ADMIN_ROLES` ⇒ nobody is ADMIN even when
-`CORVIDINHO_ACTING_IS_ADMIN=1` (MEMORY-ACL-4); deny-listed or muted users are
-never ADMIN; a user id in the admin users list is ADMIN; otherwise ADMIN only
-when admin roles are configured and the bridge's per-dispatch
-`CORVIDINHO_ACTING_IS_ADMIN=1` is set. Self-forget stays ADMIN-only.
+`CORVIDINHO_ACTING_IS_ADMIN=1` (MEMORY-ACL-4). The bridge's per-dispatch
+`CORVIDINHO_ACTING_IS_ADMIN=1` is required on every path (a scheduled run
+spawned with it off never gets ADMIN), and the live config must agree:
+deny-listed or muted users are never ADMIN; a user id in the admin users list
+is ADMIN; otherwise only when admin roles are configured. Self-forget stays
+ADMIN-only.
 Refusals stay opaque and never include memory content (MEMORY-ACL-2).
 
 Forget and override SHALL be two-phase (SAFE-4). Phase 1 (no `--confirm`)
@@ -38,10 +40,11 @@ Acceptance Criteria
 - `--user` / `--admin` / `--db` refused on all memory commands.
 - No acting user env ⇒ refused; other actors never see a user's memories.
 - Empty admin lists + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
-- Deny-listed admin refused; role admin needs roles configured + env bit.
+- Admin user id without the bridge bit (scheduled runs) refused; deny-listed or muted admin refused; role admin needs roles configured + env bit.
 - Phase 1 returns a token without content; same-turn confirm refused; new-turn confirm succeeds; replay refused.
 - Token for another memory, another actor, or changed override content refused; expired token refused.
-- `--include-deleted` refused for non-admins.
+- `--include-deleted` refused for non-admins; `--include-deleted=false` is off.
+- `--user` / `--admin` / `--db` are only refused in flag position; text after `--` or in `--content=` is data.
 
 ## Modified
 

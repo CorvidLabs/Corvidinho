@@ -166,7 +166,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
   test("admin forget is two-phase: token, same-turn refused, new turn ok, replay refused", async () => {
     process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
     const id = await storeAs("u1", "k", "content-u1");
-    actAs("boss");
+    actAs("boss", true);
 
     const phase1 = await run("memory-forget", ["--id", id]);
     expect(phase1.ok).toBe(true);
@@ -202,14 +202,14 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss,boss2";
     const a = await storeAs("u1", "a", "A");
     const b = await storeAs("u1", "b", "B");
-    actAs("boss");
+    actAs("boss", true);
     const p1 = await run("memory-forget", ["--id", a]);
     const token = (p1.data as { confirmToken: string }).confirmToken;
     newTurn();
     const wrongId = await run("memory-forget", ["--id", b, "--confirm", token]);
     expect(wrongId.ok).toBe(false);
     expect(wrongId.error).toContain("does not match");
-    actAs("boss2");
+    actAs("boss2", true);
     const wrongActor = await run("memory-forget", ["--id", a, "--confirm", token]);
     expect(wrongActor.ok).toBe(false);
     expect(wrongActor.error).toContain("does not match");
@@ -218,7 +218,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
   test("override binds content across phases", async () => {
     process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
     const id = await storeAs("u1", "k", "old");
-    actAs("boss");
+    actAs("boss", true);
     const p1 = await run("memory-override", ["--id", id, "--content", "new value"]);
     expect(p1.ok).toBe(true);
     const token = (p1.data as { confirmToken: string }).confirmToken;
@@ -256,7 +256,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
   test("--include-deleted is ADMIN-only", async () => {
     process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
     const id = await storeAs("boss", "k", "gone soon");
-    actAs("boss");
+    actAs("boss", true);
     const p1 = await run("memory-forget", ["--id", id]);
     newTurn();
     await run("memory-forget", ["--id", id, "--confirm", (p1.data as { confirmToken: string }).confirmToken]);
@@ -274,7 +274,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
   test("dangerous forget/override still SAFE-1 denied without allowlist", async () => {
     process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
     const id = await storeAs("u1", "k", "v");
-    actAs("boss");
+    actAs("boss", true);
     const r = await runPlugin({
       name: "memory-forget",
       args: ["--id", id],
@@ -282,5 +282,55 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.error).toContain("SAFE-1");
+  });
+});
+
+describe("memory ACL hardening — review follow-ups", () => {
+  test("admin user id without the bridge bit (e.g. scheduled run) is not ADMIN", async () => {
+    process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
+    const id = await storeAs("u1", "k", "v");
+    actAs("boss", false);
+    expect((await run("memory-forget", ["--id", id])).error).toBe("not authorized");
+    actAs("boss", true);
+    expect((await run("memory-forget", ["--id", id])).ok).toBe(true);
+  });
+
+  test("override phase-1 hint names the content requirement", async () => {
+    process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
+    const id = await storeAs("u1", "k", "old");
+    actAs("boss", true);
+    const p1 = await run("memory-override", ["--id", id, "--content", "new"]);
+    expect(p1.message).toContain("--content");
+  });
+
+  test("--include-deleted=false stays off; =true needs ADMIN", async () => {
+    await storeAs("u1", "k", "v");
+    actAs("u1");
+    const off = await run("memory-recall", ["--include-deleted=false"]);
+    expect(off.ok).toBe(true);
+    const on = await run("memory-recall", ["--include-deleted=true"]);
+    expect(on.error).toBe("not authorized");
+  });
+
+  test("identity-looking words in content are fine after `--` or in --content=", async () => {
+    actAs("u1");
+    const viaSep = await run("memory-store", ["person", "tip", "--", "always", "pass", "--admin", "to", "sudo"]);
+    expect(viaSep.ok).toBe(true);
+    expect((viaSep.data as { content: string }).content).toBe("always pass --admin to sudo");
+    const viaEq = await run("memory-store", ["--category", "person", "--key", "tip2", "--content=use --user flag"]);
+    expect(viaEq.ok).toBe(true);
+    const bare = await run("memory-store", ["person", "tip3", "pass", "--admin"]);
+    expect(bare.ok).toBe(false);
+    expect(bare.error).toContain("after `--`");
+  });
+
+  test("--confirm=TOKEN form works", async () => {
+    process.env.CORVIDINHO_DISCORD_ADMIN_USERS = "boss";
+    const id = await storeAs("u1", "k", "v");
+    actAs("boss", true);
+    const p1 = await run("memory-forget", ["--id", id]);
+    newTurn();
+    const ok = await run("memory-forget", ["--id", id, `--confirm=${(p1.data as { confirmToken: string }).confirmToken}`]);
+    expect(ok.ok).toBe(true);
   });
 });

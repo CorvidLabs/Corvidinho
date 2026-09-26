@@ -13,10 +13,11 @@ artifact: requirements
    the plugin handler at call time (ADMIN-4 / DISCORD-7):
    - both `CORVIDINHO_DISCORD_ADMIN_USERS` and `_ROLES` empty ⇒ nobody ADMIN,
      even if `CORVIDINHO_ACTING_IS_ADMIN=1` (MEMORY-ACL-4);
+   - the bridge's per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` is required on
+     every path (scheduled runs spawn with it off ⇒ never ADMIN);
    - acting user in the Discord deny list or `DISCORD_MUTED_USER_IDS` ⇒ never ADMIN;
    - acting user id in `CORVIDINHO_DISCORD_ADMIN_USERS` ⇒ ADMIN;
-   - otherwise ADMIN only via role: admin roles configured AND the bridge's
-     per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` (roles are only visible to the bridge).
+   - otherwise ADMIN only via role: admin roles configured (roles are only visible to the bridge).
 3. Self-forget stays ADMIN-only; non-admin refusals stay opaque (`not authorized`)
    and never include memory content (MEMORY-ACL-2).
 4. Forget/override SHALL be two-phase (SAFE-4): phase 1 (no `--confirm`) returns

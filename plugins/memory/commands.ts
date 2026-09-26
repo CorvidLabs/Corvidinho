@@ -46,14 +46,40 @@ function flagValue(args: string[], name: string): string | undefined {
   return undefined;
 }
 
+/** Args in flag position: values of VALUE_FLAGS skipped, nothing after `--`. */
+function flagTokens(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") break;
+    if (VALUE_FLAGS.has(a)) {
+      i++; // skip value
+      continue;
+    }
+    if (a.startsWith("--")) out.push(a);
+  }
+  return out;
+}
+
 function hasFlag(args: string[], name: string): boolean {
-  return args.some((a) => a === name || a.startsWith(`${name}=`));
+  return flagTokens(args).some((a) => a === name || a.startsWith(`${name}=`));
+}
+
+/** Boolean flag: bare `--x` or `--x=true|1|yes`; `--x=false` is off. */
+function boolFlag(args: string[], name: string): boolean {
+  return flagTokens(args).some(
+    (a) => a === name || (a.startsWith(`${name}=`) && truthy(a.slice(name.length + 1))),
+  );
 }
 
 function positionalAfterFlags(args: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
+    if (a === "--") {
+      out.push(...args.slice(i + 1));
+      break;
+    }
     if (VALUE_FLAGS.has(a)) {
       i++; // skip value
       continue;
@@ -82,7 +108,7 @@ function refuseArgvIdentity(args: string[]): PluginHandlerResult | null {
   if (!hit) return null;
   return {
     ok: false,
-    error: `refused: ${hit} is not accepted — acting user, ADMIN, and store come from the bridge environment, never argv (MEMORY-ACL-1..4)`,
+    error: `refused: ${hit} is not accepted — acting user, ADMIN, and store come from the bridge environment, never argv (MEMORY-ACL-1..4). To store text that contains it, put the text after \`--\` or in --content=…`,
     exitCode: 2,
   };
 }
@@ -107,17 +133,19 @@ const ACL_DENIED: PluginHandlerResult = {
 
 /**
  * Handler-time ADMIN re-check (ADMIN-4 / DISCORD-7 / MEMORY-ACL-3/4).
- * Empty admin users + roles ⇒ nobody. Deny-listed / muted ⇒ never.
- * Admin user id ⇒ yes. Role admins are only visible to the bridge, so the
- * per-dispatch CORVIDINHO_ACTING_IS_ADMIN bit counts only when admin roles
- * are configured. Any failure fails closed.
+ * The bridge's per-dispatch CORVIDINHO_ACTING_IS_ADMIN bit is required on
+ * every path (so a scheduled run spawned with it off never gets ADMIN), and
+ * the live config must agree: empty admin users + roles ⇒ nobody;
+ * deny-listed / muted ⇒ never; admin user id ⇒ yes; otherwise only when
+ * admin roles are configured (roles are visible only to the bridge).
+ * Any failure fails closed.
  */
 export async function actingIsAdmin(
   env: NodeJS.ProcessEnv,
   userId: string,
 ): Promise<boolean> {
   const id = userId.trim().toLowerCase();
-  if (!id) return false;
+  if (!id || !truthy(env.CORVIDINHO_ACTING_IS_ADMIN)) return false;
   const adminUsers = parseList(env.CORVIDINHO_DISCORD_ADMIN_USERS);
   const adminRoles = parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES);
   if (adminUsers.length === 0 && adminRoles.length === 0) return false;
@@ -128,8 +156,7 @@ export async function actingIsAdmin(
   } catch {
     return false;
   }
-  if (adminUsers.includes(id)) return true;
-  return adminRoles.length > 0 && truthy(env.CORVIDINHO_ACTING_IS_ADMIN);
+  return adminUsers.includes(id) || adminRoles.length > 0;
 }
 
 function openStore(env: NodeJS.ProcessEnv) {
@@ -162,7 +189,11 @@ type ConfirmArg =
   | { present: true; token: string | undefined };
 
 function parseConfirm(args: string[]): ConfirmArg {
-  if (!hasFlag(args, "--confirm")) return { present: false };
+  const end = args.indexOf("--");
+  const head = end >= 0 ? args.slice(0, end) : args;
+  if (!head.some((a) => a === "--confirm" || a.startsWith("--confirm="))) {
+    return { present: false };
+  }
   return { present: true, token: flagValue(args, "--confirm")?.trim() || undefined };
 }
 
@@ -224,7 +255,7 @@ async function twoPhase(opts: {
       return {
         ok: true,
         data: { pending: true, op: opts.op, ...target, confirmToken: token, expiresAt },
-        message: `pending ${opts.op} of ${row.category}/${row.key} (owner ${row.ownerUserId}); confirm from a new turn within 10m: memory-${opts.op} --id ${row.id} --confirm ${token}`,
+        message: `pending ${opts.op} of ${row.category}/${row.key} (owner ${row.ownerUserId}); confirm from a new turn within 10m: memory-${opts.op} --id ${row.id} --confirm ${token}${opts.op === "override" ? " --content <the same content as this request>" : ""}`,
         exitCode: 0,
       };
     }
@@ -324,7 +355,7 @@ export const memoryCommands: PluginCommand[] = [
       const user = actingUser(env);
       if (!user) return NO_ACTOR;
       // Forgotten content stays forgotten for non-admins (MEMORY-ACL-4).
-      const includeDeleted = hasFlag(ctx.args, "--include-deleted");
+      const includeDeleted = boolFlag(ctx.args, "--include-deleted");
       if (includeDeleted && !(await actingIsAdmin(env, user))) {
         return ACL_DENIED;
       }
