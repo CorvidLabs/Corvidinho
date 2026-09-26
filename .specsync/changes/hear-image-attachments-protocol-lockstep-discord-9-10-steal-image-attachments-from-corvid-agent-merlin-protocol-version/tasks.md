@@ -10,5 +10,5 @@ artifact: tasks
 - [x] Wire gateway/bridge/types/exports
 - [x] Fixture tests (images + protocol)
 - [x] Spec + STATUS updates
-- [ ] SpecSync approve / check / review / finalize
-- [ ] PR + merge + close #14
+- [x] SpecSync approve / check / review / finalize
+- [x] PR + merge + close #14
