@@ -76,6 +76,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).toContain("Auto-recall inject");
     expect(r.stdout).toContain("0.0.7");
   });
+  test("extract_changelog_section finds 0.0.9", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.9`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("SAFE-6");
+    expect(r.stdout).toContain("memory ACL hardening");
+  });
+
   test("extract_changelog_section finds 0.0.8", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.8`,
@@ -108,10 +117,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.8", () => {
+  test("package.json is 0.0.9", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.8");
+    expect(pkg.version).toBe("0.0.9");
   });
 });

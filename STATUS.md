@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -68,7 +68,11 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → main | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS |
 | DISCORD-SCHEDULE slash | #57 → (this PR) | `/schedule` single-project recurring runs (DISCORD-SCHEDULE-1..5); 5m min; ADMIN mutations; cooperative ticker; SESSION durable store from #61 remains bridge path |
 | MEMORY SQLite + ACL | #41 + #59 → [#64](https://github.com/CorvidLabs/Corvidinho/pull/64) | Shared DB schema v3 `memories`; per-user Discord ACL; ADMIN-only forget/override incl. self-forget; empty admin deny-all; memory-* plugins; no `/memory` slash; package **0.0.4** |
-| MEMORY ACL hardening | #59 follow-up → (this PR) | Memory plugins take actor/ADMIN only from bridge env (argv `--user`/`--admin`/`--db` refused); handler-time ADMIN re-check (empty = deny-all); two-phase HMAC confirm for forget/override from a new turn (SAFE-4); `--include-deleted` ADMIN-only; Discord/WATCH spawn env hygiene; no schema change |
+| MEMORY ACL hardening | #59 follow-up → [#128](https://github.com/CorvidLabs/Corvidinho/pull/128) | Memory plugins take actor/ADMIN only from bridge env (argv `--user`/`--admin`/`--db` refused); handler-time ADMIN re-check (empty = deny-all); two-phase HMAC confirm for forget/override from a new turn (SAFE-4); `--include-deleted` ADMIN-only; Discord/WATCH spawn env hygiene; no schema change |
+| SAFE-6 secret scrub | #66 → [#130](https://github.com/CorvidLabs/Corvidinho/pull/130) | Scrub vendor-key shapes on every SQLite write; automatic re-scrub when `SCRUB_RULES_VERSION` rises; SAFE-10 / mnemonics await HI |
+| Spawn `.env` isolation | → [#133](https://github.com/CorvidLabs/Corvidinho/pull/133) | `bun --no-env-file` for spawned agents (ALLOW-4 / SAFE-1); tests stop creating real `talk/*` worktrees |
+| `/work` restart recovery | #87 → [#135](https://github.com/CorvidLabs/Corvidinho/pull/135) | Abandoned queued/running work failed honestly on start; talk ended (SESSION-WORKTREE-3); queue/locks draft AUTONOMOUS-14 |
+| HI: retire human CLI | #129 → [#134](https://github.com/CorvidLabs/Corvidinho/pull/134) | CLI-1/2/6/9 retired; CLI-7/8 kept for the daemon; package **0.0.9** release cut |
 | SESSION-WORKTREE isolation | #58 → (this PR) | Per-talk/project git worktree isolation (SESSION-WORKTREE-1..5); `src/worktree/`; schema v4 session columns; schedule ticks use project scope; package **0.0.5**; Discord bridge restart needed to pick up |
 | v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
 | Discord presence version | → [#53](https://github.com/CorvidLabs/Corvidinho/pull/53) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
@@ -89,7 +93,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Done | Discord deny polish (DENY-1..3) + `docs/discord.md` | Landed prior |
 | Done | [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) SESSION-WORKTREE | Shipped (worktree manager + Discord/schedule wire + schema v4); package **0.0.5** |
 | Ops | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
-| Done | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY + [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) MEMORY-ACL | Shipped [#64](https://github.com/CorvidLabs/Corvidinho/pull/64) (schema v3 + ACL + plugins; package 0.0.4); ACL hardening follow-up in this PR |
+| Done | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY + [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) MEMORY-ACL | Shipped [#64](https://github.com/CorvidLabs/Corvidinho/pull/64) (schema v3 + ACL + plugins; package 0.0.4); ACL hardening [#128](https://github.com/CorvidLabs/Corvidinho/pull/128) (0.0.9) |
 | HI captured | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) IDENTITY/ADMIN/AUTONOMY | Criteria in `hi/`; impl still deferred |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |
