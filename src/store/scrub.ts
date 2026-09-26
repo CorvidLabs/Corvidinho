@@ -55,13 +55,17 @@ export function scrubOpt(text: string | null | undefined): string | null {
   return text == null ? null : scrubSecrets(text);
 }
 
-/** Every free-text column Corvidinho persists. Keep in sync with src/store/db.ts. */
+/**
+ * Every free-text column Corvidinho persists. Keep in sync with src/store/db.ts
+ * and module-owned tables (spend_ledger: src/agent/spend.ts).
+ */
 export const SCRUB_TARGETS: ReadonlyArray<{ table: string; columns: readonly string[] }> = [
   { table: "discord_sessions", columns: ["topic"] },
   { table: "discord_work_tasks", columns: ["description", "summary"] },
   { table: "schedules", columns: ["name", "description", "prompt"] },
   { table: "schedule_runs", columns: ["summary", "error"] },
   { table: "memories", columns: ["key", "content"] },
+  { table: "spend_ledger", columns: ["provider", "model"] },
 ];
 
 function tableExists(db: Database, table: string): boolean {

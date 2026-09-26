@@ -51,6 +51,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, attribution, and task run 
 task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 Attribution output uses only the project name and repository link and contains no account handle.
+doctor prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098) only when `CORVIDINHO_DAILY_SPEND_CAP_USD` is set; it is informational (`ok` or `warn`) and never changes the doctor exit code.
 
 ## Behavioral Examples
 

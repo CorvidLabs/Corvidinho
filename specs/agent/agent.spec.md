@@ -15,11 +15,13 @@ files:
   - src/agent/tier.ts
   - src/agent/tools.ts
   - src/agent/events-ndjson.ts
+  - src/agent/spend.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
+  - tests/agent.spend.test.ts
 
 db_tables: []
 depends_on:
@@ -50,6 +52,17 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+Daily spend cap (REQ-agent-098, issue #98, SAFE-8 / AUTONOMOUS-8):
+`src/agent/spend.ts` exports `SPEND_CAP_ENV`
+(`CORVIDINHO_DAILY_SPEND_CAP_USD`), `SPEND_WINDOW_MS` (rolling 24 h),
+`MODEL_PRICES_USD_PER_MTOK`, `priceForModel`, `parseSpendCap`,
+`costMicroUsd`, `estimateCallMicroUsd`, `formatUsd`, `ensureSpendLedger`,
+`SpendLedger` (`reserve` / `settle` / `window` over the module-owned
+`spend_ledger` table in the shared DB), `SpendCapRefusal`, `withSpendCap`
+(wraps the provider fetch; returns it unchanged when no cap is set) and
+`spendDoctorCheck` (doctor line). `createTaskExecute` wraps its fetch with
+`withSpendCap`.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
@@ -60,6 +73,12 @@ NDJSON frames never carry raw tool arguments; ToolCall `argsSummary`, Text,
 ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
+
+No spend cap set means no spend behavior: the fetch is untouched and the DB is
+not opened. With a cap, a provider call is never sent unless its estimate was
+reserved under the cap in one IMMEDIATE transaction; an unpriced model or an
+invalid cap value refuses every call (never counted as free). Money is
+integer micro-USD, rounded up.
 
 ## Behavioral Examples
 
@@ -79,6 +98,7 @@ events are unchanged.
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
+| Spend cap set and 24h spend + estimate over it, unpriced model, or invalid cap value | provider call not sent; SpendCapRefusal becomes the task summary (SAFE-8) |
 
 ## Dependencies
 

@@ -8,6 +8,7 @@
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { runPlugin } from "../plugins/run.ts";
+import { withSpendCap } from "./spend.ts";
 import type {
   AgentEvent,
   AgentTokenUsage,
@@ -130,7 +131,8 @@ function toAllowSet(
  */
 export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const env = opts.env ?? process.env;
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  // SAFE-8: refuse provider calls that would break the daily spend cap (no cap = untouched fetch).
+  const fetchImpl = withSpendCap(opts.fetchImpl ?? fetch, { env, readUsage: extractUsage });
   const taskText = opts.taskText?.trim() ?? "";
   const cwd = opts.cwd ?? process.cwd();
   const nonInteractive = opts.nonInteractive ?? true;

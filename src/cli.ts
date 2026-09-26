@@ -17,6 +17,8 @@ import {
   type TaskOutputMode,
   type TaskResult,
 } from "./agent/index.ts";
+import { loadLlmEnv } from "./agent/execute.ts";
+import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
@@ -92,6 +94,7 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
   CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
+  CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h (SAFE-8)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -277,6 +280,10 @@ async function doctor(): Promise<number> {
         "CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES are ignored — ADMIN is owner-only (IDENTITY-2)",
     });
   }
+
+  // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (shown only when a cap is set).
+  const spend = spendDoctorCheck({ env: process.env, model: loadLlmEnv().model });
+  if (spend) checks.push({ name: "spend", ...spend });
 
   console.log("corvidinho doctor\n");
   let allOk = true;

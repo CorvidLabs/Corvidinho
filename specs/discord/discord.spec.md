@@ -111,6 +111,10 @@ recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
 No `/memory` slash command.
+Module-owned tables in the shared DB (e.g. `spend_ledger` from
+`src/agent/spend.ts`, REQ-discord-098) are created with CREATE TABLE IF NOT
+EXISTS without a schema version bump, and their free-text columns are
+scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6).
 
 ## Behavioral Examples
 

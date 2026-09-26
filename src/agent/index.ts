@@ -85,3 +85,26 @@ export type {
   TaskProgress,
   TaskRunStreamOutcome,
 } from "./events-ndjson.ts";
+
+export {
+  costMicroUsd,
+  ensureSpendLedger,
+  estimateCallMicroUsd,
+  formatUsd,
+  MODEL_PRICES_USD_PER_MTOK,
+  parseSpendCap,
+  priceForModel,
+  SPEND_CAP_ENV,
+  SPEND_WINDOW_MS,
+  SpendCapRefusal,
+  spendDoctorCheck,
+  SpendLedger,
+  withSpendCap,
+} from "./spend.ts";
+export type {
+  ModelPrice,
+  SpendCap,
+  SpendCapOptions,
+  SpendDoctorLine,
+  SpendWindow,
+} from "./spend.ts";
