@@ -1,6 +1,6 @@
 ---
 id: bridge-marks-a-reply-interrupted-after-a-restart-in-flight-replies-are-recorded-in-the-shared-db-and-the-next-bridge
-state: draft
+state: implementing
 type: bug_fix
 base_commit: aef2cde685e9e9be6f0dc1c4311a916e33981afc
 ---
