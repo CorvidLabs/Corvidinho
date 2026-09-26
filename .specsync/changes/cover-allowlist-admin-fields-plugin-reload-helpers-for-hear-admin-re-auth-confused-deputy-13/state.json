@@ -7,10 +7,11 @@
   "title": "Cover allowlist admin fields + plugin reload helpers for HEAR admin re-auth / confused-deputy (#13)",
   "description": "Cover allowlist admin fields + plugin reload helpers for HEAR admin re-auth / confused-deputy (#13)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "2d22201fb2a75e3b8c8ed87b3e343bfb51a84ed4",
   "created_at": 1790441410,
-  "updated_at": 1790441418,
+  "updated_at": 1790441422,
   "affected_specs": [],
   "affected_paths": [
     "src/allowlist/load.ts",

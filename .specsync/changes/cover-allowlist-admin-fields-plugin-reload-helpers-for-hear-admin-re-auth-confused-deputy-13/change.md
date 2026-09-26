@@ -1,6 +1,6 @@
 ---
 id: cover-allowlist-admin-fields-plugin-reload-helpers-for-hear-admin-re-auth-confused-deputy-13
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 2d22201fb2a75e3b8c8ed87b3e343bfb51a84ed4
 ---
