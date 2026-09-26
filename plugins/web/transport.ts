@@ -269,7 +269,8 @@ export function createSocketTransport(opts: SocketTransportOptions = {}): Transp
       } else if (te !== undefined) {
         const codings = te.toLowerCase().split(",").map((s) => s.trim());
         if (codings.length !== 1 || codings[0] !== "chunked") {
-          throw new Error(`unsupported transfer-encoding: ${te}`);
+          // The header value is server-chosen text: never echo it.
+          throw new Error("unsupported transfer-encoding");
         }
         body = chunkedBody(reader);
       } else if (cl !== undefined) {

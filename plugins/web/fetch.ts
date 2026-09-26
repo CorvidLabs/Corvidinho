@@ -3,18 +3,24 @@
  * Steal: Merlin `fledge-plugin-web` + `fledge-plugin-http` (typed fetch, DNS
  * pinning), corvid-agent `server/lib/ssrf-guard.ts` (private-range blocking).
  *
- * Per hop: parse → http/https only → resolve once → refuse if ANY address is
- * not public → dial the first checked address (pinned) → redirects are read
- * manually and every hop repeats the whole check. Body and wall time are
- * capped; only text content types come back.
+ * Per hop: parse → http/https only → no secret-looking value in the URL →
+ * resolve once → refuse if ANY address is not public → dial the checked
+ * addresses in answer order (pinned; the next one only after a connect error)
+ * → redirects are read manually and every hop repeats the whole check. Body,
+ * returned text and wall time are capped; only text content types come back.
+ * Nothing the server controls (status text, header values) is echoed raw into
+ * an error.
  */
 
 import { lookup } from "node:dns/promises";
+import { scrubSecrets } from "../../src/store/scrub.ts";
 import { checkAddress, ipFamily, type IpFamily } from "./address.ts";
-import { extractTitle, htmlToText } from "./text.ts";
+import { extractTitle, htmlToText, stripControls } from "./text.ts";
 import { createSocketTransport, type Transport, type TransportResponse } from "./transport.ts";
 
 export const WEB_FETCH_MAX_BYTES = 1024 * 1024;
+/** Returned text cap (chars) so one fetch cannot flood the model context. */
+export const WEB_FETCH_MAX_CHARS = 100_000;
 export const WEB_FETCH_TIMEOUT_MS = 15_000;
 export const WEB_FETCH_MAX_REDIRECTS = 5;
 
@@ -31,6 +37,7 @@ export type WebFetchDeps = {
   resolver?: Resolver;
   transport?: Transport;
   maxBytes?: number;
+  maxChars?: number;
   timeoutMs?: number;
   maxRedirects?: number;
 };
@@ -67,6 +74,8 @@ export type WebFetchResult = {
   redirects: string[];
   bytes: number;
   truncated: boolean;
+  /** Which cap cut the output: the body byte cap or the returned-text char cap. */
+  truncatedBy?: "bytes" | "chars";
   title?: string;
   text: string;
 };
@@ -96,6 +105,18 @@ export const REQUEST_HEADERS: Readonly<Record<string, string>> = {
   "Accept-Encoding": "identity",
 };
 
+/**
+ * RFC 6838 `type/subtype` restricted names (lower-cased; each part starts
+ * alphanumeric, at most 127 chars). Anything else — spaces, prose, control
+ * characters — is not a media type and is refused, so a header cannot smuggle
+ * text into the result outside the untrusted fence.
+ */
+const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
+
+export function isValidMediaType(mime: string): boolean {
+  return MEDIA_TYPE.test(mime);
+}
+
 function isTextMime(mime: string): boolean {
   return (
     mime.startsWith("text/") ||
@@ -105,12 +126,32 @@ function isTextMime(mime: string): boolean {
   );
 }
 
+/** Content codings named in a refusal; any other value is not echoed. */
+const KNOWN_ENCODINGS = new Set(["gzip", "x-gzip", "deflate", "br", "compress", "x-compress", "zstd"]);
+
+/** A URL scheme short enough to name in an error; anything else is not echoed. */
+function shownScheme(protocol: string): string {
+  return /^[a-z][a-z0-9+.-]{0,15}:$/.test(protocol) ? protocol : "another scheme";
+}
+
+/** True when `scrubSecrets` would redact part of the URL (raw or percent-decoded). */
+function carriesSecret(href: string): boolean {
+  if (scrubSecrets(href) !== href) return true;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(href);
+  } catch {
+    return false;
+  }
+  return decoded !== href && scrubSecrets(decoded) !== decoded;
+}
+
 /** URL shape rules shared by the first hop and every redirect. */
 export function checkUrlShape(url: URL): URL {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new WebFetchError(
       "scheme",
-      `refused: only http and https URLs can be fetched (got ${url.protocol}) — SAFE-7`,
+      `refused: only http and https URLs can be fetched (got ${shownScheme(url.protocol)}) — SAFE-7`,
     );
   }
   if (url.username || url.password) {
@@ -118,6 +159,12 @@ export function checkUrlShape(url: URL): URL {
   }
   const out = new URL(url.href);
   out.hash = "";
+  if (carriesSecret(out.href)) {
+    throw new WebFetchError(
+      "blocked",
+      "refused: the URL carries a secret-looking value (SAFE-6); it is not sent anywhere",
+    );
+  }
   return out;
 }
 
@@ -141,8 +188,11 @@ export function blockedHostnameReason(host: string): string | null {
   return null;
 }
 
-/** Resolve once, refuse if any address is non-public, pin the first. */
-async function pinTarget(url: URL, resolver: Resolver): Promise<ResolvedAddress> {
+/**
+ * Resolve once, refuse if any address is non-public, and return every checked
+ * address (answer order, de-duplicated) — these are the only IPs dialed.
+ */
+async function pinTargets(url: URL, resolver: Resolver): Promise<ResolvedAddress[]> {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const literal = ipFamily(host);
   let addrs: ResolvedAddress[];
@@ -163,7 +213,7 @@ async function pinTarget(url: URL, resolver: Resolver): Promise<ResolvedAddress>
       throw new WebFetchError("dns", `could not resolve ${host}: no addresses`);
     }
   }
-  let pinned: ResolvedAddress | null = null;
+  const pinned: ResolvedAddress[] = [];
   for (const a of addrs) {
     const verdict = checkAddress(String(a?.address ?? ""));
     if (verdict.blocked) {
@@ -172,9 +222,26 @@ async function pinTarget(url: URL, resolver: Resolver): Promise<ResolvedAddress>
         `refused: ${host} resolves to ${a?.address} (${verdict.reason}) — SAFE-7`,
       );
     }
-    pinned ??= { address: String(a.address).replace(/^\[|\]$/g, ""), family: verdict.family };
+    const address = String(a.address).replace(/^\[|\]$/g, "");
+    if (!pinned.some((p) => p.address === address)) pinned.push({ address, family: verdict.family });
   }
-  return pinned!;
+  return pinned;
+}
+
+/** Socket-level failures where another checked address of the same name may still answer. */
+const CONNECT_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "ENETDOWN",
+  "EHOSTDOWN",
+  "EADDRNOTAVAIL",
+  "ETIMEDOUT",
+]);
+
+function isConnectError(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === "string" && CONNECT_ERROR_CODES.has(code);
 }
 
 function mediaType(contentType: string | undefined): { mime: string; charset?: string } {
@@ -233,6 +300,45 @@ async function readCapped(
   return { bytes: out, truncated };
 }
 
+/** First `max` UTF-16 units, never splitting a surrogate pair. */
+function capChars(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const end = max > 0 && /[\ud800-\udbff]/.test(text[max - 1]!) ? max - 1 : max;
+  return text.slice(0, end);
+}
+
+/**
+ * Dial the checked addresses in order. Only a socket-level connect failure
+ * moves on to the next one (same deadline); anything else ends the hop.
+ */
+async function dialPinned(
+  url: URL,
+  pins: readonly ResolvedAddress[],
+  deps: Required<WebFetchDeps>,
+  signal: AbortSignal,
+): Promise<{ resp: TransportResponse; pin: ResolvedAddress }> {
+  let lastMsg = "no addresses";
+  for (let i = 0; i < pins.length; i++) {
+    const pin = pins[i]!;
+    if (signal.aborted) throw new WebFetchError("timeout", "aborted");
+    try {
+      const resp = await deps.transport({
+        url,
+        address: pin.address,
+        family: pin.family,
+        headers: { ...REQUEST_HEADERS },
+        signal,
+      });
+      return { resp, pin };
+    } catch (e) {
+      lastMsg = e instanceof Error ? e.message : String(e);
+      if (!isConnectError(e) || signal.aborted) break;
+    }
+  }
+  const tried = pins.length > 1 ? ` (tried ${pins.length} checked addresses)` : "";
+  throw new WebFetchError("network", `${url.host}: ${lastMsg}${tried}`);
+}
+
 async function run(
   rawUrl: string,
   deps: Required<WebFetchDeps>,
@@ -243,22 +349,10 @@ async function run(
   const redirects: string[] = [];
 
   for (let hop = 0; ; hop++) {
-    const pin = await pinTarget(url, deps.resolver);
+    const pins = await pinTargets(url, deps.resolver);
     if (signal.aborted) throw new WebFetchError("timeout", "aborted");
 
-    let resp: TransportResponse;
-    try {
-      resp = await deps.transport({
-        url,
-        address: pin.address,
-        family: pin.family,
-        headers: { ...REQUEST_HEADERS },
-        signal,
-      });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      throw new WebFetchError("network", `${url.host}: ${msg}`);
-    }
+    const { resp, pin } = await dialPinned(url, pins, deps, signal);
 
     try {
       if (REDIRECT_STATUSES.has(resp.status)) {
@@ -284,21 +378,23 @@ async function run(
       }
 
       if (resp.status < 200 || resp.status > 299) {
-        throw new WebFetchError(
-          "http-status",
-          `HTTP ${resp.status}${resp.statusText ? ` ${resp.statusText}` : ""}`,
-        );
+        // Numeric status only: the reason phrase is server-chosen text.
+        throw new WebFetchError("http-status", `HTTP ${resp.status}`);
       }
 
       const { mime, charset } = mediaType(resp.headers["content-type"]);
+      if (mime && !isValidMediaType(mime)) {
+        throw new WebFetchError("content-type", "refused: malformed content-type header");
+      }
       if (mime && !isTextMime(mime)) {
         throw new WebFetchError("content-type", `refused: non-text content-type ${mime}`);
       }
       const encoding = (resp.headers["content-encoding"] ?? "").trim().toLowerCase();
       if (encoding && encoding !== "identity") {
+        const shown = KNOWN_ENCODINGS.has(encoding) ? ` (${encoding})` : "";
         throw new WebFetchError(
           "content-type",
-          `refused: compressed response (${encoding}); only identity encoding is read`,
+          `refused: compressed response${shown}; only identity encoding is read`,
         );
       }
 
@@ -316,6 +412,11 @@ async function run(
 
       const decoded = decode(body.bytes, charset);
       const html = mime === "text/html" || mime === "application/xhtml+xml";
+      // Control characters (terminal escapes, CR overwrites) never come back.
+      const fullText = html ? htmlToText(decoded) : stripControls(decoded);
+      const text = capChars(fullText, deps.maxChars);
+      const charCut = text.length < fullText.length;
+      const truncatedBy = charCut ? "chars" : body.truncated ? "bytes" : undefined;
       return {
         url: first.href,
         finalUrl: url.href,
@@ -324,9 +425,10 @@ async function run(
         address: pin.address,
         redirects,
         bytes: body.bytes.byteLength,
-        truncated: body.truncated,
+        truncated: body.truncated || charCut,
+        ...(truncatedBy ? { truncatedBy } : {}),
         title: html ? extractTitle(decoded) : undefined,
-        text: html ? htmlToText(decoded) : decoded,
+        text,
       };
     } finally {
       resp.close();
@@ -344,6 +446,7 @@ export async function webFetch(rawUrl: string, deps: WebFetchDeps = {}): Promise
     resolver: deps.resolver ?? systemResolver,
     transport: deps.transport ?? createSocketTransport(),
     maxBytes: deps.maxBytes ?? WEB_FETCH_MAX_BYTES,
+    maxChars: deps.maxChars ?? WEB_FETCH_MAX_CHARS,
     timeoutMs: deps.timeoutMs ?? WEB_FETCH_TIMEOUT_MS,
     maxRedirects: deps.maxRedirects ?? WEB_FETCH_MAX_REDIRECTS,
   };

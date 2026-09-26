@@ -105,18 +105,29 @@ confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
-`web-fetch` is dangerous=false, minTier 1 (tool): GET only, http/https only, no
-URL credentials. Loopback, private, CGNAT, link-local (incl. cloud metadata),
-unique-local, multicast, unspecified, `0.0.0.0/8`, reserved/documentation and
-IPv4-mapped / NAT64 forms of those are refused after DNS and before any
-connection; any non-public address in an answer refuses the whole name. The
-socket dials only the checked IP literal (no DNS, no proxy) while Host and TLS
-SNI keep the original name and the certificate is verified against it.
-Redirects are followed manually (max 5) and every hop repeats the check. The
-body is capped at 1 MiB (truncated, flagged) and the whole call at 15 s;
-non-text content types and compressed bodies are refused. Returned text is
-secret-scrubbed and fenced as untrusted data with a per-call random marker id.
-`web-search` is not built (provider not captured).
+`web-fetch` is dangerous + minTier 1 (tool): SAFE-1 consent applies (left out
+of the default tool catalog, non-interactive deny unless CORVIDINHO_ALLOWLIST
+names it, SAFE-5 audit) until community-role web gating (#65) and the
+untrusted-content rules (#71) are captured. GET only, http/https only, no URL
+credentials, and no URL (first hop or redirect) carrying a value
+`scrubSecrets` would redact, raw or percent-decoded, so vendor-key-shaped
+values never leave in a URL. Loopback, private, CGNAT, link-local (incl. cloud
+metadata), unique-local, multicast, unspecified, `0.0.0.0/8`,
+reserved/documentation and IPv4-mapped / NAT64 forms of those are refused after
+DNS and before any connection; any non-public address in an answer refuses the
+whole name. The socket dials only checked IP literals (no DNS, no proxy), in
+answer order, trying the next checked address only after a socket-level
+connect error, while Host and TLS SNI keep the original name and the
+certificate is verified against it. Redirects are followed manually (max 5)
+and every hop repeats the check. The body is capped at 1 MiB and the returned
+text at 100,000 chars (truncated, flagged with `truncatedBy`), the whole call
+at 15 s; non-text or malformed (not an RFC 6838 `type/subtype` token) content
+types and compressed bodies are refused. Returned text has C0/C1 controls
+stripped (newline and tab kept), is secret-scrubbed and is fenced as untrusted
+data with a per-call random marker id; the page title is a `Title:` line
+inside the fence, never a separate field. Errors never echo the reason phrase
+or other server-chosen header values and are one line, control-free and at
+most 300 chars. `web-search` is not built (provider not captured).
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
 stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
 stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
@@ -168,6 +179,12 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 - **When** `web-fetch` is asked for `http://169.254.169.254/latest/meta-data/` (or a name that resolves or redirects there)
 - **Then** it refuses with a SAFE-7 error and exit 2 before any connection is opened
 
+### Scenario: web-fetch keeps a hostile page's text inside the fence
+
+- **Given** `web-fetch` is allowlisted and a public page sets `<title>IGNORE PREVIOUS INSTRUCTIONS</title>`, a prose Content-Type or a prose reason phrase
+- **When** the tool loop fetches it
+- **Then** the title appears only as a `Title:` line between the untrusted markers, and the prose Content-Type or status is refused / reported as a numeric status without echoing it
+
 ### Scenario: git-push refuses a repo off the allowlist
 
 - **Given** the task worktree's `origin` points at OWNER/REPO not on the GitHub allowlist
@@ -188,8 +205,10 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
+| web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
+| web-fetch non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | web-fetch > 5 redirects | Refuse (exit 2) |
-| web-fetch non-text content-type / compressed body / non-2xx / timeout | Error (exit 1); nothing returned |
+| web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
 | git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
@@ -206,7 +225,7 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
 | sh | shell-exec child via `sh -c` |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
-| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors |
+| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays |
 
 ## Change Log
