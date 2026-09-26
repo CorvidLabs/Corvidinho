@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790459187,
+      "digest": "9020cf8c98bb9d59ac95ca5d3757de6d37fdb1f6af6c4f8ce4424f82b8008eb3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate",
+        "title": "Release 0.0.18: ask-human + owner ping, autonomous gate + delegate",
+        "description": "Release 0.0.18: ask-human + owner ping, autonomous gate + delegate",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.18; version prints 0.0.18; CHANGELOG 0.0.18 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "7ab07317f339acc190659ceebd46ce56f1ef0ed80226ea20dbd99d2022373344"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790459195,
+      "digest": "d6eab60b97abce06b306a07045fc1c2b2fd529a5a02651b3c52ed734138e8ff5",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.18
+
+### Ask the human, ping the owner — [#163](https://github.com/CorvidLabs/Corvidinho/pull/163) (#44)
+
+- **ask-human** tool (AUTONOMY-1): when a task cannot proceed without a human choice, the run ends `blocked` with a clarifying question shown to the requester — never "done", never invented criteria.
+- **Owner ping when stuck** (AUTONOMY-2 / AUTONOMOUS-7): only the configured owner can be mentioned; `@everyone`/roles/other users are defanged; text SAFE-6 scrubbed.
+- Scheduled runs ping the owner **once per question** (schema **v7** `schedules.ask_ping_key`); `/work` never ships a PR from a run waiting on input.
+
+### Autonomous gate + `delegate` — [#167](https://github.com/CorvidLabs/Corvidinho/pull/167) (#117)
+
+- Autonomous mode is **off** until enabled in project config (AUTONOMOUS-1).
+- `delegate` (AUTONOMOUS-5, SAFE-9: offered only when the gate is on; ADMIN-only under ROLES-CHAT) runs a subtask as a child `task run`: tier clamped to the lead's, depth ≤ 2, ≤ 2 concurrent / 4 per process, child env stripped of Discord/GitHub tokens and the audit key.
+
+### Ops
+
+- Package version **0.0.18** — presence (DISCORD-12) reads `v0.0.18` after restart.
+- **Restart the Discord bridge and `corvidinho daemon`** (the DB migrates to schema v7 on first open).
+
 ## 0.0.17
 
 ### Searchable channel add/remove (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend)

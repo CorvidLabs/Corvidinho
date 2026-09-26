@@ -93,6 +93,8 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Project instructions in prompt | #84 → [#150](https://github.com/CorvidLabs/Corvidinho/pull/150) | AGENT-1; AGENT-13 skills draft waits; package **0.0.16** |
 | `/work` → draft PR | #88 → [#166](https://github.com/CorvidLabs/Corvidinho/pull/166) | AUTONOMOUS-3 / GITHUB-2/5 / AGENT-4; owner-only (ROLES-CHAT-3); in the **v0.0.17** build |
 | Instructions from HEAD | #84 → [#169](https://github.com/CorvidLabs/Corvidinho/pull/169) | AGENT-1 hardening; in the **v0.0.17** build |
+| Ask-human + owner ping | #44 → [#163](https://github.com/CorvidLabs/Corvidinho/pull/163) | AUTONOMY-1..3 / AUTONOMOUS-7; schema v7; package **0.0.18** |
+| Autonomous gate + delegate | #117 → [#167](https://github.com/CorvidLabs/Corvidinho/pull/167) | AUTONOMOUS-1/5, SAFE-9; package **0.0.18** |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |
