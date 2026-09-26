@@ -15,11 +15,13 @@ files:
   - src/agent/tier.ts
   - src/agent/tools.ts
   - src/agent/events-ndjson.ts
+  - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
+  - tests/agent.ask.test.ts
 
 db_tables: []
 depends_on:
@@ -50,6 +52,15 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
+exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
+`askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
+`ASK_AGENT_SYSTEM_INSTRUCTIONS`. `AgentState` gains `blocked`;
+`ExecuteResult` / `TaskResult` gain optional `ask: { reason: "clarify" |
+"stuck", question }`. A clarify ask ends the run `blocked` (verify skipped,
+exit 0); verify exhaustion stays `failed` and carries a `stuck` ask. Additive
+on the NDJSON wire: protocol stays 2.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
@@ -60,6 +71,11 @@ NDJSON frames never carry raw tool arguments; ToolCall `argsSummary`, Text,
 ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
+
+`ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
+is offered only on tool/code tiers. A run with an ask is never `done`; the
+question is capped at 1500 chars and an empty question is refused back to the
+model.
 
 ## Behavioral Examples
 
@@ -74,7 +90,9 @@ events are unchanged.
 
 | Condition | Behavior |
 |-----------|----------|
-| Verify exhausted | state failed, verified=false, summary includes verifier output |
+| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
+| ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |

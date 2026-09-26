@@ -8,6 +8,8 @@
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "../discord/ask-ping.ts";
+import type { OwnerRecord } from "../identity/owner.ts";
 import {
   ensureTalkWorkspace,
   parkWorktree,
@@ -24,6 +26,8 @@ export type SchedulerOutbound = {
   post?: (opts: {
     channelId: string;
     content: string;
+    /** Only these users may be pinged (AUTONOMY-2 owner ping). */
+    mentionUserIds?: string[];
   }) => Promise<void>;
 };
 
@@ -48,6 +52,8 @@ export type SchedulerServiceOpts = {
    * Default true.
    */
   useWorktrees?: boolean;
+  /** Configured owner pinged when a tick needs a human (AUTONOMY-2). */
+  owner?: OwnerRecord | null;
 };
 
 export class SchedulerService {
@@ -60,6 +66,7 @@ export class SchedulerService {
   private readonly nowFn: () => number;
   private readonly defaultProjectRoot: string;
   private readonly useWorktrees: boolean;
+  private readonly owner: OwnerRecord | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Set<string>();
   private tickInFlight = false;
@@ -74,6 +81,7 @@ export class SchedulerService {
     this.nowFn = opts.now ?? (() => Date.now());
     this.defaultProjectRoot = opts.defaultProjectRoot ?? process.cwd();
     this.useWorktrees = opts.useWorktrees !== false;
+    this.owner = opts.owner ?? null;
     if (!opts.manual) {
       this.start();
     }
@@ -219,11 +227,28 @@ export class SchedulerService {
 
       if (schedule.channelId && this.outbound?.post) {
         const gate = checkChannel(schedule.channelId, this.allowlist);
-        if (gate.ok) {
+        const title = `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
+        // AUTONOMY-2: a tick that needs a human posts its question + owner ping.
+        const ask = result.ask
+          ? formatAskReply({
+              ask: result.ask,
+              owner: this.owner,
+              context: result.summary,
+              prefix: `${title}:`,
+            })
+          : null;
+        if (gate.ok && ask) {
+          if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
+          await this.outbound.post({
+            channelId: schedule.channelId,
+            content: ask.content,
+            mentionUserIds: ask.mentionUserIds,
+          });
+        } else if (gate.ok) {
           const status = result.ok ? "✅" : "❌";
           await this.outbound.post({
             channelId: schedule.channelId,
-            content: `${status} Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\`:\n${summary.slice(0, 1500)}`,
+            content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
           });
         }
       }

@@ -8,6 +8,15 @@
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { runPlugin } from "../plugins/run.ts";
+import {
+  ASK_AGENT_SYSTEM_INSTRUCTIONS,
+  ASK_TOOL_NAME,
+  ASK_TOOL_RESULT_DETAIL,
+  askExecuteResult,
+  askFromToolArguments,
+  withAskTool,
+  type ChatToolDef,
+} from "./ask.ts";
 import type {
   AgentEvent,
   AgentTokenUsage,
@@ -176,7 +185,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    const tools = buildOpenAiTools({ tier, includeDangerous });
+    // AUTONOMY-1: ask-human rides along with the plugin catalog.
+    const tools = withAskTool(buildOpenAiTools({ tier, includeDangerous }));
     return runToolLoop({
       llm: { ...llm, tier },
       fetchImpl,
@@ -202,7 +212,7 @@ type LoopArgs = {
   attempt: number;
   verifyFeedback?: string;
   signal: AbortSignal;
-  tools: OpenAiToolDef[];
+  tools: ChatToolDef[];
   cwd: string;
   nonInteractive: boolean;
   allowlist: Set<string>;
@@ -241,6 +251,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
     "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
+    ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.";
 
@@ -318,9 +329,26 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       const argv = argvFromToolArguments(rawArgs);
       emit(onEvent, { type: "ToolCall", name: eventName, args: rawArgs });
 
+      // AUTONOMY-1: ask-human ends the run with the question (never "done").
+      const asked =
+        name === ASK_TOOL_NAME && offered.has(name)
+          ? askFromToolArguments(rawArgs)
+          : null;
+      if (asked?.ok) {
+        emit(onEvent, {
+          type: "ToolResult",
+          name,
+          success: true,
+          detail: ASK_TOOL_RESULT_DETAIL,
+        });
+        return askExecuteResult(asked.ask, filesChanged);
+      }
+
       let result;
       try {
-        result = offered.has(name)
+        result = asked
+          ? asked.refusal
+          : offered.has(name)
           ? await runPlugin({
               name,
               args: argv,
@@ -420,7 +448,7 @@ async function chatCompletions(opts: {
   llm: LlmEnv;
   fetchImpl: FetchLike;
   messages: ChatMessage[];
-  tools: OpenAiToolDef[];
+  tools: ChatToolDef[];
   signal: AbortSignal;
   onUsage?: (usage: AgentTokenUsage) => void;
 }): Promise<

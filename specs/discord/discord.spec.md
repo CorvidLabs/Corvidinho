@@ -64,6 +64,8 @@ files:
   - plugins/discord/index.ts
   - tests/discord.protocol-version.test.ts
   - tests/discord.presence.test.ts
+  - src/discord/ask-ping.ts
+  - tests/discord.ask-ping.test.ts
 
 db_tables: []
 depends_on:
@@ -86,6 +88,14 @@ session worktrees.
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`).
+
+Questions and owner ping (REQ-discord-044, issue #44, AUTONOMY-1/2):
+`src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
+`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. `AgentSpawnResult`
+gains optional `ask` (validated from the `result` frame); the gateway `reply`
+takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
+users plus the replied-to author); `SchedulerService` takes `owner` and its
+outbound `post` forwards `mentionUserIds`.
 
 ## Invariants
 
