@@ -7,10 +7,11 @@
   "title": "Cover /status protocol-line fixture in tests/discord.slash.test.ts for the protocol 2 bump (issue #73); assertion reads CORVIDINHO_PROTOCOL_VERSION instead of a hard-coded 1; no module AC beyond REQ-discord-073",
   "description": "Cover /status protocol-line fixture in tests/discord.slash.test.ts for the protocol 2 bump (issue #73); assertion reads CORVIDINHO_PROTOCOL_VERSION instead of a hard-coded 1; no module AC beyond REQ-discord-073",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "80e89c701bbdb527ad60fbe57e9300b44782da81",
   "created_at": 1790452546,
-  "updated_at": 1790452564,
+  "updated_at": 1790452572,
   "affected_specs": [],
   "affected_paths": [
     "tests/discord.slash.test.ts"
