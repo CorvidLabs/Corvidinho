@@ -72,4 +72,4 @@ src/allowlist/, agent task --no-verify, optional discord.js.
 ## Change Log
 
 DISCORD-4 thin slash session/status/agents/work (2026-09-26, corvid-agent, #11).
-| 2026-09-26 | hear-slash-commands-for-session-status-agents-work-discord-4-steal-from-corvid-agent-thin-useful-set-fixture-tests-no: HEAR slash commands for session/status/agents/work (DISCORD-4) — steal from corvid-agent; thin useful set; fixture tests; no ProcessManager; STATUS Done for #11 |
+
