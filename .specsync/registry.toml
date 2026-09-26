@@ -4,3 +4,4 @@ name = "Corvidinho"
 [specs]
 cli = "specs/cli/cli.spec.md"
 plugins = "specs/plugins/plugins.spec.md"
+agent = "specs/agent/agent.spec.md"

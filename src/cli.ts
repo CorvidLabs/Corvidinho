@@ -1,10 +1,16 @@
 #!/usr/bin/env bun
 /**
  * Corvidinho — Bun/TS CLI (Linux).
- * Surfaces: help, version, doctor, plugins list/run.
+ * Surfaces: help, version, doctor, plugins list/run, task run (prove-before-done).
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
+import {
+  loadAgentConfig,
+  runTask,
+  type AgentEvent,
+  type TaskResult,
+} from "./agent/index.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { list, size } from "./plugins/registry.ts";
@@ -31,7 +37,10 @@ Usage:
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
+  corvidinho task run [--no-verify] [--max-retries N] [--json]
+                                    Demo execute + prove-before-done verify gate (AGENT-4)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
+  corvidinho --no-verify ...        Skip verify gate (bridges / WATCH latency)
 
 Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE  same as --non-interactive
@@ -47,6 +56,7 @@ Rules (see AGENTS.md + hi/):
   - HI-first; do not invent ACCESS/bounty/MainNet criteria
   - Secrets stay out of the repo and out of chat logs (SAFE-6)
   - Merge only when SpecSync change + verify are green (GITHUB intent)
+  - Real code tasks: prove-before-done via fledge verify (AGENT-4 / FLEDGE-2)
 `);
 }
 
@@ -63,11 +73,16 @@ function parseGlobalFlags(args: string[]): {
   rest: string[];
   nonInteractiveFlag: boolean;
   json: boolean;
+  noVerify: boolean;
+  maxRetries: number | undefined;
 } {
   const rest: string[] = [];
   let nonInteractiveFlag = false;
   let json = false;
-  for (const a of args) {
+  let noVerify = false;
+  let maxRetries: number | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
     if (a === "--non-interactive") {
       nonInteractiveFlag = true;
       continue;
@@ -76,9 +91,26 @@ function parseGlobalFlags(args: string[]): {
       json = true;
       continue;
     }
+    if (a === "--no-verify") {
+      noVerify = true;
+      continue;
+    }
+    if (a === "--max-retries") {
+      const next = args[i + 1];
+      if (next && /^\d+$/.test(next)) {
+        maxRetries = Number.parseInt(next, 10);
+        i++;
+      }
+      continue;
+    }
+    const mr = a.match(/^--max-retries=(\d+)$/);
+    if (mr) {
+      maxRetries = Number.parseInt(mr[1], 10);
+      continue;
+    }
     rest.push(a);
   }
-  return { rest, nonInteractiveFlag, json };
+  return { rest, nonInteractiveFlag, json, noVerify, maxRetries };
 }
 
 async function doctor(): Promise<number> {
@@ -218,9 +250,70 @@ function splitRunArgs(args: string[]): { name: string | undefined; pluginArgs: s
   };
 }
 
+/**
+ * Demo task: marks a synthetic file change so the verify gate exercises
+ * (unless --no-verify). Bridges should pass --no-verify for latency.
+ */
+async function taskRun(opts: {
+  json: boolean;
+  noVerify: boolean;
+  maxRetries: number | undefined;
+}): Promise<number> {
+  const cwd = process.cwd();
+  const config = loadAgentConfig(cwd);
+  const events: AgentEvent[] = [];
+  const result: TaskResult = await runTask({
+    cwd,
+    config,
+    verifyBeforeComplete: opts.noVerify ? false : undefined,
+    maxRetries: opts.maxRetries,
+    onEvent: (e) => {
+      events.push(e);
+      if (!opts.json && e.type === "StateChanged") {
+        console.error(`→ ${e.state}`);
+      } else if (!opts.json && e.type === "Text") {
+        console.error(e.text);
+      } else if (!opts.json && e.type === "VerifyResult") {
+        console.error(`verify: ${e.success ? "pass" : "fail"}`);
+      }
+    },
+    execute: async ({ attempt, verifyFeedback }) => {
+      if (verifyFeedback && !opts.json) {
+        console.error(`(attempt ${attempt}) feedback:\n${verifyFeedback.slice(0, 500)}`);
+      }
+      // Demo execute reports a file change so the gate runs when enabled.
+      return {
+        summary: `demo task attempt ${attempt}`,
+        filesChanged: ["src/cli.ts"],
+      };
+    },
+  });
+
+  if (opts.json) {
+    console.log(JSON.stringify({ result, events }, null, 2));
+  } else {
+    console.log(
+      `state=${result.state} verified=${result.verified} verifySkipped=${result.verifySkipped} cancelled=${result.cancelled} attempts=${result.attempts}`,
+    );
+    console.log(result.summary);
+  }
+
+  if (result.cancelled) return 130;
+  if (result.state === "failed" || (result.verified === false && !result.verifySkipped)) {
+    return 1;
+  }
+  return 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
   const raw = argv.slice(2);
-  const { rest, nonInteractiveFlag, json: globalJson } = parseGlobalFlags(raw);
+  const {
+    rest,
+    nonInteractiveFlag,
+    json: globalJson,
+    noVerify,
+    maxRetries,
+  } = parseGlobalFlags(raw);
   const nonInteractive = isNonInteractive({ nonInteractiveFlag });
 
   if (
@@ -254,6 +347,19 @@ export async function main(argv: string[]): Promise<number> {
       });
     }
     console.error("usage: corvidinho plugins <list|run> ...\n");
+    printHelp();
+    return 1;
+  }
+  if (cmd === "task") {
+    const sub = rest[1];
+    if (sub === "run") {
+      return taskRun({
+        json: globalJson || rest.includes("--json"),
+        noVerify,
+        maxRetries,
+      });
+    }
+    console.error("usage: corvidinho task run [--no-verify] [--max-retries N] [--json]\n");
     printHelp();
     return 1;
   }

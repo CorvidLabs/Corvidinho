@@ -43,3 +43,9 @@ steps = ["lint", "smoke", "test"]
 [lanes.verify]
 description = "Required gate before claiming done (AGENT-4). SpecSync is separate."
 steps = ["lint", "smoke", "test"]
+
+# Prove-before-done (AGENT-4 / FLEDGE-2). Merlin field names; Corvidinho section.
+# Bridges / WATCH chat hot path should pass --no-verify for latency.
+[corvidinho]
+verify_before_complete = true
+max_retries = 3

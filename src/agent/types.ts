@@ -1,0 +1,68 @@
+/**
+ * Prove-before-done agent types (Merlin AGENT-4 / AGENT-8 steal).
+ * Lean slice: no Trust/attest, no LLM yet.
+ */
+
+export type AgentState =
+  | "idle"
+  | "planning"
+  | "executing"
+  | "verifying"
+  | "done"
+  | "failed";
+
+export type AgentEvent =
+  | { type: "StateChanged"; state: AgentState }
+  | { type: "Text"; text: string }
+  | { type: "VerifyResult"; success: boolean; output: string };
+
+export type ExecuteResult = {
+  summary: string;
+  filesChanged: string[];
+};
+
+export type ExecuteContext = {
+  attempt: number;
+  verifyFeedback?: string;
+  signal: AbortSignal;
+};
+
+export type ExecuteFn = (ctx: ExecuteContext) => Promise<ExecuteResult>;
+
+export type VerifyResult = {
+  success: boolean;
+  output: string;
+};
+
+export type VerifyRunner = (
+  cwd: string,
+  signal?: AbortSignal,
+) => Promise<VerifyResult>;
+
+export type TaskResult = {
+  summary: string;
+  filesChanged: string[];
+  verified: boolean;
+  verifySkipped: boolean;
+  cancelled: boolean;
+  state: AgentState;
+  attempts: number;
+};
+
+export type AgentConfig = {
+  verifyBeforeComplete: boolean;
+  maxRetries: number;
+};
+
+export type RunTaskOptions = {
+  cwd: string;
+  execute: ExecuteFn;
+  /** Override config; when false, skip verify gate. */
+  verifyBeforeComplete?: boolean;
+  maxRetries?: number;
+  verifyRunner?: VerifyRunner;
+  onEvent?: (event: AgentEvent) => void;
+  signal?: AbortSignal;
+  /** Config loaded from fledge.toml; used as defaults when overrides omitted. */
+  config?: AgentConfig;
+};

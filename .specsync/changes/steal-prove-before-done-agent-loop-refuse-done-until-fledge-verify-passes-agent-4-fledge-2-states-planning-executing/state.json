@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing",
+  "slug": "steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing",
+  "title": "STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete",
+  "description": "STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "33a6c7f74ef2c2521c5c6ea2de8e552551552e0c",
+  "created_at": 1790437482,
+  "updated_at": 1790437617,
+  "affected_specs": [
+    "agent",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/agent",
+    "src/cli.ts",
+    "fledge.toml",
+    "tests",
+    ".specsync/registry.toml",
+    "specs/",
+    "AGENTS.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Task that fails verify is not reported done (verified=false); with retries, failure stdout/stderr is fed back and another execute attempt runs; exhausted retries → clear failure; --no-verify skips gate (verify_skipped); shell fledge lanes run verify and agent gate agree; AGENT-8 states planning/executing/verifying/done|failed emitted; cancellation aborts promptly; bun test + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
