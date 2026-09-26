@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454767,
+      "digest": "93b0d079dadc66af3c5d3c4c9765d894c6bf558c78642e24bbb0148fb91fa16c",
+      "note": "cover leftover version fixtures for 0.0.11 audit",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-leftover-version-fixture-paths-tests-version-test-ts-and-tests-update-helpers-test-ts-for-0-0-11-bump-audit",
+        "title": "Cover leftover version fixture paths tests/version.test.ts and tests/update-helpers.test.ts for 0.0.11 bump audit",
+        "description": "Cover leftover version fixture paths tests/version.test.ts and tests/update-helpers.test.ts for 0.0.11 bump audit",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Version fixture expectations only; REQ-discord-025 and package 0.0.11 already on the announce-enrich change",
+        "acceptance_criteria": [
+          "tests/version.test.ts and tests/update-helpers.test.ts assert package 0.0.11 and CHANGELOG 0.0.11 section; SpecSync audit covers these paths"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790454888,
+      "digest": "c806f206136d386531844d55221f48e24da275428a4eb0b3ba662d9e84050920",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

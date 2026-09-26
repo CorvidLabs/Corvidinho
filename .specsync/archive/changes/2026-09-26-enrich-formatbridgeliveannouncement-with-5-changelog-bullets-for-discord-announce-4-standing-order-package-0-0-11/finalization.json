@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "enrich-formatbridgeliveannouncement-with-5-changelog-bullets-for-discord-announce-4-standing-order-package-0-0-11",
+  "implementation_commit": "6ba10bd3240aecb2fa8608f4b5eb5aa0426107e4",
+  "implementation_tree": "fdd19ce9507342dacf07471512f0e7e0eca2d4ee",
+  "contract_digest": "85a0d39230adf9925cb41be271ce92e3b4c6367512e54cb0bd8605663014781e",
+  "workspace_digest": "d83568f6032e3cbb26d417cfe8318a96ec376200f0b429cc68a4d297b3dc90d7",
+  "closing_digest": "e547ba4df27ae7812ff0252be1a26f4e630185b2252be924adf32906ccce615d",
+  "review_digest": "dcdff333205c01b2da0d3a7e53b244068708695332a47126abb921078787c75c",
+  "finalization_digest": "f6464f01a2824e59305b8403d018702ddb5932fa0169819e1890486bd278d727",
+  "timestamp": 1790454859
+}
