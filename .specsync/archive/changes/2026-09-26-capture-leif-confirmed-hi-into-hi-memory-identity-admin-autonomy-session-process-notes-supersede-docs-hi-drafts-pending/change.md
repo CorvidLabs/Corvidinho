@@ -1,6 +1,6 @@
 ---
 id: capture-leif-confirmed-hi-into-hi-memory-identity-admin-autonomy-session-process-notes-supersede-docs-hi-drafts-pending
-state: implementing
+state: archived
 type: documentation
 base_commit: 92519c3c18fa98a6c895cb55196b5529b77c711b
 ---

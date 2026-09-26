@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-leif-confirmed-hi-into-hi-memory-identity-admin-autonomy-session-process-notes-supersede-docs-hi-drafts-pending",
+  "implementation_commit": "1e011c8b7c5934e7ccdc1ec96dc1177cc6406278",
+  "implementation_tree": "489f7fa8dfdcc5cc917c6623448c326bfa695247",
+  "contract_digest": "1ff8f6c35df185ee3ced29aef18ef8d616d0b654f60c6ead72674b788b68049e",
+  "workspace_digest": "e8d3708411d0242e416ecca804407a130da705f41424dc290d080385e1685d18",
+  "closing_digest": "b311bf9227dafb9e4191159ce67c102d079176c5c93749db6d7f791a17747d29",
+  "review_digest": "0ee1121cd8ef53ff55b73a5c16a68391d8b41552d25e1d8893db69dc4d3ba5b9",
+  "finalization_digest": "6d2335b73c54439b7a302281f37090af9965c8b02ded4bf3707031a024d74959",
+  "timestamp": 1790444562
+}
