@@ -7,11 +7,11 @@
   "title": "Tag push v* creates idempotent verbose GitHub Release; scripts/corvidinho-update.sh safe box update with SHA record, checkout tag/main, bun install, optional doctor, stop bridge via pidfile, start with documented secrets env (no hardcoded secrets), wait for logged in/protocol OK or rollback; docs/UPDATE.md; bump 0.0.3; never post Discord panic on failure",
   "description": "Tag push v* creates idempotent verbose GitHub Release; scripts/corvidinho-update.sh safe box update with SHA record, checkout tag/main, bun install, optional doctor, stop bridge via pidfile, start with documented secrets env (no hardcoded secrets), wait for logged in/protocol OK or rollback; docs/UPDATE.md; bump 0.0.3; never post Discord panic on failure",
   "kind": "operations",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "d0ba4e4df48302ed18a682a21a79d83b79ac0c4e",
   "created_at": 1790444145,
-  "updated_at": 1790444229,
+  "updated_at": 1790444284,
   "affected_specs": [],
   "affected_paths": [
     ".github/workflows",

@@ -1,6 +1,6 @@
 ---
 id: tag-push-v-creates-idempotent-verbose-github-release-scripts-corvidinho-update-sh-safe-box-update-with-sha-record
-state: implementing
+state: archived
 type: operations
 base_commit: d0ba4e4df48302ed18a682a21a79d83b79ac0c4e
 ---
