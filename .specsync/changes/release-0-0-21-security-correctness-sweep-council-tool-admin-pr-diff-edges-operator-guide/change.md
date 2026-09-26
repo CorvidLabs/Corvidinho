@@ -1,6 +1,6 @@
 ---
 id: release-0-0-21-security-correctness-sweep-council-tool-admin-pr-diff-edges-operator-guide
-state: draft
+state: implementing
 type: operations
 base_commit: aef2cde685e9e9be6f0dc1c4311a916e33981afc
 ---

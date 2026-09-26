@@ -7,10 +7,11 @@
   "title": "Release 0.0.21: security + correctness sweep, council tool, admin/pr-diff edges, operator guide",
   "description": "Release 0.0.21: security + correctness sweep, council tool, admin/pr-diff edges, operator guide",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "aef2cde685e9e9be6f0dc1c4311a916e33981afc",
   "created_at": 1790463161,
-  "updated_at": 1790463162,
+  "updated_at": 1790463165,
   "affected_specs": [
     "cli"
   ],
