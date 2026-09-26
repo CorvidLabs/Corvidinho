@@ -18,14 +18,22 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
 
 
-## Reliability (REQ-watch-007)
+## Reliability (REQ-watch-007 + WATCH-RELIABILITY-1..3)
 
 - **Poll cycle log:** every cycle emits  
   `[watch] poll cycle fetched=… new=… started=… continued=… refused=… skipped=…`  
   Errors from `pollOnce` are caught and logged (`[watch] pollOnce error`) — not swallowed by `void`.
 - **Auto-ack:** on `start_session` / `continue_session` from an `issue_comment` or `issues` mention whose sender is **not** the watch username, WATCH posts a short GitHub issue comment (Made with Corvidinho footer) **before** spawn, at most once per event id. Skips own-username senders to avoid self-loops. Dry-run uses an echo ack client (no live post).
+- **Run summary (WATCH-RELIABILITY-1):** after a **successful** auto-ack, when the agent run finishes (success or failure), WATCH posts a short summary comment on the same thread, once per event id (Made with Corvidinho footer).
+- **Spawn outcome log (WATCH-RELIABILITY-2):** each spawn emits structured  
+  `[watch] spawn start …` / `[watch] spawn outcome event=… exit=… error_class=… duration_ms=…`  
+  and appends a JSONL record (default `~/.local/share/corvidinho/watch-spawn.jsonl`, override `CORVIDINHO_WATCH_SPAWN_LOG`) so ops can read outcomes without Discord.
+- **GitHub 403 rate-limit backoff (WATCH-RELIABILITY-3):** on 403 rate-limit (or 429), WATCH backs off using `Retry-After` or `x-ratelimit-reset`, else a documented **60s** default; skips tight re-poll while backing off; logs  
+  `[watch] github rate-limit backoff ms=… until=… reason=…`.
 - **Ignore own mentions:** comments and issue-body mentions authored by `CORVIDINHO_WATCH_USERNAME` are omitted from fetched events.
 - **Search pagination bury risk:** Octokit search uses `per_page=100` sorted by `updated` desc. An org-wide qualifier (`org:… involves:…`) can still return more than one page of Corvidinho (or other) noise and **bury** pings on quieter repos (e.g. arcsite) past the first page. Prefer an explicit `repos` allowlist for critical targets, or accept that deep pages are not scanned in this thin slice.
+
+HI: [`hi/watch.md`](../hi/watch.md).
 
 **Assignee ingress (#48):** when the watch username appears in issue/PR `assignees` (from search results), WATCH emits an `assignment` event — same allowlist → session path as mentions. Dogfood can use assign *or* @mention.
 
@@ -45,6 +53,7 @@ export CORVIDINHO_GITHUB_ALLOW_USERS=0xLeif
 # Optional:
 # export CORVIDINHO_WATCH_INTERVAL_MS=60000
 # export CORVIDINHO_WATCH_DRY_RUN=1
+# export CORVIDINHO_WATCH_SPAWN_LOG=~/.local/share/corvidinho/watch-spawn.jsonl
 
 bun src/cli.ts github watch
 # or: corvidinho github watch
