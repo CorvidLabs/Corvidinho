@@ -107,6 +107,7 @@ export {
   describeProjectInstructions,
   findProjectRoot,
   loadProjectInstructions,
+  NOT_COMMITTED_REASON,
   PROJECT_INSTRUCTION_FILES,
   PROJECT_INSTRUCTIONS_HEADER,
   PROJECT_INSTRUCTIONS_MAX_BYTES,

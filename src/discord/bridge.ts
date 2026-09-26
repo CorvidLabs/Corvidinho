@@ -480,6 +480,7 @@ export async function startBridge(
     onSlash: async (interaction) => {
       await handleSlashInteraction(buildSlashCtx(), interaction);
     },
+    getAllowlistedChannelIds: () => config.channelIds,
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
       // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel.

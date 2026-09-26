@@ -140,6 +140,16 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         summary,
         exitCode,
         ...(ask ? { ask } : {}),
+        // Verify facts for the /work PR gate (REQ-discord-088).
+        ...(result
+          ? {
+              task: {
+                verified: result.verified === true,
+                verifySkipped: result.verifySkipped === true,
+                state: result.state,
+              },
+            }
+          : {}),
       };
     },
   };

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "428f7c01b7ab04645c3ed798e93fe586ed77e6a7",
+      "contract_digest": "9817eeefbd2035eb1172dca66adcbb8de47124d883e58c22f47a1a654f18294c",
+      "execution_digest": "2595e99d7fa4f4f9e67e793a6e4dd60c20c4ba94611b1527f54b68e6cc009985",
+      "workspace_digest": "95cf2f655b51524cac281c16c1106386bf6b12903c128b5848c6ec45e638a778",
+      "timestamp": 1790457912
+    }
+  ]
+}

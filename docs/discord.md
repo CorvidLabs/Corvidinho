@@ -28,11 +28,11 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/schedule pause` | `schedule` (id) | yes | Pause (ADMIN) |
 | `/schedule resume` | `schedule` (id) | yes | Resume (ADMIN) |
 | `/schedule delete` | `schedule` (id) | yes | Delete (ADMIN) |
-| `/announce channel` | `channel` (CHANNEL picker), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
+| `/announce channel` | `channel` (STRING + autocomplete), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
 | `/announce show` | — | yes | Show current announcements channel; empty = not configured (DISCORD-ANNOUNCE-3) |
 | `/admin users add` | `user` (user picker, required) | yes | Approve a user: add to `[discord].users` in the allowlist file + live (owner only; ADMIN-1) |
-| `/admin channels add` | `channel` (CHANNEL picker, guild text, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
-| `/admin channels remove` | `channel` (CHANNEL picker, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
+| `/admin channels add` | `channel` (STRING + autocomplete by name/id, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
+| `/admin channels remove` | `channel` (STRING + autocomplete from allowlist / name/id, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
@@ -51,7 +51,7 @@ flowchart TD
   B -->|no| C[Skip — default-deny]
   B -->|yes| D[postAnnouncement to announce channel only]
   D --> E[Never post to dogfood allowlist by default]
-  F["/announce channel CHANNEL picker"] --> G{ADMIN re-check}
+  F["/announce channel STRING+autocomplete"] --> G{ADMIN re-check}
   G -->|deny| H[Ephemeral not authorized]
   G -->|allow| I[Persist channel id in SQLite]
   J["/announce show or /status"] --> K[Show channel or not configured]
@@ -197,3 +197,24 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 Ops: restart the Discord bridge after deploying **0.0.5** so presence and spawn
 paths pick up the build. Do not leave abandoned worktrees under the base dir
 from crashed runs — prune via `git worktree prune` in the project if needed.
+
+### `/work` → draft PR (AUTONOMOUS-3, GITHUB-2/5, REQ-discord-088)
+
+After a `/work` run finishes, its reply carries one `PR:` line. A draft PR is
+opened only when every gate holds; otherwise the line says plainly why not.
+
+| Gate | When it fails |
+|------|---------------|
+| Run finished cleanly, verify did not fail | `PR: not opened — …` (nothing verified to ship) |
+| Ran in a git worktree with changes | `PR: not opened — …` / `PR: none — …` |
+| `git-commit` (dirty tree only), `git-push`, `github-pr-create` allowlisted (`CORVIDINHO_ALLOWLIST`, GITHUB-5) | Nothing is committed or pushed; the changes stay on `talk/…` |
+| Remote `OWNER/REPO` passes the repo gate (GITHUB-6) | Gate error, nothing pushed |
+| Tree passed `fledge lanes run verify --non-interactive` (from the run's result frame, else re-run once) | Nothing pushed (AGENT-4) |
+
+Steps run through the existing typed plugins (`git-commit` → `git-push` →
+`github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
+is built from the real diff against the remote default branch (name-status,
+diffstat, commits) plus the verify result, with repo/model text in code fences
+and secrets scrubbed. Allowlisting these plugins is process-wide: the spawned
+agent can call them too.
+

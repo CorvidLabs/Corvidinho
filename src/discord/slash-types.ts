@@ -14,6 +14,7 @@ import type { WorkStore } from "./work-store.ts";
 import type { ScheduleStore } from "../scheduler/store.ts";
 import type { MemoryStore } from "../memory/index.ts";
 import type { AnnounceStore } from "./announce-store.ts";
+import type { WorkPrRunner } from "../work/pr.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -84,6 +85,11 @@ export type SlashContext = {
   env?: NodeJS.ProcessEnv;
   /** Optional git tip short SHA (bridge fills best-effort). */
   gitTipSha?: string;
+  /**
+   * /work → draft PR step (REQ-discord-088). Default `openWorkPr`; tests
+   * inject a fake so no git push or GitHub call happens.
+   */
+  openWorkPr?: WorkPrRunner;
 };
 
 export type SlashResult =
