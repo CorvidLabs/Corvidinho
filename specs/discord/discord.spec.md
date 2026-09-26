@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 45
+version: 46
 status: draft
 files:
   - src/discord/types.ts
@@ -117,4 +117,4 @@ No `/memory` slash command.
 Preserve historical Change Log prose/rows; append the memory-discord-inject row.
 
 | 2026-09-26 | memory-discord-inject: auto-recall prepend on spawn (REQ-discord-023 / AGENT-7 / MEMORY-2/4); package 0.0.7 |
-
+| 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |

@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 43
+version: 44
 status: draft
 files:
   - src/cli.ts
@@ -79,4 +79,4 @@ Consumes agent module for runTask / loadAgentConfig.
 Preserve historical Change Log prose/rows; append the memory-discord-inject row.
 
 | 2026-09-26 | memory-discord-inject: package 0.0.7 with MEMORY Discord inject (REQ-cli-014) |
-
+| 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |

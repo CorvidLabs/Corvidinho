@@ -105,6 +105,27 @@
         "REQ-discord-023",
         "REQ-plugins-085"
       ]
+    },
+    {
+      "timestamp": 1790450583,
+      "commit": "0444266c9c37b71353485e75d7e2b401fc1a987d",
+      "contract_digest": "536f1e4bae3277ea3e8d6d26beb416cd98a3d46f48aec6c36a76116441d1261b",
+      "execution_digest": "b776e82c7e5eae52637b6d31824840d763c5793ff8fb041426c15d3220392cd7",
+      "workspace_digest": "a3ffbebc1a95e7ac5cf80a12447c2c1e817cc827d8960171f8928c41d9890b4a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-010",
+        "REQ-cli-014",
+        "REQ-discord-023",
+        "REQ-plugins-085"
+      ]
     }
   ]
 }

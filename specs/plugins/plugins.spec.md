@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 31
+version: 32
 status: draft
 files:
   - src/plugins/types.ts
@@ -97,4 +97,4 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 Preserve historical Change Log prose/rows; append the memory-discord-inject row.
 
 | 2026-09-26 | memory-discord-inject: richer memory-* argv descriptions (REQ-plugins-085) |
-
+| 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
