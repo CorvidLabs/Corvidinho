@@ -125,6 +125,11 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044).
 
+`image-attachments.ts` exports `attachmentCacheDir(workDir)` and
+`WORKSPACE_ATTACHMENTS_SUBDIR` (`.corvidinho/attachments`); the bridge binds the
+worktree first, then passes `attachmentCacheDir(store.cwdFor(session))` as the
+`enrichPromptWithImages` cache dir (REQ-discord-013, DISCORD-9).
+
 `identity-inject.ts` formats/enriches the spawn prompt with acting Discord
 user id + resolved display (owner map wins for owner). Gateway fills
 `authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
@@ -143,7 +148,9 @@ progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
-local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
+local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
+git-ignored, removed with the workspace on session end) so the agent's
+file tools can open them (REQ-discord-013); protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
