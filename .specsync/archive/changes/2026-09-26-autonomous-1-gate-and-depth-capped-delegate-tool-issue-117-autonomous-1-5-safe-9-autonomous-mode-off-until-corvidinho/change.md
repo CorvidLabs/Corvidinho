@@ -1,6 +1,6 @@
 ---
 id: autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho
-state: verifying
+state: archived
 type: feature
 base_commit: 554357fbf27b524e32cfcd29377d3c38557883e3
 ---

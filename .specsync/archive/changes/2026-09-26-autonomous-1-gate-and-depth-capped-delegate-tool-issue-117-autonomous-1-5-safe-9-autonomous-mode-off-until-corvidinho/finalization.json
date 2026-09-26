@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho",
+  "implementation_commit": "025c2abe41ebbf474cafd476bf9abf6ed6e64b0e",
+  "implementation_tree": "339e694d449a4cef286ed0922776f0b92ed1733f",
+  "contract_digest": "b0c333c46b558e5e9cb3ada64df10966d9493735d23335c94442459a1925697e",
+  "workspace_digest": "7be3dbe320e9431961d40788e86f062268c10aa46dd38ddc3c1adfb52180b64d",
+  "closing_digest": "29bc954af2aa57ba2e4bd6e3704db12fb2e948f5f004c1233aee1473b4d5f983",
+  "review_digest": "d5d3610e5e7884a41e34c950200dc86e773da4ea2e2debe2f4bb08b92fc4612d",
+  "finalization_digest": "30a60e575747caace433ad52c9269543281184ff37d9573316fef14b7c5836f0",
+  "timestamp": 1790458553
+}
