@@ -26,7 +26,7 @@ Usage:
 Rules (see AGENTS.md + hi/):
   - HI-first; do not invent ACCESS/bounty/MainNet criteria
   - Secrets stay out of the repo and out of chat logs (SAFE-6)
-  - Never merge unless a human explicitly asked (GITHUB intent)
+  - Merge only when SpecSync change + verify are green (GITHUB intent)
 `);
 }
 

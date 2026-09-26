@@ -16,10 +16,10 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.21"
+          bun-version: "1.4.2"
 
       - name: install
-        run: bun install --frozen-lockfile || bun install
+        run: bun install --frozen-lockfile
 
       - name: smoke (CLI --help)
         run: bun src/cli.ts --help
@@ -30,18 +30,39 @@ jobs:
       - name: typecheck
         run: bunx tsc --noEmit
 
-      - name: Install SpecSync
+      - name: Install SpecSync binary
         run: |
-          curl -fsSL https://raw.githubusercontent.com/CorvidLabs/spec-sync/main/install.sh | bash
+          set -euo pipefail
+          VER=6.0.0
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            x86_64|amd64) ARCH=x86_64 ;;
+            aarch64|arm64) ARCH=aarch64 ;;
+            *) echo "unsupported arch: $ARCH"; exit 1 ;;
+          esac
+          URL="https://github.com/CorvidLabs/spec-sync/releases/download/v${VER}/specsync-linux-${ARCH}.tar.gz"
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "$URL" | tar -xz -C "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/specsync"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/specsync" --version
 
-      - name: spec-check
-        run: specsync check
+      - name: spec-check (SpecSync Action)
+        uses: CorvidLabs/spec-sync@v6.0.0
+        with:
+          version: "6.0.0"
 
       - name: Install Fledge
         run: |
           curl -fsSL https://raw.githubusercontent.com/CorvidLabs/fledge/main/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          # install.sh may target /usr/local/bin; also ensure ~/.local/bin
+          if ! command -v fledge >/dev/null 2>&1; then
+            if [ -x /usr/local/bin/fledge ]; then
+              ln -sf /usr/local/bin/fledge "$HOME/.local/bin/fledge"
+            fi
+          fi
+          fledge --version || true
 
       - name: fledge verify lane
         run: fledge lanes run verify --non-interactive

@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "enabled": false,
-  "require_change_for_meaningful_files": false,
+  "enabled": true,
+  "require_change_for_meaningful_files": true,
   "meaningful_paths": [
     "src/",
     "tests/",
@@ -34,7 +34,8 @@
   ],
   "verification_commands": [
     "bun test",
-    "bun src/cli.ts --help"
+    "bun src/cli.ts --help",
+    "bunx tsc --noEmit"
   ],
   "custom_artifacts": {},
   "principles_file": null
