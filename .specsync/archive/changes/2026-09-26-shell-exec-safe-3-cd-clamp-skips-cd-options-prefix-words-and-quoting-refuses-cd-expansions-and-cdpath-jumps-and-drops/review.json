@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "950cebf97a43545b1e4538bcf2d277ae94d68e58",
+  "contract_digest": "acabd524a506f9a4a00e21ef92d915c0dd21e5b3866901aa1b8a708444f79ddd",
+  "execution_digest": "2509774a7b20368c04ca858b5653537b0d6c75709e6c9b47ab5339555668d08e",
+  "workspace_digest": "847df2d2c1e21753b67f2b54bbac56f8db591702bbb5e2e0c3261e9a451b3bb2",
+  "timestamp": 1790462175
+}
