@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 59
+version: 60
 status: draft
 files:
   - src/discord/types.ts
@@ -79,6 +79,8 @@ files:
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
   - tests/discord.ask-ping.test.ts
+  - src/discord/thin-ack.ts
+  - tests/discord.thin-ack.test.ts
 
 db_tables: []
 depends_on:
@@ -110,16 +112,20 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
-Questions and owner ping (REQ-discord-044, issue #44, AUTONOMY-1/2):
+Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6):
 `src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
-`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. `AgentSpawnResult`
+`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. Clarify mentions
+`requesterDiscordId`; stuck mentions the configured owner. `AgentSpawnResult`
 gains optional `ask` (validated from the `result` frame); the gateway `reply`
 takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
 users plus the replied-to author); `SchedulerService` takes `owner` and its
-outbound `post` forwards `mentionUserIds`. Schedule owner pings are deduped
-per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey`
-/ `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
-(schema v7, `SCHEMA_VERSION` 7).
+outbound `post` forwards `mentionUserIds`. Schedule pings are deduped per
+question: `askPingKey` digests the ask; `Schedule.askPingKey` /
+`ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key` (schema
+v7). Sessions persist `pendingAsk` in `discord_sessions.pending_ask` (schema
+v8, `SCHEMA_VERSION` 8). `src/discord/thin-ack.ts` exports `isThinAck` /
+`isCancelAsk` / `ASK_CANCELLED_ACK`: while `pendingAsk` is set, a thin-ack
+continue restates the ask without spawning the agent; cancel clears it.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
@@ -256,6 +262,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
 | 2026-09-26 | headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord: Headless schedule daemon (issue #108 captured slice CLI-8 / AUTONOMOUS-4): corvidinho daemon ticks schedules without Discord, single-instance lock in the data dir, clean SIGTERM/SIGINT shutdown, JSON-line logs, systemd doc; schedule ticks claim each due run atomically in SQLite so a daemon and a bridge on one data dir never double-fire or clobber each other |
 | 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
+| 2026-09-26 | autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package: AUTONOMY-4..7 requester ping, thin-ack restate, cancel, joke decline |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
 | 2026-09-26 | work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only: /work opens a draft PR from its verified worktree (issue 88, AUTONOMOUS-3, GITHUB-2, GITHUB-5, AGENT-4): after a /work run, only when git-commit, git-push and github-pr-create are allowlisted for non-interactive use, commit and push the talk branch and open a draft PR through the existing git and github plugins with a description built from the real diff and the verify result; otherwise reply plainly why no PR was opened |
 | 2026-09-26 | work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched: /work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD) |
