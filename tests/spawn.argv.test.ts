@@ -23,11 +23,10 @@ describe("buildCorvidinhoArgv", () => {
     ]);
   });
 
-  test("agent-client style argv for .ts", () => {
+  test("agent-client style argv for .ts (no --no-verify; AGENT-4 / #85)", () => {
     const argv = buildCorvidinhoArgv("src/cli.ts", [
       "task",
       "run",
-      "--no-verify",
       "--task",
       "hi",
       "--output",
@@ -39,12 +38,12 @@ describe("buildCorvidinhoArgv", () => {
     expect(argv.slice(3)).toEqual([
       "task",
       "run",
-      "--no-verify",
       "--task",
       "hi",
       "--output",
       "ndjson",
     ]);
+    expect(argv).not.toContain("--no-verify");
   });
 });
 

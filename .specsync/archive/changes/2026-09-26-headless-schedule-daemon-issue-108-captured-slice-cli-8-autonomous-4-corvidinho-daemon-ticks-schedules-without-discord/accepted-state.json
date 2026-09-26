@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord",
+  "slug": "headless-schedule-daemon-issue-108-captured-slice-cli-8-autonomous-4-corvidinho-daemon-ticks-schedules-without-discord",
+  "title": "Headless schedule daemon (issue #108 captured slice CLI-8 / AUTONOMOUS-4): corvidinho daemon ticks schedules without Discord, single-instance lock in the data dir, clean SIGTERM/SIGINT shutdown, JSON-line logs, systemd doc; schedule ticks claim each due run atomically in SQLite so a daemon and a bridge on one data dir never double-fire or clobber each other",
+  "description": "Headless schedule daemon (issue #108 captured slice CLI-8 / AUTONOMOUS-4): corvidinho daemon ticks schedules without Discord, single-instance lock in the data dir, clean SIGTERM/SIGINT shutdown, JSON-line logs, systemd doc; schedule ticks claim each due run atomically in SQLite so a daemon and a bridge on one data dir never double-fire or clobber each other",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
+  "created_at": 1790454525,
+  "updated_at": 1790455696,
+  "affected_specs": [
+    "cli",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/daemon/",
+    "src/cli.ts",
+    "src/scheduler/",
+    "src/discord/config.ts",
+    "tests/daemon.test.ts",
+    "tests/daemon.cli.test.ts",
+    "tests/scheduler.claim.test.ts",
+    "docs/DAEMON.md",
+    "README.md",
+    "specs/cli/",
+    "specs/discord/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "corvidinho daemon ticks the SQLite schedules table on the 60s poll without a Discord token (CLI-8 / AUTONOMOUS-4); a second daemon on the same data dir refuses to start and names the holder pid, a stale lock from a dead pid is taken over; SIGTERM/SIGINT stop ticking, wait a bounded grace for in-flight runs, mark stragglers failed, release the lock and exit 0; logs are one scrubbed JSON object per line; each due run is claimed atomically in SQLite so a daemon and a bridge sharing one data dir fire it exactly once and never overwrite each other's pause/resume or run counters; docs/DAEMON.md shows a systemd unit; fixture tests + SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
