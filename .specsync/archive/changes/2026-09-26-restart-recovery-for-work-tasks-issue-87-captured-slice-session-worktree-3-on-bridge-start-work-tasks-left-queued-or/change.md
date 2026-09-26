@@ -1,6 +1,6 @@
 ---
 id: restart-recovery-for-work-tasks-issue-87-captured-slice-session-worktree-3-on-bridge-start-work-tasks-left-queued-or
-state: implementing
+state: archived
 type: feature
 base_commit: 1b69c1fa30e33c64a52174a968583323c20658a8
 ---
