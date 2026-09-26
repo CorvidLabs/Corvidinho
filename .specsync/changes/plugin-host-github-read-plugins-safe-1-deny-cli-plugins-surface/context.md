@@ -6,3 +6,8 @@ artifact: context
 # Context
 
 WATCH slice after ORIGIN (#2) on main: typed GitHub read plugins + plugin host + SAFE-1 deny + GITHUB-6 repo deny gate + SpecSync SDD. CI remains Bun + SpecSync Action only (no Fledge in Actions). Local fledge verify is the agent gate.
+
+
+## Lesson
+
+Ancestor correction: GitHub plugin bodies use Octokit + GITHUB_TOKEN/GH_TOKEN, never shell `gh`.

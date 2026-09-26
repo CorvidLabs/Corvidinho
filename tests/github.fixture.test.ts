@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseJsonStdout } from "../plugins/github/gh.ts";
+import { parseJsonStdout } from "../plugins/github/api.ts";
 
 const fixtures = import.meta.dir + "/fixtures/github";
 

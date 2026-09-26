@@ -23,13 +23,6 @@ Acceptance Criteria
 - `danger-ping` under `--non-interactive` without allowlist exits 2 with Denied/SAFE-1.
 - Allowlisted `danger-ping` succeeds.
 
-### REQUIREMENT REQ-plugins-003
-
-Built-in read-only GitHub commands SHALL call `gh` only through typed plugin handlers and capture JSON stdout (GITHUB-1/4).
-
-Acceptance Criteria
-- github-pr-list, github-pr-status, github-ci-status, github-issue-list are registered.
-- No create/write github commands are registered in this change.
 
 ### REQUIREMENT REQ-plugins-004
 
@@ -40,6 +33,15 @@ Acceptance Criteria
 - Denied repo exits with code 3 and clear error.
 
 ## Modified
+
+### REQUIREMENT REQ-plugins-003
+
+Built-in read-only GitHub commands SHALL call GitHub via Octokit (`GITHUB_TOKEN`/`GH_TOKEN`), not shell `gh` (GITHUB-1/4).
+
+Acceptance Criteria
+- github-pr-list/status/ci-status/issue-list use `@octokit/rest`.
+- No `Bun.spawn(["gh", ...])` in plugin bodies.
+
 
 ### SPEC SECTION Change Log
 

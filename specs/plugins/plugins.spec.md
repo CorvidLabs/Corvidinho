@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 3
+version: 4
 status: draft
 files:
   - src/plugins/types.ts
@@ -9,7 +9,7 @@ files:
   - src/plugins/env.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
-  - plugins/github/gh.ts
+  - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/index.ts
   - plugins/meta/index.ts
@@ -74,7 +74,7 @@ Add GITHUB-6 repo gate invariant; keep danger/minTier and gh-helper invariants.
 |-----------|----------|
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
-| `gh` missing / auth fail on github-* | Propagate gh stderr; non-zero exit |
+| Missing token / API fail on github-* | Clear error; non-zero exit |
 
 ## Dependencies
 
@@ -83,7 +83,7 @@ Add GITHUB-6 repo gate invariant; keep danger/minTier and gh-helper invariants.
 | Module | What is used |
 |--------|-------------|
 | Bun | `Bun.which`, `Bun.spawn` |
-| gh CLI | JSON list/view/checks for read commands |
+| @octokit/rest | REST list/view/checks for read commands |
 
 ### Consumed By
 

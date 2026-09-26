@@ -90,19 +90,14 @@ async function doctor(): Promise<number> {
       : "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN",
   });
 
-  const ghPath = which("gh");
-  let ghOk = false;
-  let ghDetail = "gh not on PATH";
-  if (ghPath) {
-    const proc = Bun.spawn(["gh", "auth", "status"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const code = await proc.exited;
-    ghOk = code === 0;
-    ghDetail = ghOk ? "gh auth status ok" : "gh auth status failed (not logged in?)";
-  }
-  checks.push({ name: "github", ok: ghOk, detail: ghDetail });
+  const tokenOk = envPresent("GITHUB_TOKEN") || envPresent("GH_TOKEN");
+  checks.push({
+    name: "github",
+    ok: tokenOk,
+    detail: tokenOk
+      ? "GITHUB_TOKEN/GH_TOKEN present for Octokit (value not shown)"
+      : "missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins",
+  });
 
   const fledgePath = which("fledge");
   checks.push({

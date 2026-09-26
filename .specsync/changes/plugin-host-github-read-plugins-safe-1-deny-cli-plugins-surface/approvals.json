@@ -92,6 +92,54 @@
         "cli": "32de21bda2be07cae2c9d0442556bcfa4fcecb88ee3efca3d914fc4753372dba",
         "plugins": "cfcb3e47947a420309548445ede3b448e09cbaeb2240c300a6210111c764f3ad"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790437248,
+      "digest": "b043f197225b4d06ea3c327430f2dfae6f27f809a4cad9f145c0387995376987",
+      "note": "Octokit: MODIFY REQ-plugins-003; cover bun.lock",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+        "title": "WATCH: plugin host + GitHub read + repo deny gate",
+        "description": "WATCH slice: typed plugin host, GitHub read tools, SAFE-1 deny, GITHUB-6 repo gate, SpecSync SDD",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          "AGENTS.md",
+          "STATUS.md",
+          "bun.lock",
+          "docs/",
+          "fledge.toml",
+          "package.json",
+          "plugins/",
+          "specs/",
+          "src/",
+          "tests/",
+          "tsconfig.json"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Typed plugin host list/run with danger/minTier; SAFE-1 deny in non-interactive; github-pr-list/status/ci-status/issue-list read-only via gh JSON; GITHUB-6 requires --repo and honors DENY/ALLOW env; CLI plugins list/run + doctor count; bun test + fledge verify green; Spec Sync CI green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "32de21bda2be07cae2c9d0442556bcfa4fcecb88ee3efca3d914fc4753372dba",
+        "plugins": "631a1ef8df90ade4ccb60b77f9211173d46dfb642db09e3d161b34239df2f42f"
+      }
     }
   ],
   "reopenings": []

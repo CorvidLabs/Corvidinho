@@ -1,6 +1,7 @@
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { checkRepoGate, extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
-import { ghJson, parseJsonStdout } from "./gh.ts";
+import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
+import { Octokit } from "@octokit/rest";
 
 function takeFlag(args: string[], name: string): { value: string | undefined; rest: string[] } {
   const out: string[] = [];
@@ -20,46 +21,36 @@ function takeFlag(args: string[], name: string): { value: string | undefined; re
   return { value, rest: out };
 }
 
-function repoArgs(args: string[]): { ghArgs: string[]; rest: string[] } {
-  const { value, rest } = takeFlag(args, "--repo");
-  const ghArgs = value ? ["--repo", value] : [];
-  return { ghArgs, rest };
-}
-
-
-async function requireRepoGate(ctx: PluginHandlerArgs): Promise<PluginHandlerResult | null> {
+function requireRepo(ctx: PluginHandlerArgs): PluginHandlerResult | { repo: string; owner: string; name: string } {
   const repo = extractRepoFromArgs(ctx.args);
   const gate = checkRepoGate(repo);
   if (!gate.ok) {
     return { ok: false, error: gate.error, exitCode: 3 };
   }
-  return null;
+  const parts = splitOwnerRepo(gate.repo);
+  if (!parts) {
+    return { ok: false, error: `invalid --repo (expected OWNER/REPO): ${gate.repo}`, exitCode: 1 };
+  }
+  return { repo: gate.repo, owner: parts.owner, name: parts.name };
 }
 
-async function wrapGh(
-  ctx: PluginHandlerArgs,
-  ghArgs: string[],
-): Promise<PluginHandlerResult> {
-  const result = await ghJson(ghArgs, { cwd: ctx.cwd });
-  if (!result.ok) {
-    return {
-      ok: false,
-      error: result.stderr || `gh exited ${result.exitCode}`,
-      exitCode: result.exitCode || 1,
-      data: { stderr: result.stderr, stdout: result.stdout },
-    };
+function clientOrErr(): Octokit | PluginHandlerResult {
+  const c = createOctokit();
+  if (!(c instanceof Octokit) && "ok" in c && c.ok === false) {
+    return { ok: false, error: (c as ApiResult).error, exitCode: (c as ApiResult).exitCode };
   }
-  let data: unknown;
-  try {
-    data = parseJsonStdout(result.stdout);
-  } catch (e) {
-    return {
-      ok: false,
-      error: `failed to parse gh JSON: ${e instanceof Error ? e.message : String(e)}`,
-      exitCode: 1,
-      data: { raw: result.stdout },
-    };
+  return c as Octokit;
+}
+
+function summarize(data: unknown): string {
+  if (Array.isArray(data)) {
+    return `ok (${data.length} item${data.length === 1 ? "" : "s"})`;
   }
+  if (data && typeof data === "object") return "ok";
+  return String(data);
+}
+
+function okResult(ctx: PluginHandlerArgs, data: unknown): PluginHandlerResult {
   return {
     ok: true,
     data,
@@ -68,116 +59,201 @@ async function wrapGh(
   };
 }
 
-function summarize(data: unknown): string {
-  if (Array.isArray(data)) {
-    return `ok (${data.length} item${data.length === 1 ? "" : "s"})`;
-  }
-  if (data && typeof data === "object") {
-    return "ok";
-  }
-  return String(data);
+function fail(e: unknown): PluginHandlerResult {
+  const msg = e instanceof Error ? e.message : String(e);
+  return { ok: false, error: msg, exitCode: 1 };
 }
 
-/** Read-only GitHub plugins (GITHUB-1/4). Write/create intentionally omitted. */
+function argsWithoutRepo(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--repo" || a === "-R") {
+      i++;
+      continue;
+    }
+    if (a.startsWith("--repo=")) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+/** Read-only GitHub plugins via Octokit (GITHUB-1/4). Write/create omitted. */
 export const githubCommands: PluginCommand[] = [
   {
     name: "github-pr-list",
-    description: "List pull requests (gh pr list --json)",
+    description: "List pull requests (Octokit pulls.list)",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const denied = await requireRepoGate(ctx);
-      if (denied) return denied;
-      const { ghArgs, rest } = repoArgs(ctx.args);
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
       const { value: limit, rest: rest2 } = takeFlag(rest, "--limit");
       const { value: state, rest: rest3 } = takeFlag(rest2, "--state");
-      const args = [
-        "pr",
-        "list",
-        ...ghArgs,
-        "--json",
-        "number,title,url,state,headRefName,updatedAt",
-      ];
-      if (limit) args.push("--limit", limit);
-      if (state) args.push("--state", state);
       if (rest3.length) {
         return { ok: false, error: `unexpected args: ${rest3.join(" ")}`, exitCode: 1 };
       }
-      return wrapGh(ctx, args);
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const per_page = Math.min(Number(limit) || 30, 100);
+        const st = (state === "closed" || state === "all" ? state : "open") as "open" | "closed" | "all";
+        const res = await octokit.rest.pulls.list({
+          owner,
+          repo: name,
+          state: st,
+          per_page,
+        });
+        const data = res.data.map((p) => ({
+          number: p.number,
+          title: p.title,
+          url: p.html_url,
+          state: p.state.toUpperCase(),
+          headRefName: p.head.ref,
+          updatedAt: p.updated_at,
+        }));
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
     },
   },
   {
     name: "github-pr-status",
-    description: "Show PR status (gh pr view --json)",
+    description: "Show PR status (Octokit pulls.get)",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const denied = await requireRepoGate(ctx);
-      if (denied) return denied;
-      const { ghArgs, rest } = repoArgs(ctx.args);
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
       const selector = rest[0];
       if (!selector) {
         return {
           ok: false,
-          error: "usage: github-pr-status <number|url|branch> [--repo OWNER/REPO]",
+          error: "usage: github-pr-status <number> --repo OWNER/REPO",
           exitCode: 1,
         };
       }
-      return wrapGh(ctx, [
-        "pr",
-        "view",
-        selector,
-        ...ghArgs,
-        "--json",
-        "number,title,url,state,isDraft,mergeable,statusCheckRollup,headRefName,baseRefName",
-      ]);
+      const pull_number = Number(selector);
+      if (!Number.isFinite(pull_number)) {
+        return { ok: false, error: "PR selector must be a number when using Octokit", exitCode: 1 };
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const res = await octokit.rest.pulls.get({ owner, repo: name, pull_number });
+        const p = res.data;
+        const data = {
+          number: p.number,
+          title: p.title,
+          url: p.html_url,
+          state: p.state.toUpperCase(),
+          isDraft: p.draft ?? false,
+          mergeable: p.mergeable == null ? "UNKNOWN" : p.mergeable ? "MERGEABLE" : "CONFLICTING",
+          headRefName: p.head.ref,
+          baseRefName: p.base.ref,
+          statusCheckRollup: [] as unknown[],
+        };
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
     },
   },
   {
     name: "github-ci-status",
-    description: "Show CI check status for a PR or ref (gh pr checks --json)",
+    description: "Show CI check status for a PR (Octokit checks.listForRef)",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const denied = await requireRepoGate(ctx);
-      if (denied) return denied;
-      const { ghArgs, rest } = repoArgs(ctx.args);
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
       const selector = rest[0];
       if (!selector) {
         return {
           ok: false,
-          error: "usage: github-ci-status <number|url|branch> [--repo OWNER/REPO]",
+          error: "usage: github-ci-status <number> --repo OWNER/REPO",
           exitCode: 1,
         };
       }
-      // gh pr checks supports --json on recent gh; fall back message if missing.
-      return wrapGh(ctx, ["pr", "checks", selector, ...ghArgs, "--json", "name,state,bucket,link"]);
+      const pull_number = Number(selector);
+      if (!Number.isFinite(pull_number)) {
+        return { ok: false, error: "PR selector must be a number when using Octokit", exitCode: 1 };
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const pr = await octokit.rest.pulls.get({ owner, repo: name, pull_number });
+        const ref = pr.data.head.sha;
+        const checks = await octokit.rest.checks.listForRef({
+          owner,
+          repo: name,
+          ref,
+          per_page: 100,
+        });
+        const data = checks.data.check_runs.map((c) => ({
+          name: c.name,
+          state: (c.conclusion || c.status || "").toUpperCase(),
+          bucket: c.conclusion === "success" ? "pass" : c.conclusion ? "fail" : "pending",
+          link: c.html_url,
+        }));
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
     },
   },
   {
     name: "github-issue-list",
-    description: "List issues (gh issue list --json)",
+    description: "List issues (Octokit issues.listForRepo)",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const denied = await requireRepoGate(ctx);
-      if (denied) return denied;
-      const { ghArgs, rest } = repoArgs(ctx.args);
+      const r = requireRepo(ctx);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      const rest = argsWithoutRepo(ctx.args);
       const { value: limit, rest: rest2 } = takeFlag(rest, "--limit");
       const { value: state, rest: rest3 } = takeFlag(rest2, "--state");
-      const args = [
-        "issue",
-        "list",
-        ...ghArgs,
-        "--json",
-        "number,title,url,state,updatedAt,labels",
-      ];
-      if (limit) args.push("--limit", limit);
-      if (state) args.push("--state", state);
       if (rest3.length) {
         return { ok: false, error: `unexpected args: ${rest3.join(" ")}`, exitCode: 1 };
       }
-      return wrapGh(ctx, args);
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      try {
+        const per_page = Math.min(Number(limit) || 30, 100);
+        const st = (state === "closed" || state === "all" ? state : "open") as "open" | "closed" | "all";
+        const res = await octokit.rest.issues.listForRepo({
+          owner,
+          repo: name,
+          state: st,
+          per_page,
+        });
+        // Exclude PRs (issues API returns both)
+        const data = res.data
+          .filter((i) => !i.pull_request)
+          .map((i) => ({
+            number: i.number,
+            title: i.title,
+            url: i.html_url,
+            state: i.state.toUpperCase(),
+            updatedAt: i.updated_at,
+            labels: (i.labels || []).map((l) =>
+              typeof l === "string"
+                ? { name: l }
+                : { name: l.name, id: String(l.id ?? ""), description: l.description ?? "", color: l.color ?? "" },
+            ),
+          }));
+        return okResult(ctx, data);
+      } catch (e) {
+        return fail(e);
+      }
     },
   },
 ];
