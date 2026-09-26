@@ -85,6 +85,7 @@ export async function handleWorkCommand(
         allowlist: ctx.allowlist,
         adminUserIds: ctx.adminUserIds,
         adminRoleIds: ctx.adminRoleIds,
+        owner: ctx.owner,
         mutedUsers: ctx.mutedUsers,
       }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({

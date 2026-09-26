@@ -86,7 +86,7 @@ Outside an allowlisted channel (or from a non-configured user when a user allowl
 
 Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`, `/schedule` mutations, `/announce channel`) still uses ephemeral `"not authorized"` (different from channel deny).
 
-Admin detection: `resolvePermissionLevel` + `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` (empty ⇒ nobody ADMIN).
+Admin detection: `resolvePermissionLevel` + `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES`, plus the configured owner (IDENTITY-1: `CORVIDINHO_OWNER_DISCORD_ID` or allowlist `[owner].discord_id`; ADMIN unless muted or deny-listed). Empty owner and empty admin lists ⇒ nobody ADMIN. `/status` shows only “Owner configured: yes/no” plus the display name.
 
 Tip text (approx.):
 

@@ -10,6 +10,10 @@ files:
   - src/discord/memory-inject.ts
   - tests/discord.memory-inject.test.ts
   - src/discord/permissions.ts
+  - src/identity/owner.ts
+  - src/identity/index.ts
+  - tests/identity.owner.test.ts
+  - tests/discord.owner.test.ts
   - src/discord/session-store.ts
   - src/store/db.ts
   - src/store/index.ts

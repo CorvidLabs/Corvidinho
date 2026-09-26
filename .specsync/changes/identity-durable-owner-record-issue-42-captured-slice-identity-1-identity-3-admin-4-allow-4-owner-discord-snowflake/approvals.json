@@ -1,0 +1,58 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790451900,
+      "digest": "0ccaed08a4111fe283769588a04d56d186c824738ec0549a55d3810452fd2b2b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "identity-durable-owner-record-issue-42-captured-slice-identity-1-identity-3-admin-4-allow-4-owner-discord-snowflake",
+        "title": "IDENTITY durable owner record (issue #42 captured slice IDENTITY-1/IDENTITY-3 + ADMIN-4 + ALLOW-4): owner Discord snowflake plus optional GitHub login and display from bot-VM env CORVIDINHO_OWNER_* or allowlist file [owner] section (env overrides file); owner resolves to ADMIN at handler time unless deny-listed or muted; existing admin env lists unchanged; empty owner means no owner; ephemeral /status and doctor show owner configured yes/no plus display only; strict owner-only admin (IDENTITY-2) left for Leif",
+        "description": "IDENTITY durable owner record (issue #42 captured slice IDENTITY-1/IDENTITY-3 + ADMIN-4 + ALLOW-4): owner Discord snowflake plus optional GitHub login and display from bot-VM env CORVIDINHO_OWNER_* or allowlist file [owner] section (env overrides file); owner resolves to ADMIN at handler time unless deny-listed or muted; existing admin env lists unchanged; empty owner means no owner; ephemeral /status and doctor show owner configured yes/no plus display only; strict owner-only admin (IDENTITY-2) left for Leif",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "allowlist.example.toml",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "specs/cli/",
+          "specs/discord/",
+          "src/cli.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/",
+          "src/discord/config.ts",
+          "src/discord/permissions.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/types.ts",
+          "src/identity/",
+          "tests/cli.smoke.test.ts",
+          "tests/discord.owner.test.ts",
+          "tests/identity.owner.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Owner record (Discord snowflake + optional GitHub login + display) loads from bot-VM env CORVIDINHO_OWNER_DISCORD_ID / CORVIDINHO_OWNER_GITHUB_LOGIN / CORVIDINHO_OWNER_DISPLAY and/or the allowlist file [owner] section (TOML or JSON), env overriding file per field, re-read on every start so it survives restarts (IDENTITY-1, ALLOW-4); owner matches only by Discord snowflake or lowercased GitHub login, never by display name; resolvePermissionLevel returns ADMIN for the owner at handler time unless deny-listed or muted, while CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES keep working unchanged (ADMIN-4); empty or invalid owner config means no owner and leaves admin behavior unchanged, so empty owner plus empty admin lists is still nobody ADMIN (IDENTITY-3 owner path, ADMIN-4); ephemeral /status and corvidinho doctor show owner configured yes/no plus display name only, never ids or tokens; fixture tests cover env vs file precedence, snowflake match, case-insensitive login, display never matches, owner ADMIN, deny-listed/muted owner not ADMIN, empty owner no change; strict owner-only admin (IDENTITY-2) left for Leif; SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "ad5a9c0d15ee8139a72cb2ba78d3e725bb6ce9aa9c5b584522445cc9f45de2d2",
+        "discord": "2c8b1a0b2f31105686464cc6ad19eaf89de3c92e975c4edd504b7793115bfba5"
+      }
+    }
+  ],
+  "reopenings": []
+}
