@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "025c2abe41ebbf474cafd476bf9abf6ed6e64b0e",
+      "contract_digest": "b0c333c46b558e5e9cb3ada64df10966d9493735d23335c94442459a1925697e",
+      "execution_digest": "8fcce5a2ba17667fa81fde041dd30ec3393363141d509fbf2c0667190cb9c3cb",
+      "workspace_digest": "7be3dbe320e9431961d40788e86f062268c10aa46dd38ddc3c1adfb52180b64d",
+      "timestamp": 1790458545
+    }
+  ]
+}

@@ -5,6 +5,7 @@
  * Secrets stay in env — never commit.
  */
 
+import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
@@ -100,6 +101,11 @@ export type CreateTaskExecuteOpts = {
   maxToolRounds?: number;
   /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
   includeDangerous?: boolean;
+  /**
+   * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
+   * autonomous mode (AUTONOMOUS-1) and the delegation depth cap is not reached.
+   */
+  autonomous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
   /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
@@ -217,9 +223,16 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     if (roleSessionActive(env)) {
       actingIsAdmin = await resolveActingIsAdmin(env);
     }
+    const autonomous =
+      opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
     const tools = withAskTool(
-      buildOpenAiTools({ tier, includeDangerous, actingIsAdmin }),
+      buildOpenAiTools({
+        tier,
+        includeDangerous,
+        actingIsAdmin,
+        autonomous,
+      }),
     );
     return runToolLoop({
       llm: { ...llm, tier },
@@ -395,6 +408,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               json: true,
               nonInteractive,
               allowlist,
+              tier: llm.tier,
+              signal,
             })
           : {
               ok: false,
