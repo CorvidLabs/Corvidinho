@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "ede5f461fdd16166e8cfee218b0bf8e860fa5499",
   "created_at": 1790463159,
-  "updated_at": 1790464117,
+  "updated_at": 1790464432,
   "affected_specs": [],
   "affected_paths": [
     "src/agent/spend-alerts.ts",
@@ -38,6 +38,71 @@
     "plan"
   ],
   "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/agent/spend-alerts.ts",
+      "module": "agent",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 2,
+      "path": "src/agent/spend-outbox.ts",
+      "module": "agent",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 3,
+      "path": "src/daemon/daemon.ts",
+      "module": "cli",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 4,
+      "path": "src/discord/command-handlers/session.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 5,
+      "path": "src/discord/command-handlers/work.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 6,
+      "path": "src/discord/spend-post.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 7,
+      "path": "src/discord/work-store.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    }
+  ],
   "answers": {
     "architecture_risk": "yes",
     "public_contract": "no"
