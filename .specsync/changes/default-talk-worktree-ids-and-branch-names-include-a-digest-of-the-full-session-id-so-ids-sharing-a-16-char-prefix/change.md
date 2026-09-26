@@ -1,6 +1,6 @@
 ---
 id: default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix
-state: draft
+state: implementing
 type: bug_fix
 base_commit: faa569f4ac361e7a3eff3ae3a2047227410c803d
 ---

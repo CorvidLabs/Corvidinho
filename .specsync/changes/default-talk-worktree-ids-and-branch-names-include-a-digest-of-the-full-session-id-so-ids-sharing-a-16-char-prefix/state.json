@@ -7,10 +7,11 @@
   "title": "Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree",
   "description": "Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "faa569f4ac361e7a3eff3ae3a2047227410c803d",
   "created_at": 1790464975,
-  "updated_at": 1790464984,
+  "updated_at": 1790465118,
   "affected_specs": [
     "discord"
   ],
