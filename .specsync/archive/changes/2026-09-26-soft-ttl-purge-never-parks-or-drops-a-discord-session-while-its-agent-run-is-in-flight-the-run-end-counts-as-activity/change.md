@@ -1,6 +1,6 @@
 ---
 id: soft-ttl-purge-never-parks-or-drops-a-discord-session-while-its-agent-run-is-in-flight-the-run-end-counts-as-activity
-state: implementing
+state: archived
 type: bug_fix
 base_commit: cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f
 ---
