@@ -7,10 +7,11 @@
   "title": "WATCH never drops or skips a trusted request when an event-id write fails",
   "description": "WATCH never drops or skips a trusted request when an event-id write fails",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "f834cc942785d33825f5a13dfa687961925257fc",
   "created_at": 1790467025,
-  "updated_at": 1790467097,
+  "updated_at": 1790467107,
   "affected_specs": [
     "watch"
   ],

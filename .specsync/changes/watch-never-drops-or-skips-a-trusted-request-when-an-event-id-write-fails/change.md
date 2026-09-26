@@ -1,6 +1,6 @@
 ---
 id: watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails
-state: approved
+state: implementing
 type: bug_fix
 base_commit: f834cc942785d33825f5a13dfa687961925257fc
 ---
