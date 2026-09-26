@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "adapt-discord-ask-version-fixtures-for-ask-6-7-collapse-v0-0-24",
+      "reviewer": "Corvid Agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "8c069bbbd89ee1c66d246660cd567d327e7c08f3",
+      "contract_digest": "c10c6e5ea4fa1e5ea7f82fc3bc1657fb43678802a1260c3663729ea4ea6232d5",
+      "execution_digest": "f446a9a8f05d78aa6c3d33c1b8f551db50ab91a3ecf76bfca157b1ee5e4a8b8a",
+      "workspace_digest": "77ff4fbe66ff8641a046fecefa6edeba0ec19b854ac281580a97c3ff9e7c2467",
+      "timestamp": 1790466003
+    }
+  ]
+}

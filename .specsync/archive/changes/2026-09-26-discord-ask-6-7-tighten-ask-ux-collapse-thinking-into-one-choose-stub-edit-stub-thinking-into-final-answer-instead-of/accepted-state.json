@@ -7,11 +7,11 @@
   "title": "DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23",
   "description": "DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "faa569f4ac361e7a3eff3ae3a2047227410c803d",
   "created_at": 1790465199,
-  "updated_at": 1790465890,
+  "updated_at": 1790466011,
   "affected_specs": [
     "discord"
   ],

@@ -16,6 +16,22 @@
       "execution_digest": "b7bf4fd96ae044a00ae514268228cd678af94446f48be746996472a40df0b0f7",
       "workspace_digest": "4fa90363c87ca5f67f6c1dce1bfa75d77498f18340c8d329c627270eea6a37d0",
       "timestamp": 1790465512
+    },
+    {
+      "schema_version": 2,
+      "change_id": "discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of",
+      "reviewer": "Corvid Agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "8c069bbbd89ee1c66d246660cd567d327e7c08f3",
+      "contract_digest": "0b1434cf40282c74358bb4c45f8c08677a3345727cdb2f06bd0c86263b3f4b4f",
+      "execution_digest": "b7bf4fd96ae044a00ae514268228cd678af94446f48be746996472a40df0b0f7",
+      "workspace_digest": "77ff4fbe66ff8641a046fecefa6edeba0ec19b854ac281580a97c3ff9e7c2467",
+      "timestamp": 1790466002
     }
   ]
 }

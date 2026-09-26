@@ -1,6 +1,6 @@
 ---
 id: discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of
-state: implementing
+state: archived
 type: feature
 base_commit: faa569f4ac361e7a3eff3ae3a2047227410c803d
 ---
