@@ -1,6 +1,6 @@
 ---
 id: discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior
-state: verifying
+state: archived
 type: feature
 base_commit: c3b4d8881ea2d9a5b968eb47b9eda35c6e1b2233
 ---

@@ -8,9 +8,9 @@
     "required_check": "SpecSync scoped review"
   },
   "verdict": "pass",
-  "implementation_commit": "5a8a09a1c99d698238249ecc6342310112f82f13",
+  "implementation_commit": "838a8ee72c3ab32ef408dcc5836e6e813da5bcc3",
   "contract_digest": "536f1e4bae3277ea3e8d6d26beb416cd98a3d46f48aec6c36a76116441d1261b",
-  "execution_digest": "abfd84732dd78a2845db42e9cd46708445f165dffdaaef08b4ce84e3b80af346",
-  "workspace_digest": "e2b184a16beeee2deac70d2d2f4b6f50f434a2d548d9af2b0a30ad23047479fc",
-  "timestamp": 1790450541
+  "execution_digest": "e81f369b343dacf7e457de535af71dac206edac48158baa661000e8a58168748",
+  "workspace_digest": "fd41bb747c629089647dc480f3b2d0f95ecdccbd9ea06af35ca75dd9ae3ab745",
+  "timestamp": 1790450613
 }
