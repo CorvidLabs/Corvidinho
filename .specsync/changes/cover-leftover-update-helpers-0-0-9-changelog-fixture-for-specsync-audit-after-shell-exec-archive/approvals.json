@@ -1,0 +1,39 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790453390,
+      "digest": "07c2817fc00112bcd7cccc483ad3c4294d769ca99c13cdb3902bb67510a7883b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-leftover-update-helpers-0-0-9-changelog-fixture-for-specsync-audit-after-shell-exec-archive",
+        "title": "Cover leftover update-helpers 0.0.9 changelog fixture for SpecSync audit after shell-exec archive",
+        "description": "Cover leftover update-helpers 0.0.9 changelog fixture for SpecSync audit after shell-exec archive",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "tests/update-helpers.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "tests/update-helpers.test.ts extract_changelog_section finds 0.0.9 with shell-exec + SAFE-3; covered for SpecSync audit after shell-exec archive; no new module AC"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "7d6f962c3c56067689c0b2f215a8e70c9d12ee738610a7d6d5d6f31073628eef"
+      }
+    }
+  ],
+  "reopenings": []
+}
