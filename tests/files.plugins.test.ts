@@ -53,6 +53,11 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     expect(isProtectedPath("foo.spec.md")).toBe(true);
     expect(isProtectedPath("wallet-keystore.json")).toBe(true);
     expect(isProtectedPath("my.keystore")).toBe(true);
+    expect(isProtectedPath("bunfig.toml")).toBe(true);
+    expect(isProtectedPath("sub/pkg/bunfig.toml")).toBe(true);
+    expect(isProtectedPath(".bunfig.toml")).toBe(true);
+    expect(isProtectedPath("BunFig.TOML")).toBe(true);
+    expect(isProtectedPath("docs/bunfig.md")).toBe(false);
     expect(isProtectedPath("src/cli.ts")).toBe(false);
     expect(isProtectedPath("README.md")).toBe(false);
   });
@@ -108,6 +113,26 @@ describe("files plugins (REQ-plugins-081..083)", () => {
       });
       expect(listed.ok).toBe(true);
       expect((listed.data as { count: number }).count).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("SAFE-2: files-write cannot plant a bunfig.toml preload (REQ-plugins-083)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe2-bunfig-"));
+    try {
+      for (const target of ["bunfig.toml", ".bunfig.toml", "sub/bunfig.toml"]) {
+        const w = await runPlugin({
+          name: "files-write",
+          args: [target, 'preload = ["./p.ts"]\n'],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        expect(w.ok).toBe(false);
+        expect(w.exitCode).toBe(2);
+        expect(w.error).toContain("SAFE-2");
+        expect(existsSync(join(dir, target))).toBe(false);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run",
+  "slug": "spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run",
+  "title": "Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1)",
+  "description": "Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1)",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
+  "created_at": 1790460513,
+  "updated_at": 1790460518,
+  "affected_specs": [
+    "agent",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/agent/spawn-argv.ts",
+    "plugins/files/protectedPaths.ts",
+    "tests/spawn.argv.test.ts",
+    "tests/files.plugins.test.ts",
+    "tests/autonomous.delegate.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A bunfig.toml preload in the spawn cwd never runs in a spawned .ts agent (argv is bun --no-env-file --config=/dev/null <bin>); files-write/edit/delete refuse bunfig.toml and .bunfig.toml (SAFE-2)"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
