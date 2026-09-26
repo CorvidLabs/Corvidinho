@@ -4,6 +4,11 @@
  * Verifying: fledge lanes run verify (includes spec-check when wired).
  */
 
+import {
+  blockedTaskResult,
+  formatAskSummary,
+  stuckAfterVerifyAsk,
+} from "./ask.ts";
 import { loadAgentConfig } from "./config.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
 import { defaultVerifyRunner } from "./verify.ts";
@@ -120,6 +125,12 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       return cancelledResult(summary, filesChanged, attempts);
     }
 
+    // AUTONOMY-1: the agent asked the human — blocked, not done, no verify.
+    if (exec.ask) {
+      setState(onEvent, "blocked");
+      return blockedTaskResult({ ...exec, ask: exec.ask }, attempts);
+    }
+
     const wantVerify =
       verifyBeforeComplete && filesChanged.length > 0;
 
@@ -185,14 +196,17 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
         text: `Verification failed after ${maxRetries} retries — giving up.`,
       });
       setState(onEvent, "failed");
+      // AUTONOMY-2: stuck — still failed (AGENT-4), plus a question for a human.
+      const ask = stuckAfterVerifyAsk(maxRetries);
       return {
-        summary: `${summary}\n\nVerification failed after ${maxRetries} retries:\n${result.output}`,
+        summary: `${summary}\n\nVerification failed after ${maxRetries} retries:\n${result.output}\n\n${formatAskSummary(ask)}`,
         filesChanged,
         verified: false,
         verifySkipped: false,
         cancelled: false,
         state: "failed",
         attempts,
+        ask,
       };
     }
 

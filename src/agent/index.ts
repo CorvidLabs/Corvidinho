@@ -6,6 +6,8 @@ export type {
   ExecuteContext,
   ExecuteFn,
   ExecuteResult,
+  HumanAsk,
+  HumanAskReason,
   RunTaskOptions,
   TaskResult,
   VerifyResult,
@@ -50,6 +52,21 @@ export {
   filesChangedFromToolData,
 } from "./tools.ts";
 export type { BuildToolsOpts, OpenAiToolDef } from "./tools.ts";
+
+export {
+  ASK_AGENT_SYSTEM_INSTRUCTIONS,
+  ASK_QUESTION_MAX,
+  ASK_SUMMARY_PREFIX,
+  ASK_TOOL_NAME,
+  askFromToolArguments,
+  askFromUnknown,
+  buildAskToolDef,
+  formatAskSummary,
+  normalizeQuestion,
+  stuckAfterVerifyAsk,
+  withAskTool,
+} from "./ask.ts";
+export type { AskToolDef, AskToolOutcome, ChatToolDef } from "./ask.ts";
 
 export { summarizeTaskResult, summarizeTaskRunOutput } from "./task-summary.ts";
 export type { TaskResultSummaryInput } from "./task-summary.ts";

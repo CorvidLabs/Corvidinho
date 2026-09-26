@@ -65,6 +65,7 @@ export type OpenWorkPrInput = {
 
 export type WorkPrSkipReason =
   | "run-failed"
+  | "needs-input"
   | "verify-failed"
   | "no-worktree"
   | "no-changes"
@@ -162,6 +163,11 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
       "run-failed",
       `not opened — the work run did not finish cleanly (exit ${run.exitCode}), so there is nothing verified to ship.`,
     );
+  }
+  // AUTONOMY-1 (REQ-discord-044): a run that stopped to ask a human is not
+  // done, so there is nothing to ship yet.
+  if (run.task?.state === "blocked") {
+    return skip("needs-input", "not opened — the work run is waiting for your answer to its question.");
   }
   if (run.task && (run.task.state === "failed" || (!run.task.verified && !run.task.verifySkipped))) {
     return skip("verify-failed", "not opened — verification failed in the work run.");
