@@ -20,7 +20,11 @@ import type {
   SlashInteraction,
   SlashReplyPayload,
 } from "../src/discord/slash-types.ts";
-import { NOT_AUTHORIZED } from "../src/discord/types.ts";
+import {
+  ALLOWLIST_DENY_TIP,
+  EPHEMERAL_SILENT_ACK,
+  NOT_AUTHORIZED,
+} from "../src/discord/types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 
 function allowCfg(channels: string[] = ["chan-allowed"]) {
@@ -77,6 +81,9 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     thinkingTickMs: 60_000,
     env: over.env,
     gitTipSha: over.gitTipSha,
+    adminUserIds: over.adminUserIds,
+    adminRoleIds: over.adminRoleIds,
+    mutedUsers: over.mutedUsers,
   };
 }
 
@@ -102,18 +109,42 @@ describe("formatUptime", () => {
 });
 
 describe("slash dispatch gates", () => {
-  test("non-allowlisted channel → not authorized; no session", async () => {
+  test("non-allowlisted channel non-admin → ephemeral silent ack; no session (DISCORD-DENY-3)", async () => {
     const ctx = makeCtx();
     const ix = memoryInteraction({
       commandName: "status",
       channelId: "chan-other",
+      userId: "user-1",
     });
     const result = await handleSlashInteraction(ctx, ix);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.reply).toBe(NOT_AUTHORIZED);
+      expect(result.reason).toBe("channel_not_allowlisted");
+      expect(result.reply).toBeUndefined();
     }
-    expect(ix.replies[0]?.content).toBe(NOT_AUTHORIZED);
+    expect(ix.replies[0]?.ephemeral).toBe(true);
+    expect(ix.replies[0]?.content).toBe(EPHEMERAL_SILENT_ACK);
+    expect(ix.replies[0]?.content).not.toContain("allowlist");
+    expect(ix.replies[0]?.content).not.toBe(NOT_AUTHORIZED);
+    expect(ctx.store.list().length).toBe(0);
+  });
+
+  test("non-allowlisted channel admin → ephemeral allowlist tip (DISCORD-DENY-2)", async () => {
+    const ctx = makeCtx({ adminUserIds: ["boss"] });
+    const ix = memoryInteraction({
+      commandName: "status",
+      channelId: "chan-other",
+      userId: "boss",
+    });
+    const result = await handleSlashInteraction(ctx, ix);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("channel_not_allowlisted");
+      expect(result.reply).toBe(ALLOWLIST_DENY_TIP);
+    }
+    expect(ix.replies[0]?.ephemeral).toBe(true);
+    expect(ix.replies[0]?.content).toBe(ALLOWLIST_DENY_TIP);
+    expect(ix.replies[0]?.content).toContain("allowlist.toml");
     expect(ctx.store.list().length).toBe(0);
   });
 
@@ -233,7 +264,8 @@ describe("slash handlers", () => {
     await handleSlashInteraction(ctx, ix);
     expect(ctx.workStore.list().length).toBe(0);
     expect(ctx.store.list().length).toBe(0);
-    expect(ix.replies[0]?.content).toBe(NOT_AUTHORIZED);
+    expect(ix.replies[0]?.ephemeral).toBe(true);
+    expect(ix.replies[0]?.content).toBe(EPHEMERAL_SILENT_ACK);
   });
 });
 

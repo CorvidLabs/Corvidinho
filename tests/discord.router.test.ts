@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { routeMessage } from "../src/discord/message-router.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
-import { NOT_AUTHORIZED, type InboundMessage } from "../src/discord/types.ts";
+import { type InboundMessage } from "../src/discord/types.ts";
 
 function baseMsg(over: Partial<InboundMessage> = {}): InboundMessage {
   return {
@@ -37,7 +37,7 @@ describe("discord message-router (DISCORD-1/2/2.a/5)", () => {
     }
   });
 
-  test("non-allowlisted channel refuse on mention with short not-authorized", () => {
+  test("non-allowlisted channel refuse on mention with no public reply (DISCORD-DENY-1)", () => {
     const store = new SessionStore();
     const action = routeMessage(baseMsg({ channelId: "chan-other" }), {
       store,
@@ -45,7 +45,8 @@ describe("discord message-router (DISCORD-1/2/2.a/5)", () => {
     });
     expect(action.kind).toBe("refuse");
     if (action.kind === "refuse") {
-      expect(action.reply).toBe(NOT_AUTHORIZED);
+      expect(action.reason).toBe("channel_not_allowlisted");
+      expect(action.reply).toBeUndefined();
     }
     expect(store.bySessionId.size).toBe(0);
   });
@@ -109,12 +110,15 @@ describe("discord message-router (DISCORD-1/2/2.a/5)", () => {
     }
   });
 
-  test("empty channel allowlist denies mention", () => {
+  test("empty channel allowlist denies mention silently (DISCORD-DENY-1)", () => {
     const store = new SessionStore();
     const action = routeMessage(baseMsg(), {
       store,
       allowlist: allowCfg([]),
     });
     expect(action.kind).toBe("refuse");
+    if (action.kind === "refuse") {
+      expect(action.reply).toBeUndefined();
+    }
   });
 });

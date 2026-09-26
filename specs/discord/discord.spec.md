@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 34
+version: 35
 status: draft
 files:
   - src/discord/types.ts
@@ -46,12 +46,12 @@ Thin Discord HEAR bridge: gateway → message-router → session stub with live
 thinking status, slash ops, per-user rate limits/mutes, admin re-auth at
 command run time, confused-deputy requester checks on outbound posts,
 image attachments as local files for the agent, and Merlin-shaped
-protocol-version lockstep, and presence version under the bot name (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12).
+protocol-version lockstep, presence version under the bot name, and allowlist deny polish (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12/DENY-1..3).
 
 ## Public API
 
 loadBridgeConfig, startBridge, routeMessage, SessionStore, WorkStore,
-goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, RATE_LIMITED,
+goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, ALLOWLIST_DENY_TIP, EPHEMERAL_SILENT_ACK, RATE_LIMITED,
 MUTED, PermissionLevel, resolvePermissionLevel, checkRateLimit, muteUser,
 unmuteUser, isMuted, evaluateRequesterCanSend, agent/gateway helpers,
 thinking-status builders/controller, slash command bodies + dispatch
@@ -74,7 +74,8 @@ local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
-ClientReady sets short Custom Status from shared package version (DISCORD-12).
+ClientReady sets short Custom Status from shared package version (DISCORD-12);
+outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3).
 
 ## Behavioral Examples
 
@@ -88,8 +89,8 @@ match proceeds, mismatch refuses start; ClientReady sets presence to vX.Y.Z.
 
 ## Error Cases
 
-Missing token; empty channels; protocol mismatch; not authorized (message,
-slash, or insufficient permission); muted; rate limited; requester cannot send;
+Missing token; empty channels; protocol mismatch; channel deny silent/ephemeral (DISCORD-DENY); not authorized (insufficient
+permission); muted; rate limited; requester cannot send;
 strict missing requesting_user_id; SAFE-1 deny for discord-post; agent failure
 marks progress error then reports; unknown slash command refused; oversized/unsupported image attachments skipped.
 
@@ -106,3 +107,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral: Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands |
 | 2026-09-26 | clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global: guild PUT of six + clear globals (REQ-discord-016); discord register-commands CLI |
 | 2026-09-26 | discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src: Discord presence/custom status shows shared package version on ClientReady (DISCORD-12); fixture test; no slash/allowlist churn |
+
+| 2026-09-26 | discord-deny-polish-discord-deny-1-3-messagecreate-unauthorized-silent-slash-admin-ephemeral-allowlist-tip-non-admin: DISCORD-DENY-1..3 silent MessageCreate + slash admin tip / non-admin zero-width; docs/discord.md |

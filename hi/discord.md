@@ -30,7 +30,8 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 
 ## Notes (not numbered AC)
 
-- Mermaid diagrams stay in **repo docs** (e.g. `docs/discord.md`). Discord chat uses embeds, code fences, or PNG — not native Mermaid.
+- Mermaid diagrams stay in **repo docs** (e.g. [`docs/discord.md`](../docs/discord.md)). Discord chat uses embeds, code fences, or PNG — not native Mermaid.
+- Operator UX inventory (slash set, outbound formats, deny flowchart): [`docs/discord.md`](../docs/discord.md).
 
 ## Retired
 

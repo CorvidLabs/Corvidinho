@@ -8,7 +8,7 @@ Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, discord
 
 **Do not invent** ACCESS, bounty, or MainNet product surfaces. Do not invent acceptance criteria that are not in `hi/` or that Leif has not confirmed.
 
-Human inventory notes (not acceptance criteria): `docs/CORVIDINHO-FEATURE-STEAL.md`, `docs/CORVIDINHO-HI-DRAFT-FULL.md`.
+Human inventory notes (not acceptance criteria): `docs/CORVIDINHO-FEATURE-STEAL.md`, `docs/CORVIDINHO-HI-DRAFT-FULL.md`. Discord UX inventory: [`docs/discord.md`](docs/discord.md).
 
 
 ## Process / governance (PROCESS-1..5)

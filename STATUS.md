@@ -48,7 +48,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Attribution helper | #20 → [#24](https://github.com/CorvidLabs/Corvidinho/pull/24) | Shared “Made with Corvidinho” markdown/plain constants + `corvidinho attribution` CLI (no @handles) |
 | HEAR thinking status | #10 → [#25](https://github.com/CorvidLabs/Corvidinho/pull/25) | DISCORD-3 edit-in-place progress (elapsed, tool, rough tokens); no ProcessManager |
 | HEAR slash commands | #11 → [#26](https://github.com/CorvidLabs/Corvidinho/pull/26) | DISCORD-4 thin `/session` `/status` `/agents` `/work`; channel re-check; no ProcessManager |
-| HEAR slash re-register | → (this PR) | REQ-discord-016: guild PUT of six + clear globals; `discord register-commands`; kills duplicate /agents from stale corvid-agent guild cmds |
+| HEAR slash re-register | → [#51](https://github.com/CorvidLabs/Corvidinho/pull/51) | REQ-discord-016: guild PUT of six + clear globals; `discord register-commands`; kills duplicate /agents from stale corvid-agent guild cmds |
 | HEAR rate limits + mutes | #12 → [#27](https://github.com/CorvidLabs/Corvidinho/pull/27) | DISCORD-6 per-user sliding window + in-memory mute; peers unaffected; no ProcessManager |
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 | HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
@@ -61,13 +61,15 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
 | HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → main | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
 | v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
-| Discord presence version | → (this PR) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
+| Discord presence version | → [#53](https://github.com/CorvidLabs/Corvidinho/pull/53) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
+| Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
-| **P0 now** | Slash guild PUT=6 + global `[]` | Leif/CoS priority flip — finish Discord slash registration before deeper MEMORY |
+| Done | Slash guild PUT=6 + global `[]` | Landed [#51](https://github.com/CorvidLabs/Corvidinho/pull/51) |
+| **P0 now** | Discord deny polish (DENY-1..3) + `docs/discord.md` | This PR — silent MessageCreate deny; admin ephemeral tip on slash |
 | **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
 | HI captured | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) + [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION | Criteria in `hi/`; **impl deferred** (MEMORY code not in this PR) |
 | Later | #41 MEMORY impl · #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #37 SESSION soft-TTL · #36 CONTACTS | After slash + GH go-live |
@@ -198,6 +200,7 @@ WALLET-1..3 captured in `hi/allow.md`. **No wallet ACT** until an approved-walle
 | `corvidinho discord bridge` thin slice | **Shipped** (this PR / #5) |
 | `.env.example` + `allowlist.example.toml` | **Shipped** (no secret values) |
 | `docs/DISCORD-GO-LIVE.md` (Developer Portal + VM paths) | **Shipped** |
+| `docs/discord.md` (slash / outbound / deny UX; mermaid docs-only) | **This PR** |
 | Doctor: missing token / empty channels | **Shipped** (clear exit / refuse start) |
 | Live token in VM | **Done on Leif's box** (corvid-agent#1110) — keep secrets in secret store only |
 | Non-empty channel IDs on VM | **Done on Leif's box** — keep allowlists default-deny elsewhere |
