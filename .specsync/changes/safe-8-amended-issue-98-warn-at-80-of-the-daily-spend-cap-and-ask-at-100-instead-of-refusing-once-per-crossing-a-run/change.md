@@ -1,6 +1,6 @@
 ---
 id: safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run
-state: draft
+state: implementing
 type: feature
 base_commit: c238e3029a833915f1b31f75d23ed09f6e5c584f
 ---
