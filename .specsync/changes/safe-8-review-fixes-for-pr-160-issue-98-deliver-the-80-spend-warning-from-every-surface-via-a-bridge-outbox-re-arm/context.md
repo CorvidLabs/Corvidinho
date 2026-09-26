@@ -30,6 +30,10 @@ A review of PR #160 found:
 
 Constraints: the canonical requirement text for these fixes is carried by
 the amended change's deltas (REQ-agent-098, REQ-discord-098, REQ-cli-098);
-this change covers the implementation paths that change did not list. No new
+this change covers the implementation paths that change did not list. The
+public behavior these paths change (owner pings, `/work` `blocked` status,
+daemon log lines) is recorded as a public contract change there, so this
+change answers `public_contract: no` and declares no spec change: it adds
+no contract beyond those modified requirements. No new
 env var, slash command or schema version; the Approve card (#96, draft
 SAFE-18..20) stays left for HI capture.
