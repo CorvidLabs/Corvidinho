@@ -403,3 +403,12 @@ environment variable is added.
 Acceptance Criteria
 - `task run --task demo --output ndjson` with a fake `fledge` on PATH (it starts a lane task and blocks), sent SIGINT or SIGTERM while verify runs, exits 130 (not by the signal), its last stdout line is a `result` frame with `cancelled: true`, `verified: false`, `state: "failed"`, and both the fake `fledge` and its lane task are gone.
 
+### REQ-cli-023
+
+The project SHALL ship package version `0.0.23` (stop means stop (process trees), SAFE-3 cd clamp, scrub before clip, GitHub gate reads allowlist file). CLI `version` and Discord presence (DISCORD-12) report `0.0.23` after a restart. CHANGELOG SHALL include verbose 0.0.23 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.23`.
+- CLI `version` prints `0.0.23`.
+- CHANGELOG has a 0.0.23 section that the updater's changelog helper extracts exactly.
+
