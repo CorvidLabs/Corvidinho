@@ -63,6 +63,9 @@ files:
   - plugins/git/exec.ts
   - plugins/git/parse.ts
   - tests/git.plugins.test.ts
+  - plugins/autonomous/index.ts
+  - plugins/autonomous/commands.ts
+  - tests/autonomous.delegate.test.ts
   - plugins/fledge/index.ts
   - plugins/fledge/discover.ts
   - plugins/fledge/commands.ts
@@ -88,6 +91,8 @@ SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
 typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
 task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
+Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
+`delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117).
 
 ## Public API
 
@@ -98,7 +103,11 @@ register via `loadGitPlugins` (`plugins/git/index.ts`).
 `plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
 takes the resolver/transport seams, `webFetch` is the guarded GET core,
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
-HTTP/1.1 socket transport.
+HTTP/1.1 socket transport. Autonomous plugins
+register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
+`createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
+limiter and timeout. `PluginCommand.autonomous?: boolean`;
+`PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
 
 ## Invariants
 
@@ -166,6 +175,15 @@ URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
 (GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
 SAFE-22 default-branch policy is not enforced (awaiting HI).
 
+`delegate` (REQ-plugins-117) is `dangerous: false`, `mutating: true`, minTier
+2, `autonomous: true`: hidden from the tool catalog unless the session is
+allowed (SAFE-9), never offered to or run for a non-ADMIN role session
+(ROLES-CHAT-2/3/5, a worker runs tools), and its handler re-checks at run
+time, in order, usage (exit 1), the
+AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
+concurrency / per-run budget (exit 2, nothing spawned). It returns the
+worker's skill, tier, depth, state, summary and filesChanged.
+
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
@@ -223,6 +241,11 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
 - **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
 
+### Scenario: delegate refused while autonomous mode is off
+
+- **Given** a project without `[corvidinho.autonomous] enabled = true`
+- **When** `delegate` runs (tool loop or `plugins run`)
+- **Then** it fails with exit 2 citing AUTONOMOUS-1 and no worker is spawned
 
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
@@ -261,6 +284,9 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | git-branch-create switch would overwrite an ignored / untracked local file (e.g. `.env`) | Refuse (exit 2, SAFE-2); HEAD and files unchanged |
 | git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
 | git-push non-fast-forward | Fail (exit 1); never retried with force |
+| delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
+| delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
+| delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
 
 ## Dependencies
 
@@ -293,6 +319,8 @@ and current rows for plugins host evolution.
 | 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
 | 2026-09-26 | web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http: Web-fetch plugin, SSRF-guarded (issue #111, PLUGIN-1/2, SAFE-7): new plugins/web with one GET-only web-fetch command; http/https only; DNS resolved and every address checked against loopback, private, CGNAT, link-local/metadata, unique-local, multicast, unspecified, reserved and IPv4-mapped/NAT64 forms; the checked IP is pinned for the socket while Host and SNI keep the original name; redirects followed manually (max 5) and re-checked per hop; 1 MiB body and 15s total caps; text content types only; output control-stripped, scrubbed and fenced as untrusted data (title inside the fence, no echo of server text); URLs carrying secrets refused; 100k-char text cap; dangerous true (SAFE-1 consent), minTier 1; web-search left for HI capture |
 | 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
+| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117: `delegate` autonomous plugin (PLUGIN-5, AUTONOMOUS-5, SAFE-9), `PluginCommand.autonomous`, handler tier + signal pass-through (REQ-plugins-117) |
+| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho: AUTONOMOUS-1 gate and depth-capped delegate tool (issue #117, AUTONOMOUS-1/5, SAFE-9): autonomous mode off until [corvidinho.autonomous] enabled = true in the project fledge.toml; a code-tier lead can delegate a skill-tagged subtask to a worker (child task run, same-or-lower tier, non-interactive, depth <= 2, capped fan-out) and synthesize its summary; delegate stays hidden from the tool catalog unless the session is allowed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2..6 mutating role gates |
 | 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |

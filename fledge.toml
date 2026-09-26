@@ -52,6 +52,13 @@ steps = ["lint", "smoke", "test", "spec-check"]
 verify_before_complete = true
 max_retries = 3
 
+# Autonomous mode (AUTONOMOUS-1) stays off until a project enables it here.
+# When on, a code-tier lead may use `delegate` to hand subtasks to worker runs
+# (AUTONOMOUS-5); otherwise the tool stays hidden (SAFE-9). Workers: same or
+# lower tier, non-interactive, max 2 levels deep, 2 at once, 4 per run.
+# [corvidinho.autonomous]
+# enabled = true
+
 # Discord HEAR — local smoke without live token (CI uses bun test fixtures).
 [tasks.bridge-smoke]
 cmd = "bun src/cli.ts --protocol-version"

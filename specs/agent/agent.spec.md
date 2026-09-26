@@ -16,12 +16,17 @@ files:
   - src/agent/tools.ts
   - src/agent/project-instructions.ts
   - src/agent/events-ndjson.ts
+  - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
+  - tests/agent.ask.test.ts
+  - src/autonomous/enabled.ts
+  - src/autonomous/delegate.ts
+  - tests/autonomous.enabled.test.ts
 
 db_tables: []
 depends_on:
@@ -52,6 +57,18 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+Autonomous gate + delegation core (REQ-agent-117, issue #117):
+`src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
+`loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
+`src/autonomous/delegate.ts` exports `delegateDepthFromEnv`,
+`canDelegateAtDepth`, `clampChildTier`, `parseDelegateArgs`,
+`buildDelegateTaskText`, `resolveDelegateBin`, `isWorkerEnvDropped`,
+`buildDelegateSpawn`, `createDelegateLimiter`, `runDelegateChild` and the caps
+(`MAX_DELEGATE_DEPTH` 2, `MAX_CONCURRENT_DELEGATES` 2,
+`MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
+`autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
+(default: `autonomousSessionAllowed({ cwd, env })`).
+
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
 `loadProjectInstructions`, `renderProjectInstructions`,
@@ -76,6 +93,15 @@ appears in the final chat reply (DISCORD-3.a).
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
 in addition to MEMORY instructions.
 
+Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
+exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
+`askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
+`ASK_AGENT_SYSTEM_INSTRUCTIONS`. `AgentState` gains `blocked`;
+`ExecuteResult` / `TaskResult` gain optional `ask: { reason: "clarify" |
+"stuck", question }`. A clarify ask ends the run `blocked` (verify skipped,
+exit 0); verify exhaustion stays `failed` and carries a `stuck` ask. Additive
+on the NDJSON wire: protocol stays 2.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
@@ -86,6 +112,17 @@ NDJSON frames never carry raw tool arguments; ToolCall `argsSummary`, Text,
 ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
+
+Autonomous mode is off unless the project `fledge.toml` sets
+`[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
+left out of the tool catalog unless the session is allowed (enabled, depth
+below 2) and appear at code tier only (SAFE-9). The tool loop passes its tier
+and abort signal to `runPlugin`. A worker never runs above the lead's tier
+(omitted = the lead's), is forced non-interactive with the lead's allowlist,
+no ADMIN and no SAFE-4 confirm tokens, keeps prove-before-done (never
+`--no-verify`, REQ-cli-085), runs one level deeper, and is stopped on
+lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
+These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
 
 Project instructions come only from the project root (nearest `.git` at or
 above cwd, else cwd), never from a parent directory above it. Each file is
@@ -104,6 +141,11 @@ filesystem.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
+`ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
+is offered only on tool/code tiers. A run with an ask is never `done`; the
+question is capped at 1500 chars and an empty question is refused back to the
+model.
+
 ## Behavioral Examples
 
 ### Scenario: System prompt mentions memory-store
@@ -113,15 +155,32 @@ filesystem.
 - **Then** it embeds MEMORY_AGENT_SYSTEM_INSTRUCTIONS with argv example for
   memory-store
 
+### Scenario: delegate hidden until the project opts in
+
+- **Given** a project whose `fledge.toml` has no `[corvidinho.autonomous]`
+- **When** a code-tier task run builds its tool catalog
+- **Then** `delegate` is not offered, and a model call naming it is refused
+
+### Scenario: lead delegates a subtask
+
+- **Given** `[corvidinho.autonomous] enabled = true` and a code-tier lead
+- **When** the model calls `delegate` with `--skill specsync --task ...`
+- **Then** a worker `task run` runs non-interactive at depth 1 and its summary and filesChanged come back in the tool result for the lead to synthesize
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
-| Verify exhausted | state failed, verified=false, summary includes verifier output |
+| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
+| ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
+| Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
+| Delegation depth env malformed | Treated as the cap; no further delegation |
+| Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
 | AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
@@ -145,8 +204,11 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | tool-loop-dispatches-only-tools-offered-in-the-run-s-catalog-safe-1-agent-5-pr-128-review-follow-up-a-registered-but: Tool loop dispatches only tools offered in the run's catalog (SAFE-1 / AGENT-5, PR #128 review follow-up): a registered but not-offered (e.g. dangerous or above-tier) plugin name from the model is refused instead of run; memory store test updated for soft-deleted re-store history |
 | 2026-09-26 | spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene: Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo |
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
+| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117: AUTONOMOUS-1 `[corvidinho.autonomous]` gate, SAFE-9 catalog hiding, delegation core with depth / tier / fan-out safety defaults (REQ-agent-117) |
+| 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho: AUTONOMOUS-1 gate and depth-capped delegate tool (issue #117, AUTONOMOUS-1/5, SAFE-9): autonomous mode off until [corvidinho.autonomous] enabled = true in the project fledge.toml; a code-tier lead can delegate a skill-tagged subtask to a worker (child task run, same-or-lower tier, non-interactive, depth <= 2, capped fan-out) and synthesize its summary; delegate stays hidden from the tool catalog unless the session is allowed |
 | 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
+| 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
 

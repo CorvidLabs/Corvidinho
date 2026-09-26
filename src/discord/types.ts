@@ -6,6 +6,7 @@
  * protocol lockstep (DISCORD-10).
  */
 
+import type { HumanAsk } from "../agent/types.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 
@@ -120,6 +121,8 @@ export type AgentSpawnResult = {
   sessionId: string;
   summary: string;
   exitCode: number;
+  /** The run needs a human (AUTONOMY-1/2): question + owner ping. */
+  ask?: HumanAsk;
   /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).

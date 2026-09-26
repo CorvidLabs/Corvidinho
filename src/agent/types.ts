@@ -9,7 +9,9 @@ export type AgentState =
   | "executing"
   | "verifying"
   | "done"
-  | "failed";
+  | "failed"
+  /** Stopped to ask the human a clarifying question (AUTONOMY-1). */
+  | "blocked";
 
 export type AgentEvent =
   | { type: "StateChanged"; state: AgentState }
@@ -29,9 +31,23 @@ export type AgentTokenUsage = {
   totalTokens: number;
 };
 
+/**
+ * Why a run stopped for a human (AUTONOMY-1/2, #44): `clarify` = the agent
+ * called ask-human; `stuck` = the runner gave up (verify retries exhausted).
+ */
+export type HumanAskReason = "clarify" | "stuck";
+
+/** A question surfaced to the requester; bridges also ping the owner. */
+export type HumanAsk = {
+  reason: HumanAskReason;
+  question: string;
+};
+
 export type ExecuteResult = {
   summary: string;
   filesChanged: string[];
+  /** Set when the tool loop stopped to ask the human (ask-human). */
+  ask?: HumanAsk;
 };
 
 export type ExecuteContext = {
@@ -60,6 +76,8 @@ export type TaskResult = {
   cancelled: boolean;
   state: AgentState;
   attempts: number;
+  /** Present only when the run needs a human answer (AUTONOMY-1/2). */
+  ask?: HumanAsk;
 };
 
 export type AgentConfig = {

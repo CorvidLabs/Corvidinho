@@ -13,7 +13,7 @@ import {
   resolveActingIsAdmin,
   roleSessionActive,
 } from "./roles.ts";
-import type { PluginHandlerResult } from "./types.ts";
+import type { PluginHandlerArgs, PluginHandlerResult } from "./types.ts";
 
 export type RunOptions = {
   name: string;
@@ -22,6 +22,9 @@ export type RunOptions = {
   json?: boolean;
   nonInteractive?: boolean;
   allowlist?: ReadonlySet<string> | string[];
+  /** Passed to the handler: calling run's tier and abort signal. */
+  tier?: PluginHandlerArgs["tier"];
+  signal?: AbortSignal;
 };
 
 export class PluginDeniedError extends Error {
@@ -114,6 +117,8 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
       json: Boolean(opts.json),
       nonInteractive,
       allowlist: allow,
+      ...(opts.tier ? { tier: opts.tier } : {}),
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
   } catch (e) {
     if (dangerous) safeRecord(cmd.name, args, "error", 1);

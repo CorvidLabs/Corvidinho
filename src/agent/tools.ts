@@ -4,7 +4,7 @@
  */
 
 import { isMutatingPlugin } from "../plugins/mutating.ts";
-import { list } from "../plugins/registry.ts";
+import { get, list } from "../plugins/registry.ts";
 import type { CapabilityTier } from "./tier.ts";
 import { tierAllowsPlugin } from "./tier.ts";
 
@@ -35,11 +35,17 @@ export type BuildToolsOpts = {
    * Default true when unset (local CLI / no role session).
    */
   actingIsAdmin?: boolean;
+  /**
+   * SAFE-9: when false (default), omit autonomous extras (e.g. `delegate`)
+   * — offered only to sessions allowed autonomous tools (AUTONOMOUS-1).
+   */
+  autonomous?: boolean;
 };
 
 /**
  * Build the tools array for chat/completions.
- * Read tier → []. Dangerous plugins omitted unless includeDangerous.
+ * Read tier → []. Dangerous plugins omitted unless includeDangerous;
+ * autonomous extras omitted unless `autonomous` (SAFE-9).
  */
 export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
   const includeDangerous = Boolean(opts.includeDangerous);
@@ -48,6 +54,7 @@ export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
   for (const entry of list()) {
     if (entry.dangerous && !includeDangerous) continue;
     if (!actingIsAdmin && isMutatingPlugin(entry)) continue;
+    if (!opts.autonomous && get(entry.name)?.autonomous) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;
     out.push(toolDefForEntry(entry));
   }

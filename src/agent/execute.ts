@@ -5,6 +5,7 @@
  * Secrets stay in env — never commit.
  */
 
+import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
@@ -13,6 +14,15 @@ import {
   roleSessionActive,
 } from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
+import {
+  ASK_AGENT_SYSTEM_INSTRUCTIONS,
+  ASK_TOOL_NAME,
+  ASK_TOOL_RESULT_DETAIL,
+  askExecuteResult,
+  askFromToolArguments,
+  withAskTool,
+  type ChatToolDef,
+} from "./ask.ts";
 import type {
   AgentEvent,
   AgentTokenUsage,
@@ -104,6 +114,11 @@ export type CreateTaskExecuteOpts = {
   maxToolRounds?: number;
   /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
   includeDangerous?: boolean;
+  /**
+   * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
+   * autonomous mode (AUTONOMOUS-1) and the delegation depth cap is not reached.
+   */
+  autonomous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
   /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
@@ -221,7 +236,17 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     if (roleSessionActive(env)) {
       actingIsAdmin = await resolveActingIsAdmin(env);
     }
-    const tools = buildOpenAiTools({ tier, includeDangerous, actingIsAdmin });
+    const autonomous =
+      opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
+    // AUTONOMY-1: ask-human rides along with the plugin catalog.
+    const tools = withAskTool(
+      buildOpenAiTools({
+        tier,
+        includeDangerous,
+        actingIsAdmin,
+        autonomous,
+      }),
+    );
     return runToolLoop({
       llm: { ...llm, tier },
       fetchImpl,
@@ -248,7 +273,7 @@ type LoopArgs = {
   attempt: number;
   verifyFeedback?: string;
   signal: AbortSignal;
-  tools: OpenAiToolDef[];
+  tools: ChatToolDef[];
   cwd: string;
   nonInteractive: boolean;
   allowlist: Set<string>;
@@ -291,6 +316,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
     IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
     PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
+    ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.",
     projectBlock,
@@ -370,9 +396,26 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       const argv = argvFromToolArguments(rawArgs);
       emit(onEvent, { type: "ToolCall", name: eventName, args: rawArgs });
 
+      // AUTONOMY-1: ask-human ends the run with the question (never "done").
+      const asked =
+        name === ASK_TOOL_NAME && offered.has(name)
+          ? askFromToolArguments(rawArgs)
+          : null;
+      if (asked?.ok) {
+        emit(onEvent, {
+          type: "ToolResult",
+          name,
+          success: true,
+          detail: ASK_TOOL_RESULT_DETAIL,
+        });
+        return askExecuteResult(asked.ask, filesChanged);
+      }
+
       let result;
       try {
-        result = offered.has(name)
+        result = asked
+          ? asked.refusal
+          : offered.has(name)
           ? await runPlugin({
               name,
               args: argv,
@@ -380,6 +423,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               json: true,
               nonInteractive,
               allowlist,
+              tier: llm.tier,
+              signal,
             })
           : {
               ok: false,
@@ -475,7 +520,7 @@ async function chatCompletions(opts: {
   llm: LlmEnv;
   fetchImpl: FetchLike;
   messages: ChatMessage[];
-  tools: OpenAiToolDef[];
+  tools: ChatToolDef[];
   signal: AbortSignal;
   onUsage?: (usage: AgentTokenUsage) => void;
 }): Promise<
