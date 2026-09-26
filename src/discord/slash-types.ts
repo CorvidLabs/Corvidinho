@@ -11,6 +11,7 @@ import type { RateLimitConfig, RateLimitState } from "./permissions.ts";
 import type { WorkStore } from "./work-store.ts";
 import type { ScheduleStore } from "../scheduler/store.ts";
 import type { MemoryStore } from "../memory/index.ts";
+import type { AnnounceStore } from "./announce-store.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -43,6 +44,8 @@ export type SlashContext = {
   scheduleStore?: ScheduleStore;
   /** MEMORY store (REQ-discord-021). */
   memoryStore?: MemoryStore;
+  /** DISCORD-ANNOUNCE — optional until bridge wires it. */
+  announceStore?: AnnounceStore;
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;

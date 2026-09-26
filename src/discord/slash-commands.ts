@@ -1,6 +1,6 @@
 /**
  * Thin slash command bodies for Discord application commands (DISCORD-4 / 7 /
- * DISCORD-SCHEDULE-1..2). Plain JSON — no live discord.js required for fixture tests.
+ * DISCORD-SCHEDULE-1..2 / DISCORD-ANNOUNCE-1..2). Plain JSON — no live discord.js required for fixture tests.
  *
  * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN
  * + /schedule list|create|pause|resume|delete (single-project; skip templates).
@@ -12,28 +12,33 @@ export const OPT_SUB_COMMAND = 1;
 export const OPT_STRING = 3;
 /** Discord Application Command option type: USER */
 export const OPT_USER = 6;
+/** Discord Application Command option type: CHANNEL (native picker) */
+export const OPT_CHANNEL = 7;
+/** Discord Application Command option type: BOOLEAN */
+export const OPT_BOOLEAN = 5;
+/** Guild text channel type for CHANNEL option channel_types filter */
+export const CHANNEL_TYPE_GUILD_TEXT = 0;
+
+export type SlashOptionDef = {
+  type: number;
+  name: string;
+  description: string;
+  required?: boolean;
+  /** Restrict CHANNEL picker (e.g. [0] = guild text). */
+  channel_types?: number[];
+  options?: SlashOptionDef[];
+};
 
 export type SlashCommandBody = {
   name: string;
   description: string;
-  options?: Array<{
-    type: number;
-    name: string;
-    description: string;
-    required?: boolean;
-    options?: Array<{
-      type: number;
-      name: string;
-      description: string;
-      required?: boolean;
-    }>;
-  }>;
+  options?: SlashOptionDef[];
 };
 
 /**
  * Build the slash set: /session list|start, /status, /agents, /work,
  * /mute /unmute (DISCORD-7), /schedule list|create|pause|resume|delete
- * (DISCORD-SCHEDULE).
+ * (DISCORD-SCHEDULE), /announce channel|show (DISCORD-ANNOUNCE).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -205,6 +210,37 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
         },
       ],
     },
+    {
+      name: "announce",
+      description: "Configure ops/dev announcements channel (admin)",
+      options: [
+        {
+          type: OPT_SUB_COMMAND,
+          name: "channel",
+          description: "Set or clear the announcements channel (admin)",
+          options: [
+            {
+              type: OPT_CHANNEL,
+              name: "channel",
+              description: "Guild text channel (picker — do not type a snowflake)",
+              required: false,
+              channel_types: [CHANNEL_TYPE_GUILD_TEXT],
+            },
+            {
+              type: OPT_BOOLEAN,
+              name: "clear",
+              description: "Clear the announcements channel (default-deny until set again)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: OPT_SUB_COMMAND,
+          name: "show",
+          description: "Show the current announcements channel",
+        },
+      ],
+    },
   ];
 }
 
@@ -216,5 +252,6 @@ export const SLASH_COMMAND_NAMES = [
   "mute",
   "unmute",
   "schedule",
+  "announce",
 ] as const;
 export type SlashCommandName = (typeof SLASH_COMMAND_NAMES)[number];

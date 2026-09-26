@@ -13,6 +13,16 @@
 - Re-storing a memory key keeps the prior content as a soft-deleted row instead of overwriting it (no non-admin forget path).
 - Discord spawns always overwrite the acting env; WATCH spawns clear it.
 
+## 0.0.8
+
+### Discord `/announce` (DISCORD-ANNOUNCE-1..6)
+
+- Slash `/announce channel|show` — ADMIN sets/clears a dedicated ops/dev announcements channel via Discord’s native **CHANNEL picker** (never type a snowflake); `/announce show` and `/status` surface the current channel (empty = not configured / default-deny).
+- Persist announce channel id in shared SQLite `schema_meta` across restarts.
+- After every successful bridge restart, post a short `bridge live vX.Y.Z` note **only** to the configured announcements channel — not to the dogfood/chat allowlist.
+- Mutations re-check ADMIN at handler time; empty admin = deny-all.
+- Package version **0.0.8** — Discord presence (DISCORD-12) reads `v0.0.8` after bridge restart; **ops must restart the live bridge and re-register slash** (eight-command set). This release does not restart Corvidinho-run.
+
 ## 0.0.7
 
 ### Memory in Discord chat (AGENT-7 / MEMORY-2/4)

@@ -1,0 +1,58 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "Corvid Agent",
+      "timestamp": 1790451025,
+      "digest": "0d7d2fcc11f8af32e33c5ff5288eeac6f66c5cac702c1031bf50ef0425427c76",
+      "note": "DISCORD-ANNOUNCE-1..6; REQ-024; package 0.0.8",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-announce-slash-discord-announce-1-6-channel-picker-persist-bridge-live-announce-only-package-0-0-8-req-discord",
+        "title": "Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024",
+        "description": "Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          ".github/workflows/release.yml",
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/BOX-UPDATE.md",
+          "docs/discord.md",
+          "hi/discord.md",
+          "package.json",
+          "src/discord",
+          "tests/discord.announce.test.ts",
+          "tests/discord.register-commands.test.ts",
+          "tests/discord.session-worktree.test.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "/announce channel|show with CHANNEL picker; ADMIN set/clear persists SQLite; show+/status; ClientReady bridge live only to announce channel; empty admin deny-all; package 0.0.8 eight slash; REQ-discord-024; tests+verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "c5a6bb185b91775da5cc286ec574e0de5af029664c441ff74ee61804541ddd9b"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790451128,
+      "digest": "4ac68e97c9fa51ebbec7458f7fbd48737592626259e37285d433c7d2b7d976b9",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

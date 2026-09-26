@@ -71,6 +71,15 @@ export {
 } from "./requester-perms.ts";
 export { SessionStore } from "./session-store.ts";
 export { WorkStore, type WorkTaskStub, type WorkTaskStatus } from "./work-store.ts";
+export { AnnounceStore, ANNOUNCE_CHANNEL_META_KEY } from "./announce-store.ts";
+export {
+  postAnnouncement,
+  formatBridgeLiveAnnouncement,
+  formatAnnounceChannelLine,
+  type AnnounceSender,
+  type PostAnnouncementResult,
+} from "./announce.ts";
+export { handleAnnounceCommand } from "./command-handlers/announce.ts";
 export { routeMessage, type RouterDeps } from "./message-router.ts";
 export {
   createSpawnAgentClient,

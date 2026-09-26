@@ -66,7 +66,7 @@ bun src/cli.ts discord register-commands
 # pkill -f 'discord bridge' || true; nohup bun src/cli.ts discord bridge &
 ```
 
-3. Confirm with Discord API (source of truth): guild commands = the current slash set (seven including /schedule)
+3. Confirm with Discord API (source of truth): guild commands = the current slash set (eight including /schedule + /announce)
    (`session`, `status`, `agents`, `work`, `mute`, `unmute`); globals = empty.
 4. Discord **client cache** can lag — leave/rejoin the server or wait a minute
    if the UI still shows ghosts after the API is clean.

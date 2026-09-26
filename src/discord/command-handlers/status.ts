@@ -4,6 +4,7 @@
  */
 
 import { formatLlmStatusLine } from "../../version.ts";
+import { formatAnnounceChannelLine } from "../announce.ts";
 import { SLASH_COMMAND_NAMES } from "../slash-commands.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 
@@ -35,6 +36,8 @@ export type StatusReportInput = {
   gitTipSha?: string;
   /** Slash names to list (defaults to registered set). */
   slashNames?: readonly string[];
+  /** DISCORD-ANNOUNCE-3 — surface current announcements channel. */
+  announceChannelId?: string | null;
 };
 
 /** Pure formatter for `/status` body — fixture-friendly. */
@@ -52,6 +55,7 @@ export function formatStatusReport(input: StatusReportInput): string {
     `Work: ${input.workActive} active · ${input.workDone} done · ${input.workFailed} failed`,
     llmLine,
     `Slash commands: ${names.join(", ")}`,
+    formatAnnounceChannelLine(input.announceChannelId),
   ];
   if (input.gitTipSha) {
     lines.push(`Git tip: ${input.gitTipSha}`);
@@ -80,6 +84,7 @@ export async function handleStatusCommand(
     workFailed,
     env: ctx.env,
     gitTipSha: ctx.gitTipSha,
+    announceChannelId: ctx.announceStore?.getChannelId() ?? null,
   });
 
   await interaction.reply({
