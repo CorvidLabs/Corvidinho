@@ -96,27 +96,28 @@ export function routeMessage(
   // thread session. Other users fall through so they get their own session.
   if (msg.threadId) {
     const existing = deps.store.getByThread(msg.threadId);
-    if (existing && existing.userId === msg.authorId) {
-      // Still require parent/thread channel allowlist.
-      if (!isMonitoredChannel(msg.channelId, deps.allowlist) &&
-          !isMonitoredChannel(msg.threadId, deps.allowlist)) {
-        // Thread id may equal channel id for thread channels; if parent
-        // channel was allowlisted at create time, session exists — still
-        // re-check the session's channelId.
-        if (!isMonitoredChannel(existing.channelId, deps.allowlist)) {
-          return silentChannelDeny();
-        }
-      }
+    if (existing) {
+      // Deny-listed / unlisted actors are refused even when they do not own
+      // the thread session (DISCORD-DENY-1 / REQ-discord-201).
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
-      const blocked = refuseRateOrMute(msg, deps);
-      if (blocked) return blocked;
-      deps.store.touch(existing);
-      return {
-        kind: "continue_session",
-        session: existing,
-        prompt: stripMentions(msg.content) || msg.content,
-      };
+      if (existing.userId === msg.authorId) {
+        // Still require parent/thread channel allowlist.
+        if (!isMonitoredChannel(msg.channelId, deps.allowlist) &&
+            !isMonitoredChannel(msg.threadId, deps.allowlist)) {
+          if (!isMonitoredChannel(existing.channelId, deps.allowlist)) {
+            return silentChannelDeny();
+          }
+        }
+        const blocked = refuseRateOrMute(msg, deps);
+        if (blocked) return blocked;
+        deps.store.touch(existing);
+        return {
+          kind: "continue_session",
+          session: existing,
+          prompt: stripMentions(msg.content) || msg.content,
+        };
+      }
     }
     // No own thread session yet — fall through; mention may start one.
   }
@@ -125,21 +126,23 @@ export function routeMessage(
   // owner continues; another user cannot hijack via reply.
   if (msg.referencedMessageId) {
     const existing = deps.store.getByBotMessage(msg.referencedMessageId);
-    if (existing && existing.userId === msg.authorId) {
-      if (!isMonitoredChannel(existing.channelId, deps.allowlist) &&
-          !isMonitoredChannel(msg.channelId, deps.allowlist)) {
-        return silentChannelDeny();
-      }
+    if (existing) {
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
-      const blocked = refuseRateOrMute(msg, deps);
-      if (blocked) return blocked;
-      deps.store.touch(existing);
-      return {
-        kind: "continue_session",
-        session: existing,
-        prompt: stripMentions(msg.content) || msg.content,
-      };
+      if (existing.userId === msg.authorId) {
+        if (!isMonitoredChannel(existing.channelId, deps.allowlist) &&
+            !isMonitoredChannel(msg.channelId, deps.allowlist)) {
+          return silentChannelDeny();
+        }
+        const blocked = refuseRateOrMute(msg, deps);
+        if (blocked) return blocked;
+        deps.store.touch(existing);
+        return {
+          kind: "continue_session",
+          session: existing,
+          prompt: stripMentions(msg.content) || msg.content,
+        };
+      }
     }
   }
 

@@ -12,5 +12,5 @@ artifact: tasks
 - [x] Bridge stub/ephemeral/pick + pending retention
 - [x] Router per-user harden + getByUserChannel
 - [x] Specs + tests + package 0.0.22
-- [ ] SpecSync approve/check/review/finalize + PR merge + bridge restart/announce
+- [x] SpecSync approve/check/review/finalize + PR merge + bridge restart/announce
 
