@@ -7,11 +7,11 @@
   "title": "Release 0.0.10: live NDJSON stream (#139), owner record + owner-only ADMIN (#138/#141), SAFE-5 audit trail (#136), --task argv fix (#143); package 0.0.10, CHANGELOG, STATUS",
   "description": "Release 0.0.10: live NDJSON stream (#139), owner record + owner-only ADMIN (#138/#141), SAFE-5 audit trail (#136), --task argv fix (#143); package 0.0.10, CHANGELOG, STATUS",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "085997e28427678316dbc2d233c36f6695686d79",
   "created_at": 1790454336,
-  "updated_at": 1790454357,
+  "updated_at": 1790454389,
   "affected_specs": [
     "cli"
   ],

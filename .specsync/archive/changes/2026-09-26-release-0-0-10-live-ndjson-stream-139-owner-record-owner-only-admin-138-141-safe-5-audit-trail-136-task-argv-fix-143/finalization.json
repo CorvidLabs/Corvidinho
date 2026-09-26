@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-10-live-ndjson-stream-139-owner-record-owner-only-admin-138-141-safe-5-audit-trail-136-task-argv-fix-143",
+  "implementation_commit": "5a26bb8f7c4fa429140e9cb7f7c284a3ce855820",
+  "implementation_tree": "eb85dbd6aa98e19a60137f4a0521ceb42031dd14",
+  "contract_digest": "59a3908d888f1a169e6e4c55858d2490b74fa79865c81a1ce8c65a469a167336",
+  "workspace_digest": "534d602fab9547cde37dee46400ffa848dc82e4b221605502ee613e8f0f6c4b5",
+  "closing_digest": "3cf14afbe43df23dda392756b79319c67f82af9c3b7db09395ff246055933b9a",
+  "review_digest": "82eab71f8d21ce5fb8637f919ea0efa8c6e7d3873a07eca79a3ea67c9652d474",
+  "finalization_digest": "c808a5347b404b15ec5dc099266766e653a73e12a641b546e8605ee73b24d071",
+  "timestamp": 1790454389
+}

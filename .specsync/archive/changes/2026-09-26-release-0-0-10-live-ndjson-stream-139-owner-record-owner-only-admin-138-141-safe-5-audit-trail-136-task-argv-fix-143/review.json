@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-10-live-ndjson-stream-139-owner-record-owner-only-admin-138-141-safe-5-audit-trail-136-task-argv-fix-143",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "5a26bb8f7c4fa429140e9cb7f7c284a3ce855820",
+  "contract_digest": "59a3908d888f1a169e6e4c55858d2490b74fa79865c81a1ce8c65a469a167336",
+  "execution_digest": "d95a731d032ab95eac4760f812b01fdabdd04358904501fc357a274be24c8679",
+  "workspace_digest": "534d602fab9547cde37dee46400ffa848dc82e4b221605502ee613e8f0f6c4b5",
+  "timestamp": 1790454386
+}
