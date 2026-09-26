@@ -50,6 +50,7 @@ files:
   - plugins/shell/commands.ts
   - plugins/shell/clamp.ts
   - tests/shell.plugins.test.ts
+  - tests/shell.clamp-bypass.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -186,7 +187,12 @@ worker's skill, tier, depth, state, summary and filesChanged.
 
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
-(SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
+(SAFE-3) with exit 2. The clamp looks past prefix words (`{ } ! if then else
+elif do while until time builtin command eval`), `NAME=value` assignments,
+quoting and `cd` options (`-P -L -e -@ -n --`); `cd -`, targets the shell would
+expand (`$`, backtick, glob, brace) and CDPATH-searched targets when the
+command sets `CDPATH` refuse. The child shell does not inherit `CDPATH` or
+`OLDPWD`. SAFE-1 non-interactive deny applies unless allowlisted.
 
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
@@ -271,7 +277,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
-| shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, expansions, CDPATH) | Refuse (exit 2, SAFE-3); no spawn |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
