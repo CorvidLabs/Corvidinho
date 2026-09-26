@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "c851879f4aefe9e31990e55cf2bbe915496ba9e4",
+      "contract_digest": "f57369d36c6091150947419a23bb1a8f6a5d3bd8c087c17f0d8aee1df9046a4e",
+      "execution_digest": "885d6a69f3827f26c9344dc3229ce1ad9d4cbd2fce66c44ce1f3d4c9b8d647fb",
+      "workspace_digest": "6798edd39f68f5ecd5e6a2a33f0a28d64b93acddb235cc1c91e35979c6c1c069",
+      "timestamp": 1790456278
+    }
+  ]
+}

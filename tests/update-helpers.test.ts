@@ -119,6 +119,17 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.15", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.15`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("/admin");
+    expect(r.stdout).toContain("ADMIN-1");
+    expect(r.stdout).toContain("CHANNEL picker");
+    expect(r.stdout).not.toContain("ROLES-CHAT-2");
+  });
+
   test("extract_changelog_section finds 0.0.11", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.11`,
@@ -172,10 +183,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.14", () => {
+  test("package.json is 0.0.15", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.14");
+    expect(pkg.version).toBe("0.0.15");
   });
 });
