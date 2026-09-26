@@ -95,6 +95,54 @@
         "discord": "9cd136c78e1f699ec4099b8f2dd7c91dfaf058a125a9f5aed298db9a30b0b013",
         "plugins": "c49afe52383c755ebc17d44466821337652d4a19847976208d5ca299b3756a8b"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790450598,
+      "digest": "536f1e4bae3277ea3e8d6d26beb416cd98a3d46f48aec6c36a76116441d1261b",
+      "note": "deltas include full historical Change Logs",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior",
+        "title": "Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7",
+        "description": "Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "plugins/memory/commands.ts",
+          "src/agent/execute.ts",
+          "src/agent/tools.ts",
+          "src/discord/bridge.ts",
+          "src/discord/memory-inject.ts",
+          "tests/discord.memory-inject.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Discord spawn prepends recalled memories (limit ~20) for msg.authorId before runChat; empty scope still gets empty one-liner; bridge logs inject count; system prompt instructs trust inject / memory-store on durable facts / memory-recall before claiming ignorance / never invent; memory-* tool descriptions include argv examples; fixture tests green; package 0.0.7; no /memory slash; cites AGENT-7 MEMORY-2/4 (draft #67 behavior)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "bfd5b19073038617d2833f0cd3eceff938213c8d4a90e9d5c8ad21fb62507a59",
+        "cli": "5ac2f3168be447fd2b3a5b497236b7e013352dbdff8e9b19288eca66d2f0fb4d",
+        "discord": "3f07dbd0e01ae7cdf528520757c7f72fed78fe508f13bc63df3ee5868f913226",
+        "plugins": "279f2d285aa63eea2ceb1dc9a04d62f82dd9b62a3b6ba3f52455b666bd0a5a16"
+      }
     }
   ],
   "reopenings": []
