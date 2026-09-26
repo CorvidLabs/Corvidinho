@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "59d230b378c78f91e3da93b3a4d32bfb69e67aed",
+      "contract_digest": "78e2880864cdba11c7f526ab8c5b695d7ca19bbbe9a4934df74e23ea48a3500b",
+      "execution_digest": "3186c55e0acd121a779dd83382b3c81a93c9a444ad81d824cd1e08f6b0fbdcc8",
+      "workspace_digest": "c2af84d17f280a681ea92f4bdf2001aece01e4339d58de339857b947dac94c75",
+      "timestamp": 1790464970
+    }
+  ]
+}

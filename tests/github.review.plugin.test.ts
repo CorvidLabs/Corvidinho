@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { list } from "../src/plugins/registry.ts";
@@ -18,6 +21,8 @@ import {
 
 const REPO = "CorvidLabs/Corvidinho";
 const API = "https://api.github.com";
+/** Missing allowlist file: the gate never reads an operator's real file (ALLOW-4). */
+const NO_ALLOWLIST = join(mkdtempSync(join(tmpdir(), "corvidinho-review-")), "no-allowlist.toml");
 
 /** Fake token shape built at runtime so no secret-looking literal is committed. */
 const FAKE_TOKEN = "ghp_" + "Ab3".repeat(12);
@@ -68,6 +73,7 @@ async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => Pr
     "CORVIDINHO_GITHUB_DENY_ORGS",
     "GITHUB_TOKEN",
     "GH_TOKEN",
+    "CORVIDINHO_ALLOWLIST_FILE",
     ...Object.keys(vars),
   ];
   const prev: Record<string, string | undefined> = {};
@@ -75,7 +81,7 @@ async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => Pr
     prev[k] = process.env[k];
     delete process.env[k];
   }
-  for (const [k, v] of Object.entries(vars)) {
+  for (const [k, v] of Object.entries({ CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST, ...vars })) {
     if (v !== undefined) process.env[k] = v;
   }
   try {

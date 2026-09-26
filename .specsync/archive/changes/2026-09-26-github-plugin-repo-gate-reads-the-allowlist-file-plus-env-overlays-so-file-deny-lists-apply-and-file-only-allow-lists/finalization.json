@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists",
+  "implementation_commit": "71b9d25f22c534606c264b274f02af9772ac0736",
+  "implementation_tree": "5ec67fbafa73a5c1348d25b746af90fd2111eec4",
+  "contract_digest": "076e41c99a246da8ad8378c2e5060b374443c3556ec87dff3531d1a997b5c2aa",
+  "workspace_digest": "e60df79b7e1f470f84527d037d81942647fb1a7b9777ac2d921f20c85a763e8b",
+  "closing_digest": "8399646b6ba483bd99d718fc43fbcfa673e0f6474309cd30df9ecc7bc205880d",
+  "review_digest": "7f95a22b9e20b95d5353b95550c8801e0cb4a717a1efc888261fa07d03bc1f76",
+  "finalization_digest": "e7baa5aa6b3c2eb94e4f8cabec7d5e6d745ba9856f31a065ff40ff0468361862",
+  "timestamp": 1790463011
+}

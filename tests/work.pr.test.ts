@@ -314,6 +314,37 @@ describe("openWorkPr gates (AGENT-4, GITHUB-5, GITHUB-6)", () => {
     expect(rec.calls).toEqual([]);
   });
 
+  test("GITHUB-6 default gate reads the allowlist file: file deny wins, file-only allow opens (REQ-plugins-253)", async () => {
+    const file = join(base, "gate-allowlist.toml");
+    const prevFile = process.env.CORVIDINHO_ALLOWLIST_FILE;
+    process.env.CORVIDINHO_ALLOWLIST_FILE = file;
+    try {
+      // env allows acme/widget (beforeEach); the file denies it → refused before any plugin.
+      writeFileSync(file, `[github]\ndeny_repos = ["acme/widget"]\n`);
+      const denied = makeFixture();
+      writeFileSync(join(denied.wt, "greet.ts"), "x\n");
+      const rec = recorder();
+      const r = await openWorkPr(input(denied), deps({ runPlugin: rec.fn, repoGate: undefined }));
+      expect(r).toMatchObject({ opened: false, reason: "repo-denied" });
+      expect(r.line).toContain("is denied");
+      expect(rec.calls).toEqual([]);
+      expect(remoteRef(denied.bare, denied.branch)).toBeNull();
+
+      // Allow only in the file (no env allow) → the draft PR step runs.
+      delete process.env.CORVIDINHO_GITHUB_ALLOW_REPOS;
+      writeFileSync(file, `[github]\nrepos = ["acme/widget"]\n`);
+      const allowed = makeFixture();
+      writeFileSync(join(allowed.wt, "greet.ts"), "x\n");
+      const rec2 = recorder();
+      const ok = await openWorkPr(input(allowed), deps({ runPlugin: rec2.fn, repoGate: undefined }));
+      expect(ok).toMatchObject({ opened: true, dryRun: true, repo: "acme/widget" });
+      expect(rec2.calls.map((c) => c.name)).toEqual(["git-commit", "git-push", "github-pr-create"]);
+    } finally {
+      if (prevFile === undefined) delete process.env.CORVIDINHO_ALLOWLIST_FILE;
+      else process.env.CORVIDINHO_ALLOWLIST_FILE = prevFile;
+    }
+  });
+
   test("AGENT-4: unverified run re-runs the verify lane once; failure ships nothing", async () => {
     const fx = makeFixture();
     writeFileSync(join(fx.wt, "greet.ts"), "x\n");

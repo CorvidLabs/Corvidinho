@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists",
+  "slug": "github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists",
+  "title": "GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4)",
+  "description": "GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4)",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "ea2c970cab0297f0e75f7b0e78e2598222cd687f",
+  "created_at": 1790462700,
+  "updated_at": 1790463056,
+  "affected_specs": [
+    "plugins",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/plugins/githubDeny.ts",
+    "src/plugins/githubPublic.ts",
+    "src/work/pr.ts",
+    "tests/github.gate-allowlist-file.test.ts",
+    "tests/work.pr.test.ts",
+    "specs/plugins"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With deny_repos/deny_orgs only in the allowlist file and the allow list only in env, every GitHub plugin (issue/PR create, comment, review, reads) and the /work PR step refuse the denied repo or org with exit 3 / repo-denied; with an allow list only in the file, allowed repos pass and unlisted repos are still refused"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
