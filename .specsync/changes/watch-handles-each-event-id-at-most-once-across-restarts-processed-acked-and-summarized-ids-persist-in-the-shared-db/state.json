@@ -7,10 +7,11 @@
   "title": "WATCH handles each event id at most once across restarts: processed, acked and summarized ids persist in the shared DB and denied ids no longer evict handled ids",
   "description": "WATCH handles each event id at most once across restarts: processed, acked and summarized ids persist in the shared DB and denied ids no longer evict handled ids",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "7af2cec07739d7af3cf3ab6e77855707cdaa1e68",
   "created_at": 1790463223,
-  "updated_at": 1790463237,
+  "updated_at": 1790463587,
   "affected_specs": [
     "watch"
   ],
