@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "backfill-0-0-17-notes-with-166-work-draft-pr-owner-only-and-169-instructions-from-head-that-shipped-in-the-v0-0-17",
+  "slug": "backfill-0-0-17-notes-with-166-work-draft-pr-owner-only-and-169-instructions-from-head-that-shipped-in-the-v0-0-17",
+  "title": "Backfill 0.0.17 notes with #166 (/work draft PR, owner-only) and #169 (instructions from HEAD) that shipped in the v0.0.17 build",
+  "description": "Backfill 0.0.17 notes with #166 (/work draft PR, owner-only) and #169 (instructions from HEAD) that shipped in the v0.0.17 build",
+  "kind": "documentation",
+  "state": "draft",
+  "base_commit": "545dbd288c6d3ad669d5570bbf9f4dca6edb1bf8",
+  "created_at": 1790458438,
+  "updated_at": 1790458439,
+  "affected_specs": [],
+  "affected_paths": [
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Docs-only CHANGELOG/STATUS backfill plus a changelog-helper test assertion",
+  "acceptance_criteria": [
+    "0.0.17 section lists #166 and #169; helper test asserts it"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
