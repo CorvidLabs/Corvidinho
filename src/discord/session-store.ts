@@ -6,6 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import type { AllowlistConfig } from "../allowlist/types.ts";
 import { scrubOpt } from "../store/scrub.ts";
 import {
   isSessionExpired,
@@ -37,6 +38,11 @@ export type SessionStoreOptions = {
    */
   defaultProjectRoot?: string;
   /**
+   * Bridge allowlist: its GitHub repo list gates an explicit project outside
+   * `defaultProjectRoot` (REQ-discord-202). Absent ⇒ such projects refused.
+   */
+  allowlist?: AllowlistConfig;
+  /**
    * When true (default), create an isolated worktree/scoped dir on session
    * create for repo work. Tests may disable.
    */
@@ -55,13 +61,17 @@ export class SessionStore {
   readonly ttlMs: number;
   private readonly now: () => number;
   readonly defaultProjectRoot: string | undefined;
+  private readonly allowlist: AllowlistConfig | undefined;
   private readonly ensureWorktreeOnCreate: boolean;
+  /** session id → number of agent runs in flight (REQ-discord-204). */
+  private readonly activeRuns = new Map<string, number>();
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
     this.ttlMs = opts.ttlMs ?? resolveSessionTtlMs();
     this.now = opts.now ?? (() => Date.now());
     this.defaultProjectRoot = opts.defaultProjectRoot;
+    this.allowlist = opts.allowlist;
     this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
     if (this.db) {
       this.loadFromDb();
@@ -82,6 +92,8 @@ export class SessionStore {
   /** Drop expired session from maps + DB; park worktree async; return true if purged. */
   private purgeIfExpired(session: SessionStub | undefined): boolean {
     if (!session) return false;
+    // A run in flight is live work in the worktree, never an idle talk.
+    if (this.activeRuns.has(session.id)) return false;
     if (!this.expired(session)) return false;
     // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
     void this.parkSessionWorktree(session);
@@ -282,12 +294,12 @@ export class SessionStore {
       if (opts?.project?.trim()) {
         const resolved = resolveProjectDir(opts.project, {
           defaultProjectRoot: session.project ?? this.defaultProjectRoot ?? process.cwd(),
+          github: this.allowlist?.github,
         });
-        if (
-          resolved.ok &&
-          session.project &&
-          resolved.dir !== session.project
-        ) {
+        if (!resolved.ok) {
+          return { ok: false, error: resolved.error };
+        }
+        if (session.project && resolved.dir !== session.project) {
           return {
             ok: false,
             error: `project already set to ${session.project}; refusing mid-conversation switch`,
@@ -311,6 +323,7 @@ export class SessionStore {
       this.defaultProjectRoot ?? session.project ?? process.cwd();
     const resolved = resolveProjectDir(opts?.project ?? session.project, {
       defaultProjectRoot: defaultRoot,
+      github: this.allowlist?.github,
     });
     if (!resolved.ok) {
       return { ok: false, error: resolved.error };
@@ -361,6 +374,7 @@ export class SessionStore {
     if (opts.project?.trim() || this.defaultProjectRoot) {
       const resolved = resolveProjectDir(opts.project, {
         defaultProjectRoot: this.defaultProjectRoot ?? process.cwd(),
+        github: this.allowlist?.github,
       });
       if (resolved.ok) {
         session.project = resolved.dir;
@@ -409,6 +423,24 @@ export class SessionStore {
   touch(session: SessionStub): void {
     session.lastActivityAt = this.nowMs();
     this.persistSession(session);
+  }
+
+  /**
+   * Run `fn` (an agent run) with the session marked busy: the soft-TTL purge
+   * never drops or parks it meanwhile, and the end of the run counts as
+   * activity (SESSION-2 / SESSION-WORKTREE-3 / REQ-discord-204).
+   */
+  async runActive<T>(session: SessionStub, fn: () => Promise<T>): Promise<T> {
+    this.activeRuns.set(session.id, (this.activeRuns.get(session.id) ?? 0) + 1);
+    try {
+      return await fn();
+    } finally {
+      const left = (this.activeRuns.get(session.id) ?? 1) - 1;
+      if (left > 0) this.activeRuns.set(session.id, left);
+      else this.activeRuns.delete(session.id);
+      // Only a still-live session is touched; an ended one stays ended.
+      if (this.bySessionId.get(session.id) === session) this.touch(session);
+    }
   }
 
   /** Bind a bot outbound message id so replies continue the session (DISCORD-2). */

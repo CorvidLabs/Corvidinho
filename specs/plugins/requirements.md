@@ -178,20 +178,30 @@ Acceptance Criteria
 
 Every path argument SHALL resolve relative to the plugin cwd (task worktree /
 project root). Absolute paths outside the root, `..` escapes, and symlink
-resolutions that leave the root SHALL be refused.
+resolutions that leave the root SHALL be refused. A dangling symlink (the leaf
+or an ancestor, whose target does not exist yet) SHALL be followed by hand and
+its target clamped the same way, so a write through it cannot land outside the
+root and SAFE-2 (REQ-plugins-083) checks see the path the write would create;
+a symlink loop SHALL be refused.
 
 Acceptance Criteria
 - Escape and symlink-outside-root fixtures refuse with a clear error.
+- files-write through a dangling symlink to a missing file outside the root (absolute or relative link), or through a dangling directory link with a nested path, is refused and nothing is created outside the root.
+- files-write through a dangling symlink to a missing SAFE-2 path (`.env`, `specs/*.spec.md`) is refused with SAFE-2 (exit 2) and the file is not created.
+- A symlink loop is refused with a symlink error; a dangling symlink to a missing file inside the root still writes that in-root file.
 
 ### REQ-plugins-083
 
 `files-write`, `files-edit`, and `files-delete` SHALL hard-refuse protected
 project infra with no override (SAFE-2): `.env` / `.env.*`, `.git` components,
-basename `fledge.toml`, paths under `specs/` or ending in `.spec.md`, and
-keystore-like basenames (`*keystore*`, `wallet-keystore.json`).
+basename `fledge.toml`, basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
+config whose `preload` would run code in spawned agents), paths under `specs/`
+or ending in `.spec.md`, and keystore-like basenames (`*keystore*`,
+`wallet-keystore.json`).
 
 Acceptance Criteria
 - Protected write/edit/delete tests refuse; target file unchanged after refuse.
+- files-write of `bunfig.toml` / `.bunfig.toml` (any directory) is refused and no file is created.
 
 ### REQ-plugins-084
 

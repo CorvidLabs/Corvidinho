@@ -186,7 +186,12 @@ describe("delegate core (safety defaults)", () => {
         CORVIDINHO_ACTING_CONFIRM_TOKENS: "mc1.x",
       },
     });
-    expect(cmd.slice(0, 3)).toEqual(["bun", "--no-env-file", "/opt/corvidinho/src/cli.ts"]);
+    expect(cmd.slice(0, 4)).toEqual([
+      "bun",
+      "--no-env-file",
+      "--config=/dev/null",
+      "/opt/corvidinho/src/cli.ts",
+    ]);
     expect(cmd.slice(-2)).toEqual(["--task", "--no-verify"]);
     expect(cmd).toContain("--non-interactive");
     // Workers keep prove-before-done (REQ-cli-085): --no-verify only as task text.

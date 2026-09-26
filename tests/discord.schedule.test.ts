@@ -126,7 +126,8 @@ describe("/schedule dispatch", () => {
       options: {
         name: "Hourly dig",
         cadence: "@hourly",
-        project: "CorvidLabs/Corvidinho",
+        // Bridge project root (REQ-discord-202: create checks project scope).
+        project: ".",
         prompt: "Summarize open issues",
         channel: "chan-allowed",
       },

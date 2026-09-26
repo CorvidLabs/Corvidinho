@@ -3,10 +3,14 @@
  * Steal from corvid-agent server/lib/worktree* — Linux headless only.
  */
 
-import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { repoSlugFromRemoteUrl } from "../../plugins/git/parse.ts";
+import { isRepoAllowed } from "../allowlist/github.ts";
+import type { GithubAllowlists } from "../allowlist/types.ts";
 import {
   branchExists,
+  branchHasOwnCommits,
   cleanStaleWorktreeState,
   deleteBranch,
   forceRemoveWorktree,
@@ -27,7 +31,7 @@ export type CreateWorktreeResult = {
 };
 
 export type RemoveWorktreeOptions = {
-  /** Delete branch when zero commits ahead of main (keep if has work). */
+  /** Delete branch only when it has zero commits off the project HEAD (keep if it has work or git errors). */
   cleanBranch?: boolean;
 };
 
@@ -52,6 +56,13 @@ export type TalkWorkspace = {
 export type ResolveProjectOptions = {
   /** Bridge default project root when project is empty. */
   defaultProjectRoot: string;
+  /**
+   * GitHub repo allowlist (ALLOW-2). A project outside `defaultProjectRoot`
+   * is allowed only when it is a sibling checkout (same parent directory)
+   * whose `origin` OWNER/REPO passes this list. Absent ⇒ refused
+   * (default-deny, REQ-discord-202).
+   */
+  github?: GithubAllowlists;
 };
 
 /**
@@ -75,10 +86,84 @@ export function talkWorktreeId(sessionId: string): string {
   return `talk-${sessionPrefix || "unknown"}`;
 }
 
+function isWithin(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel));
+}
+
+function gitStdout(dir: string, args: string[]): string | null {
+  try {
+    const proc = Bun.spawnSync(["git", ...args], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (proc.exitCode !== 0) return null;
+    return new TextDecoder().decode(proc.stdout).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * OWNER/REPO of `origin` when `realDir` is the top of its own git checkout
+ * (a plain directory inside some enclosing repo does not inherit its origin).
+ */
+function checkoutOriginSlug(realDir: string): string | null {
+  const top = gitStdout(realDir, ["rev-parse", "--show-toplevel"]);
+  if (!top) return null;
+  try {
+    if (realpathSync(top) !== realDir) return null;
+  } catch {
+    return null;
+  }
+  const url = gitStdout(realDir, ["remote", "get-url", "origin"]);
+  return url ? repoSlugFromRemoteUrl(url.split("\n")[0] ?? "") : null;
+}
+
+function projectDenied(raw: string): string {
+  return `not authorized: project "${raw}" is outside the bridge project root and is not an allowlisted repo checkout`;
+}
+
+/**
+ * REQ-discord-202 (ALLOW-2/6, SAFE-3, DISCORD-SCHEDULE-3): a project picked
+ * from chat or a schedule must be the bridge project root, a directory inside
+ * it, or a sibling checkout (same parent) whose origin is GitHub-allowlisted.
+ * Checked on real paths so `..` and symlinks cannot leave that set.
+ */
+function projectScopeError(
+  raw: string,
+  dir: string,
+  root: string,
+  github: GithubAllowlists | undefined,
+): string | null {
+  const denied = projectDenied(raw);
+  let realDir: string;
+  let realRoot: string;
+  let realWorkspace: string;
+  try {
+    realDir = realpathSync(dir);
+    realRoot = realpathSync(root);
+    realWorkspace = realpathSync(dirname(root));
+  } catch {
+    return denied;
+  }
+  if (isWithin(realDir, realRoot)) return null;
+  if (!github || dirname(realDir) !== realWorkspace) {
+    return denied;
+  }
+  const slug = checkoutOriginSlug(realDir);
+  if (!slug) return denied;
+  const gate = isRepoAllowed(slug, github);
+  return gate.ok ? null : `${gate.error} (project "${raw}")`;
+}
+
 /**
  * Resolve a project path or name to an absolute directory.
- * Empty → defaultProjectRoot. Absolute existing dir → as-is.
- * Relative → resolve against defaultProjectRoot's parent (or cwd).
+ * Empty → defaultProjectRoot. Otherwise the first existing of
+ * `defaultProjectRoot/<project>` and `dirname(defaultProjectRoot)/<project>`
+ * (absolute paths as-is), then the REQ-discord-202 scope gate: inside the
+ * default root, or a sibling checkout whose origin passes `opts.github`.
  */
 export function resolveProjectDir(
   project: string | undefined | null,
@@ -99,9 +184,18 @@ export function resolveProjectDir(
   const sibling = isAbsolute(raw)
     ? candidate
     : resolve(dirname(fallback), raw);
-  for (const dir of [candidate, sibling]) {
+  // Never probe a path lexically outside the root and its parent's children,
+  // so the reply is no existence oracle for other host paths.
+  const inReach = (dir: string) =>
+    isWithin(dir, fallback) || dirname(dir) === dirname(fallback);
+  const tries = [candidate, sibling].filter(inReach);
+  if (tries.length === 0) {
+    return { ok: false, error: projectDenied(raw) };
+  }
+  for (const dir of tries) {
     if (existsSync(dir) && statSync(dir).isDirectory()) {
-      return { ok: true, dir };
+      const error = projectScopeError(raw, dir, fallback, opts.github);
+      return error ? { ok: false, error } : { ok: true, dir };
     }
   }
   return {
@@ -211,39 +305,20 @@ async function detectWorktreeBranch(
   return undefined;
 }
 
+/**
+ * Delete a talk branch only when it has no commits off the project HEAD.
+ * Any git error counts as "has commits", so a branch is never force-deleted
+ * on a guess (e.g. a repo whose default branch is not `main`/`master`).
+ */
 async function cleanupEmptyBranch(
   projectWorkingDir: string,
   branchName: string,
 ): Promise<void> {
   try {
-    const logProc = Bun.spawn(
-      ["git", "log", `main..${branchName}`, "--oneline"],
-      {
-        cwd: projectWorkingDir,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    const logOutput = (await new Response(logProc.stdout).text()).trim();
-    await logProc.exited;
-    if (logOutput.length > 0) return;
-    // Try master as fallback base
-    const log2 = Bun.spawn(
-      ["git", "log", `master..${branchName}`, "--oneline"],
-      {
-        cwd: projectWorkingDir,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    const out2 = (await new Response(log2.stdout).text()).trim();
-    await log2.exited;
-    // If main failed and master also has nothing / failed, still try delete when main log empty
-    if (logOutput.length === 0 && out2.length > 0) return;
-
+    if (await branchHasOwnCommits(projectWorkingDir, branchName)) return;
     await deleteBranch(projectWorkingDir, branchName);
   } catch {
-    // Non-fatal
+    // Non-fatal — keep the branch.
   }
 }
 

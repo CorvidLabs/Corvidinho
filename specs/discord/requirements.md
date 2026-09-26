@@ -174,19 +174,28 @@ The bridge SHALL make Discord image attachments available to the agent as
 local files it can look at (DISCORD-9). Steal shape from corvid-agent
 `image-attachments.ts`: MIME allowlist jpeg/png/gif/webp, 20MB size cap, max
 5 images per message; download at receive time; multimodal blocks + URL
-fallback. Merlin localPath: write under `/tmp/corvidinho-images` and include
-paths in the agent prompt via `enrichPromptWithImages`. Non-image / oversized
-/ failed downloads SHALL be skipped with a notice. The bridge SHALL NOT
-introduce ProcessManager or weaken allowlists. Fixture tests SHALL cover
-extraction and localPath without a live Discord token or live CDN.
+fallback. Merlin localPath: the bridge SHALL bind the session workspace first
+and then write the files inside the directory the agent runs in
+(`<session cwd>/.corvidinho/attachments/`, via
+`attachmentCacheDir(store.cwdFor(session))`), never under a shared `/tmp`
+dir, and SHALL include those paths in the agent prompt via
+`enrichPromptWithImages`, so the agent's `files-read` (which refuses paths
+outside its cwd) can open them. The attachment dir SHALL carry a
+self-ignoring `.gitignore` so images never land in a commit, and SHALL be
+removed with the workspace when the session ends or expires
+(SESSION-WORKTREE-3). Non-image / oversized / failed downloads SHALL be
+skipped with a notice. The bridge SHALL NOT introduce ProcessManager or
+weaken allowlists. Fixture tests SHALL cover extraction and localPath without
+a live Discord token or live CDN.
 
 Acceptance Criteria
 - Supported image → downloaded + localPath under cache dir; prompt cites path.
+- Bridge: the cited path is under `<session cwd>/.corvidinho/attachments/`;
+  `files-read` with that cwd opens it; `git status` in the talk worktree stays
+  clean; ending the session deletes the file.
 - Unsupported MIME / oversize / over-5 → skipped; peers unaffected.
 - Fixture tests for appendAttachmentUrls / buildMultimodalContent /
   enrichPromptWithImages; no live token; secrets out of repo; default-deny.
-
-
 
 ### REQ-discord-014
 
@@ -808,4 +817,88 @@ Acceptance Criteria
 - A changed question or reason pings again; a clean run or pause/resume re-arms the ping; a failed run keeps the marker.
 - The marker persists in SQLite (schema v7) across a restart or a second ticker on one data dir.
 - A blocked `/work` run opens no PR, says it is waiting for an answer, and makes no repository, plugin or verify call.
+
+### REQ-discord-203
+
+Each `/schedule` run SHALL get its own git worktree directory and `talk/`
+branch named from the full schedule id and run id, never a shortened prefix,
+so one run never reuses or removes the worktree or branch of another run of
+the same schedule, or of another schedule running at the same time
+(SESSION-WORKTREE-1 / SESSION-WORKTREE-3 / DISCORD-SCHEDULE-3). When creating a
+worktree finds a stale branch of the same name, it SHALL delete that branch
+only when it has no commits off the project HEAD; a branch with its own
+commits SHALL be renamed aside to `<branch>-parked-<ms>` and SHALL NOT be
+force-deleted. Removing or parking a worktree with branch cleanup SHALL
+likewise delete its branch only when the branch has no commits off the project
+HEAD, whatever the default branch is called; any git error SHALL count as
+having commits and keep the branch.
+
+Acceptance Criteria
+- Two runs of one schedule use different worktree dirs and branches; a parked run's commits survive the next run.
+- Two schedules whose ids share a prefix, running at once, get different worktrees; neither run's setup removes the other's live working tree.
+- A stale branch with commits off HEAD is kept under `<branch>-parked-<ms>`; a stale branch with no commits of its own is deleted as before.
+- In a repo whose default branch is `trunk` (no `main`/`master`), removing or parking a worktree keeps a branch with a commit of its own and still deletes a branch with none.
+
+### REQ-discord-204
+
+While an agent run is in flight for a Discord session (bridge
+mention/reply/thread chat, `/work`, `/session start`), the session SHALL
+count as busy: the soft-TTL purge on `get`, `getByThread`,
+`getByBotMessage` and `list` SHALL NOT drop that session or park/remove its
+worktree, however long the run takes (SESSION-WORKTREE-3: only an ended or
+abandoned talk is parked). The end of a run SHALL count as activity and
+refresh `lastActivityAt` (SESSION-2). Once no run is in flight, a session
+idle past the TTL SHALL still be purged and its worktree parked as before
+(REQ-discord-019 / REQ-discord-022).
+
+Acceptance Criteria
+- A lookup past the TTL during a run keeps the session, its worktree, and the agent's uncommitted edits.
+- `/work` and `/session start` replies keep the Worktree line after a run longer than the TTL.
+- The bridge can track the bot reply for a run longer than the TTL (no dropped session row).
+- After a run, an idle session past the TTL is purged and its worktree parked.
+- No new env vars, slash commands, or schema changes.
+
+### REQ-discord-201
+
+Every inbound Discord @mention, reply-to-bot continuation, thread
+continuation and slash command SHALL, after the channel gate, gate the actor
+with `gateActor` (ALLOW-3 / ALLOW-5 / DISCORD-5). A user on `denyUsers` or
+holding any role on `denyRoles` SHALL be refused (deny always wins). When
+the user or role allowlist is non-empty, the actor SHALL pass only when the
+user is listed, holds a listed role, or is the configured owner (IDENTITY-1/2);
+when both lists are empty the channel gate alone applies (ROLES-CHAT-1).
+Refusal on MessageCreate SHALL be silent: no public reply, no session
+created, no agent run (DISCORD-DENY-1). Refusal on slash SHALL be the
+ephemeral zero-width ack for every command, before mute/rate and any handler,
+so nothing is spawned (DISCORD-DENY-3). Mute keeps its own reply (DISCORD-6).
+No new env var, slash command, table or column.
+
+Acceptance Criteria
+- With `users = ["leif"]` and `deny_users = ["mallory"]`, mallory and an unlisted member get a silent refuse on @mention, reply-to-bot and thread continuation, and no session is created.
+- `/work`, `/session start` and `/status` by mallory or an unlisted member return `user_not_allowlisted` with only an ephemeral zero-width ack; no agent run, work task or session is created.
+- A listed user, a member with an allowed role, and the owner not on the user list still start sessions and run slash commands.
+- With empty user and role lists any member of an allowlisted channel may chat, but a deny-listed user or role is still refused.
+
+### REQ-discord-202
+
+A project picked from Discord — the optional `project` of `/work` and
+`/session start`, the `project` of `/schedule create`, and a stored
+schedule's project at tick time — SHALL resolve only to the bridge project
+root, a directory inside it, or a sibling checkout (a direct child of the
+root's parent directory) that is the top of its own git checkout and whose
+`origin` OWNER/REPO passes the GitHub repo allowlist (deny wins; empty allow
+or no allowlist ⇒ refuse) (ALLOW-2 / ALLOW-6 / SAFE-3 / DISCORD-SCHEDULE-3).
+Containment SHALL be checked on real paths so absolute paths, `..`
+traversal and symlinks cannot leave that set, and a path lexically outside it
+SHALL be refused before any disk probe. A refused project SHALL get a short
+`not authorized` reply and SHALL create no session, worktree, `talk/*`
+branch, schedule or agent run. No new env var, config key, slash command or
+option.
+
+Acceptance Criteria
+- `/work` or `/session start` with an absolute path or `../` traversal to another repo on the host is refused; no agent run, session, worktree or talk branch.
+- A symlink inside the bridge root that points outside it is refused.
+- A sibling checkout runs only when its origin passes the GitHub repo allowlist; a denied, unlisted or non-git sibling is refused.
+- `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
+- Empty project, the bridge root and directories inside it behave as before.
 
