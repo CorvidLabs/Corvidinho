@@ -588,9 +588,15 @@ allowlist file the bridge already reads (the loaded file, else
 `CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml`,
 created 0600 when missing), written atomically (temp file in the same
 directory, fsync, rename; mode kept) with every other line, section and
-comment kept. The live allowlist SHALL be recomputed as file ∪ env and
-updated in place so it applies without a restart. Env values SHALL NOT be
-written to the file or changed at runtime; the reply SHALL say so.
+comment kept. The file SHALL be read and written as JSON exactly when the
+allowlist loader reads it as JSON (one shared rule, `isJsonAllowlistPath`: a
+case-sensitive `.json` suffix), else as TOML, so an edit always matches what
+the next load reads. When that path is a symlink whose target does not
+resolve (dangling or looping), the mutation, the atomic write and
+`config show` SHALL refuse with a clear error, and the link SHALL NOT be
+replaced by a regular file. The live allowlist SHALL be recomputed as file ∪
+env and updated in place so it applies without a restart. Env values SHALL
+NOT be written to the file or changed at runtime; the reply SHALL say so.
 
 Empty SHALL stay deny-all: adding a deny-listed id SHALL be refused, and
 removing an env-only channel SHALL be refused, as SHALL removing a channel
@@ -601,9 +607,12 @@ SHALL warn that unlisted callers now resolve to BLOCKED. Replies SHALL be
 ephemeral, show before/after counts and never contain tokens or secrets.
 `config show` SHALL list live/file/env counts, owner configured yes/no plus
 display, and which knobs are updatable. Each mutation SHALL append SAFE-5
-audit rows (`started` before the write, failing closed when the trail is
-unavailable, then `ok`/`error`); refusals SHALL append `denied`. The gateway
-SHALL flatten subcommand-group options.
+audit rows (`started` before the write, then `ok`/`error`); refusals SHALL
+append `denied`. A mutation SHALL fail closed with the same
+`audit log unavailable (SAFE-5)` refusal, writing nothing, both when the
+trail throws and when no trail is wired (a bridge without a DB); it SHALL
+never write an unaudited change. The gateway SHALL flatten subcommand-group
+options.
 
 Acceptance Criteria
 - Non-owner and no-owner callers get ephemeral `not authorized` at dispatch and at the handler; the file is not written.
@@ -612,6 +621,9 @@ Acceptance Criteria
 - Deny-listed ids are refused; unreadable/unparsable files are refused untouched; JSON with lossy numeric ids is refused.
 - `/admin config show` shows counts by source and updatable knobs, and no token, key or owner id.
 - Mutations append `started` + `ok` audit rows with an args digest only; an unavailable audit trail refuses the change.
+- With no audit trail wired (`recordAudit` unset), `users add` and `channels add` reply `audit log unavailable (SAFE-5)`, and the file and live lists are unchanged; `config show` still works.
+- `allowlist.JSON` (TOML text) is edited as TOML, matching the loader, and reloads with the new entry; `allowlistFileFormat` agrees with `isJsonAllowlistPath` for every path.
+- A dangling or looping symlink at the allowlist path is refused by `/admin`, `writeFileAtomic` and `config show`; the link stays a symlink and its target is not created.
 - Fixture tests only; no live Discord token or network.
 
 ### REQ-discord-037
@@ -767,48 +779,45 @@ Acceptance Criteria
 
 ### REQ-discord-044
 
-When a spawned run's `result` carries a valid `ask`, the HEAR mention/reply
-path SHALL reply to the requester with the question instead of the summary or
-a bare `failed (exit N)` line (AUTONOMY-1), and SHALL mention the configured
-owner (IDENTITY-1) on the post's first line (AUTONOMY-2). The post SHALL limit
-allowed mentions to the owner plus the replied-to author, SHALL scrub secrets
-(SAFE-6) and defang `@everyone` / `@here` in the model's text, and SHALL end
-with a hint that replying answers (DISCORD-2 continues the session). The
-thinking status SHALL end as "Needs your input" (clarify) or failed "Stuck"
-(stuck). With no owner configured the question SHALL still post with no
-mention and the bridge SHALL log a warning (IDENTITY-3).
+Amend: clarify asks SHALL mention the requester Discord id
+(`requesterDiscordId`), not the owner by default. Stuck asks SHALL mention
+the configured owner (AUTONOMY-2/4). When the requester is the owner, clarify
+naturally pings the owner.
 
-A scheduled tick whose run carries an ask SHALL post the question with the
-schedule line as prefix and the same owner mention to the schedule's channel,
-only when that channel passes the allowlist (DISCORD-SCHEDULE-3). Pings SHALL
-go only where the bridge already posts: no DMs, no new channels, no new slash
-commands.
+Sessions SHALL persist `pendingAsk` (schema v8 `pending_ask`). While set,
+a thin-ack continue SHALL restate the ask via `formatAskReply` and SHALL NOT
+spawn the agent to done (AUTONOMY-5). An explicit cancel clears pending ask
+(AUTONOMY-6). A substantive continue clears pending and runs the agent with
+prior-question context.
 
-A schedule SHALL ping the owner once per question: the scheduler SHALL
-persist a digest of the pinged ask (reason plus SAFE-6 scrubbed question,
-never the text) on the schedule row (schema v7 `schedules.ask_ping_key`), and
-a later tick whose ask has the same digest SHALL still post the question but
-SHALL NOT mention anyone (`mentionUserIds: []`). The marker SHALL be cleared
-when a run succeeds without an ask or the schedule is paused or resumed, and a
-different question or reason SHALL ping again. A failed run without an ask
-SHALL keep the marker. With no owner configured no marker is recorded.
-
-A `/work` run whose result frame reports state `blocked` SHALL NOT be shipped
-as a pull request (REQ-discord-088): the PR step SHALL stop before any
-repository, plugin or verify call and its `PR:` line SHALL say the run is
-waiting for an answer (skip reason `needs-input`).
+The discord spec `files:` list SHALL include `src/discord/thin-ack.ts` and `tests/discord.thin-ack.test.ts`.
 
 Acceptance Criteria
-- Mention path: an ask reply quotes the question and carries `<@owner>` plus `mentionUserIds: [owner]`.
-- A stuck ask on a failed run replaces `failed (exit N)` with the question and a failed thinking status.
-- No owner: question posts, no mention, `mentionUserIds: []`.
-- Runs without an ask keep the plain reply with no mention restriction.
-- The spawn client passes a valid `result.ask` through and drops a malformed one.
-- Scheduler ask posts carry the schedule prefix, the question, and the owner mention.
-- The same schedule question pings once; repeat ticks post it with no mention.
-- A changed question or reason pings again; a clean run or pause/resume re-arms the ping; a failed run keeps the marker.
-- The marker persists in SQLite (schema v7) across a restart or a second ticker on one data dir.
-- A blocked `/work` run opens no PR, says it is waiting for an answer, and makes no repository, plugin or verify call.
+- Clarify mentionUserIds is [requester] when provided; stuck is [owner].
+- Thin ack on blocked session restates question; pendingAsk remains.
+- Cancel clears pendingAsk with a short ack.
+- Substantive continue runs agent; prior question is in the prompt context.
+
+### REQ-discord-203
+
+Each `/schedule` run SHALL get its own git worktree directory and `talk/`
+branch named from the full schedule id and run id, never a shortened prefix,
+so one run never reuses or removes the worktree or branch of another run of
+the same schedule, or of another schedule running at the same time
+(SESSION-WORKTREE-1 / SESSION-WORKTREE-3 / DISCORD-SCHEDULE-3). When creating a
+worktree finds a stale branch of the same name, it SHALL delete that branch
+only when it has no commits off the project HEAD; a branch with its own
+commits SHALL be renamed aside to `<branch>-parked-<ms>` and SHALL NOT be
+force-deleted. Removing or parking a worktree with branch cleanup SHALL
+likewise delete its branch only when the branch has no commits off the project
+HEAD, whatever the default branch is called; any git error SHALL count as
+having commits and keep the branch.
+
+Acceptance Criteria
+- Two runs of one schedule use different worktree dirs and branches; a parked run's commits survive the next run.
+- Two schedules whose ids share a prefix, running at once, get different worktrees; neither run's setup removes the other's live working tree.
+- A stale branch with commits off HEAD is kept under `<branch>-parked-<ms>`; a stale branch with no commits of its own is deleted as before.
+- In a repo whose default branch is `trunk` (no `main`/`master`), removing or parking a worktree keeps a branch with a commit of its own and still deletes a branch with none.
 
 ### REQ-discord-204
 
@@ -849,4 +858,27 @@ Acceptance Criteria
 - `/work`, `/session start` and `/status` by mallory or an unlisted member return `user_not_allowlisted` with only an ephemeral zero-width ack; no agent run, work task or session is created.
 - A listed user, a member with an allowed role, and the owner not on the user list still start sessions and run slash commands.
 - With empty user and role lists any member of an allowlisted channel may chat, but a deny-listed user or role is still refused.
+
+### REQ-discord-202
+
+A project picked from Discord — the optional `project` of `/work` and
+`/session start`, the `project` of `/schedule create`, and a stored
+schedule's project at tick time — SHALL resolve only to the bridge project
+root, a directory inside it, or a sibling checkout (a direct child of the
+root's parent directory) that is the top of its own git checkout and whose
+`origin` OWNER/REPO passes the GitHub repo allowlist (deny wins; empty allow
+or no allowlist ⇒ refuse) (ALLOW-2 / ALLOW-6 / SAFE-3 / DISCORD-SCHEDULE-3).
+Containment SHALL be checked on real paths so absolute paths, `..`
+traversal and symlinks cannot leave that set, and a path lexically outside it
+SHALL be refused before any disk probe. A refused project SHALL get a short
+`not authorized` reply and SHALL create no session, worktree, `talk/*`
+branch, schedule or agent run. No new env var, config key, slash command or
+option.
+
+Acceptance Criteria
+- `/work` or `/session start` with an absolute path or `../` traversal to another repo on the host is refused; no agent run, session, worktree or talk branch.
+- A symlink inside the bridge root that points outside it is refused.
+- A sibling checkout runs only when its origin passes the GitHub repo allowlist; a denied, unlisted or non-git sibling is refused.
+- `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
+- Empty project, the bridge root and directories inside it behave as before.
 

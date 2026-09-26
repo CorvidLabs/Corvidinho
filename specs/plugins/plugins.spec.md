@@ -39,6 +39,7 @@ files:
   - plugins/files/commands.ts
   - plugins/files/protectedPaths.ts
   - plugins/files/resolvePath.ts
+  - plugins/files/argv.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -47,6 +48,7 @@ files:
   - tests/files.plugins.test.ts
   - tests/files.dangling-symlink.test.ts
   - tests/search.plugins.test.ts
+  - tests/plugins.argv-dashes.test.ts
   - plugins/shell/index.ts
   - plugins/shell/commands.ts
   - plugins/shell/clamp.ts
@@ -67,7 +69,9 @@ files:
   - tests/git.plugins.test.ts
   - plugins/autonomous/index.ts
   - plugins/autonomous/commands.ts
+  - plugins/autonomous/council.ts
   - tests/autonomous.delegate.test.ts
+  - tests/autonomous.council.test.ts
   - plugins/fledge/index.ts
   - plugins/fledge/discover.ts
   - plugins/fledge/commands.ts
@@ -94,7 +98,9 @@ typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
 task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
 Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
-`delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117).
+`delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117);
+`council` convenes worker voices that propose, critique and decide
+(AUTONOMOUS-6 / REQ-plugins-118).
 
 ## Public API
 
@@ -108,7 +114,9 @@ takes the resolver/transport seams, `webFetch` is the guarded GET core,
 HTTP/1.1 socket transport. Autonomous plugins
 register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
 `createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
-limiter and timeout. `PluginCommand.autonomous?: boolean`;
+limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
+injectable env, bin, limiter, council timeout and per-voice timeout.
+`PluginCommand.autonomous?: boolean`;
 `PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
 
 ## Invariants
@@ -187,6 +195,16 @@ AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
 
+`council` (REQ-plugins-118) declares the same flags as `delegate`
+(`dangerous: false`, `mutating: true`, minTier 2, `autonomous: true`) and
+re-checks the same gates in the same order (usage exit 1; AUTONOMOUS-1,
+top-level lead only (depth 0: a delegated worker is refused), code-tier lead,
+council budget exit 2, nothing spawned). One council runs
+at a time and at most 2 per lead run. Its voices are delegate-core workers at
+read tier by default (tool at most), non-ADMIN, with an empty allowlist. It
+returns the voice count, tier, depth, state, decision, phase tallies and a
+bounded transcript; ok only when the chair decided.
+
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. The clamp looks past prefix words (`{ } ! if then else
@@ -255,6 +273,12 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **When** `delegate` runs (tool loop or `plugins run`)
 - **Then** it fails with exit 2 citing AUTONOMOUS-1 and no worker is spawned
 
+### Scenario: council voices cannot act
+
+- **Given** an autonomous-enabled project and a code-tier lead whose allowlist names `shell-exec`
+- **When** the lead runs `council --question ...`
+- **Then** every voice runs `task run` at read tier with `CORVIDINHO_ALLOWLIST` empty and `CORVIDINHO_ACTING_IS_ADMIN=0`, and the result carries the chair's decision
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
@@ -295,6 +319,10 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
 | delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
+| council while autonomous off / depth cap / below code tier / council budget spent | Refuse (exit 2); nothing spawned |
+| council from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
+| council chair fails / fewer than 2 proposals | ok=false (exit 1) with the transcript |
+| council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
 
 ## Dependencies
 
@@ -336,4 +364,7 @@ and current rows for plugins host evolution.
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
 | 2026-09-26 | spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run: Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1) |
 | 2026-09-26 | files-path-clamp-follows-dangling-symlinks-by-hand-so-files-write-cannot-escape-the-project-root-or-create-safe-2: Files path clamp follows dangling symlinks by hand so files-write cannot escape the project root or create SAFE-2 protected files through a link whose target does not exist yet |
+| 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
+| 2026-09-26 | council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2: Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed |
+| 2026-09-26 | plugin-argv-keeps-tokens-that-start-with-files-write-content-files-edit-strings-shell-exec-command-flags-search-grep: Plugin argv keeps tokens that start with -- (files-write content, files-edit strings, shell-exec command flags, search-grep patterns) and files-write refuses to empty a non-empty file without --allow-empty |
 | 2026-09-26 | shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops: Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root |

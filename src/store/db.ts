@@ -174,7 +174,13 @@ CREATE INDEX IF NOT EXISTS idx_watch_sessions_activity
  */
 const SCHEMA_V7_COLUMNS = ["ask_ping_key"] as const;
 
-export const SCHEMA_VERSION = 7;
+/**
+ * v8 — session pending ask (AUTONOMY-5/6): JSON of HumanAsk while blocked,
+ * so thin acks can restate across bridge restarts within TTL.
+ */
+const SCHEMA_V8_COLUMNS = ["pending_ask"] as const;
+
+export const SCHEMA_VERSION = 8;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -243,6 +249,17 @@ export function migrateCorvidinhoDb(db: Database): void {
     }
     db.run("UPDATE schema_meta SET value = '7' WHERE key = 'version'");
     version = 7;
+  }
+  if (version < 8) {
+    for (const col of SCHEMA_V8_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE discord_sessions ADD COLUMN ${col} TEXT`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.run("UPDATE schema_meta SET value = '8' WHERE key = 'version'");
+    version = 8;
   }
 }
 

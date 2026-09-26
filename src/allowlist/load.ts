@@ -157,6 +157,15 @@ export function resolveAllowlistPath(
   return null;
 }
 
+/**
+ * True when an allowlist file path is read as JSON (else the TOML subset).
+ * Case-sensitive `.json` suffix. The loader and `/admin`'s writer both use
+ * this one rule so they always agree on a file's format.
+ */
+export function isJsonAllowlistPath(path: string): boolean {
+  return path.endsWith(".json");
+}
+
 export async function loadAllowlistFile(
   path: string,
 ): Promise<
@@ -165,7 +174,7 @@ export async function loadAllowlistFile(
 > {
   try {
     const text = await Bun.file(path).text();
-    if (path.endsWith(".json")) {
+    if (isJsonAllowlistPath(path)) {
       const raw = JSON.parse(text) as Record<string, unknown>;
       const gh = (raw.github ?? raw.Github ?? {}) as Record<string, unknown>;
       const dc = (raw.discord ?? raw.Discord ?? {}) as Record<string, unknown>;

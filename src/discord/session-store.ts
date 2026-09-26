@@ -6,6 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import type { AllowlistConfig } from "../allowlist/types.ts";
 import { scrubOpt } from "../store/scrub.ts";
 import {
   isSessionExpired,
@@ -18,7 +19,23 @@ import {
   resolveProjectDir,
   type TalkWorkspace,
 } from "../worktree/index.ts";
+import { askFromUnknown } from "../agent/ask.ts";
+import type { HumanAsk } from "../agent/types.ts";
 import type { SessionStub } from "./types.ts";
+
+function serializePendingAsk(ask: HumanAsk | null | undefined): string | null {
+  if (!ask) return null;
+  return JSON.stringify({ reason: ask.reason, question: ask.question });
+}
+
+function parsePendingAsk(raw: string | null | undefined): HumanAsk | null {
+  if (!raw) return null;
+  try {
+    return askFromUnknown(JSON.parse(raw)) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function newId(): string {
   return `sess_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -36,6 +53,11 @@ export type SessionStoreOptions = {
    * (SESSION-WORKTREE-4). Usually the bridge projectRoot.
    */
   defaultProjectRoot?: string;
+  /**
+   * Bridge allowlist: its GitHub repo list gates an explicit project outside
+   * `defaultProjectRoot` (REQ-discord-202). Absent ⇒ such projects refused.
+   */
+  allowlist?: AllowlistConfig;
   /**
    * When true (default), create an isolated worktree/scoped dir on session
    * create for repo work. Tests may disable.
@@ -55,6 +77,7 @@ export class SessionStore {
   readonly ttlMs: number;
   private readonly now: () => number;
   readonly defaultProjectRoot: string | undefined;
+  private readonly allowlist: AllowlistConfig | undefined;
   private readonly ensureWorktreeOnCreate: boolean;
   /** session id → number of agent runs in flight (REQ-discord-204). */
   private readonly activeRuns = new Map<string, number>();
@@ -64,6 +87,7 @@ export class SessionStore {
     this.ttlMs = opts.ttlMs ?? resolveSessionTtlMs();
     this.now = opts.now ?? (() => Date.now());
     this.defaultProjectRoot = opts.defaultProjectRoot;
+    this.allowlist = opts.allowlist;
     this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
     if (this.db) {
       this.loadFromDb();
@@ -112,7 +136,7 @@ export class SessionStore {
       .query(
         `SELECT id, channel_id, thread_id, user_id, topic, project,
                 worktree_path, worktree_branch, worktree_state,
-                created_at, last_activity_at
+                pending_ask, created_at, last_activity_at
          FROM discord_sessions`,
       )
       .all() as Array<{
@@ -125,6 +149,7 @@ export class SessionStore {
       worktree_path: string | null;
       worktree_branch: string | null;
       worktree_state: string | null;
+      pending_ask: string | null;
       created_at: number;
       last_activity_at: number;
     }>;
@@ -148,6 +173,7 @@ export class SessionStore {
           worktreeBranch: row.worktree_branch ?? undefined,
           worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
             undefined,
+          pendingAsk: parsePendingAsk(row.pending_ask),
           createdAt: row.created_at,
           lastActivityAt: row.last_activity_at,
         };
@@ -166,6 +192,7 @@ export class SessionStore {
         worktreeBranch: row.worktree_branch ?? undefined,
         worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
           undefined,
+        pendingAsk: parsePendingAsk(row.pending_ask),
         createdAt: row.created_at,
         lastActivityAt: row.last_activity_at,
       };
@@ -198,9 +225,9 @@ export class SessionStore {
     this.db.run(
       `INSERT INTO discord_sessions
         (id, channel_id, thread_id, user_id, topic, project,
-         worktree_path, worktree_branch, worktree_state,
+         worktree_path, worktree_branch, worktree_state, pending_ask,
          created_at, last_activity_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          channel_id = excluded.channel_id,
          thread_id = excluded.thread_id,
@@ -210,6 +237,7 @@ export class SessionStore {
          worktree_path = excluded.worktree_path,
          worktree_branch = excluded.worktree_branch,
          worktree_state = excluded.worktree_state,
+         pending_ask = excluded.pending_ask,
          created_at = excluded.created_at,
          last_activity_at = excluded.last_activity_at`,
       [
@@ -222,6 +250,7 @@ export class SessionStore {
         session.worktreePath ?? null,
         session.worktreeBranch ?? null,
         session.worktreeState ?? null,
+        serializePendingAsk(session.pendingAsk),
         session.createdAt,
         session.lastActivityAt,
       ],
@@ -286,12 +315,12 @@ export class SessionStore {
       if (opts?.project?.trim()) {
         const resolved = resolveProjectDir(opts.project, {
           defaultProjectRoot: session.project ?? this.defaultProjectRoot ?? process.cwd(),
+          github: this.allowlist?.github,
         });
-        if (
-          resolved.ok &&
-          session.project &&
-          resolved.dir !== session.project
-        ) {
+        if (!resolved.ok) {
+          return { ok: false, error: resolved.error };
+        }
+        if (session.project && resolved.dir !== session.project) {
           return {
             ok: false,
             error: `project already set to ${session.project}; refusing mid-conversation switch`,
@@ -315,6 +344,7 @@ export class SessionStore {
       this.defaultProjectRoot ?? session.project ?? process.cwd();
     const resolved = resolveProjectDir(opts?.project ?? session.project, {
       defaultProjectRoot: defaultRoot,
+      github: this.allowlist?.github,
     });
     if (!resolved.ok) {
       return { ok: false, error: resolved.error };
@@ -365,6 +395,7 @@ export class SessionStore {
     if (opts.project?.trim() || this.defaultProjectRoot) {
       const resolved = resolveProjectDir(opts.project, {
         defaultProjectRoot: this.defaultProjectRoot ?? process.cwd(),
+        github: this.allowlist?.github,
       });
       if (resolved.ok) {
         session.project = resolved.dir;
@@ -431,6 +462,15 @@ export class SessionStore {
       // Only a still-live session is touched; an ended one stays ended.
       if (this.bySessionId.get(session.id) === session) this.touch(session);
     }
+  }
+
+  /**
+   * Set or clear the pending human ask on a session (AUTONOMY-5/6).
+   * Persists when a DB is configured.
+   */
+  setPendingAsk(session: SessionStub, ask: HumanAsk | null): void {
+    session.pendingAsk = ask;
+    this.persistSession(session);
   }
 
   /** Bind a bot outbound message id so replies continue the session (DISCORD-2). */

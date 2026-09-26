@@ -13,6 +13,7 @@ import {
   capUtf8,
   fileDiffSection,
   makeGithubReviewCommands,
+  normalizeFileFilter,
 } from "../plugins/github/review.ts";
 
 const REPO = "CorvidLabs/Corvidinho";
@@ -411,5 +412,63 @@ describe("github review reads (GITHUB-3 / issue #93)", () => {
     expect(added).toContain("--- /dev/null\n+++ b/n.ts");
     const removed = fileDiffSection({ filename: "r.ts", status: "removed", additions: 0, deletions: 1, changes: 1, patch: "@@ -1 +0,0 @@\n-x" });
     expect(removed).toContain("--- a/r.ts\n+++ /dev/null");
+  });
+
+  test("fileDiffSection: pure rename / copy / mode change say content unchanged, not binary or too large", () => {
+    const zero = { additions: 0, deletions: 0, changes: 0 };
+    const renamed = fileDiffSection({ filename: "src/new.ts", previous_filename: "src/old.ts", status: "renamed", ...zero });
+    expect(renamed).toBe(
+      "diff --git a/src/old.ts b/src/new.ts\nrename from src/old.ts\nrename to src/new.ts\n" +
+        "(no line changes: pure rename, content unchanged unless the file is binary)\n",
+    );
+    expect(renamed).not.toContain("too large");
+
+    const copied = fileDiffSection({ filename: "src/copy.ts", previous_filename: "src/orig.ts", status: "copied", ...zero });
+    expect(copied).toContain("diff --git a/src/orig.ts b/src/copy.ts\ncopy from src/orig.ts\ncopy to src/copy.ts\n");
+    expect(copied).toContain("pure copy, content unchanged");
+    expect(copied).not.toContain("too large");
+
+    const mode = fileDiffSection({ filename: "bin/run.sh", status: "changed", ...zero });
+    expect(mode).toContain("mode or type change only, content unchanged");
+    expect(mode).not.toContain("too large");
+
+    // A copy with edits keeps copy lines and the patch.
+    const copiedEdited = fileDiffSection({
+      filename: "b.ts",
+      previous_filename: "a.ts",
+      status: "copied",
+      additions: 1,
+      deletions: 1,
+      changes: 2,
+      patch: "@@ -1 +1 @@\n-x\n+y",
+    });
+    expect(copiedEdited).toContain("copy from a.ts\ncopy to b.ts\n--- a/a.ts\n+++ b/b.ts\n@@ -1 +1 @@");
+
+    // Line changes but no patch (too large), or an edited binary: unchanged wording.
+    const big = fileDiffSection({ filename: "gen.ts", status: "renamed", previous_filename: "g.ts", additions: 9000, deletions: 0, changes: 9000 });
+    expect(big).toContain("binary file, or the file diff is too large");
+    const bin = fileDiffSection({ filename: "logo.png", status: "modified", ...zero });
+    expect(bin).toContain("binary file, or the file diff is too large");
+  });
+
+  test("github-pr-diff --file that is empty after normalization is a usage error, not the full diff", async () => {
+    const { diff, calls } = commands(diffRoute(SAMPLE_DIFF));
+    for (const args of [
+      ["7", "--repo", REPO, "--file", "./"],
+      ["7", "--repo", REPO, "--file", "   "],
+      ["7", "--repo", REPO, "--file=./"],
+      ["7", "--repo", REPO, "--file", " ././ "],
+    ]) {
+      const r = await run(diff, args);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(1);
+      expect(r.error).toContain("--file needs a file path");
+      expect(r.error).toContain("usage: github-pr-diff");
+    }
+    expect(calls).toHaveLength(0);
+    expect(normalizeFileFilter(undefined)).toBeUndefined();
+    expect(normalizeFileFilter(" ./src/a.ts ")).toBe("src/a.ts");
+    expect(normalizeFileFilter("././src/a.ts")).toBe("src/a.ts");
+    expect(normalizeFileFilter("./")).toBe("");
   });
 });
