@@ -20,13 +20,10 @@ spawn the agent to done (AUTONOMY-5). An explicit cancel clears pending ask
 (AUTONOMY-6). A substantive continue clears pending and runs the agent with
 prior-question context.
 
+The discord spec `files:` list SHALL include `src/discord/thin-ack.ts` and `tests/discord.thin-ack.test.ts`.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack on blocked session restates question; pendingAsk remains.
 - Cancel clears pendingAsk with a short ack.
 - Substantive continue runs agent; prior question is in the prompt context.
-
-
-## Files
-
-Add `src/discord/thin-ack.ts` and `tests/discord.thin-ack.test.ts` to the discord spec `files:` list.
