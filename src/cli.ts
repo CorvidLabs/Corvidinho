@@ -42,7 +42,7 @@ Usage:
   corvidinho attribution             Print the canonical attribution footer
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10 light)
   corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
-  corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/5)
+  corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
@@ -63,6 +63,7 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_DISCORD_DENY_CHANNELS / _ROLES / _USERS    deny overrides
   DISCORD_TOKEN / DISCORD_BOT_TOKEN                     required for discord bridge (never commit)
   DISCORD_CHANNEL_IDS                                   non-empty channel ids (union with allowlist)
+  DISCORD_GUILD_ID                                      optional; fast guild slash registration
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):

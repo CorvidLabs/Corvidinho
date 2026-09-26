@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -34,13 +34,14 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR thin | #5 → [#23](https://github.com/CorvidLabs/Corvidinho/pull/23) | Discord bridge: mention→session stub, reply/thread continuity, allowlisted channels; no ProcessManager |
 | Attribution helper | #20 → [#24](https://github.com/CorvidLabs/Corvidinho/pull/24) | Shared “Made with Corvidinho” markdown/plain constants + `corvidinho attribution` CLI (no @handles) |
 | HEAR thinking status | #10 → [#25](https://github.com/CorvidLabs/Corvidinho/pull/25) | DISCORD-3 edit-in-place progress (elapsed, tool, rough tokens); no ProcessManager |
+| HEAR slash commands | #11 → (this PR) | DISCORD-4 thin `/session` `/status` `/agents` `/work`; channel re-check; no ProcessManager |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
-| Polish | [#11](https://github.com/CorvidLabs/Corvidinho/issues/11)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Remaining Discord polish after thinking status |
+| Polish | [#12](https://github.com/CorvidLabs/Corvidinho/issues/12)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Remaining Discord polish after slash (#11) |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
 

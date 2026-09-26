@@ -1,6 +1,7 @@
 /**
  * HEAR bridge orchestrator: gateway → message-router → session stub + agent spawn.
  * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
+ * DISCORD-4: thin slash /session /status /agents /work.
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -20,16 +21,29 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import { routeMessage } from "./message-router.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol.ts";
 import { enforceProtocolVersionOrExit } from "./protocol.ts";
 import { SessionStore } from "./session-store.ts";
+import { handleSlashInteraction } from "./slash-dispatch.ts";
+import type { SlashContext } from "./slash-types.ts";
 import {
   ThinkingStatus,
   type ThinkingOutbound,
 } from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
+import { WorkStore } from "./work-store.ts";
+
+/** Keep in sync with src/cli.ts VERSION (avoid circular import). */
+const BRIDGE_VERSION = "0.0.1";
 
 export type StartBridgeResult =
-  | { ok: true; config: BridgeConfig; store: SessionStore; stop: () => Promise<void> }
+  | {
+      ok: true;
+      config: BridgeConfig;
+      store: SessionStore;
+      workStore: WorkStore;
+      stop: () => Promise<void>;
+    }
   | { ok: false; exitCode: number; message: string };
 
 export type StartBridgeOptions = {
@@ -52,6 +66,9 @@ export type StartBridgeOptions = {
   /** ThinkingStatus debounce/tick (tests may shrink). */
   thinkingDebounceMs?: number;
   thinkingTickMs?: number;
+  /** Override bridge startedAt (tests). */
+  startedAt?: number;
+  version?: string;
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
@@ -108,6 +125,9 @@ export async function startBridge(
 
   const config = loaded.config;
   const store = new SessionStore();
+  const workStore = new WorkStore();
+  const startedAt = opts.startedAt ?? Date.now();
+  const version = opts.version ?? BRIDGE_VERSION;
   const agent =
     opts.agent ??
     (config.dryRun
@@ -130,6 +150,34 @@ export async function startBridge(
   } = {};
 
   const fallbackOutbound = memoryThinkingOutbound();
+
+  function resolveOutbound(): ThinkingOutbound {
+    return (
+      opts.thinkingOutbound ??
+      (embedRef.send && embedRef.edit
+        ? {
+            sendEmbed: embedRef.send,
+            editEmbed: embedRef.edit,
+          }
+        : fallbackOutbound)
+    );
+  }
+
+  function buildSlashCtx(): SlashContext {
+    return {
+      store,
+      workStore,
+      allowlist: config.allowlist,
+      agent,
+      version,
+      protocolVersion: CORVIDINHO_PROTOCOL_VERSION,
+      startedAt,
+      channelIds: config.channelIds,
+      thinkingOutbound: resolveOutbound(),
+      thinkingDebounceMs: opts.thinkingDebounceMs,
+      thinkingTickMs: opts.thinkingTickMs,
+    };
+  }
 
   const handlers: GatewayHandlers = {
     onMessage: async (msg: InboundMessage) => {
@@ -155,14 +203,7 @@ export async function startBridge(
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
 
-      const outbound: ThinkingOutbound =
-        opts.thinkingOutbound ??
-        (embedRef.send && embedRef.edit
-          ? {
-              sendEmbed: embedRef.send,
-              editEmbed: embedRef.edit,
-            }
-          : fallbackOutbound);
+      const outbound = resolveOutbound();
 
       const thinking = new ThinkingStatus({
         outbound,
@@ -220,6 +261,9 @@ export async function startBridge(
         store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
       }
     },
+    onSlash: async (interaction) => {
+      await handleSlashInteraction(buildSlashCtx(), interaction);
+    },
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
     },
@@ -243,12 +287,15 @@ export async function startBridge(
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
 
   await gateway.start();
-  console.log("[discord] HEAR bridge ready (session stub + thinking status; no ProcessManager).");
+  console.log(
+    "[discord] HEAR bridge ready (session stub + thinking status + slash; no ProcessManager).",
+  );
 
   return {
     ok: true,
     config,
     store,
+    workStore,
     stop: async () => {
       await gateway.stop();
     },

@@ -108,6 +108,8 @@ export async function loadBridgeConfig(
     };
   }
 
+  const guildId = env.DISCORD_GUILD_ID?.trim() || undefined;
+
   return {
     ok: true,
     config: {
@@ -116,6 +118,7 @@ export async function loadBridgeConfig(
       allowlist: cfgAllow,
       corvidinhoBin: resolveCorvidinhoBin(env, projectRoot),
       projectRoot,
+      guildId,
       dryRun: env.CORVIDINHO_DISCORD_DRY_RUN === "1",
     },
   };
