@@ -5,7 +5,7 @@ artifact: tasks
 
 # Tasks
 
-- [ ] Implement changelog bullet extract + enriched formatter
-- [ ] Extend `tests/discord.announce.test.ts`
-- [ ] Bump package/CHANGELOG/STATUS/docs; REQ-discord-025 delta
-- [ ] SpecSync check + `fledge lanes run verify --non-interactive`
+- [x] Implement changelog bullet extract + enriched formatter
+- [x] Extend `tests/discord.announce.test.ts`
+- [x] Bump package/CHANGELOG/STATUS/docs; REQ-discord-025 delta
+- [x] SpecSync check + `fledge lanes run verify --non-interactive`
