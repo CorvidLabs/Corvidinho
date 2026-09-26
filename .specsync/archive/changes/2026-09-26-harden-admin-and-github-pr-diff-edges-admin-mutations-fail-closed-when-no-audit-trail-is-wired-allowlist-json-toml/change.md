@@ -1,6 +1,6 @@
 ---
 id: harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml
-state: implementing
+state: archived
 type: bug_fix
 base_commit: c69e0e2fefdf11d506f55c528035d422973e4f1a
 ---
