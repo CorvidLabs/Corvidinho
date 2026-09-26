@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "capture-leif-confirmed-discord-schedule-session-worktree-memory-acl-into-hi-with-amendment-self-forget-requires-admin",
+  "slug": "capture-leif-confirmed-discord-schedule-session-worktree-memory-acl-into-hi-with-amendment-self-forget-requires-admin",
+  "title": "Capture Leif-confirmed DISCORD-SCHEDULE SESSION-WORKTREE MEMORY-ACL into hi/ with amendment self-forget requires ADMIN; cross-link #57 #58 #59",
+  "description": "Capture Leif-confirmed DISCORD-SCHEDULE SESSION-WORKTREE MEMORY-ACL into hi/ with amendment self-forget requires ADMIN; cross-link #57 #58 #59",
+  "kind": "documentation",
+  "state": "approved",
+  "base_commit": "59a92f9aa95a71e27e23d21967ff6afa4a209c3f",
+  "created_at": 1790447105,
+  "updated_at": 1790447173,
+  "affected_specs": [],
+  "affected_paths": [
+    "hi",
+    "STATUS.md",
+    "AGENTS.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "HI capture only into hi/discord.md session.md memory.md admin.md plus STATUS/AGENTS notes; no canonical module behavior change; impl tracked by #57 #58 #59",
+  "acceptance_criteria": [
+    "hi/discord.md has DISCORD-SCHEDULE-1..5; hi/session.md has SESSION-WORKTREE-1..5; hi/memory.md has MEMORY-ACL-1..5 with self-forget requiring ADMIN; hi/admin.md cross-links MEMORY forget to ADMIN; STATUS/AGENTS note capture; hi check clean; no invented AC; no impl code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
