@@ -18,6 +18,17 @@ export type AgentEvent =
   | { type: "ToolResult"; name: string; success: boolean; detail?: string }
   | { type: "VerifyResult"; success: boolean; output: string };
 
+/**
+ * Running token totals reported by the OpenAI-compatible provider (`usage`).
+ * Kept out of AgentEvent so `task run --json` events stay frozen; streamed as
+ * a `usage` NDJSON frame (REQ-agent-073).
+ */
+export type AgentTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
 export type ExecuteResult = {
   summary: string;
   filesChanged: string[];

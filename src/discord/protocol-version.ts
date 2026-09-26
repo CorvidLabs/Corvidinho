@@ -3,9 +3,15 @@
  * Soft-continue if unverifiable; hard-fail on verifiable mismatch.
  */
 
+import { CORVIDINHO_PROTOCOL_VERSION } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 
-export const CORVIDINHO_PROTOCOL_VERSION = 1;
+/**
+ * Single source of truth lives with the wire format it versions
+ * (`src/agent/events-ndjson.ts`). 2 = bridge reads `task run --output ndjson`
+ * (#73); a protocol-1 binary is refused at bridge start.
+ */
+export { CORVIDINHO_PROTOCOL_VERSION };
 
 export type HandshakeResult =
   | { kind: "match"; version: number }

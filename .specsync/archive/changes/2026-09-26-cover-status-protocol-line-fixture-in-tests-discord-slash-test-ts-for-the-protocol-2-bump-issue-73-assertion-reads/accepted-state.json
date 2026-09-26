@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-status-protocol-line-fixture-in-tests-discord-slash-test-ts-for-the-protocol-2-bump-issue-73-assertion-reads",
+  "slug": "cover-status-protocol-line-fixture-in-tests-discord-slash-test-ts-for-the-protocol-2-bump-issue-73-assertion-reads",
+  "title": "Cover /status protocol-line fixture in tests/discord.slash.test.ts for the protocol 2 bump (issue #73); assertion reads CORVIDINHO_PROTOCOL_VERSION instead of a hard-coded 1; no module AC beyond REQ-discord-073",
+  "description": "Cover /status protocol-line fixture in tests/discord.slash.test.ts for the protocol 2 bump (issue #73); assertion reads CORVIDINHO_PROTOCOL_VERSION instead of a hard-coded 1; no module AC beyond REQ-discord-073",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "80e89c701bbdb527ad60fbe57e9300b44782da81",
+  "created_at": 1790452546,
+  "updated_at": 1790454058,
+  "affected_specs": [],
+  "affected_paths": [
+    "tests/discord.slash.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Test-only: the /status fixture asserts the shared protocol constant instead of a literal 1 after the #73 bump; the behavior is specified by REQ-discord-073 in the companion ndjson change",
+  "acceptance_criteria": [
+    "tests/discord.slash.test.ts /status fixture asserts Protocol: ${CORVIDINHO_PROTOCOL_VERSION} (2) instead of a literal 1 and passes; bun test + fledge verify green; no module AC beyond REQ-discord-073"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
