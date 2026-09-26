@@ -1,6 +1,6 @@
 ---
 id: capture-leif-confirmed-discord-schedule-session-worktree-memory-acl-into-hi-with-amendment-self-forget-requires-admin
-state: approved
+state: implementing
 type: documentation
 base_commit: 59a92f9aa95a71e27e23d21967ff6afa4a209c3f
 ---

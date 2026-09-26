@@ -7,10 +7,11 @@
   "title": "Capture Leif-confirmed DISCORD-SCHEDULE SESSION-WORKTREE MEMORY-ACL into hi/ with amendment self-forget requires ADMIN; cross-link #57 #58 #59",
   "description": "Capture Leif-confirmed DISCORD-SCHEDULE SESSION-WORKTREE MEMORY-ACL into hi/ with amendment self-forget requires ADMIN; cross-link #57 #58 #59",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "59a92f9aa95a71e27e23d21967ff6afa4a209c3f",
   "created_at": 1790447105,
-  "updated_at": 1790447173,
+  "updated_at": 1790447177,
   "affected_specs": [],
   "affected_paths": [
     "hi",
