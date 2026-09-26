@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared",
+  "slug": "watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared",
+  "title": "WATCH durable SessionStore (issue #37 slice 1, SESSION-1..3): WATCH sessions keyed by owner/repo#number persist in the shared SQLite DB (schema v6 watch_sessions) with the same soft TTL as Discord; activity keeps the session, idle past TTL starts fresh, sessions reload on restart; github watch opens the shared DB (in-memory for dry-run without a data dir and tests); topic scrubbed per SAFE-6; turn persistence/replay and summaries stay follow-ups",
+  "description": "WATCH durable SessionStore (issue #37 slice 1, SESSION-1..3): WATCH sessions keyed by owner/repo#number persist in the shared SQLite DB (schema v6 watch_sessions) with the same soft TTL as Discord; activity keeps the session, idle past TTL starts fresh, sessions reload on restart; github watch opens the shared DB (in-memory for dry-run without a data dir and tests); topic scrubbed per SAFE-6; turn persistence/replay and summaries stay follow-ups",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "a49987d653499f40af938f26961c98e017c7777b",
+  "created_at": 1790452779,
+  "updated_at": 1790454858,
+  "affected_specs": [
+    "watch",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/watch/session-store.ts",
+    "src/watch/poller.ts",
+    "src/watch/index.ts",
+    "src/store/db.ts",
+    "src/store/scrub.ts",
+    "tests/watch.session-store.durable.test.ts",
+    "tests/store.scrub.test.ts",
+    "docs/WATCH.md",
+    "specs/watch/",
+    "specs/discord/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Shared DB migrates to schema v6 with a watch_sessions table (one row per owner/repo#number); a DB-backed WATCH SessionStore persists create/touch and reloads non-expired sessions on reopen so the same issue continues after a restart; soft TTL from resolveSessionTtlMs (SESSION-1..3): activity within TTL keeps the session, idle past TTL is purged and the next event starts a fresh session, expired rows are dropped on load; one session per issue key; stored topic is SAFE-6 scrubbed and watch_sessions.topic is in SCRUB_TARGETS; startWatchPoller opens the shared DB (in-memory for dry-run without CORVIDINHO_DATA_DIR, injectable db/sessionStore for tests) and closes it on stop; in-memory SessionStore still works with no db; turn persistence/replay and stored summaries not built; fixture tests + SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
