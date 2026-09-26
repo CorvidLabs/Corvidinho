@@ -207,7 +207,7 @@ export function goLiveChecklist(): string {
      no longer grant ADMIN (ignored; the bridge warns if set).
   6. Optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
   7. Optional but preferred for slash dogfood: DISCORD_GUILD_ID=<guild snowflake>
-     (guild PUT of the six commands + clear globals; avoids duplicate /agents)
+     (guild PUT of the current slash set + clear globals; avoids duplicate /agents)
   8. Then: corvidinho discord bridge
      Or re-register only: corvidinho discord register-commands [--guild-id ID]
 Empty channel lists refuse start (not Merlin BASIC). Secrets stay out of the repo.`;
