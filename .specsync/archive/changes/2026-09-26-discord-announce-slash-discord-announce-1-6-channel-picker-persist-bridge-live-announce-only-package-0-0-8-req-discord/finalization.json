@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-announce-slash-discord-announce-1-6-channel-picker-persist-bridge-live-announce-only-package-0-0-8-req-discord",
+  "implementation_commit": "9a61b05b5d8e0cceb067030d6446c0b33b01a072",
+  "implementation_tree": "5ffcaeafe6196bdce20f772fa3bfbd8418cb8e2e",
+  "contract_digest": "0d7d2fcc11f8af32e33c5ff5288eeac6f66c5cac702c1031bf50ef0425427c76",
+  "workspace_digest": "27997ec59ace019a50fff663069243bee9bcf9e9274e8ad2366553b05b4d4927",
+  "closing_digest": "4ac68e97c9fa51ebbec7458f7fbd48737592626259e37285d433c7d2b7d976b9",
+  "review_digest": "a0fc5a30941ea29615598bab43ae2812b713ca55ec5541a6b04ed19372cad07c",
+  "finalization_digest": "ddb27fdb6e318dcd7e0ab20d32d91dfed206cad6c48d50458fc16d7df83dca9c",
+  "timestamp": 1790451128
+}

@@ -7,11 +7,11 @@
   "title": "Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024",
   "description": "Discord /announce slash DISCORD-ANNOUNCE-1..6 CHANNEL picker persist bridge-live announce-only package 0.0.8 REQ-discord-024",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "459f48215bb329d617a71d7e51e6faf4e1af2231",
   "created_at": 1790451024,
-  "updated_at": 1790451122,
+  "updated_at": 1790451128,
   "affected_specs": [
     "discord"
   ],

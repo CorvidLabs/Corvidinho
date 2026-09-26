@@ -1,6 +1,6 @@
 ---
 id: discord-announce-slash-discord-announce-1-6-channel-picker-persist-bridge-live-announce-only-package-0-0-8-req-discord
-state: implementing
+state: archived
 type: feature
 base_commit: 459f48215bb329d617a71d7e51e6faf4e1af2231
 ---
