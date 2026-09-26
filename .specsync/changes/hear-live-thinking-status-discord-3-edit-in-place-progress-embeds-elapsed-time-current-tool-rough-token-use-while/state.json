@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while",
+  "slug": "hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while",
+  "title": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
+  "description": "HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "f987ded8770b32beffa2ed0a3c96b0ce0bc30906",
+  "created_at": 1790439766,
+  "updated_at": 1790439915,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord",
+    "tests",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "On start/continue session the bridge posts one progress embed (not silent void); edits it in-place with elapsed time and optional current tool / rough token use while agent runs; marks Done (or error) when complete then posts final reply; no ProcessManager; allowlists unchanged (default-deny); fixture/unit tests without live Discord token; STATUS Done lists HEAR thin #5→#23 and attribution #20→#24; SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

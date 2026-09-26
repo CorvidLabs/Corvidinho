@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -31,15 +31,17 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Default-deny allowlists | #16 → [#18](https://github.com/CorvidLabs/Corvidinho/pull/18) | ALLOW/WALLET HI + file/env allowlists (empty = deny-all); wallets deferred |
 | Prove-before-done | #7 → [#17](https://github.com/CorvidLabs/Corvidinho/pull/17) | Agent loop refuses done until Fledge verify passes (AGENT-4 / FLEDGE-2) |
 | SpecSync agent wiring | #8 → [#22](https://github.com/CorvidLabs/Corvidinho/pull/22) | Plan-time list/read (`spec_loader`) + verify-lane `spec-check`; typed SpecSync plugins |
+| HEAR thin | #5 → [#23](https://github.com/CorvidLabs/Corvidinho/pull/23) | Discord bridge: mention→session stub, reply/thread continuity, allowlisted channels; no ProcessManager |
+| Attribution helper | #20 → [#24](https://github.com/CorvidLabs/Corvidinho/pull/24) | Shared “Made with Corvidinho” markdown/plain constants + `corvidinho attribution` CLI (no @handles) |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
-| Polish | [#10](https://github.com/CorvidLabs/Corvidinho/issues/10)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Discord polish after thin slice |
+| Thinking | [#10](https://github.com/CorvidLabs/Corvidinho/issues/10) HEAR live thinking status | DISCORD-3 edit-in-place progress (shipping in this PR when green) |
+| Polish | [#11](https://github.com/CorvidLabs/Corvidinho/issues/11)–[#14](https://github.com/CorvidLabs/Corvidinho/issues/14) | Remaining Discord polish after thinking status |
 | Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
-| Brand | [#20](https://github.com/CorvidLabs/Corvidinho/issues/20) DOGFOOD: “Made with Corvidinho” | Plain-text + link footer on PR bodies (**no @handles**) — **can land ASAP** even pre-runner |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
 
 ### Leif config moments
@@ -71,7 +73,7 @@ Thin slice **landed** (`corvidinho discord bridge`). Live @bot works **only afte
 
 ### “Made with Corvidinho” attribution
 
-[#20](https://github.com/CorvidLabs/Corvidinho/issues/20) — footer on PR bodies can land **ASAP** (even while Cursor/Grok still author Corvidinho PRs). Reviews/Discord embeds follow HEAR #5. Separate from live runner flip.
+[#20](https://github.com/CorvidLabs/Corvidinho/issues/20) → [#24](https://github.com/CorvidLabs/Corvidinho/pull/24) **shipped** (`corvidinho attribution` + shared helpers). Use on PR bodies; never @handles.
 
 **HARD RULE (Leif):** attribution is plain text + markdown link **only**:
 
@@ -85,7 +87,7 @@ or markdown:
 Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 ```
 
-**NEVER** use `@Corvidinho` or any `@handle` in the footer (GitHub may notify unrelated users). Encode the same rule in helpers when #20 ships.
+**NEVER** use `@Corvidinho` or any `@handle` in the footer (GitHub may notify unrelated users). Helpers shipped in #24; keep using them.
 
 ### DOGFOOD / RUNNER (headless CLI flip)
 
@@ -98,10 +100,10 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 **Honest gaps before first flip (not inventing HI):**
 
 - Full LLM tool loop on top of prove-before-done (#17 landed the gate; loop flesh still open)
-- SpecSync agent tools (#8/#22 landing) so the live CLI can list/read/check specs
+- SpecSync agent tools (#8→#22) so the live CLI can list/read/check specs
 - For Discord callers: HEAR (#5) + filled allowlists + `DISCORD_TOKEN` on the VM
 - For GH @mention callers: ingress (#19) — typed reads alone are not enough
-- Attribution (#20) preferred on outbound PRs before/at flip (can land earlier)
+- Attribution (#20→#24) on outbound PRs
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 
 ### Phased milestones
@@ -109,13 +111,14 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 1. **Foundation** — done (#1, #2, #15, #18)
 2. **Prove loop** — done (#17)
 3. **SpecSync wiring** — #8 → #22 (landing; CLI usefulness for live callers)
-4. **Discord HEAR** — #5 thin shipped (go-live = token + allowlists on VM)
-5. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
-6. **Discord polish** — #10–#14
-7. **GH write / review / mention** — #19 + later GITHUB-2/3/5
-8. **Deferred** — #9, wallets
+4. **Discord HEAR** — #5 → #23 thin shipped (go-live = token + allowlists on VM)
+5. **Attribution** — #20 → #24 shipped
+6. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
+7. **Discord polish** — #10 thinking status (shipping); then #11–#14
+8. **GH write / review / mention** — #19 + later GITHUB-2/3/5
+9. **Deferred** — #9, wallets
 
-Attribution #20 may ship in parallel anytime (before first flip OK).
+Attribution #20→#24 already shipped.
 
 ## Allowlists on the bot VM (ALLOW-4)
 

@@ -3,6 +3,7 @@
  * Tests inject InboundMessage directly into the router — no ProcessManager.
  */
 
+import type { DiscordEmbedPayload } from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 
 export type GatewayHandlers = {
@@ -14,6 +15,17 @@ export type GatewayHandlers = {
     content: string;
     replyToMessageId?: string;
   }) => Promise<{ messageId: string } | null>;
+  /** Progress embeds (DISCORD-3). */
+  sendEmbed?: (opts: {
+    channelId: string;
+    embed: DiscordEmbedPayload;
+    replyToMessageId?: string;
+  }) => Promise<{ messageId: string } | null>;
+  editEmbed?: (opts: {
+    channelId: string;
+    messageId: string;
+    embed: DiscordEmbedPayload;
+  }) => Promise<boolean>;
 };
 
 export type DiscordGateway = {
@@ -117,6 +129,53 @@ export async function createLiveGateway(
     } catch (err) {
       console.error("[discord] reply failed:", err);
       return null;
+    }
+  };
+
+  handlers.sendEmbed = async ({ channelId, embed, replyToMessageId }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("send" in channel) || typeof channel.send !== "function") {
+        return null;
+      }
+      const sent = await channel.send({
+        embeds: [
+          {
+            description: embed.description,
+            color: embed.color,
+            footer: embed.footer,
+          },
+        ],
+        reply: replyToMessageId
+          ? { messageReference: replyToMessageId, failIfNotExists: false }
+          : undefined,
+      });
+      return { messageId: sent.id };
+    } catch (err) {
+      console.error("[discord] sendEmbed failed:", err);
+      return null;
+    }
+  };
+
+  handlers.editEmbed = async ({ channelId, messageId, embed }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (channel as { messages: { fetch: (id: string) => Promise<{ edit: (p: unknown) => Promise<unknown> }> } }).messages;
+      const msg = await messages.fetch(messageId);
+      await msg.edit({
+        embeds: [
+          {
+            description: embed.description,
+            color: embed.color,
+            footer: embed.footer,
+          },
+        ],
+      });
+      return true;
+    } catch (err) {
+      console.error("[discord] editEmbed failed:", err);
+      return false;
     }
   };
 

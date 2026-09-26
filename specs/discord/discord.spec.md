@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 4
+version: 6
 status: draft
 files:
   - src/discord/types.ts
@@ -12,6 +12,7 @@ files:
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
   - src/discord/bridge.ts
+  - src/discord/thinking-status.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
 
@@ -26,23 +27,33 @@ depends_on:
 
 ## Purpose
 
-Thin Discord HEAR bridge: gateway → message-router → session stub (DISCORD-1/2/2.a/5).
+Thin Discord HEAR bridge: gateway → message-router → session stub with live
+thinking status (DISCORD-1/2/2.a/3/5).
 
 ## Public API
 
-loadBridgeConfig, startBridge, routeMessage, SessionStore, goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, agent/gateway helpers; loadDiscordPlugins registers discord-post-message.
+loadBridgeConfig, startBridge, routeMessage, SessionStore, goLiveChecklist,
+CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, agent/gateway helpers,
+thinking-status builders/controller (formatElapsed, buildThinkingEmbed,
+ThinkingStatus); loadDiscordPlugins registers discord-post-message.
 
 ## Invariants
 
-Empty channel allowlist fail-start; empty user/role = deny-all when checked; missing token clean exit; no ProcessManager; secrets out of repo; discord-post-message dangerous.
+Empty channel allowlist fail-start; empty user/role = deny-all when checked;
+missing token clean exit; no ProcessManager; secrets out of repo;
+discord-post-message dangerous; thinking status edits one progress message
+in-place (no spam of new status messages each tick).
 
 ## Behavioral Examples
 
-Mention→start_session; reply/thread→continue_session; missing token / empty channels refuse cleanly.
+Mention→start_session; reply/thread→continue_session; missing token / empty
+channels refuse cleanly; session run posts progress then edits elapsed/tool/
+tokens then Done + final reply.
 
 ## Error Cases
 
-Missing token; empty channels; protocol mismatch; not authorized; SAFE-1 deny for discord-post.
+Missing token; empty channels; protocol mismatch; not authorized;
+SAFE-1 deny for discord-post; agent failure marks progress error then reports.
 
 ## Dependencies
 
@@ -50,5 +61,5 @@ src/allowlist/, agent task --no-verify, optional discord.js.
 
 ## Change Log
 
-HEAR thin DISCORD-1/2/2.a/5 (2026-09-26, corvid-agent, #5).
-| 2026-09-26 | hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5: HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify |
+DISCORD-3 live thinking status (2026-09-26, corvid-agent, #10).
+| 2026-09-26 | hear-live-thinking-status-discord-3-edit-in-place-progress-embeds-elapsed-time-current-tool-rough-token-use-while: HEAR live thinking status DISCORD-3: edit-in-place progress embeds (elapsed time, current tool, rough token use) while session runs; steal corvid-agent progress-response/embeds patterns; no ProcessManager; fixture tests; STATUS Done refresh for HEAR thin #5→#23 and attribution #20→#24 |
