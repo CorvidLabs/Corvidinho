@@ -7,10 +7,11 @@
   "title": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
   "description": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "70ce3bb4a7a557c5cafec7844a08d60f819a9906",
   "created_at": 1790455601,
-  "updated_at": 1790455693,
+  "updated_at": 1790455949,
   "affected_specs": [
     "plugins",
     "agent"

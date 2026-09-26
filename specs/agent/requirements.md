@@ -177,3 +177,11 @@ Acceptance Criteria
 - `projectInstructions: false` or no files leaves the system prompt unchanged.
 - A clean load adds no event; a refused or truncated file yields exactly one `Text` note across attempts.
 
+### REQ-agent-roles-001
+
+When building the tool catalog for an acting session, non-ADMIN SHALL not
+receive mutating tools (including files-write/edit).
+
+Acceptance Criteria
+- `tests/roles.chat.gates.test.ts` catalog assertions for non-admin vs admin.
+

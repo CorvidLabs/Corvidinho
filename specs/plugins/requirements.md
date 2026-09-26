@@ -373,3 +373,23 @@ Acceptance Criteria
 - `package.json` version is `0.0.9`; CLI `version` prints `0.0.9`.
 - CHANGELOG has a 0.0.9 section; STATUS marks #83 done.
 - `docs/hi-drafts/WATCH-RELIABILITY.md` exists as draft.
+
+### REQ-plugins-roles-001
+
+Plugin commands MAY declare `mutating: true`. `isMutatingPlugin` SHALL treat
+`dangerous: true` OR `mutating: true` as mutating. `files-write` and
+`files-edit` SHALL set `mutating: true`.
+
+Acceptance Criteria
+- `tests/roles.chat.gates.test.ts` asserts files-write/edit mutating and non-admin refuse.
+
+### REQ-plugins-roles-002
+
+When `CORVIDINHO_ACTING_IS_ADMIN` is present in the environment, `runPlugin`
+SHALL refuse mutating plugins unless `resolveActingIsAdmin` returns true
+(owner re-check). Refusal message SHALL include "not allowed for your role".
+
+Acceptance Criteria
+- Non-admin refuses files-write/shell/github-pr-create/memory-forget.
+- Admin reaches files-write; shell still SAFE-1 without allowlist.
+
