@@ -9,6 +9,10 @@ files:
   - src/discord/image-attachments.ts
   - src/discord/permissions.ts
   - src/discord/session-store.ts
+  - src/store/db.ts
+  - src/store/index.ts
+  - src/store/paths.ts
+  - src/store/session-ttl.ts
   - src/discord/work-store.ts
   - src/discord/message-router.ts
   - src/discord/agent-client.ts
@@ -36,7 +40,6 @@ depends_on:
   - plugins
   - agent
   - cli
-  - store
 ---
 
 # Discord
@@ -52,6 +55,7 @@ protocol-version lockstep, presence version under the bot name, and allowlist de
 ## Public API
 
 loadBridgeConfig, startBridge, routeMessage, SessionStore, WorkStore,
+shared store helpers (resolveDataDir, openCorvidinhoDb, resolveSessionTtlMs; src/store/),
 goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, ALLOWLIST_DENY_TIP, EPHEMERAL_SILENT_ACK, RATE_LIMITED,
 MUTED, PermissionLevel, resolvePermissionLevel, checkRateLimit, muteUser,
 unmuteUser, isMuted, evaluateRequesterCanSend, agent/gateway helpers,

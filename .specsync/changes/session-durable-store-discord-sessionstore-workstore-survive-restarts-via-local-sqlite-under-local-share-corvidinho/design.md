@@ -32,3 +32,8 @@ No API change: expired `getBy*` → undefined → mention starts fresh (SESSION-
 ## Out of scope
 
 `/schedule`, MEMORY ACL/entities/summaries, WATCH SessionStore, ProcessManager, mute SQLite.
+
+## SpecSync ownership
+
+`src/store/*` is listed under the `discord` module files for this change (canonical owner),
+so SESSION durable ships in one change. Physical path stays `src/store/` for future MEMORY #41 reuse.
