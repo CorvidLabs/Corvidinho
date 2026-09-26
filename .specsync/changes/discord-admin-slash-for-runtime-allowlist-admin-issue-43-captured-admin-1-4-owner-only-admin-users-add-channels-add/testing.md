@@ -33,3 +33,10 @@ artifact: testing
   (nine commands).
 - `bun test`, `bunx tsc --noEmit`, `specsync check --require-coverage 100`,
   `fledge lanes run verify --non-interactive`.
+
+## Requirement evidence
+
+| Requirement | How proven |
+|-------------|------------|
+| REQ-discord-043 | `tests/discord.admin-slash.test.ts` |
+| REQ-discord-009 | `tests/discord.register-commands.test.ts`, `tests/discord.admin-slash.test.ts` (body shape), `tests/discord.session-worktree.test.ts`, `tests/discord.announce.test.ts` |
