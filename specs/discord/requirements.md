@@ -594,6 +594,10 @@ and token counts to `onStatus` so the thinking embed shows what the agent is
 doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
 `result` frame; when no result frame parses, the client SHALL fall back to
 `summarizeTaskRunOutput` over the non-frame stdout, stderr and exit code.
+Frame-shaped lines that do not match the bridge's protocol (or are malformed)
+SHALL never become reply text; when the binary streamed another protocol and
+no result frame parsed, the reply SHALL be a protocol-mismatch notice naming
+both versions.
 Token counts SHALL be the provider-reported running total when a `usage`
 frame arrived, else the existing rough estimate from the summary length.
 Because the bridge now depends on the stream, `CORVIDINHO_PROTOCOL_VERSION`
@@ -604,6 +608,6 @@ Acceptance Criteria
 - Fake-bin fixture printing ndjson drives `onStatus` with planning / tool / token updates in order.
 - Summary equals `summarizeTaskResult` of the result frame; garbage lines and stderr do not break parsing.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
+- A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
 - Spawn argv ends with `--output ndjson` (no `--json`).
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
-
