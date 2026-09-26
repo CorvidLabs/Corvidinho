@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 36
+version: 37
 status: draft
 files:
   - src/plugins/types.ts
@@ -43,6 +43,18 @@ files:
   - plugins/shell/commands.ts
   - plugins/shell/clamp.ts
   - tests/shell.plugins.test.ts
+  - plugins/git/index.ts
+  - plugins/git/commands.ts
+  - plugins/git/exec.ts
+  - plugins/git/parse.ts
+  - tests/git.plugins.test.ts
+  - plugins/fledge/index.ts
+  - plugins/fledge/discover.ts
+  - plugins/fledge/commands.ts
+  - plugins/fledge/spawn.ts
+  - src/plugins/toolCost.ts
+  - tests/fledge.plugins.test.ts
+  - tests/fledge.cli.test.ts
 db_tables: []
 depends_on: []
 ---
@@ -54,13 +66,17 @@ depends_on: []
 Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 (GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
 file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
-and `shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088).
+`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088), and
+typed git plugins (`git-status|diff|log|branch-list` reads;
+`git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
+task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
 
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
 HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
-Shell plugins register via `loadShellPlugins` (`shell-exec`).
+Shell plugins register via `loadShellPlugins` (`shell-exec`). Git plugins
+register via `loadGitPlugins` (`plugins/git/index.ts`).
 
 ## Invariants
 
@@ -84,6 +100,26 @@ confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
+Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
+stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
+stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
+must be the repository / worktree top level (SAFE-3). Flags are strict
+(unknown refused); path args use the files-plugin clamp and go after `--` as
+literal pathspecs. Hooks stay off even with a repo-local `core.hooksPath`, and
+a linked worktree top level (`.git` file) is a valid cwd. `git-status` lists
+untracked files individually (`--untracked-files=all`) so they feed
+`git-commit`. `git-branch-create` switches with `--no-overwrite-ignore` so an
+ignored `.env*` / keystore is never replaced by a start point's tracked copy
+(SAFE-2). Reads are `dangerous: false`, minTier 0. `git-branch-create`,
+`git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
+message, stages explicit file paths only (no directories / `--all` / amend),
+commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
+paths and staging the deletion of SAFE-2 protected infra, and reports
+`filesChanged`. `git-push` pushes only the current branch to the same-named
+ref of a configured remote (never a URL), never forces, gates every push
+URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
+(GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
+SAFE-22 default-branch policy is not enforced (awaiting HI).
 
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
@@ -109,6 +145,12 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 - **When** `shell-exec` runs `cd sub && …` allowlisted
 - **Then** the command runs with initial cwd at project root and succeeds if the subcommand does
 
+### Scenario: git-push refuses a repo off the allowlist
+
+- **Given** the task worktree's `origin` points at OWNER/REPO not on the GitHub allowlist
+- **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
+- **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -121,6 +163,12 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | Path escapes project cwd / symlink escape | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
+| git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
+| git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
+| git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
+| git-branch-create switch would overwrite an ignored / untracked local file (e.g. `.env`) | Refuse (exit 2, SAFE-2); HEAD and files unchanged |
+| git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
+| git-push non-fast-forward | Fail (exit 1); never retried with force |
 
 ## Dependencies
 
@@ -130,6 +178,7 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 | @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
 | node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
 | sh | shell-exec child via `sh -c` |
+| git (system binary) | git plugins via `Bun.spawn` argv arrays |
 
 ## Change Log
 
@@ -147,4 +196,6 @@ and current rows for plugins host evolution.
 | 2026-09-26 | memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory: Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners |
 | 2026-09-26 | shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9: shell-exec + SAFE-3 cwd clamp; package 0.0.9 |
 | 2026-09-26 | strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner: Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set |
+| 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
+| 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |

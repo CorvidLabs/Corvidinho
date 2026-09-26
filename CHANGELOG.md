@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.0.13
+
+### Always verify on Discord / WATCH (#85 captured slice — AGENT-4 / FLEDGE-2)
+
+- Discord and WATCH spawn clients **no longer pass `--no-verify`** (REQ-discord-085 / REQ-watch-085). Prove-before-done is the default for chat and ingress.
+- Plain chat with no file edits still stays fast: the agent loop skips the verify lane when `filesChanged` is empty (honest `verifySkipped`).
+- CLI `--no-verify` remains for **local/operator opt-out only** (REQ-cli-085). Draft AGENT-14/15 (remove the flag entirely; real git porcelain / deleted-test detection) wait for HI capture; SAFE-22 still draft after #82.
+- Fixture tests assert spawn argv has no `--no-verify`.
+
+### Ops
+
+- Package version **0.0.13** — presence (DISCORD-12) reads `v0.0.13` after restart.
+- **Restart the Discord bridge and `github watch`** so spawns pick up prove-before-done (no slash churn).
+
+## 0.0.12
+
+### Typed git tools (#82) — [#145](https://github.com/CorvidLabs/Corvidinho/pull/145)
+
+- New builtins `git-status`, `git-diff`, `git-log` (safe) and `git-branch-create`, `git-commit`, `git-push` (dangerous, SAFE-1: denied non-interactive unless allowlisted) — PLUGIN-1/2, GITHUB-2.
+- Project root only (SAFE-3); never stages `.env*` or keystores, and a branch switch refuses to overwrite ignored files (SAFE-2); git hooks never run from these tools; no force/amend/rebase exposed.
+- `git-push` checks the remote's OWNER/REPO against the GitHub allow/deny lists (GITHUB-6). Draft SAFE-22 (refuse default-branch commits) awaits HI.
+
+### Durable WATCH sessions (#37) — [#142](https://github.com/CorvidLabs/Corvidinho/pull/142)
+
+- WATCH sessions keyed by `owner/repo#number` persist in the shared SQLite (**schema v6** `watch_sessions`; topic scrubbed, SAFE-6) with a soft idle TTL (default 45m) and survive restarts (SESSION-1..3).
+- Shutdown is clean: after SIGTERM the poller never acks or spawns again; poll cycles never overlap; one failing event is logged and skipped instead of blocking the rest.
+
+### Ops
+
+- Package version **0.0.12** — presence (DISCORD-12) reads `v0.0.12` after restart.
+- **Restart `github watch` and the Discord bridge** so the git tools and the schema v6 migration are picked up (the DB migrates on first open).
+
+## 0.0.11
+
+### Discord announce enrichment (DISCORD-ANNOUNCE-4 standing order)
+
+- **DISCORD-ANNOUNCE-4** — `formatBridgeLiveAnnouncement` posts version header plus ≤5 CHANGELOG bullets for what shipped (REQ-discord-025).
+- Prefer `CHANGELOG.md` section for the package version; fall back to package description or a single tip line when missing.
+- Still posts **only** to the configured announce channel via `postAnnouncement` — never dogfood allowlist by default.
+- Fixture tests for formatter + announce-channel-only post.
+
+### Ops
+
+- Package version **0.0.11** — presence (DISCORD-12) reads `v0.0.11` after restart.
+- **Restart the Discord bridge** so ClientReady posts the richer bridge-live note.
+
 ## 0.0.10
 
 ### ⚠ Upgrade notes

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "c66d101a18903b8e5413dc1a7efb826d8053e75a",
+  "contract_digest": "5910b243e2413341996589df6d92a6899f456b947812de282fe03d50d98134a6",
+  "execution_digest": "fa4b3e7f0d91ddcbebee131b3169d636e7c99a246973f8adc8f55f2d0d837491",
+  "workspace_digest": "49cbc090337617c6652ea0a4d4ea29d2f87ca76dd31a2d86fc8c78e29cd52ec7",
+  "timestamp": 1790455094
+}

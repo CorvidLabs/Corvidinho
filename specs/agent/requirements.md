@@ -150,3 +150,46 @@ Acceptance Criteria
 - `progressFromFrame` maps states to planning / working / verifying / done / failed, ToolCall to the current tool, and usage to token totals.
 - Mocked fetch with `usage` over two rounds yields running totals via `onUsage` (no network).
 
+### REQ-agent-084
+
+When `task run` executes, the execute hook SHALL read `AGENTS.md` and
+`CLAUDE.md` from the project root (the nearest directory at or above the run
+cwd that contains `.git`, else the cwd) and SHALL include them in the
+read-tier and tool-loop system prompts, labelled as project instructions that
+cannot widen SAFE-1 consent, the tool allowlist or the capability tier
+(AGENT-1). It SHALL NOT read instruction files from directories above the
+project root. Each file SHALL be capped at 16 KiB with a truncation marker. A
+symlink that resolves outside the project root, a non-regular file, and
+binary or non-UTF-8 content SHALL be refused; missing files SHALL be skipped;
+the loader SHALL never fail the run. Instruction text SHALL be SAFE-6
+scrubbed before it reaches a provider. When a file was refused or truncated,
+one `Text` event SHALL name the files that were loaded, truncated,
+deduplicated or refused; a clean load SHALL add no event, so an ordinary
+run's event stream is unchanged.
+
+Acceptance Criteria
+- A project AGENTS.md / CLAUDE.md appears in the read-tier and tool-loop system prompt under the project-instructions label on every attempt.
+- An AGENTS.md in a parent directory outside the project is never read.
+- A file over 16 KiB is cut on a UTF-8 boundary with a truncation marker.
+- A symlink resolving outside the project, a broken symlink, a directory, binary and non-UTF-8 files are refused; missing files are skipped.
+- CLAUDE.md symlinked to AGENTS.md is reported as a duplicate and rendered once.
+- Secret-shaped text in an instruction file is redacted.
+- `projectInstructions: false` or no files leaves the system prompt unchanged.
+- A clean load adds no event; a refused or truncated file yields exactly one `Text` note across attempts.
+
+### REQ-agent-112
+
+When a task run's catalog may include dangerous tools (`includeDangerous`),
+`createTaskExecute` SHALL load the project's Fledge plugins (cwd = task cwd,
+env = run env) before building the tool catalog, so Fledge commands can be
+offered and called as tools under the usual tier filter, catalog-only
+dispatch and SAFE-1 allowlist (FLEDGE-4). The default catalog (dangerous
+omitted) SHALL NOT spawn fledge. `buildOpenAiTools` SHALL build each tool with
+the exported `toolDefForEntry`, which is also what the schema-cost view
+measures (FLEDGE-5); the tool definitions sent are unchanged.
+
+Acceptance Criteria
+- includeDangerous + code tier + allowlist: the first request offers `fledge-hello`; the model's call runs the fake fledge and the ToolResult succeeds with the plugin output.
+- Default catalog: no `fledge-*` tool is offered and none is registered.
+- Existing tool-loop tests pass unchanged.
+

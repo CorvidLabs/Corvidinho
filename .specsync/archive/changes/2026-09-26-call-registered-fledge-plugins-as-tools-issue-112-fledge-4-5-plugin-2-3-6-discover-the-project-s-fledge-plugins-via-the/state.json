@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the",
+  "slug": "call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the",
+  "title": "Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list",
+  "description": "Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
+  "created_at": 1790454534,
+  "updated_at": 1790455723,
+  "affected_specs": [
+    "plugins",
+    "cli",
+    "agent"
+  ],
+  "affected_paths": [
+    "plugins/fledge",
+    "src/plugins/toolCost.ts",
+    "src/plugins/types.ts",
+    "src/plugins/registry.ts",
+    "src/agent/tools.ts",
+    "src/agent/execute.ts",
+    "src/cli.ts",
+    "tests/fledge.plugins.test.ts",
+    "tests/fledge.cli.test.ts",
+    "specs/plugins",
+    "specs/cli",
+    "specs/agent"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "corvidinho discovers the project's installed Fledge plugins by running fledge plugins list/audit --json with cwd set to the project root, argv arrays and a timeout; each Fledge plugin command registers as typed plugin fledge-<command> with dangerous true and minTier 2 (native) or 1 (sandboxed wasm without exec); plugins run fledge-<command> executes fledge --non-interactive plugins run <command> <argv...> in the project root with no shell, stdin closed, a scrubbed env, capped and secret-scrubbed output and a timeout; SAFE-1 denies them in non-interactive mode unless allowlisted; missing fledge, non-zero exit, bad JSON or timeout during discovery degrade to zero Fledge commands with a reason and never break builtins; plugins list shows each command's origin and approximate tool-schema tokens plus a total against a tool-surface budget with over-budget and oversized-schema warnings, and plugins list --json stays an array with origin/schemaChars/approxTokens per entry; fixture tests use a fake fledge on PATH with no network"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

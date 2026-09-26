@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled",
+  "implementation_commit": "84d97a9b95fb8b2cf08de9d44bd3bf65e52ff083",
+  "implementation_tree": "a3aab74849fb6aa38dad9d468e47aadc9d865410",
+  "contract_digest": "b9d7eb520d49f747dcd07bc8cd3d21b4fb2099fb606201c6bdf3ad1a0adc56d1",
+  "workspace_digest": "f79b90569af5eea95dae32016aa516d18cf7fc200e278d779d922e75778ca9f4",
+  "closing_digest": "281e5c506fd4fb86792da096e2fd7f8e183c814425d01318f0e33aefc62fec65",
+  "review_digest": "5fc8b429811204071f973a8f49f5c65484e23d9bea1922a491a1017a680b6200",
+  "finalization_digest": "806a91dc77fd48db6a27d4ef8fa07bf94dc5799ad56df6ed25be0082d9943e5d",
+  "timestamp": 1790455694
+}

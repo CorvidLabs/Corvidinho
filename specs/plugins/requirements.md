@@ -290,6 +290,55 @@ Acceptance Criteria
 - Owner + bridge bit may run memory forget phase 1.
 - Owner without the bit, a non-owner id, a muted owner, and an admin-list user or role holder are refused.
 
+### REQ-plugins-182
+
+The system SHALL register typed git plugins (PLUGIN-1) from `plugins/git/`
+via builtins. Reads `git-status` (porcelain v1 `-z --branch
+--untracked-files=all` parsed to JSON: branch, upstream, ahead/behind,
+per-entry index/worktree codes, staged / unstaged / untracked / conflicted
+lists; untracked files in a new directory are listed individually so they can
+be passed to `git-commit`), `git-diff` (worktree, or index with
+`--staged`; byte-capped with a `truncated` flag), `git-log` (last N commits,
+oneline; default 10, max 100) and `git-branch-list` SHALL declare
+`dangerous: false`, `minTier: 0`. Mutators `git-branch-create`, `git-commit`
+and `git-push` SHALL declare `dangerous: true`, `minTier: 2` (code) so SAFE-1
+denies them non-interactively unless allowlisted (PLUGIN-2).
+
+Every git invocation SHALL use `Bun.spawn` with an argv array (no shell),
+stdin closed, `GIT_TERMINAL_PROMPT=0`, repo-locating env (`GIT_DIR`,
+`GIT_WORK_TREE`, `GIT_INDEX_FILE`, …) stripped, hooks disabled, and cwd
+clamped to the plugin cwd: `GIT_CEILING_DIRECTORIES` stops discovery above
+it and the cwd SHALL be the repository / worktree top level (SAFE-3). Unknown
+flags SHALL be refused; path args SHALL resolve inside the plugin cwd with the
+files-plugin clamp (escapes and symlink escapes refused) and be passed after
+`--` as literal pathspecs.
+
+`git-commit` SHALL require a message and stage explicit file paths only
+(no directories, no `--all`, no `--amend`), SHALL refuse staging the deletion
+of SAFE-2 protected paths (`isProtectedPath`) and any `.env*`, keystore or
+`.git` path, SHALL commit only the named paths, and SHALL report the
+committed paths as `filesChanged`. `git-branch-create` SHALL validate the name
+and never reset an existing branch; when it switches it SHALL NOT overwrite
+ignored local files such as `.env*` or keystores (`--no-overwrite-ignore`;
+SAFE-2) and SHALL refuse (exit 2) instead, leaving HEAD and the files
+unchanged. `git-push` SHALL push only the current
+branch to the same-named ref on a configured remote (default `origin`), SHALL
+never force (force / force-with-lease / delete / mirror / tags / `+` or `:`
+refspec args refused), SHALL require every push URL's OWNER/REPO to pass
+`checkRepoGate` (GITHUB-6; allowlist file + env, deny wins), SHALL take
+credentials only from env / the credential helper, and SHALL redact URL
+credentials and secret-looking tokens from its output.
+
+Acceptance Criteria
+- `plugins list` includes git-status, git-diff, git-log, git-branch-list (dangerous=false, minTier 0) and git-branch-create, git-commit, git-push (dangerous=true, minTier 2).
+- Mutators are denied non-interactively without an allowlist entry (exit 2).
+- git-status JSON reports branch, staged, unstaged and untracked entries from a temp repo, listing each new file in a new directory (which git-commit then accepts); git-diff worktree vs --staged differ and a small --max-bytes truncates.
+- git-log returns N oneline commits; git-branch-list marks the current branch; git-branch-create creates and switches, refusing an existing name and option-like names; `--from` a start point that tracks an ignored local .env / keystore is refused (exit 2) and the local files and HEAD are unchanged.
+- git-commit without a message or with only a directory is refused; it commits only named paths, reports filesChanged, refuses path escapes, .env, and staging a deleted protected path.
+- A plugin cwd that is a subdirectory of a repository (not the top level) is refused; unknown flags are refused.
+- Hooks in `.git/hooks` or a repo-local `core.hooksPath` never run on git-commit / git-push; git-status and git-commit work at the top level of a linked worktree (`.git` is a file).
+- git-push to a local bare remote is refused when OWNER/REPO is not allowlisted or is denied (exit 3) and succeeds when allowlisted; force/refspec args are refused (exit 2); a non-fast-forward push is rejected without force and the remote ref is unchanged; detached HEAD is refused.
+
 ### REQ-plugins-086
 
 The system SHALL register typed plugin `shell-exec` (PLUGIN-1). It SHALL declare
@@ -361,4 +410,70 @@ Acceptance Criteria
 - Vendor-token-looking strings in diff text are redacted, including one straddling the cap.
 - A hostile diff far over the cap (many private-key openers, no closer) returns quickly; a private key split by the hard cut is not returned.
 - Tests mock Octokit (no network, no token).
+
+### REQ-plugins-112
+
+The system SHALL discover the Fledge plugins registered for a project through
+the local fledge CLI (FLEDGE-4 / PLUGIN-3): it SHALL run
+`fledge --non-interactive plugins list --json` (required) and
+`fledge --non-interactive plugins audit --json` (capabilities, best effort) as
+argv arrays with cwd set to the project root, stdin closed, a timeout and a
+capped output size, never through a shell. Fledge output SHALL be treated as
+data: command names SHALL match `^[A-Za-z0-9][A-Za-z0-9_-]{0,56}$` or be
+skipped with a warning, and free text SHALL be cleaned of control characters
+and length-capped. Each valid Fledge command SHALL register as the typed
+plugin `fledge-<command>` with `dangerous: true` (fledge manifests declare no
+danger or tier and native plugins run unsandboxed, so SAFE-1 consent applies)
+and `minTier` 2 (code) for native or capability-unknown plugins, or 1 (tool)
+for a wasm-sandboxed plugin without the `exec` capability (PLUGIN-2). The
+command description SHALL stay small and SHALL NOT include the plugin source
+path (FLEDGE-5). A name already registered by a builtin or another plugin
+SHALL be skipped with a reason. A missing fledge binary, non-zero exit,
+unexpected JSON, oversized output or timeout SHALL degrade to zero Fledge
+commands with a reason and SHALL NOT affect builtins.
+
+Acceptance Criteria
+- Fake fledge fixture: list + audit rows register `fledge-hello`, `fledge-bye`, `fledge-tz`, `fledge-runner`, all dangerous; native → minTier 2, wasm without exec → 1, wasm with exec → 2, audit unavailable → 2.
+- Invalid or overlong command names are skipped with a warning; duplicate names across plugins are skipped with a reason.
+- Missing fledge, exit 3, bad JSON and a 200 ms timeout each return ok=false with a reason and leave the builtin list unchanged.
+- The description names the plugin, version, trust tier and sandbox and never the source path.
+
+### REQ-plugins-113
+
+Running `fledge-<command>` SHALL execute
+`fledge --non-interactive plugins run <command> <argv...>` as an argv array
+(no shell interpolation) with cwd pinned to the plugin cwd (project root /
+task worktree), stdin closed, and a child env that drops `CORVIDINHO_*`,
+`DISCORD_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`,
+keeps the rest (including GitHub tokens for GitHub-backed Fledge plugins), and
+sets `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`. Output SHALL be
+secret-scrubbed with `scrubSecrets` (SAFE-6) and capped per stream; a run
+SHALL time out (default 120 s) and be killed with exit 124; a non-zero exit
+SHALL be a failed result carrying that exit code; a binary that cannot start
+SHALL fail with exit 127 instead of throwing. SAFE-1 SHALL deny the command in
+non-interactive mode unless `fledge-<command>` is allowlisted, and SAFE-5
+audit rows SHALL be recorded as for any dangerous plugin.
+
+Acceptance Criteria
+- Non-interactive without allowlist → exit 2 with SAFE-1; allowlisted → fake fledge sees `plugins run hello` and each argv item verbatim (spaces, `$(…)`, `;` not interpreted), cwd = project root.
+- The child env lacks Discord / Corvidinho LLM / audit keys, keeps `GITHUB_TOKEN`, and has `FLEDGE_NON_INTERACTIVE=1`.
+- Exit 7 → ok=false exitCode 7; sleep past a 200 ms timeout → exitCode 124; missing binary → 127.
+- A `ghp_…` token in plugin output is redacted and output past the cap is truncated with a marker.
+
+### REQ-plugins-114
+
+The system SHALL measure the context cost of each loaded plugin command on the
+exact tool definition sent to the model (`toolDefForEntry`), as JSON
+characters and approximate tokens (chars/4), and SHALL report the loaded tool
+surface as a whole (FLEDGE-5 / PLUGIN-6): total approximate tokens if every
+loaded command were offered, a default budget of ~8000 tokens with an
+over-budget flag, subtotals by origin (`builtin` or
+`fledge:<plugin>@<version>`), the largest schemas, and commands whose schema
+exceeds a ~250-token soft cap. `PluginCommand` MAY carry an `origin`; the
+registry `list()` shape is unchanged.
+
+Acceptance Criteria
+- `withToolCost` adds `origin`, `schemaChars`, `approxTokens` (= ceil(schemaChars/4)) per entry.
+- `toolSurfaceReport` totals match the per-entry sum, group by origin, and flag over-budget / oversized with small test budgets.
+- The text view prints per-command `~N tok`, the total vs budget with `OVER BUDGET` when exceeded, per-origin subtotals and oversized names.
 

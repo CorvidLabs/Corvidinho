@@ -41,28 +41,36 @@ export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
   for (const entry of list()) {
     if (entry.dangerous && !includeDangerous) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;
-    const argvDesc = entry.name.startsWith("memory-")
-      ? 'CLI-style argv after the command. memory-store e.g. ["--category","person","--key","identity","Leif is the owner"]; memory-recall e.g. ["--category","person"] or ["--query","name"]; forget/override need --id and --confirm.'
-      : "CLI-style arguments after the command name (e.g. module name, --repo OWNER/REPO).";
-    out.push({
-      type: "function",
-      function: {
-        name: entry.name,
-        description: entry.description,
-        parameters: {
-          type: "object",
-          properties: {
-            argv: {
-              type: "array",
-              items: { type: "string" },
-              description: argvDesc,
-            },
+    out.push(toolDefForEntry(entry));
+  }
+  return out;
+}
+
+/**
+ * The exact tool definition sent for one plugin — also what the schema-cost
+ * view measures (FLEDGE-5 / PLUGIN-6).
+ */
+export function toolDefForEntry(entry: { name: string; description: string }): OpenAiToolDef {
+  const argvDesc = entry.name.startsWith("memory-")
+    ? 'CLI-style argv after the command. memory-store e.g. ["--category","person","--key","identity","Leif is the owner"]; memory-recall e.g. ["--category","person"] or ["--query","name"]; forget/override need --id and --confirm.'
+    : "CLI-style arguments after the command name (e.g. module name, --repo OWNER/REPO).";
+  return {
+    type: "function",
+    function: {
+      name: entry.name,
+      description: entry.description,
+      parameters: {
+        type: "object",
+        properties: {
+          argv: {
+            type: "array",
+            items: { type: "string" },
+            description: argvDesc,
           },
         },
       },
-    });
-  }
-  return out;
+    },
+  };
 }
 
 /** Parse tool-call arguments JSON into argv for runPlugin. */
