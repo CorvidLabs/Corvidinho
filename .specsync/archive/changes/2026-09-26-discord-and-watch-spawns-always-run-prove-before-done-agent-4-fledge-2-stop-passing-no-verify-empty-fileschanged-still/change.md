@@ -1,6 +1,6 @@
 ---
 id: discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still
-state: implementing
+state: archived
 type: feature
 base_commit: 19683b6059902c62baeddb9d2110f64f82dc3009
 ---
