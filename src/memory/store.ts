@@ -115,15 +115,13 @@ export class MemoryStore {
 
     const ts = this.now();
     if (existing) {
-      // Own-scope upsert is store, not override — same owner only (ACL-1).
+      // Re-storing a key keeps the prior content as a soft-deleted row
+      // (retrievable by ADMIN) — an update must never be a non-admin
+      // forget path (MEMORY-ACL-4).
       this.db.run(
-        `UPDATE memories SET content = ?, updated_at = ? WHERE id = ?`,
-        [content, ts, existing.id],
+        `UPDATE memories SET deleted_at = ?, deleted_by_user_id = ?, updated_at = ? WHERE id = ?`,
+        [ts, owner, ts, existing.id],
       );
-      const updated = this.db
-        .query(`SELECT * FROM memories WHERE id = ?`)
-        .get(existing.id) as MemoryRow;
-      return rowToRecord(updated);
     }
 
     const id = randomUUID();

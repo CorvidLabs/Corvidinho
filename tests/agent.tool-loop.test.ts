@@ -389,3 +389,53 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
     expect(r.summary).toBe("edited execute.ts");
   });
 });
+
+describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () => {
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("a registered but not-offered dangerous tool is refused, not run", async () => {
+    let call = 0;
+    const fetchImpl = async () => {
+      call += 1;
+      const message =
+        call === 1
+          ? {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                { id: "c1", type: "function", function: { name: "danger-ping", arguments: "{}" } },
+              ],
+            }
+          : { role: "assistant", content: "done" };
+      return new Response(JSON.stringify({ choices: [{ message }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "try a hidden tool",
+      env: {
+        CORVIDINHO_LLM_API_KEY: "secret",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+        CORVIDINHO_LLM_MODEL: "test-model",
+      },
+      fetchImpl,
+      tier: "tool",
+      // Interactive + allowlisted would have let runPlugin run it before.
+      nonInteractive: false,
+      allowlist: ["danger-ping"],
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 3,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    const res = events.find((e) => e.type === "ToolResult") as
+      | { success: boolean; detail: string }
+      | undefined;
+    expect(res?.success).toBe(false);
+    expect(res?.detail).toContain("not offered");
+  });
+});

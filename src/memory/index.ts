@@ -20,3 +20,15 @@ export {
   type ForgetMemoryInput,
   type OverrideMemoryInput,
 } from "./store.ts";
+export {
+  CONFIRM_TOKEN_TTL_MS,
+  checkConfirmToken,
+  currentConfirmTurn,
+  extractConfirmTokens,
+  isHumanSuppliedToken,
+  issueConfirmToken,
+  setConfirmTurnForTests,
+  type ConfirmBinding,
+  type ConfirmCheck,
+  type ConfirmOp,
+} from "./confirm.ts";

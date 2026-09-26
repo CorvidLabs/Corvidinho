@@ -113,6 +113,7 @@ export async function handleSessionStart(
       }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
       prompt: topic,
+      humanText: topic,
       sessionId: session.id,
       resume: false,
       actingUserId: interaction.userId,

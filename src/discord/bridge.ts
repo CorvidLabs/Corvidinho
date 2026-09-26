@@ -365,6 +365,9 @@ export async function startBridge(
           }) >= PermissionLevel.ADMIN;
         result = await agent.runChat({
           prompt: enrichedPrompt,
+          // Raw human text (before memory/image enrichment) — the only
+          // source of SAFE-4 confirm tokens.
+          humanText: prompt,
           sessionId: session.id,
           resume: action.kind === "continue_session",
           actingUserId: msg.authorId,
