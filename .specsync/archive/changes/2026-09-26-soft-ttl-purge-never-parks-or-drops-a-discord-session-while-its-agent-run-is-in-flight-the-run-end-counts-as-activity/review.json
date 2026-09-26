@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "soft-ttl-purge-never-parks-or-drops-a-discord-session-while-its-agent-run-is-in-flight-the-run-end-counts-as-activity",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "719cfa09c6058f943c7bf8ce66ee79c718d5a60d",
+  "contract_digest": "ca397d08e397ae66a69e6e16b4f53893b36d9acbce3eb81cf803cb55d3cc4aa0",
+  "execution_digest": "3e2aa48975be3d6df5ae2fd2365e86bf68502686fb1f25a2daf09b0844844105",
+  "workspace_digest": "2f40c6040dcd4279e5c0bf68c5489b984d677a2ab8afc4a25d75f8a06a7d0c3a",
+  "timestamp": 1790460237
+}

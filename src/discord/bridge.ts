@@ -433,24 +433,28 @@ export async function startBridge(
             owner: config.owner ?? null,
             mutedUsers,
           }) >= PermissionLevel.ADMIN;
-        result = await agent.runChat({
-          prompt: enrichedPrompt,
-          // Raw human text (before memory/image enrichment) — the only
-          // source of SAFE-4 confirm tokens.
-          humanText: prompt,
-          sessionId: session.id,
-          resume: action.kind === "continue_session",
-          actingUserId: msg.authorId,
-          actingIsAdmin,
-          cwd: store.cwdFor(session),
-          onStatus: (u) => {
-            void thinking.update({
-              tool: u.tool,
-              tokens: u.tokens,
-              description: u.message ? `⏳ ${u.message}` : undefined,
-            });
-          },
-        });
+        // Busy while the agent runs: the soft-TTL purge must not park this
+        // worktree mid-run (REQ-discord-204).
+        result = await store.runActive(session, () =>
+          agent.runChat({
+            prompt: enrichedPrompt,
+            // Raw human text (before memory/image enrichment) — the only
+            // source of SAFE-4 confirm tokens.
+            humanText: prompt,
+            sessionId: session.id,
+            resume: action.kind === "continue_session",
+            actingUserId: msg.authorId,
+            actingIsAdmin,
+            cwd: store.cwdFor(session),
+            onStatus: (u) => {
+              void thinking.update({
+                tool: u.tool,
+                tokens: u.tokens,
+                description: u.message ? `⏳ ${u.message}` : undefined,
+              });
+            },
+          }),
+        );
       } catch (err) {
         await thinking.fail(
           `❌ ${err instanceof Error ? err.message : "agent error"}`,
