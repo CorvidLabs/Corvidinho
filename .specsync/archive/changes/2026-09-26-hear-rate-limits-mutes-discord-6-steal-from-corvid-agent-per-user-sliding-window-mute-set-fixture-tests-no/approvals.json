@@ -71,6 +71,13 @@
       "approved_delta_digests": {
         "discord": "c1816aecbe33ea58ad28e8eb8c3eab2f531d166fedd2e61d0918dbf9d09f70d3"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790441020,
+      "digest": "5e614a18b099f7592123706382f393008a686f00af1df0db0fd0f0377fb6ff90",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []

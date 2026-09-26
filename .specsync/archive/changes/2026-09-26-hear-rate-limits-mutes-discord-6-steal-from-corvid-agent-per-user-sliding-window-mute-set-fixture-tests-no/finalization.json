@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-rate-limits-mutes-discord-6-steal-from-corvid-agent-per-user-sliding-window-mute-set-fixture-tests-no",
+  "implementation_commit": "04d9730e084bcdca738fd64c1df92b312b29613f",
+  "implementation_tree": "fc69fc649480a142eb3814d8767eabff93d46f3d",
+  "contract_digest": "700a022660b73f44b0245b062cb1bd20338acc7496d42f78a5f2008f8ce8ecf7",
+  "workspace_digest": "ff135fb1376b7e477a4526f3dd0adc4d0ceb430b4d98ddc26538391115cd14da",
+  "closing_digest": "5e614a18b099f7592123706382f393008a686f00af1df0db0fd0f0377fb6ff90",
+  "review_digest": "53c64527563082789537cd39489cee68f31f92cb9a572ebfb219b8526cdbe57b",
+  "finalization_digest": "d2b4bee10eedea92c077d66a3df38559d34cdf72a9c072c84e1d458c5da1463b",
+  "timestamp": 1790441020
+}

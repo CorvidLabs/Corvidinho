@@ -1,6 +1,6 @@
 ---
 id: hear-rate-limits-mutes-discord-6-steal-from-corvid-agent-per-user-sliding-window-mute-set-fixture-tests-no
-state: implementing
+state: archived
 type: feature
 base_commit: 435556dcaedb9817bef4466404825147c9da817e
 ---
