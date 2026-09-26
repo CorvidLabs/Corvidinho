@@ -118,7 +118,19 @@ export function htmlToText(html: string): string {
     "\n",
   );
   s = s.replace(/<\/?(td|th)\b[^<>]*>/gi, " ");
-  s = s.replace(/<[^<>]*>/g, "");
+  // Strip tags until nothing changes, so split tags like `<<b>script>` cannot
+  // reassemble into markup after one pass. Deeply nested hostile markup is
+  // capped: after a few passes any leftover angle brackets are dropped, which
+  // keeps this linear and still leaves no tag behind.
+  for (let pass = 0; ; pass++) {
+    const next = s.replace(/<[^<>]*>/g, "");
+    if (next === s) break;
+    s = next;
+    if (pass >= 7) {
+      s = s.replace(/[<>]/g, "");
+      break;
+    }
+  }
   return collapse(stripControls(decodeEntities(s)));
 }
 
