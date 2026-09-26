@@ -7,10 +7,11 @@
   "title": "Backfill CHANGELOG 0.0.9/0.0.10 notes: owner-only ADMIN upgrade note + #136/#138/#141 under 0.0.9; protocol-2 restart note + #139/#143 under 0.0.10; STATUS rows",
   "description": "Backfill CHANGELOG 0.0.9/0.0.10 notes: owner-only ADMIN upgrade note + #136/#138/#141 under 0.0.9; protocol-2 restart note + #139/#143 under 0.0.10; STATUS rows",
   "kind": "documentation",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
   "created_at": 1790454582,
-  "updated_at": 1790454583,
+  "updated_at": 1790454595,
   "affected_specs": [],
   "affected_paths": [
     "CHANGELOG.md",

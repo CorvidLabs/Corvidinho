@@ -1,4 +1,37 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454594,
+      "digest": "556cf74fef93b1b60fe4a06e7b0466189d459bda654332cd3a217eb64bad1033",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "backfill-changelog-0-0-9-0-0-10-notes-owner-only-admin-upgrade-note-136-138-141-under-0-0-9-protocol-2-restart-note-139",
+        "title": "Backfill CHANGELOG 0.0.9/0.0.10 notes: owner-only ADMIN upgrade note + #136/#138/#141 under 0.0.9; protocol-2 restart note + #139/#143 under 0.0.10; STATUS rows",
+        "description": "Backfill CHANGELOG 0.0.9/0.0.10 notes: owner-only ADMIN upgrade note + #136/#138/#141 under 0.0.9; protocol-2 restart note + #139/#143 under 0.0.10; STATUS rows",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "tests/update-helpers.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Docs-only: CHANGELOG/STATUS backfill and a changelog-helper test; no behavior or spec change",
+        "acceptance_criteria": [
+          "0.0.10 notes include the protocol-2 restart note, #139 and #143; 0.0.9 notes include the owner-only ADMIN upgrade note, #138/#141 and #136; changelog-helper tests assert both"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
   "reopenings": []
 }
