@@ -18,6 +18,11 @@ messages is a fake token, used to check that logs are scrubbed.
   run, and `execution_count` is 1.
 - **Interval, `claimRun` throws once.** There is no unhandled rejection, and
   the next tick claims and runs the schedule.
+- **Odd errors.** One tick throws an error whose message has a newline, and
+  the next throws a null-prototype object (`String()` of it throws). Each is
+  logged as one `[scheduler] tick failed:` line (the second as
+  `(unprintable error)`), the logger never throws, there is no unhandled
+  rejection, and the third tick runs the due schedule.
 - **Bridge-style child process.** A child `bun` process runs the scheduler
   interval with a store that throws once, and keeps itself alive with its
   own ref'd timer, as the bridge does. It stays up and exits 0, and its
@@ -35,12 +40,12 @@ messages is a fake token, used to check that logs are scrubbed.
 
 ## Before and after
 
-- **Before the fix** (`service.ts` from `main`, same test file): 5 fail and
+- **Before the fix** (`service.ts` from `main`, same test file): 6 fail and
   1 pass. The lock-release guard test passes, because the old `finally`
   already freed the tick lock. The child process exits with code 1 and
   prints nothing to stdout, and every in-process case reports the unhandled
   `SQLITE_BUSY` / `park failed` rejection.
-- **After the fix:** 6 pass and 0 fail. The existing
+- **After the fix:** 7 pass and 0 fail. The existing
   `tests/scheduler.service.test.ts`, `tests/scheduler.worktree.test.ts`,
   `tests/daemon.test.ts` and `tests/daemon.cli.test.ts` still pass.
 
@@ -52,5 +57,5 @@ Also run: `bun test`, `bunx tsc --noEmit`,
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-discord-331` | `tests/scheduler.tick-errors.test.ts` | Interval `listDue`/`claimRun` throwing once gives no unhandled rejection, a scrubbed `[scheduler] tick failed:` line, and the next tick runs the due schedule. A bridge-style child process stays up (exit 0, exit 1 before the fix). A manual `tick()` rejects but frees the tick lock and keeps claimed runs going. A run double fault and a `parkWorktree` failure log `[scheduler] run failed:`, free the slot and never reject. |
+| `REQ-discord-331` | `tests/scheduler.tick-errors.test.ts` | Interval `listDue`/`claimRun` throwing once gives no unhandled rejection, a scrubbed `[scheduler] tick failed:` line, and the next tick runs the due schedule. A multi-line or unprintable error is logged on one line and never rejects. A bridge-style child process stays up (exit 0, exit 1 before the fix). A manual `tick()` rejects but frees the tick lock and keeps claimed runs going. A run double fault and a `parkWorktree` failure log `[scheduler] run failed:`, free the slot and never reject. |
 | `REQ-discord-108` | `tests/scheduler.service.test.ts`, `tests/daemon.test.ts` | The atomic claim, one outcome per run and the daemon tick loop pass unchanged. `tick()` still rejects to direct callers, so the daemon's `tick.failed` path is kept. |

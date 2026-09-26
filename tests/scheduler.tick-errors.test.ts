@@ -145,6 +145,46 @@ describe("scheduler interval tick errors (REQ-discord-331)", () => {
     expect(errors.some((l) => l.startsWith("[scheduler] tick failed: SQLITE_BUSY"))).toBe(true);
   });
 
+  test("a multi-line or unprintable tick error is logged on one line and never rejects", async () => {
+    const unhandled = watchUnhandled();
+    const errors = quietErrors();
+    const store = new ScheduleStore();
+    const s = dueSchedule(store, "Odd errors");
+    const listDue = store.listDue.bind(store);
+    let listCalls = 0;
+    store.listDue = (now?: number) => {
+      listCalls += 1;
+      if (listCalls === 1) {
+        throw new Error(`${BUSY}\n[discord] forged line`);
+      }
+      // String() of a null-prototype object throws.
+      if (listCalls === 2) throw Object.create(null);
+      return listDue(now);
+    };
+    const agent = okAgent();
+    const svc = new SchedulerService({
+      store,
+      agent: agent as never,
+      allowlist: emptyConfig(),
+      pollIntervalMs: 5,
+      useWorktrees: false,
+    });
+    cleanups.push(() => svc.stop());
+
+    await waitFor(() => agent.calls.length >= 1);
+    svc.stop();
+    expect(await svc.drain(2_000)).toBe(true);
+    await Bun.sleep(10);
+
+    expect(unhandled).toEqual([]);
+    expect(agent.calls).toEqual([`schedule_${s.id}`]);
+    const ticks = errors.filter((l) => l.startsWith("[scheduler] tick failed:"));
+    expect(ticks).toEqual([
+      "[scheduler] tick failed: SQLITE_BUSY: database is locked ([redacted:github-token]) [discord] forged line",
+      "[scheduler] tick failed: (unprintable error)",
+    ]);
+  });
+
   test("a bridge-style process stays up after a tick throws (no global unhandledRejection handler)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-tick-crash-"));
     cleanups.push(() => rmSync(dir, { recursive: true, force: true }));

@@ -31,11 +31,19 @@ export const FAILURE_AUTO_PAUSE = 5;
 
 /**
  * Log a tick or run error that nothing else would catch (REQ-discord-331).
- * Only the scrubbed message is logged (SAFE-6), never a stack.
+ * Only the scrubbed message is logged (SAFE-6), on one line, never a stack.
+ * Never throws: it runs in the `.catch` that keeps these promises from
+ * rejecting.
  */
 function logSchedulerError(where: "tick" | "run", err: unknown): void {
-  const msg = err instanceof Error ? err.message : String(err);
-  console.error(`[scheduler] ${where} failed: ${scrubSecrets(msg).slice(0, 500)}`);
+  let text: string;
+  try {
+    const msg = String(err instanceof Error ? err.message : err);
+    text = scrubSecrets(msg).replace(/\s+/g, " ").trim().slice(0, 500);
+  } catch {
+    text = "(unprintable error)";
+  }
+  console.error(`[scheduler] ${where} failed: ${text}`);
 }
 
 export type SchedulerOutbound = {
