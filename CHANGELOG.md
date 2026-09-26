@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.0.21
+
+### Security and correctness sweep (bug-fix PRs from an adversarial bug hunt)
+
+- **Discord actor gating** — [#176](https://github.com/CorvidLabs/Corvidinho/pull/176): chat and slash actors are checked against the user/role allowlist and deny lists (deny wins), not only the channel allowlist.
+- **`/work` and `/session start` project option** — [#177](https://github.com/CorvidLabs/Corvidinho/pull/177): the `project` option can no longer point the agent at an arbitrary git repo on the host; only configured project roots resolve.
+- **Schedules get their own worktree and branch; branches with commits are never force-deleted** — [#178](https://github.com/CorvidLabs/Corvidinho/pull/178): schedule run worktree ids no longer collide, and branch cleanup deletes a branch only when it has no commits of its own, whatever the default branch is called (`trunk` included).
+- **Soft-TTL purge never parks a live session** — [#179](https://github.com/CorvidLabs/Corvidinho/pull/179): `/status` or `/session list` can no longer park the worktree out from under a running agent.
+- **Spawned Bun config pinned** — [#182](https://github.com/CorvidLabs/Corvidinho/pull/182): a planted `bunfig.toml` preload in a project cannot run code in the agent child.
+- **Image attachments saved inside the session root** — [#183](https://github.com/CorvidLabs/Corvidinho/pull/183): the agent can read what you attach.
+- **Files path clamp follows dangling symlinks** — [#184](https://github.com/CorvidLabs/Corvidinho/pull/184): `files-write` cannot escape the root or create SAFE-2 protected files through a dangling link.
+- **`--`-prefixed argv tokens kept** — [#186](https://github.com/CorvidLabs/Corvidinho/pull/186): file content, grep patterns and shell command flags that start with `--` survive; `files-write` refuses to empty a non-empty file without `--allow-empty`.
+
+### Features and hardening
+
+- **Council tool** (AUTONOMOUS-6, SAFE-9) — [#180](https://github.com/CorvidLabs/Corvidinho/pull/180) (#118): a code-tier lead in an autonomous-enabled project can convene a council that deliberates in phases (propose → critique → decide). Hidden unless allowed; ADMIN-only under ROLES-CHAT; voices run non-ADMIN; depth-0 leads only.
+- **`/admin` and `github-pr-diff` edges** — [#175](https://github.com/CorvidLabs/Corvidinho/pull/175) (#43, #93): admin mutations fail closed without an audit trail; dangling/looping allowlist symlinks refused before any write; empty `--file` refused before any GitHub call.
+- **Operator guide** — [#181](https://github.com/CorvidLabs/Corvidinho/pull/181): `docs/DISCORD-GO-LIVE.md` and `docs/BOX-UPDATE.md` document every shipped go-live knob (owner/ADMIN, protocol, restart-together, SAFE tiers, plugin flags).
+
+### Ops
+
+- Package version **0.0.21** — restart the Discord bridge (and `corvidinho daemon` / watch if running) after update. No schema change since 0.0.20 (still v8).
+
+## 0.0.20
+
+### Autonomy clarify UX — AUTONOMY-4..7
+
+- **AUTONOMY-4** — Clarify asks ping the **requester** (message author / schedule creator). The configured owner is pinged only for **stuck** (verify/help), or when the requester is the owner.
+- **AUTONOMY-5** — While a session waits on an ask, thin replies (`ok`, `k`, `sure`, `hmmm`, emoji-only, …) do **not** clear blocked or mark done; the bridge restates the pending question once (no vacuous “ready when you are”).
+- **AUTONOMY-6** — Session stays blocked until a substantive answer or an explicit cancel (`cancel` / `nevermind` / …). Pending ask is durable on the session (`discord_sessions.pending_ask`, schema **v8**).
+- **AUTONOMY-7** — Impossible / joke “free energy / dark matter / zero-point” style asks: system prompt steers a witty public-safe decline or tiny toy demo — not a long formal MCQ / ask-human first.
+
+### Ops
+
+- Package version **0.0.20** — restart the Discord bridge after update (DB migrates to schema v8 on first open).
+
 ## 0.0.19
 
 ### Dogfood UX — identity, clean replies, thinking embed, public Q&A

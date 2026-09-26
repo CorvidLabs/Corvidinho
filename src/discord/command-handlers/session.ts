@@ -13,7 +13,12 @@ import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
-import { askPingOwner, replyWithOwnerNotice, slashOwnerNotice } from "../spend-post.ts";
+import {
+  askNeedsOwner,
+  askPingOwner,
+  replyWithOwnerNotice,
+  slashOwnerNotice,
+} from "../spend-post.ts";
 
 function formatSessionLine(s: {
   id: string;
@@ -172,14 +177,23 @@ export async function handleSessionStart(
   // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
   // is not "Done"; the owner is pinged (once per cap episode).
   const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
+  // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
+  // pinged in a separate post (below) for stuck and spend-cap.
   const ask = result.ask
-    ? formatAskReply({ ask: result.ask, owner: null, context: result.summary })
+    ? formatAskReply({
+        ask: result.ask,
+        owner: null,
+        requesterDiscordId: interaction.userId,
+        context: result.summary,
+      })
     : null;
-  if (ask) {
+  if (ask && result.ask) {
     await (ask.failed
       ? thinking?.fail(ask.status, thinkExtras)
       : thinking?.done(ask.status, thinkExtras));
-    if (!askOwner?.owner && !askOwner?.deduped) console.warn(ASK_NO_OWNER_WARNING);
+    if (askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
+      console.warn(ASK_NO_OWNER_WARNING);
+    }
   } else if (result.ok) {
     await thinking?.done("✅ Done", thinkExtras);
   } else {

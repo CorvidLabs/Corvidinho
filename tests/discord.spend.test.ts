@@ -459,6 +459,60 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     await result.stop();
   });
 
+  test("a thin reply to a spend-cap ask restates it without pinging the owner again", async () => {
+    let calls = 0;
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        calls += 1;
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(agent, {
+      CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
+      [SPEND_CAP_ENV]: "5",
+    });
+    await handlers.onMessage(MENTION);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await handlers.onMessage({
+      id: "m2",
+      channelId: "chan-1",
+      authorId: MENTION.authorId,
+      authorBot: false,
+      content: "ok",
+      mentionedBot: false,
+      referencedMessageId: "bot_1",
+    });
+    expect(calls).toBe(1);
+    expect(replies[1]!.content).toContain(SPEND_CAP_HEADLINE);
+    expect(replies[1]!.content).not.toContain("<@");
+    expect(replies[1]!.content).not.toContain(ASK_REPLY_HINT);
+    expect(replies[1]!.mentionUserIds).toEqual([]);
+    await result.stop();
+  });
+
+  test("/work with a clarify ask: blocked, addresses the requester, no owner post (AUTONOMY-4)", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return {
+          ...CAP_RESULT,
+          sessionId,
+          summary: "Needs your input: Postgres or SQLite?",
+          ask: { reason: "clarify", question: "Postgres or SQLite?" },
+        };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
+    const { ix, edits } = slashInteraction("work", { description: "pick a DB" });
+    await handlers.onSlash!(ix);
+    const body = edits.at(-1)!.content!;
+    expect(body).toContain("(blocked)");
+    expect(body).toContain("<@222233334444555566>");
+    expect(body).toContain("> Postgres or SQLite?");
+    expect(body).not.toContain(`<@${OWNER_ID}>`);
+    expect(replies).toHaveLength(0);
+    await result.stop();
+  });
+
   test("/session start at the cap shows the ask (not ✅) and pings the owner", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {

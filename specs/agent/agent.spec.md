@@ -144,14 +144,14 @@ appears in the final chat reply (DISCORD-3.a).
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
 in addition to MEMORY instructions.
 
-Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
+Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7): `src/agent/ask.ts`
 exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
 `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
-`ASK_AGENT_SYSTEM_INSTRUCTIONS`. `AgentState` gains `blocked`;
-`ExecuteResult` / `TaskResult` gain optional `ask: { reason: "clarify" |
-"stuck", question }`. A clarify ask ends the run `blocked` (verify skipped,
-exit 0); verify exhaustion stays `failed` and carries a `stuck` ask. Additive
-on the NDJSON wire: protocol stays 2.
+`ASK_AGENT_SYSTEM_INSTRUCTIONS` (includes AUTONOMY-7 joke/impossible guidance).
+`AgentState` gains `blocked`; `ExecuteResult` / `TaskResult` gain optional
+`ask: { reason: "clarify" | "stuck", question }`. A clarify ask ends the run
+`blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
+carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 
 ## Invariants
 
@@ -298,6 +298,7 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44: AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44) |
+| 2026-09-26 | autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package: AUTONOMY-7 joke/impossible guidance in ASK_AGENT_SYSTEM_INSTRUCTIONS |
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
 | 2026-09-26 | safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run: SAFE-8 amended (issue #98): warn at 80% of the daily spend cap and ask at 100% instead of refusing. Once per crossing a run that pushes rolling 24h spend to 80% of CORVIDINHO_DAILY_SPEND_CAP_USD emits a warning (Text event, result spendWarning, Discord reply line with owner ping); a provider call that would pass the cap is stopped before it is sent and the run ends blocked with a spend-cap ask to the owner via the AUTONOMY-1/2 ask path stating spend vs cap and how to continue; doctor and Discord /status show 24h spend vs the cap (AUTONOMOUS-8); Approve card (#96) left for HI capture |

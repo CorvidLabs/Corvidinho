@@ -352,7 +352,12 @@ export class SchedulerService {
         const ask = result.ask
           ? formatAskReply({
               ask: result.ask,
+              // Stuck / spend-cap: owner (skip when already pinged). Clarify:
+              // schedule creator.
               owner: askOwner.owner,
+              requesterDiscordId: alreadyPinged
+                ? undefined
+                : schedule.createdByUserId,
               context: result.summary,
               prefix: `${title}:`,
             })
@@ -363,8 +368,12 @@ export class SchedulerService {
         // `false` until a post resolves (a poster returning void counts as sent).
         let posted: void | boolean = false;
         try {
-          if (gate.ok && ask) {
-            if (!ask.ownerPinged && !askOwner.deduped) {
+          if (gate.ok && ask && result.ask) {
+            if (
+              (result.ask.reason === "stuck" || result.ask.reason === "spend-cap") &&
+              !ask.ownerPinged &&
+              !askOwner.deduped
+            ) {
               console.warn(ASK_NO_OWNER_WARNING);
             }
             posted = await this.outbound.post(
@@ -378,7 +387,7 @@ export class SchedulerService {
                 this.owner,
               ),
             );
-            if (ask.ownerPinged && pingKey) {
+            if (ask.pinged && pingKey) {
               this.store.setAskPingKey(schedule.id, pingKey);
             }
           } else if (gate.ok) {

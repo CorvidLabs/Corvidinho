@@ -388,29 +388,14 @@ Acceptance Criteria
 
 ### REQ-agent-044
 
-The tool loop SHALL offer an agent-level `ask-human` tool (argument
-`question`) on tool/code tiers alongside the plugin catalog, and its system
-prompt SHALL tell the model to call it when the task cannot proceed without a
-human choice instead of guessing, inventing acceptance criteria, or claiming
-done (AUTONOMY-1). The call SHALL NOT be dispatched as a plugin: a non-empty
-question SHALL end the execute attempt with `ask: {reason: "clarify",
-question}` and summary `Needs your input: <question>`; an empty question
-SHALL be refused back to the model as a failed tool result.
-
-`runTask` SHALL return state `blocked` (never `done`, verify not run,
-`verifySkipped: true`) with the same `ask` when execute returns one, and SHALL
-emit `StateChanged blocked`. When verification still fails after every retry,
-the result SHALL stay `failed` (AGENT-4) and SHALL carry `ask: {reason:
-"stuck", question}` with the question appended to the summary (AUTONOMY-2).
-`TaskResult.ask` rides the existing `--json` / NDJSON `result`; `blocked` is a
-valid NDJSON StateChanged value. The change is additive and the wire protocol
-stays 2.
+Amend: `ASK_AGENT_SYSTEM_INSTRUCTIONS` SHALL include AUTONOMY-7 guidance —
+impossible / joke “free energy / dark matter / zero-point” style asks get a
+witty public-safe decline or tiny toy demo; do not open with ask-human / a
+long formal MCQ unless the human clearly wants a real utility. Ask-human
+tool description SHALL say clarify addresses the requester (owner ping is for
+stuck).
 
 Acceptance Criteria
-- ask-human is in the provider tool list on tool/code tiers, once, and never on the read tier.
-- Calling ask-human ends the run with state `blocked`, `ask.reason` `clarify`, and no plugin dispatch.
-- An empty question is refused to the model and the loop continues.
-- Questions are trimmed, control characters dropped, capped at 1500 chars.
-- Verify exhaustion stays `failed` and carries a `stuck` ask.
-- `task run` text prints the question; `--json` / ndjson carry `result.ask`; blocked exits 0.
+- ASK_AGENT_SYSTEM_INSTRUCTIONS mentions AUTONOMY-7 / joke-impossible guidance.
+- Tool description no longer claims owner is always pinged on clarify.
 

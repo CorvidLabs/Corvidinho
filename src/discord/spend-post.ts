@@ -57,23 +57,29 @@ export type ChannelPost = (p: {
   mentionUserIds?: string[];
 }) => Promise<{ messageId: string } | null>;
 
+/**
+ * True when an ask pings the owner: stuck (AUTONOMY-2) and spend-cap
+ * (SAFE-8). A clarify ask addresses the requester instead (AUTONOMY-4).
+ */
+export function askNeedsOwner(ask: HumanAsk): boolean {
+  return ask.reason === "stuck" || ask.reason === "spend-cap";
+}
+
 /** One owner line pointing at a slash run's reply that needs them. */
 export function ownerAskNoticeLine(ask: HumanAsk, ownerId: string, label: string): string {
   const who = `<@${ownerId}>`;
   if (ask.reason === "spend-cap") {
     return `💸 ${who} ${label} paused at the daily spend cap — see the reply above.`;
   }
-  if (ask.reason === "stuck") {
-    return `⚠️ ${who} ${label} is stuck and needs a human — see the reply above.`;
-  }
-  return `❓ ${who} ${label} needs your input — see the reply above.`;
+  return `⚠️ ${who} ${label} is stuck and needs a human — see the reply above.`;
 }
 
 export type OwnerNotice = { content: string; mentionUserIds: string[] };
 
 /**
  * Owner notice for a finished slash run (`/work`, `/session start`): the
- * AUTONOMY-2 ping line for its ask plus the pending SAFE-8 warning (taken
+ * owner ping line for a stuck or spend-cap ask (a clarify ask addresses the
+ * requester in the reply, AUTONOMY-4) plus the pending SAFE-8 warning (taken
  * from the outbox here, so call it once per run). Null when there is
  * nothing to tell the owner.
  */
@@ -90,7 +96,7 @@ export function slashOwnerNotice(opts: {
 }): OwnerNotice | null {
   const ownerId = opts.owner?.discordId;
   const lines: string[] = [];
-  if (opts.ask && opts.pingOwnerForAsk && ownerId) {
+  if (opts.ask && opts.pingOwnerForAsk && ownerId && askNeedsOwner(opts.ask)) {
     lines.push(ownerAskNoticeLine(opts.ask, ownerId, opts.label));
   }
   const taken = takeSpendWarning(opts.outbox, opts.spendWarning);
