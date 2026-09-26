@@ -1,6 +1,6 @@
 ---
 id: hear-admin-re-auth-confused-deputy-channel-post-discord-7-8-steal-from-corvid-agent-commands-ts-merlin-bridges-discord
-state: implementing
+state: archived
 type: feature
 base_commit: 4fe4905f7108a76040cfda937e83bb0133857309
 ---

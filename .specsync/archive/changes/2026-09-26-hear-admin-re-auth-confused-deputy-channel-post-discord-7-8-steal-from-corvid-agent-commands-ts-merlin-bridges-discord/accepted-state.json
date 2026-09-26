@@ -7,11 +7,11 @@
   "title": "HEAR admin re-auth + confused-deputy channel post (DISCORD-7,8) — steal from corvid-agent commands.ts + Merlin bridges/discord requester check; fixture tests; no ProcessManager; STATUS Done for #13",
   "description": "HEAR admin re-auth + confused-deputy channel post (DISCORD-7,8) — steal from corvid-agent commands.ts + Merlin bridges/discord requester check; fixture tests; no ProcessManager; STATUS Done for #13",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "4fe4905f7108a76040cfda937e83bb0133857309",
   "created_at": 1790441117,
-  "updated_at": 1790441564,
+  "updated_at": 1790441570,
   "affected_specs": [
     "discord"
   ],

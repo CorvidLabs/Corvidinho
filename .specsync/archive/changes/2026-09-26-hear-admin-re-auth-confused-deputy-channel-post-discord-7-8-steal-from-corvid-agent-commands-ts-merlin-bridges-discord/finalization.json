@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-admin-re-auth-confused-deputy-channel-post-discord-7-8-steal-from-corvid-agent-commands-ts-merlin-bridges-discord",
+  "implementation_commit": "f39a42f91f10cba776ada9b762d98a2d50fceb0d",
+  "implementation_tree": "3d67fcd6e8e7b6ad444ae855360269a04da14a50",
+  "contract_digest": "98430091b93dfba480abc17413906d04295f108e6fe23e38710c8f3182c5af9a",
+  "workspace_digest": "7cbe3391347cf13393cdc4c1b9d5e79bf381caaccfb23b55427112a8552f0146",
+  "closing_digest": "a5361416728626a6cc1f9d323c5d0d5c121808be5248a0a7ee96ff6ae43b84fc",
+  "review_digest": "bc3d22239aa38d45bb3d065cc6d4755951b0dafc657eba2ae7b8bf571f03da7e",
+  "finalization_digest": "7febd9171aba9bd3816dd59d6c55ad64373bbfd846193a42a0bd16febfc74773",
+  "timestamp": 1790441570
+}
