@@ -4,7 +4,10 @@
 import { describe, expect, test } from "bun:test";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
-import { formatUptime } from "../src/discord/command-handlers/status.ts";
+import {
+  formatStatusReport,
+  formatUptime,
+} from "../src/discord/command-handlers/status.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import {
@@ -65,13 +68,15 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     workStore,
     allowlist: over.allowlist ?? allowCfg(),
     agent: over.agent ?? createEchoAgentClient({ delayMs: 0 }),
-    version: over.version ?? "0.0.1",
+    version: over.version ?? "0.0.2",
     protocolVersion: over.protocolVersion ?? CORVIDINHO_PROTOCOL_VERSION,
     startedAt: over.startedAt ?? Date.now() - 90_000,
     channelIds: over.channelIds ?? ["chan-allowed"],
     thinkingOutbound: over.thinkingOutbound,
     thinkingDebounceMs: 0,
     thinkingTickMs: 60_000,
+    env: over.env,
+    gitTipSha: over.gitTipSha,
   };
 }
 
@@ -131,15 +136,25 @@ describe("slash handlers", () => {
       userId: "u1",
       channelId: "chan-allowed",
     });
-    const ctx = makeCtx({ store, workStore, startedAt: Date.now() - 125_000 });
+    const ctx = makeCtx({
+      store,
+      workStore,
+      startedAt: Date.now() - 125_000,
+      env: {},
+      gitTipSha: "abc1234",
+    });
     const ix = memoryInteraction({ commandName: "status" });
     const result = await handleSlashInteraction(ctx, ix);
     expect(result.ok).toBe(true);
     const body = ix.replies[0]?.content ?? "";
-    expect(body).toContain("v0.0.1");
+    expect(body).toContain("v0.0.2");
     expect(body).toContain("Protocol: 1");
     expect(body).toContain("Active sessions: 1");
     expect(body).toContain("Channels (allowlist): 1");
+    expect(body).toContain("LLM: demo stub");
+    expect(body).toContain("Slash commands: session, status, agents, work, mute, unmute");
+    expect(body).toContain("Git tip: abc1234");
+    expect(body).not.toContain("sk-");
     expect(ix.replies[0]?.ephemeral).toBe(true);
   });
 
@@ -219,5 +234,30 @@ describe("slash handlers", () => {
     expect(ctx.workStore.list().length).toBe(0);
     expect(ctx.store.list().length).toBe(0);
     expect(ix.replies[0]?.content).toBe(NOT_AUTHORIZED);
+  });
+});
+
+describe("formatStatusReport", () => {
+  test("includes LLM host without key and omits git when absent", () => {
+    const body = formatStatusReport({
+      version: "0.0.2",
+      protocolVersion: 1,
+      startedAt: Date.now() - 60_000,
+      channelCount: 2,
+      sessions: 0,
+      workActive: 0,
+      workDone: 1,
+      workFailed: 0,
+      env: {
+        CORVIDINHO_LLM_API_KEY: "sk-should-not-appear",
+        CORVIDINHO_LLM_MODEL: "mini",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.example/v1",
+      },
+    });
+    expect(body).toContain("**Corvidinho** v0.0.2");
+    expect(body).toContain("LLM: mini @ llm.example");
+    expect(body).not.toContain("sk-should");
+    expect(body).not.toContain("Git tip:");
+    expect(body).toContain("Slash commands: session, status, agents, work, mute, unmute");
   });
 });

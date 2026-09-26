@@ -42,9 +42,7 @@ import {
 } from "./thinking-status.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
-
-/** Keep in sync with src/cli.ts VERSION (avoid circular import). */
-const BRIDGE_VERSION = "0.0.1";
+import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 
 export type StartBridgeResult =
   | {
@@ -148,7 +146,7 @@ export async function startBridge(
     rateLimitByLevel: config.rateLimitByLevel,
   });
   const startedAt = opts.startedAt ?? Date.now();
-  const version = opts.version ?? BRIDGE_VERSION;
+  const version = opts.version ?? PACKAGE_VERSION;
   const agent =
     opts.agent ??
     (config.dryRun
@@ -184,6 +182,8 @@ export async function startBridge(
     );
   }
 
+  const gitTipSha = tryGitTipShortSha(config.projectRoot);
+
   function buildSlashCtx(): SlashContext {
     return {
       store,
@@ -202,6 +202,8 @@ export async function startBridge(
       rateLimitConfig,
       adminUserIds: config.adminUserIds,
       adminRoleIds: config.adminRoleIds,
+      env: opts.env,
+      gitTipSha,
     };
   }
 

@@ -14,7 +14,13 @@ spec: cli.spec.md
 
 ### REQ-cli-002
 
-`bun src/cli.ts version` exits 0 and prints a semver string.
+The CLI `version` command SHALL print the semver string read from
+`package.json` via the shared `src/version.ts` helper and SHALL NOT rely on a
+hardcoded constant that can drift from the package.
+
+Acceptance Criteria
+- Printed version matches `package.json` `"version"`.
+- Unit tests cover `readPackageVersion` / exported `VERSION`.
 
 ### REQ-cli-003
 
@@ -107,4 +113,17 @@ The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CO
 Acceptance Criteria
 - Help documents `--tier` and LLM env vars (no secrets).
 - task run forwards ToolCall/ToolResult when not `--json`.
+
+### REQ-cli-010
+
+The project SHALL ship package version `0.0.2` and SHALL expose a shared
+version helper (`src/version.ts`) used by the CLI `version` command. STATUS.md
+SHALL briefly note the 0.0.2 dogfood polish (shared version + richer Discord
+`/status`).
+
+Acceptance Criteria
+- `package.json` version is `0.0.2`.
+- CLI `version` prints `0.0.2` (or whatever package.json says).
+- STATUS.md mentions 0.0.2 dogfood polish.
+- Secrets remain out of repo; no new slash commands invented here.
 

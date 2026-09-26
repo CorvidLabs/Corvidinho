@@ -111,6 +111,7 @@ export {
   knownSlashCommands,
 } from "./slash-dispatch.ts";
 export {
+  formatStatusReport,
   formatUptime,
 } from "./command-handlers/status.ts";
 export type {
