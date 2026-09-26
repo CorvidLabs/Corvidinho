@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 39
+version: 40
 status: draft
 files:
   - src/plugins/types.ts
@@ -11,6 +11,9 @@ files:
   - src/plugins/roles.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
+  - src/plugins/githubPublic.ts
+  - tests/github.public.community.test.ts
+  - tests/files.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
@@ -207,6 +210,14 @@ non-ADMIN callers are refused for every mutating plugin at run time with a
 "not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
 for dangerous tools. Role is re-checked via owner config each call.
 
+Non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN` set and not admin) may
+call GitHub read tools against any *public* repository after deny-list checks
+(ROLES-CHAT-8). Private or unknown visibility is refused. ADMIN / non-role
+sessions keep the GITHUB-6 allowlist gate.
+
+`files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
+files) for non-ADMIN role sessions via `isSecretPath`.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -319,6 +330,7 @@ for dangerous tools. Role is re-checked via owner config each call.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
+| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
 | 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |
 | 2026-09-26 | plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81: files-read/write/edit/glob/list/delete + search-grep; SAFE-2 protected paths; path clamp; package 0.0.6 |

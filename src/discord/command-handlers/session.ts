@@ -7,8 +7,11 @@ import {
  * Optional project (SESSION-WORKTREE-4). No ProcessManager, no Discord thread product UI.
  */
 
+import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { formatTaskPlumbing } from "../../agent/task-summary.ts";
+import { loadLlmEnv } from "../../agent/execute.ts";
 
 function formatSessionLine(s: {
   id: string;
@@ -85,12 +88,14 @@ export async function handleSessionStart(
     return;
   }
 
+  const llmModel = loadLlmEnv(process.env).model;
   const outbound = ctx.thinkingOutbound;
   const thinking = outbound
     ? new ThinkingStatus({
         outbound,
         channelId: interaction.channelId,
         sessionId: session.id,
+        model: llmModel,
         debounceMs: ctx.thinkingDebounceMs,
         tickMs: ctx.thinkingTickMs,
       })
@@ -99,6 +104,14 @@ export async function handleSessionStart(
   if (thinking) {
     await thinking.start({ description: `Session: ${topic.slice(0, 80)}` });
   }
+
+  const idInject = enrichPromptWithIdentity(topic, {
+    userId: interaction.userId,
+    displayName: interaction.userDisplayName,
+    username: interaction.userUsername,
+    owner: ctx.owner,
+  });
+  const prompt = idInject.prompt;
 
   let result;
   try {
@@ -113,7 +126,7 @@ export async function handleSessionStart(
         mutedUsers: ctx.mutedUsers,
       }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
-      prompt: topic,
+      prompt,
       humanText: topic,
       sessionId: session.id,
       resume: false,
@@ -130,7 +143,7 @@ export async function handleSessionStart(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
-    await thinking?.fail(`❌ ${msg}`);
+    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Session \`${session.id}\` failed: ${msg}`;
     if (interaction.editReply) {
       await interaction.editReply({ content: body });
@@ -140,10 +153,20 @@ export async function handleSessionStart(
     return;
   }
 
+  const plumbing = result.task
+    ? formatTaskPlumbing({
+        state: result.task.state,
+        verified: result.task.verified,
+        verifySkipped: result.task.verifySkipped,
+        attempts: result.task.attempts,
+        cancelled: result.task.cancelled,
+      })
+    : undefined;
+  const thinkExtras = { plumbing, model: llmModel };
   if (result.ok) {
-    await thinking?.done("✅ Done");
+    await thinking?.done("✅ Done", thinkExtras);
   } else {
-    await thinking?.fail(`❌ exit ${result.exitCode}`);
+    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
   }
 
   const summary = result.ok

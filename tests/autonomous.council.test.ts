@@ -350,7 +350,7 @@ describe("runCouncil phases (REQ-agent-118)", () => {
  * council header. `config.json` in its dir can fail a phase-voice key or
  * make every call sleep.
  */
-function fakeBin(config: { fail?: string[]; sleepMs?: number } = {}): { bin: string; dir: string } {
+function fakeBin(config: { fail?: string[]; sleepMs?: number; decisionPad?: number } = {}): { bin: string; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), "corvidinho-council-bin-"));
   const bin = join(dir, "corvidinho.ts");
   writeFileSync(join(dir, "config.json"), JSON.stringify(config));
@@ -372,7 +372,7 @@ writeFileSync(join(dir, "call-" + phase + "-" + voice + ".json"), JSON.stringify
 if (cfg.sleepMs) await Bun.sleep(cfg.sleepMs);
 const key = phase + "-" + voice;
 const fail = (cfg.fail ?? []).includes(key);
-const summary = phase === "decide" ? "DECISION: ship behind a flag" : phase.toUpperCase() + "-" + voice;
+const summary = phase === "decide" ? "DECISION: ship behind a flag" + " because".repeat(cfg.decisionPad ?? 0) : phase.toUpperCase() + "-" + voice;
 const result = { summary, filesChanged: [], verified: false, verifySkipped: true, cancelled: false, state: fail ? "failed" : "done", attempts: 1 };
 console.log(JSON.stringify({ protocol: ${CORVIDINHO_PROTOCOL_VERSION}, type: "usage", promptTokens: 3, completionTokens: 2, totalTokens: 5 }));
 console.log(JSON.stringify({ protocol: ${CORVIDINHO_PROTOCOL_VERSION}, type: "result", result }));
@@ -523,9 +523,21 @@ describe("council plugin (REQ-plugins-118)", () => {
       totalTokens: 35,
     });
     expect(data.transcript).toHaveLength(7);
-    // Voices are quoted by their own words, without the worker status line.
+    // Voices are quoted by their own result summary.
     expect(data.transcript[0]).toMatchObject({ phase: "propose", speaker: "voice 1", text: "PROPOSE-1" });
     expect(data.transcript[6]).toMatchObject({ phase: "decide", text: "(see decision)" });
+  });
+
+  test("a long decision is not cut at the 1800-char chat body (resultText)", async () => {
+    const { bin } = fakeBin({ decisionPad: 400 });
+    const r = await createCouncilCommand({ bin, env: BASE_ENV }).handler(
+      ctx({ cwd: project(ENABLED), args: ["--voices", "2", "q"] }),
+    );
+    expect(r.ok).toBe(true);
+    const decision = (r.data as { decision: string }).decision;
+    expect(decision.length).toBeGreaterThan(1800);
+    expect(decision.length).toBeLessThanOrEqual(COUNCIL_DECISION_MAX);
+    expect(decision.startsWith("DECISION: ship behind a flag because")).toBe(true);
   });
 
   test("--tier code is clamped to tool; --voices 2 runs 5 workers", async () => {
@@ -548,9 +560,8 @@ describe("council plugin (REQ-plugins-118)", () => {
     expect(r.error).toContain("did not decide: the chair did not reach a decision");
     const transcript = (r.data as { transcript: { phase: string; ok: boolean; text: string }[] }).transcript;
     expect(transcript).toHaveLength(7);
-    // A failed run keeps its status summary for the lead.
-    expect(transcript[6]).toMatchObject({ phase: "decide", ok: false });
-    expect(transcript[6]!.text).toContain("state=failed");
+    // A failed run keeps its state and exit code for the lead.
+    expect(transcript[6]).toMatchObject({ phase: "decide", ok: false, state: "failed", exitCode: 1 });
   });
 
   test("the council time cap stops slow voices", async () => {

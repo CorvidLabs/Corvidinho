@@ -81,7 +81,8 @@ Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `COUNCIL_VOICE_TIMEOUT_MS` 5 min, `MAX_COUNCILS_PER_RUN` 2,
 `COUNCIL_DEFAULT_TIER` read, `COUNCIL_MAX_VOICE_TIER` tool).
 `DelegateChildOutcome` gains optional `resultText` (the worker's own result
-summary, scrubbed and capped, without the status line).
+summary, scrubbed and capped at `DELEGATE_SUMMARY_MAX` rather than the
+1800-char chat body).
 
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
@@ -97,6 +98,15 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
+
+`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
+`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`. Discord/NDJSON
+bridge summaries SHALL use the chat-body helpers so operator plumbing never
+appears in the final chat reply (DISCORD-3.a).
+
+`execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
+blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
+in addition to MEMORY instructions.
 
 Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
 exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
@@ -221,6 +231,7 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 ## Change Log
 
 Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: chat/plumbing split for Discord summaries; identity + public Q&A system instructions |
 | 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
 | 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |

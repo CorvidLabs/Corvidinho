@@ -20,9 +20,9 @@ artifact: design
   for duplicates per command.
 - `src/autonomous/delegate.ts` gains one additive field:
   `DelegateChildOutcome.resultText` is the worker's own result summary
-  (scrubbed, capped). A voice is then quoted without the
-  `state=… verified=…` status line and without the 1800-char status-summary
-  cap.
+  (scrubbed, capped at `DELEGATE_SUMMARY_MAX`). A voice, and above all the
+  chair's decision, is then not cut at the 1800-char chat-body cap that
+  `collectTaskRunStream` applies for Discord.
 
 ## Phases
 

@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { attribution } from "../../src/attribution.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
-import { checkRepoGate, extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
+import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
+import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
 
@@ -23,9 +24,11 @@ function takeFlag(args: string[], name: string): { value: string | undefined; re
   return { value, rest: out };
 }
 
-function requireRepo(ctx: PluginHandlerArgs): PluginHandlerResult | { repo: string; owner: string; name: string } {
+async function requireRepo(
+  ctx: PluginHandlerArgs,
+): Promise<PluginHandlerResult | { repo: string; owner: string; name: string }> {
   const repo = extractRepoFromArgs(ctx.args);
-  const gate = checkRepoGate(repo);
+  const gate = await checkRepoGateForActingRole(repo);
   if (!gate.ok) {
     return { ok: false, error: gate.error, exitCode: 3 };
   }
@@ -119,7 +122,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -159,7 +162,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -206,7 +209,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -239,7 +242,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -286,7 +289,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -339,7 +342,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -393,7 +396,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -469,7 +472,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = requireRepo(ctx);
+      const r = await requireRepo(ctx);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);

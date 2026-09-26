@@ -33,7 +33,8 @@ empty SAFE-1 allowlist, so a must-ask tool is always denied. At most 2 voices
 SAFE-6 scrubbed and capped (1500 chars per voice entry, `DELEGATE_SUMMARY_MAX`
 for the decision). Later phases SHALL see only capped text, quoted as data
 and not as instructions. A finished run SHALL be quoted by the worker's own
-result summary (`DelegateChildOutcome.resultText`, without the status line).
+result summary (`DelegateChildOutcome.resultText`, capped at
+`DELEGATE_SUMMARY_MAX` rather than the 1800-char chat body).
 Each run SHALL get a per-voice time cap (5 min) no larger than the time left.
 The whole council SHALL have a wall-clock cap (15 min). When the cap is
 reached or the lead aborts, running voices SHALL be stopped, no later phase

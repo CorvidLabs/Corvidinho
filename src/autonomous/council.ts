@@ -437,8 +437,9 @@ export async function runCouncil(opts: {
     for (const f of out.filesChanged ?? []) files.add(f);
     if (typeof out.totalTokens === "number") tokens = (tokens ?? 0) + out.totalTokens;
     const finished = out.exitCode === 0 && out.state === "done";
-    // A finished voice is quoted by its own words (no status line); a failed
-    // one keeps the status summary so the lead can see what went wrong.
+    // A finished voice is quoted by its own result summary (up to
+    // DELEGATE_SUMMARY_MAX, not the 1800-char chat body); a failed one keeps
+    // the delegate summary with its timeout / stop note.
     let raw = finished && out.resultText ? out.resultText : (out.summary ?? "");
     if (out.aborted) {
       // The delegate core says "lead run was interrupted"; say why the council stopped it.

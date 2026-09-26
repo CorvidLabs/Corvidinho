@@ -14,9 +14,10 @@ artifact: research
 - Corvidinho #167 delegate core: `runDelegateChild` already spawns a child
   `task run` with safe argv/env, depth, timeout/abort/exit cleanup and
   scrubbed summaries, so each voice is one delegate-core run.
-- `collectTaskRunStream` builds `summary` with `summarizeTaskResult`, which
-  prefixes a status line and cuts at 1800 chars. The raw result summary is
-  better for quoting voices, hence `resultText`.
+- `collectTaskRunStream` builds `summary` as a chat body (after #173 it has
+  no `state=…` status line) cut at 1800 chars for Discord. A chair's
+  decision can run longer, so the raw result summary is kept as
+  `resultText` (capped at `DELEGATE_SUMMARY_MAX`).
 - ROLES-CHAT (#165): a role session with `CORVIDINHO_ACTING_IS_ADMIN=0`
   hides and refuses mutating tools at catalog and run time. That is the
   simplest way to make voices read/chat only at any tier.

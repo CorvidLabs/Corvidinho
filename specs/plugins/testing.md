@@ -16,5 +16,5 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
 - `council` autonomous plugin against a `.ts` fake bin in a mkdtemp dir:
   declaration, SAFE-9 catalog, refusals spawn nothing, voice argv / env (read
   tier, empty allowlist, `CORVIDINHO_ACTING_IS_ADMIN=0`, stripped tokens),
-  tier clamp, failed chair, council time cap, one-at-a-time limiter, non-ADMIN
+  tier clamp, long decision kept past the chat-body cap, failed chair, council time cap, one-at-a-time limiter, non-ADMIN
   `runPlugin` refusal (`tests/autonomous.council.test.ts`, REQ-plugins-118).

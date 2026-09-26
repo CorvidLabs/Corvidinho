@@ -323,8 +323,9 @@ export type DelegateChildOutcome = {
   verified?: boolean;
   verifySkipped?: boolean;
   /**
-   * The worker's own result `summary` without the status line (SAFE-6
-   * scrubbed, capped), when it reported a result. Councils quote this.
+   * The worker's own result `summary` (SAFE-6 scrubbed, capped at
+   * DELEGATE_SUMMARY_MAX rather than the 1800-char chat body), when it
+   * reported a result. Councils quote this.
    */
   resultText?: string;
   totalTokens?: number;
