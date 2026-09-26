@@ -21,9 +21,11 @@ artifact: testing
 
 | Requirement | How proven |
 |-------------|------------|
-| REQ-discord-019 | Existing durable/TTL fixtures still green |
-| REQ-discord-020 | Schedule fixtures still green; tick uses project worktree |
-| REQ-discord-022 | `tests/worktree*.test.ts` + session/schedule isolation fixtures |
+| REQ-discord-009 | `tests/discord.session-worktree.test.ts` — slash bodies still seven commands; optional `project` on session start + work |
+| REQ-discord-018 | `docs/discord.md` SESSION-WORKTREE section + optional project on `/session start`/`/work`; WORKTREE_BASE_DIR noted |
+| REQ-discord-019 | `tests/discord.session-store.durable.test.ts` still green; TTL purge parks worktree (`tests/discord.session-worktree.test.ts`) |
+| REQ-discord-020 | `tests/scheduler.service.test.ts` + schedule worktree tick in `tests/discord.session-worktree.test.ts` |
+| REQ-discord-022 | `tests/worktree.test.ts` + `tests/discord.session-worktree.test.ts` — isolation, park/cleanup, explicit project, schedule scope |
 
 ## Automated coverage
 
