@@ -36,7 +36,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR thinking status | #10 → [#25](https://github.com/CorvidLabs/Corvidinho/pull/25) | DISCORD-3 edit-in-place progress (elapsed, tool, rough tokens); no ProcessManager |
 | HEAR slash commands | #11 → [#26](https://github.com/CorvidLabs/Corvidinho/pull/26) | DISCORD-4 thin `/session` `/status` `/agents` `/work`; channel re-check; no ProcessManager |
 | HEAR rate limits + mutes | #12 → [#27](https://github.com/CorvidLabs/Corvidinho/pull/27) | DISCORD-6 per-user sliding window + in-memory mute; peers unaffected; no ProcessManager |
-| HEAR admin re-auth + confused-deputy | #13 → (this PR) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
+| HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 
 ### In flight / next
 
