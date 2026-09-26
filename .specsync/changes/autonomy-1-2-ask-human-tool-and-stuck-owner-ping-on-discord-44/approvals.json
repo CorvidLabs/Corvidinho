@@ -1,4 +1,44 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790455956,
+      "digest": "b170018c773c1bfb829e32891976a688fbcb88c5bc2c77c27105f715d8cdc93b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44",
+        "title": "AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44)",
+        "description": "AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "src/agent",
+          "src/discord",
+          "src/scheduler",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Tool loop offers an ask-human tool; calling it ends the run with state blocked and TaskResult.ask {reason clarify, question} instead of claiming done (AUTONOMY-1); verify retries exhausted keep state failed and add ask {reason stuck} (AGENT-4 + AUTONOMY-2); CLI text/json/ndjson surface the question; Discord mention replies and schedule posts show the question and mention the configured owner with allowedMentions limited to that owner, skipping the ping when no owner is configured (AUTONOMY-2 / IDENTITY-3); fixture tests only; specsync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "75317471a073a9bc33c932c931c9dc5249a6f8b912cc444065a34169ddc73430",
+        "discord": "0fabd63f5cc0f05f991de66b68a80ca27cb5fa6994e30df44b16e07d2c56fa27"
+      }
+    }
+  ],
   "reopenings": []
 }

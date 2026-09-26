@@ -7,10 +7,11 @@
   "title": "AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44)",
   "description": "AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "8205b1bb66eb18aa63328e4690de3dba0f8b6ecc",
   "created_at": 1790455327,
-  "updated_at": 1790455334,
+  "updated_at": 1790455961,
   "affected_specs": [
     "agent",
     "discord"
