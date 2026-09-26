@@ -122,6 +122,10 @@ export class AckedIdStore extends ProcessedIdStore {
   }
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 function splitRepo(repo: string): { owner: string; name: string } | null {
   const parts = repo.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
@@ -168,7 +172,13 @@ export async function maybePostWatchAck(opts: {
     body,
   });
   // Mark acked even on failure to avoid tight retry spam; operator sees log.
-  acked.add(event.id);
+  // The comment is already posted and the event is already marked processed
+  // (REQ-watch-247), so a failed id write must not skip the agent run.
+  try {
+    acked.add(event.id);
+  } catch (err) {
+    log?.(`[watch] ack id write failed id=${event.id}: ${errorMessage(err)}`);
+  }
   if (res.ok) {
     log?.(
       `[watch] ack ${res.dryRun ? "dry-run" : "posted"} ${event.repo}#${event.number} id=${event.id}` +

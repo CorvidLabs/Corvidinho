@@ -177,6 +177,91 @@ describe("a failed id write never aborts the cycle (REQ-watch-247, REQ-watch-037
   });
 });
 
+describe("id write failures never lose or skip a trusted request (REQ-watch-247)", () => {
+  test("an id write that fails once and would succeed on retry still leaves the event for the next cycle", async () => {
+    const { agent, prompts } = countingAgent();
+    const errors: string[] = [];
+    const result = await startWatchPoller({
+      env: envBase,
+      filePath: null,
+      runLoop: false,
+      agent,
+      ackClient: createEchoAckClient(),
+      log: () => {},
+      logError: (msg) => errors.push(msg),
+      fetchEvents: async () => [ev({ id: "c-flaky", number: 2 })],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const realAddMany = result.processed.addMany.bind(result.processed);
+    let calls = 0;
+    // Only the first write fails (a lock that clears a moment later).
+    result.processed.addMany = (ids: string[]) => {
+      calls += 1;
+      if (calls === 1) throw new Error("SQLITE_BUSY: database is locked");
+      realAddMany(ids);
+    };
+
+    const c1 = await result.pollOnce();
+    expect(c1.started + c1.continued).toBe(0);
+    expect(prompts).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("(c-flaky) failed; not marked, retried next cycle");
+    // Nothing ran, so the id must not be recorded as handled.
+    expect(result.processed.has("c-flaky")).toBe(false);
+
+    const c2 = await result.pollOnce();
+    expect(c2.newEvents).toBe(1);
+    expect(c2.started + c2.continued).toBe(1);
+    expect(prompts).toHaveLength(1);
+    const c3 = await result.pollOnce();
+    expect(c3.newEvents).toBe(0);
+    expect(prompts).toHaveLength(1);
+    await result.stop();
+  });
+
+  test("a failed acked/summarized id write after the comment is posted still runs the agent once", async () => {
+    const { agent, prompts } = countingAgent();
+    const errors: string[] = [];
+    const logs: string[] = [];
+    const ackClient = createEchoAckClient();
+    const result = await startWatchPoller({
+      env: envBase,
+      filePath: null,
+      runLoop: false,
+      agent,
+      ackClient,
+      log: (msg) => logs.push(msg),
+      logError: (msg) => errors.push(msg),
+      fetchEvents: async () => [ev({ id: "c-ackdb", number: 3 })],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    result.acked.add = () => {
+      throw new Error("SQLITE_BUSY: database is locked");
+    };
+    result.summarized.add = () => {
+      throw new Error("SQLITE_BUSY: database is locked");
+    };
+
+    const c1 = await result.pollOnce();
+    expect(c1.started).toBe(1);
+    // The ack was posted, so the run and its summary must follow.
+    expect(prompts).toHaveLength(1);
+    expect(ackClient.posts).toHaveLength(2);
+    expect(errors).toHaveLength(0);
+    expect(logs.some((l) => l.includes("ack id write failed id=c-ackdb"))).toBe(true);
+    expect(logs.some((l) => l.includes("summary id write failed id=c-ackdb"))).toBe(true);
+
+    // Still handled once: the processed id guards the next cycle.
+    const c2 = await result.pollOnce();
+    expect(c2.newEvents).toBe(0);
+    expect(prompts).toHaveLength(1);
+    expect(ackClient.posts).toHaveLength(2);
+    await result.stop();
+  });
+});
+
 describe("durable id stores (REQ-watch-247)", () => {
   test("processed, acked and summarized ids persist per kind on the shared DB", () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-watch-idstore-"));

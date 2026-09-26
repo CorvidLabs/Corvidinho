@@ -334,6 +334,9 @@ export async function startWatchPoller(
         )
         .map((e) => e.id);
       const relatedIds = related.length > 0 ? related : [event.id];
+      // routed: routeEvent returned, so a throw after it came from the id
+      // write or later. marked: the ids are durably recorded.
+      let routed = false;
       let marked = false;
 
       try {
@@ -341,6 +344,7 @@ export async function startWatchPoller(
           store,
           allowlist: config.allowlist,
         });
+        routed = true;
         processed.addMany(relatedIds);
         marked = true;
 
@@ -443,9 +447,11 @@ export async function startWatchPoller(
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
         // retried forever ahead of later events: log, mark processed, move on.
         // Marking is a DB write (REQ-watch-247). Ids are marked before any
-        // ack or spawn, so if marking itself fails nothing ran for this event
-        // and the next cycle retries it.
-        if (!marked) {
+        // ack or spawn, so if the id write itself failed nothing ran for this
+        // event: leave it for the next cycle, never mark it here (a retry that
+        // succeeds would drop a request that never ran). Only a routing
+        // failure (before the id write) is marked, as before.
+        if (!marked && !routed) {
           try {
             processed.addMany(relatedIds);
             marked = true;

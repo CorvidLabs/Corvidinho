@@ -99,8 +99,15 @@ export async function maybePostWatchSummary(opts: {
     body,
   });
 
-  // Mark summarized even on failure to avoid tight retry spam.
-  summarized.add(event.id);
+  // Mark summarized even on failure to avoid tight retry spam. The comment is
+  // already posted, so a failed id write is logged, never thrown (REQ-watch-247).
+  try {
+    summarized.add(event.id);
+  } catch (err) {
+    log?.(
+      `[watch] summary id write failed id=${event.id}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   if (res.ok) {
     log?.(
