@@ -1,0 +1,92 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790453269,
+      "digest": "5910b243e2413341996589df6d92a6899f456b947812de282fe03d50d98134a6",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6",
+        "title": "PLUGIN vcs tools: status diff log branch commit push with cwd clamp, no force, repo gate (PLUGIN-1/2 SAFE-1/2/3 GITHUB-2/6 issue 82)",
+        "description": "PLUGIN vcs tools: status diff log branch commit push with cwd clamp, no force, repo gate (PLUGIN-1/2 SAFE-1/2/3 GITHUB-2/6 issue 82)",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/git/commands.ts",
+          "plugins/git/exec.ts",
+          "plugins/git/index.ts",
+          "plugins/git/parse.ts",
+          "specs/plugins/",
+          "src/plugins/builtins.ts",
+          "tests/git.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Typed git plugins registered via builtins (PLUGIN-1): git-status (porcelain v1 parsed to JSON), git-diff (worktree or --staged, size-capped), git-log (N oneline), git-branch-list are dangerous=false minTier 0; git-branch-create, git-commit, git-push are dangerous=true minTier 2 and SAFE-1 denied non-interactive unless allowlisted (PLUGIN-2). Every git run uses argv arrays with cwd clamped to the plugin cwd (repo discovery ceiling, must be the worktree root; path args clamped, symlink escapes refused; SAFE-3), GIT_TERMINAL_PROMPT=0, strict flag parsing (unknown flags refused). git-commit requires a message, stages explicit file paths only, refuses staging deletes of SAFE-2 protected paths and .env*/keystore/.git paths, never amends, reports filesChanged. git-push pushes the current branch only, never force (force/delete/mirror/refspec args refused), requires the remote OWNER/REPO to pass checkRepoGate (GITHUB-6), takes credentials only from env/credential helper and redacts URL credentials. Fixture tests with temp git repos and a local bare remote pass without network or live tokens."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "7460f40fe5d0df4d19ab8f140adcd999539395a4567e3a47494908848a8edab8"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790455007,
+      "digest": "5910b243e2413341996589df6d92a6899f456b947812de282fe03d50d98134a6",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6",
+        "title": "PLUGIN vcs tools: status diff log branch commit push with cwd clamp, no force, repo gate (PLUGIN-1/2 SAFE-1/2/3 GITHUB-2/6 issue 82)",
+        "description": "PLUGIN vcs tools: status diff log branch commit push with cwd clamp, no force, repo gate (PLUGIN-1/2 SAFE-1/2/3 GITHUB-2/6 issue 82)",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/git/commands.ts",
+          "plugins/git/exec.ts",
+          "plugins/git/index.ts",
+          "plugins/git/parse.ts",
+          "specs/plugins/",
+          "src/plugins/builtins.ts",
+          "tests/git.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Typed git plugins registered via builtins (PLUGIN-1): git-status (porcelain v1 parsed to JSON), git-diff (worktree or --staged, size-capped), git-log (N oneline), git-branch-list are dangerous=false minTier 0; git-branch-create, git-commit, git-push are dangerous=true minTier 2 and SAFE-1 denied non-interactive unless allowlisted (PLUGIN-2). Every git run uses argv arrays with cwd clamped to the plugin cwd (repo discovery ceiling, must be the worktree root; path args clamped, symlink escapes refused; SAFE-3), GIT_TERMINAL_PROMPT=0, strict flag parsing (unknown flags refused). git-commit requires a message, stages explicit file paths only, refuses staging deletes of SAFE-2 protected paths and .env*/keystore/.git paths, never amends, reports filesChanged. git-push pushes the current branch only, never force (force/delete/mirror/refspec args refused), requires the remote OWNER/REPO to pass checkRepoGate (GITHUB-6), takes credentials only from env/credential helper and redacts URL credentials. Fixture tests with temp git repos and a local bare remote pass without network or live tokens."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "d80b43967f2b8daa272a4b6f2c7172f8428bd8c67cf1f851084b3d2f6e0af90f"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790455102,
+      "digest": "0ea01545eb9c8be5b4043e8d25ccc0ef283699302e9e04894147d8e1fcc72989",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

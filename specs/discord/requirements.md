@@ -555,6 +555,18 @@ Acceptance Criteria
 - UPDATE/DELETE on `audit_log` raise an append-only error.
 - `/status` includes the audit line when the bridge has a DB.
 
+### REQ-discord-037
+
+The shared SQLite store SHALL migrate to schema version 6 with a
+`watch_sessions` table (id, unique issue key, repo, number, user, topic,
+created/last-activity timestamps) for durable WATCH sessions (#37 slice 1).
+`watch_sessions.topic` SHALL be listed in SAFE-6 SCRUB_TARGETS so stored
+titles are re-scrubbed when the rules tighten.
+
+Acceptance Criteria
+- Fresh and v5 DBs reach schema 6 with `watch_sessions`.
+- SCRUB_TARGETS includes `watch_sessions.topic` and a re-scrub redacts it.
+
 ### REQ-discord-073
 
 The Discord spawn agent client SHALL run
