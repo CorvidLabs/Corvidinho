@@ -48,6 +48,22 @@
         }
       ],
       "requirement_ids": []
+    },
+    {
+      "timestamp": 1790448491,
+      "commit": "edb47990e183fe8a0d9b4d1a05af18acf8d6d91e",
+      "contract_digest": "b2c96e06220e872800040f0299cbcc9c82e4b6a87565fad443add8688418d116",
+      "execution_digest": "1f64317116ac350ee4a4ddc762ca7a81ced7eafe160565a94f392be970452c9f",
+      "workspace_digest": "1b2b266f6ec7c2b480a0e0d175e792398a74adacd3b4ff7a7d8ac96b2364c88c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
     }
   ]
 }

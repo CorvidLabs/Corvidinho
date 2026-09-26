@@ -77,6 +77,45 @@
         }
       },
       "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790448490,
+      "digest": "b2c96e06220e872800040f0299cbcc9c82e4b6a87565fad443add8688418d116",
+      "note": "Re-approve after correct-owner: presence.ts owned by discord (DISCORD-12)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "bump-corvidinho-to-0-0-4-for-discord-schedule-that-landed-on-main-62-7d81edc-without-a-version-bump-verbose-changelog",
+        "title": "Bump Corvidinho to 0.0.4 for Discord /schedule that landed on main (#62 / 7d81edc) without a version bump; verbose CHANGELOG covering /schedule list|create|pause|resume|delete single-project 5m min SQLite schedules ~60s ticker plus SESSION durable (#61); keep presence reading package.json via shared version helper",
+        "description": "Bump Corvidinho to 0.0.4 for Discord /schedule that landed on main (#62 / 7d81edc) without a version bump; verbose CHANGELOG covering /schedule list|create|pause|resume|delete single-project 5m min SQLite schedules ~60s ticker plus SESSION durable (#61); keep presence reading package.json via shared version helper",
+        "kind": "operations",
+        "affected_specs": [],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/UPDATE.md",
+          "package.json",
+          "src/discord/presence.ts",
+          "tests/discord.presence.test.ts",
+          "tests/discord.schedule.test.ts",
+          "tests/discord.slash.test.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Release bump only: package.json 0.0.4 + CHANGELOG/STATUS/docs/UPDATE/test fixtures for already-shipped /schedule (#62) and SESSION durable (#61); presence reads package.json via src/version.ts — no canonical HI/spec AC change",
+        "acceptance_criteria": [
+          "package.json is 0.0.4; CHANGELOG has verbose 0.0.4 covering Discord /schedule (list/create/pause/resume/delete, single-project, 5m min, SQLite schedules, ~60s ticker) and SESSION durable (#61); /schedule wrongly under 0.0.3 removed; STATUS/docs/UPDATE + version-asserting tests updated; Discord presence still reads package.json via src/version.ts (formatPresenceVersionString/VERSION); fledge lanes run verify --non-interactive green; no new slash/features"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
     }
   ],
   "reopenings": []

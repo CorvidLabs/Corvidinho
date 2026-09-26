@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "7d81edc9d105fbea329e71deca99bfe05f100a27",
   "created_at": 1790448266,
-  "updated_at": 1790448330,
+  "updated_at": 1790448491,
   "affected_specs": [],
   "affected_paths": [
     "package.json",
@@ -38,6 +38,17 @@
     "tasks"
   ],
   "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/discord/presence.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "presence.ts is owned by discord module (DISCORD-12); comment-only bump example string",
+      "timestamp": 1790448486
+    }
+  ],
   "answers": {
     "architecture_risk": "no",
     "public_contract": "no"
