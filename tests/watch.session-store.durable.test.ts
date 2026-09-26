@@ -61,7 +61,7 @@ describe("schema v6 watch_sessions (REQ-discord-037)", () => {
   test("fresh DB reaches schema 6+ with watch_sessions", () => {
     const db = openCorvidinhoDb({ memory: true });
     // v7 (AUTONOMY-2 schedule ping dedupe) builds on v6.
-    expect(SCHEMA_VERSION).toBe(7);
+    expect(SCHEMA_VERSION).toBe(8);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };

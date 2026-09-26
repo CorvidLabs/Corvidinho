@@ -30,39 +30,16 @@ import {
   PathEscapeError,
   resolveProjectPath,
 } from "./resolvePath.ts";
+import { ArgvError, parseArgv } from "./argv.ts";
 
-function flagValue(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name);
-  if (idx < 0) return undefined;
-  const v = args[idx + 1];
-  return v != null && !v.startsWith("--") ? v : undefined;
-}
-
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name);
-}
-
-function positional(args: string[], skipFlags: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (skipFlags.includes(a)) {
-      i++;
-      continue;
-    }
-    if (
-      a === "--json" ||
-      a === "--replace-all" ||
-      a === "--show-hidden" ||
-      a === "--allow-large"
-    ) {
-      continue;
-    }
-    if (a.startsWith("--")) continue;
-    out.push(a);
-  }
-  return out;
-}
+/** Boolean flags any files-* command understands; everything else is data. */
+const BOOL_FLAGS = [
+  "--json",
+  "--replace-all",
+  "--show-hidden",
+  "--allow-large",
+  "--allow-empty",
+] as const;
 
 function refuseProtected(userPath: string, absPath: string): PluginHandlerResult | null {
   if (isProtectedPath(userPath) || isProtectedPath(absPath)) {
@@ -76,7 +53,7 @@ function refuseProtected(userPath: string, absPath: string): PluginHandlerResult
 }
 
 function errResult(err: unknown): PluginHandlerResult {
-  if (err instanceof PathEscapeError) {
+  if (err instanceof PathEscapeError || err instanceof ArgvError) {
     return { ok: false, error: err.message, exitCode: 1 };
   }
   return {
@@ -117,8 +94,8 @@ export const filesCommands: PluginCommand[] = [
     minTier: 0,
     async handler(ctx) {
       try {
-        const pos = positional(ctx.args, []);
-        const pathArg = flagValue(ctx.args, "--path") ?? pos[0];
+        const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
+        const pathArg = argv.values.get("--path") ?? argv.positional[0];
         if (!pathArg) {
           return { ok: false, error: "missing path", exitCode: 1 };
         }
@@ -134,7 +111,7 @@ export const filesCommands: PluginCommand[] = [
         assertExistingFile(abs);
         const content = readFileSync(abs, "utf8");
         const data = { path: pathArg, bytes: Buffer.byteLength(content), content };
-        if (ctx.json || hasFlag(ctx.args, "--json")) {
+        if (ctx.json || argv.flags.has("--json")) {
           return { ok: true, data, message: content };
         }
         return { ok: true, data, message: content };
@@ -146,31 +123,43 @@ export const filesCommands: PluginCommand[] = [
   {
     name: "files-write",
     description:
-      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large]. SAFE-2 protected paths refused. Mutating (ROLES-CHAT-5).",
+      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large] [--allow-empty]. Content may start with '--'. Emptying a non-empty file needs --allow-empty. SAFE-2 protected paths refused. Mutating (ROLES-CHAT-5).",
     dangerous: false,
     mutating: true,
     minTier: 2,
     async handler(ctx) {
       try {
-        const pathArg = flagValue(ctx.args, "--path") ?? positional(ctx.args, ["--content", "--path"])[0];
+        const argv = parseArgv(ctx.args, ["--content", "--path"], BOOL_FLAGS);
+        const flaggedPath = argv.values.get("--path");
+        const pathArg = flaggedPath ?? argv.positional[0];
         if (!pathArg) {
           return { ok: false, error: "missing path", exitCode: 1 };
         }
-        let content = flagValue(ctx.args, "--content");
-        if (content == null) {
-          const pos = positional(ctx.args, ["--content", "--path"]);
-          // path is first positional; content is rest joined
-          content = pos.slice(1).join(" ");
-        }
-        if (content == null) content = "";
+        // Content: --content, else the positionals after the path, joined.
+        const content =
+          argv.values.get("--content") ??
+          argv.positional.slice(flaggedPath != null ? 0 : 1).join(" ");
 
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         const blocked = refuseProtected(pathArg, abs);
         if (blocked) return blocked;
 
-        const allowLarge = hasFlag(ctx.args, "--allow-large");
+        const allowLarge = argv.flags.has("--allow-large");
         if (existsSync(abs)) {
           const originalLen = statSync(abs).size;
+          if (
+            originalLen > 0 &&
+            content.length === 0 &&
+            !argv.flags.has("--allow-empty")
+          ) {
+            return {
+              ok: false,
+              error:
+                `refused: write to '${pathArg}' would empty it (${originalLen} bytes to 0; ` +
+                `content is empty or missing). Pass --allow-empty to override if intentional.`,
+              exitCode: 1,
+            };
+          }
           const boom = checkSizeExplosion(
             pathArg,
             originalLen,
@@ -201,11 +190,14 @@ export const filesCommands: PluginCommand[] = [
     minTier: 2,
     async handler(ctx) {
       try {
-        const pathArg =
-          flagValue(ctx.args, "--path") ??
-          positional(ctx.args, ["--old", "--new", "--path", "--content"])[0];
-        const oldStr = flagValue(ctx.args, "--old");
-        const newStr = flagValue(ctx.args, "--new");
+        const argv = parseArgv(
+          ctx.args,
+          ["--old", "--new", "--path", "--content"],
+          BOOL_FLAGS,
+        );
+        const pathArg = argv.values.get("--path") ?? argv.positional[0];
+        const oldStr = argv.values.get("--old");
+        const newStr = argv.values.get("--new");
         if (!pathArg || oldStr == null || newStr == null) {
           return {
             ok: false,
@@ -219,7 +211,7 @@ export const filesCommands: PluginCommand[] = [
         assertExistingFile(abs);
 
         const original = readFileSync(abs, "utf8");
-        const replaceAll = hasFlag(ctx.args, "--replace-all");
+        const replaceAll = argv.flags.has("--replace-all");
         if (!original.includes(oldStr)) {
           return {
             ok: false,
@@ -240,11 +232,13 @@ export const filesCommands: PluginCommand[] = [
             };
           }
         }
+        // Function replacer: --new is literal data, so `$$`, `$&`, `$'`, `` $` ``
+        // are never expanded as String.replace patterns (matches --replace-all).
         const next = replaceAll
           ? original.split(oldStr).join(newStr)
-          : original.replace(oldStr, newStr);
+          : original.replace(oldStr, () => newStr);
 
-        const allowLarge = hasFlag(ctx.args, "--allow-large");
+        const allowLarge = argv.flags.has("--allow-large");
         const boom = checkSizeExplosion(
           pathArg,
           Buffer.byteLength(original),
@@ -271,9 +265,8 @@ export const filesCommands: PluginCommand[] = [
     minTier: 0,
     async handler(ctx) {
       try {
-        const pattern =
-          flagValue(ctx.args, "--pattern") ??
-          positional(ctx.args, ["--pattern"])[0];
+        const argv = parseArgv(ctx.args, ["--pattern"], BOOL_FLAGS);
+        const pattern = argv.values.get("--pattern") ?? argv.positional[0];
         if (!pattern) {
           return { ok: false, error: "missing glob pattern", exitCode: 1 };
         }
@@ -317,15 +310,13 @@ export const filesCommands: PluginCommand[] = [
     minTier: 0,
     async handler(ctx) {
       try {
-        const pathArg =
-          flagValue(ctx.args, "--path") ??
-          positional(ctx.args, ["--path"])[0] ??
-          ".";
+        const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
+        const pathArg = argv.values.get("--path") ?? argv.positional[0] ?? ".";
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         if (!existsSync(abs) || !statSync(abs).isDirectory()) {
           return { ok: false, error: `Not a directory: ${pathArg}`, exitCode: 1 };
         }
-        const showHidden = hasFlag(ctx.args, "--show-hidden");
+        const showHidden = argv.flags.has("--show-hidden");
         const names = readdirSync(abs).filter((n) => showHidden || !n.startsWith("."));
         const entries = names.map((name) => {
           const full = join(abs, name);
@@ -346,7 +337,7 @@ export const filesCommands: PluginCommand[] = [
           return prefix + e.name;
         });
         const data = { path: pathArg, count: entries.length, entries };
-        if (ctx.json || hasFlag(ctx.args, "--json")) {
+        if (ctx.json || argv.flags.has("--json")) {
           return { ok: true, data, message: JSON.stringify(data, null, 2) };
         }
         return {
@@ -367,9 +358,8 @@ export const filesCommands: PluginCommand[] = [
     minTier: 2,
     async handler(ctx) {
       try {
-        const pathArg =
-          flagValue(ctx.args, "--path") ??
-          positional(ctx.args, ["--path"])[0];
+        const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
+        const pathArg = argv.values.get("--path") ?? argv.positional[0];
         if (!pathArg) {
           return { ok: false, error: "missing path", exitCode: 1 };
         }

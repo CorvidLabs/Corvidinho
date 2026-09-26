@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790461831,
+      "digest": "5b0e280a42079351d1a15a77aed491ab149e30b3e37ff7bfbe49ba6e19494dd2",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "files-edit-single-occurrence-replace-writes-new-literally-so-dollar-replacement-patterns-cannot-corrupt-the-file",
+        "title": "Files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5)",
+        "description": "files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/files/commands.ts",
+          "tests/files.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-edit without --replace-all writes --new byte-for-byte: $$, $&, $', $` and $<n> in --new are not expanded as String.replace patterns, matching the --replace-all path"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "404dafbd38b599ca36415375f3b9a0e9844a020ff04cad794e0d840efee9d35c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790462182,
+      "digest": "dc6ebe5da45fc4d62496f9bc1a533f9a75acfe27993b1de06020c3028a2a0dab",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

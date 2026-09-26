@@ -325,13 +325,21 @@ export class SchedulerService {
         const ask = result.ask
           ? formatAskReply({
               ask: result.ask,
+              // Stuck: owner (skip when already pinged). Clarify: schedule creator.
               owner: alreadyPinged ? null : this.owner,
+              requesterDiscordId: alreadyPinged
+                ? undefined
+                : schedule.createdByUserId,
               context: result.summary,
               prefix: `${title}:`,
             })
           : null;
-        if (gate.ok && ask) {
-          if (!ask.ownerPinged && !alreadyPinged) {
+        if (gate.ok && ask && result.ask) {
+          if (
+            result.ask.reason === "stuck" &&
+            !ask.ownerPinged &&
+            !alreadyPinged
+          ) {
             console.warn(ASK_NO_OWNER_WARNING);
           }
           await this.outbound.post({
@@ -339,7 +347,7 @@ export class SchedulerService {
             content: ask.content,
             mentionUserIds: ask.mentionUserIds,
           });
-          if (ask.ownerPinged && pingKey) {
+          if (ask.pinged && pingKey) {
             this.store.setAskPingKey(schedule.id, pingKey);
           }
         } else if (gate.ok) {

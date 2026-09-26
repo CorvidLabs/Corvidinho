@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790461468,
+      "commit": "ee85006c2992a0503245d49b0d25563182c5c9cc",
+      "contract_digest": "efe20d845c80327096239c2b90c6d98989a95cae62d9303cfabd827eb3083475",
+      "execution_digest": "8fdea8aab96f6ea0b4480cd1fbed319b574c7cbe8b6f31a42097639ed8a3864f",
+      "workspace_digest": "d71fa018ec028f9010b1b80076b6cfb36ad86005c4f0431f3cda5ea43ec6adc8",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-243"
+      ]
+    },
+    {
+      "timestamp": 1790461470,
+      "commit": "9bc039a3eb4bd3f1e3a9e7d66f4ff313909c0d09",
+      "contract_digest": "efe20d845c80327096239c2b90c6d98989a95cae62d9303cfabd827eb3083475",
+      "execution_digest": "8fdea8aab96f6ea0b4480cd1fbed319b574c7cbe8b6f31a42097639ed8a3864f",
+      "workspace_digest": "d71fa018ec028f9010b1b80076b6cfb36ad86005c4f0431f3cda5ea43ec6adc8",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-243"
+      ]
+    },
+    {
+      "timestamp": 1790461470,
+      "commit": "3b6faaa83ef1d5d04bd6d2bdf5d7b4aac9914b66",
+      "contract_digest": "efe20d845c80327096239c2b90c6d98989a95cae62d9303cfabd827eb3083475",
+      "execution_digest": "8fdea8aab96f6ea0b4480cd1fbed319b574c7cbe8b6f31a42097639ed8a3864f",
+      "workspace_digest": "d71fa018ec028f9010b1b80076b6cfb36ad86005c4f0431f3cda5ea43ec6adc8",
+      "acceptance_input_digest": "b89763c64c6c0a7e6059a384ffd946a085c260c55ac60ec5d1378d0a874e7796",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "plugins/files/argv.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "a9d0c1f0e94b0466f137ff7dd780d35de5691ae9dad42d29721e6d39391817e8",
+            "entry_digest": "b1e5e50829ea4b4efac406cecaa17f6d7da02854f86db1c5a90b5393950de858",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "plugins/files/commands.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "98a7db95484772d25ffe7d9f00be6cb41dcf29ca8a84747cc67a140e9041c7fe",
+            "entry_digest": "ce5e1b12f0351b068ddc8c73c856308eba15b50dbd70f8e35a23cc64e87dcbfa",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "plugins/search/commands.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "ad326eb6dd5aae801e9cc6be0fd1292e118c3f3252860bbf5a4cff74e351ff30",
+            "entry_digest": "d2fb6311ead85eb963e6e8c84e84e6a2e3c7407ce8929ad984477a66f275599f",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "plugins/shell/commands.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "1903e5d4deb753b4e3c635cb60b2d57e4242077fd22f5f089ae868fee2c8c4bf",
+            "entry_digest": "f30485e8344f24f0b658c3f2278187b828b0edee5692f3edee3627ea7801e2cd",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "0275526ffef851ba6a050b629dab8fa6ff0c31716c8342642e38cd74f8fecd3a",
+            "entry_digest": "70592aedad8dcab594c9673cbc5e01c03915338cb31bddc65ed2ed70bff49b89",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/plugins.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7215f19d919c883d47d30d38548f980a66b384e456162a8fc9abb6d011292abd",
+            "entry_digest": "96fd28cee599be47b373d0f89cad7cbe1025b7c13a9d5fa5a8ffda980099eb63",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "024e9ec695664945868382ac80364e22de4f0c5cd5b5b3b6c357d40acb92a767",
+            "entry_digest": "2e848449d228534f2577dbd5df28e5aa2427769fcd2cf82dd68dd0e9aade6b9b",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+            "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "a7da23248a3898f513c8b137d73d625a20f942ee3b353d1128682bc2f5143ab7",
+            "entry_digest": "647c38c24f0f50577682330b59ede31d1020115bd2fd3d863dae1c32ea604883",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "tests/plugins.argv-dashes.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "b731c875721bcd12a7a2ddf80283458f47879badaf3fd615f6c013175135a1a6",
+            "entry_digest": "08352e66a72634eadb5f9c6a253423eb57e43538b69537070674302120006d37",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-243"
+      ]
+    }
+  ]
+}
