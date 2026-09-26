@@ -7,11 +7,11 @@
   "title": "DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22",
   "description": "DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "e8bbd215036e7dc8739ac9159afa19f17ae943c6",
   "created_at": 1790464370,
-  "updated_at": 1790464512,
+  "updated_at": 1790464554,
   "affected_specs": [
     "discord",
     "agent"
