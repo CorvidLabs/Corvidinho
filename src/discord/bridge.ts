@@ -200,6 +200,21 @@ export async function startBridge(
       defaultProjectRoot: config.projectRoot,
     });
   const workStore = opts.workStore ?? new WorkStore({ db });
+  if (!opts.workStore && db) {
+    // SESSION-WORKTREE-3: work left running by a dead process is failed
+    // honestly and its abandoned talk ended (worktree parked, session
+    // dropped) so no later talk reuses it as cwd.
+    const abandoned = workStore.recoverAbandoned();
+    for (const task of abandoned) {
+      const session = task.sessionId ? store.get(task.sessionId) : undefined;
+      if (session) await store.endSession(session);
+    }
+    if (abandoned.length > 0) {
+      console.log(
+        `[discord] restart recovery: ${abandoned.length} abandoned work task(s) marked failed`,
+      );
+    }
+  }
   const scheduleStore =
     opts.scheduleStore ?? new ScheduleStore({ db });
   const memoryStore =
