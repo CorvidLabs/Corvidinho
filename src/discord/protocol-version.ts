@@ -3,6 +3,8 @@
  * Soft-continue if unverifiable; hard-fail on verifiable mismatch.
  */
 
+import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+
 export const CORVIDINHO_PROTOCOL_VERSION = 1;
 
 export type HandshakeResult =
@@ -17,7 +19,8 @@ export async function checkProtocolVersion(
 ): Promise<HandshakeResult> {
   let proc: ReturnType<typeof Bun.spawn>;
   try {
-    proc = Bun.spawn([bin, "--protocol-version"], {
+    // Always bun-invoke .ts — never posix_spawn the .ts path alone (EACCES).
+    proc = Bun.spawn(buildCorvidinhoArgv(bin, ["--protocol-version"]), {
       stdout: "pipe",
       stderr: "pipe",
     });

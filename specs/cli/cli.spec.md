@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 22
+version: 23
 status: draft
 files:
   - src/cli.ts
@@ -76,4 +76,4 @@ Consumes agent module for runTask / loadAgentConfig.
 WATCH `github watch` CLI (#19, 2026-09-26).
 
 | 2026-09-26 | watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions: Add `corvidinho github watch` poll-first ingress CLI (#19) |
-
+| 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: task run uses createTaskExecute (demo or env-gated LLM) |

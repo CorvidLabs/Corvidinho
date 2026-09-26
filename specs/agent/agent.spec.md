@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 10
+version: 11
 status: draft
 files:
   - src/agent/types.ts
@@ -9,6 +9,9 @@ files:
   - src/agent/loop.ts
   - src/agent/specLoader.ts
   - src/agent/index.ts
+  - src/agent/task-summary.ts
+  - src/agent/execute.ts
+  - src/agent/spawn-argv.ts
 
 db_tables: []
 depends_on:
@@ -23,7 +26,8 @@ Prove-before-done agent task loop with SpecSync-aware Planning briefing and Spec
 
 ## Public API
 
-Also export `selectRelevantSpecs`, `extractConstraintSections`, `loadRelevantSpecs` (or equivalent) from the agent module.
+Also export `selectRelevantSpecs`, `extractConstraintSections`, `loadRelevantSpecs` (or equivalent),
+`buildCorvidinhoArgv`, `createTaskExecute`, `loadLlmEnv`, `summarizeTaskRunOutput` from the agent module.
 
 ## Invariants
 
@@ -72,3 +76,4 @@ Spawns `fledge` for the default verify runner (lane includes `spec-check`). Read
 
 STEAL SpecSync agent wiring: plan-time list/read + verify-lane spec-check (2026-09-26, corvid-agent).
 | 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated |
+| 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: Always bun-invoke .ts spawn argv; thin env-gated LLM execute; task-run JSON summary helper; dogfood STATUS + #31 |

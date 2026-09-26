@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord",
+  "slug": "fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord",
+  "title": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+  "description": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
+  "kind": "bug_fix",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "a8068ad5073cb7401518f9f996b988db9740f00c",
+  "created_at": 1790442905,
+  "updated_at": 1790443059,
+  "affected_specs": [
+    "discord",
+    "watch",
+    "agent",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/discord/protocol-version.ts",
+    "src/discord/agent-client.ts",
+    "src/watch/agent-client.ts",
+    "src/agent/execute.ts",
+    "src/agent/spawn-argv.ts",
+    "src/agent/task-summary.ts",
+    "src/agent/index.ts",
+    "src/cli.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "buildCorvidinhoArgv always prefixes bun for .ts bins; protocol-version + discord/watch createSpawnAgentClient use it (no EACCES posix_spawn of .ts alone); fixture tests assert spawn argv shape; Discord surfaces parsed task run --json summary (state/summary) not raw dump; thin env-gated LLM execute when CORVIDINHO_LLM_API_KEY set else demo stub; .env.example documents CORVIDINHO_LLM_* without secrets; STATUS notes Discord go-live done + LLM gap/issue; SpecSync + fledge verify green; no #9; allowlists unchanged"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

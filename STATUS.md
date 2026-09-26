@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress + Discord go-live dogfood (bun spawn fix) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -39,13 +39,15 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 | HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
 | WATCH poll-first ingress | #19 → [#30](https://github.com/CorvidLabs/Corvidinho/pull/30) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
+| Discord spawn + dogfood path | → (this PR) | Always `bun`-invoke `.ts` for protocol + agent spawn (fix EACCES); parse `task run --json` for Discord summary; thin env-gated LLM execute stub; full tool loop → [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
-| Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
+| Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** + **live on Leif's box** (corvid-agent#1110) | Token + channel allowlists on VM; bun-spawn fix for `.ts` protocol/agent (this PR) |
 | Go-live | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH poll **shipped** (code) | Needs Leif: `GITHUB_TOKEN` + `CORVIDINHO_WATCH_USERNAME` + non-empty GH allowlists; webhook follow-up when public URL exists |
+| Dogfood | [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) Full LLM tool loop | Thin env-gated chat execute may be in-tree; tool loop still open (STATUS DOGFOOD gap) |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
 
 ### Leif config moments
@@ -105,11 +107,11 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 
 **Honest gaps before first flip (not inventing HI):**
 
-- Full LLM tool loop on top of prove-before-done (#17 landed the gate; loop flesh still open)
-- SpecSync agent tools (#8→#22) so the live CLI can list/read/check specs
-- For Discord callers: HEAR (#5) + filled allowlists + `DISCORD_TOKEN` on the VM
+- Full LLM tool loop on top of prove-before-done — tracked as [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) (gate #17 landed; thin env-gated chat execute may be in-tree; tool loop flesh still open)
+- SpecSync agent tools (#8→#22) so the live CLI can list/read/check specs — **shipped**
+- For Discord callers: HEAR (#5) **live on Leif's box** (token + allowlists); bun-spawn for `.ts` fixed this PR
 - For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later
-- Attribution (#20→#24) on outbound PRs
+- Attribution (#20→#24) on outbound PRs — **shipped**
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 
 ### Phased milestones
@@ -171,8 +173,8 @@ WALLET-1..3 captured in `hi/allow.md`. **No wallet ACT** until an approved-walle
 | `.env.example` + `allowlist.example.toml` | **Shipped** (no secret values) |
 | `docs/DISCORD-GO-LIVE.md` (Developer Portal + VM paths) | **Shipped** |
 | Doctor: missing token / empty channels | **Shipped** (clear exit / refuse start) |
-| Live token in VM | **Waiting** — CoS/Leif via **secure secret-request room only** (never chat/GitHub paste) |
-| Non-empty channel IDs on VM | **Waiting** — same secure path / offline handoff of snowflakes |
+| Live token in VM | **Done on Leif's box** (corvid-agent#1110) — keep secrets in secret store only |
+| Non-empty channel IDs on VM | **Done on Leif's box** — keep allowlists default-deny elsewhere |
 
 **Ping CoS/Leif for secrets ONLY when this milestone is green in code** (merge + doctor checklist ready). Do not ask for tokens before READY-FOR-SECRETS.
 
@@ -192,9 +194,9 @@ Fixture/unit tests cover mention→session, reply/thread continuity, and allowli
 
 See **ROADMAP** above. Short pointers:
 
-- #5 HEAR thin shipped — set token + non-empty Discord allowlists on VM for live @bot
+- #5 HEAR **live on Leif's box** (corvid-agent#1110); bun-spawn `.ts` fix + JSON summary this PR
 - #19 WATCH poll shipped — set `GITHUB_TOKEN` + `CORVIDINHO_WATCH_USERNAME` + GH allowlists; webhook follow-up later
-- Flesh full LLM tool loop on top of prove-before-done + SpecSync plugins; first DOGFOOD flip = CoS bot execs headless CLI
+- Flesh full LLM tool loop — [#31](https://github.com/CorvidLabs/Corvidinho/issues/31); thin env-gated chat may be in-tree
 - #9 / wallets deferred
 - Keep secrets out of repo; keep verify lane honest; no Trust/attest on bootstrap
 
