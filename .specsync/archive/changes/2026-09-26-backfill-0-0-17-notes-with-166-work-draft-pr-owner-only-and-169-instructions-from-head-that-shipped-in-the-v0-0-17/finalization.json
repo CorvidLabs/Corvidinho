@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "backfill-0-0-17-notes-with-166-work-draft-pr-owner-only-and-169-instructions-from-head-that-shipped-in-the-v0-0-17",
+  "implementation_commit": "21078ade5c4b190ddfa0ff4dff58458c32239627",
+  "implementation_tree": "da53f0e3148db3d260b588fc489ff5ce97c31d12",
+  "contract_digest": "f74aa927cb4ae8318892465fe7ed7a2efb1f06a5f4dab0b320f78e1aeb6ced5a",
+  "workspace_digest": "797e419a4b3e833d183296c08cb467cbc318a8583db516789388afa1ff50b8fb",
+  "closing_digest": "7a47a169be920c6134224c88c7a2c567568e40b82c8fe9bcd2a70ad06a6062ed",
+  "review_digest": "62400ee58d5c81d624d1584a16998eb624a3864bda0a4d969e9f0f4d8509b68b",
+  "finalization_digest": "0d73eea79755c74a74462a9b04a8647a48f53dad2aaba1d3804e6c41a4004388",
+  "timestamp": 1790458447
+}
