@@ -45,7 +45,9 @@ description = "Required gate before claiming done (AGENT-4 / SPECSYNC-2). Includ
 steps = ["lint", "smoke", "test", "spec-check"]
 
 # Prove-before-done (AGENT-4 / FLEDGE-2). Merlin field names; Corvidinho section.
-# Bridges / WATCH chat hot path should pass --no-verify for latency.
+# Discord / WATCH spawns do NOT pass --no-verify (REQ-discord-085 / REQ-watch-085);
+# empty filesChanged still skips the lane inside the agent loop. CLI --no-verify
+# remains for local/operator opt-out only (REQ-cli-085).
 [corvidinho]
 verify_before_complete = true
 max_retries = 3

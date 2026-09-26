@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still",
+  "slug": "discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still",
+  "title": "Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice)",
+  "description": "Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "19683b6059902c62baeddb9d2110f64f82dc3009",
+  "created_at": 1790455544,
+  "updated_at": 1790455597,
+  "affected_specs": [
+    "discord",
+    "watch",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/discord/agent-client.ts",
+    "src/watch/agent-client.ts",
+    "src/cli.ts",
+    "fledge.toml",
+    "docs/discord.md",
+    "docs/WATCH.md",
+    "tests/agent.ndjson-spawn.test.ts",
+    "tests/spawn.argv.test.ts",
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Discord and WATCH createSpawnAgentClient argv is task run --task <prompt> --output ndjson with no --no-verify; empty filesChanged still skips verify; when tools report filesChanged verify runs (AGENT-4 / FLEDGE-2); CLI --no-verify local opt-out only; package 0.0.13; fixture tests; SpecSync + fledge verify green; Made with Corvidinho"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

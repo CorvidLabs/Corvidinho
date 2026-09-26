@@ -94,12 +94,12 @@ describe("Discord spawn client reads the ndjson stream (REQ-discord-073)", () =>
       expect(readFileSync(join(dir, "argv.txt"), "utf8").trim().split("\n")).toEqual([
         "task",
         "run",
-        "--no-verify",
         "--task",
         "list plugins",
         "--output",
         "ndjson",
       ]);
+      expect(readFileSync(join(dir, "argv.txt"), "utf8")).not.toContain("--no-verify");
       expect(res.ok).toBe(true);
       expect(res.exitCode).toBe(0);
       expect(res.summary).toBe(summarizeTaskResult(RESULT));
@@ -181,12 +181,12 @@ describe("WATCH spawn client reads the ndjson stream (REQ-watch-073)", () => {
       expect(readFileSync(join(dir, "argv.txt"), "utf8").trim().split("\n")).toEqual([
         "task",
         "run",
-        "--no-verify",
         "--task",
         "review this",
         "--output",
         "ndjson",
       ]);
+      expect(readFileSync(join(dir, "argv.txt"), "utf8")).not.toContain("--no-verify");
       expect(res.ok).toBe(true);
       expect(res.summary).toBe(summarizeTaskResult(RESULT));
       expect(progress).toEqual([
