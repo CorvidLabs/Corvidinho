@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 40
+version: 41
 status: draft
 files:
   - src/cli.ts
@@ -77,4 +77,4 @@ Consumes agent module for runTask / loadAgentConfig.
 ## Change Log
 
 | 2026-09-26 | files-search-plugins-issue-81: package 0.0.6 with files/search + SAFE-2 (REQ-cli-013) |
-
+| 2026-09-26 | plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81: PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81) |
