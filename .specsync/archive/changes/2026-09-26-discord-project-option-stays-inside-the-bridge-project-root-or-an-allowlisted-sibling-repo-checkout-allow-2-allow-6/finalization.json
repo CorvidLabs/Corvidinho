@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6",
+  "implementation_commit": "9a68acd0e86ec9956365f908089aa9cb5311c8a4",
+  "implementation_tree": "9c668cd80e5967abfab8c4c8f6f476f7a2366587",
+  "contract_digest": "8a88efb81bb506bbdd91161f58c0b7e1c255d9429865ef51b80b5e1908c2ac5c",
+  "workspace_digest": "9b93303a0e575b140747066d72bf63956ab683fb00ca22a1f7ac83f4aa9475bd",
+  "closing_digest": "0dd2c1a4c0d8dff8da507165c75487cca8485d6624ef97a65a3efe06c178aeb7",
+  "review_digest": "c77efd1b6be60aa9abbc60138e7d3f177b246e705a238c46607f4b0b99d19fb3",
+  "finalization_digest": "0dbc9d2d62bc3835160dae1ef7723fd6bdd070e484088d70387c27c0aa7440c6",
+  "timestamp": 1790459702
+}

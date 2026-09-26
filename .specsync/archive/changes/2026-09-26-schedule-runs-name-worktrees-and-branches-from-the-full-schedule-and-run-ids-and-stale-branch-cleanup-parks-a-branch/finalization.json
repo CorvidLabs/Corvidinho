@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "schedule-runs-name-worktrees-and-branches-from-the-full-schedule-and-run-ids-and-stale-branch-cleanup-parks-a-branch",
+  "implementation_commit": "e75b7fd104992669be564b55ba41b9b9af3a6d3e",
+  "implementation_tree": "d41bf6ed8a044b0c55d109b411d588246da85be5",
+  "contract_digest": "e432be051b506a595297ba09d0679b4bb370961593f4a1502a54fbbaca681d47",
+  "workspace_digest": "c245314e5a0a4fabf4bbe3363db3c26200519ea3ef804e14586cfa4125eabeea",
+  "closing_digest": "6cb4c04ed95bee451d15b0c76c5ccfa22e8270e4e5f4b089bac308222ab67277",
+  "review_digest": "0473d0298f8b24fe172c6d49422b5d338c622d0172bae72550615256ed6c21f2",
+  "finalization_digest": "4793d3795ee29425c448e6a4c11fd52fdb90cc4f12b43917576936ab292748b8",
+  "timestamp": 1790460154
+}

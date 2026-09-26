@@ -810,6 +810,27 @@ Acceptance Criteria
 - The marker persists in SQLite (schema v7) across a restart or a second ticker on one data dir.
 - A blocked `/work` run opens no PR, says it is waiting for an answer, and makes no repository, plugin or verify call.
 
+### REQ-discord-203
+
+Each `/schedule` run SHALL get its own git worktree directory and `talk/`
+branch named from the full schedule id and run id, never a shortened prefix,
+so one run never reuses or removes the worktree or branch of another run of
+the same schedule, or of another schedule running at the same time
+(SESSION-WORKTREE-1 / SESSION-WORKTREE-3 / DISCORD-SCHEDULE-3). When creating a
+worktree finds a stale branch of the same name, it SHALL delete that branch
+only when it has no commits off the project HEAD; a branch with its own
+commits SHALL be renamed aside to `<branch>-parked-<ms>` and SHALL NOT be
+force-deleted. Removing or parking a worktree with branch cleanup SHALL
+likewise delete its branch only when the branch has no commits off the project
+HEAD, whatever the default branch is called; any git error SHALL count as
+having commits and keep the branch.
+
+Acceptance Criteria
+- Two runs of one schedule use different worktree dirs and branches; a parked run's commits survive the next run.
+- Two schedules whose ids share a prefix, running at once, get different worktrees; neither run's setup removes the other's live working tree.
+- A stale branch with commits off HEAD is kept under `<branch>-parked-<ms>`; a stale branch with no commits of its own is deleted as before.
+- In a repo whose default branch is `trunk` (no `main`/`master`), removing or parking a worktree keeps a branch with a commit of its own and still deletes a branch with none.
+
 ### REQ-discord-204
 
 While an agent run is in flight for a Discord session (bridge
@@ -849,4 +870,27 @@ Acceptance Criteria
 - `/work`, `/session start` and `/status` by mallory or an unlisted member return `user_not_allowlisted` with only an ephemeral zero-width ack; no agent run, work task or session is created.
 - A listed user, a member with an allowed role, and the owner not on the user list still start sessions and run slash commands.
 - With empty user and role lists any member of an allowlisted channel may chat, but a deny-listed user or role is still refused.
+
+### REQ-discord-202
+
+A project picked from Discord — the optional `project` of `/work` and
+`/session start`, the `project` of `/schedule create`, and a stored
+schedule's project at tick time — SHALL resolve only to the bridge project
+root, a directory inside it, or a sibling checkout (a direct child of the
+root's parent directory) that is the top of its own git checkout and whose
+`origin` OWNER/REPO passes the GitHub repo allowlist (deny wins; empty allow
+or no allowlist ⇒ refuse) (ALLOW-2 / ALLOW-6 / SAFE-3 / DISCORD-SCHEDULE-3).
+Containment SHALL be checked on real paths so absolute paths, `..`
+traversal and symlinks cannot leave that set, and a path lexically outside it
+SHALL be refused before any disk probe. A refused project SHALL get a short
+`not authorized` reply and SHALL create no session, worktree, `talk/*`
+branch, schedule or agent run. No new env var, config key, slash command or
+option.
+
+Acceptance Criteria
+- `/work` or `/session start` with an absolute path or `../` traversal to another repo on the host is refused; no agent run, session, worktree or talk branch.
+- A symlink inside the bridge root that points outside it is refused.
+- A sibling checkout runs only when its origin passes the GitHub repo allowlist; a denied, unlisted or non-git sibling is refused.
+- `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
+- Empty project, the bridge root and directories inside it behave as before.
 
