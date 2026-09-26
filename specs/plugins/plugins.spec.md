@@ -37,6 +37,14 @@ files:
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/search.plugins.test.ts
+  - plugins/web/index.ts
+  - plugins/web/commands.ts
+  - plugins/web/fetch.ts
+  - plugins/web/address.ts
+  - plugins/web/transport.ts
+  - plugins/web/text.ts
+  - tests/web.fetch.test.ts
+  - tests/web.transport.test.ts
 
 db_tables: []
 depends_on: []
@@ -49,12 +57,17 @@ depends_on: []
 Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 (GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
 and file/search plugins (`files-read|write|edit|glob|list|delete`, `search-grep`)
-with SAFE-2 protected-path guards (PLUGIN-1/2 / REQ-plugins-081..084).
+with SAFE-2 protected-path guards (PLUGIN-1/2 / REQ-plugins-081..084), and
+the SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111).
 
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
 HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
+`plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
+takes the resolver/transport seams, `webFetch` is the guarded GET core,
+`checkAddress` classifies one IP, and `createSocketTransport` is the pinned
+HTTP/1.1 socket transport.
 
 ## Invariants
 
@@ -78,6 +91,18 @@ confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
+`web-fetch` is dangerous=false, minTier 1 (tool): GET only, http/https only, no
+URL credentials. Loopback, private, CGNAT, link-local (incl. cloud metadata),
+unique-local, multicast, unspecified, `0.0.0.0/8`, reserved/documentation and
+IPv4-mapped / NAT64 forms of those are refused after DNS and before any
+connection; any non-public address in an answer refuses the whole name. The
+socket dials only the checked IP literal (no DNS, no proxy) while Host and TLS
+SNI keep the original name and the certificate is verified against it.
+Redirects are followed manually (max 5) and every hop repeats the check. The
+body is capped at 1 MiB (truncated, flagged) and the whole call at 15 s;
+non-text content types and compressed bodies are refused. Returned text is
+secret-scrubbed and fenced as untrusted data with a per-call random marker id.
+`web-search` is not built (provider not captured).
 
 ## Behavioral Examples
 
@@ -86,6 +111,12 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 - **Given** builtins are loaded
 - **When** an operator or the tool loop inspects `memory-store`
 - **Then** the description includes `--category` / `person` / `identity` example argv
+
+### Scenario: web-fetch refuses cloud metadata
+
+- **Given** builtins are loaded
+- **When** `web-fetch` is asked for `http://169.254.169.254/latest/meta-data/` (or a name that resolves or redirects there)
+- **Then** it refuses with a SAFE-7 error and exit 2 before any connection is opened
 
 ## Error Cases
 
@@ -98,6 +129,10 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
+| web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
+| web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
+| web-fetch > 5 redirects | Refuse (exit 2) |
+| web-fetch non-text content-type / compressed body / non-2xx / timeout | Error (exit 1); nothing returned |
 
 ## Dependencies
 
@@ -106,6 +141,8 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 | Bun | `Bun.which`, `Bun.spawn`, `Bun.file`, `Bun.write` |
 | @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
 | node:fs / path | path clamp, symlink resolve, glob/list |
+| node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
+| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors |
 
 ### Consumed By
 
