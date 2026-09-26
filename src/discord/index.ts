@@ -131,6 +131,15 @@ export type {
   SlashOptionValue,
   SlashReplyPayload,
 } from "./slash-types.ts";
+export { handleScheduleCommand } from "./command-handlers/schedule.ts";
+export {
+  ScheduleStore,
+  SchedulerService,
+  validateAndResolveCadence,
+  MIN_SCHEDULE_INTERVAL_MS,
+  DEFAULT_POLL_INTERVAL_MS,
+  type Schedule,
+} from "../scheduler/index.ts";
 export {
   NOT_AUTHORIZED,
   ALLOWLIST_DENY_TIP,

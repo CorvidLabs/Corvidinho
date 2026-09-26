@@ -63,7 +63,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HI drafts folder | #41–#44 → [#47](https://github.com/CorvidLabs/Corvidinho/pull/47) | `docs/hi-drafts/` proposals (superseded by capture) |
 | Tag→Release + box updater | → [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) | release Action + `corvidinho-update.sh` |
 | HI capture (confirmed) | #41–#44 + #37 SESSION + PROCESS → main | Real `hi/` MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + PROCESS in AGENTS/STATUS; **no MEMORY code yet** (priority: slash guild PUT + GH go-live first) |
-| HI capture (schedule/worktree/memory-ACL) | #57 #58 #59 → (this PR) | DISCORD-SCHEDULE-1..5, SESSION-WORKTREE-1..5, MEMORY-ACL-1..5 (self-forget=ADMIN amendment); admin cross-link; **impl deferred** to those issues |
+| DISCORD-SCHEDULE slash | #57 → (this PR) | `/schedule` single-project recurring runs (DISCORD-SCHEDULE-1..5); 5m min; ADMIN mutations; cooperative ticker; SESSION durable store from #61 remains bridge path |
 | v0.0.3 updater polish | → main | Pidfile stop/start + ready-wait; `docs/UPDATE.md`; release idempotency; builds on [#45](https://github.com/CorvidLabs/Corvidinho/pull/45) |
 | Discord presence version | → [#53](https://github.com/CorvidLabs/Corvidinho/pull/53) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
@@ -76,7 +76,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | **P0 now** | Discord deny polish (DENY-1..3) + `docs/discord.md` | This PR — silent MessageCreate deny; admin ephemeral tip on slash |
 | **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
 | HI captured | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) + [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) SESSION | Criteria in `hi/`; **impl deferred** (MEMORY code not in this PR) |
-| HI captured | [#57](https://github.com/CorvidLabs/Corvidinho/issues/57) schedule · [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) worktree · [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) memory ACL | Criteria in `hi/`; **impl deferred**; self-forget=ADMIN |
+| HI captured | [#57](https://github.com/CorvidLabs/Corvidinho/issues/57) schedule · [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) worktree · [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) memory ACL | Criteria in `hi/`; **#57 schedule slash shipping this change**; #58/#59 still deferred; self-forget=ADMIN |
 | Later | #41 MEMORY impl · #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #37 SESSION soft-TTL · #36 CONTACTS | After slash + GH go-live |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |

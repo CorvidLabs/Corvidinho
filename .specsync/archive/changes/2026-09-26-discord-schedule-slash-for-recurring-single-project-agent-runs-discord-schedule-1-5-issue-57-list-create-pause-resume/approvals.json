@@ -1,0 +1,159 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790447697,
+      "digest": "473c1609b0d0d5fe2627cb2e74bf41c7153e1503d9a71fcb3a6cff5fdb571ec1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+        "title": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+        "description": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/discord.md",
+          "specs/discord/",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/schedule.ts",
+          "src/discord/index.ts",
+          "src/discord/register-commands.ts",
+          "src/discord/slash-commands.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/slash-types.ts",
+          "src/scheduler/",
+          "src/store/db.ts",
+          "src/store/index.ts",
+          "tests/discord.schedule*.test.ts",
+          "tests/scheduler*.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Slash /schedule list|create|pause|resume|delete works (DISCORD-SCHEDULE-1..2); create takes human cadence (cron/@hourly/every Nh) + single project + prompt; mutations ADMIN re-check at handler (empty admin=deny-all); min interval 5m enforced; ticks respect channel/user allowlists+SAFE (DISCORD-SCHEDULE-3); scheduler tick cooperative so HEAR/WATCH ingress stays ≤~1m (DISCORD-SCHEDULE-4); steal corvid-agent schedule-commands/scheduler/db/ADR (no flock/council/templates/on-chain) (DISCORD-SCHEDULE-5); SQLite schedules in shared store; fixture tests; SpecSync+fledge verify green; Made with Corvidinho"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "5c5d06e24aeb9c909fceb3f842c49a66519a4cac388e68ab2dbdf1b2a8a7b400"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790447842,
+      "digest": "473c1609b0d0d5fe2627cb2e74bf41c7153e1503d9a71fcb3a6cff5fdb571ec1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+        "title": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+        "description": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/discord.md",
+          "specs/discord/",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/schedule.ts",
+          "src/discord/index.ts",
+          "src/discord/register-commands.ts",
+          "src/discord/slash-commands.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/slash-types.ts",
+          "src/scheduler/",
+          "src/store/db.ts",
+          "src/store/index.ts",
+          "tests/discord.schedule*.test.ts",
+          "tests/scheduler*.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Slash /schedule list|create|pause|resume|delete works (DISCORD-SCHEDULE-1..2); create takes human cadence (cron/@hourly/every Nh) + single project + prompt; mutations ADMIN re-check at handler (empty admin=deny-all); min interval 5m enforced; ticks respect channel/user allowlists+SAFE (DISCORD-SCHEDULE-3); scheduler tick cooperative so HEAR/WATCH ingress stays ≤~1m (DISCORD-SCHEDULE-4); steal corvid-agent schedule-commands/scheduler/db/ADR (no flock/council/templates/on-chain) (DISCORD-SCHEDULE-5); SQLite schedules in shared store; fixture tests; SpecSync+fledge verify green; Made with Corvidinho"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "9124371a043992240b83bd9a12e6ea51069cbecefd46c9100c41499f6924c972"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790447863,
+      "digest": "473c1609b0d0d5fe2627cb2e74bf41c7153e1503d9a71fcb3a6cff5fdb571ec1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+        "title": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+        "description": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/discord.md",
+          "specs/discord/",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/schedule.ts",
+          "src/discord/index.ts",
+          "src/discord/register-commands.ts",
+          "src/discord/slash-commands.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/slash-types.ts",
+          "src/scheduler/",
+          "src/store/db.ts",
+          "src/store/index.ts",
+          "tests/discord.schedule*.test.ts",
+          "tests/scheduler*.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Slash /schedule list|create|pause|resume|delete works (DISCORD-SCHEDULE-1..2); create takes human cadence (cron/@hourly/every Nh) + single project + prompt; mutations ADMIN re-check at handler (empty admin=deny-all); min interval 5m enforced; ticks respect channel/user allowlists+SAFE (DISCORD-SCHEDULE-3); scheduler tick cooperative so HEAR/WATCH ingress stays ≤~1m (DISCORD-SCHEDULE-4); steal corvid-agent schedule-commands/scheduler/db/ADR (no flock/council/templates/on-chain) (DISCORD-SCHEDULE-5); SQLite schedules in shared store; fixture tests; SpecSync+fledge verify green; Made with Corvidinho"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "8e2939c713352b1e2f08d7e95569e56d606e49c98b217a95e8030b95c5619ec0"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790447896,
+      "digest": "1c105b7ca988c2eb1cdc70a41086ba4f6cc6700fc7f6546f831b3cbae18b2508",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

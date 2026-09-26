@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 37
+version: 39
 status: draft
 files:
   - src/discord/types.ts
@@ -29,6 +29,14 @@ files:
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
   - src/discord/command-handlers/mute.ts
+  - src/discord/command-handlers/schedule.ts
+  - src/scheduler/cron.ts
+  - src/scheduler/store.ts
+  - src/scheduler/service.ts
+  - src/scheduler/index.ts
+  - tests/discord.schedule.test.ts
+  - tests/scheduler.cron.test.ts
+  - tests/scheduler.service.test.ts
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
@@ -50,7 +58,7 @@ Thin Discord HEAR bridge: gateway → message-router → session stub with live
 thinking status, slash ops, per-user rate limits/mutes, admin re-auth at
 command run time, confused-deputy requester checks on outbound posts,
 image attachments as local files for the agent, and Merlin-shaped
-protocol-version lockstep, presence version under the bot name, and allowlist deny polish (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12/DENY-1..3).
+protocol-version lockstep, presence version under the bot name, allowlist deny polish (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12/DENY-1..3), and Discord `/schedule` recurring single-project runs with a cooperative ticker (DISCORD-SCHEDULE-1..5).
 
 ## Public API
 
@@ -60,7 +68,8 @@ goLiveChecklist, CORVIDINHO_PROTOCOL_VERSION, NOT_AUTHORIZED, ALLOWLIST_DENY_TIP
 MUTED, PermissionLevel, resolvePermissionLevel, checkRateLimit, muteUser,
 unmuteUser, isMuted, evaluateRequesterCanSend, agent/gateway helpers,
 thinking-status builders/controller, slash command bodies + dispatch
-(handleSlashInteraction, buildSlashCommandBodies including mute/unmute, registerSlashCommandSet / registerSlashCommandsLive);
+(handleSlashInteraction, buildSlashCommandBodies including mute/unmute/schedule, registerSlashCommandSet / registerSlashCommandsLive);
+ScheduleStore / SchedulerService / validateAndResolveCadence (src/scheduler/);
 loadDiscordPlugins registers discord-post-message (requester check);
 isImageAttachment, extractImageBlocks, enrichPromptWithImages,
 checkProtocolVersion, enforceProtocolVersionOrExit, summarizeTaskRunOutput;
@@ -81,12 +90,13 @@ Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
 ClientReady sets short Custom Status from shared package version (DISCORD-12);
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
-SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019).
+SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
+`/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020).
 
 ## Behavioral Examples
 
 Mention→start_session; reply/thread→continue_session; slash /session|/status|
-/agents|/work on allowlisted channel; admin /mute|/unmute; non-admin mute
+/agents|/work|/schedule on allowlisted channel; admin /mute|/unmute and /schedule mutations; non-admin mute
 refused; rate-limited or muted user refused while peer continues;
 discord-post-message with requester who cannot send → refuse; missing token /
 empty channels refuse cleanly; session run posts progress then Done;
@@ -117,3 +127,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-deny-polish-discord-deny-1-3-messagecreate-unauthorized-silent-slash-admin-ephemeral-allowlist-tip-non-admin: DISCORD-DENY-1..3 silent MessageCreate + slash admin tip / non-admin zero-width; docs/discord.md |
 | 2026-09-26 | session-durable-store: Discord SessionStore/WorkStore SQLite durability + soft TTL (SESSION-1..4 / REQ-discord-019); shared store module; no MEMORY ACL /schedule |
 | 2026-09-26 | session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho: SESSION durable store: Discord SessionStore (+ WorkStore) survive restarts via local SQLite under ~/.local/share/corvidinho/ (align MEMORY #41 path); soft TTL 30-60m keep-alive on activity; idle/stale → fresh session (SESSION-1..4); no ProcessManager; no /schedule; no MEMORY ACL |
+| 2026-09-26 | discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume: Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain |

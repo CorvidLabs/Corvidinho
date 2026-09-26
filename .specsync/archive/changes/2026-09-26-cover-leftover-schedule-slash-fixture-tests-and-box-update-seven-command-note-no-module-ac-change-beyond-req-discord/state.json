@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-leftover-schedule-slash-fixture-tests-and-box-update-seven-command-note-no-module-ac-change-beyond-req-discord",
+  "slug": "cover-leftover-schedule-slash-fixture-tests-and-box-update-seven-command-note-no-module-ac-change-beyond-req-discord",
+  "title": "Cover leftover schedule slash fixture tests and BOX-UPDATE seven-command note (no module AC change beyond REQ-discord-020 already archived)",
+  "description": "Cover leftover schedule slash fixture tests and BOX-UPDATE seven-command note (no module AC change beyond REQ-discord-020 already archived)",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "79961525e42f6c2df06e2ac410f297bc89116062",
+  "created_at": 1790447953,
+  "updated_at": 1790447974,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/BOX-UPDATE.md",
+    "tests/discord.register-commands.test.ts",
+    "tests/discord.schedule.test.ts",
+    "tests/discord.slash.test.ts",
+    "tests/scheduler.cron.test.ts",
+    "tests/scheduler.service.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Fixture tests + BOX-UPDATE slash-count wording for already-shipped REQ-discord-020; no new module AC",
+  "acceptance_criteria": [
+    "docs/BOX-UPDATE.md and schedule fixture tests covered by this documentation cover change; bun test + fledge verify green; no new module AC beyond archived REQ-discord-020"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-schedule-slash-fixture-tests-and-box-update-seven-command-note-no-module-ac-change-beyond-req-discord",
+  "implementation_commit": "f0f5be5b76aab365e0a8e8ef46b4b6e149a85545",
+  "implementation_tree": "072cbdebc44c321193dad283618de347c1be9ba5",
+  "contract_digest": "fe23e5fa548836d24be579e5334845d121a2af8e76d11b297b39e51e959ba44f",
+  "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+  "closing_digest": "fbe6c795e1a6d553fbcc90a53d4f5d5d037a342f8c01a2679b052cb0b7275941",
+  "review_digest": "a9f9337e73d80aaf7bf0ee1925bd677f556c003c4103620efc94ba371e7b1b66",
+  "finalization_digest": "0fac4124ed5253a502f48bc778cffd38a75a31ab54fb210dfcf278214d95d5c7",
+  "timestamp": 1790447966
+}

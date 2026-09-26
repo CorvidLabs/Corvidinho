@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-leftover-schedule-slash-fixture-tests-and-box-update-seven-command-note-no-module-ac-change-beyond-req-discord",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "f0f5be5b76aab365e0a8e8ef46b4b6e149a85545",
+      "contract_digest": "fe23e5fa548836d24be579e5334845d121a2af8e76d11b297b39e51e959ba44f",
+      "execution_digest": "9f9ea66d8819e4a631907cca18e8edc3b53f55712da8816f6316f43c25d44ba9",
+      "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+      "timestamp": 1790447963
+    }
+  ]
+}

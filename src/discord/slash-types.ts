@@ -9,6 +9,7 @@ import type { SessionStore } from "./session-store.ts";
 import type { DiscordEmbedPayload, ThinkingOutbound } from "./thinking-status.ts";
 import type { RateLimitConfig, RateLimitState } from "./permissions.ts";
 import type { WorkStore } from "./work-store.ts";
+import type { ScheduleStore } from "../scheduler/store.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -37,6 +38,8 @@ export type SlashInteraction = {
 export type SlashContext = {
   store: SessionStore;
   workStore: WorkStore;
+  /** DISCORD-SCHEDULE — optional until bridge wires it. */
+  scheduleStore?: ScheduleStore;
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;

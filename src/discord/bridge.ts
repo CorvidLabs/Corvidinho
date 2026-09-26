@@ -2,6 +2,7 @@
  * HEAR bridge orchestrator: gateway → message-router → session stub + agent spawn.
  * DISCORD-3: edit-in-place thinking status while agent runs (no ProcessManager).
  * DISCORD-4: thin slash /session /status /agents /work.
+ * DISCORD-SCHEDULE: /schedule + cooperative ticker (single-project).
  * DISCORD-6: per-user rate limits + mutes.
  * DISCORD-9: image attachments → local files for agent.
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
@@ -44,6 +45,10 @@ import {
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import {
+  ScheduleStore,
+  SchedulerService,
+} from "../scheduler/index.ts";
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 
@@ -53,6 +58,7 @@ export type StartBridgeResult =
       config: BridgeConfig;
       store: SessionStore;
       workStore: WorkStore;
+      scheduleStore: ScheduleStore;
       mutedUsers: Set<string>;
       rateLimitState: RateLimitState;
       muteUser: (userId: string) => void;
@@ -95,6 +101,11 @@ export type StartBridgeOptions = {
   /** Inject stores (tests); when set, skips DB open. */
   sessionStore?: SessionStore;
   workStore?: WorkStore;
+  scheduleStore?: ScheduleStore;
+  /** Disable cooperative scheduler ticker (tests). */
+  disableScheduler?: boolean;
+  /** Scheduler poll interval override (tests). */
+  schedulerPollIntervalMs?: number;
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
@@ -166,6 +177,8 @@ export async function startBridge(
   const store =
     opts.sessionStore ?? new SessionStore({ db, ttlMs });
   const workStore = opts.workStore ?? new WorkStore({ db });
+  const scheduleStore =
+    opts.scheduleStore ?? new ScheduleStore({ db });
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -216,6 +229,7 @@ export async function startBridge(
     return {
       store,
       workStore,
+      scheduleStore,
       allowlist: config.allowlist,
       agent,
       version,
@@ -345,6 +359,25 @@ export async function startBridge(
       return gw;
     });
 
+  let scheduler: SchedulerService | null = null;
+  if (!opts.disableScheduler) {
+    scheduler = new SchedulerService({
+      store: scheduleStore,
+      agent,
+      allowlist: config.allowlist,
+      pollIntervalMs: opts.schedulerPollIntervalMs,
+      outbound: {
+        post: async ({ channelId, content }) => {
+          if (replyRef.fn) {
+            await replyRef.fn({ channelId, content });
+          }
+        },
+      },
+      // Start after gateway is up; construct with manual then start below.
+      manual: true,
+    });
+  }
+
   const gateway = await factory(config, handlers);
   // If factory is createLiveGateway-like, reply is set inside; for custom, allow handlers.reply
   if (handlers.reply) replyRef.fn = handlers.reply;
@@ -352,8 +385,9 @@ export async function startBridge(
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
 
   await gateway.start();
+  scheduler?.start();
   console.log(
-    "[discord] HEAR bridge ready (session stub + thinking status + slash + rate/mute; no ProcessManager).",
+    "[discord] HEAR bridge ready (session stub + thinking status + slash + schedule ticker + rate/mute; no ProcessManager).",
   );
 
   return {
@@ -361,11 +395,13 @@ export async function startBridge(
     config,
     store,
     workStore,
+    scheduleStore,
     mutedUsers,
     rateLimitState,
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
+      scheduler?.stop();
       await gateway.stop();
     },
   };

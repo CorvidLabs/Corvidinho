@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790447959,
+      "commit": "79961525e42f6c2df06e2ac410f297bc89116062",
+      "contract_digest": "fe23e5fa548836d24be579e5334845d121a2af8e76d11b297b39e51e959ba44f",
+      "execution_digest": "9f9ea66d8819e4a631907cca18e8edc3b53f55712da8816f6316f43c25d44ba9",
+      "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790447962,
+      "commit": "f0f5be5b76aab365e0a8e8ef46b4b6e149a85545",
+      "contract_digest": "fe23e5fa548836d24be579e5334845d121a2af8e76d11b297b39e51e959ba44f",
+      "execution_digest": "9f9ea66d8819e4a631907cca18e8edc3b53f55712da8816f6316f43c25d44ba9",
+      "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790447962,
+      "commit": "f0f5be5b76aab365e0a8e8ef46b4b6e149a85545",
+      "contract_digest": "fe23e5fa548836d24be579e5334845d121a2af8e76d11b297b39e51e959ba44f",
+      "execution_digest": "9f9ea66d8819e4a631907cca18e8edc3b53f55712da8816f6316f43c25d44ba9",
+      "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+      "acceptance_input_digest": "c83e88d3a98ba41cae039290d181abc8b4b367ed33baa9a8c47ff7c52861bd0d",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "docs/BOX-UPDATE.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "c02a13cd34b334f56efa65927716ba83316965fca484b69d7fd5bce587b9c12f",
+            "entry_digest": "d6d2c894e48b56ad21599d20fdc31e2f74c3ac8311e4f0f72ae3a52495631e84",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "tests/discord.register-commands.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "b5d449ee73553d8ec8388f2c0e5d8d3510abf4ff813bc30490d10b80d659792b",
+            "entry_digest": "aa1e86e8958b5ba2d5c5cdde21f0025e2e2f880ac0796a65454eb22db880d365",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.schedule.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "fcbbce81b2a19380c6bf4a6af902f2638fe45ff2a73e4ef1882f22efe38c6b06",
+            "entry_digest": "af030e88a1b4442f5f8bc03feb260bbcb43d1843a4a537630ba128da13cc882f",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.slash.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "a52c329410cff42b680df0cd4ba7fd6a05cfb4bfea826361177438fb860fd71f",
+            "entry_digest": "1e8b4d4f122c8434d67304973e5ae5da65b419e753c12a9c000acdd6f39d62a7",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/scheduler.cron.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "14cf34cb1918489200bbe24b007ab52dc83bb665150d7db51cd643b2b9adf0ff",
+            "entry_digest": "5be69e1dbfbac2bf7408f31e7ab235f32020c4e546950c46c24f48bb81d2dd14",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/scheduler.service.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "eb847bd03ceeaf3c508f068f092a494221b6736a1f4deb802df148c1ca9e1c98",
+            "entry_digest": "b5727a72aa3edeb1023dc8fa8baa71a6306e9a94833bfccc32077105fb165107",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    }
+  ]
+}

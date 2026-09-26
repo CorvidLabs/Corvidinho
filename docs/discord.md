@@ -3,14 +3,14 @@
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
 **As of:** 2026-09-26 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
 
 ---
 
-## Slash commands (exact set of six)
+## Slash commands (seven: DISCORD-4 six + /schedule)
 
 Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globals when `DISCORD_GUILD_ID` is set (`discord register-commands` / ClientReady).
 
@@ -23,6 +23,11 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/work` | `description` (string, required) | public (deferred) | Drive a work task |
 | `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check) |
 | `/unmute` | `user` (user, required) | yes | Unmute user (ADMIN) |
+| `/schedule list` | — | yes | List schedules |
+| `/schedule create` | `name`, `cadence`, `project`, `prompt`, optional `channel` | yes | Create recurring single-project run (ADMIN; min 5m cadence) |
+| `/schedule pause` | `schedule` (id) | yes | Pause (ADMIN) |
+| `/schedule resume` | `schedule` (id) | yes | Resume (ADMIN) |
+| `/schedule delete` | `schedule` (id) | yes | Delete (ADMIN) |
 
 Gate order for every slash: **channel allowlist → mute/rate → minPermission → handler**.
 
@@ -53,7 +58,7 @@ Outside an allowlisted channel (or from a non-configured user when a user allowl
 | **MessageCreate** (@mention / reply / thread) | **Silent** — no public reply, no DM, no reaction | **Silent** (MessageCreate has no ephemeral; tip is slash-only) |
 | **Slash** | Ephemeral **zero-width** ack (`\u200b`) only — Discord requires a response within 3s; no useful leak | Ephemeral **allowlist tip** (how to add channel/user to config + restart) |
 
-Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`) still uses ephemeral `"not authorized"` (different from channel deny).
+Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`, `/schedule` mutations) still uses ephemeral `"not authorized"` (different from channel deny).
 
 Admin detection: `resolvePermissionLevel` + `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` (empty ⇒ nobody ADMIN).
 
