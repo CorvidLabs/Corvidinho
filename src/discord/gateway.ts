@@ -234,6 +234,7 @@ export async function createLiveGateway(
     reply: (opts: unknown) => Promise<unknown>;
     deferReply: (opts?: unknown) => Promise<unknown>;
     editReply: (opts: unknown) => Promise<unknown>;
+    deleteReply?: () => Promise<unknown>;
     deferred: boolean;
     replied: boolean;
   }): SlashInteraction {
@@ -322,6 +323,11 @@ export async function createLiveGateway(
       },
       editReply: async (opts) => {
         await send(opts, "edit");
+      },
+      deleteReply: async () => {
+        if (typeof interaction.deleteReply === "function") {
+          await interaction.deleteReply();
+        }
       },
     };
   }

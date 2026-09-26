@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.25
+
+### Discord slash ASK-7 alignment
+
+- **DISCORD-ASK-7** — `/session start` and `/work` collapse the thinking progress message into the final answer (same as mention/button pick) and delete the deferred slash reply when `editMessage` is available — no extra ✅ Done embed + full interaction reply.
+- `finalizeContent` only closes the thinking controller on a successful edit so Done/fail fallback still works when `editMessage` is missing.
+- HI + REQ-discord-048 clarify slash coverage.
+
+### Ops
+
+- Package version **0.0.25** — restart the Discord bridge after update. No schema bump.
+
 ## 0.0.24
 
 ### Discord ask UX tighten (less duplicate noise)

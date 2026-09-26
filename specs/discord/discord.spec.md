@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 62
+version: 63
 status: draft
 files:
   - src/discord/types.ts
@@ -42,11 +42,13 @@ files:
   - src/discord/presence.ts
   - src/discord/bridge.ts
   - src/discord/thinking-status.ts
+  - src/discord/slash-finish.ts
   - src/discord/slash-commands.ts
   - src/discord/register-commands.ts
   - src/discord/slash-types.ts
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
+  - tests/discord.slash-ask7.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
@@ -124,8 +126,9 @@ When an ask has structured options (or a numbered list in the question),
 `src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
 an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 `ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
-Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick prefer editing
-that message into the final answer (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent`.
+Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
+`/session start` / `/work` prefer editing that message into the final answer
+(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)

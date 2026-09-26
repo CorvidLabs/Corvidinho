@@ -10,6 +10,7 @@ import {
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 
@@ -147,13 +148,18 @@ export async function handleSessionStart(
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
-    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Session \`${session.id}\` failed: ${msg}`;
-    if (interaction.editReply) {
-      await interaction.editReply({ content: body });
-    } else {
-      await interaction.reply({ content: body });
-    }
+    // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
+    await finishSlashWithThinking({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras: { model: llmModel },
+      ok: false,
+      failStatus: `❌ ${msg}`,
+    });
     return;
   }
 
@@ -167,11 +173,6 @@ export async function handleSessionStart(
       })
     : undefined;
   const thinkExtras = { plumbing, model: llmModel };
-  if (result.ok) {
-    await thinking?.done("✅ Done", thinkExtras);
-  } else {
-    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
-  }
 
   const summary = result.ok
     ? result.summary.slice(0, 1500)
@@ -181,11 +182,17 @@ export async function handleSessionStart(
     : "";
   const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
 
-  if (interaction.editReply) {
-    await interaction.editReply({ content: body });
-  } else {
-    await interaction.reply({ content: body });
-  }
+  // DISCORD-ASK-7 — collapse thinking into the final body; drop deferred reply.
+  await finishSlashWithThinking({
+    thinking,
+    body,
+    interaction,
+    sessionId: session.id,
+    trackBotMessage: ctx.trackBotMessage,
+    thinkExtras,
+    ok: result.ok,
+    failStatus: `❌ exit ${result.exitCode}`,
+  });
 }
 
 export async function handleSessionCommand(
