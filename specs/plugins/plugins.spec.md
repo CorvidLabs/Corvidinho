@@ -45,6 +45,7 @@ files:
   - tests/memory.plugins.test.ts
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
+  - tests/files.dangling-symlink.test.ts
   - tests/search.plugins.test.ts
   - plugins/shell/index.ts
   - plugins/shell/commands.ts
@@ -119,7 +120,8 @@ non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
 plain Made with Corvidinho attribution (no @handles). Dry-run via
 CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
-`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
+`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
+a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
 keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
 no in-band override. Memory plugins take the acting user and ADMIN
@@ -269,7 +271,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Missing token / API fail on github-* | Clear error; non-zero exit |
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
-| Path escapes project cwd / symlink escape | Refuse (exit 1) |
+| Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
@@ -326,4 +328,6 @@ and current rows for plugins host evolution.
 | 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |
 | 2026-09-26 | github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured: github-ci-status takes a PR number or a ref (branch/tag/SHA; git ref-name validation, option-looking refused) and reports verdict green/red/pending/none over check runs plus legacy commit statuses; rows keep name/state/bucket/link (REQ-plugins-094, GITHUB-4 / #94 captured slice; draft GITHUB-11 left for HI capture) |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
+| 2026-09-26 | spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run: Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1) |
+| 2026-09-26 | files-path-clamp-follows-dangling-symlinks-by-hand-so-files-write-cannot-escape-the-project-root-or-create-safe-2: Files path clamp follows dangling symlinks by hand so files-write cannot escape the project root or create SAFE-2 protected files through a link whose target does not exist yet |
 | 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |

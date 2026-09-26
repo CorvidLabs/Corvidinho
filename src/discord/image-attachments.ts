@@ -4,8 +4,10 @@
  * Steal shape from archived corvid-agent `server/discord/image-attachments.ts`
  * (MIME allowlist; 20MB / 5 images caps; multimodal blocks + URL fallback).
  * Merlin `bridges/discord/src/images.ts` localPath: write downloaded bytes
- * under `/tmp/corvidinho-images` so HI "files it can actually look at" holds
- * for the headless CLI prompt path (no ProcessManager / no Anthropic SDK).
+ * to local files so HI "files it can actually look at" holds for the
+ * headless CLI prompt path (no ProcessManager / no Anthropic SDK). The bridge
+ * writes them inside the session workspace (`attachmentCacheDir`) because the
+ * agent's file tools refuse paths outside their cwd (REQ-discord-013).
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
@@ -29,8 +31,23 @@ export const MAX_IMAGES_PER_MESSAGE = 5;
 /** Fetch timeout for Discord CDN downloads (Merlin FETCH_TIMEOUT_MS). */
 export const FETCH_TIMEOUT_MS = 15_000;
 
-/** Local cache dir so the agent can open real files (Merlin IMAGE_CACHE_DIR). */
+/**
+ * Fallback cache dir when a caller passes no `cacheDir` (Merlin
+ * IMAGE_CACHE_DIR). The bridge never uses it: it is outside any session cwd,
+ * so the agent's file tools cannot open it.
+ */
 export const IMAGE_CACHE_DIR = "/tmp/corvidinho-images";
+
+/** Attachment dir relative to a session workspace (agent cwd). */
+export const WORKSPACE_ATTACHMENTS_SUBDIR = join(".corvidinho", "attachments");
+
+/**
+ * Where the bridge writes a session's attachments: inside the agent cwd so
+ * files-read can open them; removed with the workspace when the session ends.
+ */
+export function attachmentCacheDir(workDir: string): string {
+  return join(workDir, WORKSPACE_ATTACHMENTS_SUBDIR);
+}
 
 export type { DiscordAttachment };
 
@@ -61,7 +78,7 @@ export type MaterializedImage = {
   attachment: DiscordAttachment;
   mediaType: ImageMediaType;
   base64: string;
-  /** Absolute path under IMAGE_CACHE_DIR when write succeeded. */
+  /** Absolute path under the cache dir when write succeeded. */
   localPath?: string;
 };
 
@@ -148,6 +165,14 @@ export async function extractImageBlocks(
       ensuredDir = true;
     } catch {
       /* best-effort — keep base64 even if disk write fails */
+    }
+    if (ensuredDir) {
+      // Self-ignoring dir: downloaded images never land in a commit.
+      try {
+        await writeFile(join(cacheDir, ".gitignore"), "*\n", { flag: "wx" });
+      } catch {
+        /* already present, or not writable — images still write below */
+      }
     }
   }
 
