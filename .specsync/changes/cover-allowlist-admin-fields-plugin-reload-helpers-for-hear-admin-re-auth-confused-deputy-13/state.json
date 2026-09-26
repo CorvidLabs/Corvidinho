@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-allowlist-admin-fields-plugin-reload-helpers-for-hear-admin-re-auth-confused-deputy-13",
+  "slug": "cover-allowlist-admin-fields-plugin-reload-helpers-for-hear-admin-re-auth-confused-deputy-13",
+  "title": "Cover allowlist admin fields + plugin reload helpers for HEAR admin re-auth / confused-deputy (#13)",
+  "description": "Cover allowlist admin fields + plugin reload helpers for HEAR admin re-auth / confused-deputy (#13)",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "2d22201fb2a75e3b8c8ed87b3e343bfb51a84ed4",
+  "created_at": 1790441410,
+  "updated_at": 1790441418,
+  "affected_specs": [],
+  "affected_paths": [
+    "src/allowlist/load.ts",
+    "src/allowlist/types.ts",
+    "src/plugins/builtins.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Allowlist admin_users/admin_roles fields and plugin reload-after-clearRegistry are support paths for DISCORD-7/8; no new canonical module — covered by active discord change REQ-011/012",
+  "acceptance_criteria": [
+    "Support paths for #13: DiscordAllowlists.adminUsers/adminRoles + load/env overlays; builtins/plugin loaders re-register after clearRegistry so fixture tests stay green. No new HI; covered by discord REQ-011/012."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
