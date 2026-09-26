@@ -13,6 +13,7 @@ files:
   - src/plugins/githubDeny.ts
   - src/plugins/githubPublic.ts
   - tests/github.public.community.test.ts
+  - tests/github.gate-allowlist-file.test.ts
   - tests/files.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts

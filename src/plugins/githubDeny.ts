@@ -10,6 +10,7 @@
 import {
   checkGithubRepo,
   configFromEnvOnly,
+  loadAllowlist,
   type AllowlistConfig,
 } from "../allowlist/index.ts";
 
@@ -30,8 +31,8 @@ export function extractRepoFromArgs(args: string[]): string | undefined {
 
 /**
  * Enforce default-deny allowlist. Requires explicit --repo OWNER/REPO.
- * Pass `cfg` in tests; otherwise builds from env overlays (file load is async —
- * CLI/plugins may call `checkRepoGateAsync` when file must be included).
+ * Pass a loaded `AllowlistConfig`; the env-only fallback skips the allowlist
+ * file, so runtime callers use `checkRepoGateAsync` (file + env, ALLOW-4).
  */
 export function checkRepoGate(
   repo: string | undefined,
@@ -47,4 +48,15 @@ export function checkRepoGate(
     return { ok: false, repo: repo ?? "", error: r.error };
   }
   return { ok: true, repo: r.repo! };
+}
+
+/**
+ * GITHUB-6 gate over the full allowlist (file + env overlays, ALLOW-4) — the
+ * same loader WATCH ingress uses, so file deny lists are never skipped.
+ */
+export async function checkRepoGateAsync(
+  repo: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<RepoGateResult> {
+  return checkRepoGate(repo, await loadAllowlist({ env }));
 }

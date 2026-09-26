@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790462773,
+      "digest": "076e41c99a246da8ad8378c2e5060b374443c3556ec87dff3531d1a997b5c2aa",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists",
+        "title": "GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4)",
+        "description": "GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "specs/plugins",
+          "src/plugins/githubDeny.ts",
+          "src/plugins/githubPublic.ts",
+          "src/work/pr.ts",
+          "tests/github.gate-allowlist-file.test.ts",
+          "tests/work.pr.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With deny_repos/deny_orgs only in the allowlist file and the allow list only in env, every GitHub plugin (issue/PR create, comment, review, reads) and the /work PR step refuse the denied repo or org with exit 3 / repo-denied; with an allow list only in the file, allowed repos pass and unlisted repos are still refused"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "78133369dd540e772df5798400d80aa270361e7351d787eb646b5b986eaf717e",
+        "plugins": "a17359786e0782828a8c4bac96a6792b361d4ff23effd7aeb7ce7bc33906478b"
+      }
+    }
+  ],
+  "reopenings": []
+}
