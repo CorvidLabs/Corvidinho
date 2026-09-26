@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 4
+version: 5
 status: draft
 files:
   - src/cli.ts
@@ -52,4 +52,4 @@ Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
 ## Change Log
 
 plugins list/run + non-interactive + doctor plugin count (2026-09-26, corvid-agent).
-
+| 2026-09-26 | plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface: WATCH: plugin host + GitHub read + repo deny gate |
