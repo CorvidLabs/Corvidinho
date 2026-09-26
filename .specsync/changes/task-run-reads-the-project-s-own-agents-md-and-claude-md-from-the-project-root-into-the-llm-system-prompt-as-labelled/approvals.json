@@ -36,6 +36,43 @@
       "approved_delta_digests": {
         "agent": "cc071b44c13f21d8fac2ab0bfa1ec53dae9c496b4b25ae0986791e104bdb4f0c"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790454582,
+      "digest": "b9d7eb520d49f747dcd07bc8cd3d21b4fb2099fb606201c6bdf3ad1a0adc56d1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled",
+        "title": "Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed",
+        "description": "Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed",
+        "kind": "feature",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/project-instructions.ts",
+          "tests/agent.project-instructions.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "task run in a project folder puts the project root AGENTS.md and CLAUDE.md (nearest .git at or above cwd, else cwd; never a parent outside the project) into the read-tier and tool-loop system prompts under a project-instructions label; files over 16 KiB are cut with a truncation marker; symlinks resolving outside the project, non-regular, binary and non-UTF-8 files are refused; missing files are skipped; text is SAFE-6 scrubbed; a Text event names loaded/truncated/duplicate/refused files; temp-dir fixture tests"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "33781fd14990f084fda7fc45008c443da3367d7b488deb510679f2b1c147980b"
+      }
     }
   ],
   "reopenings": []

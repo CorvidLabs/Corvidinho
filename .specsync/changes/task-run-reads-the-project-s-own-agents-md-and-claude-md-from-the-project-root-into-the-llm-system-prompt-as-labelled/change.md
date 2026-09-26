@@ -1,6 +1,6 @@
 ---
 id: task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled
-state: implementing
+state: verifying
 type: feature
 base_commit: 1f5406ac242cd72be5a1c8730891f33ff95e25ee
 ---
