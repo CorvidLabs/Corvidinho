@@ -20,3 +20,4 @@ From Discord, an ADMIN can approve or add users, add or remove channels, and upd
 ## Notes (not numbered AC)
 
 - Memory forget/override (own or another user’s) requires ADMIN at handler time — see **MEMORY-ACL-3..4** in `hi/memory.md` (Leif amendment: self-forget is ADMIN too). Empty admin/owner = deny-all (**ADMIN-4**).
+- Mutating tools for community chat vs owner ADMIN: **ROLES-CHAT-1..7** in [`hi/roles.md`](roles.md). ADMIN slash (#43) stays separate; capture gates first.
