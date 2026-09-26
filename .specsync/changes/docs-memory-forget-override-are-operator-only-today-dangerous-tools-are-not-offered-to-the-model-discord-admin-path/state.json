@@ -7,10 +7,11 @@
   "title": "Docs: memory forget/override are operator-only today (dangerous tools are not offered to the model); Discord admin path tracked in #43",
   "description": "Docs: memory forget/override are operator-only today (dangerous tools are not offered to the model); Discord admin path tracked in #43",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "ebe1f69ba95a9125fb28fdffb7c60324898873ef",
   "created_at": 1790452231,
-  "updated_at": 1790452232,
+  "updated_at": 1790452233,
   "affected_specs": [],
   "affected_paths": [
     "docs/discord.md"
