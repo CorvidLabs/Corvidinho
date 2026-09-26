@@ -7,11 +7,11 @@
   "title": "Files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5)",
   "description": "files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "3720b97c0dfc6ee65187a6278c13f8e1058632d3",
   "created_at": 1790461743,
-  "updated_at": 1790461977,
+  "updated_at": 1790462182,
   "affected_specs": [
     "plugins"
   ],
