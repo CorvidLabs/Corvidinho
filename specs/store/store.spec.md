@@ -8,11 +8,7 @@ files:
   - src/store/paths.ts
   - src/store/session-ttl.ts
 
-db_tables:
-  - schema_meta
-  - discord_sessions
-  - discord_session_bot_messages
-  - discord_work_tasks
+db_tables: []
 depends_on: []
 ---
 
