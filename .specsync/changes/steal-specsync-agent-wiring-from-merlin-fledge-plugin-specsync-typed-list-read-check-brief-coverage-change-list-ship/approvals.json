@@ -91,6 +91,52 @@
         "cli": "90487e9bc5f6d37c1bc7143ef045fadd372e07dfec47c264feb844f7e92101ce",
         "plugins": "00790855aed54e7d76948b53e6262b7ddb6913a99a793ee6d60d97d99f856a72"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790438232,
+      "digest": "b1998e8c552d28bd1bd13e3538f7a594f7470a3b5100a947a459dde30b5ef93b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
+        "title": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated",
+        "description": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "AGENTS.md",
+          "STATUS.md",
+          "fledge.toml",
+          "plugins/specsync",
+          "specs/",
+          "src/agent",
+          "src/cli.ts",
+          "src/plugins",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Agent/CLI can list and read specs/ via typed plugins (specsync-list/read) and CLI; companion brief loads context.md/tasks.md/etc when modules targeted (SPECSYNC-5); plan-time Merlin spec_loader list/read feeds Planning; spec-check is on lanes.verify so SpecSync check failures block prove-before-done verified=true (SPECSYNC-2/7); CI Spec Sync Action remains a dedicated workflow alongside Bun smoke; coverage and change list/ship-status available when asked; no SpecSync API key; bun test + SpecSync Action green; change archived"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "1cc09bbda9aaa9832c97a27557ee5a6e3f5897f0839c5b7298e0d42534996ca1",
+        "cli": "90487e9bc5f6d37c1bc7143ef045fadd372e07dfec47c264feb844f7e92101ce",
+        "plugins": "00790855aed54e7d76948b53e6262b7ddb6913a99a793ee6d60d97d99f856a72"
+      }
     }
   ],
   "reopenings": []

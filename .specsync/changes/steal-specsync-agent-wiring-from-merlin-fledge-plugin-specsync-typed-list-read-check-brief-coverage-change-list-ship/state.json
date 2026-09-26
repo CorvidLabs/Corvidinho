@@ -4,14 +4,14 @@
   "workflow_origin_version": 2,
   "id": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
   "slug": "steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship",
-  "title": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); keep CI Spec Sync Action separate from fledge verify lane",
-  "description": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); keep CI Spec Sync Action separate from fledge verify lane",
+  "title": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated",
+  "description": "STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); plan-time list/read + verify-lane spec-check; CI Spec Sync Action remains dedicated",
   "kind": "feature",
   "state": "verifying",
   "canonical_applied": true,
   "base_commit": "b55ff627783de1b7d5ce5c0ed9c75c618d9b546b",
   "created_at": 1790437972,
-  "updated_at": 1790438147,
+  "updated_at": 1790438239,
   "affected_specs": [
     "agent",
     "plugins",
@@ -31,7 +31,7 @@
   "no_spec_change": false,
   "no_spec_change_rationale": null,
   "acceptance_criteria": [
-    "Agent/CLI can list and read specs/ via typed plugins (specsync-list/read) and CLI; companion brief loads context.md/tasks.md/etc when modules targeted (SPECSYNC-5); specsync check failure blocks prove-before-done verified=true (SPECSYNC-2) while fledge verify lane stays SpecSync-free (CI Spec Sync Action separate); coverage/score and change list/ship-status available when asked; no SpecSync API key; bun test + SpecSync Action green; change archived"
+    "Agent/CLI can list and read specs/ via typed plugins (specsync-list/read) and CLI; companion brief loads context.md/tasks.md/etc when modules targeted (SPECSYNC-5); plan-time Merlin spec_loader list/read feeds Planning; spec-check is on lanes.verify so SpecSync check failures block prove-before-done verified=true (SPECSYNC-2/7); CI Spec Sync Action remains a dedicated workflow alongside Bun smoke; coverage and change list/ship-status available when asked; no SpecSync API key; bun test + SpecSync Action green; change archived"
   ],
   "selected_artifacts": [
     "context",
