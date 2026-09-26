@@ -40,10 +40,14 @@ jobs:
             aarch64|arm64) ARCH=aarch64 ;;
             *) echo "unsupported arch: $ARCH"; exit 1 ;;
           esac
-          URL="https://github.com/CorvidLabs/spec-sync/releases/download/v${VER}/specsync-linux-${ARCH}.tar.gz"
+          ART="specsync-linux-${ARCH}"
+          URL="https://github.com/CorvidLabs/spec-sync/releases/download/v${VER}/${ART}.tar.gz"
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL "$URL" | tar -xz -C "$HOME/.local/bin"
-          chmod +x "$HOME/.local/bin/specsync"
+          tmp="$(mktemp -d)"
+          curl -fsSL "$URL" | tar -xz -C "$tmp"
+          # tarball contains a single binary named like specsync-linux-x86_64
+          bin="$(find "$tmp" -type f | head -1)"
+          install -m 755 "$bin" "$HOME/.local/bin/specsync"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/specsync" --version
 

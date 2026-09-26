@@ -12,3 +12,7 @@ CI on PR #1 failed for two reasons:
 2. Workflow pinned Bun `1.2.21` while `bun.lock` is lockfileVersion 2 from Bun 1.4.x ("Unknown lockfile version" / frozen lockfile).
 
 Adopted workflow-v2 baseline via `specsync change adopt`. This change enables SDD enforcement and repairs CI so verify can go green before merge.
+
+## Lesson
+
+SpecSync release tarball extracts a binary named `specsync-linux-<arch>`, not `specsync`. CI must `install`/`mv` it onto `$PATH` as `specsync`.
