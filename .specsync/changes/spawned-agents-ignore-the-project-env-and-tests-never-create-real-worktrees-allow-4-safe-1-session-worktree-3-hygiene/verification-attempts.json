@@ -54,6 +54,24 @@
       "requirement_ids": [
         "REQ-agent-133"
       ]
+    },
+    {
+      "timestamp": 1790451088,
+      "commit": "8cd2fcaafd8d1f2c0614cd175c6b6076c053e809",
+      "contract_digest": "b78ebad651e9e0f3a1481acb69dbe9db841711fa840360769504796c5039f424",
+      "execution_digest": "cdcd8f30fbc61f0f71fcedbec54d8abc068920a5bd519b51fd714c9437a88fc5",
+      "workspace_digest": "af45576a35a809e703d275015c69e79ef387c0da579d051b3c5d181b5b7f9e3c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-133"
+      ]
     }
   ]
 }
