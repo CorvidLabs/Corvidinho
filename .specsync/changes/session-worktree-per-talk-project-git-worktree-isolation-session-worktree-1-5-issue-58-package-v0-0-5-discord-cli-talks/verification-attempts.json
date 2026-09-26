@@ -44,6 +44,28 @@
         "REQ-discord-020",
         "REQ-discord-022"
       ]
+    },
+    {
+      "timestamp": 1790449041,
+      "commit": "b10f37eb108795ec79703b69efdd124468d87de8",
+      "contract_digest": "dd565c00e954cce14a039b948795f18cd6ddd8e42b7cfc4152c8170a310f5c8d",
+      "execution_digest": "ca3ca571e0dd4dae3f259e63e17c61bb63ea875b7d19117165e441713484cc17",
+      "workspace_digest": "f8db579b2dad33c6c4eaf7fc93384220c9f66c45dd01be3d6881ffa1a09c685d",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-009",
+        "REQ-discord-018",
+        "REQ-discord-019",
+        "REQ-discord-020",
+        "REQ-discord-022"
+      ]
     }
   ]
 }
