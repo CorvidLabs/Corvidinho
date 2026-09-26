@@ -1,0 +1,21 @@
+{
+  "timestamp": 1790453069,
+  "commit": "dcc512a520577808d8e2c531339785f317b9c782",
+  "contract_digest": "969687376db8805f3b6e1f944fd6fec0e79fd89b2bdcb8d2579b1a0fe2c68cf4",
+  "execution_digest": "e6f555e025d9efc29d0165b6a26b3759a81b8831496151b3aafa5a7a14553551",
+  "workspace_digest": "34e4b8b1fee695044a49c917e50a538535a3617c0e1f1b291f09b438a40ea6c7",
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-cli-042",
+    "REQ-discord-042",
+    "REQ-plugins-011",
+    "REQ-plugins-042"
+  ]
+}
