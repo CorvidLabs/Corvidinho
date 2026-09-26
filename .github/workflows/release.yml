@@ -1,0 +1,92 @@
+name: release
+
+# Create a GitHub Release with verbose notes when a version tag is pushed.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build verbose release notes
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          PKG_VER="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
+          PREV="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [ -n "${PREV}" ]; then
+            RANGE="${PREV}..${TAG}"
+            CHANGELOG="$(git log --pretty=format:'- %s (%h)' "${RANGE}")"
+          else
+            RANGE="(initial tag)"
+            CHANGELOG="$(git log --pretty=format:'- %s (%h)' -n 40)"
+          fi
+          TAG_NOTES="$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)"
+          SLASH='/session (list|start) · /status · /agents · /work · /mute · /unmute'
+          {
+            echo "## Corvidinho ${TAG}"
+            echo
+            echo "**package.json version:** \`${PKG_VER}\`"
+            echo "**Git tag:** \`${TAG}\`"
+            echo "**Commit range:** \`${RANGE}\`"
+            echo
+            if [ -n "${TAG_NOTES}" ]; then
+              echo "### Tag annotation"
+              echo
+              printf '%s\n' "${TAG_NOTES}"
+              echo
+            fi
+            echo "### Commits in this cut"
+            echo
+            printf '%s\n' "${CHANGELOG}"
+            echo
+            echo "### Slash commands (current set — do not invent more here)"
+            echo
+            echo "${SLASH}"
+            echo
+            echo "### Upgrade on the bot box (safe)"
+            echo
+            echo "Prefer the updater so a bad tip rolls back and **does not** Discord-spam:"
+            echo
+            echo '```bash'
+            echo "cd /path/to/Corvidinho"
+            echo "CORVIDINHO_REF=${TAG} ./scripts/corvidinho-update.sh"
+            echo "# optional: CORVIDINHO_BRIDGE_UNIT=corvidinho-bridge"
+            echo "# see docs/BOX-UPDATE.md"
+            echo '```'
+            echo
+            echo "### Operator notes"
+            echo
+            echo "- Secrets stay in VM env/secret store — never in the repo."
+            echo "- Discord sessions are in-memory; restart clears them (durable session DB is a separate ask)."
+            echo "- Updater failure → exit non-zero + rollback when possible; logs only (no Discord panic)."
+            echo "- Confirm with ephemeral Discord \`/status\` (version, uptime, LLM mode, git tip)."
+            echo
+            echo "Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)"
+          } > /tmp/corvidinho-release-body.md
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=${PKG_VER}" >> "$GITHUB_OUTPUT"
+          echo "body_path=/tmp/corvidinho-release-body.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Corvidinho ${{ steps.meta.outputs.tag }}
+          body_path: /tmp/corvidinho-release-body.md
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

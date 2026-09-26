@@ -12,6 +12,8 @@
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
 | Trust / Augur / Attest | **Not** wired — do not re-add Trust thrash on this bootstrap |
 | Merge policy | Merge when verify + SpecSync change cycle are green (Leif/CoS standing order) |
+| Box update | `scripts/corvidinho-update.sh` + `docs/BOX-UPDATE.md` — pull/install/doctor/restart + rollback; no Discord panic spam |
+| Releases | Tag `v*` → `.github/workflows/release.yml` creates GitHub Release with verbose notes |
 
 ## Not inventing
 
