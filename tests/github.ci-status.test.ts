@@ -6,6 +6,7 @@ import {
   checkRunRow,
   commitStatusRow,
   fetchCiStatus,
+  isStatusesPermissionDenied,
   parseCiSelector,
   validateCiRef,
   type CiOctokit,
@@ -15,6 +16,7 @@ import { list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
+const SHA_B = "fedcba9876543210fedcba9876543210fedcba98";
 
 type Run = { name: string; status: string; conclusion: string | null; html_url: string | null; head_sha?: string };
 type Status = { state: string; context: string; target_url: string | null };
@@ -27,19 +29,32 @@ function st(context: string, state: string): Status {
   return { context, state, target_url: `https://ci.example.test/${context}` };
 }
 
-/** Octokit-shaped fake: records calls, serves pages from arrays. */
+type FakeError = { status: number; message: string; response?: { headers: Record<string, string> } };
+
+/**
+ * Octokit-shaped fake: records calls, serves pages from arrays. `refs` maps a
+ * ref (branch name or SHA) to its own rows so a moving branch can be modelled;
+ * refs not listed there serve `runs` / `statuses`.
+ */
 function fakeOctokit(opts: {
   runs?: Run[];
   statuses?: Status[];
+  refs?: Record<string, { runs?: Run[]; statuses?: Status[] }>;
+  commitSha?: string;
   statusSha?: string;
   runsTotal?: number;
-  statusesError?: { status: number; message: string };
-  checksError?: { status: number; message: string };
+  statusesTotal?: number;
+  statusesError?: FakeError;
+  checksError?: FakeError;
+  commitError?: FakeError;
 }) {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
-  const runs = opts.runs ?? [];
-  const statuses = opts.statuses ?? [];
+  const runsFor = (ref: string) => opts.refs?.[ref]?.runs ?? opts.runs ?? [];
+  const statusesFor = (ref: string) => opts.refs?.[ref]?.statuses ?? opts.statuses ?? [];
   const page = <T>(xs: T[], p: number, per: number) => xs.slice((p - 1) * per, p * per);
+  const raise = (e: FakeError): never => {
+    throw Object.assign(new Error(e.message), e);
+  };
   const octokit: CiOctokit = {
     rest: {
       pulls: {
@@ -51,23 +66,33 @@ function fakeOctokit(opts: {
       checks: {
         async listForRef(params) {
           calls.push({ method: "checks.listForRef", params });
-          if (opts.checksError) throw Object.assign(new Error(opts.checksError.message), opts.checksError);
+          if (opts.checksError) raise(opts.checksError);
           if (opts.runsTotal !== undefined) {
             // Endless full pages: exercises the paging cap.
             const full = Array.from({ length: params.per_page }, (_, i) => run(`r${params.page}-${i}`, "success"));
             return { data: { total_count: opts.runsTotal, check_runs: full } };
           }
+          const runs = runsFor(params.ref);
           return {
             data: { total_count: runs.length, check_runs: page(runs, params.page, params.per_page) },
           };
         },
       },
       repos: {
+        async getCommit(params) {
+          calls.push({ method: "repos.getCommit", params });
+          if (opts.commitError) raise(opts.commitError);
+          return { data: { sha: opts.commitSha ?? SHA } };
+        },
         async getCombinedStatusForRef(params) {
           calls.push({ method: "repos.getCombinedStatusForRef", params });
-          if (opts.statusesError) {
-            throw Object.assign(new Error(opts.statusesError.message), opts.statusesError);
+          if (opts.statusesError) raise(opts.statusesError);
+          if (opts.statusesTotal !== undefined) {
+            // Endless full pages: exercises the statuses paging cap.
+            const full = Array.from({ length: params.per_page }, (_, i) => st(`s${params.page}-${i}`, "success"));
+            return { data: { sha: opts.statusSha ?? SHA, total_count: opts.statusesTotal, statuses: full } };
           }
+          const statuses = statusesFor(params.ref);
           return {
             data: {
               sha: opts.statusSha ?? SHA,
@@ -81,6 +106,11 @@ function fakeOctokit(opts: {
   };
   return { octokit, calls };
 }
+
+const listingRefs = (calls: { method: string; params: Record<string, unknown> }[]) =>
+  calls
+    .filter((c) => c.method === "checks.listForRef" || c.method === "repos.getCombinedStatusForRef")
+    .map((c) => c.params.ref);
 
 describe("github-ci-status selector (GITHUB-4: PR or ref)", () => {
   test("digits are a PR number", () => {
@@ -228,13 +258,50 @@ describe("github-ci-status fetch (mocked Octokit)", () => {
     expect(msg).toContain("failing: lint");
   });
 
-  test("ref target skips pulls.get and passes the ref through", async () => {
-    const { octokit, calls } = fakeOctokit({ runs: [run("smoke", "success")], statusSha: SHA });
+  test("ref target skips pulls.get and pins the ref to one SHA before listing", async () => {
+    const { octokit, calls } = fakeOctokit({ runs: [run("smoke", "success")] });
     const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "main" } });
     expect(calls.some((c) => c.method === "pulls.get")).toBe(false);
-    expect(calls.map((c) => c.params.ref)).toEqual(["main", "main"]);
+    expect(calls[0]).toEqual({
+      method: "repos.getCommit",
+      params: { owner: "o", repo: "r", ref: "main", per_page: 1 },
+    });
+    expect(listingRefs(calls)).toEqual([SHA, SHA]);
     expect(d).toMatchObject({ target: "ref", pr: null, ref: "main", sha: SHA, verdict: "green" });
     expect(ciStatusMessage(d)).toContain("CI green for main @ 0123456");
+  });
+
+  test("a branch that moves mid-query is still read at the resolved commit only", async () => {
+    // `main` resolved to SHA (green); by the time the listings run, the branch
+    // name would serve SHA_B's red rows. Every listing must use the pinned SHA.
+    const { octokit, calls } = fakeOctokit({
+      commitSha: SHA,
+      statusSha: SHA,
+      refs: {
+        [SHA]: { runs: [run("smoke", "success")], statuses: [st("jenkins", "success")] },
+        main: { runs: [run("smoke", "failure")], statuses: [st("jenkins", "failure")] },
+        [SHA_B]: { runs: [run("smoke", "failure")], statuses: [st("jenkins", "failure")] },
+      },
+    });
+    const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "main" } });
+    expect(listingRefs(calls)).toEqual([SHA, SHA]);
+    expect(d.sha).toBe(SHA);
+    expect(d.verdict).toBe("green");
+    expect(d.counts).toMatchObject({ total: 2, pass: 2, fail: 0 });
+  });
+
+  test("result SHA is the resolved commit, not the statuses response", async () => {
+    const { octokit } = fakeOctokit({ commitSha: SHA, statusSha: SHA_B, runs: [run("smoke", "success")] });
+    const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "abc1234" } });
+    expect(d.sha).toBe(SHA);
+  });
+
+  test("an unknown ref fails at resolution without listing", async () => {
+    const { octokit, calls } = fakeOctokit({ commitError: { status: 422, message: "No commit found for SHA: nope" } });
+    await expect(
+      fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "nope" } }),
+    ).rejects.toThrow("No commit found");
+    expect(listingRefs(calls)).toEqual([]);
   });
 
   test("status-context-only repo is covered by the verdict", async () => {
@@ -261,15 +328,37 @@ describe("github-ci-status fetch (mocked Octokit)", () => {
     expect(calls.filter((c) => c.method === "checks.listForRef").map((c) => c.params.page)).toEqual([1, 2]);
   });
 
-  test("paging stops at the cap and reports truncation", async () => {
+  test("check-run paging stops at the cap; an all-pass truncated list is pending, not green", async () => {
     const { octokit, calls } = fakeOctokit({ runsTotal: 5000 });
     const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "main" } });
     expect(calls.filter((c) => c.method === "checks.listForRef")).toHaveLength(CI_MAX_PAGES);
     expect(d.truncated).toBe(true);
+    expect(d.counts).toMatchObject({ total: CI_MAX_PAGES * 100, pass: CI_MAX_PAGES * 100, fail: 0 });
+    expect(d.verdict).toBe("pending");
+    expect(d.warnings.join(" ")).toContain("truncated");
+    expect(d.warnings.join(" ")).toContain("verdict pending");
+    expect(ciStatusMessage(d)).toContain("CI pending for main");
+  });
+
+  test("commit-status paging stops at the cap; truncation keeps the verdict off green", async () => {
+    const { octokit, calls } = fakeOctokit({ runs: [run("smoke", "success")], statusesTotal: 5000 });
+    const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "main" } });
+    expect(calls.filter((c) => c.method === "repos.getCombinedStatusForRef")).toHaveLength(CI_MAX_PAGES);
+    expect(d.truncated).toBe(true);
+    expect(d.counts.total).toBe(1 + CI_MAX_PAGES * 100);
+    expect(d.verdict).toBe("pending");
     expect(d.warnings.join(" ")).toContain("truncated");
   });
 
-  test("commit statuses 403 degrades to check runs with a warning", async () => {
+  test("a truncated list with a seen failure stays red", async () => {
+    const { octokit } = fakeOctokit({ runs: [run("lint", "failure")], statusesTotal: 5000 });
+    const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "main" } });
+    expect(d.truncated).toBe(true);
+    expect(d.verdict).toBe("red");
+    expect(d.warnings.join(" ")).not.toContain("verdict pending");
+  });
+
+  test("commit statuses permission 403 degrades to check runs with a warning", async () => {
     const { octokit } = fakeOctokit({
       runs: [run("smoke", "success")],
       statusesError: { status: 403, message: "Resource not accessible by integration" },
@@ -278,6 +367,62 @@ describe("github-ci-status fetch (mocked Octokit)", () => {
     expect(d.verdict).toBe("green");
     expect(d.warnings[0]).toContain("commit statuses not readable");
     expect(ciStatusMessage(d)).toContain("warning:");
+  });
+
+  test("verdict none still carries the statuses 403 warning in the message", async () => {
+    const { octokit } = fakeOctokit({
+      statusesError: { status: 403, message: "Resource not accessible by integration" },
+    });
+    const d = await fetchCiStatus(octokit, { owner: "o", repo: "r", target: { kind: "ref", ref: "main" } });
+    expect(d.verdict).toBe("none");
+    expect(d.warnings).toHaveLength(1);
+    const msg = ciStatusMessage(d);
+    expect(msg).toContain("CI none for main @ 0123456");
+    expect(msg).toContain("; warning: commit statuses not readable (403)");
+  });
+
+  test("rate-limit and SSO 403s on commit statuses propagate instead of degrading to green", async () => {
+    const target = { kind: "ref", ref: "main" } as const;
+    const cases: FakeError[] = [
+      {
+        status: 403,
+        message: "API rate limit exceeded for installation ID 1.",
+        response: { headers: { "x-ratelimit-remaining": "0" } },
+      },
+      {
+        status: 403,
+        message: "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.",
+        response: { headers: { "retry-after": "60" } },
+      },
+      { status: 403, message: "API rate limit exceeded" },
+      { status: 403, message: "You have triggered an abuse detection mechanism." },
+      {
+        status: 403,
+        message: "Resource protected by organization SAML enforcement.",
+        response: { headers: { "x-github-sso": "required; url=https://github.com/orgs/o/sso" } },
+      },
+    ];
+    for (const statusesError of cases) {
+      const err = Object.assign(new Error(statusesError.message), statusesError);
+      expect(isStatusesPermissionDenied(err)).toBe(false);
+      const { octokit } = fakeOctokit({ runs: [run("smoke", "success")], statusesError });
+      await expect(fetchCiStatus(octokit, { owner: "o", repo: "r", target })).rejects.toThrow(
+        statusesError.message,
+      );
+    }
+    // Header-only signals, with a message that looks like a plain permission denial.
+    const quietLimit = Object.assign(new Error("Forbidden"), {
+      status: 403,
+      response: { headers: { "x-ratelimit-remaining": "0" } },
+    });
+    expect(isStatusesPermissionDenied(quietLimit)).toBe(false);
+    const denied = Object.assign(new Error("Resource not accessible by personal access token"), {
+      status: 403,
+      response: { headers: { "x-ratelimit-remaining": "4999" } },
+    });
+    expect(isStatusesPermissionDenied(denied)).toBe(true);
+    expect(isStatusesPermissionDenied(Object.assign(new Error("Not Found"), { status: 404 }))).toBe(false);
+    expect(isStatusesPermissionDenied(null)).toBe(false);
   });
 
   test("other errors propagate", async () => {
@@ -354,16 +499,20 @@ describe("github-ci-status plugin handler", () => {
 
   test("ref end-to-end through Octokit with a stubbed transport", async () => {
     process.env.GITHUB_TOKEN = "fixture-token-not-real";
+    const commits = "https://api.github.com/repos/CorvidLabs/Corvidinho/commits/";
     const urls: string[] = [];
     const json = (body: unknown) =>
       new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input instanceof Request ? input.url : input);
       urls.push(url);
-      if (url.includes("/check-runs")) {
+      if (url === `${commits}feat%2Fci?per_page=1`) {
+        return json({ sha: SHA, files: [] });
+      }
+      if (url === `${commits}${SHA}/check-runs?per_page=100&page=1`) {
         return json({ total_count: 1, check_runs: [run("smoke", null, "in_progress")] });
       }
-      if (url.endsWith("/status?per_page=100&page=1")) {
+      if (url === `${commits}${SHA}/status?per_page=100&page=1`) {
         return json({ sha: SHA, total_count: 1, statuses: [st("ci/legacy", "success")] });
       }
       return new Response("not found", { status: 404 });
@@ -375,8 +524,9 @@ describe("github-ci-status plugin handler", () => {
     expect(data.sha).toBe(SHA);
     expect(data.checks.map((c) => c.bucket)).toEqual(["pending", "pass"]);
     expect(r.message).toContain("CI pending for feat/ci");
-    const base = "https://api.github.com/repos/CorvidLabs/Corvidinho/commits/feat%2Fci/";
-    expect(urls).toHaveLength(2);
-    expect(urls.every((u) => u.startsWith(base))).toBe(true);
+    // One ref resolution, then both listings by the pinned SHA (never the moving branch name).
+    expect(urls).toHaveLength(3);
+    expect(urls[0]).toBe(`${commits}feat%2Fci?per_page=1`);
+    expect(urls.slice(1).every((u) => u.startsWith(`${commits}${SHA}/`))).toBe(true);
   });
 });

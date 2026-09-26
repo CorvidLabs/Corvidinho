@@ -47,7 +47,6 @@ type CheckRunLike = {
   status: string;
   conclusion: string | null;
   html_url: string | null;
-  head_sha?: string;
 };
 
 type StatusLike = {
@@ -76,6 +75,12 @@ export type CiOctokit = {
       }): Promise<{ data: { total_count: number; check_runs: CheckRunLike[] } }>;
     };
     repos: {
+      getCommit(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+        per_page: number;
+      }): Promise<{ data: { sha: string } }>;
       getCombinedStatusForRef(params: {
         owner: string;
         repo: string;
@@ -206,6 +211,27 @@ function httpStatus(e: unknown): number | undefined {
   return typeof s === "number" ? s : undefined;
 }
 
+/**
+ * True only for a 403 that means "this token may not read commit statuses".
+ * Rate limits (primary: `x-ratelimit-remaining: 0`; secondary: `retry-after`
+ * or a rate-limit message) and SSO/SAML enforcement also answer 403, but the
+ * statuses are merely unread there, so those errors must propagate.
+ */
+export function isStatusesPermissionDenied(e: unknown): boolean {
+  if (httpStatus(e) !== 403) return false;
+  const err = e as { message?: unknown; response?: { headers?: Record<string, unknown> } };
+  const headers = err.response?.headers ?? {};
+  const header = (k: string): string | undefined => {
+    const v = headers[k];
+    return v == null ? undefined : String(v);
+  };
+  if (header("x-ratelimit-remaining") === "0") return false;
+  if (header("retry-after") !== undefined) return false;
+  if (header("x-github-sso") !== undefined) return false;
+  const msg = typeof err.message === "string" ? err.message : "";
+  return !/rate limit|abuse|SAML|\bSSO\b/i.test(msg);
+}
+
 async function listCheckRuns(
   octokit: CiOctokit,
   owner: string,
@@ -228,9 +254,8 @@ async function listCommitStatuses(
   owner: string,
   repo: string,
   ref: string,
-): Promise<{ statuses: StatusLike[]; sha: string | null; truncated: boolean }> {
+): Promise<{ statuses: StatusLike[]; truncated: boolean }> {
   const statuses: StatusLike[] = [];
-  let sha: string | null = null;
   for (let page = 1; page <= CI_MAX_PAGES; page++) {
     const res = await octokit.rest.repos.getCombinedStatusForRef({
       owner,
@@ -239,60 +264,70 @@ async function listCommitStatuses(
       per_page: PER_PAGE,
       page,
     });
-    sha = sha ?? (res.data.sha || null);
     statuses.push(...res.data.statuses);
     if (res.data.statuses.length < PER_PAGE || statuses.length >= res.data.total_count) {
-      return { statuses, sha, truncated: false };
+      return { statuses, truncated: false };
     }
   }
-  return { statuses, sha, truncated: true };
+  return { statuses, truncated: true };
 }
 
 /**
- * Resolve the target (PR head SHA or the ref itself), read check runs and the
- * combined commit status, and reduce them to one verdict. Check-run errors
- * propagate; a 403 on commit statuses (token without that scope) degrades to
- * check runs only with a warning.
+ * Pin the target to one commit (PR head SHA, or the ref resolved through
+ * `repos.getCommit`), read check runs and the combined commit status for that
+ * SHA, and reduce them to one verdict. Check-run errors propagate; a
+ * permission 403 on commit statuses (token without that scope) degrades to
+ * check runs only with a warning, while rate-limit / SSO 403s propagate. A
+ * truncated listing never reports `green` (unseen rows may fail): it is
+ * reported as `pending`.
  */
 export async function fetchCiStatus(
   octokit: CiOctokit,
   opts: { owner: string; repo: string; target: CiTarget },
 ): Promise<CiStatusData> {
   const { owner, repo, target } = opts;
-  let queryRef: string;
+  let sha: string;
   let label: string;
-  let sha: string | null = null;
   if (target.kind === "pr") {
     const pr = await octokit.rest.pulls.get({ owner, repo, pull_number: target.number });
-    queryRef = pr.data.head.sha;
     sha = pr.data.head.sha;
     label = pr.data.head.ref;
   } else {
-    queryRef = target.ref;
+    // A branch name moves: resolve it once so every page reads the same commit.
+    const commit = await octokit.rest.repos.getCommit({ owner, repo, ref: target.ref, per_page: 1 });
+    sha = commit.data.sha;
     label = target.ref;
   }
 
   const warnings: string[] = [];
   const [checks, statuses] = await Promise.all([
-    listCheckRuns(octokit, owner, repo, queryRef),
-    listCommitStatuses(octokit, owner, repo, queryRef).catch((e: unknown) => {
-      if (httpStatus(e) !== 403) throw e;
+    listCheckRuns(octokit, owner, repo, sha),
+    listCommitStatuses(octokit, owner, repo, sha).catch((e: unknown) => {
+      if (!isStatusesPermissionDenied(e)) throw e;
       warnings.push("commit statuses not readable (403); verdict covers check runs only");
-      return { statuses: [] as StatusLike[], sha: null, truncated: false };
+      return { statuses: [] as StatusLike[], truncated: false };
     }),
   ]);
 
   const rows = [...checks.runs.map(checkRunRow), ...statuses.statuses.map(commitStatusRow)];
   const truncated = checks.truncated || statuses.truncated;
-  if (truncated) warnings.push(`more than ${CI_MAX_PAGES * PER_PAGE} rows; list truncated`);
-  sha = sha ?? statuses.sha ?? checks.runs[0]?.head_sha ?? null;
+  let verdict = ciVerdict(rows);
+  if (truncated) {
+    let w = `more than ${CI_MAX_PAGES * PER_PAGE} rows; list truncated`;
+    // Unseen rows may fail, so a truncated listing is never reported green.
+    if (verdict === "green") {
+      verdict = "pending";
+      w += " (verdict pending: unlisted rows not seen)";
+    }
+    warnings.push(w);
+  }
 
   return {
     target: target.kind,
     pr: target.kind === "pr" ? target.number : null,
     ref: label,
     sha,
-    verdict: ciVerdict(rows),
+    verdict,
     counts: countBuckets(rows),
     checks: rows,
     truncated,
@@ -300,21 +335,27 @@ export async function fetchCiStatus(
   };
 }
 
-/** One-line human summary, e.g. `CI red for PR #12 (feat/x @ abc1234): 3 rows ...`. */
+/**
+ * One-line human summary, e.g. `CI red for PR #12 (feat/x) @ abc1234: 3 checks ...`.
+ * Warnings are appended for every verdict (including `none`) so human CLI
+ * output never drops them.
+ */
 export function ciStatusMessage(d: CiStatusData): string {
   const what = d.pr != null ? `PR #${d.pr} (${d.ref})` : d.ref;
   const at = d.sha ? ` @ ${d.sha.slice(0, 7)}` : "";
+  let msg: string;
   if (d.verdict === "none") {
-    return `CI none for ${what}${at}: no check runs or commit statuses reported`;
-  }
-  const c = d.counts;
-  let msg =
-    `CI ${d.verdict} for ${what}${at}: ${c.total} check${c.total === 1 ? "" : "s"}` +
-    ` (pass ${c.pass}, fail ${c.fail}, pending ${c.pending}, skipping ${c.skipping})`;
-  const failing = d.checks.filter((r) => r.bucket === "fail").map((r) => r.name);
-  if (failing.length) {
-    const shown = failing.slice(0, 5).join(", ");
-    msg += `; failing: ${shown}${failing.length > 5 ? `, +${failing.length - 5} more` : ""}`;
+    msg = `CI none for ${what}${at}: no check runs or commit statuses reported`;
+  } else {
+    const c = d.counts;
+    msg =
+      `CI ${d.verdict} for ${what}${at}: ${c.total} check${c.total === 1 ? "" : "s"}` +
+      ` (pass ${c.pass}, fail ${c.fail}, pending ${c.pending}, skipping ${c.skipping})`;
+    const failing = d.checks.filter((r) => r.bucket === "fail").map((r) => r.name);
+    if (failing.length) {
+      const shown = failing.slice(0, 5).join(", ");
+      msg += `; failing: ${shown}${failing.length > 5 ? `, +${failing.length - 5} more` : ""}`;
+    }
   }
   if (d.warnings.length) msg += `; warning: ${d.warnings.join("; ")}`;
   return msg;

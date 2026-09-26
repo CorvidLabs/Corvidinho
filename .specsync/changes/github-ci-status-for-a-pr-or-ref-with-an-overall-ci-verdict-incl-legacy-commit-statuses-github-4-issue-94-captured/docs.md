@@ -14,6 +14,12 @@ artifact: docs
   `data.pr`, `data.truncated`, `data.warnings`, and the per-check rows under
   `data.checks` (was the bare `data` array). Human output is one line, e.g.
   `CI red for PR #12 (feat/x) @ abc1234: 3 checks (pass 2, fail 1, pending 0, skipping 0); failing: lint`.
+  Warnings (statuses unreadable, truncated listing) end the line as
+  `; warning: ...` for every verdict, `none` included.
+- `data.sha` is the commit actually read: the PR head SHA, or the ref
+  resolved once before listing. A truncated all-pass listing reports
+  `pending`; a rate-limit or SSO 403 on statuses is an error, not a
+  check-runs-only verdict.
 - `specs/plugins/plugins.spec.md`: files list, version, Change Log row;
   REQ-plugins-094 materialized into `specs/plugins/requirements.md`.
 - No CHANGELOG / package version bump in this slice (coordinator ships).
