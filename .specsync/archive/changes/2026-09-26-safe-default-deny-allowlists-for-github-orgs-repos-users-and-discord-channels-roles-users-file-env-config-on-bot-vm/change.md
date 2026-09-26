@@ -1,6 +1,6 @@
 ---
 id: safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm
-state: implementing
+state: archived
 type: feature
 base_commit: 33a6c7f74ef2c2521c5c6ea2de8e552551552e0c
 ---

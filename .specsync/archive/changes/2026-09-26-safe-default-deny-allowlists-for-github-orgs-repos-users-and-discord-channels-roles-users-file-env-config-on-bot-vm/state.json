@@ -7,11 +7,11 @@
   "title": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
   "description": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "33a6c7f74ef2c2521c5c6ea2de8e552551552e0c",
   "created_at": 1790437520,
-  "updated_at": 1790437677,
+  "updated_at": 1790437710,
   "affected_specs": [
     "plugins",
     "cli"
