@@ -115,11 +115,19 @@ describe("session worktree binding (SESSION-WORKTREE-1..4)", () => {
       const other = join(root, "other");
       initGitRepo(def);
       initGitRepo(other);
+      // A sibling project must be an allowlisted checkout (REQ-discord-202).
+      Bun.spawnSync(
+        ["git", "remote", "add", "origin", "https://github.com/acme/other.git"],
+        { cwd: other },
+      );
+      const allowlist = emptyConfig();
+      allowlist.github.repos = ["acme/other"];
       process.env.WORKTREE_BASE_DIR = join(root, "wts");
 
       const store = new SessionStore({
         db: openCorvidinhoDb({ memory: true }),
         defaultProjectRoot: def,
+        allowlist,
       });
       const created = await store.createWithWorktree({
         channelId: "c",
