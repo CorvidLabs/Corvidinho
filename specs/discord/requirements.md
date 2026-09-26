@@ -970,4 +970,3 @@ Acceptance Criteria
 - Slash `/session start` / `/work` success: thinking becomes the answer body and the deferred reply is deleted (or thin) when collapse succeeds.
 - Fallback preserves Done embed + separate reply when editMessage is unavailable.
 
-

@@ -1,6 +1,6 @@
 ---
 id: align-session-start-and-work-with-discord-ask-7-collapse-thinking-into-one-final-message-instead-of-done-embed-plus
-state: approved
+state: implementing
 type: feature
 base_commit: 76d10237cd3ac73bb6cfaee512b281fdf6bfc26c
 ---
