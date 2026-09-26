@@ -108,7 +108,7 @@ async function bridgeWith(agent: AgentClient) {
     },
   });
   if (!result.ok || !box.handlers) throw new Error("bridge did not start");
-  return { result, handlers: box.handlers, replies, calls };
+  return { result, handlers: box.handlers, replies, calls, outbound };
 }
 
 describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
@@ -129,7 +129,7 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
         return { ok: true, sessionId, summary: "SHOULD_NOT_RUN", exitCode: 0 };
       },
     };
-    const { result, handlers, replies, calls } = await bridgeWith(agent);
+    const { result, handlers, replies, calls, outbound } = await bridgeWith(agent);
     await handlers.onMessage({
       id: "m1",
       channelId: "chan-1",
@@ -138,9 +138,13 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       content: "@bot pick a DB",
       mentionedBot: true,
     });
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain("> Postgres or SQLite?");
-    expect(result.store.getByBotMessage("bot_1")!.pendingAsk).toMatchObject(CLARIFY);
+    expect(replies).toHaveLength(0);
+    const askEdit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
+    );
+    expect(askEdit).toBeDefined();
+    const stubId = askEdit!.messageId;
+    expect(result.store.getByBotMessage(stubId)!.pendingAsk).toMatchObject(CLARIFY);
     expect(calls).toHaveLength(1);
 
     // Thin continue via reply to bot message
@@ -151,15 +155,15 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       authorBot: false,
       content: "ok",
       mentionedBot: false,
-      referencedMessageId: "bot_1",
+      referencedMessageId: stubId,
     });
-    expect(replies).toHaveLength(2);
-    expect(replies[1]!.content).toContain("> Postgres or SQLite?");
-    expect(replies[1]!.content).toContain(ASK_REPLY_HINT);
-    expect(replies[1]!.content).toContain("<@user-1>");
-    expect(replies[1]!.content).not.toContain("SHOULD_NOT_RUN");
-    expect(replies[1]!.content).not.toContain("ready when you are");
-    expect(result.store.getByBotMessage("bot_1")!.pendingAsk).toMatchObject(CLARIFY);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toContain("> Postgres or SQLite?");
+    expect(replies[0]!.content).toContain(ASK_REPLY_HINT);
+    expect(replies[0]!.content).toContain("<@user-1>");
+    expect(replies[0]!.content).not.toContain("SHOULD_NOT_RUN");
+    expect(replies[0]!.content).not.toContain("ready when you are");
+    expect(result.store.getByBotMessage(stubId)!.pendingAsk).toMatchObject(CLARIFY);
     expect(calls).toHaveLength(1); // agent not re-spawned
     expect(n).toBe(1);
     await result.stop();
@@ -177,7 +181,7 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
         };
       },
     };
-    const { result, handlers, replies, calls } = await bridgeWith(agent);
+    const { result, handlers, replies, calls, outbound } = await bridgeWith(agent);
     await handlers.onMessage({
       id: "m1",
       channelId: "chan-1",
@@ -186,6 +190,9 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       content: "@bot pick a DB",
       mentionedBot: true,
     });
+    const stubId = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("Postgres"),
+    )!.messageId;
     await handlers.onMessage({
       id: "m2",
       channelId: "chan-1",
@@ -193,10 +200,10 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       authorBot: false,
       content: "cancel",
       mentionedBot: false,
-      referencedMessageId: "bot_1",
+      referencedMessageId: stubId,
     });
     expect(replies.at(-1)!.content).toBe(ASK_CANCELLED_ACK);
-    expect(result.store.getByBotMessage("bot_1")!.pendingAsk ?? null).toBeNull();
+    expect(result.store.getByBotMessage(stubId)!.pendingAsk ?? null).toBeNull();
     expect(calls).toHaveLength(1);
     await result.stop();
   });
@@ -218,7 +225,7 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
         return { ok: true, sessionId, summary: `chose from: ${prompt.slice(0, 80)}`, exitCode: 0 };
       },
     };
-    const { result, handlers, replies, calls } = await bridgeWith(agent);
+    const { result, handlers, replies, calls, outbound } = await bridgeWith(agent);
     await handlers.onMessage({
       id: "m1",
       channelId: "chan-1",
@@ -227,6 +234,9 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       content: "@bot pick a DB",
       mentionedBot: true,
     });
+    const stubId = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
+    )!.messageId;
     await handlers.onMessage({
       id: "m2",
       channelId: "chan-1",
@@ -234,14 +244,17 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       authorBot: false,
       content: "Postgres",
       mentionedBot: false,
-      referencedMessageId: "bot_1",
+      referencedMessageId: stubId,
     });
     expect(n).toBe(2);
     expect(calls[1]).toContain("Postgres or SQLite?");
     expect(calls[1]).toContain("Human answer:");
     expect(calls[1]).toContain("Postgres");
-    expect(replies.at(-1)!.content).toContain("chose from:");
-    expect(result.store.getByBotMessage("bot_2")!.pendingAsk ?? null).toBeNull();
+    const answer = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("chose from:"),
+    );
+    expect(answer).toBeDefined();
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
     await result.stop();
   });
 });
