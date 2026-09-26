@@ -120,7 +120,11 @@ async function fixture(opts: {
     ...(opts.env ?? {}),
   };
   // Load exactly as the bridge does: file ∪ env, then DISCORD_CHANNEL_IDS.
-  const loaded = await loadAllowlist({ env, home: dir });
+  // A malformed file refuses bridge start (fail closed); for those cases model
+  // a file that broke after start (the bridge keeps the view it started with).
+  const loaded = await loadAllowlist({ env, home: dir }).catch(() =>
+    loadAllowlist({ env, home: dir, filePath: null }),
+  );
   const channelIds = [
     ...new Set([
       ...loaded.discord.channels,

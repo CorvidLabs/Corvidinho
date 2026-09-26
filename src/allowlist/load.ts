@@ -32,34 +32,196 @@ function lower(list: string[]): string[] {
   return list.map((s) => s.toLowerCase());
 }
 
-/** Minimal TOML subset: [section] + key = ["a","b"] or key = "a,b" or key = [] */
+const HEADER_RE = /^\[\s*([A-Za-z0-9_.-]+)\s*\]$/;
+const KEY_RE = /^\s*([A-Za-z0-9_]+)\s*=/;
+/** Unquoted array item / value characters. */
+const BARE_RE = /^[^\s,[\]"'#=]+/;
+
+/**
+ * Sections read as allow/deny lists, plus the top level (where a dotted
+ * `github.deny_repos = …` would land). Anything the parser cannot read there
+ * throws: a deny list is never silently dropped (fail closed).
+ */
+function isListSection(section: string): boolean {
+  return section === "" || section === "github" || section === "discord";
+}
+
+/** Error text names the line and key only, never the values. */
+function tomlError(row: number, where: string, msg: string): Error {
+  return new Error(`allowlist TOML line ${row + 1}: ${where}${msg}`);
+}
+
+function blankFrom(line: string, col: number): boolean {
+  const rest = line.slice(col).trimStart();
+  return rest === "" || rest.startsWith("#");
+}
+
+/** `"…"` (only `\"` / `\\` escapes) or `'…'` on one line, starting at `col`. */
+function readQuoted(
+  line: string,
+  col: number,
+  fail: (msg: string) => Error,
+): { text: string; end: number } {
+  const q = line[col]!;
+  let text = "";
+  for (let j = col + 1; j < line.length; j++) {
+    const c = line[j]!;
+    if (c === q) return { text, end: j + 1 };
+    if (q === '"' && c === "\\") {
+      const n = line[j + 1];
+      if (n !== '"' && n !== "\\") throw fail("unsupported escape in string");
+      text += n;
+      j++;
+      continue;
+    }
+    text += c;
+  }
+  throw fail("unterminated string");
+}
+
+/**
+ * Array starting at `lines[row][col]` (`[`); may span lines, with a trailing
+ * comma and `#` comments between items. Items are quoted strings or bare
+ * words; a quoted item holding commas is split on them, as the single-line
+ * reader always did. Returns the items and the row of the closing `]`.
+ */
+function readArray(
+  lines: string[],
+  row: number,
+  col: number,
+  where: string,
+): { items: string[]; row: number } {
+  const start = row;
+  const items: string[] = [];
+  let needItem = true;
+  col++;
+  for (;;) {
+    const line = lines[row]!;
+    while (col < line.length && (line[col] === " " || line[col] === "\t")) col++;
+    if (col >= line.length || line[col] === "#") {
+      row++;
+      col = 0;
+      const next = lines[row];
+      if (
+        next === undefined ||
+        HEADER_RE.test(next.replace(/#.*$/, "").trim()) ||
+        KEY_RE.test(next)
+      ) {
+        throw tomlError(start, where, 'unterminated array (no closing "]")');
+      }
+      continue;
+    }
+    const c = line[col]!;
+    const fail = (msg: string) => tomlError(row, where, msg);
+    if (c === "]") {
+      if (!blankFrom(line, col + 1)) throw fail('unexpected text after "]"');
+      return { items, row };
+    }
+    if (c === ",") {
+      if (needItem) throw fail('unexpected ","');
+      needItem = true;
+      col++;
+      continue;
+    }
+    if (!needItem) throw fail('expected "," or "]" between array items');
+    if (c === "[") throw fail("nested arrays are not supported");
+    if (c === '"' || c === "'") {
+      const s = readQuoted(line, col, fail);
+      items.push(...s.text.split(",").map((p) => p.trim()).filter(Boolean));
+      col = s.end;
+    } else {
+      const m = line.slice(col).match(BARE_RE);
+      if (!m) throw fail(`unexpected "${c}"`);
+      items.push(m[0]);
+      col += m[0].length;
+    }
+    needItem = false;
+  }
+}
+
+/** Non-array value on one line: `"a,b"`, `'a b'` or bare `a, b` (split on commas / whitespace). */
+function readScalar(line: string, col: number, row: number, where: string): string[] {
+  const fail = (msg: string) => tomlError(row, where, msg);
+  const c = line[col];
+  if (c === '"' || c === "'") {
+    const s = readQuoted(line, col, fail);
+    if (!blankFrom(line, s.end)) throw fail("unexpected text after string");
+    return parseList(s.text);
+  }
+  const hash = line.indexOf("#", col);
+  const raw = (hash >= 0 ? line.slice(col, hash) : line.slice(col)).trim();
+  if (!raw) throw fail("missing value");
+  if (/["'[\]=]/.test(raw)) throw fail("cannot parse value");
+  return parseList(raw);
+}
+
+/** Lenient one-line reading kept for sections that hold no allow/deny lists. */
+function legacyValue(val: string): string[] {
+  if (val.startsWith("[")) {
+    return val
+      .replace(/^\[/, "")
+      .replace(/\]$/, "")
+      .split(",")
+      .map((p) => p.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+  return parseList(val.replace(/^["']|["']$/g, ""));
+}
+
+/**
+ * Minimal TOML subset for the allowlist file (ALLOW-4): `[section]` headers
+ * and `key = value`, section names and keys lowercased. A value is an array
+ * of quoted strings / bare words (`["a", 'b', c]`, `[]`) that may span lines
+ * with a trailing comma and `#` comments, or a one-line `"a,b"` / `a b` list.
+ * Single-line files read exactly as before.
+ *
+ * Fail closed: in `[github]`, `[discord]` and the top level, any line or
+ * value outside this subset throws (line + key in the message, no values), as
+ * does a malformed `[header]` anywhere. Other sections (e.g. `[owner]`, which
+ * identity/owner.ts reads itself) keep the lenient one-line reading.
+ */
 export function parseSimpleToml(text: string): Record<string, Record<string, string[]>> {
   const out: Record<string, Record<string, string[]>> = {};
+  const lines = text.split(/\r?\n/);
   let section = "";
-  for (const lineRaw of text.split(/\r?\n/)) {
-    const line = lineRaw.replace(/#.*$/, "").trim();
+  for (let row = 0; row < lines.length; row++) {
+    const raw = lines[row]!;
+    const line = raw.replace(/#.*$/, "").trim();
     if (!line) continue;
-    const sec = line.match(/^\[([^\]]+)\]$/);
-    if (sec) {
-      section = sec[1]!.trim().toLowerCase();
+    if (line.startsWith("[")) {
+      const sec = line.match(HEADER_RE);
+      if (!sec) throw tomlError(row, "", "malformed or unsupported section header");
+      section = sec[1]!.toLowerCase();
       if (!out[section]) out[section] = {};
       continue;
     }
-    if (!section) continue;
-    const kv = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
-    if (!kv) continue;
-    const key = kv[1]!.toLowerCase();
-    const val = kv[2]!.trim();
-    if (val.startsWith("[")) {
-      const inner = val.replace(/^\[/, "").replace(/\]$/, "");
-      const parts = inner
-        .split(",")
-        .map((p) => p.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
-      out[section]![key] = parts;
-    } else {
-      out[section]![key] = parseList(val.replace(/^["']|["']$/g, ""));
+    if (!isListSection(section)) {
+      const kv = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+      if (kv) out[section]![kv[1]!.toLowerCase()] = legacyValue(kv[2]!.trim());
+      continue;
     }
+    const kv = raw.match(KEY_RE);
+    if (!kv) {
+      throw tomlError(
+        row,
+        section ? `[${section}]: ` : "",
+        "expected key = value (bare key of letters, digits and _)",
+      );
+    }
+    const key = kv[1]!.toLowerCase();
+    const where = `${section ? `[${section}].` : ""}${key}: `;
+    let col = kv[0].length;
+    while (col < raw.length && (raw[col] === " " || raw[col] === "\t")) col++;
+    let items: string[];
+    if (raw[col] === "[") {
+      const arr = readArray(lines, row, col, where);
+      items = arr.items;
+      row = arr.row;
+    } else {
+      items = readScalar(raw, col, row, where);
+    }
+    // Top-level keys are checked (fail closed) but hold nothing the loader reads.
+    if (section) out[section]![key] = items;
   }
   return out;
 }
@@ -200,7 +362,7 @@ export async function loadAllowlistFile(
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: `allowlist file read failed (${path}): ${msg}` };
+    return { ok: false, error: `allowlist file unreadable or malformed (${path}): ${msg}` };
   }
 }
 
@@ -242,6 +404,10 @@ export type LoadOptions = {
 /**
  * Load allowlist config: file (if present) then env overlays.
  * Missing file is OK — env-only still works; empty allow ⇒ deny-all at gate.
+ * A file that exists but cannot be read or parsed THROWS (fail closed): env
+ * allow overlays would otherwise admit what the file's deny lists refuse.
+ * Callers refuse on the throw (bridge / watch / daemon do not start; gates,
+ * git-push and discord-post-message refuse the action).
  */
 export async function loadAllowlist(opts: LoadOptions = {}): Promise<AllowlistConfig> {
   const env = opts.env ?? process.env;
@@ -259,14 +425,16 @@ export async function loadAllowlist(opts: LoadOptions = {}): Promise<AllowlistCo
       opts.filePath !== undefined ? opts.filePath : resolveAllowlistPath(env, home);
     if (path && existsSync(path)) {
       const loaded = await loadAllowlistFile(path);
-      if (loaded.ok) {
-        cfg = {
-          sourcePath: path,
-          github: loaded.github,
-          discord: loaded.discord,
-        };
+      if (!loaded.ok) {
+        // Never read a broken file as "no file": its deny lists would be lost
+        // while env allow still admits (ALLOW-1..6 / GITHUB-6).
+        throw new Error(`${loaded.error} — refusing to fall back to env-only allowlists`);
       }
-      // Unreadable/missing parse → empty (deny-all), never allow-all.
+      cfg = {
+        sourcePath: path,
+        github: loaded.github,
+        discord: loaded.discord,
+      };
     }
   }
 

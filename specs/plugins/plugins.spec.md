@@ -22,6 +22,7 @@ files:
   - src/allowlist/github.ts
   - src/allowlist/discord.ts
   - src/allowlist/index.ts
+  - tests/allowlist.toml-multiline.test.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/ciStatus.ts

@@ -654,6 +654,33 @@ describe("git-push (GITHUB-6, never force)", () => {
     expect((again.data as { status: string }).status).toBe("up-to-date");
   });
 
+  test("a multi-line file deny_repos refuses; a malformed file never falls back to env allow", async () => {
+    const { repo, bare } = setup();
+    process.env.CORVIDINHO_GITHUB_ALLOW_ORGS = "acme";
+
+    const multi = join(base, `allow-multi-${Date.now()}.toml`);
+    writeFileSync(multi, '[github]\ndeny_repos = [\n  "acme/widget", # keep out\n]\n');
+    process.env.CORVIDINHO_ALLOWLIST_FILE = multi;
+    const denied = await run("git-push", [], repo);
+    expect(denied.ok).toBe(false);
+    expect(denied.exitCode).toBe(3);
+    expect(denied.error).toContain("denied");
+    expect(remoteRef(bare, "feat/push")).toBeNull();
+
+    const broken = join(base, `allow-broken-${Date.now()}.toml`);
+    writeFileSync(broken, '[github]\ndeny_repos = [\n  "acme/widget"\n');
+    process.env.CORVIDINHO_ALLOWLIST_FILE = broken;
+    let refused: string;
+    try {
+      const r = await run("git-push", [], repo);
+      refused = r.ok ? "pushed" : (r.error ?? "refused");
+    } catch (e) {
+      refused = e instanceof Error ? e.message : String(e);
+    }
+    expect(refused).toContain("allowlist file");
+    expect(remoteRef(bare, "feat/push")).toBeNull();
+  });
+
   test("force, refspecs, other branches, URL remotes and detached HEAD refused", async () => {
     const { repo, bare } = setup();
     process.env.CORVIDINHO_GITHUB_ALLOW_REPOS = "acme/widget";
