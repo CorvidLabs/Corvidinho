@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 51
+version: 52
 status: draft
 files:
   - src/discord/types.ts
@@ -46,6 +46,9 @@ files:
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
+  - src/work/pr.ts
+  - src/work/pr-body.ts
+  - tests/work.pr.test.ts
   - src/discord/command-handlers/mute.ts
   - src/discord/command-handlers/schedule.ts
   - src/discord/command-handlers/announce.ts
@@ -87,6 +90,12 @@ Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`).
 
+`src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
+throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
+`WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
+`workCommitMessage` and `buildWorkPrBody` (REQ-discord-088).
+`AgentSpawnResult.task` carries the run's verify facts from its result frame.
+
 ## Invariants
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
@@ -106,6 +115,7 @@ SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
+`/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store

@@ -116,6 +116,11 @@ export type AgentSpawnResult = {
   sessionId: string;
   summary: string;
   exitCode: number;
+  /**
+   * Verify facts from the child's `result` frame (AGENT-4); absent when no
+   * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).
+   */
+  task?: { verified: boolean; verifySkipped: boolean; state?: string };
 };
 
 export const NOT_AUTHORIZED = "not authorized";

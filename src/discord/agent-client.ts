@@ -107,7 +107,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
         },
       });
-      const { exitCode, summary, totalTokens } = await collectTaskRunStream({
+      const { exitCode, summary, totalTokens, result } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
@@ -136,6 +136,16 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         sessionId,
         summary,
         exitCode,
+        // Verify facts for the /work PR gate (REQ-discord-088).
+        ...(result
+          ? {
+              task: {
+                verified: result.verified === true,
+                verifySkipped: result.verifySkipped === true,
+                state: result.state,
+              },
+            }
+          : {}),
       };
     },
   };
