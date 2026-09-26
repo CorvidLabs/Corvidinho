@@ -1,0 +1,37 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790451035,
+      "digest": "563626d733f3a9ab0f39f779f85974c7049664f909818da838585ce11842c631",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-bridge-and-session-start-and-work-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-are",
+        "title": "Discord bridge and /session start and /work pass the raw human message as humanText so SAFE-4 memory confirm tokens are extracted only from what the human typed, never from recalled memory injected into the spawn prompt (PR #128 follow-up after #131)",
+        "description": "Discord bridge and /session start and /work pass the raw human message as humanText so SAFE-4 memory confirm tokens are extracted only from what the human typed, never from recalled memory injected into the spawn prompt (PR #128 follow-up after #131)",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Behavior is specified by REQ-discord-021 (confirm tokens only from the human's message) in the companion memory-hardening change; this change only threads the raw text through the call sites",
+        "acceptance_criteria": [
+          "Bridge message path, /session start and /work pass the raw human message as humanText; the spawn env carries only tokens found in humanText; a token present only in the memory-enriched prompt is not treated as human-supplied (fixture); tests + SpecSync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
