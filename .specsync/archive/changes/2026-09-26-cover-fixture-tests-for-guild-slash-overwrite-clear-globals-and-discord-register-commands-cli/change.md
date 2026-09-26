@@ -1,6 +1,6 @@
 ---
 id: cover-fixture-tests-for-guild-slash-overwrite-clear-globals-and-discord-register-commands-cli
-state: implementing
+state: archived
 type: documentation
 base_commit: 4c2b3a52279d8b76bb0ecc3701357e21c4927d5c
 ---
