@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-12-typed-git-tools-145-and-durable-watch-sessions-142-package-0-0-12-changelog-status",
+  "implementation_commit": "177e038f96ce6032a14734d6b0d1620e8f5a790f",
+  "implementation_tree": "80e5e190ac0438d3015bc026e9f389cac81f6c78",
+  "contract_digest": "de765e2c25a13e2a6515183d3477895d381f1f464b652f0de1e60c460a81226b",
+  "workspace_digest": "2218a77abfaa1cbe74d3c8b09c6eaca4115c8ef3f6bade64d422baaed6d4aaa9",
+  "closing_digest": "884e62590ed4ddd5477b046a75445678ea0eaed4d6f79e30b24e20eea0b030e7",
+  "review_digest": "04e41e2c81011356a5be7acb8377977bef4465a658380cffde864ba76a611390",
+  "finalization_digest": "9075b61e5c02e74f3baa4dcd4cce30d59224f83a77e26fabe0964e334b6f6b36",
+  "timestamp": 1790455356
+}
