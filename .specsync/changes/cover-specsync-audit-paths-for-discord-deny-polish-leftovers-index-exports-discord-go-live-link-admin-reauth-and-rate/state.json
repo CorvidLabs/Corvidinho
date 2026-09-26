@@ -7,10 +7,11 @@
   "title": "Cover SpecSync audit paths for Discord deny polish leftovers: index exports, DISCORD-GO-LIVE link, admin-reauth and rate-mute deny asserts",
   "description": "Cover SpecSync audit paths for Discord deny polish leftovers: index exports, DISCORD-GO-LIVE link, admin-reauth and rate-mute deny asserts",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "5c4dc52158e5480b1efdf99dbab7891c0ba9bce8",
   "created_at": 1790446032,
-  "updated_at": 1790446043,
+  "updated_at": 1790446044,
   "affected_specs": [
     "discord"
   ],
