@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-watch-mentions-fixture-for-watch-reliability-tests",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "8f26f924638913815042cfe76ee528f3d3b760d0",
+      "contract_digest": "c02a042dfc6560a531c85b3753ada44db9a8863b75581f2040c61ccedff9ff97",
+      "execution_digest": "5df2079412287b7d5f1be6a0ab5478e7017ec4d110e98ac587809a36d001803e",
+      "workspace_digest": "caa78285e8410234141358ee2307c21fee05e23c594fa2fd7801cb7b338f2848",
+      "timestamp": 1790446604
+    }
+  ]
+}

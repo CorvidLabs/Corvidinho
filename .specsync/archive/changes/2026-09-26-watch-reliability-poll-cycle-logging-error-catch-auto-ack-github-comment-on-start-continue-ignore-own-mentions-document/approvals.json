@@ -1,0 +1,104 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790446197,
+      "digest": "85ba7e7a7f695065e7d0883d5cf30bef65384f51426f936fe50972b8a5cbe007",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document",
+        "title": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
+        "description": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "watch"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "docs/WATCH.md",
+          "specs/cli/cli.spec.md",
+          "specs/watch/requirements.md",
+          "specs/watch/watch.spec.md",
+          "src/watch/ack.ts",
+          "src/watch/index.ts",
+          "src/watch/poller.ts",
+          "src/watch/searcher.ts",
+          "tests/watch.ack.test.ts",
+          "tests/watch.poller.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Every poll cycle logs fetched/new/started/continued/refused/skipped; pollOnce errors are caught and logged (not swallowed by void); when start/continue from mention or issue_comment (sender !== watch username), post short GitHub ack comment with Made with Corvidinho footer once per event id; ignore own corvid-agent mentions/comments in searcher; docs/WATCH.md notes org search per_page=30 pagination bury risk; fixture tests cover logging/ack skip/own-mention skip without live tokens; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "da4de8bffce43718b909ee2edfa897f80b59eefa0dce79a8c36138d8ec1f5b4b",
+        "watch": "e81c8fe0edcc8c60dfc7983f5d56b4419621a083a49c56e3ae0295e1237f1fae"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790446307,
+      "digest": "85ba7e7a7f695065e7d0883d5cf30bef65384f51426f936fe50972b8a5cbe007",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document",
+        "title": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
+        "description": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "watch"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "docs/WATCH.md",
+          "specs/cli/cli.spec.md",
+          "specs/watch/requirements.md",
+          "specs/watch/watch.spec.md",
+          "src/watch/ack.ts",
+          "src/watch/index.ts",
+          "src/watch/poller.ts",
+          "src/watch/searcher.ts",
+          "tests/watch.ack.test.ts",
+          "tests/watch.poller.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Every poll cycle logs fetched/new/started/continued/refused/skipped; pollOnce errors are caught and logged (not swallowed by void); when start/continue from mention or issue_comment (sender !== watch username), post short GitHub ack comment with Made with Corvidinho footer once per event id; ignore own corvid-agent mentions/comments in searcher; docs/WATCH.md notes org search per_page=30 pagination bury risk; fixture tests cover logging/ack skip/own-mention skip without live tokens; SpecSync+fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "da4de8bffce43718b909ee2edfa897f80b59eefa0dce79a8c36138d8ec1f5b4b",
+        "watch": "db5c0676e66de0e2a91d71831bb6e1363d6ff18452133f49031886d382912675"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790446329,
+      "digest": "20cac9eec4dd14f0d9a0101c195fd009ac4d914d6af67371be7c399c850815bc",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

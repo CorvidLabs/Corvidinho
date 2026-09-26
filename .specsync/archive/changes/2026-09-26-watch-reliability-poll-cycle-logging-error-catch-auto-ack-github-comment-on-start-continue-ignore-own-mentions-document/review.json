@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "14a1cb0e5c88a524fb6da80bb48dff8af3f5af63",
+  "contract_digest": "85ba7e7a7f695065e7d0883d5cf30bef65384f51426f936fe50972b8a5cbe007",
+  "execution_digest": "5857e9f8ec53cf63fc7d343e1618b643e192b2cd380221f43667b57748ab65cd",
+  "workspace_digest": "e04a4bea00ae2aef17dba14e1d14a47e54f89e8097fa70c2d0bb399089352b43",
+  "timestamp": 1790446326
+}

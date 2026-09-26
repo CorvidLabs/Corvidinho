@@ -2,6 +2,8 @@
  * WATCH searcher — injectable client; Octokit live path; fixtures for CI.
  * Steals DetectedMention shapes from corvid-agent; uses typed API not shell gh.
  * Assignment events: when watch username is in issue/PR assignees (#48).
+ * Own watch-username mentions/comments skipped (REQ-watch-007).
+ * Search per_page=100; org-wide results can still bury pings beyond one page.
  */
 
 import { Octokit } from "@octokit/rest";
@@ -132,7 +134,7 @@ export function createOctokitSearchClient(token: string): SearchClient {
         q,
         sort: "updated",
         order: "desc",
-        per_page: 30,
+        per_page: 100,
       });
       return (res.data.items ?? []).map((it) => {
         const htmlUrl = it.html_url ?? "";
@@ -212,8 +214,11 @@ export async function fetchWatchEvents(opts: {
       const parts = splitRepo(item.repo);
       if (!parts) continue;
 
-      // Issue/PR body mention
-      if (containsMention(item.body, username)) {
+      // Issue/PR body mention (skip own watch-username — REQ-watch-007)
+      if (
+        containsMention(item.body, username) &&
+        item.user.toLowerCase() !== username.toLowerCase()
+      ) {
         events.push({
           id: `issue-${item.repo}#${item.number}`,
           type: "issues",
@@ -256,6 +261,8 @@ export async function fetchWatchEvents(opts: {
       );
       for (const c of comments) {
         if (!containsMention(c.body, username)) continue;
+        // Skip own comments (no self-loop on acks / chatter) — REQ-watch-007
+        if (c.user.toLowerCase() === username.toLowerCase()) continue;
         events.push({
           id: `comment-${c.id}`,
           type: "issue_comment",

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-watch-mentions-fixture-for-watch-reliability-tests",
+  "slug": "cover-watch-mentions-fixture-for-watch-reliability-tests",
+  "title": "Cover watch mentions fixture for watch reliability tests",
+  "description": "Cover watch mentions fixture for watch reliability tests",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "8f26f924638913815042cfe76ee528f3d3b760d0",
+  "created_at": 1790446548,
+  "updated_at": 1790446716,
+  "affected_specs": [
+    "watch"
+  ],
+  "affected_paths": [
+    "tests/fixtures/watch/mentions.json"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Fixture-only test data exercises existing watch behavior; the canonical watch spec already covers the behavior, so no spec text changes are needed.",
+  "acceptance_criteria": [
+    "The existing watch reliability change fully covers tests/fixtures/watch/mentions.json, and specsync change audit reports no uncovered meaningful paths."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
