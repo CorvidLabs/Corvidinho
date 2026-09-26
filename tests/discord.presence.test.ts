@@ -15,7 +15,7 @@ import {
 
 describe("formatPresenceVersionString", () => {
   test("prefixes v when missing", () => {
-    expect(formatPresenceVersionString("0.0.3")).toBe("v0.0.3");
+    expect(formatPresenceVersionString("0.0.4")).toBe("v0.0.4");
   });
 
   test("keeps existing v prefix", () => {

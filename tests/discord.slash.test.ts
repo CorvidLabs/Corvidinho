@@ -72,7 +72,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     workStore,
     allowlist: over.allowlist ?? allowCfg(),
     agent: over.agent ?? createEchoAgentClient({ delayMs: 0 }),
-    version: over.version ?? "0.0.3",
+    version: over.version ?? "0.0.4",
     protocolVersion: over.protocolVersion ?? CORVIDINHO_PROTOCOL_VERSION,
     startedAt: over.startedAt ?? Date.now() - 90_000,
     channelIds: over.channelIds ?? ["chan-allowed"],
@@ -178,7 +178,7 @@ describe("slash handlers", () => {
     const result = await handleSlashInteraction(ctx, ix);
     expect(result.ok).toBe(true);
     const body = ix.replies[0]?.content ?? "";
-    expect(body).toContain("v0.0.3");
+    expect(body).toContain("v0.0.4");
     expect(body).toContain("Protocol: 1");
     expect(body).toContain("Active sessions: 1");
     expect(body).toContain("Channels (allowlist): 1");
@@ -272,7 +272,7 @@ describe("slash handlers", () => {
 describe("formatStatusReport", () => {
   test("includes LLM host without key and omits git when absent", () => {
     const body = formatStatusReport({
-      version: "0.0.3",
+      version: "0.0.4",
       protocolVersion: 1,
       startedAt: Date.now() - 60_000,
       channelCount: 2,
@@ -286,7 +286,7 @@ describe("formatStatusReport", () => {
         CORVIDINHO_LLM_BASE_URL: "https://llm.example/v1",
       },
     });
-    expect(body).toContain("**Corvidinho** v0.0.3");
+    expect(body).toContain("**Corvidinho** v0.0.4");
     expect(body).toContain("LLM: mini @ llm.example");
     expect(body).not.toContain("sk-should");
     expect(body).not.toContain("Git tip:");

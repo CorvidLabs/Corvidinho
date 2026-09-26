@@ -21,7 +21,7 @@ export type VersionPresenceActivity = {
 
 /**
  * Build the Custom Status activity showing the shared package version.
- * Example state: `v0.0.3`.
+ * Example state: `v0.0.4`.
  */
 export function buildVersionPresenceActivity(
   version: string = VERSION,

@@ -53,7 +53,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     scheduleStore: over.scheduleStore ?? new ScheduleStore(),
     allowlist: over.allowlist ?? allowCfg(),
     agent: over.agent ?? createEchoAgentClient({ delayMs: 0 }),
-    version: over.version ?? "0.0.3",
+    version: over.version ?? "0.0.4",
     protocolVersion: over.protocolVersion ?? CORVIDINHO_PROTOCOL_VERSION,
     startedAt: over.startedAt ?? Date.now() - 90_000,
     channelIds: over.channelIds ?? ["chan-allowed"],

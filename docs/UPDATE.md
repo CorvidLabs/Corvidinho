@@ -6,7 +6,7 @@ Ship cuts are **GitHub Releases** on tags `v*` — see [Releases](https://github
 
 ```bash
 cd /path/to/Corvidinho
-CORVIDINHO_REF=v0.0.3 ./scripts/corvidinho-update.sh
+CORVIDINHO_REF=v0.0.4 ./scripts/corvidinho-update.sh
 ```
 
 Full operator notes (systemd / `BRIDGE_CMD`, dry-run, doctor): **[`docs/BOX-UPDATE.md`](BOX-UPDATE.md)**.

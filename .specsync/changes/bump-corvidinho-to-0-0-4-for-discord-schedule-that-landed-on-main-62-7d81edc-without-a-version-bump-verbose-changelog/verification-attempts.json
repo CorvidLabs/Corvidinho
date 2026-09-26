@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790448322,
+      "commit": "7d81edc9d105fbea329e71deca99bfe05f100a27",
+      "contract_digest": "b2c96e06220e872800040f0299cbcc9c82e4b6a87565fad443add8688418d116",
+      "execution_digest": "7cc1bbb97ee2cb2d6bd941bbf2c21880c3b22365fedbb71c5b978ac5461acdc7",
+      "workspace_digest": "1b2b266f6ec7c2b480a0e0d175e792398a74adacd3b4ff7a7d8ac96b2364c88c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790448329,
+      "commit": "7d81edc9d105fbea329e71deca99bfe05f100a27",
+      "contract_digest": "b2c96e06220e872800040f0299cbcc9c82e4b6a87565fad443add8688418d116",
+      "execution_digest": "7cc1bbb97ee2cb2d6bd941bbf2c21880c3b22365fedbb71c5b978ac5461acdc7",
+      "workspace_digest": "1b2b266f6ec7c2b480a0e0d175e792398a74adacd3b4ff7a7d8ac96b2364c88c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    }
+  ]
+}

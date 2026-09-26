@@ -1,10 +1,23 @@
 # Changelog
 
-## 0.0.3
+## 0.0.4
 
 ### Discord
 
-- `/schedule` list|create|pause|resume|delete — recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / #57); 5m min cadence; ADMIN mutations; cooperative ~60s ticker that does not starve HEAR/WATCH; SQLite schedules in shared store.
+- **`/schedule`** slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / #57 → [#62](https://github.com/CorvidLabs/Corvidinho/pull/62) / `7d81edc`).
+  - Subcommands: **list** | **create** | **pause** | **resume** | **delete**.
+  - Single-project only (no templates / flock / council / on-chain).
+  - Human cadence with a **5-minute minimum** interval.
+  - ADMIN mutations re-checked at the handler (empty admin allowlist = deny-all).
+  - Schedules persisted in **SQLite** via the shared store (`ScheduleStore`).
+  - Cooperative **~60s ticker** that does not starve HEAR / WATCH ingress.
+- Discord Custom Status (DISCORD-12) continues to show `vX.Y.Z` from `package.json` via `src/version.ts` — this cut bumps presence to **v0.0.4** after bridge restart (ops).
+
+### Session
+
+- **SESSION durable** SQLite `SessionStore` / `WorkStore` + soft TTL (SESSION-1..4 / [#61](https://github.com/CorvidLabs/Corvidinho/pull/61)) — landed on main after the v0.0.3 tag; kept as the bridge path under `/schedule`.
+
+## 0.0.3
 
 ### Ops
 
