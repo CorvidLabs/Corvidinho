@@ -57,10 +57,15 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `loadProjectInstructions`, `renderProjectInstructions`,
 `describeProjectInstructions`, `withProjectInstructions`,
 `PROJECT_INSTRUCTION_FILES` (`AGENTS.md`, `CLAUDE.md`),
-`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER` and
-`projectInstructionsWarning`
+`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER`,
+`NOT_COMMITTED_REASON` and `projectInstructionsWarning`
 (re-exported from `src/agent/index.ts`). `createTaskExecute` loads them from
 `cwd` by default; `projectInstructions: false` opts out.
+`ProjectInstructions.source` is `commit` when the project root holds `.git`
+(files are read from the `HEAD` commit through read-only git: `ls-tree`,
+`cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
+git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
+`uncommitted: true` when its working-tree copy differs from `HEAD`.
 
 ## Invariants
 
@@ -78,6 +83,15 @@ above cwd, else cwd), never from a parent directory above it. Each file is
 capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
 project instructions that cannot widen SAFE-1 consent, the tool allowlist or
 the capability tier. The loader never throws.
+
+In a git project only the `HEAD` copy of an instruction file reaches the
+system prompt. The file tools (files-write / files-edit, not dangerous) can
+change the working tree without consent, so working-tree edits and untracked
+instruction files are never loaded; only a commit, which needs a dangerous,
+consented tool such as `git-commit` (SAFE-1), changes what later runs see. A
+`.git` that git cannot read never falls back to the working tree. Committed
+symlinks are followed only as paths inside the commit, never through the
+filesystem.
 
 ## Behavioral Examples
 
@@ -101,6 +115,10 @@ the capability tier. The loader never throws.
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
 | Instruction file over 16 KiB | first 16 KiB kept (UTF-8 boundary) plus truncation marker; one-time Text note |
+| Git project: working-tree AGENTS.md / CLAUDE.md differs from HEAD | HEAD copy loaded; one-time Text note says working-tree changes were not loaded |
+| Git project: instruction file untracked, or HEAD unborn | refused as not committed; named in the Text note |
+| Git project: `.git` unusable (not a repo top level, git missing) | present files refused; no working-tree fallback |
+| Git project: committed symlink leaves the commit, is broken, hops a symlinked dir, or loops | refused; named in the Text note |
 
 ## Dependencies
 
