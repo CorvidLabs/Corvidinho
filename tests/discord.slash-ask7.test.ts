@@ -234,7 +234,7 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       await handleSessionStart(slashCtx(store, outbound, tracked), ix);
 
       const doneBlob = embedEdits
-        .map((e) => `${e.description ?? ""}|${e.title ?? ""}|${e.footer?.text ?? ""}`)
+        .map((e) => `${e.description ?? ""}|${e.footer?.text ?? ""}`)
         .join("\n");
       expect(doneBlob).toContain("✅ Done");
       expect(getDeleted()).toBe(0);

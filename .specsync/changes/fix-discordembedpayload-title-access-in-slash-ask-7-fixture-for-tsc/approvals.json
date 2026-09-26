@@ -1,0 +1,35 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790466761,
+      "digest": "7a514ae06475b429e9b1c6c065c59659b50b1256835c2fbe07d87848959cd23e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fix-discordembedpayload-title-access-in-slash-ask-7-fixture-for-tsc",
+        "title": "Fix DiscordEmbedPayload title access in slash ASK-7 fixture for tsc",
+        "description": "Fix DiscordEmbedPayload title access in slash ASK-7 fixture for tsc",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "tests/discord.slash-ask7.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Typecheck-only fix in existing slash ASK-7 fixture; no REQ delta",
+        "acceptance_criteria": [
+          "tsc --noEmit clean; slash-ask7 tests still pass without referencing DiscordEmbedPayload.title."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
