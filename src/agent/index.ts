@@ -140,11 +140,12 @@ export type {
   SpendWindow,
 } from "./spend.ts";
 export { createSpendAlertOutbox } from "./spend-outbox.ts";
-export type { SpendAlertOutbox, TakenSpendWarning } from "./spend-outbox.ts";
+export type { SpendAlertOutbox, SpendCapPingClaim, TakenSpendWarning } from "./spend-outbox.ts";
 export {
   claimSpendCapPing,
   claimSpendWarnings,
   ensureSpendAlerts,
+  releaseSpendCapPing,
   releaseSpendWarnings,
 } from "./spend-alerts.ts";
 export {

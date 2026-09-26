@@ -409,8 +409,7 @@ export async function startBridge(
         // Thin ack: restate pending question once; do not spawn agent.
         const restated = formatAskReply({
           ask: session.pendingAsk,
-          // SAFE-8: restating a spend-cap ask pings once per cap episode.
-          owner: askPingOwner(session.pendingAsk, config.owner, spendAlerts).owner,
+          owner: config.owner,
           requesterDiscordId: msg.authorId,
           replyHint: true,
         });
@@ -577,7 +576,12 @@ export async function startBridge(
           })
         : null;
       if (ask) {
-        store.setPendingAsk(session, result.ask!);
+        // AUTONOMY-5/6: a clarify or stuck ask waits for the requester's
+        // answer. A spend-cap stop is not answerable by a reply (SAFE-8), so
+        // it is never the pending ask: a later "ok" runs normally and a
+        // substantive reply carries no cap text into the prompt.
+        const pendingAsk = result.ask!.reason === "spend-cap" ? null : result.ask!;
+        if (pendingAsk || session.pendingAsk) store.setPendingAsk(session, pendingAsk);
         await (ask.failed
           ? thinking.fail(ask.status, thinkExtras)
           : thinking.done(ask.status, thinkExtras));
@@ -606,25 +610,35 @@ export async function startBridge(
       if (replyRef.fn) {
         // SAFE-8: a pending 80% spend warning rides the reply and pings the owner.
         const pending = spendAlerts.takeWarning(result.spendWarning);
-        const sent = await replyRef.fn(
-          withSpendWarningPost(
-            {
-              channelId,
-              content: body,
-              replyToMessageId: msg.id,
-              ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
-            },
-            pending?.warning,
-            config.owner,
-          ),
-        );
-        if (!sent) pending?.release();
+        let sent: Awaited<ReturnType<NonNullable<typeof replyRef.fn>>> = null;
+        try {
+          sent = await replyRef.fn(
+            withSpendWarningPost(
+              {
+                channelId,
+                content: body,
+                replyToMessageId: msg.id,
+                ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
+              },
+              pending?.warning,
+              config.owner,
+            ),
+          );
+        } finally {
+          // Not posted: the next post carries the warning and the cap ping.
+          if (!sent) {
+            pending?.release();
+            askOwner?.release();
+          }
+        }
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
         }
       } else {
         // Dry / test: synthesize bot message id so reply continuity can be tested.
         store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+        // Nothing was posted: the cap ping stays for the next post.
+        askOwner?.release();
       }
     },
     onSlash: async (interaction) => {

@@ -222,7 +222,7 @@ export async function handleWorkCommand(
     owner: ctx.owner,
     outbox: ctx.spendAlerts,
     ask: result.ask,
-    pingOwnerForAsk: Boolean(askOwner?.owner),
+    askOwner,
     spendWarning: result.spendWarning,
     label: `/work \`${task.id}\``,
   });

@@ -32,6 +32,7 @@ import {
   withSpendWarningPost,
 } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
+import { SessionStore } from "../src/discord/session-store.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { THINKING_COLORS, type DiscordEmbedPayload } from "../src/discord/thinking-status.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
@@ -102,7 +103,13 @@ describe("80% warning line (formatSpendWarningReply / withSpendWarningPost)", ()
 
 type Reply = { channelId: string; content: string; replyToMessageId?: string; mentionUserIds?: string[] };
 
-async function bridgeWith(agent: AgentClient, env: Record<string, string>, db = openCorvidinhoDb({ memory: true })) {
+async function bridgeWith(
+  agent: AgentClient,
+  env: Record<string, string>,
+  db = openCorvidinhoDb({ memory: true }),
+  /** True while gateway posts should fail (the live gateway then returns null). */
+  failReplies: () => boolean = () => false,
+) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const outbound = memoryThinkingOutbound();
   const replies: Reply[] = [];
@@ -125,6 +132,7 @@ async function bridgeWith(agent: AgentClient, env: Record<string, string>, db = 
     gatewayFactory: async (_cfg, handlers) => {
       box.handlers = handlers;
       handlers.reply = async (opts) => {
+        if (failReplies()) return null;
         replies.push(opts);
         return { messageId: `bot_${replies.length}` };
       };
@@ -459,11 +467,11 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     await result.stop();
   });
 
-  test("a thin reply to a spend-cap ask restates it without pinging the owner again", async () => {
-    let calls = 0;
+  test("a spend-cap stop is not the pending ask: a later \"ok\" runs the agent (no restated cap ask), a substantive reply carries no cap text", async () => {
+    const prompts: string[] = [];
     const agent: AgentClient = {
-      async runChat({ sessionId }) {
-        calls += 1;
+      async runChat({ sessionId, prompt }) {
+        prompts.push(prompt);
         return { ...CAP_RESULT, sessionId };
       },
     };
@@ -473,21 +481,41 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     });
     await handlers.onMessage(MENTION);
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    await handlers.onMessage({
-      id: "m2",
+    if (!result.ok) throw new Error("bridge did not start");
+    expect(result.store.getByBotMessage("bot_1")?.pendingAsk ?? null).toBeNull();
+    const reply = (id: string, content: string, ref: string) => ({
+      id,
       channelId: "chan-1",
       authorId: MENTION.authorId,
       authorBot: false,
-      content: "ok",
+      content,
       mentionedBot: false,
-      referencedMessageId: "bot_1",
+      referencedMessageId: ref,
     });
-    expect(calls).toBe(1);
+    await handlers.onMessage(reply("m2", "ok", "bot_1"));
+    // The agent ran again (still at the cap: the ask posts, no second ping).
+    expect(prompts).toHaveLength(2);
     expect(replies[1]!.content).toContain(SPEND_CAP_HEADLINE);
-    expect(replies[1]!.content).not.toContain("<@");
-    expect(replies[1]!.content).not.toContain(ASK_REPLY_HINT);
     expect(replies[1]!.mentionUserIds).toEqual([]);
+    await handlers.onMessage(reply("m3", "the cap is raised now, please continue", "bot_2"));
+    expect(prompts).toHaveLength(3);
+    expect(prompts[2]).not.toContain("Prior clarifying question");
+    expect(prompts[2]).not.toContain("Daily spend cap reached");
     await result.stop();
+  });
+
+  test("a spend-cap ask persisted as pending by an earlier build loads as no pending ask", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const now = Date.now();
+    db.run(
+      `INSERT INTO discord_sessions (id, channel_id, user_id, created_at, last_activity_at, pending_ask)
+       VALUES ('sess_cap', 'chan-1', 'u', ?, ?, ?), ('sess_clarify', 'chan-1', 'u', ?, ?, ?)`,
+      [now, now, JSON.stringify(CAP_ASK), now, now, JSON.stringify({ reason: "clarify", question: "A or B?" })],
+    );
+    db.run("INSERT INTO discord_session_bot_messages (bot_message_id, session_id) VALUES ('b_cap', 'sess_cap'), ('b_clarify', 'sess_clarify')");
+    const store = new SessionStore({ db });
+    expect(store.getByBotMessage("b_cap")?.pendingAsk).toBeNull();
+    expect(store.getByBotMessage("b_clarify")?.pendingAsk).toEqual({ reason: "clarify", question: "A or B?" });
   });
 
   test("/work with a clarify ask: blocked, addresses the requester, no owner post (AUTONOMY-4)", async () => {
@@ -534,14 +562,14 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     await replyWithOwnerNotice({
       interaction: { channelId: "c", reply: async (p) => void edits.push(p), editReply: async (p) => void edits.push(p) },
       body: "Work task `w` (blocked).",
-      notice: { content: `💸 <@${OWNER_ID}> x`, mentionUserIds: [OWNER_ID] },
+      notice: { content: `💸 <@${OWNER_ID}> x`, mentionUserIds: [OWNER_ID], release: () => {} },
     });
     expect(edits.map((e) => e.content)).toEqual([`Work task \`w\` (blocked).\n\n💸 <@${OWNER_ID}> x`]);
     const edits2: SlashReplyPayload[] = [];
     await replyWithOwnerNotice({
       interaction: { channelId: "c", reply: async (p) => void edits2.push(p), editReply: async (p) => void edits2.push(p) },
       body: "B",
-      notice: { content: "N", mentionUserIds: [] },
+      notice: { content: "N", mentionUserIds: [], release: () => {} },
       post: async () => null,
     });
     expect(edits2.map((e) => e.content)).toEqual(["B", "B\n\nN"]);
@@ -550,7 +578,7 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
   test("schedule: a spend-cap ask already pinged this episode posts without a ping", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const outbox = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" } });
-    expect(outbox.claimCapPing()).toBe(true); // e.g. a chat reply pinged already
+    expect(outbox.claimCapPing()).not.toBeNull(); // e.g. a chat reply pinged already
     const store = new ScheduleStore();
     const posts: Array<{ channelId: string; content: string; mentionUserIds?: string[] }> = [];
     const past = Date.now() - 60_000;
@@ -589,6 +617,144 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     expect(posts[0]!.content).toContain(SPEND_CAP_HEADLINE);
     expect(posts[0]!.content).not.toContain("<@");
     expect(posts[0]!.mentionUserIds).toEqual([]);
+  });
+});
+
+describe("a post that did not go out hands back its warning and cap ping (review #160)", () => {
+  function pendingWarningDb() {
+    const db = openCorvidinhoDb({ memory: true });
+    const ledger = new SpendLedger(db);
+    ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    expect(ledger.noteWarning({ capMicroUsd: 1_000_000, now: Date.now() })).not.toBeNull();
+    return db;
+  }
+  const expired = () => new Error("Unknown interaction (token expired)");
+
+  test("/work whose final reply fails (expired token) still posts the owner notice with the warning; the error is re-thrown", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      pendingWarningDb(),
+    );
+    const { ix } = slashInteraction("work", { description: "add storage" });
+    ix.editReply = async () => {
+      throw expired();
+    };
+    await expect(handlers.onSlash!(ix)).rejects.toThrow("token expired");
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toMatch(new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
+    expect(replies[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+
+  test("/session start whose reply and notice both fail hands back the warning and the cap ping: the next chat reply carries both", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    let failing = true;
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      pendingWarningDb(),
+      () => failing,
+    );
+    const { ix } = slashInteraction("session", { topic: "storage" });
+    ix.editReply = async () => {
+      throw expired();
+    };
+    await expect(handlers.onSlash!(ix)).rejects.toThrow("token expired");
+    expect(replies).toHaveLength(0);
+    failing = false;
+    await handlers.onMessage(MENTION);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(replies[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+
+  test("chat: a spend-cap reply that failed to post does not use up the episode's owner ping", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    let failing = true;
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      openCorvidinhoDb({ memory: true }),
+      () => failing,
+    );
+    await handlers.onMessage(MENTION);
+    expect(replies).toHaveLength(0);
+    failing = false;
+    await handlers.onMessage({ ...MENTION, id: "m2" });
+    expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+
+  test("schedule: a spend-cap post that failed keeps no ping key and hands the cap ping back; the next tick pings", async () => {
+    const outbox = createSpendAlertOutbox({ db: openCorvidinhoDb({ memory: true }), env: { [SPEND_CAP_ENV]: "5" } });
+    const store = new ScheduleStore();
+    const posts: Array<{ channelId: string; content: string; mentionUserIds?: string[] }> = [];
+    const s = store.create({
+      name: "Nightly",
+      cronExpression: "0 * * * *",
+      project: "proj-a",
+      prompt: "do thing",
+      createdByUserId: "admin",
+      channelId: "chan-allowed",
+      now: Date.now() - 7_200_000,
+    });
+    const cfg = emptyConfig();
+    cfg.discord.channels = ["chan-allowed"];
+    let failing = true;
+    const svc = new SchedulerService({
+      store,
+      agent: {
+        async runChat({ sessionId }) {
+          return { ...CAP_RESULT, sessionId };
+        },
+      },
+      allowlist: cfg,
+      manual: true,
+      useWorktrees: false,
+      owner: OWNER,
+      spendAlerts: outbox,
+      outbound: {
+        post: async (p) => {
+          if (failing) return false;
+          posts.push(p);
+          return true;
+        },
+      },
+    });
+    const runDue = async () => {
+      s.nextRunAt = Date.now() - 60_000;
+      await svc.tick();
+      for (let i = 0; i < 50 && svc.runningIds().length > 0; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    await runDue();
+    expect(posts).toHaveLength(0);
+    expect(store.get(s.id)?.askPingKey ?? null).toBeNull();
+    failing = false;
+    await runDue();
+    svc.stop();
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
   });
 });
 

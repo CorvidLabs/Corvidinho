@@ -9,7 +9,9 @@
  * the cap. The row stays undelivered until the Discord bridge — the only
  * surface that knows the owner — claims it on its next post and pings the
  * owner (src/agent/spend-outbox.ts). A warning is never used up by a run whose
- * surface could not show it.
+ * surface could not show it, nor by a post made while spend is back under 80%
+ * (it stays pending, still disarming its crossing, until a post sees 80%
+ * again or it is 24 h old).
  *
  * Kinds (constants; the table holds no free text, SAFE-6):
  *  - `warn`  80% reached while the warning was armed (disarms it).
@@ -87,12 +89,14 @@ function lastRearm(db: Database, capMicroUsd: number): number {
 function insertAlert(
   db: Database,
   a: { kind: string; now: number; capMicroUsd: number; spentMicroUsd: number; deliveredAt?: number },
-): void {
+): string {
+  const id = crypto.randomUUID();
   db.run(
     `INSERT INTO spend_alerts (id, ts, kind, cap_micro_usd, spent_micro_usd, delivered_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [crypto.randomUUID(), a.now, a.kind, a.capMicroUsd, a.spentMicroUsd, a.deliveredAt ?? null],
+    [id, a.now, a.kind, a.capMicroUsd, a.spentMicroUsd, a.deliveredAt ?? null],
   );
+  return id;
 }
 
 /** Armed unless a `kind` row for this cap value is newer than its last re-arm and < 24 h old. */
@@ -161,16 +165,24 @@ export function recordSpendWarning(
 
 export type ClaimedSpendWarnings = {
   ids: string[];
-  /** The latest claimed warning as recorded. */
+  /** Spend to report (current, else as recorded) against the latest warning's cap. */
   latest: { spentMicroUsd: number; capMicroUsd: number };
 };
 
 /**
  * Claim every undelivered `warn` row of the last 24 h (marks it delivered)
  * in one IMMEDIATE transaction, so two posters never both deliver it.
- * Null when there is nothing to deliver.
+ * `currentSpentMicroUsd` (read inside the transaction) is the spend to
+ * report; while it is back under 80% of the latest warning's cap nothing is
+ * claimed and the rows stay pending: the crossing stays disarmed (no second
+ * `warn` row), so the first post that sees 80% again delivers it once.
+ * Null when there is nothing to deliver now.
  */
-export function claimSpendWarnings(db: Database, now: number): ClaimedSpendWarnings | null {
+export function claimSpendWarnings(
+  db: Database,
+  now: number,
+  currentSpentMicroUsd?: () => number,
+): ClaimedSpendWarnings | null {
   const run = db.transaction((): ClaimedSpendWarnings | null => {
     const rows = db
       .query(
@@ -180,13 +192,22 @@ export function claimSpendWarnings(db: Database, now: number): ClaimedSpendWarni
       )
       .all(SPEND_ALERT_WARN, now - WINDOW_MS) as Array<{ id: string; cap: number; spent: number }>;
     if (rows.length === 0) return null;
+    const last = rows[rows.length - 1]!;
+    let spent = last.spent;
+    if (currentSpentMicroUsd) {
+      try {
+        spent = currentSpentMicroUsd();
+      } catch {
+        // Keep the recorded amount.
+      }
+    }
+    if (!atWarnThreshold(spent, last.cap)) return null;
     const ids = rows.map((r) => r.id);
     db.run(
       `UPDATE spend_alerts SET delivered_at = ? WHERE id IN (${ids.map(() => "?").join(", ")})`,
       [now, ...ids],
     );
-    const last = rows[rows.length - 1]!;
-    return { ids, latest: { spentMicroUsd: last.spent, capMicroUsd: last.cap } };
+    return { ids, latest: { spentMicroUsd: spent, capMicroUsd: last.cap } };
   });
   return run.immediate();
 }
@@ -201,19 +222,24 @@ export function releaseSpendWarnings(db: Database, ids: readonly string[]): void
 }
 
 /**
- * Once per cap episode: true (and a delivered `cap` row recorded) when the
- * owner has not been pinged about a spend-cap stop at this cap value since
- * its last re-arm and within 24 h. One IMMEDIATE transaction, so concurrent
- * posters ping once.
+ * Once per cap episode: the id of a newly recorded (delivered) `cap` row
+ * when the owner has not been pinged about a spend-cap stop at this cap
+ * value since its last re-arm and within 24 h; null otherwise. One IMMEDIATE
+ * transaction, so concurrent posters ping once. Hand the id to
+ * releaseSpendCapPing when the post that carried the ping failed.
  */
 export function claimSpendCapPing(
   db: Database,
   o: { now: number; capMicroUsd: number; spentMicroUsd: number },
-): boolean {
-  const run = db.transaction((): boolean => {
-    if (!capPingArmed(db, o.capMicroUsd, o.now)) return false;
-    insertAlert(db, { kind: SPEND_ALERT_CAP, ...o, deliveredAt: o.now });
-    return true;
+): string | null {
+  const run = db.transaction((): string | null => {
+    if (!capPingArmed(db, o.capMicroUsd, o.now)) return null;
+    return insertAlert(db, { kind: SPEND_ALERT_CAP, ...o, deliveredAt: o.now });
   });
   return run.immediate();
+}
+
+/** Undo a cap-ping claim (its post failed), so the next spend-cap ask pings. */
+export function releaseSpendCapPing(db: Database, id: string): void {
+  db.run("DELETE FROM spend_alerts WHERE id = ? AND kind = ?", [id, SPEND_ALERT_CAP]);
 }

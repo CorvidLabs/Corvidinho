@@ -362,7 +362,7 @@ export class SchedulerService {
         const askOwner =
           result.ask && gate.ok && !alreadyPinged
             ? askPingOwner(result.ask, this.owner, this.spendAlerts)
-            : { owner: null, deduped: alreadyPinged };
+            : { owner: null, deduped: alreadyPinged, release: () => {} };
         const ask = result.ask
           ? formatAskReply({
               ask: result.ask,
@@ -401,7 +401,8 @@ export class SchedulerService {
                 this.owner,
               ),
             );
-            if (ask.pinged && pingKey) {
+            // A ping that never went out is not remembered (AUTONOMY-2).
+            if (posted !== false && ask.pinged && pingKey) {
               this.store.setAskPingKey(schedule.id, pingKey);
             }
           } else if (gate.ok) {
@@ -418,7 +419,11 @@ export class SchedulerService {
             );
           }
         } finally {
-          if (posted === false) pending?.release();
+          // Not posted: the next post carries the warning and the cap ping.
+          if (posted === false) {
+            pending?.release();
+            askOwner.release();
+          }
         }
       }
     } catch (err) {

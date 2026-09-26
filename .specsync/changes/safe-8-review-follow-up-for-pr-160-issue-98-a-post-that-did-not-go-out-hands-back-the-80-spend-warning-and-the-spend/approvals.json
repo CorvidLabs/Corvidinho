@@ -1,0 +1,53 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790465336,
+      "digest": "9efe3d1e608aa187cad8220756e29dae72ba8ae6290e85edd4b6a2a10de3be6d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend",
+        "title": "SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask",
+        "description": "SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/agent/",
+          "specs/discord/",
+          "src/agent/index.ts",
+          "src/agent/spend-alerts.ts",
+          "src/agent/spend-outbox.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/session-store.ts",
+          "src/discord/spend-post.ts",
+          "src/scheduler/service.ts",
+          "tests/agent.spend-ask.test.ts",
+          "tests/discord.spend.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A slash /work or /session start whose final reply fails (e.g. an expired interaction token) still posts the owner notice (spend-cap ping and pending 80% warning) as a fresh channel post and the reply error is still raised; when neither the notice post nor the reply went out, the claimed warning and the claimed cap-episode ping are handed back so the next bridge post carries them. A chat reply or schedule post that did not go out hands back both the warning and the cap ping, and a schedule keeps no ping key for a ping that was never posted. A warning claimed while 24 h spend is back under 80% of its cap stays pending (no delivery, no second warning row) and the first post that sees 80% or more delivers it once: 80% at T0, 72% later, 96% later delivers exactly one warning at 96%. A spend-cap stop is never stored as the session pending ask (a later ok runs the agent, a substantive reply carries no cap text into the prompt), and a spend-cap pending ask persisted by an earlier build loads as none; clarify and stuck pending asks are unchanged (AUTONOMY-5/6). Fixture tests only; each new test fails on the previous code."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "7c8895daf8e8fa414f3cdb7041f10460458b09973d9f7cd31290b45ee3eaaca5",
+        "discord": "d7272b509fd89ad54ba333463a7f69add25e2ae7f6c3888dbc1edb07907756f6"
+      }
+    }
+  ],
+  "reopenings": []
+}

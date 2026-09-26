@@ -14,8 +14,10 @@
  * cap episode across chat, slash commands and schedules (spend-alerts.ts
  * `cap` rows), so a busy channel at the cap does not ping on every message.
  *
- * Never throws: a DB problem falls back to the run's own `spendWarning` and
- * to pinging (a notice too many beats a silent one).
+ * A claim is handed back when the post that carried it did not go out
+ * (`release`), so one failed post never swallows a warning or the episode's
+ * owner ping. Never throws: a DB problem falls back to the run's own
+ * `spendWarning` and to pinging (a notice too many beats a silent one).
  */
 
 import type { Database } from "bun:sqlite";
@@ -23,11 +25,12 @@ import {
   claimSpendCapPing,
   claimSpendWarnings,
   ensureSpendAlerts,
+  releaseSpendCapPing,
   releaseSpendWarnings,
   spendAlertsExist,
 } from "./spend-alerts.ts";
 import { ensureSpendLedger, parseSpendCap, SpendLedger } from "./spend.ts";
-import { atWarnThreshold, spendPercent } from "./spend-notice.ts";
+import { spendPercent } from "./spend-notice.ts";
 import type { SpendWarning } from "./types.ts";
 
 export type TakenSpendWarning = {
@@ -37,20 +40,28 @@ export type TakenSpendWarning = {
   release(): void;
 };
 
+/** A spend-cap owner ping this post may carry (once per cap episode). */
+export type SpendCapPingClaim = {
+  /** Hand the ping back when the post that carried it failed. */
+  release(): void;
+};
+
 export type SpendAlertOutbox = {
   /**
    * The SAFE-8 80% warning to append to the post being sent now, or null.
    * With a DB: claims every undelivered warning of the last 24 h (so no other
    * post repeats it) and returns it with current spend; null when nothing is
-   * pending or spend has meanwhile dropped under 80% of that cap. Without a
-   * DB (or when the table is missing): `fallback`, the run's own warning.
+   * pending, or while spend is back under 80% of that cap (the warning then
+   * stays pending for the first post that sees 80% again). Without a DB (or
+   * when the table is missing): `fallback`, the run's own warning.
    */
   takeWarning(fallback?: SpendWarning): TakenSpendWarning | null;
   /**
-   * True when a `spend-cap` ask should ping the owner: the first time in a
-   * cap episode (re-armed once spend is back under 70% or after 24 h).
+   * A claim when a `spend-cap` ask should ping the owner: the first time in
+   * a cap episode (re-armed once spend is back under 70% or after 24 h);
+   * null when this episode already pinged.
    */
-  claimCapPing(): boolean;
+  claimCapPing(): SpendCapPingClaim | null;
 };
 
 const NOOP = () => {};
@@ -75,16 +86,10 @@ export function createSpendAlertOutbox(opts: {
         if (!spendAlertsExist(db)) return fallbackWarning(fallback);
         ensureSpendAlerts(db);
         const t = now();
-        const claimed = claimSpendWarnings(db, t);
+        // Current spend, read inside the claim (a ledger error keeps the recorded amount).
+        const claimed = claimSpendWarnings(db, t, () => new SpendLedger(db).window(t).spentMicroUsd);
         if (!claimed) return null;
-        const cap = claimed.latest.capMicroUsd;
-        let spent = claimed.latest.spentMicroUsd;
-        try {
-          spent = new SpendLedger(db).window(t).spentMicroUsd;
-        } catch {
-          // Keep the recorded amount.
-        }
-        if (!atWarnThreshold(spent, cap)) return null;
+        const { spentMicroUsd: spent, capMicroUsd: cap } = claimed.latest;
         return {
           warning: { spentMicroUsd: spent, capMicroUsd: cap, percent: spendPercent(spent, cap) },
           release: () => {
@@ -100,18 +105,28 @@ export function createSpendAlertOutbox(opts: {
       }
     },
     claimCapPing() {
-      if (!db) return true;
+      if (!db) return { release: NOOP };
       try {
         ensureSpendLedger(db);
         const t = now();
         const cap = parseSpendCap(env);
-        return claimSpendCapPing(db, {
+        const id = claimSpendCapPing(db, {
           now: t,
           capMicroUsd: cap.kind === "cap" ? cap.capMicroUsd : 0,
           spentMicroUsd: new SpendLedger(db).window(t).spentMicroUsd,
         });
+        if (!id) return null;
+        return {
+          release: () => {
+            try {
+              releaseSpendCapPing(db, id);
+            } catch {
+              // The episode stays pinged.
+            }
+          },
+        };
       } catch {
-        return true;
+        return { release: NOOP };
       }
     },
   };

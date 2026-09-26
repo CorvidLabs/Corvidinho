@@ -89,11 +89,14 @@ names; the details are in `ask.question`), and `SPEND_REARM_PERCENT` (70)
 sets where the warning re-arms. `src/agent/spend-alerts.ts` owns the
 `spend_alerts` table (`ensureSpendAlerts`, adding `delivered_at` to an older
 table): `recordSpendWarning`, `rearmSpendAlerts`, `warnArmed`,
-`capPingArmed`, `claimSpendWarnings` / `releaseSpendWarnings` and
-`claimSpendCapPing`. `src/agent/spend-outbox.ts` exports
-`createSpendAlertOutbox` (`SpendAlertOutbox`: `takeWarning(fallback)` →
-`TakenSpendWarning` with `release()`, and `claimCapPing()`), the delivery
-side the Discord bridge uses.
+`capPingArmed`, `claimSpendWarnings` (claims nothing while current spend is
+back under 80%, leaving the warning pending) / `releaseSpendWarnings` and
+`claimSpendCapPing` (the new `cap` row's id) / `releaseSpendCapPing`.
+`src/agent/spend-outbox.ts` exports `createSpendAlertOutbox`
+(`SpendAlertOutbox`: `takeWarning(fallback)` → `TakenSpendWarning` with
+`release()`, and `claimCapPing()` → `SpendCapPingClaim` with `release()`, or
+null when the episode already pinged), the delivery side the Discord bridge
+uses.
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
 `loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;

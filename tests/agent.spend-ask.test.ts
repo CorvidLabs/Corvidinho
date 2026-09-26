@@ -314,8 +314,8 @@ describe("spend alert outbox: recorded anywhere, delivered by the bridge (spend-
     const box = createSpendAlertOutbox({ env: { [SPEND_CAP_ENV]: "1" } });
     expect(box.takeWarning(w)?.warning).toEqual(w);
     expect(box.takeWarning()).toBeNull();
-    expect(box.claimCapPing()).toBe(true);
-    expect(box.claimCapPing()).toBe(true);
+    expect(box.claimCapPing()).not.toBeNull();
+    expect(box.claimCapPing()).not.toBeNull();
   });
 
   test("a DB without spend tables is left alone and the run's warning is used", () => {
@@ -340,14 +340,36 @@ describe("spend alert outbox: recorded anywhere, delivered by the bridge (spend-
     taken!.release();
     expect(box.takeWarning()?.warning.percent).toBe(87);
     expect(box.takeWarning()).toBeNull();
-    // A warning that is moot by delivery time (spend back under 80%) is dropped.
+    // A post made while spend is back under 80% delivers nothing and leaves
+    // the warning pending (not dropped) for the next post that sees 80%.
     seed(ledger, 900_000, t + 1);
     expect(ledger.noteWarning({ capMicroUsd: 2 * CAP, now: t + 2 })).toMatchObject({ percent: 88 });
     t = NOW + SPEND_WINDOW_MS; // the $0.85 call left: $0.92 of $2.00 = 46%
     expect(box.takeWarning()).toBeNull();
     expect(
       db.query("SELECT COUNT(*) AS n FROM spend_alerts WHERE kind = 'warn' AND delivered_at IS NULL").get(),
-    ).toEqual({ n: 0 });
+    ).toEqual({ n: 1 });
+  });
+
+  test("80% at T0 → 72% → 96%: the warning left pending under 80% reaches the owner once at 96% (no second warning)", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const ledger = new SpendLedger(db);
+    const cap = 5_000_000;
+    seed(ledger, 1_000_000, NOW - 20 * H); // leaves the window at NOW + 4 h
+    seed(ledger, 3_000_000, NOW - H);
+    // T0: a WATCH / daemon run takes spend to 80%; nobody is told yet.
+    expect(ledger.noteWarning({ capMicroUsd: cap, now: NOW })).toMatchObject({ percent: 80 });
+    seed(ledger, 600_000, NOW + 2 * H);
+    let t = NOW + 5 * H; // the $1 left the window: $3.60 = 72% (above the 70% re-arm level)
+    const box = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" }, now: () => t });
+    expect(box.takeWarning()).toBeNull();
+    // Spend climbs to 96% within the same crossing.
+    seed(ledger, 1_200_000, t + 1);
+    t += 2;
+    expect(ledger.noteWarning({ capMicroUsd: cap, now: t })).toBeNull();
+    expect(box.takeWarning()?.warning).toEqual({ spentMicroUsd: 4_800_000, capMicroUsd: cap, percent: 96 });
+    expect(box.takeWarning()).toBeNull();
+    expect(db.query("SELECT COUNT(*) AS n FROM spend_alerts WHERE kind = 'warn'").get()).toEqual({ n: 1 });
   });
 
   test("claimCapPing: once per cap episode; spend back under 70% or 24 h re-arms it", () => {
@@ -356,18 +378,30 @@ describe("spend alert outbox: recorded anywhere, delivered by the bridge (spend-
     seed(ledger, 990_000, NOW - 10);
     let t = NOW;
     const box = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "1" }, now: () => t });
-    expect(box.claimCapPing()).toBe(true);
-    expect(box.claimCapPing()).toBe(false);
+    expect(box.claimCapPing()).not.toBeNull();
+    expect(box.claimCapPing()).toBeNull();
     t = NOW + H;
-    expect(box.claimCapPing()).toBe(false);
+    expect(box.claimCapPing()).toBeNull();
     // Old spend leaves the window; the next call's check re-arms.
     t = NOW + 25 * H;
     ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1, capMicroUsd: CAP, now: t });
-    expect(box.claimCapPing()).toBe(true);
-    expect(box.claimCapPing()).toBe(false);
+    expect(box.claimCapPing()).not.toBeNull();
+    expect(box.claimCapPing()).toBeNull();
     // 24 h after the last ping it pings again even without a re-arm.
     t += SPEND_WINDOW_MS + 1;
-    expect(box.claimCapPing()).toBe(true);
+    expect(box.claimCapPing()).not.toBeNull();
+  });
+
+  test("claimCapPing: a released claim (its post failed) lets the next spend-cap ask ping in the same episode", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    seed(new SpendLedger(db), 990_000, NOW - 10);
+    const box = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "1" }, now: () => NOW });
+    const claim = box.claimCapPing();
+    expect(claim).not.toBeNull();
+    expect(box.claimCapPing()).toBeNull();
+    claim!.release();
+    expect(box.claimCapPing()).not.toBeNull();
+    expect(box.claimCapPing()).toBeNull();
   });
 
   test("an older spend_alerts table gains delivered_at and its warning is delivered", () => {

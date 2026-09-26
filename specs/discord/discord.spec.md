@@ -145,15 +145,21 @@ The bridge builds one `createSpendAlertOutbox({ db, env })`
 (`src/agent/spend-outbox.ts`) and shares it as `SlashContext.spendAlerts` and
 `SchedulerServiceOpts.spendAlerts`; `SlashContext.post` is the gateway reply
 (a fresh channel post). `src/discord/spend-post.ts` exports `askPingOwner`
-(a `spend-cap` ask pings once per cap episode via `claimCapPing`, also when
-a thin reply restates it), `askNeedsOwner` (stuck and spend-cap ping the
+(a `spend-cap` ask pings once per cap episode via `claimCapPing`; its
+`release` hands the ping back when the post fails), `askNeedsOwner` (stuck
+and spend-cap ping the
 owner; clarify addresses the requester, AUTONOMY-4),
 `takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
 `replyWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
 `AskPingOwner` types. The chat reply, `/work`, `/session start` and the
 schedule post take the pending warning from the outbox (the run's own
-`spendWarning` only when there is no DB), and hand it back when the post
-fails (`SchedulerOutbound.post` may resolve `false`). `/work` and
+`spendWarning` only when there is no DB), and hand it and the cap ping back
+when the post does not go out (`SchedulerOutbound.post` may resolve `false`;
+a schedule then keeps no ping key). `OwnerNotice.release` hands back what a
+slash notice claimed; `replyWithOwnerNotice` still posts the notice when the
+slash reply itself fails (expired interaction token) and re-raises that
+error. A `spend-cap` stop is never the session's `pendingAsk` (a reply cannot
+lift the cap), and a stored one loads as none. `/work` and
 `/session start` post `result.ask` through `formatAskReply` (paused status,
 not ✅; a clarify ask addresses the requester); `WorkTaskStatus` gains
 `blocked` (listed on `/status` as waiting for input when > 0); the owner
