@@ -2,6 +2,7 @@
  * DISCORD-5 — allowlisted channels via existing allowlist helpers.
  * DISCORD-6 — per-user rate limits + mutes (thin steal from corvid-agent).
  * DISCORD-7 — resolvePermissionLevel + minPermission re-check at run time.
+ * IDENTITY-1 / ADMIN-4 — configured owner resolves to ADMIN at handler time.
  */
 
 import {
@@ -11,6 +12,7 @@ import {
   checkUser,
 } from "../allowlist/discord.ts";
 import type { AllowlistConfig, GateResult } from "../allowlist/types.ts";
+import { isOwnerDiscord, type OwnerRecord } from "../identity/owner.ts";
 import { MUTED, NOT_AUTHORIZED, RATE_LIMITED } from "./types.ts";
 
 
@@ -34,11 +36,17 @@ export type ResolvePermissionOpts = {
   /** DISCORD-7 — empty ⇒ nobody ADMIN (default-deny). */
   adminUserIds?: string[];
   adminRoleIds?: string[];
+  /**
+   * IDENTITY-1 — configured owner (matched by Discord snowflake only).
+   * null/undefined ⇒ no owner; admin lists behave exactly as before.
+   */
+  owner?: OwnerRecord | null;
 };
 
 /**
  * Resolve caller permission at command run time (DISCORD-7).
- * Empty adminUserIds/adminRoleIds ⇒ nobody is ADMIN (default-deny).
+ * Empty adminUserIds/adminRoleIds and no owner ⇒ nobody is ADMIN (default-deny).
+ * The configured owner is ADMIN unless muted or deny-listed (ADMIN-4).
  * Denied users are BLOCKED. When users+roles allowlists are both empty,
  * channel-gated callers get STANDARD (preserve HEAR thin slash).
  */
@@ -54,6 +62,9 @@ export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionL
     return PermissionLevel.BLOCKED;
   }
   const roleIds = (opts.roleIds ?? []).map((r) => r.trim().toLowerCase()).filter(Boolean);
+  if (isOwnerDiscord(opts.owner, opts.userId)) {
+    return PermissionLevel.ADMIN;
+  }
   if (adminUsers.includes(id)) {
     return PermissionLevel.ADMIN;
   }

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "337de2d6597ca3ee75c41e7cd59af4cf66c23b93",
+  "contract_digest": "8bd3489b43c859a4904bb61b8b89f51d9eaf03283ddcaa34a06c193f02e40de3",
+  "execution_digest": "d4787ab10f3a99bc88ae9b9f312035c9ad01cf86c895064d00e3e40f3915cb3f",
+  "workspace_digest": "fde1d4a7486cee83819d95c57b6d8703f8002e98fdc03642b2a6f28f640de08a",
+  "timestamp": 1790452527
+}

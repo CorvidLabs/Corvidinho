@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790452504,
+      "commit": "922509ea220961132b68b941a3b432004269d34f",
+      "contract_digest": "8bd3489b43c859a4904bb61b8b89f51d9eaf03283ddcaa34a06c193f02e40de3",
+      "execution_digest": "d4787ab10f3a99bc88ae9b9f312035c9ad01cf86c895064d00e3e40f3915cb3f",
+      "workspace_digest": "fde1d4a7486cee83819d95c57b6d8703f8002e98fdc03642b2a6f28f640de08a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-042"
+      ]
+    },
+    {
+      "timestamp": 1790452506,
+      "commit": "a1c4467cba5172a6ac615c16e130ac46e3de74af",
+      "contract_digest": "8bd3489b43c859a4904bb61b8b89f51d9eaf03283ddcaa34a06c193f02e40de3",
+      "execution_digest": "d4787ab10f3a99bc88ae9b9f312035c9ad01cf86c895064d00e3e40f3915cb3f",
+      "workspace_digest": "fde1d4a7486cee83819d95c57b6d8703f8002e98fdc03642b2a6f28f640de08a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-042"
+      ]
+    },
+    {
+      "timestamp": 1790452506,
+      "commit": "337de2d6597ca3ee75c41e7cd59af4cf66c23b93",
+      "contract_digest": "8bd3489b43c859a4904bb61b8b89f51d9eaf03283ddcaa34a06c193f02e40de3",
+      "execution_digest": "d4787ab10f3a99bc88ae9b9f312035c9ad01cf86c895064d00e3e40f3915cb3f",
+      "workspace_digest": "fde1d4a7486cee83819d95c57b6d8703f8002e98fdc03642b2a6f28f640de08a",
+      "acceptance_input_digest": "ba9b623b82d57c89c7093f769d39d65ddfd5a8bc8765e69efbeb70906445aefd",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "plugins/memory/commands.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "24a6af7c904ae76281b9020165a8b8eefa8df15b597cbd0e7d028cddb1e93ff1",
+            "entry_digest": "64dda318d5add7e5269d38c58a35f98e34883e668cceffa253a74772bc2b3cfb",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "c9654f0719ce2741346a4b47111c11b74ff4ec8c27ddbaad363de6d804ddda4b",
+            "entry_digest": "34d6fd4015997a47e17a142e03fcecaf3da113bb4672f1b92128a35fc650df08",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/plugins.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "6180602cccac0e3550cfaf5e44cbe634e2baf6b096cc9fee503722bc622edd28",
+            "entry_digest": "ad6de89382d8efcced23b55b1db11558e922ce43615009e7eb642b976b00e5db",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "5514634fd87ab3de9d53ae478888495b13c94485af481645f6d82b8e8625f396",
+            "entry_digest": "d9cd8f6459109e9088e98d4a904e5de7d034c1789c5b3705bc13b748bf78b964",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+            "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "72493d2ee2ca78100a03ef96a09626dec1177a7a362ffe1a78744275f7444e3c",
+            "entry_digest": "f55af7125841d9a7f4783fb1e1a919cf34e942bbae23f134548149b979cc59b7",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "tests/memory.plugins.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7e4fa6b77edabede140b596b87176dfe035b52b4ed528dae21623f75b14a2160",
+            "entry_digest": "c901c3431cf3ba503dc0fc70d54c9cf78823333812911f2fc9da33ec59d6990c",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-042"
+      ]
+    }
+  ]
+}

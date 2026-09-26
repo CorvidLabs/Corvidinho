@@ -82,6 +82,7 @@ function isAdminActor(ctx: SlashContext, interaction: SlashInteraction): boolean
     allowlist: ctx.allowlist,
     adminUserIds: ctx.adminUserIds,
     adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
   });
   return permLevel >= PermissionLevel.ADMIN;
 }
@@ -155,6 +156,7 @@ export async function handleSlashInteraction(
       allowlist: ctx.allowlist,
       adminUserIds: ctx.adminUserIds,
       adminRoleIds: ctx.adminRoleIds,
+      owner: ctx.owner,
     });
     if (permLevel < entry.minPermission) {
       await interaction.reply({

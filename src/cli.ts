@@ -28,6 +28,7 @@ import {
   goLiveChecklist as watchGoLiveChecklist,
   startWatchPoller,
 } from "./watch/index.ts";
+import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { list, size } from "./plugins/registry.ts";
@@ -40,6 +41,8 @@ type DoctorCheck = {
   name: string;
   ok: boolean;
   detail: string;
+  /** Printed label override (informational checks never fail doctor). */
+  mark?: string;
 };
 
 function printHelp(): void {
@@ -247,10 +250,20 @@ async function doctor(): Promise<number> {
     detail: `${pluginCount} command(s) loaded`,
   });
 
+  // IDENTITY-1 — owner yes/no + display only (never ids/logins/tokens).
+  // Optional: a missing owner is informational and never fails doctor.
+  const ownerLoad = await loadOwnerConfig({ env: process.env });
+  checks.push({
+    name: "owner",
+    ok: true,
+    mark: ownerLoad.owner && ownerLoad.issues.length === 0 ? "ok" : "info",
+    detail: formatOwnerDoctorDetail(ownerLoad),
+  });
+
   console.log("corvidinho doctor\n");
   let allOk = true;
   for (const c of checks) {
-    const mark = c.ok ? "ok" : "missing";
+    const mark = c.mark ?? (c.ok ? "ok" : "missing");
     console.log(`  [${mark}] ${c.name}: ${c.detail}`);
     if (!c.ok) allOk = false;
   }

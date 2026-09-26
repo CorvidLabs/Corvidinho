@@ -1,8 +1,10 @@
 /**
  * /status — bridge metrics (DISCORD-4) + dogfood polish lines.
  * Steal shape from corvid-agent info-commands; keep ephemeral.
+ * IDENTITY-1: owner configured yes/no + display only (no ids).
  */
 
+import { formatOwnerStatus } from "../../identity/owner.ts";
 import { formatLlmStatusLine } from "../../version.ts";
 import { formatAnnounceChannelLine } from "../announce.ts";
 import { SLASH_COMMAND_NAMES } from "../slash-commands.ts";
@@ -38,6 +40,8 @@ export type StatusReportInput = {
   slashNames?: readonly string[];
   /** DISCORD-ANNOUNCE-3 — surface current announcements channel. */
   announceChannelId?: string | null;
+  /** IDENTITY-1 owner line (`formatOwnerStatus`); omitted when undefined. */
+  ownerLine?: string;
   /** SAFE-5 — audit chain verify line (bridge supplies). */
   auditLine?: string;
 };
@@ -59,6 +63,9 @@ export function formatStatusReport(input: StatusReportInput): string {
     `Slash commands: ${names.join(", ")}`,
     formatAnnounceChannelLine(input.announceChannelId),
   ];
+  if (input.ownerLine) {
+    lines.push(input.ownerLine);
+  }
   if (input.auditLine) {
     lines.push(input.auditLine);
   }
@@ -90,6 +97,7 @@ export async function handleStatusCommand(
     env: ctx.env,
     gitTipSha: ctx.gitTipSha,
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
+    ownerLine: formatOwnerStatus(ctx.owner),
     auditLine: ctx.auditLine?.(),
   });
 

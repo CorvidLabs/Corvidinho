@@ -4,6 +4,7 @@
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import type { OwnerRecord } from "../identity/owner.ts";
 import type { AgentClient } from "./agent-client.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { DiscordEmbedPayload, ThinkingOutbound } from "./thinking-status.ts";
@@ -69,6 +70,8 @@ export type SlashContext = {
   /** DISCORD-7 admin lists (empty = nobody ADMIN). */
   adminUserIds?: string[];
   adminRoleIds?: string[];
+  /** IDENTITY-1 — configured owner (ADMIN unless muted/deny-listed). */
+  owner?: OwnerRecord | null;
   /** Optional env for LLM status line (tests inject). */
   env?: NodeJS.ProcessEnv;
   /** Optional git tip short SHA (bridge fills best-effort). */

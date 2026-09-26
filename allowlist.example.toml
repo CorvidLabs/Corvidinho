@@ -27,3 +27,13 @@ users = []
 deny_channels = []
 deny_roles = []
 deny_users = []
+
+# Optional durable owner (IDENTITY-1). Env CORVIDINHO_OWNER_DISCORD_ID /
+# CORVIDINHO_OWNER_GITHUB_LOGIN / CORVIDINHO_OWNER_DISPLAY override per field.
+# discord_id must be the numeric user snowflake (quote it). The owner is ADMIN
+# unless muted or on deny_users; empty = no owner (admin env lists unchanged).
+# Matching is by discord_id or github_login only — never by display.
+# [owner]
+# discord_id = "000000000000000000"
+# github_login = "your-github-login"
+# display = "Your Name"
