@@ -34,3 +34,10 @@ Octokit fetch. There is no network and no token.
 Also run: `bun test`, `bunx tsc --noEmit`,
 `specsync check --require-coverage 100` and
 `fledge lanes run verify --non-interactive`.
+
+## Requirement evidence
+
+| Requirement | Test | Evidence |
+|---|---|---|
+| `REQ-discord-043` | `tests/discord.admin-slash.test.ts` | unset `recordAudit` refuses users/channels add with `audit log unavailable (SAFE-5)` and leaves file + live lists unchanged; dangling and looping symlinks are refused by `/admin`, `writeFileAtomic` and `config show` with the link kept; `allowlist.JSON` is edited as TOML and reloads; existing ADMIN-1..4 tests pass. |
+| `REQ-plugins-093` | `tests/github.review.plugin.test.ts` | `--file ./`, whitespace, `--file=./` and ` ././ ` return a usage error with no API call; pure rename/copy/`changed` entries say content unchanged, copies get `copy from`/`copy to`; existing diff/files/scrub tests pass. |
