@@ -1,0 +1,45 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790444202,
+      "digest": "ed20da0deacd89592588abaf64078411cff4ff0a369f0e1677ac8292baeb4260",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "add-tag-v-github-release-action-with-verbose-notes-and-scripts-corvidinho-update-sh-for-safe-box-pull-install-doctor",
+        "title": "Add tag v* GitHub Release Action with verbose notes and scripts/corvidinho-update.sh for safe box pull install doctor restart rollback without Discord panic spam; land orphaned 0.0.2 SpecSync archive tip",
+        "description": "Add tag v* GitHub Release Action with verbose notes and scripts/corvidinho-update.sh for safe box pull install doctor restart rollback without Discord panic spam; land orphaned 0.0.2 SpecSync archive tip",
+        "kind": "operations",
+        "affected_specs": [],
+        "affected_paths": [
+          ".github/workflows/release.yml",
+          "STATUS.md",
+          "docs/BOX-UPDATE.md",
+          "scripts/corvidinho-update.sh"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "CI release workflow and operator box-update shell script; no living module acceptance criteria change",
+        "acceptance_criteria": [
+          "On push tag v*, GitHub Action creates a GitHub Release with verbose notes (changelog + upgrade steps); scripts/corvidinho-update.sh safely pulls/checkouts target ref, bun install, doctor, restarts bridge only after health checks, rolls back previous tip if unhealthy, never Discord-spam on failure; docs/BOX-UPDATE.md documents usage; STATUS notes the updater + release Action; orphaned 0.0.2 SpecSync change archived on main; SpecSync audit green; fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790444249,
+      "digest": "47cd986ef07c082a0c3f073e7a4fc5649c9f530946efa854e489a4c2a99325ef",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "add-tag-v-github-release-action-with-verbose-notes-and-scripts-corvidinho-update-sh-for-safe-box-pull-install-doctor",
+  "slug": "add-tag-v-github-release-action-with-verbose-notes-and-scripts-corvidinho-update-sh-for-safe-box-pull-install-doctor",
+  "title": "Add tag v* GitHub Release Action with verbose notes and scripts/corvidinho-update.sh for safe box pull install doctor restart rollback without Discord panic spam; land orphaned 0.0.2 SpecSync archive tip",
+  "description": "Add tag v* GitHub Release Action with verbose notes and scripts/corvidinho-update.sh for safe box pull install doctor restart rollback without Discord panic spam; land orphaned 0.0.2 SpecSync archive tip",
+  "kind": "operations",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "6cf991abc8e908fe55426b9a6b19d507f394cb1e",
+  "created_at": 1790444174,
+  "updated_at": 1790444249,
+  "affected_specs": [],
+  "affected_paths": [
+    ".github/workflows/release.yml",
+    "scripts/corvidinho-update.sh",
+    "docs/BOX-UPDATE.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "CI release workflow and operator box-update shell script; no living module acceptance criteria change",
+  "acceptance_criteria": [
+    "On push tag v*, GitHub Action creates a GitHub Release with verbose notes (changelog + upgrade steps); scripts/corvidinho-update.sh safely pulls/checkouts target ref, bun install, doctor, restarts bridge only after health checks, rolls back previous tip if unhealthy, never Discord-spam on failure; docs/BOX-UPDATE.md documents usage; STATUS notes the updater + release Action; orphaned 0.0.2 SpecSync change archived on main; SpecSync audit green; fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

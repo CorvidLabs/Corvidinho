@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "add-tag-v-github-release-action-with-verbose-notes-and-scripts-corvidinho-update-sh-for-safe-box-pull-install-doctor",
+  "implementation_commit": "dffbb59dabd45e65ebcc8a1171f1cb303751a279",
+  "implementation_tree": "9f532f792903475fb863f80dd6bbe19992f3e24d",
+  "contract_digest": "ed20da0deacd89592588abaf64078411cff4ff0a369f0e1677ac8292baeb4260",
+  "workspace_digest": "d198bd06b2798ad9ce2b54d8dcbe0fd094e233a0b407b4dd19d627b60bcfff3b",
+  "closing_digest": "47cd986ef07c082a0c3f073e7a4fc5649c9f530946efa854e489a4c2a99325ef",
+  "review_digest": "c8774cb1ef2c9736d6caf26a26468250a556bc6b518948edafb4638158944d20",
+  "finalization_digest": "ed85fd0ed2a69263934ed55c022ecdbacac696eb321de63560d3b18a2a61cc86",
+  "timestamp": 1790444249
+}
