@@ -7,10 +7,11 @@
   "title": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
   "description": "GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "8747a9abb99c2322ea67c40da96fb60bc69172bc",
   "created_at": 1790454572,
-  "updated_at": 1790454580,
+  "updated_at": 1790454932,
   "affected_specs": [
     "plugins"
   ],
