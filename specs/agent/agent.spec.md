@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 14
+version: 15
 status: draft
 files:
   - src/agent/types.ts
@@ -27,29 +27,29 @@ depends_on:
 
 ## Purpose
 
-Prove-before-done agent task loop with SpecSync-aware Planning and an interruptible LLM plugin tool loop when an API key is configured.
+Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
+so Discord/CLI chats trust injected facts and call memory-store/recall
+appropriately (REQ-agent-010).
 
 ## Public API
 
-Also export `selectRelevantSpecs`, `extractConstraintSections`, `loadRelevantSpecs`, `buildCorvidinhoArgv`, `createTaskExecute`, `loadLlmEnv`, `summarizeTaskRunOutput`, `parseCapabilityTier`, `loadTierFromEnv`, `tierAllowsPlugin`, `buildOpenAiTools`, `argvFromToolArguments`, `filesChangedFromToolData` from the agent module. AgentEvent includes ToolCall and ToolResult.
+Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
+`src/agent/index.ts`).
 
 ## Invariants
 
-Planning loads specs before execute when possible; SpecSync check participates in done-gate via fledge verify lane; LLM tool loop honors AbortSignal and SAFE-1 dangerous deny; no SpecSync cloud key; no Trust/attest.
+Tool-loop system prompt SHALL include trust-inject / memory-store /
+memory-recall-before-ignorance / never-invent rules. OpenAI tool argv
+descriptions for `memory-*` commands SHALL include concrete examples.
 
 ## Behavioral Examples
 
-#### Scenario: Tool loop calls plugin then finishes
+### Scenario: System prompt mentions memory-store
 
-- **Given** an API key and tool/code tier with mocked chat completions
-- **When** the model returns a tool_call for an allowlisted plugin then a final text message
-- **Then** the plugin runs via runPlugin, ToolCall/ToolResult events emit, and ExecuteResult.summary is the final text
-
-#### Scenario: Read tier has no tools
-
-- **Given** an API key and tier=read
-- **When** createTaskExecute runs
-- **Then** the chat request omits tools and returns assistant text only
+- **Given** tool-loop execute is constructed
+- **When** the system message is built
+- **Then** it embeds MEMORY_AGENT_SYSTEM_INSTRUCTIONS with argv example for
+  memory-store
 
 ## Error Cases
 
@@ -67,5 +67,5 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 
 ## Change Log
 
-Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
-| 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
+| 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |
+

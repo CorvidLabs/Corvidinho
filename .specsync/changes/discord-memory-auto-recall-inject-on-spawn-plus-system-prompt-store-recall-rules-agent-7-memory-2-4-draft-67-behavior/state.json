@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior",
+  "slug": "discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior",
+  "title": "Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7",
+  "description": "Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "c3b4d8881ea2d9a5b968eb47b9eda35c6e1b2233",
+  "created_at": 1790450141,
+  "updated_at": 1790450221,
+  "affected_specs": [
+    "discord",
+    "agent",
+    "plugins",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/discord/memory-inject.ts",
+    "src/discord/bridge.ts",
+    "src/agent/execute.ts",
+    "src/agent/tools.ts",
+    "plugins/memory/commands.ts",
+    "tests/discord.memory-inject.test.ts",
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Discord spawn prepends recalled memories (limit ~20) for msg.authorId before runChat; empty scope still gets empty one-liner; bridge logs inject count; system prompt instructs trust inject / memory-store on durable facts / memory-recall before claiming ignorance / never invent; memory-* tool descriptions include argv examples; fixture tests green; package 0.0.7; no /memory slash; cites AGENT-7 MEMORY-2/4 (draft #67 behavior)"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

@@ -414,3 +414,18 @@ Acceptance Criteria
 - Package `0.0.5`; docs/STATUS/CHANGELOG updated.
 - Fixture tests + SpecSync + fledge verify green.
 
+### REQ-discord-023
+
+When `memoryStore` is available, Discord HEAR spawn SHALL recall memories for
+`msg.authorId` (limit ~20) and prepend a clear inject block to the agent prompt
+before `agent.runChat` (AGENT-7 / MEMORY-2 / MEMORY-4). Empty scope SHALL still
+include a one-liner nudging `memory-store`. Bridge SHALL log inject count.
+No `/memory` slash.
+
+Acceptance Criteria
+- Inject helper formats `category/key: content` bullets under a fixed header.
+- Empty recall → empty one-liner still prepended.
+- Missing store / blank user → prompt unchanged (injected=false).
+- Bridge logs `[discord] memory inject: N recalled for user …`.
+- Fixture tests cover format + enrich (no live Discord).
+

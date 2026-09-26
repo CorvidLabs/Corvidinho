@@ -28,6 +28,7 @@ export type { LoadRelevantSpecsOptions, SpecRef } from "./specLoader.ts";
 export { buildCorvidinhoArgv } from "./spawn-argv.ts";
 export {
   createTaskExecute,
+  MEMORY_AGENT_SYSTEM_INSTRUCTIONS,
   loadLlmEnv,
 } from "./execute.ts";
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";

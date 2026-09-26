@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 41
+version: 42
 status: draft
 files:
   - src/cli.ts
@@ -76,5 +76,5 @@ Consumes agent module for runTask / loadAgentConfig.
 
 ## Change Log
 
-| 2026-09-26 | files-search-plugins-issue-81: package 0.0.6 with files/search + SAFE-2 (REQ-cli-013) |
+| 2026-09-26 | memory-discord-inject: package 0.0.7 with MEMORY Discord inject (REQ-cli-014) |
 

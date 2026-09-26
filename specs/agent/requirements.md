@@ -83,3 +83,15 @@ Acceptance Criteria
 - read → no tools in chat request.
 - tool/code → buildOpenAiTools filters by minTier; dangerous omitted by default.
 
+### REQ-agent-010
+
+The tool-loop system prompt SHALL instruct the model to (a) trust the injected
+memory block, (b) call `memory-store` when the user states durable
+identity/person/project facts, (c) call `memory-recall` before claiming
+ignorance about the user/people/projects, (d) never invent memories
+(AGENT-7 / MEMORY-2/4; draft #67 behavior).
+
+Acceptance Criteria
+- `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` exported and embedded in tool-loop system.
+- Fixture asserts trust / store / recall / never-invent phrases + argv example.
+

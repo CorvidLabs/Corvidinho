@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 29
+version: 30
 status: draft
 files:
   - src/plugins/types.ts
@@ -53,32 +53,17 @@ HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 
 ## Invariants
 
-Builtin plugin loaders MAY re-register after an in-process registry clear
-(test seam). Presence of an already-registered command name skips duplicate
-register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
-`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
-non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
-(GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
-plain Made with Corvidinho attribution (no @handles). Dry-run via
-CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
-`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
-Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
-keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
-no in-band override.
+Memory plugin command descriptions SHALL include concrete argv examples so the
+LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
+`memory-*` is enriched similarly in `buildOpenAiTools`.
 
 ## Behavioral Examples
 
-### Scenario: List plugins
+### Scenario: memory-store description shows argv example
 
 - **Given** builtins are loaded
-- **When** the operator runs `corvidinho plugins list`
-- **Then** github-*, memory-*, files-*, search-grep, and plugins-list appear with danger markings and exit 0
-
-### Scenario: SAFE-2 refuse protected write
-
-- **Given** a project with `.env` and `fledge.toml`
-- **When** `files-write` targets `.env` or `fledge.toml`
-- **Then** the run fails with a refused/SAFE-2 error and the file is unchanged
+- **When** an operator or the tool loop inspects `memory-store`
+- **Then** the description includes `--category` / `person` / `identity` example argv
 
 ## Error Cases
 
@@ -109,10 +94,5 @@ no in-band override.
 
 ## Change Log
 
-Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
-and current rows for plugins host evolution.
+| 2026-09-26 | memory-discord-inject: richer memory-* argv descriptions (REQ-plugins-085) |
 
-| 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
-| 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |
-| 2026-09-26 | plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81: files-read/write/edit/glob/list/delete + search-grep; SAFE-2 protected paths; path clamp; package 0.0.6 |
-| 2026-09-26 | cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive: Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive |

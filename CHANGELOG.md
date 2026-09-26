@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.7
+
+### Memory in Discord chat (AGENT-7 / MEMORY-2/4)
+
+- **Auto-recall inject** on Discord spawn: before `agent.runChat`, recall up to 20 memories for `msg.authorId` and prepend a clear `[Corvidinho memory for this Discord user …]` block (empty scope still gets a one-liner nudging `memory-store`).
+- **System prompt** (`src/agent/execute.ts`): trust injected block; call `memory-store` for durable identity/person/project facts; call `memory-recall` before claiming ignorance; never invent memories (draft #67 behavior without new HI ids).
+- **Richer memory tool descriptions** + argv examples so the model actually calls `memory-store` / `memory-recall`.
+- Bridge logs `[discord] memory inject: N recalled for user …` to stdout (ops: `/tmp/corvidinho-discord-bridge.log`).
+- Fixture tests for inject helper + prompt/tool enrichment.
+- No `/memory` slash (HI does not define one).
+
+### Ops
+
+- Package version **0.0.7** — Discord presence (DISCORD-12) reads `v0.0.7` after bridge restart (ops must restart live bridge + post channel update; this release does not restart it).
+
 ## 0.0.6
 
 ### Files / search plugins (PLUGIN-1/2, SAFE-2 / #81)
