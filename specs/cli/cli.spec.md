@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 52
+version: 53
 status: draft
 files:
   - src/cli.ts
@@ -117,3 +117,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | release-0-0-16-daemon-157-web-fetch-148-fledge-plugins-as-tools-154-pr-diff-files-153-ci-by-ref-158-project: Release 0.0.16: daemon (#157), web-fetch (#148), Fledge plugins as tools (#154), PR diff/files (#153), CI by ref (#158), project instructions (#150); package 0.0.16, CHANGELOG, STATUS |
 | 2026-09-26 | release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate: Release 0.0.18: ask-human + owner ping, autonomous gate + delegate |
+| 2026-09-26 | release-0-0-20-security-correctness-sweep-council-tool-admin-pr-diff-edges-operator-guide: Release 0.0.20: security + correctness sweep, council tool, admin/pr-diff edges, operator guide |

@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790462991,
+      "digest": "8a77aa50287958ba009a2404661a8e203591da8ba13466223c8f0a9749af5c8c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-20-security-correctness-sweep-council-tool-admin-pr-diff-edges-operator-guide",
+        "title": "Release 0.0.20: security + correctness sweep, council tool, admin/pr-diff edges, operator guide",
+        "description": "Release 0.0.20: security + correctness sweep, council tool, admin/pr-diff edges, operator guide",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.20; version prints 0.0.20; CHANGELOG 0.0.20 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "c689662caaf8d9b96461c87d90014162950c4f4c7a03d65bece385864a6da730"
+      }
+    }
+  ],
   "reopenings": []
 }
