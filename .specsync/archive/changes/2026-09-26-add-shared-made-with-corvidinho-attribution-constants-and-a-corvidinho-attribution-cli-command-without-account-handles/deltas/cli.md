@@ -1,24 +1,29 @@
----
-module: cli
-version: 21
-status: draft
-files:
-  - src/cli.ts
-  - src/attribution.ts
+# CLI semantic delta
 
-db_tables: []
-depends_on:
-  - plugins
-  - agent
----
+## Added
 
-# Cli
+### REQUIREMENT REQ-cli-1
 
-## Purpose
+The CLI SHALL export canonical markdown and plain attribution footers that link
+to the Corvidinho repository and contain no account handles.
 
-Operator surface includes Discord HEAR bridge entrypoints and canonical attribution output for outbound PR bodies.
+Acceptance Criteria
 
-## Public API
+- The markdown and plain strings match the canonical repository URL exactly.
+- Unit tests assert that neither string contains an `@` character.
+
+### REQUIREMENT REQ-cli-2
+
+`corvidinho attribution` SHALL print the canonical markdown footer and exit 0.
+
+Acceptance Criteria
+
+- The CLI output is exactly the markdown footer followed by a newline.
+- The command exits with status 0.
+
+## Modified
+
+### SPEC SECTION Public API
 
 ### Exported Functions
 
@@ -42,14 +47,14 @@ Operator surface includes Discord HEAR bridge entrypoints and canonical attribut
 |------|-------------|
 | `AttributionFormat` | Supported attribution output formats |
 
-## Invariants
+### SPEC SECTION Invariants
 
 task run honors --no-verify and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 Attribution output uses only the project name and repository link and contains no
 account handle.
 
-## Behavioral Examples
+### SPEC SECTION Behavioral Examples
 
 ### Scenario: Plugins list
 
@@ -75,7 +80,7 @@ account handle.
 - **When** the operator runs `corvidinho task run --no-verify --json`
 - **Then** exit 0 and JSON has verifySkipped true
 
-## Error Cases
+### SPEC SECTION Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
@@ -84,14 +89,8 @@ account handle.
 | Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
 | Task verify exhausted | Exit 1; JSON verified false |
 
-## Dependencies
-
-Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
-Consumes agent module for runTask / loadAgentConfig.
-
-## Change Log
+### SPEC SECTION Change Log
 
 SpecSync CLI forwarding + task --task briefing hook (2026-09-26, corvid-agent).
 | 2026-09-26 | Add canonical attribution helper and `corvidinho attribution` output for outbound PR footers (issue #20). |
 | 2026-09-26 | Add CLI attribution helper and canonical no-handle footer forms. |
-| 2026-09-26 | add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles: Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles |

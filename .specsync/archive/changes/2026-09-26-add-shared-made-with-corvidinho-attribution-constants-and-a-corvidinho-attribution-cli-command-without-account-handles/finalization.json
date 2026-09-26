@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles",
+  "implementation_commit": "4fc555e9f4b95cc3c2ff6f6f25661ba8030b9155",
+  "implementation_tree": "3fda3a2202b2222a6ed24cb1932e6e8992d115e0",
+  "contract_digest": "c2a33f36884bc3e3b54fcbae2cfe347b09e71ddede23c474470d066577108b66",
+  "workspace_digest": "a75ed86f145f5f7a0b7773af545d04d80811eb58eba913b2054b639d59663e35",
+  "closing_digest": "8ae5f1ab739b886e2e4499d3502b23dac984555894eb668047bf006b828cda72",
+  "review_digest": "87bd3e82192499f18ffa4c232c976605f08a7b73c8b4d3cf9b3716866af68833",
+  "finalization_digest": "99006101362e5b44a5f3186088bfe61e4e0dad3a320206e3fd58956b27f9da9c",
+  "timestamp": 1790439528
+}

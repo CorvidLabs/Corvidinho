@@ -11,6 +11,7 @@ import {
   type AgentEvent,
   type TaskResult,
 } from "./agent/index.ts";
+import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
   goLiveChecklist,
@@ -38,6 +39,7 @@ Usage:
   corvidinho --help                 Show this help
   corvidinho help                   Same as --help
   corvidinho version                Print version
+  corvidinho attribution             Print the canonical attribution footer
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10 light)
   corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/5)
@@ -416,6 +418,10 @@ export async function main(argv: string[]): Promise<number> {
   const cmd = rest[0];
   if (cmd === "version" || cmd === "--version" || cmd === "-V") {
     console.log(VERSION);
+    return 0;
+  }
+  if (cmd === "attribution") {
+    console.log(attribution());
     return 0;
   }
   if (cmd === "--protocol-version") {
