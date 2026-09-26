@@ -1,6 +1,6 @@
 ---
 id: watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 88f75293d5c73d3c7b374f16ffee07e4aeafd5c7
 ---

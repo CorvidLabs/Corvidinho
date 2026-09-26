@@ -7,10 +7,11 @@
   "title": "WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention",
   "description": "WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "88f75293d5c73d3c7b374f16ffee07e4aeafd5c7",
   "created_at": 1790466980,
-  "updated_at": 1790467036,
+  "updated_at": 1790467106,
   "affected_specs": [
     "watch"
   ],
