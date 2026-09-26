@@ -433,21 +433,21 @@ export async function startBridge(
 
       await thinking.start({ description: "Working on your request..." });
 
-      // SESSION-WORKTREE: bind isolated cwd on start; reuse on continue (no silent switch).
-      if (action.kind === "start_session" || !session.worktreePath) {
-        const bound = await store.bindWorktree(session);
-        if (!bound.ok) {
-          await thinking.fail(`❌ worktree: ${bound.error}`);
-          if (replyRef.fn) {
-            await replyRef.fn({
-              channelId,
-              content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
-              replyToMessageId: msg.id,
-            });
-          }
-          await store.endSession(session);
-          return;
+      // SESSION-WORKTREE: bind isolated cwd on start; on continue reuse the
+      // live worktree (no silent switch), or re-create it when its directory
+      // is gone (crash mid-park) — never a dead or parked cwd.
+      const bound = await store.bindWorktree(session);
+      if (!bound.ok) {
+        await thinking.fail(`❌ worktree: ${bound.error}`);
+        if (replyRef.fn) {
+          await replyRef.fn({
+            channelId,
+            content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
+            replyToMessageId: msg.id,
+          });
         }
+        await store.endSession(session);
+        return;
       }
 
       const sessionCwd = store.cwdFor(session);
