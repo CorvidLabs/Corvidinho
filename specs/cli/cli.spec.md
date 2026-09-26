@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 42
+version: 43
 status: draft
 files:
   - src/cli.ts

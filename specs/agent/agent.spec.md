@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 15
+version: 16
 status: draft
 files:
   - src/agent/types.ts

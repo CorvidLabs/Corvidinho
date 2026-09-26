@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 30
+version: 31
 status: draft
 files:
   - src/plugins/types.ts

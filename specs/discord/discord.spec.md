@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 44
+version: 45
 status: draft
 files:
   - src/discord/types.ts
