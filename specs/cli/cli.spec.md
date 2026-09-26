@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 5
+version: 7
 status: draft
 files:
   - src/cli.ts
@@ -51,5 +51,5 @@ Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
 
 ## Change Log
 
-plugins list/run + non-interactive + doctor plugin count (2026-09-26, corvid-agent).
+Document default-deny allowlists + wallet deferral (2026-09-26, corvid-agent).
 

@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 5
+version: 7
 status: draft
 files:
   - src/plugins/types.ts
@@ -9,6 +9,11 @@ files:
   - src/plugins/env.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
+  - src/allowlist/types.ts
+  - src/allowlist/load.ts
+  - src/allowlist/github.ts
+  - src/allowlist/discord.ts
+  - src/allowlist/index.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/index.ts
@@ -26,33 +31,11 @@ Typed plugin command host for Corvidinho: register/list/run commands with honest
 
 ## Public API
 
-### Exported Functions
-
-| Function | Parameters | Returns | Description |
-|----------|-----------|---------|-------------|
-| `register` | `command: PluginCommand` | `void` | Register a command by unique name |
-| `get` | `name: string` | `PluginCommand \| undefined` | Lookup by name |
-| `list` | — | `PluginListEntry[]` | Sorted list with danger/tier |
-| `clearRegistry` | — | `void` | Test helper |
-| `size` | — | `number` | Registered count |
-| `runPlugin` | `opts: RunOptions` | `Promise<PluginHandlerResult>` | Run with SAFE-1 enforcement |
-| `isNonInteractive` | `{ nonInteractiveFlag?: boolean }` | `boolean` | Flag/env detection |
-| `allowlistFromEnv` | — | `Set<string>` | Parse CORVIDINHO_ALLOWLIST |
-| `loadBuiltins` | — | `void` | Load github + meta plugins once |
-
-### Exported Types
-
-| Type | Description |
-|------|-------------|
-| `PluginCommand` | name, description, dangerous?, minTier?, handler |
-| `PluginListEntry` | name, description, dangerous, minTier |
-| `PluginHandlerArgs` | args, cwd, json, nonInteractive, allowlist |
-| `PluginHandlerResult` | ok, data?, message?, error?, exitCode? |
-| `RunOptions` | name, args?, cwd?, json?, nonInteractive?, allowlist? |
+Export allowlist load + github/discord gate helpers used by plugins and future HEAR.
 
 ## Invariants
 
-Add GITHUB-6 repo gate invariant; keep danger/minTier and gh-helper invariants.
+Empty allowlists deny all targeted GH/Discord actions; deny overrides win; file+env load; no Merlin empty→BASIC.
 
 ## Behavioral Examples
 
@@ -93,5 +76,5 @@ Add GITHUB-6 repo gate invariant; keep danger/minTier and gh-helper invariants.
 
 ## Change Log
 
-WATCH: host + github read + SAFE-1 deny + repo deny gate (2026-09-26, corvid-agent).
+Default-deny allowlists file+env; Discord stub; empty≠BASIC (2026-09-26, corvid-agent).
 

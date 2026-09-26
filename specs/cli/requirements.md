@@ -38,3 +38,11 @@ Acceptance Criteria
 - `corvidinho plugins list` exits 0 and shows github + meta commands.
 - Doctor includes a plugins check with command count.
 
+### REQ-cli-005
+
+Help/STATUS/README SHALL document bot-VM allowlist file + env overlays, default-deny (empty = refuse), and that AlgoChat/wallet ACT is deferred until a wallet allowlist exists (ALLOW-4, WALLET-1..3).
+
+Acceptance Criteria
+- `corvidinho --help` mentions allowlist file/env vars.
+- STATUS/README note how to set allowlists on the bot VM; wallets deferred.
+

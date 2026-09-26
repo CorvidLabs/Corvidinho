@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm",
+  "slug": "safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm",
+  "title": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
+  "description": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "33a6c7f74ef2c2521c5c6ea2de8e552551552e0c",
+  "created_at": 1790437520,
+  "updated_at": 1790437666,
+  "affected_specs": [
+    "plugins",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/",
+    "plugins/",
+    "tests/",
+    "hi/",
+    "STATUS.md",
+    "README.md",
+    "docs/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Empty/missing allowlist refuses targeted GH plugin runs and Discord channel posts/listens (default-deny); allow match passes; deny override wins; file+env load (CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml|json); Discord stub API for HEAR; HI allow.md ALLOW/WALLET captured; STATUS/README document VM config; wallets deferred (no wallet code); bun test + fledge verify + Spec Sync CI green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
