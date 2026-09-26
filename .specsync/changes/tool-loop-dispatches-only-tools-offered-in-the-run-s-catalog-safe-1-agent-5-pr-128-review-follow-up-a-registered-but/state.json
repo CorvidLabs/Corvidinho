@@ -7,10 +7,11 @@
   "title": "Tool loop dispatches only tools offered in the run's catalog (SAFE-1 / AGENT-5, PR #128 review follow-up): a registered but not-offered (e.g. dangerous or above-tier) plugin name from the model is refused instead of run; memory store test updated for soft-deleted re-store history",
   "description": "Tool loop dispatches only tools offered in the run's catalog (SAFE-1 / AGENT-5, PR #128 review follow-up): a registered but not-offered (e.g. dangerous or above-tier) plugin name from the model is refused instead of run; memory store test updated for soft-deleted re-store history",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "a9feb0fde12d55d7625957eb869ce49665c631d3",
   "created_at": 1790450626,
-  "updated_at": 1790450652,
+  "updated_at": 1790450666,
   "affected_specs": [
     "agent"
   ],
