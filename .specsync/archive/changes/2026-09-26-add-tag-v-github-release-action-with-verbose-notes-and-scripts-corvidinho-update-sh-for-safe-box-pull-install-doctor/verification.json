@@ -1,0 +1,62 @@
+{
+  "timestamp": 1790444211,
+  "commit": "dffbb59dabd45e65ebcc8a1171f1cb303751a279",
+  "contract_digest": "ed20da0deacd89592588abaf64078411cff4ff0a369f0e1677ac8292baeb4260",
+  "execution_digest": "5ef7d4753babc67ef94dcb4cfef1ca7b5956d1f9174f7c8a49a522c1a49b5ab6",
+  "workspace_digest": "d198bd06b2798ad9ce2b54d8dcbe0fd094e233a0b407b4dd19d627b60bcfff3b",
+  "acceptance_input_digest": "f1df6c785944a24fe55ad875933e888dc4aaea38a2cfa09ba5b2a4e8f486b6f9",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": ".github/workflows/release.yml",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "254a3a1b312f4c3e890039a579b57ffb4ae6dca4e48af5cf9b65e5dd18bd7c6a",
+        "entry_digest": "ddef77af0dfd52f0d3b33f97bbb085534abf06357a1abc69f5a3ab63c662a45a",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b8ec78e9f277974e3c26c68c73ca7dde8b6d7460f64d2e2f7bb5a23ee33832ee",
+        "entry_digest": "ce16510844d6bc9f0b116366e24c6fb5e63a8a6eea7a6240d52ab16c76d0cf41",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/BOX-UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9c23b25155cde6fad431f9ef43afe485cb8e4be013fcd1167359d017f2d3a4f9",
+        "entry_digest": "1decc8074cf7b2f9729399873cb736a1c96faa80511ceecf4e4abc4261cf7f93",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "scripts/corvidinho-update.sh",
+        "kind": "file",
+        "mode": 33261,
+        "payload_digest": "d7b2650a556f3046b04cd711623ff30ec406dca059c90665b7a5328758fe1b1e",
+        "entry_digest": "23f59484ac60c1c26e2b8ea63327948e96412d6aded66947351206fa0d9e3c61",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

@@ -1,6 +1,6 @@
 ---
 id: add-tag-v-github-release-action-with-verbose-notes-and-scripts-corvidinho-update-sh-for-safe-box-pull-install-doctor
-state: implementing
+state: archived
 type: operations
 base_commit: 6cf991abc8e908fe55426b9a6b19d507f394cb1e
 ---
