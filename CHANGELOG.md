@@ -17,6 +17,20 @@
 
 - Package version **0.0.23** — restart the Discord bridge, `corvidinho daemon` and watch after update. No schema bump (still v8). Bridge chat agents now run in their own process group and are killed when the bridge exits.
 
+## 0.0.24
+
+### Discord ask UX tighten (less duplicate noise)
+
+- **DISCORD-ASK-6** — Button asks collapse the thinking embed into one public **Choose** stub (no separate "Needs your input" + stub).
+- **DISCORD-ASK-7** — On success (mention done or after a button pick), edit the existing stub/thinking message into the final answer when practical — no extra ✅ Done + new reply.
+- Ephemeral Choose → options flow unchanged (DISCORD-ASK-1..5).
+- Live gateway: `editMessage` / `deleteMessage`; interaction replies use `MessageFlags.Ephemeral` (drops deprecated `ephemeral: true` warning).
+
+### Ops
+
+- Package version **0.0.24** — restart the Discord bridge after update. No schema bump.
+
+
 ## 0.0.22
 
 ### Ephemeral Discord button asks + multi-user sessions

@@ -1,5 +1,5 @@
 /**
- * DISCORD-ASK-1..5 — ephemeral Discord button asks.
+ * DISCORD-ASK-1..7 — ephemeral Discord button asks (ASK-6/7: one public stub; edit into answer).
  *
  * MessageCreate cannot post ephemeral content. Flow:
  * 1) Public stub with a single "Choose" button (no MCQ body).
