@@ -11,8 +11,8 @@ know what landed vs what is next — especially:
 - When Discord @bot replies work (only after HEAR #5 + token + allowlists)
 - When GitHub @mentions get a session (not yet — typed reads only; tracked by #19)
 - What Leif can prepare now vs wait for (config moments; secrets stay out of repo)
-- When Corvidinho-bot (and later other bots) can **exec** `corvidinho` / Bun as
-  the live agent loop (DOGFOOD / RUNNER flip) vs Cursor/Grok still authoring PRs
+- First DOGFOOD flip: CoS/Corvidinho-bot (Grok) shells into headless `corvidinho`
+  CLI for real work (bridges = other callers; not a product-UI wait)
 - Attribution footer (“Made with Corvidinho”, #20) can land ASAP even pre-runner
 
 Foundation already merged: BOOT #1, ORIGIN #2, plugins+GH reads #15 (#6+#4),

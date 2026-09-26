@@ -5,7 +5,7 @@
 | Item | State |
 |------|--------|
 | Repo | Bootstrap / HI capture + default-deny allowlists + prove-before-done |
-| Default product | Linux-first Bun/TS agent runner (CLI stub → live bot loop next) |
+| Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
 | Fledge | `fledge.toml` with `smoke` + `verify` (includes `spec-check` note/task) |
@@ -85,18 +85,20 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 
 **NEVER** use `@Corvidinho` or any `@handle` in the footer (GitHub may notify unrelated users). Encode the same rule in helpers when #20 ships.
 
-### DOGFOOD / RUNNER (live bot loop)
+### DOGFOOD / RUNNER (headless CLI flip)
 
-**Goal:** Corvidinho-bot (and later other bots) `exec` `corvidinho` / Bun entry as the *live* agent loop — not only Cursor/Grok Bot authoring PRs into this repo.
+**What Corvidinho is:** a **headless agent CLI** — any caller can `exec` `corvidinho` / Bun entry (Grok bots, Discord bridge, GH ingress, scripts). Dogfood ≠ waiting for a Corvidinho product UI. Bridges are just other callers of the same CLI.
 
-**Place in order:** after SpecSync wiring (**#8**) → Discord HEAR thin (**#5**) → **then** runner flip.
+**First flip:** CoS / Corvidinho-bot (Grok stack) shells into `corvidinho` for *real* work — not only Cursor/Grok authoring PRs *into* this repo. Same binary later for Discord/GH callers.
 
-**Honest gaps before flip (not inventing HI):**
+**Useful order (not “become a separate product”):** SpecSync wiring (**#8**) and Discord HEAR thin (**#5**) make the CLI more useful for live callers; they are capability unlocks, not a product-UI gate. Flip when the Grok bot path can honestly exec the CLI for work.
+
+**Honest gaps before first flip (not inventing HI):**
 
 - Full LLM tool loop on top of prove-before-done (#17 landed the gate; loop flesh still open)
-- SpecSync agent tools (#8) so the live loop can list/read/check specs
-- Discord ingress (#5) + filled allowlists + `DISCORD_TOKEN` on the VM
-- GH mention ingress (#19) if the bot should answer @mentions (typed reads alone are not enough)
+- SpecSync agent tools (#8) so the live CLI can list/read/check specs
+- For Discord callers: HEAR (#5) + filled allowlists + `DISCORD_TOKEN` on the VM
+- For GH @mention callers: ingress (#19) — typed reads alone are not enough
 - Attribution (#20) preferred on outbound PRs before/at flip (can land earlier)
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 
@@ -104,14 +106,14 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 
 1. **Foundation** — done (#1, #2, #15, #18)
 2. **Prove loop** — done (#17)
-3. **SpecSync wiring** — #8
-4. **Discord HEAR** — #5
-5. **DOGFOOD / RUNNER** — bots exec `corvidinho` live (after #8 → #5; gaps above)
+3. **SpecSync wiring** — #8 (CLI usefulness for live callers)
+4. **Discord HEAR** — #5 (Discord as a caller of the same CLI)
+5. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
 6. **Discord polish** — #10–#14
 7. **GH write / review / mention** — #19 + later GITHUB-2/3/5
 8. **Deferred** — #9, wallets
 
-Attribution #20 may ship in parallel anytime (pre-runner OK).
+Attribution #20 may ship in parallel anytime (before first flip OK).
 
 ## Allowlists on the bot VM (ALLOW-4)
 
@@ -150,7 +152,7 @@ WALLET-1..3 captured in `hi/allow.md`. **No wallet ACT** until an approved-walle
 
 See **ROADMAP** above. Short pointers:
 
-- #8 SpecSync agent wiring → #5 HEAR → DOGFOOD/RUNNER flip
+- #8 SpecSync + #5 HEAR unlock callers; first DOGFOOD flip = CoS bot execs headless CLI
 - #19 GH mention/listen ingress; #20 attribution ASAP
 - #10–#14 Discord polish after #5; #9 / wallets deferred
 - Keep secrets out of repo; keep verify lane honest; no Trust/attest on bootstrap
