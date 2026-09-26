@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "fix-discordembedpayload-title-access-in-slash-ask-7-fixture-for-tsc",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "30290e1c70b0b100a1ba7d72c659150bd1722e6f",
+  "contract_digest": "7a514ae06475b429e9b1c6c065c59659b50b1256835c2fbe07d87848959cd23e",
+  "execution_digest": "d7b7ac1c49ed40cf9827b81481e1a8e01f975e6e809c641a5e475ab9f3034399",
+  "workspace_digest": "b69e1bda9b02355f78523e7bbbb5d71139b1a74e74cc5d277f9c624697f452a1",
+  "timestamp": 1790466763
+}

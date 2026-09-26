@@ -382,8 +382,8 @@ export class ThinkingStatus {
     if (this.closed && !this.messageId) return null;
     this.stopTicker();
     const id = this.messageId;
-    this.closed = true;
-    this.phase = "done";
+    // Only close on success so callers can fall back to done()/fail()+reply
+    // when editMessage is missing or the edit fails (DISCORD-ASK-7).
     if (!id || !this.outbound.editMessage) return null;
     const ok = await this.outbound.editMessage({
       channelId: this.channelId,
@@ -393,7 +393,10 @@ export class ThinkingStatus {
       components: opts.components ?? null,
       mentionUserIds: opts.mentionUserIds,
     });
-    return ok ? { messageId: id } : null;
+    if (!ok) return null;
+    this.closed = true;
+    this.phase = "done";
+    return { messageId: id };
   }
 
   /**
