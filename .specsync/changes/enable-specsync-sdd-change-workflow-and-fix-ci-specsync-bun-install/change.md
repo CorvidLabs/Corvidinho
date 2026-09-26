@@ -1,6 +1,6 @@
 ---
 id: enable-specsync-sdd-change-workflow-and-fix-ci-specsync-bun-install
-state: implementing
+state: verifying
 type: operations
 base_commit: eb9d9c6755d49dc92565a4c6f427f0589451f29a
 ---

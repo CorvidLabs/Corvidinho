@@ -75,3 +75,4 @@ Bootstrap operator surface for Corvidinho on Linux: print help, print version, a
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-09-26 | corvid-agent | Initial draft stub for BOOT HI capture |
+| 2026-09-26 | corvid-agent | Help text: merge when SpecSync change + verify green |
