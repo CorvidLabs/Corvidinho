@@ -84,6 +84,15 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 
+`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
+`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`. Discord/NDJSON
+bridge summaries SHALL use the chat-body helpers so operator plumbing never
+appears in the final chat reply (DISCORD-3.a).
+
+`execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
+blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
+in addition to MEMORY instructions.
+
 Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2): `src/agent/ask.ts`
 exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`, `askFromToolArguments`,
 `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
@@ -188,6 +197,7 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 ## Change Log
 
 Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: chat/plumbing split for Discord summaries; identity + public Q&A system instructions |
 | 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
 | 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
@@ -202,3 +212,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
 | 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
+

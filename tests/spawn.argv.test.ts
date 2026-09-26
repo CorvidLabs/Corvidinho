@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { buildCorvidinhoArgv } from "../src/agent/spawn-argv.ts";
 import {
+  chatBodyFromTaskResult,
+  formatTaskPlumbing,
   summarizeTaskResult,
   summarizeTaskRunOutput,
 } from "../src/agent/task-summary.ts";
@@ -115,5 +117,33 @@ describe("spawned agents ignore the project .env (ALLOW-4 / SAFE-1)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("DISCORD-3.a chat body vs plumbing", () => {
+  const result = {
+    summary: "Hello Leif, here is the answer.",
+    state: "done",
+    verified: false,
+    verifySkipped: true,
+    attempts: 1,
+    cancelled: false,
+  };
+
+  test("chatBodyFromTaskResult is human text only", () => {
+    const body = chatBodyFromTaskResult(result);
+    expect(body).toBe("Hello Leif, here is the answer.");
+    expect(body).not.toContain("state=");
+    expect(body).not.toContain("verified=");
+    expect(body).not.toContain("attempts=");
+  });
+
+  test("formatTaskPlumbing is operator line for the embed", () => {
+    const line = formatTaskPlumbing(result);
+    expect(line).toContain("state=done");
+    expect(line).toContain("verified=false");
+    expect(line).toContain("verifySkipped");
+    expect(line).toContain("attempts=1");
+    expect(line).not.toContain("Hello Leif");
   });
 });

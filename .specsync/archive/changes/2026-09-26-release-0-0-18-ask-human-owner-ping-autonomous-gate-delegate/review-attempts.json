@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "aa9422b2f8353c0f70396798e715e0df267b4de3",
+      "contract_digest": "9020cf8c98bb9d59ac95ca5d3757de6d37fdb1f6af6c4f8ce4424f82b8008eb3",
+      "execution_digest": "2e906b3d1e5447cd7422a9eb217609538937e6d0f31eb33fd0fb9143bc1b6ccf",
+      "workspace_digest": "c4ce91a476ff60e391712919d94c5df5125723b01781ebd155ca72701805bb1c",
+      "timestamp": 1790459190
+    }
+  ]
+}

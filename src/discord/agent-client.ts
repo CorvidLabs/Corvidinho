@@ -169,6 +169,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
                 verified: result.verified === true,
                 verifySkipped: result.verifySkipped === true,
                 state: result.state,
+                attempts: result.attempts,
+                cancelled: result.cancelled === true,
               },
             }
           : {}),
