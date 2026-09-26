@@ -7,6 +7,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import { defaultDbPath, type DataDirOptions } from "./paths.ts";
+import { ensureScrubbed } from "./scrub.ts";
 
 export type OpenDbOptions = DataDirOptions & {
   /** Explicit DB file path (tests). */
@@ -179,11 +180,14 @@ export function openCorvidinhoDb(opts: OpenDbOptions = {}): Database {
   if (opts.memory) {
     const db = new Database(":memory:");
     migrateCorvidinhoDb(db);
+    ensureScrubbed(db);
     return db;
   }
   const path = opts.path ?? defaultDbPath(opts);
   mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { create: true });
   migrateCorvidinhoDb(db);
+  // SAFE-6: re-scrub stored rows once whenever the scrub rules tighten.
+  ensureScrubbed(db);
   return db;
 }
