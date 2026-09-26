@@ -95,6 +95,21 @@ STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
 
+Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
+constants/types from `src/discord/memory-inject.ts` (also re-exported via
+`src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
+`ADMIN_AUDIT_SURFACE` (`command-handlers/admin.ts`); `planAdminListChange`,
+`commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
+`setJsonDiscordList`, `writeFileAtomic` (`admin-allowlist.ts`);
+`flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
+`SlashContext.recordAudit`.
+
+`src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
+throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
+`WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
+`workCommitMessage` and `buildWorkPrBody` (REQ-discord-088).
+`AgentSpawnResult.task` carries the run's verify facts from its result frame.
+
 `identity-inject.ts` formats/enriches the spawn prompt with acting Discord
 user id + resolved display (owner map wins for owner). Gateway fills
 `authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
@@ -212,3 +227,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only: /work opens a draft PR from its verified worktree (issue 88, AUTONOMOUS-3, GITHUB-2, GITHUB-5, AGENT-4): after a /work run, only when git-commit, git-push and github-pr-create are allowlisted for non-interactive use, commit and push the talk branch and open a draft PR through the existing git and github plugins with a description built from the real diff and the verify result; otherwise reply plainly why no PR was opened |
 | 2026-09-26 | work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched: /work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD) |
 | 2026-09-26 | discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord: Discord searchable channel STRING+autocomplete for /admin channels add\|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17 |
+

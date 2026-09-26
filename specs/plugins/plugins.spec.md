@@ -102,6 +102,81 @@ HTTP/1.1 socket transport.
 
 ## Invariants
 
+Builtin plugin loaders MAY re-register after an in-process registry clear
+(test seam). Presence of an already-registered command name skips duplicate
+register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
+`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
+non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
+(GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
+plain Made with Corvidinho attribution (no @handles). Dry-run via
+CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
+`files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse.
+Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
+keystore basenames) cannot be overwritten or deleted via file tools (SAFE-2);
+no in-band override. Memory plugins take the acting user and ADMIN
+only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
+`CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
+refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
+`memory-forget` / `memory-override` are two-phase with an HMAC confirm token
+confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+Memory plugin command descriptions SHALL include concrete argv examples so the
+LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
+`memory-*` is enriched similarly in `buildOpenAiTools`.
+`web-fetch` is dangerous + minTier 1 (tool): SAFE-1 consent applies (left out
+of the default tool catalog, non-interactive deny unless CORVIDINHO_ALLOWLIST
+names it, SAFE-5 audit) until community-role web gating (#65) and the
+untrusted-content rules (#71) are captured. GET only, http/https only, no URL
+credentials, and no URL (first hop or redirect) carrying a value
+`scrubSecrets` would redact, raw or percent-decoded, so vendor-key-shaped
+values never leave in a URL. Loopback, private, CGNAT, link-local (incl. cloud
+metadata), unique-local, multicast, unspecified, `0.0.0.0/8`,
+reserved/documentation and IPv4-mapped / NAT64 forms of those are refused after
+DNS and before any connection; any non-public address in an answer refuses the
+whole name. The socket dials only checked IP literals (no DNS, no proxy), in
+answer order, trying the next checked address only after a socket-level
+connect error, while Host and TLS SNI keep the original name and the
+certificate is verified against it. Redirects are followed manually (max 5)
+and every hop repeats the check. The body is capped at 1 MiB and the returned
+text at 100,000 chars (truncated, flagged with `truncatedBy`), the whole call
+at 15 s; non-text or malformed (not an RFC 6838 `type/subtype` token) content
+types and compressed bodies are refused. Returned text has C0/C1 controls
+stripped (newline and tab kept), is secret-scrubbed and is fenced as untrusted
+data with a per-call random marker id; the page title is a `Title:` line
+inside the fence, never a separate field. Errors never echo the reason phrase
+or other server-chosen header values and are one line, control-free and at
+most 300 chars. `web-search` is not built (provider not captured).
+Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
+stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
+stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
+must be the repository / worktree top level (SAFE-3). Flags are strict
+(unknown refused); path args use the files-plugin clamp and go after `--` as
+literal pathspecs. Hooks stay off even with a repo-local `core.hooksPath`, and
+a linked worktree top level (`.git` file) is a valid cwd. `git-status` lists
+untracked files individually (`--untracked-files=all`) so they feed
+`git-commit`. `git-branch-create` switches with `--no-overwrite-ignore` so an
+ignored `.env*` / keystore is never replaced by a start point's tracked copy
+(SAFE-2). Reads are `dangerous: false`, minTier 0. `git-branch-create`,
+`git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
+message, stages explicit file paths only (no directories / `--all` / amend),
+commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
+paths and staging the deletion of SAFE-2 protected infra, and reports
+`filesChanged`. `git-push` pushes only the current branch to the same-named
+ref of a configured remote (never a URL), never forces, gates every push
+URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
+(GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
+SAFE-22 default-branch policy is not enforced (awaiting HI).
+
+`shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
+Lexical `cd`/`pushd` targets that escape the root are refused before spawn
+(SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
+
+
+File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
+When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
+non-ADMIN callers are refused for every mutating plugin at run time with a
+"not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
+for dangerous tools. Role is re-checked via owner config each call.
+
 Non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN` set and not admin) may
 call GitHub read tools against any *public* repository after deny-list checks
 (ROLES-CHAT-8). Private or unknown visibility is refused. ADMIN / non-role
@@ -223,3 +298,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | web-fetch-htmltotext-strips-tags-to-a-capped-fixpoint-so-split-tags-cannot-reassemble-codeql-incomplete-multi-character: Web-fetch htmlToText strips tags to a capped fixpoint so split tags cannot reassemble (CodeQL incomplete multi-character sanitization on #148) |
 | 2026-09-26 | github-ci-status-for-a-pr-or-ref-with-an-overall-ci-verdict-incl-legacy-commit-statuses-github-4-issue-94-captured: github-ci-status takes a PR number or a ref (branch/tag/SHA; git ref-name validation, option-looking refused) and reports verdict green/red/pending/none over check runs plus legacy commit statuses; rows keep name/state/bucket/link (REQ-plugins-094, GITHUB-4 / #94 captured slice; draft GITHUB-11 left for HI capture) |
 | 2026-09-26 | github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200: GitHub PR review reads (issue #93 captured slice, GITHUB-3 / GITHUB-1): read-only github-pr-diff (unified diff capped at 200 KiB with a truncation marker, optional --file PATH filter) and github-pr-files (changed files with status/additions/deletions, paginated to a cap) in plugins/github/review.ts; dangerous false, minTier 0, GITHUB-6 repo gate; SAFE-6 scrub on returned text; diff returned as untrusted data; draft GITHUB-10 confidence score left for HI capture |
+

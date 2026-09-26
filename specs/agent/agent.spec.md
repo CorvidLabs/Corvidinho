@@ -38,6 +38,35 @@ appropriately (REQ-agent-010).
 
 ## Public API
 
+Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
+`src/agent/index.ts`).
+
+NDJSON event stream (REQ-agent-073, issue #73): `src/agent/events-ndjson.ts`
+owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
+`usageFrame`, `resultFrame`, `serializeFrame`, `createNdjsonWriter`,
+`summarizeToolArgs`, `parseNdjsonLine`, `createNdjsonParser`,
+`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`. Frames:
+`{protocol, type}` with AgentEvent types `StateChanged` / `Text` / `ToolCall`
+(`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
+(running prompt / completion / total tokens) and a final `result`
+(`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
+totals; `extractUsage` reads OpenAI-compatible `usage`.
+
+Project instructions (REQ-agent-084, AGENT-1, issue #84):
+`src/agent/project-instructions.ts` exports `findProjectRoot`,
+`loadProjectInstructions`, `renderProjectInstructions`,
+`describeProjectInstructions`, `withProjectInstructions`,
+`PROJECT_INSTRUCTION_FILES` (`AGENTS.md`, `CLAUDE.md`),
+`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER`,
+`NOT_COMMITTED_REASON` and `projectInstructionsWarning`
+(re-exported from `src/agent/index.ts`). `createTaskExecute` loads them from
+`cwd` by default; `projectInstructions: false` opts out.
+`ProjectInstructions.source` is `commit` when the project root holds `.git`
+(files are read from the `HEAD` commit through read-only git: `ls-tree`,
+`cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
+git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
+`uncommitted: true` when its working-tree copy differs from `HEAD`.
+
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`. Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
@@ -120,3 +149,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
 | 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |
+
