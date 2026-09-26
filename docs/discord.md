@@ -187,3 +187,24 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 Ops: restart the Discord bridge after deploying **0.0.5** so presence and spawn
 paths pick up the build. Do not leave abandoned worktrees under the base dir
 from crashed runs — prune via `git worktree prune` in the project if needed.
+
+### `/work` → draft PR (AUTONOMOUS-3, GITHUB-2/5, REQ-discord-088)
+
+After a `/work` run finishes, its reply carries one `PR:` line. A draft PR is
+opened only when every gate holds; otherwise the line says plainly why not.
+
+| Gate | When it fails |
+|------|---------------|
+| Run finished cleanly, verify did not fail | `PR: not opened — …` (nothing verified to ship) |
+| Ran in a git worktree with changes | `PR: not opened — …` / `PR: none — …` |
+| `git-commit` (dirty tree only), `git-push`, `github-pr-create` allowlisted (`CORVIDINHO_ALLOWLIST`, GITHUB-5) | Nothing is committed or pushed; the changes stay on `talk/…` |
+| Remote `OWNER/REPO` passes the repo gate (GITHUB-6) | Gate error, nothing pushed |
+| Tree passed `fledge lanes run verify --non-interactive` (from the run's result frame, else re-run once) | Nothing pushed (AGENT-4) |
+
+Steps run through the existing typed plugins (`git-commit` → `git-push` →
+`github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
+is built from the real diff against the remote default branch (name-status,
+diffstat, commits) plus the verify result, with repo/model text in code fences
+and secrets scrubbed. Allowlisting these plugins is process-wide: the spawned
+agent can call them too.
+
