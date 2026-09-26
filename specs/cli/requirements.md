@@ -20,6 +20,7 @@ spec: cli.spec.md
 
 `bun src/cli.ts doctor` checks Discord token env presence, `gh auth status`, and whether `fledge` / `specsync` are on PATH, never printing secret values.
 
+
 ## Constraints
 
 - Secrets stay out of repo and chat logs.
@@ -27,4 +28,13 @@ spec: cli.spec.md
 
 ## Out of Scope
 
-- Discord gateway, GitHub writes, plugin loading, SpecSync change workspaces (workflow off).
+- Discord gateway, GitHub write plugins, autonomous mode (later PRs).
+
+### REQ-cli-004
+
+The CLI SHALL provide `plugins list` and `plugins run <name>` and honor `--non-interactive` / CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE; doctor SHALL report loaded plugin count.
+
+Acceptance Criteria
+- `corvidinho plugins list` exits 0 and shows github + meta commands.
+- Doctor includes a plugins check with command count.
+

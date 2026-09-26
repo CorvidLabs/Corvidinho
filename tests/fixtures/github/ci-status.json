@@ -1,0 +1,8 @@
+[
+  {
+    "name": "smoke",
+    "state": "SUCCESS",
+    "bucket": "pass",
+    "link": "https://github.com/CorvidLabs/Corvidinho/actions"
+  }
+]

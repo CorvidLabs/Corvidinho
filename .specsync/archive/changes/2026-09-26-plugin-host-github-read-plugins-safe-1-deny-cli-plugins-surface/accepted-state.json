@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+  "slug": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+  "title": "WATCH: plugin host + GitHub read + repo deny gate",
+  "description": "WATCH slice: typed plugin host, GitHub read tools, SAFE-1 deny, GITHUB-6 repo gate, SpecSync SDD",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "bfd880ea9645d1444aa4e4cc11e7fcded4c35eb8",
+  "created_at": 1790436944,
+  "updated_at": 1790437332,
+  "affected_specs": [
+    "plugins",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/",
+    "plugins/",
+    "tests/",
+    "specs/",
+    "tsconfig.json",
+    "package.json",
+    "STATUS.md",
+    "AGENTS.md",
+    "fledge.toml",
+    ".specsync/config.toml",
+    ".specsync/registry.toml",
+    "docs/",
+    "bun.lock"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Typed plugin host list/run with danger/minTier; SAFE-1 deny in non-interactive; github-pr-list/status/ci-status/issue-list read-only via gh JSON; GITHUB-6 requires --repo and honors DENY/ALLOW env; CLI plugins list/run + doctor count; bun test + fledge verify green; Spec Sync CI green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+  "implementation_commit": "e937162943f54d5f539d5223cdbdc1e9e2f1b7bd",
+  "implementation_tree": "435e1f1317b865ef622299ce66375ea577fdb5ff",
+  "contract_digest": "b043f197225b4d06ea3c327430f2dfae6f27f809a4cad9f145c0387995376987",
+  "workspace_digest": "ea10940eb1e09843f9ecfa16f268a6a4bdc1c0140ab3016e7329d4d108039685",
+  "closing_digest": "b795bca18204560a1215a58f6a0ecb5a511a877c02636158b31ac607fd1d44d1",
+  "review_digest": "aa0d10dd0a0115bd92a1c34e1a8426bf095b36e6f2d931e32d5c7bfd2e4714ae",
+  "finalization_digest": "6fc46d8f828297a0538572be5642554815db1a4e00444d0965ad1d9500a73998",
+  "timestamp": 1790437332
+}

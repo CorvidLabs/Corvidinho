@@ -33,6 +33,7 @@ bun install
 bun src/cli.ts --help
 bun src/cli.ts doctor
 bun src/cli.ts version
+bun src/cli.ts plugins list
 bun test
 hi check
 fledge lanes run verify --non-interactive

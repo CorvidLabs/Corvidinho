@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "e937162943f54d5f539d5223cdbdc1e9e2f1b7bd",
+      "contract_digest": "b043f197225b4d06ea3c327430f2dfae6f27f809a4cad9f145c0387995376987",
+      "execution_digest": "acfa1b514ed1dbd981bf69ca5d1321ab6c8a8543e78943b3774b6a127408c55a",
+      "workspace_digest": "ea10940eb1e09843f9ecfa16f268a6a4bdc1c0140ab3016e7329d4d108039685",
+      "timestamp": 1790437330
+    }
+  ]
+}
