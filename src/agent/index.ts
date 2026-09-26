@@ -93,6 +93,7 @@ export {
   PROJECT_INSTRUCTION_FILES,
   PROJECT_INSTRUCTIONS_HEADER,
   PROJECT_INSTRUCTIONS_MAX_BYTES,
+  projectInstructionsWarning,
   renderProjectInstructions,
   withProjectInstructions,
 } from "./project-instructions.ts";

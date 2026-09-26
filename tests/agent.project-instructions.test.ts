@@ -19,6 +19,7 @@ import {
   loadProjectInstructions,
   PROJECT_INSTRUCTIONS_HEADER,
   PROJECT_INSTRUCTIONS_MAX_BYTES,
+  projectInstructionsWarning,
   renderProjectInstructions,
   withProjectInstructions,
 } from "../src/agent/project-instructions.ts";
@@ -209,6 +210,21 @@ describe("loadProjectInstructions (AGENT-1)", () => {
     expect(block.split("</project-instructions>").length - 1).toBe(1);
   });
 
+  test("projectInstructionsWarning only speaks up for refused or truncated files", () => {
+    const { proj } = makeProject();
+    writeFileSync(join(proj, "AGENTS.md"), "ok\n");
+    symlinkSync("AGENTS.md", join(proj, "CLAUDE.md"));
+    expect(projectInstructionsWarning(loadProjectInstructions(proj))).toBeNull();
+    expect(projectInstructionsWarning(loadProjectInstructions(proj, { maxBytes: 1 }))).toBe(
+      "Project instructions: AGENTS.md (3 bytes, truncated); CLAUDE.md (same file as AGENTS.md)",
+    );
+    rmSync(join(proj, "CLAUDE.md"));
+    mkdirSync(join(proj, "CLAUDE.md"));
+    expect(projectInstructionsWarning(loadProjectInstructions(proj))).toBe(
+      "Project instructions: AGENTS.md (3 bytes); CLAUDE.md refused: not a regular file",
+    );
+  });
+
   test("withProjectInstructions appends only when there is a block", () => {
     expect(withProjectInstructions("sys", "")).toBe("sys");
     expect(withProjectInstructions("sys", "blk")).toBe("sys\n\nblk");
@@ -257,11 +273,39 @@ describe("createTaskExecute uses project instructions (AGENT-1)", () => {
         expect(s).toContain("PROJECT-RULE-42");
         expect(s).not.toContain("PARENT RULES");
       }
-      const notes = events.filter(
-        (e) => e.type === "Text" && e.text.startsWith("Project instructions:"),
-      );
-      expect(notes).toEqual([{ type: "Text", text: "Project instructions: AGENTS.md (16 bytes)" }]);
+      // A clean load adds no event: the run's event stream is unchanged.
+      expect(events.filter((e) => e.type === "Text" && e.text.startsWith("Project"))).toEqual([]);
     }
+  });
+
+  test("a refused or truncated file is reported once as a Text event", async () => {
+    const { outside, proj } = makeProject();
+    writeFileSync(join(proj, "AGENTS.md"), "x".repeat(PROJECT_INSTRUCTIONS_MAX_BYTES + 1));
+    symlinkSync(join(outside, "AGENTS.md"), join(proj, "CLAUDE.md"));
+    const systems: string[] = [];
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: proj,
+      env: llmEnv,
+      tier: "read",
+      fetchImpl: captureFetch(systems),
+      loadPlugins: false,
+      onEvent: (e) => events.push(e),
+    });
+    const signal = new AbortController().signal;
+    await exec({ attempt: 1, signal });
+    await exec({ attempt: 2, signal });
+    expect(events).toEqual([
+      {
+        type: "Text",
+        text:
+          `Project instructions: AGENTS.md (${PROJECT_INSTRUCTIONS_MAX_BYTES + 1} bytes, truncated); ` +
+          "CLAUDE.md refused: resolves outside the project root",
+      },
+    ]);
+    expect(systems[0]).toContain("[truncated: AGENTS.md is");
+    expect(systems[0]).not.toContain("PARENT RULES");
   });
 
   test("projectInstructions:false leaves the prompt unchanged", async () => {

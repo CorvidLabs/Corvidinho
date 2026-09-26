@@ -235,7 +235,7 @@ export function renderProjectInstructions(pi: ProjectInstructions): string {
   return parts.join("\n\n");
 }
 
-/** One-line operator note (Text event), or null when no file was found. */
+/** One-line summary of every file found, or null when no file was found. */
 export function describeProjectInstructions(pi: ProjectInstructions): string | null {
   if (pi.files.length === 0) return null;
   const bits = pi.files.map((f) => {
@@ -246,6 +246,18 @@ export function describeProjectInstructions(pi: ProjectInstructions): string | n
     return `${f.name} refused: ${f.reason}`;
   });
   return `Project instructions: ${bits.join("; ")}`;
+}
+
+/**
+ * Operator note for the run's `Text` event: the summary, but only when a
+ * file was refused or truncated. A clean load adds no event, so the event
+ * stream of an ordinary run is unchanged.
+ */
+export function projectInstructionsWarning(pi: ProjectInstructions): string | null {
+  const noteworthy = pi.files.some(
+    (f) => f.status === "refused" || (f.status === "loaded" && f.truncated),
+  );
+  return noteworthy ? describeProjectInstructions(pi) : null;
 }
 
 /** Append the project block to a system prompt (no-op when empty). */

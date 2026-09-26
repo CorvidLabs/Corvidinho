@@ -57,7 +57,8 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `loadProjectInstructions`, `renderProjectInstructions`,
 `describeProjectInstructions`, `withProjectInstructions`,
 `PROJECT_INSTRUCTION_FILES` (`AGENTS.md`, `CLAUDE.md`),
-`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB) and `PROJECT_INSTRUCTIONS_HEADER`
+`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER` and
+`projectInstructionsWarning`
 (re-exported from `src/agent/index.ts`). `createTaskExecute` loads them from
 `cwd` by default; `projectInstructions: false` opts out.
 
@@ -97,9 +98,9 @@ the capability tier. The loader never throws.
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 | AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
-| Instruction file symlink resolves outside the project | refused; named in the Text note; run continues |
-| Instruction file is a directory, binary, or not UTF-8 | refused; named in the Text note; run continues |
-| Instruction file over 16 KiB | first 16 KiB kept (UTF-8 boundary) plus truncation marker |
+| Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
+| Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
+| Instruction file over 16 KiB | first 16 KiB kept (UTF-8 boundary) plus truncation marker; one-time Text note |
 
 ## Dependencies
 

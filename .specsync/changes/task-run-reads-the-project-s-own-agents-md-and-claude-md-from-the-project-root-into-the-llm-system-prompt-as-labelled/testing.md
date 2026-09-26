@@ -17,7 +17,10 @@ network):
   CLAUDE.md -> AGENTS.md reported as duplicate and rendered once.
 - secret in AGENTS.md scrubbed; closing label escaped.
 - `createTaskExecute`: read and tool tiers carry the block on every attempt,
-  note emitted once; `projectInstructions: false` and no files leave the
+  a clean load emits no event; a truncated AGENTS.md plus an outside
+  CLAUDE.md symlink emit exactly one note across two attempts;
+  `projectInstructionsWarning` is null for a clean load (incl. duplicate);
+  `projectInstructions: false` and no files leave the
   prompt unchanged.
 
 Plus `bun test`, `bunx tsc --noEmit`, `specsync check --require-coverage 100`,

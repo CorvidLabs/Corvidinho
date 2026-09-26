@@ -26,10 +26,15 @@ New module `src/agent/project-instructions.ts`:
   capability tier, then one `<project-instructions file="NAME">` block per
   loaded file (a closing tag inside a file is escaped). Empty when nothing
   loaded.
-- `describeProjectInstructions(pi)`: one-line operator note, or null.
+- `describeProjectInstructions(pi)`: one-line summary of every file found,
+  or null.
+- `projectInstructionsWarning(pi)`: that summary only when a file was
+  refused or truncated, else null.
 - `withProjectInstructions(system, block)`: append helper.
 
 Hook in `createTaskExecute` (`src/agent/execute.ts`): load once per execute
 fn from `cwd` (opt-out `projectInstructions: false`), append the block to the
-read-tier and tool-loop system prompts, and emit the note as one `Text`
-event on the first attempt. No new CLI flag, env var or persisted data.
+read-tier and tool-loop system prompts, and emit the warning (if any) as
+one `Text` event on the first attempt. A clean load emits nothing, so the
+`task run --json` / NDJSON event stream of an ordinary run is unchanged
+(the #139 exact-event test stays as it is). No new CLI flag, env var or persisted data.

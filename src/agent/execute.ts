@@ -15,8 +15,8 @@ import type {
   ExecuteResult,
 } from "./types.ts";
 import {
-  describeProjectInstructions,
   loadProjectInstructions,
+  projectInstructionsWarning,
   renderProjectInstructions,
   withProjectInstructions,
 } from "./project-instructions.ts";
@@ -166,7 +166,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const project =
     opts.projectInstructions === false ? null : loadProjectInstructions(cwd);
   const projectBlock = project ? renderProjectInstructions(project) : "";
-  let projectNote = project ? describeProjectInstructions(project) : null;
+  let projectNote = project ? projectInstructionsWarning(project) : null;
 
   return async ({ attempt, verifyFeedback, signal }) => {
     if (projectNote) {
