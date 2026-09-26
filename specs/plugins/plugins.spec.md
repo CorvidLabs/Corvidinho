@@ -18,6 +18,7 @@ files:
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
+  - tests/audit.keyed-downgrade.test.ts
   - src/allowlist/types.ts
   - src/allowlist/load.ts
   - src/allowlist/github.ts
@@ -249,6 +250,12 @@ sessions keep the GITHUB-6 allowlist gate.
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`.
 
+SAFE-5 audit chain (REQ-plugins-095): once `audit_log` holds a keyed row it
+stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
+append after a keyed row (a dangerous run is then refused, fail closed), and
+`verifyAudit` with the key reports an unkeyed row after a keyed row as the
+break. An unkeyed prefix followed by keyed rows still verifies as mixed.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -324,6 +331,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, expansions, CDPATH) | Refuse (exit 2, SAFE-3); no spawn |
+| Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |

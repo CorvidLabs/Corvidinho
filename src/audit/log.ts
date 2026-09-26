@@ -5,8 +5,10 @@
  * chain. With CORVIDINHO_AUDIT_HMAC_KEY set on the bot VM each link is an
  * HMAC-SHA256, so someone who can write the DB but not read the VM env cannot
  * re-sign the chain. Without a key the chain is plain SHA-256 (integrity only)
- * and verify says so. Rows hold ids, digests and outcomes — never raw args or
- * memory content.
+ * and verify says so. Once a keyed row exists the chain stays keyed: an
+ * unkeyed row after it is refused on append and fails verify, so keyed rows
+ * cannot be relinked as plain SHA-256. Rows hold ids, digests and outcomes —
+ * never raw args or memory content.
  */
 
 import { createHash, createHmac } from "node:crypto";
@@ -95,8 +97,13 @@ export function appendAudit(
   let hash = "";
   db.transaction(() => {
     const last = db
-      .query("SELECT hash FROM audit_log ORDER BY seq DESC LIMIT 1")
-      .get() as { hash: string } | null;
+      .query("SELECT hash, keyed FROM audit_log ORDER BY seq DESC LIMIT 1")
+      .get() as { hash: string; keyed: number } | null;
+    if (last?.keyed && !key) {
+      throw new Error(
+        "audit chain is keyed; appending needs CORVIDINHO_AUDIT_HMAC_KEY (SAFE-5)",
+      );
+    }
     const prev = last?.hash ?? GENESIS;
     const row = {
       ts: opts.now ?? Date.now(),
@@ -133,7 +140,8 @@ export function appendAudit(
 
 /**
  * Recompute the chain. Keyed rows need the key; without it they cannot be
- * verified and the result is not ok (fail closed).
+ * verified and the result is not ok (fail closed). An unkeyed row after a
+ * keyed row is a break: only a writer without the key would produce one.
  */
 export function verifyAudit(db: Database, key?: string): AuditVerify {
   const rows = db.query("SELECT * FROM audit_log ORDER BY seq ASC").all() as Row[];
@@ -147,7 +155,8 @@ export function verifyAudit(db: Database, key?: string): AuditVerify {
       return { ok: false, count: rows.length, keyedRows, unkeyedRows, keyAvailable: false, brokenAtSeq: r.seq };
     }
     const expect = link(r.keyed ? key : undefined, prev, r);
-    if (r.prev_hash !== prev || r.hash !== expect) {
+    const downgraded = !r.keyed && keyedRows > 0;
+    if (downgraded || r.prev_hash !== prev || r.hash !== expect) {
       return { ok: false, count: rows.length, keyedRows, unkeyedRows, keyAvailable: Boolean(key), brokenAtSeq: r.seq };
     }
     prev = r.hash;
