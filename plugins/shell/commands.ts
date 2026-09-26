@@ -10,49 +10,74 @@ import {
   firstDisallowedCd,
 } from "./clamp.ts";
 
-function flagValue(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name);
-  if (idx < 0) return undefined;
-  const v = args[idx + 1];
-  return v != null && !v.startsWith("--") ? v : undefined;
-}
+type ParsedCommand = { command?: string; json: boolean; error?: string };
 
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name);
-}
-
-/** Collect command string: --command <str> or all non-flag positionals joined. */
-function parseCommand(args: string[]): string | undefined {
-  const flagged = flagValue(args, "--command");
-  if (flagged != null) return flagged;
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
+/**
+ * Collect the command string (REQ-plugins-243). Only leading options belong to
+ * shell-exec: `--json`, `--command <str>` / `--command=<str>`, `--cwd <dir>`
+ * (ignored; the cwd is pinned) and `--`, which ends them. From the first other
+ * token on, every token is part of the command verbatim, so the command's own
+ * flags (`--dry-run`, `--json`, ...) are never dropped. Words left over after
+ * `--command` make the call ambiguous and are refused, not dropped.
+ */
+function parseCommand(args: string[]): ParsedCommand {
+  let json = false;
+  let flagged: string | undefined;
+  let i = 0;
+  for (; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--command" || a === "--cwd") {
+    if (a === "--") {
       i++;
+      break;
+    }
+    if (a === "--json") {
+      json = true;
       continue;
     }
-    if (a === "--json") continue;
-    if (a.startsWith("--")) continue;
-    out.push(a);
+    if (a === "--command" || a === "--cwd") {
+      const v = args[i + 1];
+      if (v === undefined) return { json, error: `missing value for ${a}` };
+      i++;
+      if (a === "--cwd") continue;
+      if (flagged !== undefined) return { json, error: "--command given more than once" };
+      flagged = v;
+      continue;
+    }
+    if (a.startsWith("--command=")) {
+      if (flagged !== undefined) return { json, error: "--command given more than once" };
+      flagged = a.slice("--command=".length);
+      continue;
+    }
+    break;
   }
-  if (out.length === 0) return undefined;
-  return out.join(" ");
+  const rest = args.slice(i);
+  if (flagged !== undefined) {
+    if (rest.length > 0) {
+      return {
+        json,
+        error: "unexpected argument(s) after --command (put the whole command in --command)",
+      };
+    }
+    return { command: flagged, json };
+  }
+  return { command: rest.length > 0 ? rest.join(" ") : undefined, json };
 }
 
 export const shellCommands: PluginCommand[] = [
   {
     name: "shell-exec",
     description:
-      "Execute a shell command (sh -c) pinned to the project cwd. dangerous + minTier=code. SAFE-3 refuses cd/pushd outside the root. Args: <command|--command ...>",
+      "Execute a shell command (sh -c) pinned to the project cwd. dangerous + minTier=code. SAFE-3 refuses cd/pushd outside the root. Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
     dangerous: true,
     minTier: 2,
     async handler(ctx): Promise<PluginHandlerResult> {
-      const cmdStr = parseCommand(ctx.args);
-      if (!cmdStr || !cmdStr.trim()) {
+      const parsed = parseCommand(ctx.args);
+      const cmdStr = parsed.command;
+      if (parsed.error || !cmdStr || !cmdStr.trim()) {
+        const usage = "usage: shell-exec <command>  (or --command <str>)";
         return {
           ok: false,
-          error: "usage: shell-exec <command>  (or --command <str>)",
+          error: parsed.error ? `${parsed.error}; ${usage}` : usage,
           exitCode: 1,
         };
       }
@@ -96,7 +121,7 @@ export const shellCommands: PluginCommand[] = [
         exitCode: code,
         output,
       };
-      if (ctx.json || hasFlag(ctx.args, "--json")) {
+      if (ctx.json || parsed.json) {
         return {
           ok,
           data,
