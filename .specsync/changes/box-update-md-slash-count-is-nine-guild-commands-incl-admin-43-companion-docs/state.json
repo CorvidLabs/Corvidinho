@@ -7,10 +7,11 @@
   "title": "BOX-UPDATE.md slash count is nine guild commands incl. /admin (#43 companion docs)",
   "description": "BOX-UPDATE.md slash count is nine guild commands incl. /admin (#43 companion docs)",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "92359247c1841bed84b9298ad1d75b17faaf409f",
   "created_at": 1790456123,
-  "updated_at": 1790456178,
+  "updated_at": 1790456200,
   "affected_specs": [],
   "affected_paths": [
     "docs/BOX-UPDATE.md"

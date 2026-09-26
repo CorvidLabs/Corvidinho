@@ -1,6 +1,6 @@
 ---
 id: box-update-md-slash-count-is-nine-guild-commands-incl-admin-43-companion-docs
-state: approved
+state: implementing
 type: documentation
 base_commit: 92359247c1841bed84b9298ad1d75b17faaf409f
 ---
