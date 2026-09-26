@@ -57,7 +57,37 @@ export {
   isAckableEventType,
   maybePostWatchAck,
   shouldAckEvent,
+  type AckAttemptResult,
   type AckClient,
   type AckCommentResult,
 } from "./ack.ts";
 
+export {
+  buildSummaryBody,
+  maybePostWatchSummary,
+  SuccessfulAckStore,
+  SummarizedIdStore,
+} from "./summary.ts";
+
+export {
+  classifySpawnError,
+  createMemorySpawnOutcomeStore,
+  defaultSpawnLogPath,
+  formatSpawnOutcomeLog,
+  formatSpawnStartLog,
+  SpawnOutcomeStore,
+  type MemorySpawnOutcomeStore,
+  type SpawnErrorClass,
+  type SpawnOutcome,
+} from "./spawn-log.ts";
+
+export {
+  asGithubRateLimitError,
+  computeRateLimitBackoffMs,
+  DEFAULT_RATE_LIMIT_BACKOFF_MS,
+  formatRateLimitLog,
+  GithubRateLimitError,
+  parseGithubRateLimit,
+  type RateLimitBackoff,
+  type RateLimitHeaders,
+} from "./rate-limit.ts";

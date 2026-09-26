@@ -84,7 +84,7 @@ printing secret values. Help SHALL document `DISCORD_GUILD_ID` preference for
 fast guild-scoped registration.
 
 Acceptance Criteria
-- `corvidinho --protocol-version` prints `1` and exits 0.
+- `corvidinho --protocol-version` prints `CORVIDINHO_PROTOCOL_VERSION` (currently `2`) and exits 0.
 - `corvidinho discord bridge` without token exits non-zero with clean explanation.
 - `corvidinho discord register-commands` without token exits non-zero naming token env.
 - Help documents `discord bridge`, `discord register-commands`, and Discord env/allowlist vars including `DISCORD_GUILD_ID`.
@@ -203,9 +203,64 @@ GitHub login, or any token. Owner config problems (for example a non-snowflake
 Discord id) SHALL be named without echoing the value. A missing owner is
 informational and SHALL NOT change the doctor exit code.
 
+Because ADMIN is owner-only (IDENTITY-2), doctor SHALL print a
+`[warn] admin-lists` line when `CORVIDINHO_DISCORD_ADMIN_USERS` or
+`CORVIDINHO_DISCORD_ADMIN_ROLES` is set, saying they are ignored. The line
+SHALL NOT echo their values and SHALL NOT change the exit code.
+
 Acceptance Criteria
 - Doctor prints an `owner` line with configured yes/no plus the display name only.
 - Doctor never prints the owner Discord id, GitHub login, or tokens.
 - A missing owner does not flip the doctor exit code.
+- Legacy admin lists produce a `[warn] admin-lists` line without their values and without changing the exit code.
 - Fixture test runs doctor with a temp allowlist file / env (no network).
+### REQ-cli-015
+
+The project SHALL ship package version `0.0.9` with shell-exec + SAFE-3
+(issue #83 / PLUGIN-1,2 / SAFE-3). CLI `version` and Discord presence
+(DISCORD-12) report `0.0.9` after bridge update. CHANGELOG SHALL include
+verbose 0.0.9 notes. STATUS.md SHALL mark #83 done.
+
+Acceptance Criteria
+- `package.json` version is `0.0.9`.
+- CLI `version` prints `0.0.9`.
+- CHANGELOG has a 0.0.9 section covering shell-exec + SAFE-3.
+- STATUS ROADMAP marks #83 done; next = remaining M3 plugins (git, …).
+
+### REQ-cli-073
+
+`corvidinho task run` SHALL accept `--output text|json|ndjson` so output can be
+human text, a single JSON result, or a stream of events (CLI-7). `--json`
+SHALL remain an alias for `--output json` and its single pretty-printed
+`{ result, events }` payload SHALL be unchanged. `--output ndjson` SHALL write
+one JSON object per stdout line as the run progresses (AgentEvent frames,
+`usage` frames when the provider reports usage) and end with a `result` frame
+whose `result` equals the `--json` `result`, except that `summary` is capped at
+4000 characters (the frame then carries `truncated: true`) so one line stays
+bounded; human stderr progress stays quiet
+in ndjson mode like `--json`. Exit codes SHALL match the other modes. An
+unknown `--output` value SHALL print usage to stderr and exit 1.
+`--protocol-version` SHALL print `2`.
+
+Acceptance Criteria
+- `task run --no-verify --output ndjson` prints only protocol-2 frames, starting with `StateChanged` and ending with `result`.
+- The ndjson `result` equals `task run --no-verify --json` `.result` (a `summary` over 4000 chars is capped with `truncated: true`).
+- `--json` output still parses as one JSON document with `result` and `events`.
+- `--output bogus` exits 1 with a usage line.
+- `--protocol-version` prints `2`.
+
+### REQ-cli-143
+
+`task run --task <text>` SHALL treat the next argv item as the task text even
+when it starts with `-`, and `--task=<text>` SHALL keep text that spans
+lines. The bridges pass untrusted Discord and GitHub text as that value, so
+text that looks like a flag (for example `--tier=code`, `--no-verify`,
+`--max-retries=9`) SHALL NOT be parsed as a CLI flag and SHALL NOT change
+the capability tier, verify, or retry settings (AGENT-5, SAFE-1).
+
+Acceptance Criteria
+- A `--task` value starting with `-` is kept verbatim as the task text.
+- Flag-looking task text never sets tier, max-retries, JSON, or no-verify.
+- `--task=` with newlines keeps every line.
+- Normal `--task TEXT --tier code --json` parsing is unchanged.
 

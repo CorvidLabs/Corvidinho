@@ -345,4 +345,21 @@ describe("corvidinho doctor owner line (REQ-cli-042)", () => {
     expect(without.out).not.toContain(OWNER_ID);
     expect(without.code).toBe(withOwner.code);
   }, 30_000);
+
+  test("legacy admin lists get a warn line and never change the exit code (IDENTITY-2)", async () => {
+    const env = baseEnv();
+    delete env.CORVIDINHO_DISCORD_ADMIN_USERS;
+    delete env.CORVIDINHO_DISCORD_ADMIN_ROLES;
+    const clean = await runDoctor(env);
+    expect(clean.out).not.toContain("admin-lists");
+    const withLists = await runDoctor({
+      ...env,
+      CORVIDINHO_DISCORD_ADMIN_USERS: "123456789012345678",
+      CORVIDINHO_DISCORD_ADMIN_ROLES: "234567890123456789",
+    });
+    expect(withLists.out).toContain("[warn] admin-lists:");
+    expect(withLists.out).toContain("owner-only (IDENTITY-2)");
+    expect(withLists.out).not.toContain("123456789012345678");
+    expect(withLists.code).toBe(clean.code);
+  }, 30_000);
 });

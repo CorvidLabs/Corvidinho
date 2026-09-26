@@ -90,6 +90,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     gitTipSha: over.gitTipSha,
     adminUserIds: over.adminUserIds,
     adminRoleIds: over.adminRoleIds,
+    owner: over.owner,
     mutedUsers: over.mutedUsers,
   };
 }
@@ -137,7 +138,7 @@ describe("slash dispatch gates", () => {
   });
 
   test("non-allowlisted channel admin → ephemeral allowlist tip (DISCORD-DENY-2)", async () => {
-    const ctx = makeCtx({ adminUserIds: ["boss"] });
+    const ctx = makeCtx({ owner: { discordId: "boss" } });
     const ix = memoryInteraction({
       commandName: "status",
       channelId: "chan-other",
@@ -186,7 +187,7 @@ describe("slash handlers", () => {
     expect(result.ok).toBe(true);
     const body = ix.replies[0]?.content ?? "";
     expect(body).toContain("v0.0.3");
-    expect(body).toContain("Protocol: 1");
+    expect(body).toContain(`Protocol: ${CORVIDINHO_PROTOCOL_VERSION}`);
     expect(body).toContain("Active sessions: 1");
     expect(body).toContain("Channels (allowlist): 1");
     expect(body).toContain("LLM: demo stub");

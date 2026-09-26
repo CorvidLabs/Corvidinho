@@ -1,0 +1,57 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790453068,
+      "digest": "969687376db8805f3b6e1f944fd6fec0e79fd89b2bdcb8d2579b1a0fe2c68cf4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner",
+        "title": "Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set",
+        "description": "Strict IDENTITY-2: ADMIN is owner-only (issue #42, Leif decision). Admin user/role env lists no longer grant ADMIN; no owner means nobody is ADMIN (IDENTITY-3); bridge and doctor warn when legacy admin lists are set",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs",
+          "plugins/memory/commands.ts",
+          "src/cli.ts",
+          "src/discord/bridge.ts",
+          "src/discord/config.ts",
+          "src/discord/permissions.ts",
+          "src/discord/slash-types.ts",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "resolvePermissionLevel returns ADMIN only for the configured owner (unless muted/deny-listed); CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES never grant ADMIN in the bridge or the memory handler; no owner means nobody ADMIN; bridge start and doctor warn when the legacy lists are set without echoing ids; fixture tests cover all of this"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "fe449e62aae99f353fbfae07cf079fa84cc4fefea7a16832bb32ab4092999f60",
+        "discord": "9ebbe9621c8764a1b03bd164d6309b0d256898b6155f0b3157acd1a100ce7eb3",
+        "plugins": "8687c029f8636c67e3ea7233752f3d370ae733e4955f6d04b3304bca89e00a56"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790453118,
+      "digest": "b2ff86a778aabccfdb59309b17aba9fa6bca4a6136d2645ea7134b248c1b98bf",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

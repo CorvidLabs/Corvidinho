@@ -6,12 +6,15 @@
  */
 
 import {
+  createNdjsonWriter,
   createTaskExecute,
   loadAgentConfig,
   parseCapabilityTier,
   runTask,
+  TASK_OUTPUT_MODES,
   type AgentEvent,
   type CapabilityTier,
+  type TaskOutputMode,
   type TaskResult,
 } from "./agent/index.ts";
 import { attribution } from "./attribution.ts";
@@ -63,8 +66,11 @@ Usage:
                                     Run a typed plugin command
   corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
-  corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N] [--json]
+  corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N]
+                    [--output text|json|ndjson] [--json]
                                     LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5)
+                                    --json = --output json (one result); ndjson = live event stream
+                                    for bridges, one versioned frame per line (AGENT-8 / CLI-7)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --no-verify ...        Skip verify gate (bridges / WATCH latency)
 
@@ -106,7 +112,13 @@ function envPresent(name: string): boolean {
   return typeof v === "string" && v.length > 0;
 }
 
-function parseGlobalFlags(args: string[]): {
+/**
+ * `--task` always takes the next argv item as the task text, even when it
+ * starts with `-`: the bridges pass untrusted Discord / GitHub text there, and
+ * a message like `--tier=code` or `--no-verify` must stay task text, never
+ * become a flag (AGENT-5 / SAFE-1). `--task=TEXT` may span lines.
+ */
+export function parseGlobalFlags(args: string[]): {
   rest: string[];
   nonInteractiveFlag: boolean;
   json: boolean;
@@ -137,14 +149,13 @@ function parseGlobalFlags(args: string[]): {
       continue;
     }
     if (a === "--task") {
-      const next = args[i + 1];
-      if (next && !next.startsWith("-")) {
-        taskText = next;
+      if (i + 1 < args.length) {
+        taskText = args[i + 1];
         i++;
       }
       continue;
     }
-    const tf = a.match(/^--task=(.+)$/);
+    const tf = a.match(/^--task=(.+)$/s);
     if (tf) {
       taskText = tf[1];
       continue;
@@ -253,6 +264,19 @@ async function doctor(): Promise<number> {
     mark: ownerLoad.owner && ownerLoad.issues.length === 0 ? "ok" : "info",
     detail: formatOwnerDoctorDetail(ownerLoad),
   });
+  // IDENTITY-2 — ADMIN is owner-only; legacy admin lists are ignored.
+  if (
+    (process.env.CORVIDINHO_DISCORD_ADMIN_USERS ?? "").trim() ||
+    (process.env.CORVIDINHO_DISCORD_ADMIN_ROLES ?? "").trim()
+  ) {
+    checks.push({
+      name: "admin-lists",
+      ok: true,
+      mark: "warn",
+      detail:
+        "CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES are ignored — ADMIN is owner-only (IDENTITY-2)",
+    });
+  }
 
   console.log("corvidinho doctor\n");
   let allOk = true;
@@ -356,12 +380,44 @@ function splitRunArgs(args: string[]): { name: string | undefined; pluginArgs: s
   };
 }
 
+const TASK_RUN_USAGE =
+  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N] [--output text|json|ndjson] [--json]";
+
+/**
+ * `--output text|json|ndjson` for `task run` (CLI-7). Parsed only here so a
+ * plugin's own `--output` after `--` is never taken. `--json` = `--output json`;
+ * an explicit `--output` wins. Returns null for a missing or unknown value.
+ */
+export function parseTaskOutputMode(
+  args: string[],
+  json: boolean,
+): TaskOutputMode | null {
+  let value: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--output") {
+      const next = args[i + 1];
+      value = next && !next.startsWith("-") ? next : "";
+      if (value) i++;
+      continue;
+    }
+    const m = a.match(/^--output=(.*)$/);
+    if (m) value = m[1];
+  }
+  if (value === undefined) return json ? "json" : "text";
+  const mode = value.trim().toLowerCase();
+  return (TASK_OUTPUT_MODES as readonly string[]).includes(mode)
+    ? (mode as TaskOutputMode)
+    : null;
+}
+
 /**
  * Demo task: marks a synthetic file change so the verify gate exercises
  * (unless --no-verify). Bridges should pass --no-verify for latency.
+ * `ndjson` streams one frame per line (REQ-cli-073 / REQ-agent-073).
  */
 async function taskRun(opts: {
-  json: boolean;
+  output: TaskOutputMode;
   noVerify: boolean;
   maxRetries: number | undefined;
   taskText: string | undefined;
@@ -371,9 +427,17 @@ async function taskRun(opts: {
   const cwd = process.cwd();
   const config = loadAgentConfig(cwd);
   const events: AgentEvent[] = [];
+  const json = opts.output === "json";
+  // Machine modes keep stderr quiet; ndjson writes each frame as it happens.
+  const quiet = opts.output !== "text";
+  const ndjson =
+    opts.output === "ndjson"
+      ? createNdjsonWriter((line) => console.log(line))
+      : null;
   const handleEvent = (e: AgentEvent) => {
     events.push(e);
-    if (opts.json) return;
+    ndjson?.event(e);
+    if (quiet) return;
     if (e.type === "StateChanged") {
       console.error(`→ ${e.state}`);
     } else if (e.type === "Text") {
@@ -395,6 +459,7 @@ async function taskRun(opts: {
     nonInteractive: opts.nonInteractive,
     allowlist: allowlistFromEnv(),
     onEvent: handleEvent,
+    onUsage: ndjson ? (u) => ndjson.usage(u) : undefined,
   });
   const result: TaskResult = await runTask({
     cwd,
@@ -404,14 +469,16 @@ async function taskRun(opts: {
     maxRetries: opts.maxRetries,
     onEvent: handleEvent,
     execute: async (ctx) => {
-      if (ctx.verifyFeedback && !opts.json) {
+      if (ctx.verifyFeedback && !quiet) {
         console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
       }
       return execute(ctx);
     },
   });
 
-  if (opts.json) {
+  if (ndjson) {
+    ndjson.result(result);
+  } else if (json) {
     console.log(JSON.stringify({ result, events }, null, 2));
   } else {
     console.log(
@@ -660,8 +727,16 @@ export async function main(argv: string[]): Promise<number> {
   if (cmd === "task") {
     const sub = rest[1];
     if (sub === "run") {
+      const output = parseTaskOutputMode(
+        rest.slice(2),
+        globalJson || rest.includes("--json"),
+      );
+      if (!output) {
+        console.error(`${TASK_RUN_USAGE}\n`);
+        return 1;
+      }
       return taskRun({
-        json: globalJson || rest.includes("--json"),
+        output,
         noVerify,
         maxRetries,
         taskText,
@@ -669,7 +744,7 @@ export async function main(argv: string[]): Promise<number> {
         nonInteractive,
       });
     }
-    console.error("usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N] [--json]\n");
+    console.error(`${TASK_RUN_USAGE}\n`);
     printHelp();
     return 1;
   }

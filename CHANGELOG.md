@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.10
+
+### WATCH reliability (WATCH-RELIABILITY-1..3)
+
+- **WATCH-RELIABILITY-1** — After a successful auto-ack on mention/comment start/continue, post a short agent summary comment on the same GitHub thread when the run finishes (success or failure), once per event id (Made with Corvidinho footer).
+- **WATCH-RELIABILITY-2** — Persist spawn outcome logging (start, exit code / error class, duration) as a structured `[watch] spawn …` log line and durable JSONL (`CORVIDINHO_WATCH_SPAWN_LOG` or `~/.local/share/corvidinho/watch-spawn.jsonl`) — readable without Discord.
+- **WATCH-RELIABILITY-3** — On GitHub **403 rate-limit**, back off using `Retry-After` / `x-ratelimit-reset` (documented default **60s**); skip tight re-poll loops; clear `[watch] github rate-limit backoff` log line.
+- HI captured in [`hi/watch.md`](hi/watch.md) (not draft).
+
+### Ops
+
+- Package version **0.0.10** — presence (DISCORD-12) reads `v0.0.10` after restart.
+- **Restart `github watch`** to pick up summary comments, spawn JSONL, and rate-limit backoff.
+
 ## 0.0.9
 
 ### Security — memory ACL hardening (#59 follow-up) — [#128](https://github.com/CorvidLabs/Corvidinho/pull/128)
@@ -38,6 +52,16 @@
 - **Restart the Discord bridge and `github watch`** so spawns pick up the hardened memory plugins, non-interactive SAFE-1, `--no-env-file`, and the one-time secret re-scrub. No slash re-register needed (command set unchanged). No schema migration beyond what main already had.
 - Operators running `corvidinho plugins run memory-*` by hand now set `CORVIDINHO_ACTING_DISCORD_USER_ID` (+ admin env for forget/override) instead of `--user`/`--admin`; forget/override confirm tokens must be supplied by a human.
 - Bot config belongs in the VM env / `~/.config/corvidinho/` — a `.env` inside a worked-on project is ignored by spawned agents.
+
+### Shell plugin + SAFE-3 cwd clamp (#83)
+
+- Typed builtin `shell-exec` (PLUGIN-1): `sh -c` with stdout/stderr merged; **dangerous** + `minTier: code` (PLUGIN-2); SAFE-1 allowlist in non-interactive.
+- **SAFE-3:** spawn cwd pinned to plugin/project root; lexical refuse of `cd`/`pushd` that would escape (absolute outside, `..`, `~`, `$VAR`, bare `cd`) before spawn — Merlin steal.
+- Exports `CORVIDINHO_PROJECT_ROOT` into the child env for nested tools.
+- Fixture tests: happy path, SAFE-1 deny, SAFE-3 escape refuse, relative-within-root allow.
+- `docs/hi-drafts/WATCH-RELIABILITY.md` — draft only for Leif (post-ack summary, spawn outcome log, 403 backoff); **not** captured to `hi/`.
+- After restart, typed `shell-exec` + SAFE-3 cwd clamp are available to the LLM tool loop.
+
 
 ## 0.0.8
 

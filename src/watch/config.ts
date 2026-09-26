@@ -71,7 +71,10 @@ export function goLiveChecklist(): string {
      (~/.config/corvidinho/allowlist.toml or CORVIDINHO_GITHUB_ALLOW_*)
   4. Optional: CORVIDINHO_WATCH_INTERVAL_MS (default 60000, min 30000)
   5. Optional: CORVIDINHO_WATCH_DRY_RUN=1 for local dry-run
-  See docs/WATCH.md — webhook path deferred until a public URL exists.`;
+  6. Optional: CORVIDINHO_WATCH_SPAWN_LOG = JSONL path for spawn outcomes
+     (default ~/.local/share/corvidinho/watch-spawn.jsonl)
+  See docs/WATCH.md — webhook path deferred until a public URL exists.
+  On GitHub 403 rate-limit, WATCH backs off via Retry-After / reset (default 60s).`;
 }
 
 export type LoadWatchOptions = LoadOptions & {

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "strict-identity-2-admin-is-owner-only-issue-42-leif-decision-admin-user-role-env-lists-no-longer-grant-admin-no-owner",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "643045504b50040e1a1b48bc6cc5beb9d6c3985e",
+      "contract_digest": "969687376db8805f3b6e1f944fd6fec0e79fd89b2bdcb8d2579b1a0fe2c68cf4",
+      "execution_digest": "e6f555e025d9efc29d0165b6a26b3759a81b8831496151b3aafa5a7a14553551",
+      "workspace_digest": "34e4b8b1fee695044a49c917e50a538535a3617c0e1f1b291f09b438a40ea6c7",
+      "timestamp": 1790453116
+    }
+  ]
+}

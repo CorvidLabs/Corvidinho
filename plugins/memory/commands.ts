@@ -137,10 +137,9 @@ const ACL_DENIED: PluginHandlerResult = {
  * Handler-time ADMIN re-check (ADMIN-4 / DISCORD-7 / MEMORY-ACL-3/4).
  * The bridge's per-dispatch CORVIDINHO_ACTING_IS_ADMIN bit is required on
  * every path (so a scheduled run spawned with it off never gets ADMIN), and
- * the live config must agree: empty admin users + roles ⇒ nobody;
- * deny-listed / muted ⇒ never; admin user id ⇒ yes; otherwise only when
- * admin roles are configured (roles are visible only to the bridge).
- * Any failure fails closed.
+ * the live config must agree: ADMIN is owner-only (IDENTITY-2) — the acting
+ * user must be the configured owner's snowflake; no owner ⇒ nobody
+ * (IDENTITY-3); deny-listed / muted ⇒ never. Any failure fails closed.
  */
 export async function actingIsAdmin(
   env: NodeJS.ProcessEnv,
@@ -148,16 +147,15 @@ export async function actingIsAdmin(
 ): Promise<boolean> {
   const id = userId.trim().toLowerCase();
   if (!id || !truthy(env.CORVIDINHO_ACTING_IS_ADMIN)) return false;
-  const adminUsers = parseList(env.CORVIDINHO_DISCORD_ADMIN_USERS);
-  const adminRoles = parseList(env.CORVIDINHO_DISCORD_ADMIN_ROLES);
-  // IDENTITY-1: the configured owner is ADMIN too (same rule as the bridge).
+  // IDENTITY-2: ADMIN is owner-only (same rule as the bridge). Admin
+  // user/role lists do not grant ADMIN; no owner ⇒ nobody (IDENTITY-3).
   let isOwner = false;
   try {
     isOwner = isOwnerDiscord((await loadOwnerConfig({ env })).owner, userId);
   } catch {
     isOwner = false;
   }
-  if (!isOwner && adminUsers.length === 0 && adminRoles.length === 0) return false;
+  if (!isOwner) return false;
   if (parseList(env.DISCORD_MUTED_USER_IDS).includes(id)) return false;
   try {
     const allow = await loadAllowlist({ env });
@@ -165,7 +163,7 @@ export async function actingIsAdmin(
   } catch {
     return false;
   }
-  return isOwner || adminUsers.includes(id) || adminRoles.length > 0;
+  return true;
 }
 
 function openStore(env: NodeJS.ProcessEnv) {

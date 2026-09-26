@@ -150,7 +150,7 @@ describe("resolvePermissionLevel + owner (IDENTITY-1 / ADMIN-4)", () => {
     ).toBe(PermissionLevel.BLOCKED);
   });
 
-  test("admin env lists keep working alongside an owner", () => {
+  test("admin env lists no longer grant ADMIN alongside an owner (IDENTITY-2)", () => {
     expect(
       resolvePermissionLevel({
         userId: ADMIN_ID,
@@ -158,7 +158,7 @@ describe("resolvePermissionLevel + owner (IDENTITY-1 / ADMIN-4)", () => {
         adminUserIds: [ADMIN_ID],
         owner: OWNER,
       }),
-    ).toBe(PermissionLevel.ADMIN);
+    ).toBe(PermissionLevel.STANDARD);
     expect(
       resolvePermissionLevel({
         userId: OTHER_ID,
@@ -167,12 +167,11 @@ describe("resolvePermissionLevel + owner (IDENTITY-1 / ADMIN-4)", () => {
         adminRoleIds: ["ops"],
         owner: OWNER,
       }),
-    ).toBe(PermissionLevel.ADMIN);
+    ).toBe(PermissionLevel.STANDARD);
   });
 
-  test("empty owner changes nothing (IDENTITY-3 owner path)", () => {
+  test("no owner ⇒ nobody ADMIN, admin lists or not (IDENTITY-3)", () => {
     for (const owner of [null, undefined]) {
-      // Admin lists behave exactly as before.
       expect(
         resolvePermissionLevel({
           userId: ADMIN_ID,
@@ -180,8 +179,8 @@ describe("resolvePermissionLevel + owner (IDENTITY-1 / ADMIN-4)", () => {
           adminUserIds: [ADMIN_ID],
           owner,
         }),
-      ).toBe(PermissionLevel.ADMIN);
-      // Empty owner + empty admin lists ⇒ nobody ADMIN (default-deny).
+      ).toBe(PermissionLevel.STANDARD);
+      // No owner ⇒ nobody ADMIN (default-deny).
       expect(
         resolvePermissionLevel({ userId: OWNER_ID, allowlist: allowCfg(), owner }),
       ).toBe(PermissionLevel.STANDARD);

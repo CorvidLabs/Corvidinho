@@ -508,7 +508,7 @@ describe("startWatchPoller stop, single-flight, per-event isolation (REQ-watch-0
     await result.stop();
   });
 
-  test("single-flight: interval ticks are skipped while a long cycle runs", async () => {
+  test("single-flight: no second cycle starts while a long loop cycle runs", async () => {
     jest.useFakeTimers();
     try {
       let fetches = 0;
@@ -527,6 +527,7 @@ describe("startWatchPoller stop, single-flight, per-event isolation (REQ-watch-0
       if (!result.ok) return;
 
       // The loop fires once immediately; the first agent run is still going.
+      jest.advanceTimersByTime(0);
       await firstStarted.wait;
       jest.advanceTimersByTime(result.config.intervalMs * 3);
       await flushMicrotasks();
@@ -535,6 +536,42 @@ describe("startWatchPoller stop, single-flight, per-event isolation (REQ-watch-0
       // pollOnce joins the in-flight loop cycle instead of starting another.
       release.open();
       await result.pollOnce();
+      expect(fetches).toBe(1);
+      expect(spawns).toEqual([1, 2, 3]);
+      await result.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("single-flight: the loop tick joins a direct pollOnce already in flight", async () => {
+    jest.useFakeTimers();
+    try {
+      let fetches = 0;
+      const { agent, spawns, firstStarted, release } = blockingAgent();
+      const result = await startWatchPoller({
+        env,
+        filePath: null,
+        agent,
+        log: () => {},
+        fetchEvents: async () => {
+          fetches += 1;
+          return threeIssues();
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // A direct cycle is mid-run when the loop's first tick fires.
+      const direct = result.pollOnce();
+      await firstStarted.wait;
+      jest.advanceTimersByTime(0);
+      await flushMicrotasks();
+      expect(fetches).toBe(1);
+
+      release.open();
+      await direct;
+      await flushMicrotasks();
       expect(fetches).toBe(1);
       expect(spawns).toEqual([1, 2, 3]);
       await result.stop();

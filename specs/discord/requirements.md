@@ -61,7 +61,7 @@ invoke via `bun` (never posix_spawn the `.ts` path alone — EACCES). Archive
 `shared/bridge-protocol.ts` SHALL NOT be used.
 
 Acceptance Criteria
-- `corvidinho --protocol-version` prints `1`.
+- `corvidinho --protocol-version` prints `CORVIDINHO_PROTOCOL_VERSION` (currently `2`).
 - Verifiable mismatch refuses start; unverifiable warns and continues.
 - Fixture stub-binary tests cover match/mismatch/unverifiable/timeout.
 - `.ts` bin probe uses argv starting with `bun` then the `.ts` path.
@@ -523,22 +523,24 @@ per field. The record is re-read on every start, so it survives restarts.
 The owner SHALL be matched only by Discord snowflake or case-insensitive
 GitHub login, never by display name.
 
-At handler time (ADMIN-4 / DISCORD-7) `resolvePermissionLevel` SHALL return
-ADMIN for the owner's Discord id unless the owner is muted or on the Discord
-deny list. The existing `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` lists
-SHALL keep working unchanged. A missing, blank, or non-snowflake owner id
-SHALL mean no owner and SHALL NOT change admin behavior, so an empty owner
-with empty admin lists still leaves nobody ADMIN (IDENTITY-3 owner path).
+ADMIN SHALL be owner-only (IDENTITY-2, Leif decision on #42). At handler time
+(ADMIN-4 / DISCORD-7) `resolvePermissionLevel` SHALL return ADMIN only for
+the owner's Discord id, and not when the owner is muted or on the Discord deny
+list. `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` SHALL NOT grant ADMIN. A
+missing, blank, or non-snowflake owner id SHALL mean no owner, and with no
+owner nobody is ADMIN (IDENTITY-3). When the legacy admin lists are set, or no
+owner is configured, the bridge SHALL log a start-up warning that never echoes
+ids.
 
 Ephemeral `/status` and `corvidinho doctor` SHALL show whether an owner is
-configured plus the display name only, never ids, logins, or tokens. Making
-the owner the only admin (strict IDENTITY-2) is not part of this requirement.
+configured plus the display name only, never ids, logins, or tokens.
 
 Acceptance Criteria
 - Env and allowlist-file `[owner]` load the owner; env wins per field; reloading the same config yields the same owner.
 - The owner matches by Discord snowflake or lowercased GitHub login; the display name never matches.
 - The owner resolves to ADMIN; a muted or deny-listed owner does not.
-- Empty or invalid owner config leaves the admin env lists and default-deny unchanged.
+- Admin user/role lists never resolve to ADMIN, with or without an owner; no owner ⇒ nobody ADMIN and admin slash (/mute) is refused for everyone.
+- Bridge start warns when the legacy admin lists are set or no owner is configured.
 - `/status` (ephemeral) and `corvidinho doctor` show owner configured yes/no plus the display name only.
 - Fixture tests only; no live Discord token or network.
 
@@ -595,3 +597,29 @@ Acceptance Criteria
 - Fresh and v5 DBs reach schema 6 with `watch_sessions`.
 - SCRUB_TARGETS includes `watch_sessions.topic` and a re-scrub redacts it.
 
+### REQ-discord-073
+
+The Discord spawn agent client SHALL run
+`task run --no-verify --task <prompt> --output ndjson`, read stdout line by
+line while the child runs, and forward each frame's live state, current tool,
+and token counts to `onStatus` so the thinking embed shows what the agent is
+doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
+`result` frame; when no result frame parses, the client SHALL fall back to
+`summarizeTaskRunOutput` over the non-frame stdout, stderr and exit code.
+Frame-shaped lines that do not match the bridge's protocol (or are malformed)
+SHALL never become reply text; when the binary streamed another protocol and
+no result frame parsed, the reply SHALL be a protocol-mismatch notice naming
+both versions.
+Token counts SHALL be the provider-reported running total when a `usage`
+frame arrived, else the existing rough estimate from the summary length.
+Because the bridge now depends on the stream, `CORVIDINHO_PROTOCOL_VERSION`
+SHALL be `2` and DISCORD-10 lockstep SHALL refuse a binary reporting another
+version.
+
+Acceptance Criteria
+- Fake-bin fixture printing ndjson drives `onStatus` with planning / tool / token updates in order.
+- Summary equals `summarizeTaskResult` of the result frame; garbage lines and stderr do not break parsing.
+- Missing result frame falls back to `summarizeTaskRunOutput`.
+- A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
+- Spawn argv ends with `--output ndjson` (no `--json`).
+- `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.

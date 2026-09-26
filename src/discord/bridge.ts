@@ -180,6 +180,15 @@ export async function startBridge(
   }
 
   const config = loaded.config;
+  if (config.adminUserIds.length > 0 || config.adminRoleIds.length > 0) {
+    // IDENTITY-2 (Leif decision on #42): ADMIN is owner-only.
+    console.warn(
+      "[discord] CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES are ignored — ADMIN is owner-only (IDENTITY-2). Set CORVIDINHO_OWNER_DISCORD_ID or [owner] in the allowlist file.",
+    );
+  }
+  if (!config.owner) {
+    console.warn("[discord] no owner configured — nobody is ADMIN (IDENTITY-3).");
+  }
   const env = opts.env ?? process.env;
   const db =
     opts.db ??
