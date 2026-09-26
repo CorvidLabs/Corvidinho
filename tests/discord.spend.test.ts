@@ -35,7 +35,12 @@ import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
-import { THINKING_COLORS, type DiscordEmbedPayload } from "../src/discord/thinking-status.ts";
+import {
+  THINKING_COLORS,
+  type DiscordEmbedPayload,
+  type EditMessageOpts,
+  type ThinkingOutbound,
+} from "../src/discord/thinking-status.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
 import { formatStatusReport } from "../src/discord/command-handlers/status.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
@@ -110,6 +115,12 @@ async function bridgeWith(
   db = openCorvidinhoDb({ memory: true }),
   /** True while gateway posts should fail (the live gateway then returns null). */
   failReplies: () => boolean = () => false,
+  /**
+   * Thinking outbound. Default: embeds only (no `editMessage`), so the run
+   * answers with the fallback reply (DISCORD-ASK-6/7 collapse unavailable);
+   * pass one with `editMessage` to exercise the collapsed single message.
+   */
+  thinkingOutbound?: ThinkingOutbound,
 ) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const outbound = memoryThinkingOutbound();
@@ -126,7 +137,10 @@ async function bridgeWith(
     projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-spend-proj-")),
     skipProtocolCheck: true,
     disableScheduler: true,
-    thinkingOutbound: outbound,
+    thinkingOutbound: thinkingOutbound ?? {
+      sendEmbed: outbound.sendEmbed,
+      editEmbed: outbound.editEmbed,
+    },
     thinkingDebounceMs: 0,
     thinkingTickMs: 60_000,
     agent,
@@ -154,7 +168,7 @@ const MENTION = {
 };
 
 describe("bridge replies", () => {
-  test("spend-cap ask → question + owner ping; status paused (not error)", async () => {
+  test("spend-cap ask → question + owner ping; never an error status (fallback reply path)", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: `state=blocked\n${formatAskSummary(CAP_ASK)}`, exitCode: 0, ask: CAP_ASK };
@@ -166,9 +180,11 @@ describe("bridge replies", () => {
     expect(replies[0]!.content).toContain(SPEND_CAP_HEADLINE);
     expect(replies[0]!.content).toContain("Daily spend cap reached");
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
-    expect(last.description).toContain(SPEND_CAP_STATUS);
-    expect(last.color).not.toBe(THINKING_COLORS.error);
+    // DISCORD-ASK-6/7: finalizeContent closes the thinking status before the
+    // fallback reply, so the embed keeps its progress state — never an error.
+    for (const e of outbound.edits) {
+      expect((e.embed as DiscordEmbedPayload).color).not.toBe(THINKING_COLORS.error);
+    }
     await result.stop();
   });
 
@@ -812,6 +828,192 @@ describe("a post that did not go out hands back its warning and cap ping (review
     expect(posts).toHaveLength(1);
     expect(posts[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
+  });
+});
+
+// ─── DISCORD-ASK-6/7 collapsed single message (thinking edited into the answer) ──
+
+/** Thinking outbound whose `editMessage` records every edit and can fail. */
+function collapseOutbound(failEdits: () => boolean = () => false) {
+  const base = memoryThinkingOutbound();
+  const finals: EditMessageOpts[] = [];
+  const outbound: ThinkingOutbound = {
+    sendEmbed: base.sendEmbed,
+    editEmbed: base.editEmbed,
+    async editMessage(opts) {
+      if (failEdits()) return false;
+      finals.push(opts);
+      return true;
+    },
+  };
+  return { outbound, finals };
+}
+
+describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () => {
+  function pendingWarningDb() {
+    const db = openCorvidinhoDb({ memory: true });
+    const ledger = new SpendLedger(db);
+    ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    expect(ledger.noteWarning({ capMicroUsd: 1_000_000, now: Date.now() })).not.toBeNull();
+    return db;
+  }
+
+  test("the 80% warning and the owner mention ride the edit of the thinking message; no separate reply", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "all good", exitCode: 0 };
+      },
+    };
+    const { outbound, finals } = collapseOutbound();
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
+      pendingWarningDb(),
+      () => false,
+      outbound,
+    );
+    await handlers.onMessage(MENTION);
+    expect(replies).toHaveLength(0);
+    expect(finals).toHaveLength(1);
+    expect(finals[0]!.content).toStartWith(`all good\n\n⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(finals[0]!.embed).toBeNull();
+    // Delivered once: the next answer carries no warning.
+    await handlers.onMessage({ ...MENTION, id: "m2" });
+    expect(finals[1]!.content).toBe("all good");
+    await result.stop();
+  });
+
+  test("a spend-cap stop collapses to plain text (no buttons) that pings the owner once per episode and leaves no pending ask", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { outbound, finals } = collapseOutbound();
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      openCorvidinhoDb({ memory: true }),
+      () => false,
+      outbound,
+    );
+    if (!result.ok) throw new Error("bridge did not start");
+    await handlers.onMessage(MENTION);
+    await handlers.onMessage({ ...MENTION, id: "m2" });
+    expect(replies).toHaveLength(0);
+    expect(finals).toHaveLength(2);
+    expect(finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(finals[0]!.content).not.toContain(ASK_REPLY_HINT);
+    expect(finals[0]!.components).toBeNull();
+    expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(finals[1]!.content).toContain(SPEND_CAP_HEADLINE);
+    expect(finals[1]!.content).not.toContain("<@");
+    expect(finals[1]!.mentionUserIds).toEqual([]);
+    for (const s of result.store.list()) expect(s.pendingAsk ?? null).toBeNull();
+    await result.stop();
+  });
+
+  test("collapsed edit fails → the fallback reply carries the warning; edit and reply both fail → warning and cap ping go to the next answer", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    let failEdits = true;
+    let failReplies = false;
+    const { outbound, finals } = collapseOutbound(() => failEdits);
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      pendingWarningDb(),
+      () => failReplies,
+      outbound,
+    );
+    // Edit fails, the fallback reply goes out: it carries the ping and the warning.
+    await handlers.onMessage(MENTION);
+    expect(finals).toHaveLength(0);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(replies[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+
+    // Both fail: nothing went out, so both claims are handed back.
+    const again = collapseOutbound(() => failEdits);
+    const second = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      pendingWarningDb(),
+      () => failReplies,
+      again.outbound,
+    );
+    failReplies = true;
+    await second.handlers.onMessage(MENTION);
+    expect(again.finals).toHaveLength(0);
+    expect(second.replies).toHaveLength(0);
+    failEdits = false;
+    failReplies = false;
+    await second.handlers.onMessage({ ...MENTION, id: "m2" });
+    expect(again.finals).toHaveLength(1);
+    expect(again.finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(again.finals[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(again.finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await second.result.stop();
+  });
+
+  test("a button pick whose run stops at the cap collapses the stub into the plain-text ask with the owner pinged and no pending ask", async () => {
+    let n = 0;
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        n += 1;
+        if (n === 1) {
+          return {
+            ok: true,
+            sessionId,
+            summary: "Needs your input",
+            exitCode: 0,
+            ask: {
+              reason: "clarify",
+              question: "Which DB?",
+              options: [
+                { id: "1", label: "Postgres" },
+                { id: "2", label: "SQLite" },
+              ],
+            },
+            task: { verified: false, verifySkipped: true, state: "blocked" },
+          };
+        }
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { outbound, finals } = collapseOutbound();
+    const { result, handlers } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      openCorvidinhoDb({ memory: true }),
+      () => false,
+      outbound,
+    );
+    if (!result.ok) throw new Error("bridge did not start");
+    await handlers.onMessage(MENTION);
+    const stub = result.store.list()[0]!.pendingAsk!;
+    expect(stub.stubMessageId).toBeTruthy();
+    await handlers.onComponent!({
+      id: "ix-pick",
+      customId: pickCustomId(stub.askId, "1"),
+      channelId: "chan-1",
+      userId: MENTION.authorId,
+      messageId: stub.stubMessageId!,
+      reply: async () => {},
+    });
+    const last = finals.at(-1)!;
+    expect(last.messageId).toBe(stub.stubMessageId!);
+    expect(last.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(last.components).toBeNull();
+    expect(last.mentionUserIds).toEqual([OWNER_ID]);
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    await result.stop();
   });
 });
 

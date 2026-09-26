@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 61
+version: 62
 status: draft
 files:
   - src/discord/types.ts
@@ -126,6 +126,8 @@ When an ask has structured options (or a numbered list in the question),
 `src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
 an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 `ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
+Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick prefer editing
+that message into the final answer (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent`.
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
@@ -157,8 +159,10 @@ and spend-cap ping the owner; clarify addresses the requester, AUTONOMY-4),
 `takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
 `replyWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
 `AskPingOwner` types. The chat reply (also the reply to a run a button pick
-resumed; a spend-cap stop never gets choice buttons), `/work`, `/session
-start` and the schedule post take the pending warning from the outbox (the run's own
+resumed; a spend-cap stop never gets choice buttons; the warning line and
+owner mention ride the collapsed edit of the thinking message, DISCORD-ASK-6/7,
+or the fallback reply, and go back when neither went out), `/work`,
+`/session start` and the schedule post take the pending warning from the outbox (the run's own
 `spendWarning` only when there is no DB), and hand it and the cap ping back
 when the post does not go out (`SchedulerOutbound.post` may resolve `false`;
 a schedule then keeps no ping key). `OwnerNotice.release` hands back what a
@@ -344,4 +348,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is: Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted |
 | 2026-09-26 | discord-ask-ephemeral-buttons-session-multi: DISCORD-ASK-1..5 ephemeral button asks + SESSION-MULTI-1..4 per-user sessions (package 0.0.22) |
 | 2026-09-26 | discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22: DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22 |
+| 2026-09-26 | discord-ask-6-7-tighten-ask-ux: DISCORD-ASK-6/7 collapse thinking into Choose stub; edit stub/thinking into final answer; package 0.0.23 |
+| 2026-09-26 | discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of: DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23 |
 | 2026-09-26 | safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend: SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask |

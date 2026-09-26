@@ -25,6 +25,19 @@ artifact: design
   a spend-cap stop is always free text (no choice buttons; no choice can
   lift the cap), pings the owner once per episode, is never the pending
   ask, and the reply carries/hands back the warning and cap ping.
+- Collapsed answers (#204, DISCORD-ASK-6/7, merged from main): the bridge
+  prefers `thinking.finalizeContent` (edit the thinking message / Choose
+  stub into the answer) and falls back to the separate reply. The warning is
+  taken once before that; `withSpendWarningPost` builds the content and
+  mentions used by whichever message goes out, and a finally hands the
+  warning and the cap ping back when neither the edit nor the fallback reply
+  went out (the dry path included). Pending-ask bookkeeping is one rule on
+  both sides: store `pendingToStore` when set, else clear a free-text
+  pending ask (button asks survive, SESSION-MULTI-3) — identical to main for
+  every main case (there an ask always had `pendingToStore`) and, for a
+  spend-cap stop, the same as a finished turn. The fallback status uses
+  `askBody` (not `askBody && pendingToStore`) so a spend-cap stop never
+  shows "✅ Done".
 - Scheduler (`src/scheduler/service.ts`): on a post that resolved `false`
   (or threw) the warning and the cap ping are released and no ping key is
   stored.

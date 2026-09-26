@@ -99,7 +99,7 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
         };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(agent);
+    const { result, handlers, replies, outbound } = await bridgeWith(agent);
     await handlers.onMessage({
       id: "m1",
       channelId: "chan-1",
@@ -108,14 +108,30 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
       content: "@bot pick a DB",
       mentionedBot: true,
     });
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain("Choose");
-    expect(replies[0]!.content).not.toContain("Postgres");
-    expect(replies[0]!.components).toBeDefined();
-    const pending = result.store.getByBotMessage("bot_1")!.pendingAsk!;
+    // DISCORD-ASK-6 — collapse thinking into one Choose stub (no separate reply).
+    expect(replies).toHaveLength(0);
+    expect(outbound.sends).toHaveLength(1);
+    const stubEdit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("Choose"),
+    );
+    expect(stubEdit).toBeDefined();
+    expect(String(stubEdit!.content)).not.toContain("Postgres");
+    expect(stubEdit!.components).toBeDefined();
+    expect(stubEdit!.embed).toBeNull();
+    const stubId = stubEdit!.messageId;
+    const pending = result.store.getByBotMessage(stubId)!.pendingAsk!;
     expect(pending.options?.map((o) => o.label)).toEqual(["Postgres", "SQLite"]);
     expect(pending.askId).toBeTruthy();
-    expect(pending.stubMessageId).toBe("bot_1");
+    expect(pending.stubMessageId).toBe(stubId);
+    // No leftover "Needs your input" thinking Done embed.
+    const needsInput = outbound.edits.some(
+      (e) =>
+        typeof (e.embed as { description?: string })?.description === "string" &&
+        String((e.embed as { description?: string }).description).includes(
+          "Needs your input",
+        ),
+    );
+    expect(needsInput).toBe(false);
     await result.stop();
   });
 
@@ -143,7 +159,7 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
         };
       },
     };
-    const { result, handlers, replies, calls } = await bridgeWith(agent);
+    const { result, handlers, replies, calls, outbound } = await bridgeWith(agent);
     await handlers.onMessage({
       id: "m1",
       channelId: "chan-1",
@@ -154,6 +170,7 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
     });
     const pending = result.store.list()[0]!.pendingAsk!;
     const askId = pending.askId;
+    const stubId = pending.stubMessageId!;
 
     const eph: Array<Record<string, unknown>> = [];
     const openIx: ComponentInteraction = {
@@ -161,7 +178,7 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
       customId: openCustomId(askId),
       channelId: "chan-1",
       userId: "user-1",
-      messageId: "bot_1",
+      messageId: stubId,
       reply: async (opts) => {
         eph.push(opts as Record<string, unknown>);
       },
@@ -177,7 +194,7 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
       customId: pickCustomId(askId, "1"),
       channelId: "chan-1",
       userId: "user-1",
-      messageId: "bot_1",
+      messageId: stubId,
       reply: async (opts) => {
         eph.push(opts as Record<string, unknown>);
       },
@@ -185,7 +202,14 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
     expect(calls.length).toBeGreaterThanOrEqual(2);
     expect(calls[1]!.humanText).toBe("Postgres");
     expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
-    expect(replies.some((r) => r.content.includes("Using Postgres"))).toBe(true);
+    // DISCORD-ASK-7 — final answer edited into stub/thinking; no extra reply.
+    expect(replies.some((r) => r.content.includes("Using Postgres"))).toBe(false);
+    const answerEdit = outbound.contentEdits.find(
+      (e) =>
+        typeof e.content === "string" && e.content.includes("Using Postgres"),
+    );
+    expect(answerEdit).toBeDefined();
+    expect(answerEdit!.messageId).toBe(stubId);
 
     // Expired press after clear still gets short message when we re-seed expired pending
     const sess = result.store.list()[0]!;
