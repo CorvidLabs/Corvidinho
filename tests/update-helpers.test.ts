@@ -119,6 +119,35 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.24", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.24`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ASK-6");
+    expect(r.stdout).toContain("DISCORD-ASK-7");
+    expect(r.stdout).toContain("collapse");
+  });
+
+  test("extract_changelog_section finds 0.0.23", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.23`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Scrub before clip");
+    expect(r.stdout).toContain("Process-tree kill");
+  });
+
+  test("extract_changelog_section finds 0.0.22", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.22`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ASK");
+    expect(r.stdout).toContain("SESSION-MULTI");
+    expect(r.stdout).toContain("ephemeral");
+  });
+
   test("extract_changelog_section finds 0.0.21", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.21`,
@@ -244,10 +273,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.21", () => {
+  test("package.json is 0.0.24", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.21");
+    expect(pkg.version).toBe("0.0.24");
   });
 });

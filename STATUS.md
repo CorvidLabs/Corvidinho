@@ -96,6 +96,8 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Ask-human + owner ping | #44 → [#163](https://github.com/CorvidLabs/Corvidinho/pull/163) | AUTONOMY-1..3 / AUTONOMOUS-7; schema v7; package **0.0.18** |
 | Autonomous gate + delegate | #117 → [#167](https://github.com/CorvidLabs/Corvidinho/pull/167) | AUTONOMOUS-1/5, SAFE-9; package **0.0.18** |
 | Bug sweep + councils (0.0.21) | #175–#186 | Actor allowlist/deny gating, /work project clamp, schedule worktree isolation + safe branch cleanup, TTL never parks a live run, pinned Bun config, attachments in root, symlink clamp, `--` argv kept; council tool (#118); /admin + pr-diff edges; operator guide; package **0.0.21** |
+| Ephemeral Discord button asks (0.0.22) | DISCORD-ASK / SESSION-MULTI | Choose stub + ephemeral option buttons (~30m TTL); per-user sessions; ask-human options; package **0.0.22** |
+| Stop-means-stop + security fixes (0.0.23) | #185 #187 #188 #190 #191 | Process-tree kill on timeout/abort/exit/signals (AGENT-3), daemon kills abandoned runs, Fledge `--` + per-project binding; SAFE-3 cd clamp bypasses; files-edit literal `$`; scrub-before-clip (SAFE-6); GitHub gate honours allowlist-file deny lists (GITHUB-6); package **0.0.23** |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |

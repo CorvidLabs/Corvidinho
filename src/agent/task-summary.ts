@@ -6,7 +6,18 @@
  * DISCORD-3.a — Discord/chat outbound uses `chatBodyFromTaskResult` (human
  * text only). Plumbing (`state=… verified=…`) belongs on the thinking embed,
  * via `formatTaskPlumbing`, never in the final chat reply body.
+ *
+ * REQ-agent-232 / SAFE-6 — the summary, non-frame stdout and stderr are
+ * secret-scrubbed before they are clipped, so a clip never cuts a secret into
+ * a shape the scrubber misses (a short `ghp_` prefix, a key without its END).
  */
+
+import { scrubSecrets } from "../store/scrub.ts";
+
+/** Scrub, trim, then clip (SAFE-6: scrub before the clip). */
+function scrubClip(text: string, max: number): string {
+  return scrubSecrets(text).trim().slice(0, max);
+}
 
 /** Fields of a TaskResult used for the summary (all optional when parsed). */
 export type TaskResultSummaryInput = {
@@ -37,8 +48,7 @@ export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
  * Caps at 1800 chars for Discord outbound.
  */
 export function chatBodyFromTaskResult(r: TaskResultSummaryInput): string {
-  const body = typeof r.summary === "string" ? r.summary.trim() : "";
-  return body.slice(0, 1800);
+  return typeof r.summary === "string" ? scrubClip(r.summary, 1800) : "";
 }
 
 /**
@@ -65,15 +75,15 @@ export function summarizeTaskRunOutput(
       };
       const r = parsed?.result;
       if (r && typeof r === "object") {
-        return (summarizeTaskResult(r) || trimmed).slice(0, 1800);
+        return summarizeTaskResult(r) || scrubClip(trimmed, 1800);
       }
     } catch {
       /* fall through to raw */
     }
   }
   return (
-    trimmed.slice(0, 1800) ||
-    stderr.trim().slice(0, 500) ||
+    scrubClip(trimmed, 1800) ||
+    scrubClip(stderr, 500) ||
     `(exit ${exitCode})`
   );
 }
@@ -102,13 +112,13 @@ export function chatBodyFromTaskRunOutput(
   // No structured result — avoid leaking raw JSON plumbing; prefer stderr/exit.
   if (trimmed.startsWith("{") && trimmed.includes('"result"')) {
     return (
-      stderr.trim().slice(0, 500) ||
+      scrubClip(stderr, 500) ||
       `(exit ${exitCode})`
     );
   }
   return (
-    trimmed.slice(0, 1800) ||
-    stderr.trim().slice(0, 500) ||
+    scrubClip(trimmed, 1800) ||
+    scrubClip(stderr, 500) ||
     `(exit ${exitCode})`
   );
 }

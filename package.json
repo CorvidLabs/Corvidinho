@@ -1,6 +1,6 @@
 {
   "name": "corvidinho",
-  "version": "0.0.21",
+  "version": "0.0.24",
   "private": true,
   "description": "Linux-first Bun/TS agent runner (Fledge + SpecSync citizen) \u2014 CorvidLabs bootstrap",
   "type": "module",

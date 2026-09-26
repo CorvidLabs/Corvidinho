@@ -366,11 +366,22 @@ Acceptance Criteria
 whose lexically-resolved `cd` or `pushd` target would land outside that root
 (SAFE-3). Refusals include absolute paths outside the root, `..` chains that
 escape, `~` / `~user`, `$VAR` references, and bare `cd` (home). Relative `cd`
-that stays under root and absolute `cd` under root SHALL be allowed.
+that stays under root and absolute `cd` under root SHALL be allowed. The clamp
+SHALL find a `cd` or `pushd` behind prefix words (`{`, `}`, `!`, `if`, `then`,
+`else`, `elif`, `do`, `while`, `until`, `time`, `builtin`, `command`, `eval`,
+`function NAME`) and `NAME=value` assignments, SHALL remove quotes and
+backslashes from words before checking them, and SHALL skip `cd` / `pushd`
+options (`-P`, `-L`, `-e`, `-@`, `-n`, `--`) to reach the real target. It SHALL
+refuse `-` (OLDPWD), a target containing `$`, a backtick, a glob or a brace,
+and, when the command mentions `CDPATH`, a relative target whose first
+component is not `.` or `..`. The spawned shell SHALL NOT inherit `CDPATH` or
+`OLDPWD` from the bot's environment.
 
 Acceptance Criteria
 - Unit fixtures cover allow/refuse cases above.
 - Integration: `cd /tmp && …` and `cd ..` from root refuse with exit 2 and SAFE-3 message; `cd sub && …` inside project succeeds when allowlisted.
+- `cd - && ls`, `cd -P / && …`, `{ cd /; …; }`, `if true; then cd /; …; fi` and `CDPATH=/ && cd tmp` refuse; `builtin` / `command` / `eval` / assignment-prefixed and quoted-head `cd /` refuse; `cd -P sub`, `cd -- sub` and `{ cd sub; }` stay allowed.
+- With `OLDPWD` set outside the root in the bot's environment, `cd -` is refused before spawn; with `CDPATH` set outside the root, `cd sub && pwd` prints the in-root `sub`.
 
 ### REQ-plugins-088
 
@@ -565,32 +576,54 @@ SHALL be skipped with a reason. A missing fledge binary, non-zero exit,
 unexpected JSON, oversized output or timeout SHALL degrade to zero Fledge
 commands with a reason and SHALL NOT affect builtins.
 
+Each registered Fledge command SHALL be bound to the project root (resolved
+cwd) it was discovered for. Loading another root SHALL rebind same-named
+Fledge commands to that root's plugin (origin, tier and danger from it) and
+SHALL remove Fledge commands that root does not offer, including when its
+discovery fails; a cached load SHALL be reused only while every Fledge
+command in the registry is still bound to that root; a forced reload SHALL
+pick up a changed plugin version. A bound command called with any other cwd
+SHALL be refused with exit 2 without starting fledge, so a long-running
+process never runs one project's plugin under another project's name.
+
 Acceptance Criteria
 - Fake fledge fixture: list + audit rows register `fledge-hello`, `fledge-bye`, `fledge-tz`, `fledge-runner`, all dangerous; native → minTier 2, wasm without exec → 1, wasm with exec → 2, audit unavailable → 2.
 - Invalid or overlong command names are skipped with a warning; duplicate names across plugins are skipped with a reason.
 - Missing fledge, exit 3, bad JSON and a 200 ms timeout each return ok=false with a reason and leave the builtin list unchanged.
 - The description names the plugin, version, trust tier and sandbox and never the source path.
+- Two roots with different plugins behind `fledge-hello`: after loading the second, origin and minTier come from its plugin, the first root's other commands are gone, a call from the first root's cwd is refused with exit 2 and runs nothing, and loading the first root again rebinds it.
+- A root whose discovery fails leaves no other root's Fledge command registered; builtins stay.
 
 ### REQ-plugins-113
 
 Running `fledge-<command>` SHALL execute
-`fledge --non-interactive plugins run <command> <argv...>` as an argv array
-(no shell interpolation) with cwd pinned to the plugin cwd (project root /
-task worktree), stdin closed, and a child env that drops `CORVIDINHO_*`,
+`fledge --non-interactive plugins run <command> -- <argv...>` as an argv array
+(no shell interpolation) with cwd pinned to the bound project root, stdin
+closed, and a child env that drops `CORVIDINHO_*`,
 `DISCORD_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`,
 keeps the rest (including GitHub tokens for GitHub-backed Fledge plugins), and
-sets `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`. Output SHALL be
+sets `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`. The `--` SHALL
+end fledge's own options so model-supplied argv such as `--help`, `--json`
+or `--ni` reach the plugin verbatim (fledge 1.8 passes everything after one
+`--` to the plugin). Output SHALL be
 secret-scrubbed with `scrubSecrets` (SAFE-6) and capped per stream; a run
-SHALL time out (default 120 s) and be killed with exit 124; a non-zero exit
+SHALL time out (default 120 s) and be killed with exit 124; the calling run's
+abort signal (AGENT-3) SHALL stop it with exit 130 (`aborted`), and an
+already-aborted call SHALL not start fledge. Fledge SHALL run in its own
+process group and a timeout or abort SHALL stop its whole process tree
+(REQ-plugins-154), including a grandchild left holding the output pipes after
+the plugin exited. A non-zero exit
 SHALL be a failed result carrying that exit code; a binary that cannot start
 SHALL fail with exit 127 instead of throwing. SAFE-1 SHALL deny the command in
 non-interactive mode unless `fledge-<command>` is allowlisted, and SAFE-5
 audit rows SHALL be recorded as for any dangerous plugin.
 
 Acceptance Criteria
-- Non-interactive without allowlist → exit 2 with SAFE-1; allowlisted → fake fledge sees `plugins run hello` and each argv item verbatim (spaces, `$(…)`, `;` not interpreted), cwd = project root.
+- Non-interactive without allowlist → exit 2 with SAFE-1; allowlisted → argv is `plugins run hello -- <argv...>` and the fake plugin sees each argv item verbatim (spaces, `$(…)`, `;` not interpreted), cwd = project root.
+- `--help`, `--json`, `--ni` and a literal `--` as argv reach the plugin in order, and fledge's own help is never printed.
 - The child env lacks Discord / Corvidinho LLM / audit keys, keeps `GITHUB_TOKEN`, and has `FLEDGE_NON_INTERACTIVE=1`.
 - Exit 7 → ok=false exitCode 7; sleep past a 200 ms timeout → exitCode 124; missing binary → 127.
+- A timeout kills a same-group and a `setsid` grandchild, and a background grandchild left after the plugin exited; an abort returns exit 130 with `aborted` and kills the tree.
 - A `ghp_…` token in plugin output is redacted and output past the cap is truncated with a marker.
 
 ### REQ-plugins-114
@@ -647,6 +680,49 @@ Acceptance Criteria
 - Rows keep `name/state/bucket/link` and add `kind/status/conclusion`; `plugins list` still shows dangerous=false minTier=0; missing or denied `--repo` still exits 3.
 - Tests use a mocked Octokit / stubbed transport only (no network, no real token).
 
+### REQ-plugins-154
+
+A bounded child process SHALL NOT outlive its limit (AGENT-3).
+`src/plugins/proc-group.ts` SHALL provide the Linux process-tree stop used by
+Fledge runs, delegate workers and spawned schedule/chat runs, which SHALL be
+spawned with `detached: true` (their own session and process group).
+Stopping a child SHALL signal every process group led by a member of its
+tree, including the child's own group after the child exited, and every
+descendant found by walking `/proc` parent links, so a grandchild that moved
+to its own group or session is reached while its parent lives. A hard kill
+SHALL freeze the tree with SIGSTOP, re-read `/proc` until no new member
+appears, then SIGKILL. A graceful stop MAY first send SIGTERM and return the
+members it saw, so a later hard kill still reaches grandchildren orphaned
+meanwhile. Pid reuse SHALL be guarded: the root pid is used only while it is
+still this process's child or matches a remembered start time, and a group
+whose leader exited only through a remembered member still in it or a
+snapshot taken as the leader exited. This process, its own process group and
+pid 1 SHALL never be signalled, and the helpers SHALL never throw.
+
+A tracked child SHALL be stopped with its tree when this process exits, and
+when SIGINT, SIGTERM or SIGHUP arrives while no other listener handles that
+signal; the signal SHALL then be re-raised with its default action. The hook
+SHALL run before other listeners and count them, so a process that handles
+the signal itself (the bridge's `once` handler, the daemon's grace) keeps its
+own shutdown, and the exit hook stops what is left. A signal this process
+started with ignored (the `SigIgn` mask in `/proc/self/status` at load, for
+example SIGHUP under `nohup` or SIGINT in a background job) SHALL NOT be
+hooked, so it stays ignored while a child is tracked and after the last one
+is untracked. A caller MAY give the tracker its latest snapshot of the tree
+(taken as the child exited); the exit and signal hooks SHALL use it, so what
+the child left in its group is still stopped after the child is gone.
+Signal and exit hooks SHALL be removed once no child is tracked.
+
+Acceptance Criteria
+- Real `sh` trees: a hard kill stops the child, a same-group grandchild and a `setsid` grandchild.
+- A SIGTERM-ignoring grandchild orphaned by the child's exit is killed by a later hard kill given the SIGTERM snapshot.
+- Synthetic `/proc` tables: descendants in any group and orphans in the root's group are members; unrelated processes, a recycled root pid (not our child), a recycled known pid (start time differs), this process and pid 1 are not.
+- A parent that exits, or dies of SIGTERM with no other handler (exit by SIGTERM), leaves no tracked tree behind; a parent with its own SIGTERM or `once` SIGINT handler registered first keeps its grace and its tree dies at exit.
+- Untracking the last child removes the signal hooks.
+- A parent with no other handler dies by SIGHUP after its tracked tree is killed; a parent started with SIGHUP ignored survives SIGHUP while a child is tracked and after it is untracked (SIGHUP still ignored in its `SigIgn`), and SIGTERM still stops its tree.
+- `SigIgn` parsing maps bit n-1 to signal n (SIGHUP, SIGINT, SIGTERM) and treats a missing mask as none.
+- A parent tracking a child with its exit snapshot kills the grandchild that child left in its group when the parent exits.
+
 ### REQ-plugins-243
 
 The `files-*`, `search-grep` and `shell-exec` builtins SHALL NOT silently
@@ -668,6 +744,32 @@ Acceptance Criteria
 - `files-edit --old / --new` accept values that start with `--`.
 - `shell-exec echo git push --dry-run origin main` runs with `--dry-run` intact; a trailing `--json` stays in the command; leading `--json`/`--command`/`--command=` still work; `--command X --dry-run` is refused before spawn.
 - `search-grep --no-verify src` searches for `--no-verify` under `src`; `--pattern` takes a `--` value, `--path=` works, and with `--pattern` the first positional is the path.
+
+### REQ-plugins-253
+
+The GITHUB-6 repo gate used by every GitHub plugin (plugins/github commands
+and review reads) SHALL build its allowlist with the ALLOW-4 loader
+(`loadAllowlist`: the allowlist file — `CORVIDINHO_ALLOWLIST_FILE` or
+~/.config/corvidinho/allowlist.toml|json — plus env overlays), the same
+loader WATCH ingress uses, and SHALL NOT fall back to env overlays alone.
+`deny_repos` / `deny_orgs` from the file SHALL win over an allow list from env
+(and over the community public-repo path), and an allow list only in the file
+SHALL admit matching repos. A missing, unreadable or malformed allowlist file
+SHALL contribute nothing (none of its allow or deny entries apply) while env
+overlays still apply, so with no env allow list the gate refuses
+(default-deny). `checkRepoGateAsync` SHALL expose the same file + env gate to
+other callers. The test suite SHALL NOT read the operator's allowlist file:
+the bun test preload points `CORVIDINHO_ALLOWLIST_FILE` at a missing file,
+and tests that hand a custom env object to a loader pass a missing file too.
+No new env var, config key, slash command or plugin.
+
+Acceptance Criteria
+- With deny lists only in the file and the allow list only in env, github-issue-create, github-issue-comment, github-pr-create, github-pr-review and the review reads refuse the denied repo or org with exit 3 and a GITHUB-6 error; nothing is posted.
+- With the allow list only in the file, allowed repos pass and unlisted repos are still refused.
+- A non-admin role session is refused for a file-denied repo even when it is public.
+- `corvidinho plugins run` with ~/.config/corvidinho/allowlist.toml honors its deny lists.
+- With a malformed (truncated JSON) or unreadable (a directory) allowlist file and no env allow list, the gate and github-issue-create refuse with exit 3 (allowlist empty); with env `CORVIDINHO_GITHUB_ALLOW_ORGS` the env allow list applies and none of the file's entries do.
+- With an operator allowlist file admitting corvidlabs (via `CORVIDINHO_ALLOWLIST_FILE` or ~/.config/corvidinho/allowlist.toml), `bun test` has no failures and no test sends a request to api.github.com while a GitHub token is set.
 
 ### REQ-plugins-237
 
