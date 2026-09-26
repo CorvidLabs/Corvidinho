@@ -159,6 +159,48 @@
         "agent": "75317471a073a9bc33c932c931c9dc5249a6f8b912cc444065a34169ddc73430",
         "discord": "afb38ac379f37ff0a0ccdf91156e1625d69b981d99b48daaa82952834d2ba9a4"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790458733,
+      "digest": "a1992cc875f3c85a37d07273720c47e6ebffb8042d7b492374d3fb425710ad56",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "autonomy-1-2-ask-human-tool-and-stuck-owner-ping-on-discord-44",
+        "title": "AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44)",
+        "description": "AUTONOMY-1/2 ask-human tool and stuck owner ping on Discord (#44)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/agent",
+          "src/discord",
+          "src/scheduler",
+          "src/store/db.ts",
+          "src/work/pr.ts",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Tool loop offers an ask-human tool; calling it ends the run with state blocked and TaskResult.ask {reason clarify, question} instead of claiming done (AUTONOMY-1); verify retries exhausted keep state failed and add ask {reason stuck} (AGENT-4 + AUTONOMY-2); CLI text/json/ndjson surface the question; Discord mention replies and schedule posts show the question and mention the configured owner with allowedMentions limited to that owner, skipping the ping when no owner is configured (AUTONOMY-2 / IDENTITY-3); fixture tests only; specsync + fledge verify green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "75317471a073a9bc33c932c931c9dc5249a6f8b912cc444065a34169ddc73430",
+        "discord": "3658c2277ad9f986f850fb318d2060a89401df561ca2a8a649dccba0d76459b8"
+      }
     }
   ],
   "reopenings": []
