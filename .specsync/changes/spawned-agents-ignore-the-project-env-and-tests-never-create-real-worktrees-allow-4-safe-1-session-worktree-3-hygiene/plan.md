@@ -7,4 +7,4 @@ artifact: plan
 
 1. `--no-env-file` in spawn argv + fixture proving isolation.
 2. Temp project roots in bridge/slash fixtures.
-3. REQ-agent-010; SpecSync check; fledge verify; PR.
+3. REQ-agent-133; SpecSync check; fledge verify; PR.

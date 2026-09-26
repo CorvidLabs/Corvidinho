@@ -12,4 +12,4 @@ artifact: testing
 
 | Requirement | How proven |
 |-------------|------------|
-| REQ-agent-010 | `tests/spawn.argv.test.ts`; bridge/slash fixtures with temp roots |
+| REQ-agent-133 | `tests/spawn.argv.test.ts`; bridge/slash fixtures with temp roots |

@@ -7,7 +7,7 @@ change: spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktr
 
 ## Added
 
-### REQUIREMENT REQ-agent-010
+### REQUIREMENT REQ-agent-133
 
 When Corvidinho spawns its own `.ts` entrypoint (Discord/WATCH agent runs,
 protocol handshake), it SHALL invoke `bun --no-env-file <bin>` so `.env*` files
