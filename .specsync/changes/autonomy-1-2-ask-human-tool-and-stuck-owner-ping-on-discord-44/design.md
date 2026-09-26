@@ -40,6 +40,13 @@ Discord side (`src/discord/ask-ping.ts`, new):
   mention and a logged warning (IDENTITY-3).
 - Scheduler: `SchedulerService` takes `owner`; a tick with an ask posts the
   question with the schedule line as prefix and the owner mention.
+- Ping dedupe: `askPingKey` (hex SHA-256 of reason + SAFE-6 scrubbed
+  question) is stored in `schedules.ask_ping_key` (schema v7, column-only
+  write via `ScheduleStore.setAskPingKey`) after a pinged post. A repeat with
+  the same key posts the question with no mention and no warning. A clean run
+  (ok, no ask) and `setStatus` (pause/resume) clear it; a failed run keeps it.
+  Persisting it in SQLite keeps the dedupe across bridge restarts and a
+  bridge + daemon sharing one data dir.
 
 Alternatives rejected: a DM to the owner (not captured; DISCORD-5), a new
 slash command (not captured), a protocol bump (the change is additive).

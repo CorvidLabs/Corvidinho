@@ -12,3 +12,4 @@ artifact: tasks
 - [x] Fixture tests `tests/agent.ask.test.ts`, `tests/discord.ask-ping.test.ts`
 - [x] Docs, spec files lists, deltas REQ-agent-044 / REQ-discord-044
 - [x] specsync check, tsc, bun test, `fledge lanes run verify --non-interactive`
+- [x] Schedule owner ping once per question: schema v7 `schedules.ask_ping_key`, `askPingKey`, `ScheduleStore.setAskPingKey`, dedupe tests

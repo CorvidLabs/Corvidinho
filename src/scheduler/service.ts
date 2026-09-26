@@ -11,7 +11,11 @@
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
-import { ASK_NO_OWNER_WARNING, formatAskReply } from "../discord/ask-ping.ts";
+import {
+  ASK_NO_OWNER_WARNING,
+  askPingKey,
+  formatAskReply,
+} from "../discord/ask-ping.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import {
   ensureTalkWorkspace,
@@ -294,25 +298,39 @@ export class SchedulerService {
         return;
       }
 
+      // A clean run re-arms the owner ping for the next question (AUTONOMY-2).
+      if (result.ok && !result.ask && schedule.askPingKey) {
+        this.store.setAskPingKey(schedule.id, null);
+      }
+
       if (schedule.channelId && this.outbound?.post) {
         const gate = checkChannel(schedule.channelId, this.allowlist);
         const title = `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
-        // AUTONOMY-2: a tick that needs a human posts its question + owner ping.
+        // AUTONOMY-2: a tick that needs a human posts its question and pings
+        // the owner once per question — a repeat still posts, without a ping.
+        const pingKey = result.ask ? askPingKey(result.ask) : null;
+        const alreadyPinged =
+          pingKey !== null && schedule.askPingKey === pingKey;
         const ask = result.ask
           ? formatAskReply({
               ask: result.ask,
-              owner: this.owner,
+              owner: alreadyPinged ? null : this.owner,
               context: result.summary,
               prefix: `${title}:`,
             })
           : null;
         if (gate.ok && ask) {
-          if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
+          if (!ask.ownerPinged && !alreadyPinged) {
+            console.warn(ASK_NO_OWNER_WARNING);
+          }
           await this.outbound.post({
             channelId: schedule.channelId,
             content: ask.content,
             mentionUserIds: ask.mentionUserIds,
           });
+          if (ask.ownerPinged && pingKey) {
+            this.store.setAskPingKey(schedule.id, pingKey);
+          }
         } else if (gate.ok) {
           const status = result.ok ? "✅" : "❌";
           await this.outbound.post({

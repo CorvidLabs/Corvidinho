@@ -4,7 +4,8 @@
  * owner); no owner ⇒ no ping (IDENTITY-3). Fixtures only: fake gateway, fake
  * sh bin, in-memory scheduler — no live Discord, no network, no git worktrees.
  */
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import type { Database } from "bun:sqlite";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,8 +15,10 @@ import type { HumanAsk, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/discord/agent-client.ts";
 import {
+  ASK_NO_OWNER_WARNING,
   ASK_REPLY_HINT,
   ASK_REPLY_MAX,
+  askPingKey,
   defangMassMentions,
   formatAskReply,
 } from "../src/discord/ask-ping.ts";
@@ -23,6 +26,8 @@ import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { THINKING_COLORS, type DiscordEmbedPayload } from "../src/discord/thinking-status.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
+import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
+import { Database as SqliteDatabase } from "bun:sqlite";
 import { SchedulerService } from "../src/scheduler/service.ts";
 
 const OWNER_ID = "111122223333444455";
@@ -318,5 +323,226 @@ describe("scheduler tick asks + pings (AUTONOMY-2)", () => {
     expect(posts).toHaveLength(1);
     expect(posts[0]!.content).toStartWith("✅ Schedule **Nightly**");
     expect(posts[0]!.mentionUserIds).toBeUndefined();
+  });
+});
+
+describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () => {
+  type Step = HumanAsk | "ok" | "fail";
+  type Post = { channelId: string; content: string; mentionUserIds?: string[] };
+  const STUCK: HumanAsk = stuckAfterVerifyAsk(2);
+  const HOUR = 3_600_000;
+
+  function allowCfg() {
+    const cfg = emptyConfig();
+    cfg.discord.channels = ["chan-allowed"];
+    return cfg;
+  }
+
+  function stepAgent(steps: { next: Step }): AgentClient {
+    return {
+      async runChat({ sessionId }) {
+        const step = steps.next;
+        if (step === "ok") return { ok: true, sessionId, summary: "done", exitCode: 0 };
+        if (step === "fail") return { ok: false, sessionId, summary: "boom", exitCode: 1 };
+        const ok = step.reason === "clarify";
+        return {
+          ok,
+          sessionId,
+          summary: `state=${ok ? "blocked" : "failed"}\n${formatAskSummary(step)}`,
+          exitCode: ok ? 0 : 1,
+          ask: step,
+        };
+      },
+    };
+  }
+
+  /** One schedule, a manual clock, and a tick(step) that runs one due run. */
+  function harness(opts: { db?: Database; clock?: { now: number } } = {}) {
+    const clock = opts.clock ?? { now: Date.parse("2026-09-26T10:30:00Z") };
+    const store = new ScheduleStore(opts.db ? { db: opts.db } : {});
+    const schedule =
+      store.list()[0] ??
+      store.create({
+        name: "Nightly",
+        cronExpression: "0 * * * *",
+        project: "proj-a",
+        prompt: "do thing",
+        createdByUserId: "admin",
+        channelId: "chan-allowed",
+        now: clock.now,
+      });
+    const steps: { next: Step } = { next: "ok" };
+    const posts: Post[] = [];
+    const svc = new SchedulerService({
+      store,
+      agent: stepAgent(steps),
+      allowlist: allowCfg(),
+      manual: true,
+      useWorktrees: false,
+      owner: OWNER,
+      now: () => clock.now,
+      outbound: { post: async (p) => void posts.push(p) },
+    });
+    async function tick(step: Step): Promise<Post> {
+      steps.next = step;
+      clock.now += HOUR;
+      const r = await svc.tick();
+      expect(r.started).toEqual([schedule.id]);
+      for (let i = 0; i < 50 && svc.runningIds().length > 0; i++) {
+        await new Promise((res) => setTimeout(res, 10));
+      }
+      return posts.at(-1)!;
+    }
+    return { store, schedule, svc, tick, posts, clock };
+  }
+
+  function pinged(p: Post): boolean {
+    return p.content.includes(`<@${OWNER_ID}>`) && (p.mentionUserIds ?? []).includes(OWNER_ID);
+  }
+
+  function silent(p: Post): boolean {
+    return !p.content.includes("<@") && (p.mentionUserIds ?? []).length === 0;
+  }
+
+  test("the same question pings once; repeats still post the question, unpinged and unwarned", async () => {
+    const h = harness();
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const first = await h.tick(CLARIFY);
+      const second = await h.tick(CLARIFY);
+      const third = await h.tick(CLARIFY);
+      expect(pinged(first)).toBe(true);
+      for (const p of [second, third]) {
+        expect(p.content).toContain("> Postgres or SQLite?");
+        expect(p.content).toContain("Schedule **Nightly**");
+        expect(silent(p)).toBe(true);
+      }
+      expect(warn.mock.calls.some((c) => c[0] === ASK_NO_OWNER_WARNING)).toBe(false);
+      expect(h.store.get(h.schedule.id)!.askPingKey).toBe(askPingKey(CLARIFY));
+    } finally {
+      warn.mockRestore();
+      h.svc.stop();
+    }
+  });
+
+  test("a changed question (or reason) pings again", async () => {
+    const h = harness();
+    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    expect(pinged(await h.tick({ reason: "clarify", question: "Which port?" }))).toBe(true);
+    expect(pinged(await h.tick(STUCK))).toBe(true);
+    expect(silent(await h.tick(STUCK))).toBe(true);
+    h.svc.stop();
+  });
+
+  test("a failed run keeps the marker; a clean run re-arms the ping", async () => {
+    const h = harness();
+    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    expect((await h.tick("fail")).content).toStartWith("❌");
+    expect(silent(await h.tick(CLARIFY))).toBe(true);
+    expect((await h.tick("ok")).content).toStartWith("✅");
+    expect(h.store.get(h.schedule.id)!.askPingKey).toBeUndefined();
+    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    h.svc.stop();
+  });
+
+  test("pause/resume re-arms the ping", async () => {
+    const h = harness();
+    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    h.store.setStatus(h.schedule.id, "paused", h.clock.now);
+    expect(h.store.get(h.schedule.id)!.askPingKey).toBeUndefined();
+    h.store.setStatus(h.schedule.id, "active", h.clock.now);
+    expect(pinged(await h.tick(CLARIFY))).toBe(true);
+    h.svc.stop();
+  });
+
+  test("the marker persists in SQLite across a restart / second ticker", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const clock = { now: Date.parse("2026-09-26T10:30:00Z") };
+    const a = harness({ db, clock });
+    expect(pinged(await a.tick(CLARIFY))).toBe(true);
+    a.svc.stop();
+    const row = db
+      .query("SELECT ask_ping_key FROM schedules WHERE id = ?")
+      .get(a.schedule.id) as { ask_ping_key: string | null };
+    expect(row.ask_ping_key).toBe(askPingKey(CLARIFY));
+    expect(row.ask_ping_key).not.toContain("Postgres");
+
+    // Fresh store + service on the same data (bridge restart / daemon).
+    const b = harness({ db, clock });
+    expect(b.schedule.id).toBe(a.schedule.id);
+    expect(silent(await b.tick(CLARIFY))).toBe(true);
+    // Pause elsewhere is seen via refresh and re-arms the ping.
+    a.store.setStatus(a.schedule.id, "paused", clock.now);
+    a.store.setStatus(a.schedule.id, "active", clock.now);
+    expect(pinged(await b.tick(CLARIFY))).toBe(true);
+    b.svc.stop();
+    db.close();
+  });
+
+  test("no owner configured never records a marker", async () => {
+    const store = new ScheduleStore();
+    const s = store.create({
+      name: "Nightly",
+      cronExpression: "0 * * * *",
+      project: "proj-a",
+      prompt: "do thing",
+      createdByUserId: "admin",
+      channelId: "chan-allowed",
+      now: Date.now() - 2 * HOUR,
+    });
+    s.nextRunAt = Date.now() - 60_000;
+    const posts: Post[] = [];
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    const svc = new SchedulerService({
+      store,
+      agent: stepAgent({ next: CLARIFY }),
+      allowlist: allowCfg(),
+      manual: true,
+      useWorktrees: false,
+      owner: null,
+      outbound: { post: async (p) => void posts.push(p) },
+    });
+    try {
+      await svc.tick();
+      for (let i = 0; i < 50 && svc.runningIds().length > 0; i++) {
+        await new Promise((res) => setTimeout(res, 10));
+      }
+      expect(posts).toHaveLength(1);
+      expect(silent(posts[0]!)).toBe(true);
+      expect(warn.mock.calls.some((c) => c[0] === ASK_NO_OWNER_WARNING)).toBe(true);
+      expect(store.get(s.id)!.askPingKey).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+      svc.stop();
+    }
+  });
+
+  test("askPingKey is a stable hex digest of reason + scrubbed question", () => {
+    const k = askPingKey(CLARIFY);
+    expect(k).toMatch(/^[0-9a-f]{64}$/);
+    expect(askPingKey({ ...CLARIFY, question: "  Postgres or SQLite?  " })).toBe(k);
+    expect(askPingKey({ reason: "stuck", question: CLARIFY.question })).not.toBe(k);
+  });
+
+  test("schema v7 adds schedules.ask_ping_key and migrates a v6 DB", () => {
+    expect(SCHEMA_VERSION).toBe(7);
+    const db = new SqliteDatabase(":memory:");
+    migrateCorvidinhoDb(db);
+    db.exec("ALTER TABLE schedules DROP COLUMN ask_ping_key");
+    db.run("UPDATE schema_meta SET value = '6' WHERE key = 'version'");
+    db.run(
+      `INSERT INTO schedules (id, name, cron_expression, project, prompt, created_by_user_id, created_at, updated_at)
+       VALUES ('sched_x', 'n', '0 * * * *', 'p', 'q', 'u', 1, 1)`,
+    );
+    migrateCorvidinhoDb(db);
+    const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
+      value: string;
+    };
+    expect(v.value).toBe("7");
+    const row = db.query("SELECT ask_ping_key FROM schedules WHERE id = 'sched_x'").get() as {
+      ask_ping_key: string | null;
+    };
+    expect(row.ask_ping_key).toBeNull();
+    db.close();
   });
 });

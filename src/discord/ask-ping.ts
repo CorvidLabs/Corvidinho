@@ -11,6 +11,7 @@
  * schedule channel) — no DM path, no new channel (DISCORD-5 / DISCORD-8).
  */
 
+import { createHash } from "node:crypto";
 import type { HumanAsk } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
@@ -49,6 +50,17 @@ export type FormatAskReplyOpts = {
   /** Include "Reply to this message to answer." (reply-tracked posts only). */
   replyHint?: boolean;
 };
+
+/**
+ * Stable digest of an ask (reason + scrubbed question) used to ping the owner
+ * once per schedule per question (AUTONOMY-2). Hex SHA-256 of the SAFE-6
+ * scrubbed text, so a stored key never derives from a raw secret.
+ */
+export function askPingKey(ask: HumanAsk): string {
+  return createHash("sha256")
+    .update(`${ask.reason}\n${scrubSecrets(ask.question).trim()}`)
+    .digest("hex");
+}
 
 /** Break `@everyone` / `@here` so they never render as mass mentions. */
 export function defangMassMentions(text: string): string {

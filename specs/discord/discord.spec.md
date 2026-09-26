@@ -104,7 +104,10 @@ Questions and owner ping (REQ-discord-044, issue #44, AUTONOMY-1/2):
 gains optional `ask` (validated from the `result` frame); the gateway `reply`
 takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
 users plus the replied-to author); `SchedulerService` takes `owner` and its
-outbound `post` forwards `mentionUserIds`.
+outbound `post` forwards `mentionUserIds`. Schedule owner pings are deduped
+per question: `askPingKey` (`ask-ping.ts`) digests the ask, `Schedule.askPingKey`
+/ `ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key`
+(schema v7, `SCHEMA_VERSION` 7).
 
 ## Invariants
 

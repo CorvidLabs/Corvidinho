@@ -15,3 +15,5 @@ artifact: plan
 5. Fixture tests (`tests/agent.ask.test.ts`, `tests/discord.ask-ping.test.ts`),
    docs, spec files lists, deltas REQ-agent-044 / REQ-discord-044.
 6. specsync check, tsc, bun test, fledge verify.
+7. Schedule ping dedupe: persist the pinged ask digest (schema v7) and skip
+   the mention on repeats until success, pause/resume, or a new question.
