@@ -15,6 +15,8 @@ import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import { askPingOwner, replyWithOwnerNotice, slashOwnerNotice } from "../spend-post.ts";
 
 export async function handleWorkCommand(
   ctx: SlashContext,
@@ -144,7 +146,19 @@ export async function handleWorkCommand(
       })
     : undefined;
   const thinkExtras = { plumbing, model: llmModel };
-  if (result.ok) {
+  // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
+  // is blocked, not done; the owner is pinged (once per cap episode).
+  const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
+  const ask = result.ask
+    ? formatAskReply({ ask: result.ask, owner: null, context: result.summary })
+    : null;
+  if (ask) {
+    ctx.workStore.setStatus(task, ask.failed ? "failed" : "blocked", result.summary.slice(0, 500));
+    await (ask.failed
+      ? thinking?.fail(ask.status, thinkExtras)
+      : thinking?.done(ask.status, thinkExtras));
+    if (!askOwner?.owner && !askOwner?.deduped) console.warn(ASK_NO_OWNER_WARNING);
+  } else if (result.ok) {
     ctx.workStore.setStatus(task, "completed", result.summary.slice(0, 500));
     await thinking?.done("✅ Done", thinkExtras);
   } else {
@@ -156,9 +170,11 @@ export async function handleWorkCommand(
     await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
   }
 
-  const summary = result.ok
-    ? result.summary.slice(0, 1500)
-    : `failed (exit ${result.exitCode})`;
+  const summary = ask
+    ? ask.content
+    : result.ok
+      ? result.summary.slice(0, 1500)
+      : `failed (exit ${result.exitCode})`;
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
@@ -166,7 +182,9 @@ export async function handleWorkCommand(
   // a draft PR only when the PR path is allowlisted; else one plain line why.
   // ROLES-CHAT-3: commit/push/PR are mutating — only ADMIN (the owner) may
   // ship /work as a PR; everyone else keeps the changes on the work branch.
-  const prLine = !actingIsAdmin
+  const prLine = result.ask?.reason === "spend-cap"
+    ? "PR: not opened — the work run paused at the daily spend cap (SAFE-8)."
+    : !actingIsAdmin
     ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR (ROLES-CHAT-3). The changes stay on the work branch."
     : await shipWorkPr(ctx, {
     worktreePath:
@@ -185,11 +203,16 @@ export async function handleWorkCommand(
     summary,
   ].join("\n");
 
-  if (interaction.editReply) {
-    await interaction.editReply({ content: body });
-  } else {
-    await interaction.reply({ content: body });
-  }
+  // Owner ping for the ask + pending SAFE-8 80% warning, as a fresh post.
+  const notice = slashOwnerNotice({
+    owner: ctx.owner,
+    outbox: ctx.spendAlerts,
+    ask: result.ask,
+    pingOwnerForAsk: Boolean(askOwner?.owner),
+    spendWarning: result.spendWarning,
+    label: `/work \`${task.id}\``,
+  });
+  await replyWithOwnerNotice({ interaction, body, notice, post: ctx.post });
 }
 
 /** One reply line for the /work PR step; never throws (REQ-discord-088). */

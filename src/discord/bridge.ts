@@ -78,6 +78,8 @@ import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 import { readSpendSnapshot } from "../agent/spend.ts";
 import { formatSpendStatusLine } from "../agent/spend-notice.ts";
+import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
+import { askPingOwner } from "./spend-post.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -260,6 +262,9 @@ export async function startBridge(
     formatSpendStatusLine(
       readSpendSnapshot({ env, db, model: loadLlmEnv(env).model }),
     );
+  // SAFE-8: every bridge post delivers pending 80% warnings (recorded by any
+  // run on this data dir) and pings the owner once per spend-cap episode.
+  const spendAlerts = createSpendAlertOutbox({ db, env });
   // SAFE-5: /admin mutations append to the same chain (fail closed on error).
   const recordAudit = db
     ? (entry: AuditEntryInput) =>
@@ -320,6 +325,8 @@ export async function startBridge(
       announceStore,
       auditLine,
       spendLine,
+      spendAlerts,
+      ...(replyRef.fn ? { post: replyRef.fn } : {}),
       recordAudit,
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
@@ -484,11 +491,15 @@ export async function startBridge(
           })
         : undefined;
       const thinkExtras = { plumbing, model: llmModel };
-      // AUTONOMY-1/2: needs a human → question to the requester + owner ping.
+      // AUTONOMY-1/2: needs a human → question to the requester + owner ping
+      // (a spend-cap ask pings once per cap episode, SAFE-8).
+      const askOwner = result.ask
+        ? askPingOwner(result.ask, config.owner, spendAlerts)
+        : null;
       const ask = result.ask
         ? formatAskReply({
             ask: result.ask,
-            owner: config.owner,
+            owner: askOwner?.owner,
             context: result.summary,
             replyHint: true,
           })
@@ -497,7 +508,7 @@ export async function startBridge(
         await (ask.failed
           ? thinking.fail(ask.status, thinkExtras)
           : thinking.done(ask.status, thinkExtras));
-        if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
+        if (!ask.ownerPinged && !askOwner?.deduped) console.warn(ASK_NO_OWNER_WARNING);
       } else if (result.ok) {
         await thinking.done("✅ Done", thinkExtras);
       } else {
@@ -512,7 +523,8 @@ export async function startBridge(
           : `session ${session.id} failed (exit ${result.exitCode})`;
 
       if (replyRef.fn) {
-        // SAFE-8: an 80% spend warning rides the reply and pings the owner.
+        // SAFE-8: a pending 80% spend warning rides the reply and pings the owner.
+        const pending = spendAlerts.takeWarning(result.spendWarning);
         const sent = await replyRef.fn(
           withSpendWarningPost(
             {
@@ -521,10 +533,11 @@ export async function startBridge(
               replyToMessageId: msg.id,
               ...(ask ? { mentionUserIds: ask.mentionUserIds } : {}),
             },
-            result.spendWarning,
+            pending?.warning,
             config.owner,
           ),
         );
+        if (!sent) pending?.release();
         if (sent?.messageId) {
           store.trackBotMessage(sent.messageId, session);
         }
@@ -575,11 +588,11 @@ export async function startBridge(
       pollIntervalMs: opts.schedulerPollIntervalMs,
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
+      spendAlerts,
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
-          if (replyRef.fn) {
-            await replyRef.fn({ channelId, content, mentionUserIds });
-          }
+          if (!replyRef.fn) return false;
+          return (await replyRef.fn({ channelId, content, mentionUserIds })) !== null;
         },
       },
       // Start after gateway is up; construct with manual then start below.

@@ -512,6 +512,10 @@ async function taskRun(opts: {
       `state=${result.state} verified=${result.verified} verifySkipped=${result.verifySkipped} cancelled=${result.cancelled} attempts=${result.attempts}`,
     );
     console.log(result.summary);
+    // SAFE-8: a spend-cap summary is generic; the operator details are in the ask.
+    if (result.ask && !result.summary.includes(result.ask.question)) {
+      console.log(result.ask.question);
+    }
   }
 
   if (result.cancelled) return 130;

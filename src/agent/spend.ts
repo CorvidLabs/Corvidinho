@@ -9,8 +9,10 @@
  * DB is never opened (no behavior change).
  *
  * SAFE-8 as amended (#98): at 80% of the cap the run gets one warning per
- * crossing (deduped in `spend_alerts` across processes); at 100% the call is
- * not sent — the guard records a `spend-cap` ask and the execute hook ends the
+ * crossing, recorded in `spend_alerts` across processes and re-armed once
+ * spend is seen back under 70% (spend-alerts.ts); the Discord bridge delivers
+ * recorded warnings to the owner (spend-outbox.ts). At 100% the call is not
+ * sent — the guard records a `spend-cap` ask and the execute hook ends the
  * attempt with it, so the run stops `blocked` and the owner is asked through
  * the AUTONOMY-1/2 path instead of the call being refused or overspent.
  *
@@ -34,16 +36,15 @@
 import type { Database } from "bun:sqlite";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import { formatAskSummary } from "./ask.ts";
+import { ensureSpendAlerts, rearmSpendAlerts, recordSpendWarning } from "./spend-alerts.ts";
 import {
-  atWarnThreshold,
   formatSpendDoctorLine,
   SPEND_CAP_ENV,
+  SPEND_CAP_SUMMARY,
   spendCapInvalidAsk,
   spendCapLedgerAsk,
   spendCapReachedAsk,
   spendCapUnpricedAsk,
-  spendPercent,
   type SpendDoctorLine,
   type SpendSnapshot,
 } from "./spend-notice.ts";
@@ -166,25 +167,15 @@ CREATE TABLE IF NOT EXISTS spend_ledger (
   settled_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_spend_ledger_ts ON spend_ledger(ts);
-CREATE TABLE IF NOT EXISTS spend_alerts (
-  id TEXT PRIMARY KEY NOT NULL,
-  ts INTEGER NOT NULL,
-  kind TEXT NOT NULL,
-  cap_micro_usd INTEGER NOT NULL,
-  spent_micro_usd INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_spend_alerts_ts ON spend_alerts(ts);
 `;
-
-/** `spend_alerts.kind` for the SAFE-8 80% warning (a constant, never free text). */
-const WARN_ALERT_KIND = "warn";
 
 /**
  * Create the ledger and alert tables in the shared DB (idempotent; no schema
- * version bump). `spend_alerts` holds only a constant kind and integers.
+ * version bump). `spend_alerts` holds only constant kinds and integers.
  */
 export function ensureSpendLedger(db: Database): void {
   db.exec(SPEND_LEDGER_SQL);
+  ensureSpendAlerts(db);
 }
 
 /** reserved → in flight; actual → provider usage; estimated → no usage, estimate kept; failed → HTTP error, 0. */
@@ -232,7 +223,8 @@ export class SpendLedger {
 
   /**
    * Atomically check the cap and reserve the estimate. Refuses (no row) when
-   * window spend + estimate would exceed the cap.
+   * window spend + estimate would exceed the cap. Spend seen back under the
+   * re-arm level re-arms the 80% warning and the cap ping (spend-alerts.ts).
    */
   reserve(opts: {
     provider: string;
@@ -243,6 +235,7 @@ export class SpendLedger {
   }): SpendReservation {
     const run = this.db.transaction((): SpendReservation => {
       const { spentMicroUsd } = this.window(opts.now);
+      rearmSpendAlerts(this.db, { spentMicroUsd, capMicroUsd: opts.capMicroUsd, now: opts.now });
       if (spentMicroUsd + opts.estimateMicroUsd > opts.capMicroUsd) {
         return { ok: false, spentMicroUsd };
       }
@@ -267,33 +260,21 @@ export class SpendLedger {
 
   /**
    * SAFE-8 80% warning, once per crossing: when 24 h spend is at or past the
-   * threshold and no warning for this cap value was recorded in the last 24 h,
-   * record one and return it. Check and insert share one IMMEDIATE
-   * transaction, so concurrent processes warn once between them. A new cap
-   * value re-arms the warning. A zero cap never warns (nothing is spent).
+   * threshold and the warning for this cap value is armed, record one
+   * undelivered `warn` row and return it; under the re-arm level, re-arm.
+   * Armed = no warning for this cap value since the last re-arm and within
+   * 24 h, so a new crossing or a new cap value warns again. Check and insert
+   * share one IMMEDIATE transaction, so concurrent processes warn once
+   * between them. A zero cap never warns (nothing is spent).
    */
   noteWarning(opts: { capMicroUsd: number; now: number }): SpendWarning | null {
     const run = this.db.transaction((): SpendWarning | null => {
-      if (opts.capMicroUsd <= 0) return null;
       const { spentMicroUsd } = this.window(opts.now);
-      if (!atWarnThreshold(spentMicroUsd, opts.capMicroUsd)) return null;
-      const seen = this.db
-        .query(
-          `SELECT 1 AS x FROM spend_alerts
-            WHERE kind = ? AND cap_micro_usd = ? AND ts > ? LIMIT 1`,
-        )
-        .get(WARN_ALERT_KIND, opts.capMicroUsd, opts.now - SPEND_WINDOW_MS);
-      if (seen) return null;
-      this.db.run(
-        `INSERT INTO spend_alerts (id, ts, kind, cap_micro_usd, spent_micro_usd)
-         VALUES (?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), opts.now, WARN_ALERT_KIND, opts.capMicroUsd, spentMicroUsd],
-      );
-      return {
+      return recordSpendWarning(this.db, {
         spentMicroUsd,
         capMicroUsd: opts.capMicroUsd,
-        percent: spendPercent(spentMicroUsd, opts.capMicroUsd),
-      };
+        now: opts.now,
+      });
     });
     return run.immediate();
   }
@@ -375,8 +356,9 @@ export type SpendGuard = {
   fetch: SpendFetch;
   /**
    * When a call was stopped at the cap during this attempt, replace the
-   * attempt's result with the `spend-cap` ask (summary `Needs your input:
-   * <question>`, filesChanged kept), so the run ends `blocked` instead of
+   * attempt's result with the `spend-cap` ask (the generic
+   * SPEND_CAP_SUMMARY as summary — safe for a public reply — the details in
+   * `ask.question`, filesChanged kept), so the run ends `blocked` instead of
    * reporting a failed call. Clears the ask.
    */
   finish(result: ExecuteResult): ExecuteResult;
@@ -480,7 +462,7 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       const ask = pending;
       pending = null;
       if (!ask) return result;
-      return { summary: formatAskSummary(ask), filesChanged: [...result.filesChanged], ask };
+      return { summary: SPEND_CAP_SUMMARY, filesChanged: [...result.filesChanged], ask };
     },
   };
 }

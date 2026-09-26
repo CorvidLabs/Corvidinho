@@ -48,7 +48,10 @@ export type FormatAskReplyOpts = {
   context?: string;
   /** Leading line (e.g. which schedule this is). */
   prefix?: string;
-  /** Include "Reply to this message to answer." (reply-tracked posts only). */
+  /**
+   * Include "Reply to this message to answer." (reply-tracked posts only;
+   * ignored for a spend-cap ask, which a reply cannot unblock).
+   */
   replyHint?: boolean;
 };
 
@@ -104,7 +107,9 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   if (stuck && opts.context?.trim()) {
     lines.push(clean(opts.context, ASK_REPLY_CONTEXT_MAX));
   }
-  if (opts.replyHint) lines.push(ASK_REPLY_HINT);
+  // SAFE-8: a reply cannot lift the cap (no Approve card yet, #96), so a
+  // spend-cap ask never invites one.
+  if (opts.replyHint && !spendCap) lines.push(ASK_REPLY_HINT);
   let content = lines.join("\n");
   if (content.length > ASK_REPLY_MAX) {
     content = `${content.slice(0, ASK_REPLY_MAX - 1)}…`;
@@ -122,9 +127,12 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   };
 }
 
-/** SAFE-8 spend-cap ask headline: the run paused before a provider call. */
+/**
+ * SAFE-8 spend-cap ask headline: the run paused before a provider call. It
+ * names the operator because a requester cannot lift the cap.
+ */
 export const SPEND_CAP_HEADLINE =
-  "💸 I paused before spending more — the daily spend cap needs you.";
+  "💸 I paused before spending more — the daily spend cap needs the operator.";
 export const SPEND_CAP_STATUS = "💸 Paused at the spend cap";
 
 export type SpendWarningReply = {
@@ -137,7 +145,8 @@ export type SpendWarningReply = {
 /**
  * SAFE-8 80% warning line for a Discord post, rebuilt from the warning's
  * amounts (never from child text). Pings the configured owner when set; the
- * runner records each warning once per crossing, so this pings at most once.
+ * runner records each warning once per crossing and the bridge's outbox
+ * (src/agent/spend-outbox.ts) hands it to exactly one post.
  */
 export function formatSpendWarningReply(
   warning: SpendWarning,

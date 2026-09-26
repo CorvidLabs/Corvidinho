@@ -12,6 +12,8 @@ import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import { askPingOwner, replyWithOwnerNotice, slashOwnerNotice } from "../spend-post.ts";
 
 function formatSessionLine(s: {
   id: string;
@@ -167,25 +169,43 @@ export async function handleSessionStart(
       })
     : undefined;
   const thinkExtras = { plumbing, model: llmModel };
-  if (result.ok) {
+  // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
+  // is not "Done"; the owner is pinged (once per cap episode).
+  const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
+  const ask = result.ask
+    ? formatAskReply({ ask: result.ask, owner: null, context: result.summary })
+    : null;
+  if (ask) {
+    await (ask.failed
+      ? thinking?.fail(ask.status, thinkExtras)
+      : thinking?.done(ask.status, thinkExtras));
+    if (!askOwner?.owner && !askOwner?.deduped) console.warn(ASK_NO_OWNER_WARNING);
+  } else if (result.ok) {
     await thinking?.done("✅ Done", thinkExtras);
   } else {
     await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
   }
 
-  const summary = result.ok
-    ? result.summary.slice(0, 1500)
-    : `failed (exit ${result.exitCode})`;
+  const summary = ask
+    ? ask.content
+    : result.ok
+      ? result.summary.slice(0, 1500)
+      : `failed (exit ${result.exitCode})`;
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
   const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
 
-  if (interaction.editReply) {
-    await interaction.editReply({ content: body });
-  } else {
-    await interaction.reply({ content: body });
-  }
+  // Owner ping for the ask + pending SAFE-8 80% warning, as a fresh post.
+  const notice = slashOwnerNotice({
+    owner: ctx.owner,
+    outbox: ctx.spendAlerts,
+    ask: result.ask,
+    pingOwnerForAsk: Boolean(askOwner?.owner),
+    spendWarning: result.spendWarning,
+    label: `/session \`${session.id}\``,
+  });
+  await replyWithOwnerNotice({ interaction, body, notice, post: ctx.post });
 }
 
 export async function handleSessionCommand(

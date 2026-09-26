@@ -23,6 +23,7 @@ import {
   withSpendCap,
   type SpendFetch,
 } from "../src/agent/spend.ts";
+import { SPEND_CAP_SUMMARY } from "../src/agent/spend-notice.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { rescrubDatabase, SCRUB_TARGETS } from "../src/store/scrub.ts";
 
@@ -191,7 +192,7 @@ describe("withSpendCap (SAFE-8)", () => {
     expect(msg).toContain("Daily spend cap reached");
     expect(msg).toContain("$0.9990 spent in the last 24h (99% of the $1.00 cap)");
     expect(msg).toContain("stopped before sending it");
-    expect(msg).toContain(`raise ${SPEND_CAP_ENV}`);
+    expect(msg).toContain(`the operator raises ${SPEND_CAP_ENV}`);
     expect(msg).toContain("24h window");
     expect(calls).toHaveLength(0);
     expect(ledgerRows(db)).toHaveLength(1);
@@ -331,8 +332,10 @@ describe("createTaskExecute hook", () => {
       const result = await exec({ attempt: 1, signal: new AbortController().signal });
       expect(calls).toHaveLength(0);
       expect(result.ask?.reason).toBe("spend-cap");
-      expect(result.summary).toStartWith("Needs your input: Daily spend cap reached (SAFE-8)");
-      expect(result.summary).toContain("of the $0.00 cap");
+      // Generic summary (safe for a public reply); the details are in the ask.
+      expect(result.summary).toBe(SPEND_CAP_SUMMARY);
+      expect(result.ask?.question).toStartWith("Daily spend cap reached (SAFE-8)");
+      expect(result.ask?.question).toContain("of the $0.00 cap");
       expect(result.filesChanged).toEqual([]);
       expect(existsSync(join(dir, "corvidinho.db"))).toBe(true);
       // The next attempt starts clean (the ask is taken once).

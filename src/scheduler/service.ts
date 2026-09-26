@@ -17,6 +17,9 @@ import {
   formatAskReply,
   withSpendWarningPost,
 } from "../discord/ask-ping.ts";
+import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
+import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
+import type { HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import {
   ensureTalkWorkspace,
@@ -30,13 +33,16 @@ export const DEFAULT_MAX_CONCURRENT = 2;
 export const FAILURE_AUTO_PAUSE = 5;
 
 export type SchedulerOutbound = {
-  /** Post schedule result to a Discord channel (optional). */
+  /**
+   * Post schedule result to a Discord channel (optional). Resolving `false`
+   * means the post did not go out (a claimed spend warning is handed back).
+   */
   post?: (opts: {
     channelId: string;
     content: string;
     /** Only these users may be pinged (AUTONOMY-2 owner ping). */
     mentionUserIds?: string[];
-  }) => Promise<void>;
+  }) => Promise<void | boolean>;
 };
 
 /** One finished (or abandoned) schedule run, for operator logs. */
@@ -48,6 +54,10 @@ export type ScheduleRunFinished = {
   error?: string;
   /** Schedule was auto-paused after this run (FAILURE_AUTO_PAUSE). */
   autoPaused: boolean;
+  /** The run stopped to ask a human (AUTONOMY-1/2; `spend-cap` = SAFE-8). */
+  askReason?: HumanAskReason;
+  /** This run crossed 80% of the daily spend cap (SAFE-8). */
+  spendWarning?: SpendWarning;
 };
 
 export type SchedulerServiceOpts = {
@@ -73,6 +83,12 @@ export type SchedulerServiceOpts = {
   useWorktrees?: boolean;
   /** Configured owner pinged when a tick needs a human (AUTONOMY-2). */
   owner?: OwnerRecord | null;
+  /**
+   * SAFE-8 — pending 80% warnings and the once-per-episode spend-cap ping
+   * (the bridge wires its shared DB). Without it a post carries the run's
+   * own warning and a spend-cap ask pings per the schedule's ping key.
+   */
+  spendAlerts?: SpendAlertOutbox;
   /** Called once per run when it finishes or is abandoned (daemon logs). */
   onRunFinished?: (event: ScheduleRunFinished) => void;
 };
@@ -94,6 +110,7 @@ export class SchedulerService {
   private readonly defaultProjectRoot: string;
   private readonly useWorktrees: boolean;
   private readonly owner: OwnerRecord | null;
+  private readonly spendAlerts?: SpendAlertOutbox;
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
@@ -112,6 +129,7 @@ export class SchedulerService {
     this.defaultProjectRoot = opts.defaultProjectRoot ?? process.cwd();
     this.useWorktrees = opts.useWorktrees !== false;
     this.owner = opts.owner ?? null;
+    this.spendAlerts = opts.spendAlerts;
     this.onRunFinished = opts.onRunFinished;
     if (!opts.manual) {
       this.start();
@@ -295,6 +313,8 @@ export class SchedulerService {
         ok: result.ok,
         summary,
         error: result.ok ? undefined : summary,
+        ...(result.ask ? { askReason: result.ask.reason } : {}),
+        ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
       })) {
         return;
       }
@@ -312,45 +332,59 @@ export class SchedulerService {
         const pingKey = result.ask ? askPingKey(result.ask) : null;
         const alreadyPinged =
           pingKey !== null && schedule.askPingKey === pingKey;
+        // SAFE-8: a spend-cap ask also pings once per cap episode across
+        // every bridge surface (only consulted when this post would ping).
+        const askOwner =
+          result.ask && gate.ok && !alreadyPinged
+            ? askPingOwner(result.ask, this.owner, this.spendAlerts)
+            : { owner: null, deduped: alreadyPinged };
         const ask = result.ask
           ? formatAskReply({
               ask: result.ask,
-              owner: alreadyPinged ? null : this.owner,
+              owner: askOwner.owner,
               context: result.summary,
               prefix: `${title}:`,
             })
           : null;
-        if (gate.ok && ask) {
-          if (!ask.ownerPinged && !alreadyPinged) {
-            console.warn(ASK_NO_OWNER_WARNING);
+        // SAFE-8: a pending 80% spend warning (this run's or one recorded by
+        // any other run on the data dir) rides the post and pings the owner.
+        const pending = gate.ok ? takeSpendWarning(this.spendAlerts, result.spendWarning) : null;
+        // `false` until a post resolves (a poster returning void counts as sent).
+        let posted: void | boolean = false;
+        try {
+          if (gate.ok && ask) {
+            if (!ask.ownerPinged && !askOwner.deduped) {
+              console.warn(ASK_NO_OWNER_WARNING);
+            }
+            posted = await this.outbound.post(
+              withSpendWarningPost(
+                {
+                  channelId: schedule.channelId,
+                  content: ask.content,
+                  mentionUserIds: ask.mentionUserIds,
+                },
+                pending?.warning,
+                this.owner,
+              ),
+            );
+            if (ask.ownerPinged && pingKey) {
+              this.store.setAskPingKey(schedule.id, pingKey);
+            }
+          } else if (gate.ok) {
+            const status = result.ok ? "✅" : "❌";
+            posted = await this.outbound.post(
+              withSpendWarningPost(
+                {
+                  channelId: schedule.channelId,
+                  content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
+                },
+                pending?.warning,
+                this.owner,
+              ),
+            );
           }
-          await this.outbound.post(
-            withSpendWarningPost(
-              {
-                channelId: schedule.channelId,
-                content: ask.content,
-                mentionUserIds: ask.mentionUserIds,
-              },
-              result.spendWarning,
-              this.owner,
-            ),
-          );
-          if (ask.ownerPinged && pingKey) {
-            this.store.setAskPingKey(schedule.id, pingKey);
-          }
-        } else if (gate.ok) {
-          const status = result.ok ? "✅" : "❌";
-          // SAFE-8: an 80% spend warning rides the post and pings the owner.
-          await this.outbound.post(
-            withSpendWarningPost(
-              {
-                channelId: schedule.channelId,
-                content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
-              },
-              result.spendWarning,
-              this.owner,
-            ),
-          );
+        } finally {
+          if (posted === false) pending?.release();
         }
       }
     } catch (err) {
@@ -377,11 +411,21 @@ export class SchedulerService {
   private finish(
     schedule: Schedule,
     run: ScheduleRun,
-    result: { ok: boolean; summary?: string; error?: string },
+    result: {
+      ok: boolean;
+      summary?: string;
+      error?: string;
+      askReason?: HumanAskReason;
+      spendWarning?: SpendWarning;
+    },
   ): boolean {
     if (this.finishedRuns.has(run)) return false;
     this.finishedRuns.add(run);
-    this.store.markRunFinished(schedule, run, result);
+    this.store.markRunFinished(schedule, run, {
+      ok: result.ok,
+      summary: result.summary,
+      error: result.error,
+    });
     const autoPaused = this.maybeAutoPause(schedule);
     this.onRunFinished?.({
       scheduleId: schedule.id,
@@ -389,6 +433,8 @@ export class SchedulerService {
       ok: result.ok,
       error: result.error,
       autoPaused,
+      ...(result.askReason ? { askReason: result.askReason } : {}),
+      ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
     });
     return true;
   }

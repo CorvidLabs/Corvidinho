@@ -10,8 +10,12 @@
  *
  * Bridges rebuild the warning from integer micro-USD (SpendWarning), never
  * from child-written text. A model id is SAFE-6 scrubbed before it is quoted.
- * The Approve card (#96) does not exist yet: the ask says how to continue
- * with what exists today (raise or unset the cap, or wait for the window).
+ * The Approve card (#96) does not exist yet, so a reply cannot lift the cap:
+ * the ask is addressed to the operator and names the operator action that
+ * does (raise or unset the cap and restart, or wait for the window) instead
+ * of asking a yes/no question. The run's summary (posted wherever the run
+ * reports, e.g. a public GitHub comment for WATCH) is a generic line without
+ * amounts or env internals; the details live in the ask question.
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
@@ -23,6 +27,19 @@ export const SPEND_CAP_ENV = "CORVIDINHO_DAILY_SPEND_CAP_USD";
 
 /** Warn once when rolling 24 h spend reaches this percent of the cap. */
 export const SPEND_WARN_PERCENT = 80;
+
+/**
+ * The warning (and the cap ping) re-arm once spend is seen back under this
+ * percent, so the next crossing warns again (spend-alerts.ts).
+ */
+export const SPEND_REARM_PERCENT = 70;
+
+/**
+ * TaskResult summary of a run stopped by the spend cap: safe for any audience
+ * (no amounts, no env names). The ask question carries the details.
+ */
+export const SPEND_CAP_SUMMARY =
+  "Paused before calling the model: the operator's daily spend cap (SAFE-8) needs attention, so nothing more was spent.";
 
 /** Largest amount a bridge accepts from a child's result frame (micro-USD). */
 const MAX_MICRO_USD = 1e15;
@@ -78,8 +95,11 @@ export function spendWarningFromUnknown(raw: unknown): SpendWarning | undefined 
 
 // ─── Spend-cap ask (100%) ──────────────────────────────────────────────────
 
-const RESTART_HINT =
-  "in the environment Corvidinho runs with (restart the bridge or daemon so new runs pick it up)";
+/** Where the operator makes the change. */
+const OPERATOR_HINT =
+  "in the environment Corvidinho runs with and restarts the bridge or daemon so new runs pick it up";
+/** No Approve card yet (#96): say plainly that answering does not unblock. */
+const NO_REPLY_NOTE = "Replying can't lift the cap — this needs the operator.";
 
 function spendCapAsk(question: string): HumanAsk {
   return { reason: "spend-cap", question };
@@ -96,8 +116,8 @@ export function spendCapReachedAsk(o: {
     `Daily spend cap reached (SAFE-8): ${formatUsd(o.spentMicroUsd)} spent in the last 24h ` +
       `(${pct}% of the ${formatUsd(o.capMicroUsd)} cap), and the next provider call ` +
       `(~${formatUsd(o.estimateMicroUsd)}) would pass it, so I stopped before sending it. ` +
-      `To continue, raise ${SPEND_CAP_ENV} (or unset it) ${RESTART_HINT} and ask again, ` +
-      "or wait until earlier spend leaves the 24h window. Do you want to raise the cap?",
+      `To continue, the operator raises ${SPEND_CAP_ENV} (or unsets it) ${OPERATOR_HINT}, ` +
+      `or waits until earlier spend leaves the 24h window; then ask again. ${NO_REPLY_NOTE}`,
   );
 }
 
@@ -106,7 +126,7 @@ export function spendCapInvalidAsk(): HumanAsk {
   return spendCapAsk(
     `Spend cap can't be enforced (SAFE-8): ${SPEND_CAP_ENV} is set but is not a plain USD ` +
       "amount (e.g. 5 or 2.50), so I stopped before calling the provider. " +
-      `Fix or unset it ${RESTART_HINT} and ask again. Do you want to fix the cap?`,
+      `To continue, the operator fixes or unsets it ${OPERATOR_HINT}; then ask again. ${NO_REPLY_NOTE}`,
   );
 }
 
@@ -116,8 +136,8 @@ export function spendCapUnpricedAsk(model: string, capMicroUsd: number): HumanAs
   return spendCapAsk(
     `Spend cap can't be enforced (SAFE-8): model "${shown}" has no known price, so I can't ` +
       `count it against the ${formatUsd(capMicroUsd)} daily cap and stopped before calling ` +
-      `the provider. Switch CORVIDINHO_LLM_MODEL to a priced model or unset ${SPEND_CAP_ENV} ` +
-      `${RESTART_HINT}, then ask again. Which do you want?`,
+      "the provider. To continue, the operator switches CORVIDINHO_LLM_MODEL to a priced model " +
+      `or unsets ${SPEND_CAP_ENV} ${OPERATOR_HINT}; then ask again. ${NO_REPLY_NOTE}`,
   );
 }
 
@@ -126,8 +146,9 @@ export function spendCapLedgerAsk(error: string): HumanAsk {
   const why = scrubSecrets(error).replace(/\s+/g, " ").trim().slice(0, 200) || "unknown error";
   return spendCapAsk(
     `Spend cap can't be enforced (SAFE-8): the spend ledger is unavailable (${why}), so I ` +
-      "stopped before calling the provider. Check the data dir (CORVIDINHO_DATA_DIR) or unset " +
-      `${SPEND_CAP_ENV} ${RESTART_HINT}, then ask again. How do you want to proceed?`,
+      "stopped before calling the provider. To continue, the operator checks the data dir " +
+      `(CORVIDINHO_DATA_DIR) or unsets ${SPEND_CAP_ENV} ${OPERATOR_HINT}; then ask again. ` +
+      NO_REPLY_NOTE,
   );
 }
 

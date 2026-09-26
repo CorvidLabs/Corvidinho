@@ -139,10 +139,20 @@ export type {
   SpendSnapshot,
   SpendWindow,
 } from "./spend.ts";
+export { createSpendAlertOutbox } from "./spend-outbox.ts";
+export type { SpendAlertOutbox, TakenSpendWarning } from "./spend-outbox.ts";
+export {
+  claimSpendCapPing,
+  claimSpendWarnings,
+  ensureSpendAlerts,
+  releaseSpendWarnings,
+} from "./spend-alerts.ts";
 export {
   formatSpendDoctorLine,
   formatSpendStatusLine,
   formatSpendWarningLine,
+  SPEND_CAP_SUMMARY,
+  SPEND_REARM_PERCENT,
   spendCapInvalidAsk,
   spendCapLedgerAsk,
   spendCapReachedAsk,

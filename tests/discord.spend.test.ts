@@ -6,18 +6,23 @@
  * fake sh bin, in-memory DB — no live Discord, no network, no git worktrees.
  */
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatAskSummary } from "../src/agent/ask.ts";
 import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
-import { SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
-import { spendCapReachedAsk } from "../src/agent/spend-notice.ts";
+import { extractUsage } from "../src/agent/execute.ts";
+import { createSpendGuard, SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
+import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
+import { createSpendAlertOutbox } from "../src/agent/spend-outbox.ts";
 import type { HumanAsk, SpendWarning, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
+import { createDaemonLogger, startDaemon } from "../src/daemon/index.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/discord/agent-client.ts";
+import { replyWithOwnerNotice } from "../src/discord/spend-post.ts";
 import {
   appendPostLine,
+  ASK_REPLY_HINT,
   ASK_REPLY_MAX,
   askPingKey,
   formatAskReply,
@@ -284,5 +289,302 @@ describe("scheduler post carries the 80% warning", () => {
     expect(posts[0]!.content).toStartWith("✅ Schedule **Nightly**");
     expect(posts[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
     expect(posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
+  });
+});
+
+// ─── Delivery: recorded anywhere, delivered by the bridge (review #160) ──────
+
+function slashInteraction(commandName: "work" | "session", options: Record<string, string>) {
+  const edits: SlashReplyPayload[] = [];
+  const ix: SlashInteraction = {
+    id: `ix_${commandName}_${Math.random()}`,
+    commandName,
+    ...(commandName === "session" ? { subcommand: "start" } : {}),
+    channelId: "chan-1",
+    userId: "222233334444555566",
+    options,
+    reply: async (p) => void edits.push(p),
+    deferReply: async () => {},
+    editReply: async (p) => void edits.push(p),
+  };
+  return { ix, edits };
+}
+
+const CAP_RESULT = {
+  ok: true,
+  summary: SPEND_CAP_SUMMARY,
+  exitCode: 0,
+  ask: CAP_ASK,
+  task: { state: "blocked", verified: false, verifySkipped: true, attempts: 1, cancelled: false },
+};
+
+describe("80% warning reaches the owner even when the crossing run could not show it", () => {
+  test("a WATCH-style run crosses 80% (warning ignored there); the next bridge reply pings the owner once", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-spend-deliver-"));
+    const path = join(dir, "corvidinho.db");
+    try {
+      // The other process (e.g. `github watch` or the daemon) shares the data dir.
+      const runnerDb = openCorvidinhoDb({ path });
+      new SpendLedger(runnerDb).reserve({
+        provider: "p",
+        model: "gpt-4o-mini",
+        estimateMicroUsd: 799_800,
+        capMicroUsd: Number.MAX_SAFE_INTEGER,
+        now: Date.now() - 1000,
+      });
+      const ignored: SpendWarning[] = [];
+      const guard = createSpendGuard(
+        async () =>
+          Response.json({
+            choices: [{ message: { content: "ok" } }],
+            usage: { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 },
+          }),
+        { env: { [SPEND_CAP_ENV]: "1" }, readUsage: extractUsage, db: runnerDb, onWarning: (w) => ignored.push(w) },
+      );
+      await guard.fetch("https://llm.test/v1/chat/completions", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4o-mini", messages: [] }),
+      });
+      expect(ignored).toHaveLength(1); // recorded, but WATCH never shows it
+      runnerDb.close();
+
+      const agent: AgentClient = {
+        async runChat({ sessionId }) {
+          return { ok: true, sessionId, summary: "all good", exitCode: 0 };
+        },
+      };
+      const { result, handlers, replies } = await bridgeWith(
+        agent,
+        { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "1" },
+        openCorvidinhoDb({ path }),
+      );
+      await handlers.onMessage(MENTION);
+      expect(replies[0]!.content).toStartWith("all good\n\n⚠️ <@");
+      expect(replies[0]!.content).toContain("of the $1.00 daily cap used in the last 24h (80%)");
+      expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+      await handlers.onMessage({ ...MENTION, id: "m2" });
+      expect(replies[1]!.content).toBe("all good");
+      await result.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("/work delivers a pending warning as a fresh post that pings the owner", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const ledger = new SpendLedger(db);
+    ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    expect(ledger.noteWarning({ capMicroUsd: 1_000_000, now: Date.now() })).not.toBeNull();
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "did it", exitCode: 0 };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID }, db);
+    const { ix, edits } = slashInteraction("work", { description: "add storage" });
+    await handlers.onSlash!(ix);
+    expect(edits.at(-1)!.content).toContain("(completed)");
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toStartWith(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+});
+
+describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done) on slash runs", () => {
+  test("chat: the first ask at the cap pings the owner; later ones post without a ping or a reply hint", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      db,
+    );
+    await handlers.onMessage(MENTION);
+    await handlers.onMessage({ ...MENTION, id: "m2" });
+    expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(replies[1]!.content).toContain(SPEND_CAP_HEADLINE);
+    expect(replies[1]!.content).not.toContain("<@");
+    expect(replies[1]!.mentionUserIds).toEqual([]);
+    for (const r of replies) {
+      expect(r.content).not.toContain(ASK_REPLY_HINT);
+      expect(r.content).toContain("Replying can't lift the cap");
+    }
+    // Spend seen back under 70% (the next call's check) re-arms the ping.
+    new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1, capMicroUsd: 5_000_000, now: Date.now() });
+    await handlers.onMessage({ ...MENTION, id: "m3" });
+    expect(replies[2]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+
+  test("/work at the cap: blocked task, paused status, ask in the reply, owner pinged once in a fresh post", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { result, handlers, replies, outbound } = await bridgeWith(agent, {
+      CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
+      [SPEND_CAP_ENV]: "5",
+    });
+    const { ix, edits } = slashInteraction("work", { description: "add storage" });
+    await handlers.onSlash!(ix);
+    const body = edits.at(-1)!.content!;
+    expect(body).toContain("(blocked)");
+    expect(body).toContain(SPEND_CAP_HEADLINE);
+    expect(body).toContain("Daily spend cap reached (SAFE-8)");
+    expect(body).toContain("PR: not opened — the work run paused at the daily spend cap (SAFE-8).");
+    expect(body).not.toContain("✅");
+    expect(body).not.toContain("<@");
+    if (!result.ok) throw new Error("bridge did not start");
+    expect(result.workStore.list()[0]!.status).toBe("blocked");
+    const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
+    expect(last.description).toContain(SPEND_CAP_STATUS);
+    expect(last.color).not.toBe(THINKING_COLORS.error);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toMatch(
+      new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`),
+    );
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    // Same cap episode: the next /work posts its reply but does not ping again.
+    const second = slashInteraction("work", { description: "more storage" });
+    await handlers.onSlash!(second.ix);
+    expect(second.edits.at(-1)!.content).toContain("(blocked)");
+    expect(replies).toHaveLength(1);
+    await result.stop();
+  });
+
+  test("/session start at the cap shows the ask (not ✅) and pings the owner", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ...CAP_RESULT, sessionId };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
+    const { ix, edits } = slashInteraction("session", { topic: "storage" });
+    await handlers.onSlash!(ix);
+    expect(edits.at(-1)!.content).toContain(SPEND_CAP_HEADLINE);
+    expect(replies[0]!.content).toMatch(
+      new RegExp(`^💸 <@${OWNER_ID}> /session \`[^\`]+\` paused at the daily spend cap`),
+    );
+    await result.stop();
+  });
+
+  test("without a gateway post (or when it fails) the owner notice is appended to the slash reply", async () => {
+    const edits: SlashReplyPayload[] = [];
+    await replyWithOwnerNotice({
+      interaction: { channelId: "c", reply: async (p) => void edits.push(p), editReply: async (p) => void edits.push(p) },
+      body: "Work task `w` (blocked).",
+      notice: { content: `💸 <@${OWNER_ID}> x`, mentionUserIds: [OWNER_ID] },
+    });
+    expect(edits.map((e) => e.content)).toEqual([`Work task \`w\` (blocked).\n\n💸 <@${OWNER_ID}> x`]);
+    const edits2: SlashReplyPayload[] = [];
+    await replyWithOwnerNotice({
+      interaction: { channelId: "c", reply: async (p) => void edits2.push(p), editReply: async (p) => void edits2.push(p) },
+      body: "B",
+      notice: { content: "N", mentionUserIds: [] },
+      post: async () => null,
+    });
+    expect(edits2.map((e) => e.content)).toEqual(["B", "B\n\nN"]);
+  });
+
+  test("schedule: a spend-cap ask already pinged this episode posts without a ping", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const outbox = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" } });
+    expect(outbox.claimCapPing()).toBe(true); // e.g. a chat reply pinged already
+    const store = new ScheduleStore();
+    const posts: Array<{ channelId: string; content: string; mentionUserIds?: string[] }> = [];
+    const past = Date.now() - 60_000;
+    const s = store.create({
+      name: "Nightly",
+      cronExpression: "0 * * * *",
+      project: "proj-a",
+      prompt: "do thing",
+      createdByUserId: "admin",
+      channelId: "chan-allowed",
+      now: past - 3_600_000,
+    });
+    s.nextRunAt = past;
+    const cfg = emptyConfig();
+    cfg.discord.channels = ["chan-allowed"];
+    const svc = new SchedulerService({
+      store,
+      agent: {
+        async runChat({ sessionId }) {
+          return { ...CAP_RESULT, sessionId };
+        },
+      },
+      allowlist: cfg,
+      manual: true,
+      useWorktrees: false,
+      owner: OWNER,
+      spendAlerts: outbox,
+      outbound: { post: async (p) => void posts.push(p) },
+    });
+    await svc.tick();
+    for (let i = 0; i < 50 && svc.runningIds().length > 0; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    svc.stop();
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.content).toContain(SPEND_CAP_HEADLINE);
+    expect(posts[0]!.content).not.toContain("<@");
+    expect(posts[0]!.mentionUserIds).toEqual([]);
+  });
+});
+
+describe("headless daemon logs the spend warning and the spend-cap stop", () => {
+  test("spend.warning and run.needs_human (reason spend-cap) are warn lines", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "corvidinho-spend-daemon-"));
+    const projectRoot = mkdtempSync(join(tmpdir(), "corvidinho-spend-daemon-proj-"));
+    const env = { ...process.env, CORVIDINHO_DATA_DIR: dataDir };
+    const lines: Array<Record<string, unknown>> = [];
+    const other = openCorvidinhoDb({ env });
+    try {
+      const s = new ScheduleStore({ db: other }).create({
+        name: "nightly",
+        cronExpression: "0 * * * *",
+        project: ".",
+        prompt: "summarize",
+        createdByUserId: "owner",
+      });
+      other.run("UPDATE schedules SET next_run_at = ? WHERE id = ?", [Date.now() - 1000, s.id]);
+      const d = await startDaemon({
+        env,
+        projectRoot,
+        logger: createDaemonLogger({ write: (l) => lines.push(JSON.parse(l)) }),
+        agent: {
+          async runChat({ sessionId }) {
+            return { ...CAP_RESULT, sessionId, spendWarning: WARNING };
+          },
+        },
+        useWorktrees: false,
+      });
+      expect(d.ok).toBe(true);
+      if (!d.ok) return;
+      await d.tick();
+      await Bun.sleep(30);
+      expect(lines.find((l) => l.event === "spend.warning")).toMatchObject({
+        level: "warn",
+        spentMicroUsd: WARNING.spentMicroUsd,
+        capMicroUsd: WARNING.capMicroUsd,
+        percent: 82,
+      });
+      expect(lines.find((l) => l.event === "run.needs_human")).toMatchObject({
+        level: "warn",
+        reason: "spend-cap",
+        message: SPEND_CAP_SUMMARY,
+      });
+      await d.stop("SIGTERM");
+    } finally {
+      other.close();
+      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });
