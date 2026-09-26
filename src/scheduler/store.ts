@@ -270,13 +270,6 @@ export class ScheduleStore {
     );
   }
 
-  markRunStarted(
-    schedule: Schedule,
-    now = Date.now(),
-  ): ScheduleRun {
-    return this.startRun(schedule, now, false) as ScheduleRun;
-  }
-
   /**
    * Claim a due run for this process: advances next_run_at only when the row
    * is still active with the next_run_at this process last saw. Returns null
@@ -284,37 +277,24 @@ export class ScheduleStore {
    * paused/deleted meanwhile — so each due run fires exactly once.
    */
   claimRun(schedule: Schedule, now = Date.now()): ScheduleRun | null {
-    return this.startRun(schedule, now, true);
-  }
-
-  private startRun(
-    schedule: Schedule,
-    now: number,
-    compareAndSet: boolean,
-  ): ScheduleRun | null {
     // Advance next_run before work so we do not double-fire if tick overlaps.
     const next = getNextCronDate(
       schedule.cronExpression,
       new Date(now),
     ).getTime();
     if (this.db) {
-      const cas = compareAndSet
-        ? " AND status = 'active' AND next_run_at IS ?"
-        : "";
-      const params: Array<number | string | null> = [now, next, now, schedule.id];
-      if (compareAndSet) params.push(schedule.nextRunAt ?? null);
       const res = this.db.run(
         `UPDATE schedules SET last_run_at = ?,
            execution_count = execution_count + 1, next_run_at = ?, updated_at = ?
-         WHERE id = ?${cas}`,
-        params,
+         WHERE id = ? AND status = 'active' AND next_run_at IS ?`,
+        [now, next, now, schedule.id, schedule.nextRunAt ?? null],
       );
-      if (compareAndSet && res.changes === 0) {
+      if (res.changes === 0) {
         // Lost the race (or paused/deleted elsewhere): pick up the new row.
         this.refresh();
         return null;
       }
-    } else if (compareAndSet && schedule.status !== "active") {
+    } else if (schedule.status !== "active") {
       return null;
     }
     const run: ScheduleRun = {
