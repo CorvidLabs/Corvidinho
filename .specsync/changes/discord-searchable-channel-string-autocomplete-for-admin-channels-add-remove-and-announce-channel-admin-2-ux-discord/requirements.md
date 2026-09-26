@@ -11,4 +11,4 @@ artifact: requirements
   re-check unchanged.
 - REQ-discord-009 / DISCORD-ANNOUNCE-2 (amended): `/announce channel` uses the
   same searchable STRING + autocomplete (no native CHANNEL picker).
-- Package 0.0.16; slash re-register after deploy.
+- Package 0.0.17; slash re-register after deploy.

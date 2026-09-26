@@ -1,15 +1,15 @@
 ---
 id: discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord
-state: approved
+state: implementing
 type: feature
 base_commit: 8a1cdd4fe4cb49bab490a1dcbad8f0d07c372e44
 ---
 
-# Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.16
+# Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17
 
 ## Intent
 
-Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.16
+Discord searchable channel STRING+autocomplete for /admin channels add|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17
 
 ## Affected Canonical Specs
 
@@ -17,7 +17,7 @@ Discord searchable channel STRING+autocomplete for /admin channels add|remove an
 
 ## Acceptance Criteria
 
-- STRING+autocomplete on /admin channels add|remove and /announce channel matches guild text channels by case-insensitive name (emoji/unicode ok) or snowflake, returns ≤25 ranked choices; remove may scope to live allowlist; ADMIN-4 re-check unchanged; persist paths unchanged; package 0.0.16; fixture tests; dogfood by typing channel name letters
+- STRING+autocomplete on /admin channels add|remove and /announce channel matches guild text channels by case-insensitive name (emoji/unicode ok) or snowflake, returns ≤25 ranked choices; remove may scope to live allowlist; ADMIN-4 re-check unchanged; persist paths unchanged; package 0.0.17; fixture tests; dogfood by typing channel name letters
 
 ## No-spec Rationale
 
