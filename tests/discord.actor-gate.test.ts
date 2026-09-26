@@ -64,7 +64,8 @@ function tempStore(): SessionStore {
 function recordingAgent(spawned: string[]): AgentClient {
   return {
     async runChat(o: AgentRunChatOpts) {
-      spawned.push(`${o.actingUserId}: ${o.prompt}`);
+      // humanText: the invoker's own words (prompt may carry identity/memory inject).
+      spawned.push(`${o.actingUserId}: ${o.humanText ?? o.prompt}`);
       return { ok: true, sessionId: o.sessionId, summary: "ok", exitCode: 0 };
     },
   };
