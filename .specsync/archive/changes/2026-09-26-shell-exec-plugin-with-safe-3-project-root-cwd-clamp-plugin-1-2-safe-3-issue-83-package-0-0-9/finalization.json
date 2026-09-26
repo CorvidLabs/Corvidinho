@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9",
+  "implementation_commit": "bc38358362b1eea24a2d804a80c9ced380e747d6",
+  "implementation_tree": "97626e2f565fff95137239729890b50be742f298",
+  "contract_digest": "39733e4dfb6f55d32586000d07b605a0baae7fc66e1277ee3221990c6a124a63",
+  "workspace_digest": "b78a8d0bbd6340662f9110dd680e2156796bb182c46ed5450116aef7679ee86b",
+  "closing_digest": "d1643d12769c89ce6124f156064afd923042e75d8e5b97d7831d4e154faa4957",
+  "review_digest": "4a34c463f311b609a18eb390404b4eea91ef371364fff40d93912d34217bbb8d",
+  "finalization_digest": "01492331cc571f648dedcbbb5aa697f48cf8a57edcc69e64e1edda89ca8894d3",
+  "timestamp": 1790453067
+}

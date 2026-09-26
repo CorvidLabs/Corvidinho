@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "e59e94f1ddba5e2e508355cf7282bece7c9f6362",
+      "contract_digest": "39733e4dfb6f55d32586000d07b605a0baae7fc66e1277ee3221990c6a124a63",
+      "execution_digest": "412d2bcc8dca93bdbdc19cc0e12ec6968254ec2ad3661296c03bde7baa54a9e7",
+      "workspace_digest": "3c13f54a7a488ca24af21bf08a774529ac6e3c1e7e31c44dcc757eb62368699a",
+      "timestamp": 1790453018
+    },
+    {
+      "schema_version": 2,
+      "change_id": "shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "bc38358362b1eea24a2d804a80c9ced380e747d6",
+      "contract_digest": "39733e4dfb6f55d32586000d07b605a0baae7fc66e1277ee3221990c6a124a63",
+      "execution_digest": "7892791bcb7e879f7a3fe36ef79afb452ae7970c721c9f8bd8d532e374953aed",
+      "workspace_digest": "b78a8d0bbd6340662f9110dd680e2156796bb182c46ed5450116aef7679ee86b",
+      "timestamp": 1790453061
+    }
+  ]
+}
