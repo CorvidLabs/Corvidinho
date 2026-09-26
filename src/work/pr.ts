@@ -70,6 +70,7 @@ export type WorkPrSkipReason =
   | "no-changes"
   | "conflicts"
   | "no-base"
+  | "wrong-branch"
   | "not-allowed"
   | "no-repo"
   | "repo-denied"
@@ -189,6 +190,16 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
     return skip("no-base", `not opened — cannot find the base branch on \`${remote}\` to compare against.`);
   }
   const { base, mergeBase } = based;
+  // Push only the work branch — never the base or whatever the agent checked
+  // out instead (git-push pushes the current branch).
+  const headRef = await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+  const current = headRef.code === 0 ? headRef.stdout.trim() : "";
+  if (current !== branch || current === base) {
+    return skip(
+      "wrong-branch",
+      `not opened — the worktree is on \`${current || "a detached HEAD"}\`, not the work branch \`${branch}\`.`,
+    );
+  }
   const count = await git(cwd, ["rev-list", "--count", `${mergeBase}..HEAD`]);
   const ahead = count.code === 0 ? Number(count.stdout.trim()) || 0 : 0;
   if (!dirty && ahead === 0) {

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched",
+  "slug": "work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched",
+  "title": "/work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD)",
+  "description": "/work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD)",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "155f20af4346b11c10cdbe68526314962a1e09a2",
+  "created_at": 1790458095,
+  "updated_at": 1790458096,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/command-handlers/work.ts",
+    "src/work/pr.ts",
+    "tests/work.pr.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "non-owner /work never runs the PR step; push refused unless HEAD is the work branch and not the base"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

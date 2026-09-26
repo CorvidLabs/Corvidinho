@@ -397,6 +397,19 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
     expect(body).toContain("passed in the work run on this tree");
   });
 
+  test("worktree not on the work branch (agent switched branches or detached) → no push", async () => {
+    for (const move of [["checkout", "-q", "-b", "elsewhere"], ["checkout", "-q", "--detach"]]) {
+      const fx = makeFixture(`sess_branch${move.length}`);
+      writeFileSync(join(fx.wt, "greet.ts"), "export const hi = 'hi';\n");
+      g(fx.wt, ...move);
+      const rec = recorder();
+      const r = await openWorkPr(input(fx), deps({ runPlugin: rec.fn, verify: passVerify }));
+      expect(r).toMatchObject({ opened: false, reason: "wrong-branch" });
+      expect(rec.calls.length).toBe(0);
+      expect(remoteRef(fx.bare, fx.branch)).toBeNull();
+    }
+  });
+
   test("agent already committed: git-commit not needed or allowlisted; unverified run re-verifies", async () => {
     const fx = makeFixture();
     writeFileSync(join(fx.wt, "greet.ts"), "x\n");
@@ -515,6 +528,7 @@ describe("/work reply carries the PR line (AUTONOMOUS-3)", () => {
       startedAt: Date.now(),
       channelIds: ["chan-allowed"],
       openWorkPr: openPr,
+      owner: { discordId: "user-1" },
     };
   }
 
@@ -584,6 +598,31 @@ describe("/work reply carries the PR line (AUTONOMOUS-3)", () => {
     expect(edits.at(-1)?.content ?? "").toContain(
       "PR: not opened — this work did not run in a git worktree.",
     );
+  });
+
+  test("ROLES-CHAT-3: a non-owner's /work never runs the PR step", async () => {
+    const store = new SessionStore({
+      defaultProjectRoot: mkdtempSync(join(base, "proj-")),
+    });
+    const agent: AgentClient = {
+      runChat: async ({ sessionId }) => ({
+        ok: true,
+        sessionId,
+        summary: "did it",
+        exitCode: 0,
+        task: { verified: true, verifySkipped: false, state: "done" },
+      }),
+    };
+    let called = 0;
+    const openPr = async (): Promise<WorkPrOutcome> => {
+      called += 1;
+      return { opened: false, reason: "not-allowed", line: "PR: fixture" };
+    };
+    const ctx = { ...ctxFor(store, agent, openPr), owner: { discordId: "someone-else" } };
+    const { ix, edits } = interaction("Add greeting");
+    await handleWorkCommand(ctx, ix);
+    expect(called).toBe(0);
+    expect(edits.at(-1)?.content ?? "").toContain("only the owner (ADMIN) can ship /work as a PR");
   });
 
   test("a throwing PR step never breaks the reply", async () => {

@@ -78,18 +78,18 @@ export async function handleWorkCommand(
     });
   }
 
+  const actingIsAdmin =
+    resolvePermissionLevel({
+      userId: interaction.userId,
+      roleIds: interaction.roleIds,
+      allowlist: ctx.allowlist,
+      adminUserIds: ctx.adminUserIds,
+      adminRoleIds: ctx.adminRoleIds,
+      owner: ctx.owner,
+      mutedUsers: ctx.mutedUsers,
+    }) >= PermissionLevel.ADMIN;
   let result;
   try {
-    const actingIsAdmin =
-      resolvePermissionLevel({
-        userId: interaction.userId,
-        roleIds: interaction.roleIds,
-        allowlist: ctx.allowlist,
-        adminUserIds: ctx.adminUserIds,
-        adminRoleIds: ctx.adminRoleIds,
-        owner: ctx.owner,
-        mutedUsers: ctx.mutedUsers,
-      }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
       prompt: description,
       humanText: description,
@@ -139,7 +139,11 @@ export async function handleWorkCommand(
     : "";
   // AUTONOMOUS-3 / GITHUB-2/5 (REQ-discord-088): ship a verified worktree as
   // a draft PR only when the PR path is allowlisted; else one plain line why.
-  const prLine = await shipWorkPr(ctx, {
+  // ROLES-CHAT-3: commit/push/PR are mutating — only ADMIN (the owner) may
+  // ship /work as a PR; everyone else keeps the changes on the work branch.
+  const prLine = !actingIsAdmin
+    ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR (ROLES-CHAT-3). The changes stay on the work branch."
+    : await shipWorkPr(ctx, {
     worktreePath:
       session.worktreeState === "active" ? session.worktreePath : undefined,
     branch: session.worktreeBranch,
