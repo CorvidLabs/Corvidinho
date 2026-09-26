@@ -66,7 +66,7 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 
 | 2026-09-26 | shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-issue-83-package-0-0-9: shell-exec + SAFE-3 cwd clamp; package 0.0.9 |
 
-## Added
+## Modified
 
 ### REQUIREMENT REQ-plugins-086
 
@@ -102,11 +102,3 @@ Acceptance Criteria
 - `package.json` version is `0.0.9`; CLI `version` prints `0.0.9`.
 - CHANGELOG has a 0.0.9 section; STATUS marks #83 done.
 - `docs/hi-drafts/WATCH-RELIABILITY.md` exists as draft.
-
-### FRONTMATTER files
-
-Add:
-- `plugins/shell/index.ts`
-- `plugins/shell/commands.ts`
-- `plugins/shell/clamp.ts`
-- `tests/shell.plugins.test.ts`

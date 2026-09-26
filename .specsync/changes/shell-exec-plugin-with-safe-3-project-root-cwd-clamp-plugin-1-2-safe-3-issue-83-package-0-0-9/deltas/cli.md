@@ -11,7 +11,7 @@ change: shell-exec-plugin-with-safe-3-project-root-cwd-clamp-plugin-1-2-safe-3-i
 
 | 2026-09-26 | shell-exec-safe-3-issue-83: package 0.0.9 with shell-exec + SAFE-3 (REQ-cli-015) |
 
-## Added
+## Modified
 
 ### REQUIREMENT REQ-cli-015
 
