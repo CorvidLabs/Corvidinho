@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "297189a9c978f300fbba3f66da367401e9cf64e2",
+      "contract_digest": "639945086ecbf37d6933047955a189c055783452b0488d5a8f964b9255540ac0",
+      "execution_digest": "f2ccd29ccfdbcc0daa3ee15a95d3ff33c5629df36526b921c3ead20891350e07",
+      "workspace_digest": "918caa5803a4a8fbfcd6117f3790d016956adf79e5834010943250bd4f6531e8",
+      "timestamp": 1790464506
+    }
+  ]
+}

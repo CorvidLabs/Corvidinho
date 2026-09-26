@@ -349,8 +349,8 @@ Acceptance Criteria
 `askFromToolArguments` / `askFromUnknown` SHALL populate `HumanAsk.options`
 when provided or when the question contains a numbered/lettered choice list
 (`resolveAskOptions`). `ASK_AGENT_SYSTEM_INSTRUCTIONS` SHALL steer the model
-to prefer options for Discord ephemeral buttons (DISCORD-ASK-1) and free-text
-only when choices cannot be listed (DISCORD-ASK-4).
+to prefer options for Discord ephemeral buttons and free-text only when
+choices cannot be listed.
 
 Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
