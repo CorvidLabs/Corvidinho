@@ -1,6 +1,6 @@
 ---
 id: cover-hear-5-go-live-docs-discord-go-live-env-allowlist-templates-and-bun-lock-from-discord-js
-state: implementing
+state: archived
 type: documentation
 base_commit: 8609cc16f73198c35f4a17c4d8a775900561ff77
 ---

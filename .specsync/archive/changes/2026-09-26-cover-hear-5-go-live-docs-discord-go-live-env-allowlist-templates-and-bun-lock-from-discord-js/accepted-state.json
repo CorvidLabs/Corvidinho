@@ -7,11 +7,11 @@
   "title": "Cover HEAR #5 go-live docs (DISCORD-GO-LIVE), env/allowlist templates, and bun.lock from discord.js",
   "description": "Cover HEAR #5 go-live docs (DISCORD-GO-LIVE), env/allowlist templates, and bun.lock from discord.js",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "8609cc16f73198c35f4a17c4d8a775900561ff77",
   "created_at": 1790438716,
-  "updated_at": 1790438851,
+  "updated_at": 1790438854,
   "affected_specs": [],
   "affected_paths": [
     "bun.lock",

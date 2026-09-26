@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-hear-5-go-live-docs-discord-go-live-env-allowlist-templates-and-bun-lock-from-discord-js",
+  "implementation_commit": "01cb0134f397dff0178b7422b975437ce200e4ce",
+  "implementation_tree": "42f4ed17f03b385405d6f0c05863a198b29ce925",
+  "contract_digest": "71dce0bbded8c84896f40c86878c864eb27618a3869c73f1122bcc1da08a5774",
+  "workspace_digest": "1b44a5ef50982cb20269a3b89f26b62ec608b8ba893aef8db0a073d987242a57",
+  "closing_digest": "bb709cac873c59bb18344375940d4b5743e311573f5d7940417e7f3789184dca",
+  "review_digest": "5d5621a3a66593e9ad32040074e15bde849c09f425f8323169dab403e9e30030",
+  "finalization_digest": "382adb15ba0f038eb3d85ad7370bb2e3267f7b52a9d4792b8b7ab58f87ab5e6f",
+  "timestamp": 1790438854
+}

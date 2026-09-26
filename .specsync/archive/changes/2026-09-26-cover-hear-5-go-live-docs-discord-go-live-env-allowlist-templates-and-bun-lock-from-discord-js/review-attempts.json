@@ -16,6 +16,22 @@
       "execution_digest": "560d766b01da0b97e97941a6ce95ac7b67db1f290bc86125a0d90383ef8a7f09",
       "workspace_digest": "91d440b3ae1695b3882a20b98466d2a272aad0cd7d4b10c20dd6203b8f822a29",
       "timestamp": 1790438763
+    },
+    {
+      "schema_version": 2,
+      "change_id": "cover-hear-5-go-live-docs-discord-go-live-env-allowlist-templates-and-bun-lock-from-discord-js",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "01cb0134f397dff0178b7422b975437ce200e4ce",
+      "contract_digest": "71dce0bbded8c84896f40c86878c864eb27618a3869c73f1122bcc1da08a5774",
+      "execution_digest": "560d766b01da0b97e97941a6ce95ac7b67db1f290bc86125a0d90383ef8a7f09",
+      "workspace_digest": "1b44a5ef50982cb20269a3b89f26b62ec608b8ba893aef8db0a073d987242a57",
+      "timestamp": 1790438852
     }
   ]
 }
