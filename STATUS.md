@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync wiring + HEAR thin + attribution + thinking status + slash + rate/mute + admin re-auth + image attachments / protocol lockstep + WATCH poll ingress |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (11 families incl. ALLOW/WALLET) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -38,13 +38,14 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | HEAR rate limits + mutes | #12 → [#27](https://github.com/CorvidLabs/Corvidinho/pull/27) | DISCORD-6 per-user sliding window + in-memory mute; peers unaffected; no ProcessManager |
 | HEAR admin re-auth + confused-deputy | #13 → [#28](https://github.com/CorvidLabs/Corvidinho/pull/28) | DISCORD-7 run-time minPermission + DISCORD-8 requester View/Send check; no ProcessManager |
 | HEAR image attachments + protocol lockstep | #14 → [#29](https://github.com/CorvidLabs/Corvidinho/pull/29) | DISCORD-9 image→local files (MIME/20MB/5) + DISCORD-10 Merlin protocol-version lockstep; no ProcessManager |
+| WATCH poll-first ingress | #19 → [#30](https://github.com/CorvidLabs/Corvidinho/pull/30) | GitHub mention/review_request/issue_comment → allowlist → session stub; poll-first for VM; webhook deferred; no ProcessManager |
 
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR thin **shipped** (code) | Still needs Leif/CoS: `DISCORD_TOKEN` + **non-empty** Discord channel allowlists on the VM |
-| Listen | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH: GitHub mention/review ingress | Webhook or poll → session on allowlisted targets; **not** typed reads alone |
+| Go-live | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) WATCH poll **shipped** (code) | Needs Leif: `GITHUB_TOKEN` + `CORVIDINHO_WATCH_USERNAME` + non-empty GH allowlists; webhook follow-up when public URL exists |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now / no wallet ACT until approved-wallet list |
 
 ### Leif config moments
@@ -63,8 +64,10 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 
 **GitHub secrets useful when:**
 
-- `GITHUB_TOKEN` / `GH_TOKEN` — useful **NOW** for typed read plugins (list PRs/issues/CI) on allowlisted repos
-- GitHub App / webhook secret / poll credentials — useful when **#19** mention/listen ingress ships (not required for typed reads alone)
+- `GITHUB_TOKEN` / `GH_TOKEN` — useful **NOW** for typed read plugins **and** WATCH poll (`corvidinho github watch`)
+- `CORVIDINHO_WATCH_USERNAME` — GitHub login to listen for (WATCH go-live)
+- Non-empty `CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS` / `_USERS` (or allowlist file)
+- Webhook secret + public URL — **follow-up** when deploying webhook ingress (poll-first is the VM default; see `docs/WATCH.md`)
 
 ### Discord @bot + reply → session
 
@@ -72,7 +75,7 @@ Thin slice **landed** (`corvidinho discord bridge`). Live @bot works **only afte
 
 ### GitHub mention → agent response
 
-**Not yet** — typed Octokit reads only (#4/#15). Tracked by [#19](https://github.com/CorvidLabs/Corvidinho/issues/19). No reply to random mentions (ALLOW-1).
+**Poll thin slice landed** (`corvidinho github watch`) — [#19](https://github.com/CorvidLabs/Corvidinho/issues/19). Live listen needs token + username + non-empty GH allowlists on the VM. No reply to random mentions (ALLOW-1). Webhook deferred (poll-first for VM; see `docs/WATCH.md`).
 
 ### “Made with Corvidinho” attribution
 
@@ -105,7 +108,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 - Full LLM tool loop on top of prove-before-done (#17 landed the gate; loop flesh still open)
 - SpecSync agent tools (#8→#22) so the live CLI can list/read/check specs
 - For Discord callers: HEAR (#5) + filled allowlists + `DISCORD_TOKEN` on the VM
-- For GH @mention callers: ingress (#19) — typed reads alone are not enough
+- For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later
 - Attribution (#20→#24) on outbound PRs
 - Secrets stay in env/secret store; default-deny allowlists stay empty=refuse
 
@@ -118,7 +121,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 5. **Attribution** — #20 → #24 shipped
 6. **DOGFOOD / RUNNER** — first flip: CoS/Corvidinho-bot execs headless CLI (#8/#5 help; not a UI milestone)
 7. **Discord polish** — #10→#25 thinking; #11→#26 slash; #12→#27 rate/mute; #13→#28 admin; #14→#29 image+protocol
-8. **GH write / review / mention** — #19 + later GITHUB-2/3/5
+8. **GH mention ingress** — #19 WATCH poll shipped (webhook follow-up); later GITHUB-2/3/5 writes
 9. **Deferred** — #9, wallets
 
 Attribution #20→#24 already shipped.
@@ -189,10 +192,10 @@ Fixture/unit tests cover mention→session, reply/thread continuity, and allowli
 
 See **ROADMAP** above. Short pointers:
 
-- #5 HEAR thin shipped — set token + non-empty Discord allowlists on VM for live @bot; first DOGFOOD flip = CoS bot execs headless CLI
-- Flesh full LLM tool loop on top of prove-before-done + SpecSync plugins
-- #19 GH mention/listen ingress; #20 attribution ASAP (footer on PR bodies)
-- #10–#14 Discord polish after #5; #9 / wallets deferred
+- #5 HEAR thin shipped — set token + non-empty Discord allowlists on VM for live @bot
+- #19 WATCH poll shipped — set `GITHUB_TOKEN` + `CORVIDINHO_WATCH_USERNAME` + GH allowlists; webhook follow-up later
+- Flesh full LLM tool loop on top of prove-before-done + SpecSync plugins; first DOGFOOD flip = CoS bot execs headless CLI
+- #9 / wallets deferred
 - Keep secrets out of repo; keep verify lane honest; no Trust/attest on bootstrap
 
 ## Verify locally

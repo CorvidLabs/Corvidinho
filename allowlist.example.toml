@@ -4,6 +4,8 @@
 # Default-deny: empty allow lists REFUSE (not Merlin empty→BASIC).
 # Deny overrides always win.
 
+# WATCH (github watch) also requires non-empty [github] orgs and/or repos
+# plus users — empty = deny-all (ALLOW-1). See docs/WATCH.md.
 [github]
 orgs = []
 repos = []

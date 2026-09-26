@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 21
+version: 22
 status: draft
 files:
   - src/cli.ts
@@ -16,7 +16,7 @@ depends_on:
 
 ## Purpose
 
-Operator surface includes Discord HEAR bridge entrypoints and canonical attribution output for outbound PR bodies.
+Operator surface includes Discord HEAR bridge, GitHub WATCH poll, and canonical attribution output for outbound PR bodies.
 
 ## Public API
 
@@ -51,29 +51,11 @@ account handle.
 
 ## Behavioral Examples
 
-### Scenario: Plugins list
+### Scenario: Github watch missing token
 
-- **Given** builtins are loaded
-- **When** the operator runs `corvidinho plugins list`
-- **Then** github-* and plugins-list appear with danger markings and exit 0
-
-### Scenario: Specsync list
-
-- **Given** builtins are loaded and `.specsync/registry.toml` has modules
-- **When** the operator runs `corvidinho specsync list`
-- **Then** registered module names print and exit 0
-
-### Scenario: Attribution footer
-
-- **Given** the canonical attribution helper
-- **When** the operator runs `corvidinho attribution`
-- **Then** the exact markdown footer prints, exits 0, and contains no account handle
-
-### Scenario: Task run skip verify
-
-- **Given** `--no-verify`
-- **When** the operator runs `corvidinho task run --no-verify --json`
-- **Then** exit 0 and JSON has verifySkipped true
+- **Given** no GITHUB_TOKEN / GH_TOKEN
+- **When** the operator runs `corvidinho github watch`
+- **Then** exit non-zero naming the token env and go-live checklist
 
 ## Error Cases
 
@@ -91,7 +73,7 @@ Consumes agent module for runTask / loadAgentConfig.
 
 ## Change Log
 
-SpecSync CLI forwarding + task --task briefing hook (2026-09-26, corvid-agent).
-| 2026-09-26 | Add canonical attribution helper and `corvidinho attribution` output for outbound PR footers (issue #20). |
-| 2026-09-26 | Add CLI attribution helper and canonical no-handle footer forms. |
-| 2026-09-26 | add-shared-made-with-corvidinho-attribution-constants-and-a-corvidinho-attribution-cli-command-without-account-handles: Add shared Made with Corvidinho attribution constants and a corvidinho attribution CLI command without account handles |
+WATCH `github watch` CLI (#19, 2026-09-26).
+
+| 2026-09-26 | watch-github-mention-review-ingress-poll-first-thin-slice-issue-19-poll-octokit-search-for-allowlisted-repo-mentions: Add `corvidinho github watch` poll-first ingress CLI (#19) |
+
