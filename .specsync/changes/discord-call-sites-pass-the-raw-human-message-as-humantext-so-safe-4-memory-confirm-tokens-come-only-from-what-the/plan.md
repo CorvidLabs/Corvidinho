@@ -1,5 +1,5 @@
 ---
-change: discord-bridge-and-session-start-and-work-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-are
+change: discord-call-sites-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-come-only-from-what-the
 artifact: plan
 ---
 

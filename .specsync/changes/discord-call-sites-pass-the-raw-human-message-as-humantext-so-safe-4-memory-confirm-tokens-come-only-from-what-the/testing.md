@@ -1,5 +1,5 @@
 ---
-change: discord-bridge-and-session-start-and-work-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-are
+change: discord-call-sites-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-come-only-from-what-the
 artifact: testing
 ---
 
@@ -11,4 +11,4 @@ artifact: testing
 
 | Requirement | How proven |
 |-------------|------------|
-| REQ-discord-021 | `tests/memory.spawn-env.test.ts` |
+| REQ-discord-128 | `tests/memory.spawn-env.test.ts` |
