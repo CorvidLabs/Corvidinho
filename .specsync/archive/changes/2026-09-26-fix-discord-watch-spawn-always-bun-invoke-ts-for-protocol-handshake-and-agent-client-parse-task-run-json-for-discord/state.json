@@ -7,11 +7,11 @@
   "title": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
   "description": "Fix Discord/WATCH spawn: always bun-invoke .ts for protocol handshake and agent-client; parse task run --json for Discord summary; thin env-gated LLM execute stub; STATUS dogfood go-live note",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "a8068ad5073cb7401518f9f996b988db9740f00c",
   "created_at": 1790442905,
-  "updated_at": 1790443163,
+  "updated_at": 1790443205,
   "affected_specs": [
     "discord",
     "watch",

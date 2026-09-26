@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "c3e3a23b9f7a179bddf9e64a4b6ca71a3d10db7b",
+  "contract_digest": "4d587718607e2039fc5da991af05b16da9f0e1f1b68ab8658cbf95fb12783d7d",
+  "execution_digest": "9ead597aaf5df78e796adffb2b3a0ae375ccefad60a5c84b20150db7a35be09a",
+  "workspace_digest": "b7f374957453f8227319a6f781629a2a8fab8c7b7e40c5d6e960b5e4d196ecf7",
+  "timestamp": 1790443198
+}
