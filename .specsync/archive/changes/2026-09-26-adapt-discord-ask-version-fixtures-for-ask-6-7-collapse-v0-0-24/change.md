@@ -1,6 +1,6 @@
 ---
 id: adapt-discord-ask-version-fixtures-for-ask-6-7-collapse-v0-0-24
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 883a3f546cebdaa7a9fe26bde8155df80f7edcfb
 ---

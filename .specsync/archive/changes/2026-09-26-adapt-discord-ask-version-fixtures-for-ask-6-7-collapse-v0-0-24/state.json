@@ -7,11 +7,11 @@
   "title": "Adapt Discord ask/version fixtures for ASK-6/7 collapse (v0.0.24)",
   "description": "Adapt Discord ask/version fixtures for ASK-6/7 collapse (v0.0.24)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "883a3f546cebdaa7a9fe26bde8155df80f7edcfb",
   "created_at": 1790465933,
-  "updated_at": 1790466097,
+  "updated_at": 1790466139,
   "affected_specs": [],
   "affected_paths": [
     "tests/discord.ask-ping.test.ts",
