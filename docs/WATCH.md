@@ -17,6 +17,16 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run --no-verify` (or echo in dry-run)
 
+
+## Reliability (REQ-watch-007)
+
+- **Poll cycle log:** every cycle emits  
+  `[watch] poll cycle fetched=… new=… started=… continued=… refused=… skipped=…`  
+  Errors from `pollOnce` are caught and logged (`[watch] pollOnce error`) — not swallowed by `void`.
+- **Auto-ack:** on `start_session` / `continue_session` from an `issue_comment` or `issues` mention whose sender is **not** the watch username, WATCH posts a short GitHub issue comment (Made with Corvidinho footer) **before** spawn, at most once per event id. Skips own-username senders to avoid self-loops. Dry-run uses an echo ack client (no live post).
+- **Ignore own mentions:** comments and issue-body mentions authored by `CORVIDINHO_WATCH_USERNAME` are omitted from fetched events.
+- **Search pagination bury risk:** Octokit search uses `per_page=100` sorted by `updated` desc. An org-wide qualifier (`org:… involves:…`) can still return more than one page of Corvidinho (or other) noise and **bury** pings on quieter repos (e.g. arcsite) past the first page. Prefer an explicit `repos` allowlist for critical targets, or accept that deep pages are not scanned in this thin slice.
+
 **Assignee ingress (#48):** when the watch username appears in issue/PR `assignees` (from search results), WATCH emits an `assignment` event — same allowlist → session path as mentions. Dogfood can use assign *or* @mention.
 
 **Outbound writes (GITHUB-2/3/5):** dangerous plugins `github-issue-create`, `github-issue-comment`, `github-pr-create`, `github-pr-review` — require `CORVIDINHO_ALLOWLIST` in non-interactive mode + non-empty GitHub repo allowlist. PR bodies get a plain Made with Corvidinho footer (no @handles). Set `CORVIDINHO_GITHUB_DRY_RUN=1` for local dry-run.

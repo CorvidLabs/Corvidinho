@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document",
+  "slug": "watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document",
+  "title": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
+  "description": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "4d83cc3995663588adc0a890389a3560c22853cd",
+  "created_at": 1790446128,
+  "updated_at": 1790446197,
+  "affected_specs": [
+    "watch",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/watch/poller.ts",
+    "src/watch/searcher.ts",
+    "src/watch/ack.ts",
+    "src/watch/index.ts",
+    "docs/WATCH.md",
+    "STATUS.md",
+    "specs/watch/watch.spec.md",
+    "specs/watch/requirements.md",
+    "specs/cli/cli.spec.md",
+    "tests/watch.poller.test.ts",
+    "tests/watch.ack.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Every poll cycle logs fetched/new/started/continued/refused/skipped; pollOnce errors are caught and logged (not swallowed by void); when start/continue from mention or issue_comment (sender !== watch username), post short GitHub ack comment with Made with Corvidinho footer once per event id; ignore own corvid-agent mentions/comments in searcher; docs/WATCH.md notes org search per_page=30 pagination bury risk; fixture tests cover logging/ack skip/own-mention skip without live tokens; SpecSync+fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

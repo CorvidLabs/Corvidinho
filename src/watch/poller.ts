@@ -1,6 +1,7 @@
 /**
  * WATCH poll loop: fetch → dedup → allowlist route → session stub.
  * Poll-first for bot/VM (no public URL). No ProcessManager.
+ * REQ-watch-007: cycle logging, caught pollOnce errors, auto-ack on mention/comment.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -9,6 +10,13 @@ import {
   createSpawnAgentClient,
   type AgentClient,
 } from "./agent-client.ts";
+import {
+  AckedIdStore,
+  createEchoAckClient,
+  createOctokitAckClient,
+  maybePostWatchAck,
+  type AckClient,
+} from "./ack.ts";
 import {
   goLiveChecklist,
   loadWatchConfig,
@@ -54,6 +62,7 @@ export type StartWatchResult =
       config: WatchConfig;
       store: SessionStore;
       processed: ProcessedIdStore;
+      acked: AckedIdStore;
       /** Run one poll cycle (tests / dry). */
       pollOnce: () => Promise<PollCycleResult>;
       stop: () => Promise<void>;
@@ -75,10 +84,14 @@ export type StartWatchOptions = {
   filePath?: string | null;
   agent?: AgentClient;
   searchClient?: SearchClient;
+  ackClient?: AckClient;
   /** Inject events instead of searching (tests). */
   fetchEvents?: () => Promise<DetectedEvent[]>;
   /** Skip starting the interval timer (tests call pollOnce). */
   runLoop?: boolean;
+  /** Override log sink (tests). Default console.log / console.error. */
+  log?: (msg: string) => void;
+  logError?: (msg: string, err?: unknown) => void;
   onAction?: (info: {
     kind: string;
     event: DetectedEvent;
@@ -86,6 +99,13 @@ export type StartWatchOptions = {
     summary?: string;
   }) => void;
 };
+
+function formatCycleLog(r: PollCycleResult): string {
+  return (
+    `[watch] poll cycle fetched=${r.fetched} new=${r.newEvents} ` +
+    `started=${r.started} continued=${r.continued} refused=${r.refused} skipped=${r.skipped}`
+  );
+}
 
 /**
  * Start the GitHub WATCH poller. Clean exit when token/username/repos missing.
@@ -110,6 +130,7 @@ export async function startWatchPoller(
   const config = loaded.config;
   const store = new SessionStore();
   const processed = new ProcessedIdStore();
+  const acked = new AckedIdStore();
   const searchClient =
     opts.searchClient ?? createOctokitSearchClient(config.token);
   const agent: AgentClient =
@@ -120,6 +141,18 @@ export async function startWatchPoller(
           bin: config.corvidinhoBin,
           cwd: config.projectRoot,
         }));
+  const ackClient: AckClient =
+    opts.ackClient ??
+    (config.dryRun
+      ? createEchoAckClient()
+      : createOctokitAckClient(config.token));
+  const log = opts.log ?? ((msg: string) => console.log(msg));
+  const logError =
+    opts.logError ??
+    ((msg: string, err?: unknown) => {
+      if (err !== undefined) console.error(msg, err);
+      else console.error(msg);
+    });
 
   let timer: ReturnType<typeof setInterval> | null = null;
   let running = true;
@@ -189,6 +222,16 @@ export async function startWatchPoller(
       if (action.kind === "start_session") result.started += 1;
       if (action.kind === "continue_session") result.continued += 1;
 
+      // Auto-ack BEFORE spawn so the thread sees presence even if spawn is slow.
+      await maybePostWatchAck({
+        event,
+        kind: action.kind,
+        mentionUsername: config.mentionUsername,
+        ackClient,
+        acked,
+        log,
+      });
+
       const spawn = await agent.runChat({
         prompt: action.prompt,
         sessionId: action.session.id,
@@ -202,14 +245,21 @@ export async function startWatchPoller(
       });
     }
 
+    log(formatCycleLog(result));
     return result;
   };
 
+  const schedulePoll = () => {
+    void pollOnce().catch((err) => {
+      logError("[watch] pollOnce error", err);
+    });
+  };
+
   if (opts.runLoop !== false) {
-    // Fire once immediately, then on interval.
-    void pollOnce();
+    // Fire once immediately, then on interval — always catch so errors surface.
+    schedulePoll();
     timer = setInterval(() => {
-      void pollOnce();
+      schedulePoll();
     }, config.intervalMs);
   }
 
@@ -218,6 +268,7 @@ export async function startWatchPoller(
     config,
     store,
     processed,
+    acked,
     pollOnce,
     stop: async () => {
       running = false;
@@ -231,3 +282,5 @@ export async function startWatchPoller(
 
 /** Re-export for callers that only need allowlist typing. */
 export type { AllowlistConfig };
+
+export { formatCycleLog };

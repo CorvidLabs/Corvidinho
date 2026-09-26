@@ -42,3 +42,18 @@ export {
   type SessionStub,
   type WatchConfig,
 } from "./types.ts";
+
+export {
+  ACK_CONTINUE,
+  ACK_START,
+  AckedIdStore,
+  buildAckBody,
+  createEchoAckClient,
+  createOctokitAckClient,
+  isAckableEventType,
+  maybePostWatchAck,
+  shouldAckEvent,
+  type AckClient,
+  type AckCommentResult,
+} from "./ack.ts";
+
