@@ -10,6 +10,7 @@ import {
   CadenceError,
   validateAndResolveCadence,
 } from "../../scheduler/cron.ts";
+import { resolveProjectDir } from "../../worktree/index.ts";
 import {
   PermissionLevel,
   resolvePermissionLevel,
@@ -163,6 +164,20 @@ async function handleCreate(
     const msg =
       err instanceof CadenceError ? err.message : "Invalid cadence.";
     await interaction.reply({ content: msg, ephemeral: true });
+    return;
+  }
+
+  // REQ-discord-202 (DISCORD-SCHEDULE-3): the project must be one the ticks
+  // may run on — bridge root or an allowlisted sibling checkout.
+  const scoped = resolveProjectDir(project, {
+    defaultProjectRoot: ctx.store.defaultProjectRoot ?? process.cwd(),
+    github: ctx.allowlist.github,
+  });
+  if (!scoped.ok) {
+    await interaction.reply({
+      content: `Project refused: ${scoped.error}`,
+      ephemeral: true,
+    });
     return;
   }
 
