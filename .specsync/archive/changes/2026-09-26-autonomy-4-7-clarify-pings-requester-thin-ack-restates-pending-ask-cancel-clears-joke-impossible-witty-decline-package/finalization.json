@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "autonomy-4-7-clarify-pings-requester-thin-ack-restates-pending-ask-cancel-clears-joke-impossible-witty-decline-package",
+  "implementation_commit": "cbe5be73671cb3e3e2c5ba41ff7ae5ddf2d63d7f",
+  "implementation_tree": "88964f2504a7ead1805ab6d0a395576d568d1737",
+  "contract_digest": "6680644cd5067f4b8378a7c420c8b5b483dba9c011dde58db139e9e40399a17d",
+  "workspace_digest": "a72aa8f70ffee18597acd99e014bbdb415a6ac4e9af512c9076c528f5afd770b",
+  "closing_digest": "5b012a392ddbe74dd836059d671cb777e1223c8efcc00cc5aef13aee12c2f6a1",
+  "review_digest": "ab23f57e1ab96865166e59b6a2d00efddd7c27f72179106eb6e791a14422d3fa",
+  "finalization_digest": "363c8b1f950256001d55e94f167360136531dbac823e56ec6f10157d26a5fcac",
+  "timestamp": 1790462994
+}
