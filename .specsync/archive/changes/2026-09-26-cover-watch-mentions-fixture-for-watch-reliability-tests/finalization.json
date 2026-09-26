@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-watch-mentions-fixture-for-watch-reliability-tests",
+  "implementation_commit": "8f26f924638913815042cfe76ee528f3d3b760d0",
+  "implementation_tree": "3a2b28754fbd21bb23a8bdebd03ec22baac7d27a",
+  "contract_digest": "c02a042dfc6560a531c85b3753ada44db9a8863b75581f2040c61ccedff9ff97",
+  "workspace_digest": "caa78285e8410234141358ee2307c21fee05e23c594fa2fd7801cb7b338f2848",
+  "closing_digest": "9a900c5c1585735cdd0397bd5a1486ff4a5142edc11f64c17c3c8fda73e179bc",
+  "review_digest": "8a9060c4122fc8805d36c462aab9ea894c68e0fd3381a27317e3472b0fbce30c",
+  "finalization_digest": "798ecfdb8139c119b26ae169a0724f3d079e98196aaf41ba78e2936984ba402e",
+  "timestamp": 1790446716
+}

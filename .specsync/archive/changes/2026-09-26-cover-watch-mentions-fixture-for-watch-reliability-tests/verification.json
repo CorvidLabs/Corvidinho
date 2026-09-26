@@ -1,0 +1,82 @@
+{
+  "timestamp": 1790446592,
+  "commit": "8f26f924638913815042cfe76ee528f3d3b760d0",
+  "contract_digest": "c02a042dfc6560a531c85b3753ada44db9a8863b75581f2040c61ccedff9ff97",
+  "execution_digest": "5df2079412287b7d5f1be6a0ab5478e7017ec4d110e98ac587809a36d001803e",
+  "workspace_digest": "caa78285e8410234141358ee2307c21fee05e23c594fa2fd7801cb7b338f2848",
+  "acceptance_input_digest": "96da25031e4214eec597cc2c4609ae2da9b5f72aa48bb9cc4241d8aeadfd34de",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "specs/watch/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+        "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1dc513d83f4e8f0a9fc0b16325f2eeb20048e9ba32bd9cc2761b05f569b2c8aa",
+        "entry_digest": "912e6c358154c5099e4a8f2cc4aa55ffdf96d3fd7330117cbf049c2848bfc73d",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "325040a88a3ca49de2e913ea46f6dba0a8a97e866c7bb91985b9117c084df2ad",
+        "entry_digest": "c36d10c30e7a4e29d81eb117c16c9eb2a446b41b745234da2d10345eaea662ca",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bbbb84af25d7f77f05a4745262660dea339a5d464649b59eee6688982aa62d5a",
+        "entry_digest": "1159a0145681bade26701a5c84276090cb999bea9a0f224c0dc8ab7da1b4774f",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/watch.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1bb89ca6e35ff1aa8f8ebf554ba64402c6763c165a1689f1f37a9a8607d7369e",
+        "entry_digest": "c57ba6d9432cc8b9684e2cc590cc25088eb53e41b026feb32efbc502410d4952",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "tests/fixtures/watch/mentions.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5833556a18602feba8386430eecd6aed9bcd114f36cf80a12df3563ec9d59e4a",
+        "entry_digest": "070db2300493332833376859c018df116c2c4e74876301490c5e6bb6b6c93074",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec watch",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

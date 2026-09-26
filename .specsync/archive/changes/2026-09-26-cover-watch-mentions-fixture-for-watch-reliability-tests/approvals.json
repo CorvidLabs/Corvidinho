@@ -1,0 +1,44 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790446588,
+      "digest": "c02a042dfc6560a531c85b3753ada44db9a8863b75581f2040c61ccedff9ff97",
+      "note": "Cover the leftover watch fixture path; no canonical spec text change is needed.",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-watch-mentions-fixture-for-watch-reliability-tests",
+        "title": "Cover watch mentions fixture for watch reliability tests",
+        "description": "Cover watch mentions fixture for watch reliability tests",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "watch"
+        ],
+        "affected_paths": [
+          "tests/fixtures/watch/mentions.json"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Fixture-only test data exercises existing watch behavior; the canonical watch spec already covers the behavior, so no spec text changes are needed.",
+        "acceptance_criteria": [
+          "The existing watch reliability change fully covers tests/fixtures/watch/mentions.json, and specsync change audit reports no uncovered meaningful paths."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790446716,
+      "digest": "9a900c5c1585735cdd0397bd5a1486ff4a5142edc11f64c17c3c8fda73e179bc",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
