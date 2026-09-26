@@ -214,4 +214,16 @@ Acceptance Criteria
 - A missing owner does not flip the doctor exit code.
 - Legacy admin lists produce a `[warn] admin-lists` line without their values and without changing the exit code.
 - Fixture test runs doctor with a temp allowlist file / env (no network).
+### REQ-cli-015
+
+The project SHALL ship package version `0.0.9` with shell-exec + SAFE-3
+(issue #83 / PLUGIN-1,2 / SAFE-3). CLI `version` and Discord presence
+(DISCORD-12) report `0.0.9` after bridge update. CHANGELOG SHALL include
+verbose 0.0.9 notes. STATUS.md SHALL mark #83 done.
+
+Acceptance Criteria
+- `package.json` version is `0.0.9`.
+- CLI `version` prints `0.0.9`.
+- CHANGELOG has a 0.0.9 section covering shell-exec + SAFE-3.
+- STATUS ROADMAP marks #83 done; next = remaining M3 plugins (git, …).
 
