@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 30
+version: 32
 status: draft
 files:
   - src/plugins/types.ts
@@ -72,20 +72,17 @@ only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
 `memory-forget` / `memory-override` are two-phase with an HMAC confirm token
 confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+Memory plugin command descriptions SHALL include concrete argv examples so the
+LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
+`memory-*` is enriched similarly in `buildOpenAiTools`.
 
 ## Behavioral Examples
 
-### Scenario: List plugins
+### Scenario: memory-store description shows argv example
 
 - **Given** builtins are loaded
-- **When** the operator runs `corvidinho plugins list`
-- **Then** github-*, memory-*, files-*, search-grep, and plugins-list appear with danger markings and exit 0
-
-### Scenario: SAFE-2 refuse protected write
-
-- **Given** a project with `.env` and `fledge.toml`
-- **When** `files-write` targets `.env` or `fledge.toml`
-- **Then** the run fails with a refused/SAFE-2 error and the file is unchanged
+- **When** an operator or the tool loop inspects `memory-store`
+- **Then** the description includes `--category` / `person` / `identity` example argv
 
 ## Error Cases
 
@@ -123,4 +120,6 @@ and current rows for plugins host evolution.
 | 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |
 | 2026-09-26 | plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81: files-read/write/edit/glob/list/delete + search-grep; SAFE-2 protected paths; path clamp; package 0.0.6 |
 | 2026-09-26 | cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive: Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive |
+| 2026-09-26 | memory-discord-inject: richer memory-* argv descriptions (REQ-plugins-085) |
+| 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
 | 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |

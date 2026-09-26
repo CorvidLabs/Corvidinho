@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-leftover-index-exports-and-version-fixture-paths-for-specsync-audit-after-memory-discord-inject-archive",
+  "slug": "cover-leftover-index-exports-and-version-fixture-paths-for-specsync-audit-after-memory-discord-inject-archive",
+  "title": "Cover leftover index exports and version fixture paths for SpecSync audit after memory-discord-inject archive",
+  "description": "Cover leftover index exports and version fixture paths for SpecSync audit after memory-discord-inject archive",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "b425f4ab09cc089c33f4914054a9183c68737040",
+  "created_at": 1790450708,
+  "updated_at": 1790450721,
+  "affected_specs": [
+    "agent",
+    "discord",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/agent/index.ts",
+    "src/discord/index.ts",
+    "tests/update-helpers.test.ts",
+    "tests/version.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Re-export MEMORY_AGENT_SYSTEM_INSTRUCTIONS / memory-inject helpers and version/changelog fixture bumps are already covered by living agent/discord/cli specs from the archived memory-discord-inject change; no new acceptance criteria.",
+  "acceptance_criteria": [
+    "src/agent/index.ts re-exports MEMORY_AGENT_SYSTEM_INSTRUCTIONS; src/discord/index.ts re-exports memory-inject helpers; tests/version.test.ts and tests/update-helpers.test.ts assert package 0.0.7 / changelog 0.0.7; covered for SpecSync change audit after memory-discord-inject archive; no new module AC"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

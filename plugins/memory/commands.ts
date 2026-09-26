@@ -298,7 +298,12 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-store",
     description:
-      "Store a memory for the acting Discord user (category key content). Categories: conversation|entity|person|personality",
+      "Store a durable fact for the acting Discord user (MEMORY / AGENT-7). " +
+      "Categories: conversation|entity|person|personality. " +
+      'Call when the user states identity/person/project facts. argv example: ' +
+      '["--category","person","--key","identity","Leif is the owner"]. ' +
+      "Also: [\"person\",\"identity\",\"Leif is the owner\"] positional. " +
+      "Acting user comes from CORVIDINHO_ACTING_DISCORD_USER_ID (bridge sets it).",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -356,7 +361,11 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-recall",
     description:
-      "Recall the acting Discord user's own memories (optional --category / --query)",
+      "Recall durable facts for the acting Discord user (MEMORY / AGENT-7). " +
+      "Call BEFORE claiming you do not know who the user is or facts about them/people/projects. " +
+      'argv examples: [] (all), ["--category","person"], ' +
+      '["--query","Leif"], ["--category","person","--limit","20"]. ' +
+      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -416,7 +425,9 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-forget",
     description:
-      "ADMIN soft-delete a memory by id (own or other). Two-phase: run without --confirm for a token, then --confirm TOKEN from a new turn. SAFE-4 + MEMORY-ACL-4.",
+      "ADMIN soft-delete a memory by id (own or other). Two-phase (SAFE-4): run without --confirm to get a token, " +
+      "the human must reply with that token in a new message, then run again with --confirm TOKEN. MEMORY-ACL-4. " +
+      'argv examples: ["--id","<uuid>"] then ["--id","<uuid>","--confirm","<token>"] (acting admin from bridge env).',
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
@@ -432,7 +443,9 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-override",
     description:
-      "ADMIN overwrite memory content by id (own or other). Two-phase: run without --confirm for a token, then --confirm TOKEN from a new turn. MEMORY-ACL-3/4.",
+      "ADMIN overwrite memory content by id (own or other). Two-phase (SAFE-4): run without --confirm to get a token, " +
+      "the human must reply with that token in a new message, then run again with --confirm TOKEN and the same content. MEMORY-ACL-3/4. " +
+      'argv examples: ["--id","<uuid>","--content","new text"] then ["--id","<uuid>","--confirm","<token>","--content","new text"].',
     dangerous: true,
     minTier: 1,
     async handler(ctx) {

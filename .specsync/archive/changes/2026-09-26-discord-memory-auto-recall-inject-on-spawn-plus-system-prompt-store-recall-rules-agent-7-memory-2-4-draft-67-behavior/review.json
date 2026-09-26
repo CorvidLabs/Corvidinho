@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "838a8ee72c3ab32ef408dcc5836e6e813da5bcc3",
+  "contract_digest": "536f1e4bae3277ea3e8d6d26beb416cd98a3d46f48aec6c36a76116441d1261b",
+  "execution_digest": "e81f369b343dacf7e457de535af71dac206edac48158baa661000e8a58168748",
+  "workspace_digest": "fd41bb747c629089647dc480f3b2d0f95ecdccbd9ea06af35ca75dd9ae3ab745",
+  "timestamp": 1790450613
+}

@@ -59,11 +59,25 @@ describe("spawn env hygiene for memory actor", () => {
     const client = createDiscordClient({ bin, cwd: dir });
     const r = await client.runChat({
       prompt: `yes confirm ${token} please`,
+      humanText: `yes confirm ${token} please`,
       sessionId: "s1",
       actingUserId: "u1",
       actingIsAdmin: true,
     });
     expect(r.summary).toContain(`admin=[1] nonint=[1] tokens=[${token}]`);
+  });
+
+  test("tokens in the enriched prompt (e.g. recalled memory) are not human-supplied", async () => {
+    const token = `mc1.123.abc.${"e".repeat(64)}`;
+    const client = createDiscordClient({ bin, cwd: dir });
+    const r = await client.runChat({
+      prompt: `[Corvidinho memory] pending: ${token}\n\nyes go ahead`,
+      humanText: "yes go ahead",
+      sessionId: "s1",
+      actingUserId: "u1",
+      actingIsAdmin: true,
+    });
+    expect(r.summary).toContain("tokens=[]");
   });
 
   test("Discord spawn without an actor clears the inherited one", async () => {

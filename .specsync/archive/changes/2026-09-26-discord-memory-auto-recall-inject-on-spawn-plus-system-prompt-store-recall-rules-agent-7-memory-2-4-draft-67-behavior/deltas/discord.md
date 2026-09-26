@@ -1,108 +1,34 @@
 ---
 module: discord
-version: 46
-status: draft
-files:
-  - src/discord/types.ts
-  - src/discord/config.ts
-  - src/discord/protocol-version.ts
-  - src/discord/image-attachments.ts
-  - src/discord/memory-inject.ts
-  - tests/discord.memory-inject.test.ts
-  - src/discord/permissions.ts
-  - src/discord/session-store.ts
-  - src/store/db.ts
-  - src/store/index.ts
-  - src/store/paths.ts
-  - src/store/session-ttl.ts
-  - src/worktree/index.ts
-  - src/worktree/manager.ts
-  - src/worktree/cleanup.ts
-  - tests/worktree.test.ts
-  - tests/discord.session-worktree.test.ts
-  - src/memory/types.ts
-  - src/memory/store.ts
-  - src/memory/index.ts
-  - tests/memory.store.test.ts
-  - tests/memory.spawn-env.test.ts
-  - src/discord/work-store.ts
-  - src/discord/message-router.ts
-  - src/discord/agent-client.ts
-  - src/discord/gateway.ts
-  - src/discord/presence.ts
-  - src/discord/bridge.ts
-  - src/discord/thinking-status.ts
-  - src/discord/slash-commands.ts
-  - src/discord/register-commands.ts
-  - src/discord/slash-types.ts
-  - src/discord/slash-dispatch.ts
-  - src/discord/command-handlers/session.ts
-  - src/discord/command-handlers/status.ts
-  - src/discord/command-handlers/agents.ts
-  - src/discord/command-handlers/work.ts
-  - src/discord/command-handlers/mute.ts
-  - src/discord/command-handlers/schedule.ts
-  - src/scheduler/cron.ts
-  - src/scheduler/store.ts
-  - src/scheduler/service.ts
-  - src/scheduler/index.ts
-  - tests/discord.schedule.test.ts
-  - tests/scheduler.cron.test.ts
-  - tests/scheduler.service.test.ts
-  - src/discord/requester-perms.ts
-  - src/discord/index.ts
-  - plugins/discord/index.ts
-  - tests/discord.protocol-version.test.ts
-  - tests/discord.presence.test.ts
-
-db_tables: []
-depends_on:
-  - plugins
-  - agent
-  - cli
+change: discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior
 ---
 
-# Discord
+# Delta — discord (MEMORY auto-recall inject)
 
-## Purpose
+## Modified
+
+### SPEC SECTION Purpose
 
 HEAR Discord bridge also auto-recalls MEMORY for the acting Discord user on
 spawn and prepends an inject block to the agent prompt (AGENT-7 / MEMORY-2/4 /
 REQ-discord-023), alongside image attachments, schedule, presence, and
 session worktrees.
 
-## Public API
+### SPEC SECTION Public API
 
 Export `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`).
 
-## Invariants
+### SPEC SECTION Invariants
 
-Empty channel allowlist fail-start; empty user/role = deny-all when checked;
-empty admin lists = nobody ADMIN; missing token clean exit; no ProcessManager;
-secrets out of repo; discord-post-message dangerous; thinking status edits one
-progress message in-place; slash handlers re-check channel allowlist and
-minPermission before acting; rate/mute refuse only the offending user;
-outbound post with requesting_user_id verifies requester channel perms;
-image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
-local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
-unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
-Discord replies prefer parsed `task run --json` summaries;
-slash registration with guild id PUTs guild commands then clears globals;
-ClientReady sets short Custom Status from shared package version (DISCORD-12);
-outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
-SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
-`/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
-memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
-per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
 No `/memory` slash command.
 
-## Behavioral Examples
+### SPEC SECTION Behavioral Examples
 
 ### Scenario: Spawn with seeded identity
 
@@ -118,19 +44,19 @@ No `/memory` slash command.
 - **Then** the prompt still includes the empty-memory one-liner nudging
   `memory-store`
 
-## Error Cases
+### SPEC SECTION Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | memoryStore undefined | Prompt unchanged; no inject log |
 | Blank author id | Prompt unchanged; no inject |
 
-## Dependencies
+### SPEC SECTION Dependencies
 
 - MEMORY store (`src/memory`) / REQ-discord-021
 - Agent spawn client (`agent-client.ts`)
 
-## Change Log
+### SPEC SECTION Change Log
 
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
@@ -148,4 +74,20 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | session-worktree-per-talk-project-git-worktree-isolation-session-worktree-1-5-issue-58-package-v0-0-5-discord-cli-talks: SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5 |
 | 2026-09-26 | memory-discord-inject: auto-recall prepend on spawn (REQ-discord-023 / AGENT-7 / MEMORY-2/4); package 0.0.7 |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
-| 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |
+
+## Added
+
+### REQUIREMENT REQ-discord-023
+
+When `memoryStore` is available, Discord HEAR spawn SHALL recall memories for
+`msg.authorId` (limit ~20) and prepend a clear inject block to the agent prompt
+before `agent.runChat` (AGENT-7 / MEMORY-2 / MEMORY-4). Empty scope SHALL still
+include a one-liner nudging `memory-store`. Bridge SHALL log inject count.
+No `/memory` slash.
+
+Acceptance Criteria
+- Inject helper formats `category/key: content` bullets under a fixed header.
+- Empty recall → empty one-liner still prepended.
+- Missing store / blank user → prompt unchanged (injected=false).
+- Bridge logs `[discord] memory inject: N recalled for user …`.
+- Fixture tests cover format + enrich (no live Discord).

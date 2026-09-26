@@ -18,6 +18,12 @@ export type AgentStatusUpdate = {
 
 export type AgentRunChatOpts = {
   prompt: string;
+  /**
+   * The human's own words for this run, before memory/image enrichment.
+   * SAFE-4 confirm tokens are taken only from here — never from `prompt`,
+   * which may carry recalled memory the model wrote. Omitted ⇒ no tokens.
+   */
+  humanText?: string;
   sessionId: string;
   resume?: boolean;
   /** Discord acting user for MEMORY ACL scope (MEMORY-ACL-1). */
@@ -57,6 +63,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
   return {
     async runChat({
       prompt,
+      humanText,
       sessionId,
       actingUserId,
       actingIsAdmin,
@@ -86,7 +93,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           // Always overwrite: never inherit an actor from the bridge env (REQ-discord-021).
           CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
           // SAFE-4: only confirm tokens the human typed in this message count.
-          CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(prompt).join(","),
+          CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(humanText ?? "").join(","),
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
