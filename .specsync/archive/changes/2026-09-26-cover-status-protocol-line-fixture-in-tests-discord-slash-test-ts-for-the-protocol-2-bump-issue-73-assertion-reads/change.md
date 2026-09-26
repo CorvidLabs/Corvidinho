@@ -1,6 +1,6 @@
 ---
 id: cover-status-protocol-line-fixture-in-tests-discord-slash-test-ts-for-the-protocol-2-bump-issue-73-assertion-reads
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 80e89c701bbdb527ad60fbe57e9300b44782da81
 ---

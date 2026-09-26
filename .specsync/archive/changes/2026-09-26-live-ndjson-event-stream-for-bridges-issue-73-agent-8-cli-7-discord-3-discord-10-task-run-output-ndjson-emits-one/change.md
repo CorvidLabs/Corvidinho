@@ -1,6 +1,6 @@
 ---
 id: live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one
-state: implementing
+state: archived
 type: feature
 base_commit: ad431a9436108288cbe4c938d3e865da957458be
 ---
