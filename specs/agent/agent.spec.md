@@ -58,6 +58,11 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
+`LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
+completions request (headers and body); `createTaskExecute` takes
+`llmTimeoutMs?: number` to override it. No env var.
+
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
 `loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
@@ -166,6 +171,12 @@ filesystem.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
+An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
+the default verify runner runs fledge in its own process group and an abort
+kills the lane's whole tree; an abort while verify runs is a cancel (no
+`VerifyResult`, no retry, no `stuck` ask); each LLM request is bounded by a
+timeout, and a caller abort is never reported as a timeout.
+
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
 is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
@@ -206,6 +217,8 @@ model.
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
+| AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
+| LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |

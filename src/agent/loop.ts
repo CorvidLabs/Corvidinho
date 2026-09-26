@@ -169,6 +169,11 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
         output: err instanceof Error ? err.message : String(err),
       };
     }
+    // An aborted lane exits non-zero: that is a cancel, not a failed verify
+    // (no retry, no stuck ask) — AGENT-3.
+    if (isAborted(signal)) {
+      return cancelledResult(summary, filesChanged, attempts);
+    }
 
     emit(onEvent, {
       type: "VerifyResult",

@@ -65,3 +65,96 @@ describe("createTaskExecute", () => {
     expect(calls[0].auth).toBe("Bearer secret");
   });
 });
+
+describe("stalled LLM provider (AGENT-3, REQ-agent-244)", () => {
+  const env = (baseUrl: string) => ({
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: baseUrl,
+  });
+
+  /** Never answers: rejects only when its request signal aborts. */
+  const stalledFetch = (_input: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+        once: true,
+      });
+    });
+
+  test("headers then a trickle: the request times out instead of hanging", async () => {
+    // Sends headers, then one byte every 50ms and never finishes the body.
+    const timers = new Set<ReturnType<typeof setInterval>>();
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        let timer: ReturnType<typeof setInterval> | undefined;
+        const body = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode("{"));
+            timer = setInterval(() => c.enqueue(new TextEncoder().encode(" ")), 50);
+            timers.add(timer);
+          },
+          cancel() {
+            if (timer) clearInterval(timer);
+          },
+        });
+        return new Response(body, { headers: { "content-type": "application/json" } });
+      },
+    });
+    try {
+      const exec = createTaskExecute({
+        taskText: "stall",
+        env: env(`http://127.0.0.1:${server.port}/v1`),
+        tier: "read",
+        loadPlugins: false,
+        projectInstructions: false,
+        llmTimeoutMs: 300,
+      });
+      const t0 = Date.now();
+      const result = await exec({ attempt: 1, signal: new AbortController().signal });
+      expect(result.summary).toBe("LLM request timed out after 300ms");
+      expect(result.filesChanged).toEqual([]);
+      expect(Date.now() - t0).toBeLessThan(3_000);
+    } finally {
+      for (const t of timers) clearInterval(t);
+      server.stop(true);
+    }
+  });
+
+  test("no response at all: the tool loop's request times out too", async () => {
+    let calls = 0;
+    const exec = createTaskExecute({
+      taskText: "stall",
+      env: env("https://llm.test/v1"),
+      tier: "tool",
+      fetchImpl: (input, init) => {
+        calls += 1;
+        return stalledFetch(input, init);
+      },
+      loadPlugins: false,
+      projectInstructions: false,
+      llmTimeoutMs: 200,
+    });
+    const result = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(result.summary).toBe("LLM request timed out after 200ms");
+    expect(calls).toBe(1);
+  });
+
+  test("a caller abort still stops the request and is not reported as a timeout", async () => {
+    const ac = new AbortController();
+    const exec = createTaskExecute({
+      taskText: "stall",
+      env: env("https://llm.test/v1"),
+      tier: "read",
+      fetchImpl: stalledFetch,
+      loadPlugins: false,
+      projectInstructions: false,
+      llmTimeoutMs: 60_000,
+    });
+    setTimeout(() => ac.abort(), 50);
+    const t0 = Date.now();
+    const result = await exec({ attempt: 1, signal: ac.signal });
+    expect(Date.now() - t0).toBeLessThan(3_000);
+    expect(result.summary).toStartWith("LLM request failed:");
+    expect(result.summary).not.toContain("timed out");
+  });
+});

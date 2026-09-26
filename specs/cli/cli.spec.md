@@ -92,6 +92,7 @@ Attribution output uses only the project name and repository link and contains n
 | Attribution command | Print the canonical markdown footer; exit 0 |
 | Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
 | Task verify exhausted | Exit 1; JSON verified false |
+| Task run gets SIGINT / SIGTERM | Run aborted (verify lane and tool loop stopped); cancelled result printed (ndjson `result` frame); exit 130 |
 | Daemon lock held by a live daemon | `daemon.lock_held` log line; exit 1 |
 | Daemon `CORVIDINHO_BIN` protocol mismatch | `daemon.protocol_mismatch` log line; lock released; exit 1 |
 

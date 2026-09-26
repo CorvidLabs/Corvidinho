@@ -475,20 +475,34 @@ async function taskRun(opts: {
     onEvent: handleEvent,
     onUsage: ndjson ? (u) => ndjson.usage(u) : undefined,
   });
-  const result: TaskResult = await runTask({
-    cwd,
-    task: opts.taskText,
-    config,
-    verifyBeforeComplete: opts.noVerify ? false : undefined,
-    maxRetries: opts.maxRetries,
-    onEvent: handleEvent,
-    execute: async (ctx) => {
-      if (ctx.verifyFeedback && !quiet) {
-        console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
-      }
-      return execute(ctx);
-    },
-  });
+  // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
+  // and tool loop stop and the cancelled result below is still printed (exit
+  // 130). `once`: a second signal takes the default action.
+  const abort = new AbortController();
+  const onSignal = () => abort.abort();
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  let result: TaskResult;
+  try {
+    result = await runTask({
+      cwd,
+      task: opts.taskText,
+      config,
+      verifyBeforeComplete: opts.noVerify ? false : undefined,
+      maxRetries: opts.maxRetries,
+      signal: abort.signal,
+      onEvent: handleEvent,
+      execute: async (ctx) => {
+        if (ctx.verifyFeedback && !quiet) {
+          console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
+        }
+        return execute(ctx);
+      },
+    });
+  } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+  }
 
   if (ndjson) {
     ndjson.result(result);

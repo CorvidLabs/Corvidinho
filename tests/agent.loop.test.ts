@@ -162,6 +162,34 @@ describe("runTask prove-before-done", () => {
     expect(result.state).toBe("failed");
   });
 
+  test("abort while verify runs → cancelled, not a failed verify or stuck ask (AGENT-3)", async () => {
+    // The runner returns (a killed lane exits non-zero) rather than throwing.
+    const ac = new AbortController();
+    const c = collect();
+    let executeCalls = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 0,
+      signal: ac.signal,
+      onEvent: c.onEvent,
+      verifyRunner: async () => {
+        ac.abort();
+        return { success: false, output: "killed by SIGTERM" };
+      },
+      execute: async () => {
+        executeCalls += 1;
+        return { summary: "wrote", filesChanged: ["x.ts"] };
+      },
+    });
+    expect(result.cancelled).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(result.state).toBe("failed");
+    expect(result.ask).toBeUndefined();
+    expect(executeCalls).toBe(1);
+    expect(c.events.some((e) => e.type === "VerifyResult")).toBe(false);
+  });
+
   test("defaultVerifyRunner argv shape (FLEDGE-2/3 agree)", async () => {
     const { VERIFY_ARGS } = await import("../src/agent/verify.ts");
     expect([...VERIFY_ARGS]).toEqual([
