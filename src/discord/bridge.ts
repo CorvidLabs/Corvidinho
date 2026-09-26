@@ -32,7 +32,10 @@ import {
   type DiscordGateway,
   type GatewayHandlers,
 } from "./gateway.ts";
-import { enrichPromptWithImages } from "./image-attachments.ts";
+import {
+  attachmentCacheDir,
+  enrichPromptWithImages,
+} from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
@@ -336,6 +339,8 @@ export async function startBridge(
         store,
         allowlist: config.allowlist,
         channelOnlyGate: true,
+        // REQ-discord-201 — owner passes the actor gate even when unlisted.
+        owner: config.owner ?? null,
         mutedUsers,
         rateLimit: { state: rateLimitState, config: rateLimitConfig },
       });
@@ -355,39 +360,6 @@ export async function startBridge(
 
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
-
-      // DISCORD-9 — download attachments to local files the agent can open.
-      let enrichedPrompt = await enrichPromptWithImages(
-        prompt,
-        msg.attachments,
-        { messageId: msg.id },
-      );
-
-      // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
-      const idInject = enrichPromptWithIdentity(enrichedPrompt, {
-        userId: msg.authorId,
-        displayName: msg.authorDisplayName,
-        username: msg.authorUsername,
-        owner: config.owner ?? null,
-      });
-      if (idInject.injected) {
-        console.log(
-          `[discord] identity inject: user ${msg.authorId}` +
-            (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
-        );
-        enrichedPrompt = idInject.prompt;
-      }
-
-      // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
-      const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-        ownerUserId: msg.authorId,
-      });
-      if (memInject.injected) {
-        console.log(
-          `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
-        );
-        enrichedPrompt = memInject.prompt;
-      }
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
@@ -421,8 +393,48 @@ export async function startBridge(
         }
       }
 
+      const sessionCwd = store.cwdFor(session);
+
       let result;
       try {
+        // DISCORD-9 — download attachments into the session workspace (bound
+        // above): the agent's file tools only open paths under its cwd
+        // (REQ-discord-013).
+        let enrichedPrompt = await enrichPromptWithImages(
+          prompt,
+          msg.attachments,
+          {
+            messageId: msg.id,
+            cacheDir: attachmentCacheDir(sessionCwd ?? config.projectRoot),
+          },
+        );
+
+        // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
+        const idInject = enrichPromptWithIdentity(enrichedPrompt, {
+          userId: msg.authorId,
+          displayName: msg.authorDisplayName,
+          username: msg.authorUsername,
+          owner: config.owner ?? null,
+        });
+        if (idInject.injected) {
+          console.log(
+            `[discord] identity inject: user ${msg.authorId}` +
+              (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
+          );
+          enrichedPrompt = idInject.prompt;
+        }
+
+        // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
+        const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
+          ownerUserId: msg.authorId,
+        });
+        if (memInject.injected) {
+          console.log(
+            `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
+          );
+          enrichedPrompt = memInject.prompt;
+        }
+
         const actingIsAdmin =
           resolvePermissionLevel({
             userId: msg.authorId,
@@ -433,24 +445,28 @@ export async function startBridge(
             owner: config.owner ?? null,
             mutedUsers,
           }) >= PermissionLevel.ADMIN;
-        result = await agent.runChat({
-          prompt: enrichedPrompt,
-          // Raw human text (before memory/image enrichment) — the only
-          // source of SAFE-4 confirm tokens.
-          humanText: prompt,
-          sessionId: session.id,
-          resume: action.kind === "continue_session",
-          actingUserId: msg.authorId,
-          actingIsAdmin,
-          cwd: store.cwdFor(session),
-          onStatus: (u) => {
-            void thinking.update({
-              tool: u.tool,
-              tokens: u.tokens,
-              description: u.message ? `⏳ ${u.message}` : undefined,
-            });
-          },
-        });
+        // Busy while the agent runs: the soft-TTL purge must not park this
+        // worktree mid-run (REQ-discord-204).
+        result = await store.runActive(session, () =>
+          agent.runChat({
+            prompt: enrichedPrompt,
+            // Raw human text (before memory/image enrichment) — the only
+            // source of SAFE-4 confirm tokens.
+            humanText: prompt,
+            sessionId: session.id,
+            resume: action.kind === "continue_session",
+            actingUserId: msg.authorId,
+            actingIsAdmin,
+            cwd: sessionCwd,
+            onStatus: (u) => {
+              void thinking.update({
+                tool: u.tool,
+                tokens: u.tokens,
+                description: u.message ? `⏳ ${u.message}` : undefined,
+              });
+            },
+          }),
+        );
       } catch (err) {
         await thinking.fail(
           `❌ ${err instanceof Error ? err.message : "agent error"}`,
