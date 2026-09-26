@@ -34,6 +34,7 @@ bun src/cli.ts --help
 bun src/cli.ts doctor
 bun src/cli.ts version
 bun src/cli.ts plugins list
+bun src/cli.ts task run --no-verify --json
 bun test
 hi check
 fledge lanes run verify --non-interactive

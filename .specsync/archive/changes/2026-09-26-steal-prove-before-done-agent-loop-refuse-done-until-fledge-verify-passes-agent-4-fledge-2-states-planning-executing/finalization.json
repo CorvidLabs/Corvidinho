@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing",
+  "implementation_commit": "403682477f9a87150840aa38c2499001e2d51207",
+  "implementation_tree": "43397f9e1463f449506b04b8ad7df3d74829dc73",
+  "contract_digest": "1c2cf6ae2dbeb0f7b717474ff78f2a2f6712a57e06706175628b405c846ea398",
+  "workspace_digest": "c174a8eb40e4565553bfc99f1bd11d6caf86d46e80db830c4c3e35d44b49f919",
+  "closing_digest": "e3f3d033c1ab7c89d868de4de9406e850fa70fb4fd40da5853450f3bca741626",
+  "review_digest": "d3735c51bb2473d46fe641453051c565983878abe502d6875aeec6e68ffcfa98",
+  "finalization_digest": "225a3c4182214735dbb7c6bdba3f9ba660089d5bbce3e8b16c20771f20d179de",
+  "timestamp": 1790437728
+}

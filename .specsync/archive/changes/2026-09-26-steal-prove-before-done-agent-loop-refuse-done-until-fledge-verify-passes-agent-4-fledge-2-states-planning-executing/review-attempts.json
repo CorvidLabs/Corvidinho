@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "403682477f9a87150840aa38c2499001e2d51207",
+      "contract_digest": "1c2cf6ae2dbeb0f7b717474ff78f2a2f6712a57e06706175628b405c846ea398",
+      "execution_digest": "5605096b1f873425657467449f1881bfe5ebc4f5fa399fa0871ca27dd0704624",
+      "workspace_digest": "c174a8eb40e4565553bfc99f1bd11d6caf86d46e80db830c4c3e35d44b49f919",
+      "timestamp": 1790437726
+    }
+  ]
+}

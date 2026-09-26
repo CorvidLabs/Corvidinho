@@ -46,3 +46,11 @@ Acceptance Criteria
 - `corvidinho --help` mentions allowlist file/env vars.
 - STATUS/README note how to set allowlists on the bot VM; wallets deferred.
 
+### REQ-cli-006
+
+The CLI SHALL expose `task run` with `--no-verify`, optional `--max-retries`, and `--json` TaskResult output so operators and bridges can exercise or skip the prove-before-done gate.
+
+Acceptance Criteria
+- `corvidinho task run --no-verify --json` exits 0 with verify_skipped.
+- Help documents `task run` and `--no-verify`.
+

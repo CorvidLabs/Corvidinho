@@ -52,10 +52,11 @@ WALLET-1..3 captured in `hi/allow.md`. **No wallet ACT** until an approved-walle
 
 ## Next (for Corvidinho bot / follow-on PRs)
 
-- Flesh agent loop / prove-before-done
-- Wire Discord HEAR behind allowlist stub (`src/allowlist/discord.ts`)
+- Landed: plugin host + GitHub reads (#6/#4); default-deny allowlists (#16/#18); prove-before-done agent gate (#7)
+- Flesh full LLM tool loop on top of prove-before-done
+- Wire Discord HEAR behind allowlist stub (`src/allowlist/discord.ts`) — bridges use --no-verify for latency
 - Turn draft specs active when behavior stabilizes
-- Keep secrets out of repo; keep verify lane honest
+- Keep secrets out of repo; keep verify lane honest; no Trust/attest on bootstrap
 
 ## Verify locally
 
