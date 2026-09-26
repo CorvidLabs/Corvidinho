@@ -10,7 +10,8 @@
  * (AUTONOMOUS-1), hidden from the tool catalog unless the session is allowed
  * and at code tier (SAFE-9), mutating so non-ADMIN role sessions never see
  * or run it (ROLES-CHAT-2/3/5). The handler re-checks every gate at run
- * time. Voices are advisers: read tier by default (tool at most), non-ADMIN
+ * time, and only a top-level lead (depth 0) may convene: a delegated worker
+ * is refused before anything spawns. Voices are advisers: read tier by default (tool at most), non-ADMIN
  * role sessions with an empty SAFE-1 allowlist, so they get no mutating
  * tools and a must-ask action is always denied.
  */
@@ -21,6 +22,7 @@ import {
   COUNCIL_MAX_VOICES,
   COUNCIL_MIN_VOICES,
   MAX_COUNCILS_PER_RUN,
+  canConveneCouncilAtDepth,
   formatCouncilPhases,
   parseCouncilArgs,
   resolveCouncilTier,
@@ -28,8 +30,6 @@ import {
 } from "../../src/autonomous/council.ts";
 import {
   DELEGATE_MIN_TIER,
-  MAX_DELEGATE_DEPTH,
-  canDelegateAtDepth,
   createDelegateLimiter,
   delegateDepthFromEnv,
   resolveDelegateBin,
@@ -73,7 +73,7 @@ export function createCouncilCommand(deps: CouncilCommandDeps = {}): PluginComma
     description:
       "Convene a council for a decision that needs more than one voice. Worker voices propose independently, critique each other's proposals, then a chair decides; you get the decision and a short transcript. The council advises; you decide. " +
       `argv e.g. ["--question","SQLite or flat files for the cache?"]; optional ["--voices","${COUNCIL_DEFAULT_VOICES}"] (${COUNCIL_MIN_VOICES}-${COUNCIL_MAX_VOICES}), ["--tier","read|tool"] (default read; voices never write). ` +
-      `Expensive (up to ${2 * COUNCIL_MAX_VOICES + 1} worker runs, ${MAX_COUNCILS_PER_RUN} councils per run). Autonomous extra: only when the project enables [corvidinho.autonomous]; code tier (AUTONOMOUS-1/6, SAFE-9).`,
+      `Expensive (up to ${2 * COUNCIL_MAX_VOICES + 1} worker runs, ${MAX_COUNCILS_PER_RUN} councils per run). Autonomous extra: only when the project enables [corvidinho.autonomous]; code tier; top-level lead only, a delegated worker is refused (AUTONOMOUS-1/6, SAFE-9).`,
     dangerous: false,
     mutating: true,
     minTier: DELEGATE_MIN_TIER,
@@ -87,10 +87,12 @@ export function createCouncilCommand(deps: CouncilCommandDeps = {}): PluginComma
           "refused: autonomous mode is off for this project (AUTONOMOUS-1). Enable it with [corvidinho.autonomous] enabled = true in fledge.toml.",
         );
       }
+      // Top-level lead only: a delegated worker (depth >= 1) never convenes
+      // a council, so voices never outlive a worker its lead kills (SAFE-9).
       const depth = delegateDepthFromEnv(env);
-      if (!canDelegateAtDepth(depth)) {
+      if (!canConveneCouncilAtDepth(depth)) {
         return refuse(
-          `refused: delegation depth cap reached (depth ${depth}, max ${MAX_DELEGATE_DEPTH}); decide this yourself (SAFE-9).`,
+          `refused: councils run only from a top-level lead, not a delegated worker (depth ${depth}); decide this yourself (SAFE-9).`,
         );
       }
       // Omitted tier ⇒ the env tier (default tool), never a higher default.

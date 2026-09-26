@@ -14,8 +14,10 @@ artifact: design
 - `plugins/autonomous/council.ts` is the `council` command (PLUGIN-5):
   `dangerous: false`, `mutating: true`, `minTier: 2`, `autonomous: true`.
   The handler checks gates in the same order as `delegate`: usage (exit 1),
-  then AUTONOMOUS-1, depth cap, code tier and council budget (exit 2,
-  nothing spawned).
+  then AUTONOMOUS-1, top-level lead only (depth 0; a delegated worker is
+  refused, so voices never outlive a worker its lead stops and one task's
+  fan-out stays bounded), code tier and council budget (exit 2, nothing
+  spawned).
 - `plugins/autonomous/index.ts` registers `delegate` and `council`, checking
   for duplicates per command.
 - `src/autonomous/delegate.ts` gains one additive field:

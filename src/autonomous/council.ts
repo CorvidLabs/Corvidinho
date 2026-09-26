@@ -62,6 +62,18 @@ export const COUNCIL_TIMEOUT_MS = 15 * 60 * 1000;
 export const COUNCIL_VOICE_TIMEOUT_MS = Math.min(5 * 60 * 1000, DELEGATE_TIMEOUT_MS);
 /** Councils one lead process may convene, one at a time. */
 export const MAX_COUNCILS_PER_RUN = 2;
+/**
+ * Only a top-level lead (delegation depth 0) convenes a council; a delegated
+ * worker never does (SAFE-9). A worker has a shorter cap than a council and
+ * can be killed by its lead, and its voices would outlive it. This also keeps
+ * one top-level task's worker fan-out bounded.
+ */
+export const COUNCIL_LEAD_DEPTH = 0;
+
+/** May a run at this delegation depth convene a council? Top-level lead only. */
+export function canConveneCouncilAtDepth(depth: number): boolean {
+  return depth === COUNCIL_LEAD_DEPTH;
+}
 /** Voice tier when the lead does not ask for one. */
 export const COUNCIL_DEFAULT_TIER: CapabilityTier = "read";
 /** Voices never run above this tier (they advise; they do not act). */

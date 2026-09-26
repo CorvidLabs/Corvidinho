@@ -10,7 +10,8 @@ artifact: plan
    time limits.
 2. `DelegateChildOutcome.resultText` in the delegate core (additive).
 3. `council` plugin in `plugins/autonomous/council.ts`, registered by
-   `loadAutonomousPlugins`, with gates re-checked in the handler.
+   `loadAutonomousPlugins`, with gates re-checked in the handler; only a
+   top-level lead (depth 0) may convene, a delegated worker is refused.
 4. Tests: an in-process fake runner for the core; a `.ts` fake bin for the
    plugin and the lead tool loop.
 5. Specs: REQ-agent-118 and REQ-plugins-118 (canonical and deltas), spec file

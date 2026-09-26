@@ -192,8 +192,9 @@ worker's skill, tier, depth, state, summary and filesChanged.
 
 `council` (REQ-plugins-118) declares the same flags as `delegate`
 (`dangerous: false`, `mutating: true`, minTier 2, `autonomous: true`) and
-re-checks the same gates in the same order (usage exit 1; AUTONOMOUS-1, depth
-cap, code-tier lead, council budget exit 2, nothing spawned). One council runs
+re-checks the same gates in the same order (usage exit 1; AUTONOMOUS-1,
+top-level lead only (depth 0: a delegated worker is refused), code-tier lead,
+council budget exit 2, nothing spawned). One council runs
 at a time and at most 2 per lead run. Its voices are delegate-core workers at
 read tier by default (tool at most), non-ADMIN, with an empty allowlist. It
 returns the voice count, tier, depth, state, decision, phase tallies and a

@@ -9,6 +9,7 @@ artifact: tasks
 - [x] `runCouncil`: propose, critique, decide; at most 2 voices at once; per-voice and council time caps; lead abort
 - [x] Delegate core: additive `resultText` on `DelegateChildOutcome`
 - [x] `council` plugin (dangerous=false, mutating=true, minTier=2, autonomous=true) with run-time gate re-checks and a council budget
+- [x] Top-level lead only: refuse `council` at delegation depth other than 0 (a delegated worker) before anything spawns, so voices never outlive a worker its lead stops (review fix)
 - [x] Register `council` in `loadAutonomousPlugins`
 - [x] Document `council` in the fledge.toml autonomous comment
 - [x] Tests: in-process runner for the core; `.ts` fake bin for plugin argv/env, refusals, clamp, failed chair, time cap, limiter, ROLES-CHAT refusal and the tool loop

@@ -18,6 +18,7 @@ import {
   buildCritiqueText,
   buildDecideText,
   buildProposeText,
+  canConveneCouncilAtDepth,
   capCouncilText,
   formatCouncilPhases,
   parseCouncilArgs,
@@ -444,7 +445,8 @@ describe("council plugin (REQ-plugins-118)", () => {
     const on = project(ENABLED);
     const cases: [PluginHandlerArgs, NodeJS.ProcessEnv, number, string][] = [
       [ctx({ cwd: project() }), BASE_ENV, 2, "autonomous mode is off"],
-      [ctx({ cwd: on }), { ...BASE_ENV, [DELEGATE_DEPTH_ENV]: "2" }, 2, "depth cap"],
+      [ctx({ cwd: on }), { ...BASE_ENV, [DELEGATE_DEPTH_ENV]: "2" }, 2, "top-level lead"],
+      [ctx({ cwd: on }), { ...BASE_ENV, [DELEGATE_DEPTH_ENV]: "1" }, 2, "top-level lead"],
       [ctx({ cwd: on, tier: "tool" }), BASE_ENV, 2, "needs the code tier"],
       [ctx({ cwd: on, tier: undefined }), BASE_ENV, 2, "needs the code tier"],
       [ctx({ cwd: on, args: [] }), BASE_ENV, 1, "missing question"],
@@ -461,6 +463,24 @@ describe("council plugin (REQ-plugins-118)", () => {
     expect(r.exitCode).toBe(2);
     expect(r.error).toContain("council limit reached");
     expect(Object.keys(callsOf(dir))).toHaveLength(0);
+  });
+
+  test("a delegated worker (depth 1) is refused before any voice spawns (SAFE-9)", async () => {
+    expect(canConveneCouncilAtDepth(0)).toBe(true);
+    for (const d of [1, 2, 3, -1, 0.5]) expect(canConveneCouncilAtDepth(d)).toBe(false);
+    const { bin, dir } = fakeBin();
+    const limiter = createDelegateLimiter({ maxConcurrent: 1, maxTotal: 2 });
+    const r = await createCouncilCommand({
+      bin,
+      env: { ...BASE_ENV, [DELEGATE_DEPTH_ENV]: "1" },
+      limiter,
+    }).handler(ctx({ cwd: project(ENABLED) }));
+    expect(r).toMatchObject({ ok: false, exitCode: 2 });
+    expect(r.error).toContain("councils run only from a top-level lead");
+    expect(r.error).toContain("depth 1");
+    expect(Object.keys(callsOf(dir))).toHaveLength(0);
+    // The refusal spends no council budget.
+    expect(limiter.started).toBe(0);
   });
 
   test("voices are delegated read-tier, non-ADMIN workers with an empty allowlist and stripped env", async () => {
