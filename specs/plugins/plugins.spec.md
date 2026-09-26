@@ -82,4 +82,4 @@ register. No new dangerous commands; SAFE-1 non-interactive deny unchanged.
 ## Change Log
 
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
-| 2026-09-26 | cover-plugin-reload-after-clearregistry-helpers-for-hear-13-fixture-suite: Cover plugin reload-after-clearRegistry helpers for HEAR #13 fixture suite |
+
