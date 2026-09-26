@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-cli-help-text-for-hear-slash-discord-4-bridge-line-optional-discord-guild-id",
+  "slug": "cover-cli-help-text-for-hear-slash-discord-4-bridge-line-optional-discord-guild-id",
+  "title": "Cover CLI help text for HEAR slash (DISCORD-4 bridge line + optional DISCORD_GUILD_ID)",
+  "description": "Cover CLI help text for HEAR slash (DISCORD-4 bridge line + optional DISCORD_GUILD_ID)",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "a19c1df2339268e66fefa91b604d91707cfa6739",
+  "created_at": 1790440330,
+  "updated_at": 1790440581,
+  "affected_specs": [],
+  "affected_paths": [
+    "src/cli.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Help-only usage/env lines for DISCORD-4 slash mention and optional DISCORD_GUILD_ID; no cli module acceptance criteria change",
+  "acceptance_criteria": [
+    "CLI --help mentions DISCORD-1/2/3/4/5 for discord bridge and documents optional DISCORD_GUILD_ID for guild slash registration; no cli module AC change"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/cli.ts",
+      "module": "cli",
+      "actor": "corvid-agent",
+      "reason": "src/cli.ts is owned by cli module; assign canonical owner for help-only cover",
+      "timestamp": 1790440498
+    }
+  ],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

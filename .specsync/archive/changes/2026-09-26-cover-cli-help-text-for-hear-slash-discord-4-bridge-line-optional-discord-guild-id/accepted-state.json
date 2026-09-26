@@ -7,11 +7,11 @@
   "title": "Cover CLI help text for HEAR slash (DISCORD-4 bridge line + optional DISCORD_GUILD_ID)",
   "description": "Cover CLI help text for HEAR slash (DISCORD-4 bridge line + optional DISCORD_GUILD_ID)",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "a19c1df2339268e66fefa91b604d91707cfa6739",
   "created_at": 1790440330,
-  "updated_at": 1790440546,
+  "updated_at": 1790440577,
   "affected_specs": [],
   "affected_paths": [
     "src/cli.ts"

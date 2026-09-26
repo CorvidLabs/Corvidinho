@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-cli-help-text-for-hear-slash-discord-4-bridge-line-optional-discord-guild-id",
+  "implementation_commit": "b9c1eb61800bb1dc7795fdfaa30146d229205cc3",
+  "implementation_tree": "4794896ef13a33332b58de4a46a8e6f81437dcbd",
+  "contract_digest": "65f299a896c1ce14a9ccae7e305c67ed055a441a06c96829a70c38a72313e0ae",
+  "workspace_digest": "5691c07dc74979778921e3d055215855a8da948845e3723803747e20d3f3e9d6",
+  "closing_digest": "672e83cdf7ab87f80ef5cac482a0fac67e4766aee2b90f18e8a598478490517f",
+  "review_digest": "2c8a97d767dbeccbdece0a47bfe17353b8c19f8c539e7979fac6f66acfc5780b",
+  "finalization_digest": "a6a1b00d4720d48dcba5c34c2b5ee43ca1f13138608913cf5a0d8a745cf08228",
+  "timestamp": 1790440577
+}

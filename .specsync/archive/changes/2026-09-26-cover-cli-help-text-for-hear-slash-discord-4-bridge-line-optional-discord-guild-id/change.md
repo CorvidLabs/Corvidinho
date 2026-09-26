@@ -1,6 +1,6 @@
 ---
 id: cover-cli-help-text-for-hear-slash-discord-4-bridge-line-optional-discord-guild-id
-state: verifying
+state: archived
 type: documentation
 base_commit: a19c1df2339268e66fefa91b604d91707cfa6739
 ---
