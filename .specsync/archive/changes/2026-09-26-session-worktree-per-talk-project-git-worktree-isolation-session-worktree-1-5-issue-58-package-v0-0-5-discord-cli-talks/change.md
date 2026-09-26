@@ -1,6 +1,6 @@
 ---
 id: session-worktree-per-talk-project-git-worktree-isolation-session-worktree-1-5-issue-58-package-v0-0-5-discord-cli-talks
-state: verifying
+state: archived
 type: feature
 base_commit: 6cb5f18ab909f4bc5e6529b8c29df121e0833c4e
 ---

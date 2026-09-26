@@ -7,11 +7,11 @@
   "title": "SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5: Discord/CLI talks and scheduled runs get isolated git worktrees so cwd/branch do not bleed; steal corvid-agent worktree lib Linux headless; soft TTL still applies; end/abandon parks or cleans; explicit project per talk/schedule never silent mid-conversation switch; wire session/work spawn + schedule ticks; fixture tests; SpecSync+fledge verify",
   "description": "SESSION-WORKTREE per-talk/project git worktree isolation (SESSION-WORKTREE-1..5 / issue #58) + package v0.0.5: Discord/CLI talks and scheduled runs get isolated git worktrees so cwd/branch do not bleed; steal corvid-agent worktree lib Linux headless; soft TTL still applies; end/abandon parks or cleans; explicit project per talk/schedule never silent mid-conversation switch; wire session/work spawn + schedule ticks; fixture tests; SpecSync+fledge verify",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "6cb5f18ab909f4bc5e6529b8c29df121e0833c4e",
   "created_at": 1790448736,
-  "updated_at": 1790449056,
+  "updated_at": 1790449076,
   "affected_specs": [
     "discord"
   ],
