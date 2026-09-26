@@ -11,4 +11,4 @@ artifact: tasks
 - [x] Fixture tests (SAFE-1 / SAFE-3 / happy)
 - [x] Version 0.0.9 + CHANGELOG + STATUS
 - [x] WATCH reliability HI draft (docs only)
-- [ ] Verify: bun test + fledge verify
+- [x] Verify: bun test + fledge verify
