@@ -1,6 +1,6 @@
 ---
 id: files-path-clamp-follows-dangling-symlinks-by-hand-so-files-write-cannot-escape-the-project-root-or-create-safe-2
-state: draft
+state: implementing
 type: bug_fix
 base_commit: cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f
 ---

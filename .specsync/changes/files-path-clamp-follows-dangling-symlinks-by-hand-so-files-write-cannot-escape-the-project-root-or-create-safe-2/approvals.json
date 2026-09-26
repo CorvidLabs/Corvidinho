@@ -1,4 +1,40 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790461152,
+      "digest": "f703e91675d6dcfeb19154c30fd7ec9bff7ecc2844f65f849e87ce02376ad8f9",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "files-path-clamp-follows-dangling-symlinks-by-hand-so-files-write-cannot-escape-the-project-root-or-create-safe-2",
+        "title": "Files path clamp follows dangling symlinks by hand so files-write cannot escape the project root or create SAFE-2 protected files through a link whose target does not exist yet",
+        "description": "Files path clamp follows dangling symlinks by hand so files-write cannot escape the project root or create SAFE-2 protected files through a link whose target does not exist yet",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/files/resolvePath.ts",
+          "tests/files.dangling-symlink.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-write through a dangling symlink whose target is outside the project root is refused with a symlink-escape error and the target is not created; through a dangling symlink to a missing SAFE-2 path (.env, specs/*.spec.md) it is refused with SAFE-2 and the file is not created; a dangling directory link cannot carry a nested write outside the root; a symlink loop is refused; a dangling link to a missing file inside the root still writes that in-root file"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "179b3cb76e7bd71d13c7cc377a45d217bcf93c610d161b5c9bbb6202aed99df9"
+      }
+    }
+  ],
   "reopenings": []
 }
