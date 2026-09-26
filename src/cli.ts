@@ -33,11 +33,15 @@ Usage:
                                     Run a typed plugin command
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
 
-Env:
+Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE  same as --non-interactive
   CORVIDINHO_ALLOWLIST                                  comma-separated dangerous command names
-  CORVIDINHO_GITHUB_DENY_REPOS                          owner/repo or owner/* never touched (GITHUB-6)
-  CORVIDINHO_GITHUB_ALLOW_REPOS                         if set, only these repos are allowed
+  CORVIDINHO_ALLOWLIST_FILE                             path to allowlist.toml|json on the bot VM
+  CORVIDINHO_GITHUB_ALLOW_REPOS / _ORGS / _USERS        default-deny; deny wins (GITHUB-6)
+  CORVIDINHO_GITHUB_DENY_REPOS / _ORGS / _USERS         always refuse these
+  CORVIDINHO_DISCORD_ALLOW_CHANNELS / _ROLES / _USERS   stub for HEAR; empty = refuse posts/listens
+  CORVIDINHO_DISCORD_DENY_CHANNELS / _ROLES / _USERS    deny overrides
+  (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
   - HI-first; do not invent ACCESS/bounty/MainNet criteria

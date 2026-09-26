@@ -56,6 +56,22 @@ Do not invent ACCESS/bounty/MainNet surfaces.
 
 See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, secrets out of repo.
 
+
+## Allowlists (bot VM)
+
+Corvidinho is **default-deny**: empty/missing allowlists refuse targeted GitHub plugin runs and Discord listen/post checks. Deny always wins. Do not copy Merlin’s empty-permissions → BASIC allow-by-default.
+
+On the bot VM:
+
+```bash
+mkdir -p ~/.config/corvidinho
+# edit ~/.config/corvidinho/allowlist.toml  (or .json)
+# or: export CORVIDINHO_ALLOWLIST_FILE=/path/to/allowlist.toml
+# env overlays: CORVIDINHO_GITHUB_ALLOW_REPOS, CORVIDINHO_DISCORD_ALLOW_CHANNELS, …
+```
+
+See [`STATUS.md`](STATUS.md) for the full shape. AlgoChat / wallet ACT is **deferred** until a wallet allowlist exists (`hi/allow.md` WALLET-*). HEAR (#5) stays blocked until Discord allowlist wiring lands.
+
 ## License
 
 MIT — CorvidLabs.

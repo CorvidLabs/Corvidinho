@@ -1,0 +1,96 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790437653,
+      "digest": "bdb7b7d25829240b20c569726c06dd199d2fd620ebfb3263e8a0714fcc499a60",
+      "note": "Default-deny allowlists; empty≠Merlin BASIC; wallet deferred; Discord stub for HEAR",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm",
+        "title": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
+        "description": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "README.md",
+          "STATUS.md",
+          "docs/",
+          "hi/",
+          "plugins/",
+          "src/",
+          "tests/"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Empty/missing allowlist refuses targeted GH plugin runs and Discord channel posts/listens (default-deny); allow match passes; deny override wins; file+env load (CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml|json); Discord stub API for HEAR; HI allow.md ALLOW/WALLET captured; STATUS/README document VM config; wallets deferred (no wallet code); bun test + fledge verify + Spec Sync CI green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "619e7e636cfd4d36894f1d56eb02d55b8c7d2abc74c62f4da61f0b03889e942f",
+        "plugins": "7d43d6dea802e9342656599cdc5bf10a0a4e4d487918419027766fce5b798822"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790437655,
+      "digest": "bdb7b7d25829240b20c569726c06dd199d2fd620ebfb3263e8a0714fcc499a60",
+      "note": "Default-deny allowlists; empty≠Merlin BASIC; wallet deferred; Discord stub for HEAR",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm",
+        "title": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
+        "description": "SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "README.md",
+          "STATUS.md",
+          "docs/",
+          "hi/",
+          "plugins/",
+          "src/",
+          "tests/"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Empty/missing allowlist refuses targeted GH plugin runs and Discord channel posts/listens (default-deny); allow match passes; deny override wins; file+env load (CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml|json); Discord stub API for HEAR; HI allow.md ALLOW/WALLET captured; STATUS/README document VM config; wallets deferred (no wallet code); bun test + fledge verify + Spec Sync CI green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "619e7e636cfd4d36894f1d56eb02d55b8c7d2abc74c62f4da61f0b03889e942f",
+        "plugins": "7d43d6dea802e9342656599cdc5bf10a0a4e4d487918419027766fce5b798822"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790437708,
+      "digest": "804f11cccc1a621bfd85f9c8542360d476ebd0b7368002f7aaea50c56849fbe9",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm",
+  "implementation_commit": "0e46bfc058e622f37e96119cf0ed7ff207be404b",
+  "implementation_tree": "48e44c6065e5b8c3eaf47739c988dcf4c7f16ccf",
+  "contract_digest": "bdb7b7d25829240b20c569726c06dd199d2fd620ebfb3263e8a0714fcc499a60",
+  "workspace_digest": "3de39de0bdd5572e2e3c1391afe0dea3f825d4075cd9ec9c54fc87fb5f5aabdb",
+  "closing_digest": "804f11cccc1a621bfd85f9c8542360d476ebd0b7368002f7aaea50c56849fbe9",
+  "review_digest": "88a30ee1618bce776e11350a37a65d62ddb7c165bfee507106cefe7e2706ade9",
+  "finalization_digest": "9dd1427c8f2618bb9470b306378afc8a4481b92763dc0e617cc7f05255bd6636",
+  "timestamp": 1790437708
+}
