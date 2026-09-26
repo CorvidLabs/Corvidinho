@@ -3,7 +3,7 @@
  * Runtime still enforces SAFE-1 dangerous deny via runPlugin.
  */
 
-import { list } from "../plugins/registry.ts";
+import { get, list } from "../plugins/registry.ts";
 import type { CapabilityTier } from "./tier.ts";
 import { tierAllowsPlugin } from "./tier.ts";
 
@@ -29,17 +29,24 @@ export type BuildToolsOpts = {
   tier: CapabilityTier;
   /** When false (default), omit dangerous plugins from the catalog entirely. */
   includeDangerous?: boolean;
+  /**
+   * SAFE-9: when false (default), omit autonomous extras (e.g. `delegate`)
+   * — offered only to sessions allowed autonomous tools (AUTONOMOUS-1).
+   */
+  autonomous?: boolean;
 };
 
 /**
  * Build the tools array for chat/completions.
- * Read tier → []. Dangerous plugins omitted unless includeDangerous.
+ * Read tier → []. Dangerous plugins omitted unless includeDangerous;
+ * autonomous extras omitted unless `autonomous` (SAFE-9).
  */
 export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
   const includeDangerous = Boolean(opts.includeDangerous);
   const out: OpenAiToolDef[] = [];
   for (const entry of list()) {
     if (entry.dangerous && !includeDangerous) continue;
+    if (!opts.autonomous && get(entry.name)?.autonomous) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;
     const argvDesc = entry.name.startsWith("memory-")
       ? 'CLI-style argv after the command. memory-store e.g. ["--category","person","--key","identity","Leif is the owner"]; memory-recall e.g. ["--category","person"] or ["--query","name"]; forget/override need --id and --confirm.'

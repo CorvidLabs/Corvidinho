@@ -3,6 +3,8 @@
  * Danger and minTier are declared on every command; runtime enforces them (SAFE-1).
  */
 
+import type { CapabilityTier } from "../agent/tier.ts";
+
 export type PluginHandlerArgs = {
   /** Args after the command name (and after `--` when invoked via CLI). */
   args: string[];
@@ -10,6 +12,10 @@ export type PluginHandlerArgs = {
   json: boolean;
   nonInteractive: boolean;
   allowlist: ReadonlySet<string>;
+  /** Capability tier of the calling run, when known (tool loop). */
+  tier?: CapabilityTier;
+  /** Aborts with the calling run (AGENT-3), when the caller has one. */
+  signal?: AbortSignal;
 };
 
 export type PluginHandlerResult = {
@@ -29,6 +35,11 @@ export type PluginCommand = {
   dangerous?: boolean;
   /** Minimum autonomy/trust tier required (PLUGIN-2). Default 0. */
   minTier?: number;
+  /**
+   * Autonomous extra (PLUGIN-5): left out of the agent tool catalog unless
+   * the session is allowed autonomous tools (AUTONOMOUS-1 / SAFE-9).
+   */
+  autonomous?: boolean;
   handler: (ctx: PluginHandlerArgs) => Promise<PluginHandlerResult>;
 };
 

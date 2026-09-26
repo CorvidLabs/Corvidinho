@@ -5,6 +5,7 @@
  * Secrets stay in env — never commit.
  */
 
+import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { runPlugin } from "../plugins/run.ts";
@@ -80,6 +81,11 @@ export type CreateTaskExecuteOpts = {
   maxToolRounds?: number;
   /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
   includeDangerous?: boolean;
+  /**
+   * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
+   * autonomous mode (AUTONOMOUS-1) and the delegation depth cap is not reached.
+   */
+  autonomous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
 };
@@ -176,7 +182,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    const tools = buildOpenAiTools({ tier, includeDangerous });
+    const autonomous =
+      opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
+    const tools = buildOpenAiTools({ tier, includeDangerous, autonomous });
     return runToolLoop({
       llm: { ...llm, tier },
       fetchImpl,
@@ -328,6 +336,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               json: true,
               nonInteractive,
               allowlist,
+              tier: llm.tier,
+              signal,
             })
           : {
               ok: false,
