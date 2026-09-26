@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "3ee5b4f6d8b6966b0e041222c15db0ad25f53ce9",
+      "contract_digest": "5e1f5b56ff9d116af13ae69fe7a583550e356467e7d559bf8ad348a1cef4d57e",
+      "execution_digest": "0423a95858a0a8b7da6595fa1a3e24456acaec557b3958ecce279cd5d38e7be5",
+      "workspace_digest": "8ca9af99628c8542a95791490dddf87fc65b20535f4308c5c7bb61b90c9e60ec",
+      "timestamp": 1790444081
+    }
+  ]
+}

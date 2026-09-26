@@ -7,11 +7,11 @@
   "title": "Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands",
   "description": "Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "4ef180b31cf719ac1e1661d209b37360781dd026",
   "created_at": 1790443783,
-  "updated_at": 1790444046,
+  "updated_at": 1790444084,
   "affected_specs": [
     "discord",
     "cli"

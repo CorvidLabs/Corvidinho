@@ -1,6 +1,6 @@
 ---
 id: bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral
-state: verifying
+state: archived
 type: feature
 base_commit: 4ef180b31cf719ac1e1661d209b37360781dd026
 ---
