@@ -7,7 +7,7 @@
   "title": "Shell-exec plugin with SAFE-3 project-root cwd clamp (PLUGIN-1/2 SAFE-3 issue #83) package 0.0.9",
   "description": "shell-exec plugin with SAFE-3 project-root cwd clamp (PLUGIN-1/2 SAFE-3 issue #83) package 0.0.9",
   "kind": "feature",
-  "state": "implementing",
+  "state": "verifying",
   "canonical_applied": true,
   "base_commit": "ad431a9436108288cbe4c938d3e865da957458be",
   "created_at": 1790452832,
