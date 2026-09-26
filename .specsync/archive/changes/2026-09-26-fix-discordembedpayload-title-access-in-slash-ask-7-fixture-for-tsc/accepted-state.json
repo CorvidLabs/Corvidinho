@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "fix-discordembedpayload-title-access-in-slash-ask-7-fixture-for-tsc",
+  "slug": "fix-discordembedpayload-title-access-in-slash-ask-7-fixture-for-tsc",
+  "title": "Fix DiscordEmbedPayload title access in slash ASK-7 fixture for tsc",
+  "description": "Fix DiscordEmbedPayload title access in slash ASK-7 fixture for tsc",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "d40400015fdcb4ae5b7ccfc19a2a8fc7b20a7cff",
+  "created_at": 1790466756,
+  "updated_at": 1790466771,
+  "affected_specs": [],
+  "affected_paths": [
+    "tests/discord.slash-ask7.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Typecheck-only fix in existing slash ASK-7 fixture; no REQ delta",
+  "acceptance_criteria": [
+    "tsc --noEmit clean; slash-ask7 tests still pass without referencing DiscordEmbedPayload.title."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

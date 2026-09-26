@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790466599,
+      "digest": "0156d668eab44cd8537901de457b6e6ac4fd1cf475956ebf72d65dfa191551ce",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "bump-version-fixtures-to-0-0-25-for-slash-ask-7-package-bump",
+        "title": "Bump version fixtures to 0.0.25 for slash ASK-7 package bump",
+        "description": "Bump version fixtures to 0.0.25 for slash ASK-7 package bump",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Package bump to 0.0.25 already HI/REQ covered by slash ASK-7 archive; only version fixture asserts need a covering change for SpecSync audit",
+        "acceptance_criteria": [
+          "tests/version.test.ts and tests/update-helpers.test.ts assert package 0.0.25 and extract CHANGELOG 0.0.25 section with /session /work ASK-7 bullets; bun test both files green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790466611,
+      "digest": "8355b86ba04644aa65b922aee7f45fe29d12c2182a7f2cd4c228da9e08a1ffd1",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -9,7 +9,7 @@
 
 import { lstatSync } from "node:fs";
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
-import { loadAllowlist } from "../../src/allowlist/load.ts";
+import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { checkRepoGate } from "../../src/plugins/githubDeny.ts";
 import type {
   PluginCommand,
@@ -629,7 +629,10 @@ export const gitCommands: PluginCommand[] = [
         if (urls.code !== 0 || pushUrls.length === 0) return fail(`unknown remote: ${remote}`);
 
         // GITHUB-6: every push URL's OWNER/REPO must pass the repo gate (file + env; deny wins).
-        const cfg = await loadAllowlist({ env: process.env });
+        // A malformed / unreadable allowlist file refuses (fail closed), never env-only.
+        const loaded = await tryLoadAllowlist({ env: process.env });
+        if (!loaded.ok) return fail(`GITHUB-6: refused — ${loaded.error}`, 3);
+        const cfg = loaded.config;
         const repos: string[] = [];
         for (const url of pushUrls) {
           const slug = repoSlugFromRemoteUrl(url);

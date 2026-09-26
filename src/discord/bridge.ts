@@ -13,7 +13,7 @@
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
- * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse thinking↔stub↔answer;
+ * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * SESSION-MULTI: per-user sessions.
  */
 
@@ -780,15 +780,17 @@ export async function startBridge(
         return;
       }
 
-      // pick
+      // pick — claim immediately so a concurrent re-press cannot double-resume.
       const label =
         findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
       const prior = pending.question;
       store.setPendingAsk(session, null);
+      // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
       await interaction.reply({
         content: `Got it — **${label}**. Working on it…`,
         ephemeral: true,
         update: true,
+        components: [],
       });
 
       const channelId = session.threadId ?? session.channelId;
@@ -815,6 +817,11 @@ export async function startBridge(
         const bound = await store.bindWorktree(session);
         if (!bound.ok) {
           await thinking.fail(`❌ worktree: ${bound.error}`);
+          try {
+            await interaction.deleteReply?.();
+          } catch {
+            /* ignore */
+          }
           return;
         }
       }
@@ -865,6 +872,11 @@ export async function startBridge(
         await thinking.fail(
           `❌ ${err instanceof Error ? err.message : "agent error"}`,
         );
+        try {
+          await interaction.deleteReply?.();
+        } catch {
+          /* ignore */
+        }
         throw err;
       }
 
@@ -982,6 +994,14 @@ export async function startBridge(
         }
       } else {
         thinking.dispose();
+      }
+
+      // DISCORD-ASK-8 — drop the ephemeral "Got it… Working…" once resume finishes
+      // so buttons cannot linger and the dismissible half-done UI goes away.
+      try {
+        await interaction.deleteReply?.();
+      } catch {
+        /* already gone or gateway lacks deleteReply */
       }
     },
     onSlash: async (interaction) => {

@@ -119,6 +119,16 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.25", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.25`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ASK-7");
+    expect(r.stdout).toContain("/session");
+    expect(r.stdout).toContain("/work");
+  });
+
   test("extract_changelog_section finds 0.0.24", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.24`,
@@ -273,10 +283,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.24", () => {
+  test("package.json is 0.0.25", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.24");
+    expect(pkg.version).toBe("0.0.25");
   });
 });
