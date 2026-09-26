@@ -1,32 +1,13 @@
 ---
 module: watch
-version: 10
-status: draft
-files:
-  - src/watch/types.ts
-  - src/watch/config.ts
-  - src/watch/dedup.ts
-  - src/watch/searcher.ts
-  - src/watch/router.ts
-  - src/watch/session-store.ts
-  - src/watch/agent-client.ts
-  - src/watch/poller.ts
-  - src/watch/ack.ts
-  - src/watch/summary.ts
-  - src/watch/spawn-log.ts
-  - src/watch/rate-limit.ts
-  - src/watch/index.ts
-
-db_tables: []
-depends_on:
-  - plugins
-  - agent
-  - cli
+change: watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging
 ---
 
-# Watch
+# Delta — watch (WATCH-RELIABILITY-1..3)
 
-## Purpose
+## Modified
+
+### SPEC SECTION Purpose
 
 Thin GitHub WATCH poll ingress: Octokit/fixture search → allowlist gate →
 session stub for mention / issue_comment / review_request / assignment on
@@ -38,7 +19,7 @@ own mentions in search, document org-search pagination bury risk; plus
 WATCH-RELIABILITY-1..3 — post-run summary after successful auto-ack, durable
 spawn outcome logging, and GitHub 403 rate-limit backoff.
 
-## Public API
+### SPEC SECTION Public API
 
 loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
@@ -49,7 +30,7 @@ SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
 rate-limit helpers (parseGithubRateLimit, GithubRateLimitError,
 computeRateLimitBackoffMs).
 
-## Invariants
+### SPEC SECTION Invariants
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
 allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
@@ -63,7 +44,7 @@ WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
 `CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
 user (REQ-watch-008).
 
-## Behavioral Examples
+### SPEC SECTION Behavioral Examples
 
 Allowlisted mention or assignment→start_session; same repo#number→continue_session;
 non-allowlisted user/repo→refuse quiet; duplicate id→skip; missing token /
@@ -73,16 +54,12 @@ own-username comment omitted from events; after successful ack + spawn finish,
 summary comment once per event id; spawn start/outcome log + JSONL row; 403
 rate-limit schedules backoff and skips tight re-poll.
 
-## Error Cases
+### SPEC SECTION Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
 (user/repo); already processed; GitHub 403 rate-limit backoff.
 
-## Dependencies
-
-src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify.
-
-## Change Log
+### SPEC SECTION Change Log
 
 WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/issue_comment → allowlist → session stub; webhook deferred.
 
@@ -92,5 +69,33 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-26 | github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create: GitHub write plugins + WATCH assignment ingress |
 | 2026-09-26 | watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document: poll logging + error catch, auto-ack, ignore own mentions, pagination bury docs (REQ-watch-007) |
 | 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |
-| 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
 | 2026-09-26 | watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging: WATCH-RELIABILITY-1..3 — post-run summary, spawn outcome JSONL, 403 rate-limit backoff; package 0.0.10 |
+
+## Added
+
+### REQUIREMENT REQ-watch-009
+
+The system SHALL post a short agent summary comment on the same GitHub thread when the agent run finishes (success or failure), after a successful auto-ack on issue_comment or issues start_session or continue_session, at most once per event id, with Made with Corvidinho attribution (WATCH-RELIABILITY-1).
+
+Acceptance Criteria
+- Summary skipped when auto-ack did not succeed or event already summarized.
+- Summary posted for both ok and non-zero exit runs.
+- Fixture tests need no live GitHub token.
+
+### REQUIREMENT REQ-watch-010
+
+The system SHALL persist spawn outcome logging (start, exit code or error class, duration_ms) via a structured watch spawn log line and a durable JSONL store under the Corvidinho data dir (override CORVIDINHO_WATCH_SPAWN_LOG) readable without Discord (WATCH-RELIABILITY-2).
+
+Acceptance Criteria
+- Start and outcome log lines emitted per spawn.
+- JSONL append contains eventId, exitCode, errorClass, durationMs.
+- Fixture or temp-dir tests cover store without live Discord.
+
+### REQUIREMENT REQ-watch-011
+
+The system SHALL back off on GitHub 403 rate-limit (or 429) using Retry-After or x-ratelimit-reset headers, else a documented default of 60s, before the next poll cycle; SHALL NOT tight-loop; SHALL emit a clear watch github rate-limit backoff log line (WATCH-RELIABILITY-3).
+
+Acceptance Criteria
+- Retry-After seconds preferred; else reset; else 60s default.
+- While backoff outstanding, pollOnce skips fetch.
+- Plain 403 without rate-limit signal does not trigger backoff.

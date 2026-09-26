@@ -7,6 +7,7 @@
  */
 
 import { Octokit } from "@octokit/rest";
+import { asGithubRateLimitError } from "./rate-limit.ts";
 import type { DetectedEvent, DetectedEventType } from "./types.ts";
 
 export function containsMention(body: string, username: string): boolean {
@@ -122,65 +123,84 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
   };
 }
 
+async function withRateLimitRethrow<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const rl = asGithubRateLimitError(err);
+    if (rl) throw rl;
+    throw err;
+  }
+}
+
 export function createOctokitSearchClient(token: string): SearchClient {
   const octokit = new Octokit({ auth: token, userAgent: "corvidinho-watch" });
   return {
     async searchInvolving(repoQualifier, username, sinceDate) {
-      const day = sinceDate.split("T")[0] ?? sinceDate;
-      const q = repoQualifier.endsWith("/*")
-        ? `org:${repoQualifier.slice(0, -2)} involves:${username} updated:>=${day}`
-        : `repo:${repoQualifier} involves:${username} updated:>=${day}`;
-      const res = await octokit.rest.search.issuesAndPullRequests({
-        q,
-        sort: "updated",
-        order: "desc",
-        per_page: 100,
-      });
-      return (res.data.items ?? []).map((it) => {
-        const htmlUrl = it.html_url ?? "";
-        const repo =
-          htmlUrl.match(/github\.com\/([^/]+\/[^/]+)\//)?.[1] ??
-          (repoQualifier.endsWith("/*") ? "unknown/unknown" : repoQualifier);
-        return {
-          number: it.number,
-          title: it.title ?? "",
-          htmlUrl,
-          body: it.body ?? "",
-          user: it.user?.login ?? "unknown",
-          createdAt: it.created_at,
-          updatedAt: it.updated_at,
-          isPullRequest: !!it.pull_request,
-          repo,
-          assignees: (it.assignees ?? [])
-            .map((a) => a?.login)
-            .filter((x): x is string => !!x),
-        };
+      return withRateLimitRethrow(async () => {
+        const day = sinceDate.split("T")[0] ?? sinceDate;
+        const q = repoQualifier.endsWith("/*")
+          ? `org:${repoQualifier.slice(0, -2)} involves:${username} updated:>=${day}`
+          : `repo:${repoQualifier} involves:${username} updated:>=${day}`;
+        const res = await octokit.rest.search.issuesAndPullRequests({
+          q,
+          sort: "updated",
+          order: "desc",
+          per_page: 100,
+        });
+        return (res.data.items ?? []).map((it) => {
+          const htmlUrl = it.html_url ?? "";
+          const repo =
+            htmlUrl.match(/github\.com\/([^/]+\/[^/]+)\//)?.[1] ??
+            (repoQualifier.endsWith("/*") ? "unknown/unknown" : repoQualifier);
+          return {
+            number: it.number,
+            title: it.title ?? "",
+            htmlUrl,
+            body: it.body ?? "",
+            user: it.user?.login ?? "unknown",
+            createdAt: it.created_at,
+            updatedAt: it.updated_at,
+            isPullRequest: !!it.pull_request,
+            repo,
+            assignees: (it.assignees ?? [])
+              .map((a) => a?.login)
+              .filter((x): x is string => !!x),
+          };
+        });
       });
     },
     async listComments(owner, repo, number) {
-      const res = await octokit.rest.issues.listComments({
-        owner,
-        repo,
-        issue_number: number,
-        per_page: 50,
+      return withRateLimitRethrow(async () => {
+        const res = await octokit.rest.issues.listComments({
+          owner,
+          repo,
+          issue_number: number,
+          per_page: 50,
+        });
+        return res.data.map((c) => ({
+          id: c.id,
+          body: c.body ?? "",
+          user: c.user?.login ?? "unknown",
+          htmlUrl: c.html_url,
+          createdAt: c.created_at,
+        }));
       });
-      return res.data.map((c) => ({
-        id: c.id,
-        body: c.body ?? "",
-        user: c.user?.login ?? "unknown",
-        htmlUrl: c.html_url,
-        createdAt: c.created_at,
-      }));
     },
     async listReviewRequests(owner, repo, number) {
       try {
-        const res = await octokit.rest.pulls.listRequestedReviewers({
-          owner,
-          repo,
-          pull_number: number,
+        return await withRateLimitRethrow(async () => {
+          const res = await octokit.rest.pulls.listRequestedReviewers({
+            owner,
+            repo,
+            pull_number: number,
+          });
+          return (res.data.users ?? []).map((u) => u.login);
         });
-        return (res.data.users ?? []).map((u) => u.login);
-      } catch {
+      } catch (err) {
+        // Non-rate-limit failures stay quiet (PR may not exist); rate-limit bubbles.
+        const rl = asGithubRateLimitError(err);
+        if (rl) throw rl;
         return [];
       }
     },
