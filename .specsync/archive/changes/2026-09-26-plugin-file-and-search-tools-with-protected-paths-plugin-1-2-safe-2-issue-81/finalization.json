@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+  "implementation_commit": "844d9fe3a66db1103714269c2df6289353df4d2d",
+  "implementation_tree": "65be223fa8cf841cca0e3a2df6650376ebc52c08",
+  "contract_digest": "cfab5d1a3446f02dac78e7f02fa889f01a5b120240b0bdcea3bb3318d139c465",
+  "workspace_digest": "c280b5bad46a5e0856b6c572d7adf2f030bc0d3dd4f7eb5c7fe170cf446ef7c4",
+  "closing_digest": "74ee16e47da95a7453823438828eedccc70bf83976a4a29a95eb2acc7012067b",
+  "review_digest": "062847c6eca88cf005fed2630c8ad185c0b4ccb0139ddfd6ac6e2fadaa3cd38b",
+  "finalization_digest": "45acaebf537e2a3955f9888ae9791b570b2fb7c3b2b13522316a7779ae3c21ae",
+  "timestamp": 1790449670
+}

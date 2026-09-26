@@ -1,0 +1,143 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790449546,
+      "digest": "984abf2efea7faa58447550f75e5d479f8009268da843b2ef73b23e735c27648",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+        "title": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+        "description": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+        "kind": "feature",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/files",
+          "plugins/search",
+          "specs/plugins",
+          "src/plugins/builtins.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-read/write/edit/glob/list and search-grep registered as typed plugins (PLUGIN-1); write/edit/delete declare minTier=code and delete is dangerous (PLUGIN-2); write/edit/delete refuse protected infra paths env/git/fledge.toml/specs/keystores (SAFE-2); paths clamped to project cwd with symlink escape refuse; happy-path + SAFE-2 deny tests green; STATUS/CHANGELOG updated; wired into builtins for LLM tool loop"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "da03cfb3bd32618a488247dc660fd197c14033f654b47e7ad9bccaba846ce944"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790449578,
+      "digest": "cfab5d1a3446f02dac78e7f02fa889f01a5b120240b0bdcea3bb3318d139c465",
+      "note": "re-pin after adding cli 0.0.6 delta",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+        "title": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+        "description": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "plugins/files",
+          "plugins/search",
+          "specs/cli",
+          "specs/plugins",
+          "src/plugins/builtins.ts",
+          "tests/files.plugins.test.ts",
+          "tests/search.plugins.test.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-read/write/edit/glob/list and search-grep registered as typed plugins (PLUGIN-1); write/edit/delete declare minTier=code and delete is dangerous (PLUGIN-2); write/edit/delete refuse protected infra paths env/git/fledge.toml/specs/keystores (SAFE-2); paths clamped to project cwd with symlink escape refuse; happy-path + SAFE-2 deny tests green; STATUS/CHANGELOG updated; wired into builtins for LLM tool loop"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "463ece9d14fc9014fde5c48c093433178fe77dd8da8c4b9c57905a26ea34ce10",
+        "plugins": "da03cfb3bd32618a488247dc660fd197c14033f654b47e7ad9bccaba846ce944"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790449664,
+      "digest": "cfab5d1a3446f02dac78e7f02fa889f01a5b120240b0bdcea3bb3318d139c465",
+      "note": "re-pin after Change Log depth fix",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+        "title": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+        "description": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "plugins/files",
+          "plugins/search",
+          "specs/cli",
+          "specs/plugins",
+          "src/plugins/builtins.ts",
+          "tests/files.plugins.test.ts",
+          "tests/search.plugins.test.ts",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-read/write/edit/glob/list and search-grep registered as typed plugins (PLUGIN-1); write/edit/delete declare minTier=code and delete is dangerous (PLUGIN-2); write/edit/delete refuse protected infra paths env/git/fledge.toml/specs/keystores (SAFE-2); paths clamped to project cwd with symlink escape refuse; happy-path + SAFE-2 deny tests green; STATUS/CHANGELOG updated; wired into builtins for LLM tool loop"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "463ece9d14fc9014fde5c48c093433178fe77dd8da8c4b9c57905a26ea34ce10",
+        "plugins": "3210e1a78dbbaa4399c1fadea6ad5ea40f3085816df882f68b8b1205fb5701e6"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790449670,
+      "digest": "74ee16e47da95a7453823438828eedccc70bf83976a4a29a95eb2acc7012067b",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790449807,
+      "digest": "e348f7c6fe9b50401565c7945ac3018f84b3690b8292384f896a00dacaa5a93b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive",
+        "title": "Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive",
+        "description": "Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "tests/plugins.list.smoke.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "tests/plugins.list.smoke.test.ts asserts files-read/files-write/search-grep appear in plugins list; covered for SpecSync change audit after #81 archive; no new module AC"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "7cb76a7f4d267b0961d1727305f354002f818ed084e002b9d2bf2c02d86c248d"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790449811,
+      "digest": "5d720739e36542c5727dc88cab9f7d50b84d320bd36885f8652b0c81d496c82c",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

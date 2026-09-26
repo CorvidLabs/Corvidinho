@@ -4,7 +4,7 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
 | HI | Captured under `hi/` (16 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
@@ -70,18 +70,20 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Discord presence version | → [#53](https://github.com/CorvidLabs/Corvidinho/pull/53) | DISCORD-12: Custom Status under bot name shows shared `vX.Y.Z` from `src/version.ts` on ClientReady/restart; fixture test; no slash/allowlist churn |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
+| Files/search plugins + SAFE-2 | #81 → (this PR) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |
+
 ### In flight / next
 
 | Order | Issue | Notes |
 |-------|-------|--------|
+| **Done (cut-order)** | [#81](https://github.com/CorvidLabs/Corvidinho/issues/81) PLUGIN files/search + SAFE-2 | Shipped this PR — typed file/search builtins; path clamp; protected-path refuse; package **0.0.6** |
+| **P0 next** | M3 remaining plugins (shell, git, …) | Next after #81; still HI-gated — do not invent criteria |
 | Done | Slash guild PUT=6 + global `[]` | Landed [#51](https://github.com/CorvidLabs/Corvidinho/pull/51) |
-| **P0 now** | Discord deny polish (DENY-1..3) + `docs/discord.md` | This PR — silent MessageCreate deny; admin ephemeral tip on slash |
-| Done | [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) SESSION-WORKTREE | Shipped this PR (worktree manager + Discord/schedule wire + schema v4); package **0.0.5** |
-| **P0 next** | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
-| Done | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY + [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) MEMORY-ACL | Shipped this PR (schema v3 + ACL + plugins); package 0.0.4 |
+| Done | Discord deny polish (DENY-1..3) + `docs/discord.md` | Landed prior |
+| Done | [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) SESSION-WORKTREE | Shipped (worktree manager + Discord/schedule wire + schema v4); package **0.0.5** |
+| Ops | [#19](https://github.com/CorvidLabs/Corvidinho/issues/19) GH go-live + [#48](https://github.com/CorvidLabs/Corvidinho/issues/48) writes | Token + username + allowlists + `github watch`; write plugins in [#52](https://github.com/CorvidLabs/Corvidinho/pull/52) — need `CORVIDINHO_ALLOWLIST` for ACT |
+| Done | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY + [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) MEMORY-ACL | Shipped (schema v3 + ACL + plugins); package 0.0.4 |
 | HI captured | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42)–[#44](https://github.com/CorvidLabs/Corvidinho/issues/44) IDENTITY/ADMIN/AUTONOMY | Criteria in `hi/`; impl still deferred |
-| HI captured | [#58](https://github.com/CorvidLabs/Corvidinho/issues/58) SESSION-WORKTREE | Criteria in `hi/`; deferred |
-| Later | #42 IDENTITY · #43 ADMIN · #44 AUTONOMY · #58 worktree · #36 CONTACTS | After MEMORY |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |
 

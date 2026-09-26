@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 36
+version: 41
 status: draft
 files:
   - src/cli.ts
@@ -76,8 +76,5 @@ Consumes agent module for runTask / loadAgentConfig.
 
 ## Change Log
 
-| 2026-09-26 | watch-reliability: STATUS notes WATCH poll logging + auto-ack + own-mention skip + pagination bury docs (REQ-watch-007); no CLI argv change |
-| 2026-09-26 | memory-sqlite-acl: package 0.0.4 with MEMORY ship (REQ-cli-011) |
-| 2026-09-26 | memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user: MEMORY SQLite + ACL (MEMORY-1..4 / MEMORY-ACL-1..5 / issues #41 #59): shared store schema v3 memories scoped by Discord owner_user_id; categories conversation/entity/person/personality; ADMIN-only forget/override including self-forget; empty admin deny-all; no slash commands; no on-chain; bump 0.0.4 |
-| 2026-09-26 | session-worktree: package 0.0.5 with SESSION-WORKTREE ship (REQ-cli-012) |
-| 2026-09-26 | cover-leftover-cli-package-0-0-5-req-cli-012-paths-for-specsync-audit-after-session-worktree-archive-no-module-ac: Cover leftover cli package 0.0.5 / REQ-cli-012 paths for SpecSync audit after SESSION-WORKTREE archive (no module AC change beyond version bump already shipped in #58 PR) |
+| 2026-09-26 | files-search-plugins-issue-81: package 0.0.6 with files/search + SAFE-2 (REQ-cli-013) |
+

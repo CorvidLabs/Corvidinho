@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "844d9fe3a66db1103714269c2df6289353df4d2d",
+  "contract_digest": "cfab5d1a3446f02dac78e7f02fa889f01a5b120240b0bdcea3bb3318d139c465",
+  "execution_digest": "5d5ce15c2cbc847aeef77eaeee761d727355c29b9d6894753bd4785483f2d217",
+  "workspace_digest": "c280b5bad46a5e0856b6c572d7adf2f030bc0d3dd4f7eb5c7fe170cf446ef7c4",
+  "timestamp": 1790449667
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+  "slug": "plugin-file-and-search-tools-with-protected-paths-plugin-1-2-safe-2-issue-81",
+  "title": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+  "description": "PLUGIN file and search tools with protected paths (PLUGIN-1,2 SAFE-2 issue #81)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "c20fc10318238468d1e6036a8f814759a31f7526",
+  "created_at": 1790449430,
+  "updated_at": 1790449670,
+  "affected_specs": [
+    "cli",
+    "plugins"
+  ],
+  "affected_paths": [
+    "CHANGELOG.md",
+    "STATUS.md",
+    "package.json",
+    "plugins/files",
+    "plugins/search",
+    "specs/cli",
+    "specs/plugins",
+    "src/plugins/builtins.ts",
+    "tests/files.plugins.test.ts",
+    "tests/search.plugins.test.ts",
+    "tests/update-helpers.test.ts",
+    "tests/version.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "files-read/write/edit/glob/list and search-grep registered as typed plugins (PLUGIN-1); write/edit/delete declare minTier=code and delete is dangerous (PLUGIN-2); write/edit/delete refuse protected infra paths env/git/fledge.toml/specs/keystores (SAFE-2); paths clamped to project cwd with symlink escape refuse; happy-path + SAFE-2 deny tests green; STATUS/CHANGELOG updated; wired into builtins for LLM tool loop"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "research",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
