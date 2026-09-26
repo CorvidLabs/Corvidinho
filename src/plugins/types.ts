@@ -1,7 +1,6 @@
 /**
  * Typed plugin command surface (PLUGIN-1/2/6).
- * Danger, mutating, and minTier are declared on every command; runtime enforces
- * them (SAFE-1 / ROLES-CHAT-2..6).
+ * Danger and minTier are declared on every command; runtime enforces them (SAFE-1).
  */
 
 export type PluginHandlerArgs = {
@@ -35,6 +34,8 @@ export type PluginCommand = {
   mutating?: boolean;
   /** Minimum autonomy/trust tier required (PLUGIN-2). Default 0. */
   minTier?: number;
+  /** Where the command comes from (PLUGIN-6): "builtin" (default) or "fledge:<plugin>@<version>". */
+  origin?: string;
   handler: (ctx: PluginHandlerArgs) => Promise<PluginHandlerResult>;
 };
 

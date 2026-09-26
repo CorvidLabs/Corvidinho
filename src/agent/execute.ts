@@ -5,6 +5,7 @@
  * Secrets stay in env — never commit.
  */
 
+import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import {
@@ -198,7 +199,11 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    // ROLES-CHAT-2/6: stamp catalog from live ADMIN re-check when a role session is on.
+    if (includeDangerous && opts.loadPlugins !== false) {
+      // FLEDGE-4: Fledge commands are all dangerous, so only discover them
+      // when this run's catalog may offer dangerous tools.
+      await loadFledgePlugins({ cwd, env });
+    }
     let actingIsAdmin = true;
     if (roleSessionActive(env)) {
       actingIsAdmin = await resolveActingIsAdmin(env);
