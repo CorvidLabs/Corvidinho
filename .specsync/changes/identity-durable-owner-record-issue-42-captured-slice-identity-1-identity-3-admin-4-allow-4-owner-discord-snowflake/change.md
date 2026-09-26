@@ -1,6 +1,6 @@
 ---
 id: identity-durable-owner-record-issue-42-captured-slice-identity-1-identity-3-admin-4-allow-4-owner-discord-snowflake
-state: approved
+state: implementing
 type: feature
 base_commit: 1b69c1fa30e33c64a52174a968583323c20658a8
 ---
