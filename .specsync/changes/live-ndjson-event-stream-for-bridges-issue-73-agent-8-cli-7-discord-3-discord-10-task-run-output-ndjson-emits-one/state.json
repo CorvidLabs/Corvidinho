@@ -7,11 +7,11 @@
   "title": "Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2",
   "description": "Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2",
   "kind": "feature",
-  "state": "implementing",
+  "state": "verifying",
   "canonical_applied": true,
   "base_commit": "ad431a9436108288cbe4c938d3e865da957458be",
   "created_at": 1790451723,
-  "updated_at": 1790453973,
+  "updated_at": 1790454001,
   "affected_specs": [
     "agent",
     "cli",
