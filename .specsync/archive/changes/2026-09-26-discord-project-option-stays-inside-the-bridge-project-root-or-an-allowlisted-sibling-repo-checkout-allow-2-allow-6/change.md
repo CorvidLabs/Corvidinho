@@ -1,6 +1,6 @@
 ---
 id: discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 65cff62fdae8cb0413d92adfe8acb29455fc127f
 ---
