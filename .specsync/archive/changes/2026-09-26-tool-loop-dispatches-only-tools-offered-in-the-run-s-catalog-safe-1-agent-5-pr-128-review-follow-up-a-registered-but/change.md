@@ -1,6 +1,6 @@
 ---
 id: tool-loop-dispatches-only-tools-offered-in-the-run-s-catalog-safe-1-agent-5-pr-128-review-follow-up-a-registered-but
-state: implementing
+state: archived
 type: bug_fix
 base_commit: a9feb0fde12d55d7625957eb869ce49665c631d3
 ---
