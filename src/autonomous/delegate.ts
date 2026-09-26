@@ -331,6 +331,12 @@ export type DelegateChildOutcome = {
   /** Worker's prove-before-done outcome, when it reported a result. */
   verified?: boolean;
   verifySkipped?: boolean;
+  /**
+   * The worker's own result `summary` (SAFE-6 scrubbed, capped at
+   * DELEGATE_SUMMARY_MAX rather than the 1800-char chat body), when it
+   * reported a result. Councils quote this.
+   */
+  resultText?: string;
   totalTokens?: number;
   timedOut: boolean;
   aborted: boolean;
@@ -509,6 +515,9 @@ export async function runDelegateChild(opts: {
     };
     if (typeof r?.verified === "boolean") outcome.verified = r.verified;
     if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
+    if (typeof r?.summary === "string") {
+      outcome.resultText = scrubSecrets(r.summary).trim().slice(0, DELEGATE_SUMMARY_MAX);
+    }
     if (out.totalTokens !== undefined) outcome.totalTokens = out.totalTokens;
     return outcome;
   } finally {

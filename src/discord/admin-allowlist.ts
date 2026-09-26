@@ -23,9 +23,11 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   renameSync,
   statSync,
@@ -37,6 +39,7 @@ import { basename, dirname, join } from "node:path";
 import {
   defaultAllowlistPaths,
   discordFromEnv,
+  isJsonAllowlistPath,
   parseSimpleToml,
   resolveAllowlistPath,
 } from "../allowlist/load.ts";
@@ -106,8 +109,35 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return b.every((x) => s.has(x));
 }
 
+/** Same rule as the loader (`isJsonAllowlistPath`), so edits match what loads. */
 export function allowlistFileFormat(path: string): AllowlistFileFormat {
-  return path.toLowerCase().endsWith(".json") ? "json" : "toml";
+  return isJsonAllowlistPath(path) ? "json" : "toml";
+}
+
+/**
+ * When `path` is a symlink whose target does not resolve (dangling, or a
+ * loop), the error to refuse with; else null. The loader reads such a path
+ * as "no file", and a write there would replace the operator's link with a
+ * regular file, so `/admin` refuses instead.
+ */
+export function danglingSymlinkError(path: string): string | null {
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return null;
+  } catch {
+    return null;
+  }
+  try {
+    realpathSync(path);
+    return null;
+  } catch {
+    let dest = "?";
+    try {
+      dest = readlinkSync(path);
+    } catch {
+      /* keep "?" */
+    }
+    return `allowlist file is a symlink to ${dest}, which does not resolve (dangling or looping); fix or remove the link on the VM`;
+  }
 }
 
 /**
@@ -310,6 +340,8 @@ export function planAdminListChange(opts: {
   const path = resolveAdminAllowlistPath(opts.allowlist, env, opts.home);
   const format = allowlistFileFormat(path);
   const id = opts.id.trim().toLowerCase();
+  const dangling = danglingSymlinkError(path);
+  if (dangling) return { ok: false, path, error: dangling };
   let exists = false;
   let text = "";
   try {
@@ -369,9 +401,13 @@ export function planAdminListChange(opts: {
 /**
  * Atomic write: temp file in the target's directory (same filesystem),
  * fsync, then rename over the target. Keeps the target's mode (new files
- * 0600, new dirs 0700). Symlinked targets are resolved first.
+ * 0600, new dirs 0700). Symlinked targets are resolved first; a dangling or
+ * looping symlink is refused (throws) and left in place, never replaced by a
+ * regular file.
  */
 export function writeFileAtomic(path: string, text: string): void {
+  const dangling = danglingSymlinkError(path);
+  if (dangling) throw new Error(dangling);
   const target = existsSync(path) ? realpathSync(path) : path;
   const dir = dirname(target);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -436,6 +472,8 @@ export function readAdminFileView(
   | { ok: false; path: string; error: string } {
   const path = resolveAdminAllowlistPath(allowlist, env, home);
   const format = allowlistFileFormat(path);
+  const dangling = danglingSymlinkError(path);
+  if (dangling) return { ok: false, path, error: dangling };
   try {
     const exists = existsSync(path);
     const text = exists ? readFileSync(path, "utf8") : "";
