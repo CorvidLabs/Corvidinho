@@ -172,6 +172,7 @@ The system SHALL register typed file/search plugins `files-read`, `files-write`,
 
 Acceptance Criteria
 - `plugins list` includes the seven command names with correct dangerous/minTier.
+- `tests/plugins.list.smoke.test.ts` asserts files-read, files-write, search-grep.
 
 ### REQ-plugins-082
 

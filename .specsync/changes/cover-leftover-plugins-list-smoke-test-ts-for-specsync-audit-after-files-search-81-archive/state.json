@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive",
+  "slug": "cover-leftover-plugins-list-smoke-test-ts-for-specsync-audit-after-files-search-81-archive",
+  "title": "Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive",
+  "description": "Cover leftover plugins.list.smoke.test.ts for SpecSync audit after files/search #81 archive",
+  "kind": "bug_fix",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "373b0c69e27a9857138e554e7536e5dd5901d9ba",
+  "created_at": 1790449799,
+  "updated_at": 1790449807,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "tests/plugins.list.smoke.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "tests/plugins.list.smoke.test.ts asserts files-read/files-write/search-grep appear in plugins list; covered for SpecSync change audit after #81 archive; no new module AC"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
