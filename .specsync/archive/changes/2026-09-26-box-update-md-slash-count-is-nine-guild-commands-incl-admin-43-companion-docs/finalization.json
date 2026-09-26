@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "box-update-md-slash-count-is-nine-guild-commands-incl-admin-43-companion-docs",
+  "implementation_commit": "3b5d39b31393c044cddc284f5030b0be996040e5",
+  "implementation_tree": "9d26251089b553fcaa96ff073f279fbf454561bd",
+  "contract_digest": "de1f9a627b74df6c54ccbff178d3cd43418bed9b0f41e782b1b5c9e1bfc2d8a0",
+  "workspace_digest": "36153202a4ccac81da4d0f4488cf312667e79207b2dc25056c5c08545fd57a2b",
+  "closing_digest": "9c1a0c192c97fafcb4a8dfa7aa329c5e10baae9d8382b15ccf7231bce6755596",
+  "review_digest": "aed71cfd2184a79d9104890427c5476c74002bd19332376e433a30fd446c979b",
+  "finalization_digest": "c1619e840e2c064a9a6daf5c68767119b48f0e8c2bbcded46b4f6bde0fbbabcf",
+  "timestamp": 1790456325
+}
