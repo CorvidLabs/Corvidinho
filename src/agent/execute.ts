@@ -7,6 +7,10 @@
 
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
+import {
+  resolveActingIsAdmin,
+  roleSessionActive,
+} from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
 import type {
   AgentEvent,
@@ -194,7 +198,12 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    const tools = buildOpenAiTools({ tier, includeDangerous });
+    // ROLES-CHAT-2/6: stamp catalog from live ADMIN re-check when a role session is on.
+    let actingIsAdmin = true;
+    if (roleSessionActive(env)) {
+      actingIsAdmin = await resolveActingIsAdmin(env);
+    }
+    const tools = buildOpenAiTools({ tier, includeDangerous, actingIsAdmin });
     return runToolLoop({
       llm: { ...llm, tier },
       fetchImpl,

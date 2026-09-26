@@ -72,6 +72,7 @@ NDJSON frames never carry raw tool arguments; ToolCall `argsSummary`, Text,
 ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
+`buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
 Project instructions come only from the project root (nearest `.git` at or
 above cwd, else cwd), never from a parent directory above it. Each file is

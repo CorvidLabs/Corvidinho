@@ -1,12 +1,14 @@
 ---
 module: plugins
-version: 35
+version: 36
 status: draft
 files:
   - src/plugins/types.ts
   - src/plugins/registry.ts
   - src/plugins/run.ts
   - src/plugins/env.ts
+  - src/plugins/mutating.ts
+  - src/plugins/roles.ts
   - src/plugins/builtins.ts
   - src/plugins/githubDeny.ts
   - src/audit/log.ts
@@ -116,6 +118,12 @@ SAFE-22 default-branch policy is not enforced (awaiting HI).
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
 
+File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
+When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
+non-ADMIN callers are refused for every mutating plugin at run time with a
+"not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
+for dangerous tools. Role is re-checked via owner config each call.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -142,12 +150,26 @@ Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 - **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
 - **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
 
+
+### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
+
+- **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
+- **When** the agent runs `files-write`
+- **Then** the run fails with exit 2 and a "not allowed for your role" message; no file is written
+
+### Scenario: ADMIN files-write still allowed (ROLES-CHAT-4)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=1` and the acting user is the configured owner
+- **When** the agent runs `files-write` under non-interactive
+- **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
+| Mutating + acting non-ADMIN (ROLES-CHAT-3) | Deny (exit 2, not allowed for your role) |
 | Missing token / API fail on github-* | Clear error; non-zero exit |
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |

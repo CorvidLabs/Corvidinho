@@ -8,8 +8,6 @@
  * two-phase with a confirm token from a different turn (SAFE-4).
  */
 
-import { loadAllowlist } from "../../src/allowlist/load.ts";
-import { isOwnerDiscord, loadOwnerConfig } from "../../src/identity/owner.ts";
 import {
   checkConfirmToken,
   isHumanSuppliedToken,
@@ -92,14 +90,6 @@ function positionalAfterFlags(args: string[]): string[] {
   return out;
 }
 
-function parseList(raw: string | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw
-    .split(/[,\s]+/)
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 function truthy(v: string | undefined): boolean {
   const s = v?.trim().toLowerCase();
   return s === "1" || s === "true" || s === "yes";
@@ -134,36 +124,14 @@ const ACL_DENIED: PluginHandlerResult = {
 };
 
 /**
- * Handler-time ADMIN re-check (ADMIN-4 / DISCORD-7 / MEMORY-ACL-3/4).
- * The bridge's per-dispatch CORVIDINHO_ACTING_IS_ADMIN bit is required on
- * every path (so a scheduled run spawned with it off never gets ADMIN), and
- * the live config must agree: ADMIN is owner-only (IDENTITY-2) — the acting
- * user must be the configured owner's snowflake; no owner ⇒ nobody
- * (IDENTITY-3); deny-listed / muted ⇒ never. Any failure fails closed.
+ * Handler-time ADMIN re-check (ADMIN-4 / DISCORD-7 / MEMORY-ACL-3/4 / ROLES-CHAT-6).
+ * Delegates to shared resolveActingIsAdmin (owner-only; empty ⇒ nobody).
  */
 export async function actingIsAdmin(
   env: NodeJS.ProcessEnv,
   userId: string,
 ): Promise<boolean> {
-  const id = userId.trim().toLowerCase();
-  if (!id || !truthy(env.CORVIDINHO_ACTING_IS_ADMIN)) return false;
-  // IDENTITY-2: ADMIN is owner-only (same rule as the bridge). Admin
-  // user/role lists do not grant ADMIN; no owner ⇒ nobody (IDENTITY-3).
-  let isOwner = false;
-  try {
-    isOwner = isOwnerDiscord((await loadOwnerConfig({ env })).owner, userId);
-  } catch {
-    isOwner = false;
-  }
-  if (!isOwner) return false;
-  if (parseList(env.DISCORD_MUTED_USER_IDS).includes(id)) return false;
-  try {
-    const allow = await loadAllowlist({ env });
-    if (allow.discord.denyUsers.includes(id)) return false;
-  } catch {
-    return false;
-  }
-  return true;
+  return resolveActingIsAdmin(env, userId);
 }
 
 function openStore(env: NodeJS.ProcessEnv) {

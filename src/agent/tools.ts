@@ -3,6 +3,7 @@
  * Runtime still enforces SAFE-1 dangerous deny via runPlugin.
  */
 
+import { isMutatingPlugin } from "../plugins/mutating.ts";
 import { list } from "../plugins/registry.ts";
 import type { CapabilityTier } from "./tier.ts";
 import { tierAllowsPlugin } from "./tier.ts";
@@ -29,17 +30,26 @@ export type BuildToolsOpts = {
   tier: CapabilityTier;
   /** When false (default), omit dangerous plugins from the catalog entirely. */
   includeDangerous?: boolean;
+  /**
+   * When false (non-ADMIN acting session), omit all mutating tools (ROLES-CHAT-2).
+   * Default true when unset (local CLI / no role session).
+   */
+  actingIsAdmin?: boolean;
 };
 
 /**
  * Build the tools array for chat/completions.
- * Read tier → []. Dangerous plugins omitted unless includeDangerous.
+ * Read tier → []. Dangerous omitted unless includeDangerous.
+ * Non-ADMIN acting sessions omit all mutating tools (ROLES-CHAT-2).
  */
 export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
   const includeDangerous = Boolean(opts.includeDangerous);
+  const actingIsAdmin = opts.actingIsAdmin !== false;
   const out: OpenAiToolDef[] = [];
   for (const entry of list()) {
     if (entry.dangerous && !includeDangerous) continue;
+    // ROLES-CHAT-2/5: non-ADMIN never sees mutating tools (incl. files-write/edit).
+    if (!actingIsAdmin && isMutatingPlugin(entry)) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;
     const argvDesc = entry.name.startsWith("memory-")
       ? 'CLI-style argv after the command. memory-store e.g. ["--category","person","--key","identity","Leif is the owner"]; memory-recall e.g. ["--category","person"] or ["--query","name"]; forget/override need --id and --confirm.'
