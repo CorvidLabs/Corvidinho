@@ -1,6 +1,6 @@
 ---
 id: memory-sqlite-acl-memory-1-4-memory-acl-1-5-issues-41-59-shared-store-schema-v3-memories-scoped-by-discord-owner-user
-state: implementing
+state: archived
 type: feature
 base_commit: 7d81edc9d105fbea329e71deca99bfe05f100a27
 ---
