@@ -94,6 +94,34 @@ function ctx(over: Partial<PluginHandlerArgs> & { cwd: string }): PluginHandlerA
 
 const BASE_ENV = { PATH: process.env.PATH ?? "" };
 
+/** Worker body with a same-group grandchild and one in its own session. */
+const TREE_BODY = [
+  'd="$(dirname "$0")"',
+  'sleep 30 & echo $! > "$d/bg.pid"',
+  'setsid sleep 30 & echo $! > "$d/sess.pid"',
+  "sleep 30",
+].join("\n");
+
+/** Alive and not a zombie (an unreaped orphan counts as dead). */
+function running(pid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const state = stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3);
+    return state !== "Z" && state !== "X";
+  } catch {
+    return false;
+  }
+}
+
+async function until(cond: () => boolean, ms = 3000): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (cond()) return true;
+    await Bun.sleep(20);
+  }
+  return cond();
+}
+
 describe("delegate core (safety defaults)", () => {
   test("depth from env: unset 0, garbage fails closed to the cap", () => {
     expect(delegateDepthFromEnv({})).toBe(0);
@@ -477,6 +505,61 @@ describe("delegate plugin handler (fake bin)", () => {
     );
     expect(r2.ok).toBe(false);
     expect(existsSync(join(dir2, "argv.bin"))).toBe(false);
+  });
+
+  test("timeout stops the worker's whole tree, not just the worker (REQ-agent-117)", async () => {
+    const { bin, dir } = fakeBin(TREE_BODY);
+    const cmd = createDelegateCommand({ bin, env: BASE_ENV, timeoutMs: 1500 });
+    const started = Date.now();
+    const r = await cmd.handler(ctx({ cwd: project(ENABLED) }));
+    expect(Date.now() - started).toBeLessThan(6000);
+    expect(r.data).toMatchObject({ state: "cancelled", timedOut: true });
+    const bg = Number(readFileSync(join(dir, "bg.pid"), "utf8"));
+    const sess = Number(readFileSync(join(dir, "sess.pid"), "utf8"));
+    expect(await until(() => !running(bg) && !running(sess))).toBe(true);
+  });
+
+  test("lead abort stops the worker's whole tree (AGENT-3, REQ-agent-117)", async () => {
+    const { bin, dir } = fakeBin(TREE_BODY);
+    const cmd = createDelegateCommand({ bin, env: BASE_ENV });
+    const ac = new AbortController();
+    const sessFile = join(dir, "sess.pid");
+    void until(() => existsSync(sessFile) && readFileSync(sessFile, "utf8").trim() !== "", 10_000).then(() =>
+      ac.abort(),
+    );
+    const r = await cmd.handler(ctx({ cwd: project(ENABLED), signal: ac.signal }));
+    expect(r.data).toMatchObject({ state: "cancelled", aborted: true });
+    const bg = Number(readFileSync(join(dir, "bg.pid"), "utf8"));
+    const sess = Number(readFileSync(join(dir, "sess.pid"), "utf8"));
+    expect(await until(() => !running(bg) && !running(sess))).toBe(true);
+  });
+
+  test("lead abort after the worker exited kills what it left holding the pipe (REQ-agent-117)", async () => {
+    const done = serializeFrame(resultFrame(DONE));
+    const { bin, dir } = fakeBin(
+      [
+        'd="$(dirname "$0")"',
+        'echo $$ > "$d/run.pid"',
+        `cat <<'EOF'\n${done}\nEOF`,
+        'sleep 30 & echo $! > "$d/bg.pid"',
+        "exit 0",
+      ].join("\n"),
+    );
+    const cmd = createDelegateCommand({ bin, env: BASE_ENV });
+    const ac = new AbortController();
+    const runFile = join(dir, "run.pid");
+    const bgFile = join(dir, "bg.pid");
+    const pidIn = (f: string) => (existsSync(f) ? Number(readFileSync(f, "utf8").trim()) || 0 : 0);
+    let bg = 0;
+    // Abort inside the pipe drain: the worker is gone, its grandchild is not.
+    void until(() => pidIn(runFile) > 0 && pidIn(bgFile) > 0 && !running(pidIn(runFile)), 10_000).then(() => {
+      bg = pidIn(bgFile);
+      ac.abort();
+    });
+    const r = await cmd.handler(ctx({ cwd: project(ENABLED), signal: ac.signal }));
+    expect(r.data).toMatchObject({ aborted: true });
+    expect(bg).toBeGreaterThan(1);
+    expect(await until(() => !running(bg))).toBe(true);
   });
 
   test("fan-out cap: a spent per-run budget refuses without spawning", async () => {
