@@ -1,6 +1,6 @@
 ---
 id: release-cut-v0-0-9-package-0-0-9-changelog-0-0-9-section-memory-acl-hardening-128-safe-6-scrub-130-spawn-env-isolation
-state: implementing
+state: archived
 type: operations
 base_commit: 2c86c945f7816f01497ee7c8ab324e72b92f9e3b
 ---

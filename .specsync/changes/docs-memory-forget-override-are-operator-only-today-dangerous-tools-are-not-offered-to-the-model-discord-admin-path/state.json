@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "docs-memory-forget-override-are-operator-only-today-dangerous-tools-are-not-offered-to-the-model-discord-admin-path",
+  "slug": "docs-memory-forget-override-are-operator-only-today-dangerous-tools-are-not-offered-to-the-model-discord-admin-path",
+  "title": "Docs: memory forget/override are operator-only today (dangerous tools are not offered to the model); Discord admin path tracked in #43",
+  "description": "Docs: memory forget/override are operator-only today (dangerous tools are not offered to the model); Discord admin path tracked in #43",
+  "kind": "documentation",
+  "state": "approved",
+  "base_commit": "ebe1f69ba95a9125fb28fdffb7c60324898873ef",
+  "created_at": 1790452231,
+  "updated_at": 1790452232,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/discord.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Doc wording correction only",
+  "acceptance_criteria": [
+    "docs/discord.md says memory forget/override are operator-only today and points the Discord admin path to #43"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

@@ -7,11 +7,11 @@
   "title": "Release cut v0.0.9: package 0.0.9, CHANGELOG 0.0.9 section (memory ACL hardening #128, SAFE-6 scrub #130, spawn .env isolation #133, /work restart recovery #135, CLI HI retire #134) and STATUS roadmap rows; version pin tests updated",
   "description": "Release cut v0.0.9: package 0.0.9, CHANGELOG 0.0.9 section (memory ACL hardening #128, SAFE-6 scrub #130, spawn .env isolation #133, /work restart recovery #135, CLI HI retire #134) and STATUS roadmap rows; version pin tests updated",
   "kind": "operations",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "2c86c945f7816f01497ee7c8ab324e72b92f9e3b",
   "created_at": 1790452181,
-  "updated_at": 1790452184,
+  "updated_at": 1790452201,
   "affected_specs": [],
   "affected_paths": [
     "package.json",

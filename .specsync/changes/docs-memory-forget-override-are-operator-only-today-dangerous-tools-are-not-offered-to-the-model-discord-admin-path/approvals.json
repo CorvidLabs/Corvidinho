@@ -1,0 +1,35 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790452232,
+      "digest": "67ad20cdca831c7c5421c3fadedebc47a1d60678954e15abf9d2cf76892e5ce2",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "docs-memory-forget-override-are-operator-only-today-dangerous-tools-are-not-offered-to-the-model-discord-admin-path",
+        "title": "Docs: memory forget/override are operator-only today (dangerous tools are not offered to the model); Discord admin path tracked in #43",
+        "description": "Docs: memory forget/override are operator-only today (dangerous tools are not offered to the model); Discord admin path tracked in #43",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "docs/discord.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Doc wording correction only",
+        "acceptance_criteria": [
+          "docs/discord.md says memory forget/override are operator-only today and points the Discord admin path to #43"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
