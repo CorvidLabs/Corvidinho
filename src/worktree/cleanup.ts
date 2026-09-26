@@ -42,6 +42,54 @@ export async function deleteBranch(
   }
 }
 
+/**
+ * True when `branchName` has commits not on the project's HEAD (the base
+ * `git worktree add -b` branches from). Unknown (git error) counts as true.
+ * HEAD-based on purpose: it works whatever the default branch is called
+ * (`main`, `master`, `trunk`, ...).
+ */
+export async function branchHasOwnCommits(
+  projectWorkingDir: string,
+  branchName: string,
+): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(
+      ["git", "rev-list", "--count", `HEAD..refs/heads/${branchName}`],
+      {
+        cwd: projectWorkingDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const out = (await new Response(proc.stdout).text()).trim();
+    if ((await proc.exited) !== 0) return true;
+    return out !== "0";
+  } catch {
+    return true;
+  }
+}
+
+/** Rename a branch aside so its name is free and its commits are kept. */
+async function parkBranch(
+  projectWorkingDir: string,
+  branchName: string,
+): Promise<void> {
+  try {
+    const proc = Bun.spawn(
+      ["git", "branch", "-m", branchName, `${branchName}-parked-${Date.now()}`],
+      {
+        cwd: projectWorkingDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    await new Response(proc.stderr).text();
+    await proc.exited;
+  } catch {
+    // Non-fatal — creation then refuses (branch exists) instead of losing work.
+  }
+}
+
 export async function forceRemoveWorktree(
   projectWorkingDir: string,
   worktreeDir: string,
@@ -92,6 +140,11 @@ export async function cleanStaleWorktreeState(
   }
 
   if (await branchExists(projectWorkingDir, branchName)) {
-    await deleteBranch(projectWorkingDir, branchName);
+    // Never `branch -D` work: a stale branch with its own commits is parked.
+    if (await branchHasOwnCommits(projectWorkingDir, branchName)) {
+      await parkBranch(projectWorkingDir, branchName);
+    } else {
+      await deleteBranch(projectWorkingDir, branchName);
+    }
   }
 }

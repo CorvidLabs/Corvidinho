@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cleanupemptybranch-never-force-deletes-a-branch-with-commits-when-the-default-branch-is-not-main-master",
+  "implementation_commit": "241aa7414d5b3967fed109bd4e1de547367149ec",
+  "implementation_tree": "c87a0dd5f0d664a35b7a0e9ff625dad93f6b8245",
+  "contract_digest": "c197a69dc66b4b26feab357303c80228ca92da75f0754a4c527a81bcd130e0c8",
+  "workspace_digest": "6d740c26ecd9de5e0736ff22111c105c11b6f8cc4464fa3dc7f8b1f7ef35893b",
+  "closing_digest": "c5fe008b6edc47f30b4cafcec07bec41759642f15623568d1f8314e7b1735369",
+  "review_digest": "d133294181de6626bb8d0cc2568631f0e27c4a230153ddba946481a6effd3043",
+  "finalization_digest": "f60f7599fb42df149534cc694fa3818cab8155836fae2bec1252bc89e667b981",
+  "timestamp": 1790461842
+}

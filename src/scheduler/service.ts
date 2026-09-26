@@ -250,9 +250,18 @@ export class SchedulerService {
           return;
         }
         projectDir = resolved.dir;
+        // Name the worktree/branch from the full schedule + run ids. The
+        // default 16-char prefix gave every run of a schedule (and schedules
+        // sharing a first id char) one dir/branch, so a new run wiped the last.
+        const runKey = `schedule_${schedule.id}_${run.id}`.replace(
+          /[^a-zA-Z0-9_-]/g,
+          "",
+        );
         const ensured = await ensureTalkWorkspace({
           projectWorkingDir: resolved.dir,
-          sessionId: `schedule_${schedule.id}_${run.id}`,
+          sessionId: runKey,
+          worktreeId: `talk-${runKey}`,
+          branchName: `talk/${runKey}`,
         });
         if (!ensured.ok) {
           this.finish(schedule, run, {
