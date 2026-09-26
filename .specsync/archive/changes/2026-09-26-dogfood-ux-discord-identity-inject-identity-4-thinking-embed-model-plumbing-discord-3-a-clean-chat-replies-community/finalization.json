@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community",
+  "implementation_commit": "bbd506d0fcea89e89835df646b09387b4178871f",
+  "implementation_tree": "16d2d50033c7c62a0c0423dfa2ed7f15f5b66872",
+  "contract_digest": "958d874cd9e9f21bcbd488a40226844e078a39bbb9fcdb12f6466a8cc1422709",
+  "workspace_digest": "c05e88657e91d55ef669486197b7135477ab61e380ad77af0aac73b06208a258",
+  "closing_digest": "4917ca209543345a77739158ad3911b63846d7dcc3f455421525203836344d59",
+  "review_digest": "5c9eb418553b371bb2ccecb6d075aa98177697da374377d0a27ceca22b4a6675",
+  "finalization_digest": "59d277dfec2af480b922477d34d273fc64afae23f994b27299452b47b8171d37",
+  "timestamp": 1790459197
+}

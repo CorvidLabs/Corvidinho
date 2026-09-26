@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.19
+
+### Dogfood UX — identity, clean replies, thinking embed, public Q&A
+
+- **IDENTITY-4** — Discord injects acting user id + display name (owner map wins for the owner; never invents names like "Kyn"); memory stays scoped to the acting Discord user.
+- **DISCORD-3.a** — Thinking/progress embed footer shows **model**, session id, and operator plumbing (`state` / `verified` / `verifySkipped` / `attempts`). Final chat reply is **human text only** — no plumbing lines.
+- **ROLES-CHAT-8** — Non-ADMIN community sessions may use **any public GitHub** (+ site/roadmap via web-fetch); **private repos** and **secret paths** (`.env`, keys, keystores) are refused. Deny lists still win. ADMIN keeps the GITHUB-6 allowlist.
+
+### Ops
+
+- Package version **0.0.19** — restart the Discord bridge after update; re-register slash if the gateway does not on ready.
+
 ## 0.0.18
 
 ### Ask the human, ping the owner — [#163](https://github.com/CorvidLabs/Corvidinho/pull/163) (#44)
