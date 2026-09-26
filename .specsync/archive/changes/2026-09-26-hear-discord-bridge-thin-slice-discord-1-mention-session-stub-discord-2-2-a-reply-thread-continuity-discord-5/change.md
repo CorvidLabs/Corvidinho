@@ -1,6 +1,6 @@
 ---
 id: hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5
-state: implementing
+state: archived
 type: feature
 base_commit: 8609cc16f73198c35f4a17c4d8a775900561ff77
 ---

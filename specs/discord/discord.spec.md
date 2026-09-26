@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 3
+version: 4
 status: draft
 files:
   - src/discord/types.ts
@@ -51,4 +51,4 @@ src/allowlist/, agent task --no-verify, optional discord.js.
 ## Change Log
 
 HEAR thin DISCORD-1/2/2.a/5 (2026-09-26, corvid-agent, #5).
-
+| 2026-09-26 | hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5: HEAR Discord bridge thin slice: DISCORD-1 mention→session stub, DISCORD-2/2.a reply/thread continuity, DISCORD-5 allowlisted channels only; gateway→message-router→session stub; no ProcessManager; token clean-exit; discord-post dangerous; spawn --no-verify |

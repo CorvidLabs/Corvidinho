@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "hear-discord-bridge-thin-slice-discord-1-mention-session-stub-discord-2-2-a-reply-thread-continuity-discord-5",
+  "implementation_commit": "42d0210a0226528058c9bdd5ff00f3fa2b8a8474",
+  "implementation_tree": "36a6dca57d57ae2e6acae357552efbb2dcd83d7b",
+  "contract_digest": "bc2a9f9e84754b9727eee903d6d54004bef828393184feb095431b56aacd2c47",
+  "workspace_digest": "91d440b3ae1695b3882a20b98466d2a272aad0cd7d4b10c20dd6203b8f822a29",
+  "closing_digest": "566a466dc6c29cace3e11d64a7c89fbf0cef8b9437826083e04774932045f17b",
+  "review_digest": "b06ce786b08775b8f4e87a5be779c1c7d8e9d160a18914c57e7d1e18f3da0644",
+  "finalization_digest": "f5146bac3db2fbaa893f9954eb9bc48cdcd8d7d0411ba59c86ed340404bd76ef",
+  "timestamp": 1790438842
+}
