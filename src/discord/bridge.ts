@@ -6,6 +6,7 @@
  * SESSION-WORKTREE: per-talk/project git worktree isolation.
  * DISCORD-6: per-user rate limits + mutes.
  * DISCORD-9: image attachments → local files for agent.
+ * MEMORY: auto-recall inject on spawn (AGENT-7 / MEMORY-2/4).
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
  * DISCORD-12: presence/custom status shows shared package version.
  */
@@ -27,6 +28,7 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import { enrichPromptWithImages } from "./image-attachments.ts";
+import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
@@ -291,11 +293,22 @@ export async function startBridge(
       const channelId = msg.threadId ?? msg.channelId;
 
       // DISCORD-9 — download attachments to local files the agent can open.
-      const enrichedPrompt = await enrichPromptWithImages(
+      let enrichedPrompt = await enrichPromptWithImages(
         prompt,
         msg.attachments,
         { messageId: msg.id },
       );
+
+      // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
+      const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
+        ownerUserId: msg.authorId,
+      });
+      if (memInject.injected) {
+        console.log(
+          `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
+        );
+        enrichedPrompt = memInject.prompt;
+      }
 
       const outbound = resolveOutbound();
 

@@ -93,7 +93,12 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-store",
     description:
-      "Store a memory for the acting Discord user (category key content). Categories: conversation|entity|person|personality",
+      "Store a durable fact for the acting Discord user (MEMORY / AGENT-7). " +
+      "Categories: conversation|entity|person|personality. " +
+      'Call when the user states identity/person/project facts. argv example: ' +
+      '["--category","person","--key","identity","Leif is the owner"]. ' +
+      "Also: [\"person\",\"identity\",\"Leif is the owner\"] positional. " +
+      "Acting user comes from CORVIDINHO_ACTING_DISCORD_USER_ID (bridge sets it).",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -155,7 +160,11 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-recall",
     description:
-      "Recall memories for the acting Discord user (optional --category / --query)",
+      "Recall durable facts for the acting Discord user (MEMORY / AGENT-7). " +
+      "Call BEFORE claiming you do not know who the user is or facts about them/people/projects. " +
+      'argv examples: [] (all), ["--category","person"], ' +
+      '["--query","Leif"], ["--category","person","--limit","20"]. ' +
+      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -213,7 +222,8 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-forget",
     description:
-      "ADMIN soft-delete a memory by id (own or other). Requires --confirm. SAFE-4 + MEMORY-ACL-4.",
+      "ADMIN soft-delete a memory by id (own or other). Requires --confirm. SAFE-4 + MEMORY-ACL-4. " +
+      'argv example: ["--id","<uuid>","--confirm"] (plus acting admin env).',
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
@@ -267,7 +277,8 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-override",
     description:
-      "ADMIN overwrite memory content by id (own or other). Requires --confirm. MEMORY-ACL-3/4.",
+      "ADMIN overwrite memory content by id (own or other). Requires --confirm. MEMORY-ACL-3/4. " +
+      'argv example: ["--id","<uuid>","--confirm","updated content here"].',
     dangerous: true,
     minTier: 1,
     async handler(ctx) {

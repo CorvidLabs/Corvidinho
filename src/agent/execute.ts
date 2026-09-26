@@ -40,6 +40,14 @@ export function loadLlmEnv(env: NodeJS.ProcessEnv = process.env): LlmEnv {
   return { apiKey, baseUrl, model, tier };
 }
 
+/** Memory instructions embedded in the tool-loop system prompt (AGENT-7 / MEMORY-2/4). */
+export const MEMORY_AGENT_SYSTEM_INSTRUCTIONS =
+  "Memory (AGENT-7 / MEMORY-2/4): " +
+  "(a) Trust any [Corvidinho memory for this Discord user ...] block prepended to the task — those are durable facts already stored for the acting user; use them. " +
+  "(b) When the user states durable identity/person/project facts about themselves or others, call memory-store (argv e.g. [\"--category\",\"person\",\"--key\",\"identity\",\"Leif is the owner\"]). " +
+  "(c) Before claiming you do not know who the user is or facts about them/people/projects, call memory-recall first (or use the injected block). " +
+  "(d) Never invent memories that were not injected or returned by memory-recall. ";
+
 export type FetchLike = (
   input: string | URL | Request,
   init?: RequestInit,
@@ -199,6 +207,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     "Use the provided tools (project plugins) when they help complete the task. " +
     "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
     "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
+    MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.";
 

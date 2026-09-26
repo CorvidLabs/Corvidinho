@@ -85,16 +85,13 @@ Acceptance Criteria
 
 ### REQ-agent-010
 
-When Corvidinho spawns its own `.ts` entrypoint (Discord/WATCH agent runs,
-protocol handshake), it SHALL invoke `bun --no-env-file <bin>` so `.env*` files
-in the spawn cwd (a project worktree) are never loaded into the agent. Agent
-configuration (allowlists, admin lists, keys) SHALL come only from the
-environment the parent passes (ALLOW-4 / SAFE-1). Fixture tests SHALL use
-temporary project roots so test runs create no worktrees or branches in the
-repository (SESSION-WORKTREE-3 hygiene).
+The tool-loop system prompt SHALL instruct the model to (a) trust the injected
+memory block, (b) call `memory-store` when the user states durable
+identity/person/project facts, (c) call `memory-recall` before claiming
+ignorance about the user/people/projects, (d) never invent memories
+(AGENT-7 / MEMORY-2/4; draft #67 behavior).
 
 Acceptance Criteria
-- `.ts` spawn argv is `bun --no-env-file <bin> ...`; non-`.ts` bins unchanged.
-- A `.env` in the spawn cwd does not reach the child.
-- `bun test` leaves no `talk/*` worktrees or branches behind.
+- `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` exported and embedded in tool-loop system.
+- Fixture asserts trust / store / recall / never-invent phrases + argv example.
 

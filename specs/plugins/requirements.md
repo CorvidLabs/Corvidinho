@@ -201,3 +201,16 @@ tokens. STATUS.md ROADMAP and CHANGELOG SHALL record the slice.
 
 Acceptance Criteria
 - Happy read/write/edit/glob/grep tests pass; STATUS Done row cites #81.
+
+### REQ-plugins-085
+
+`memory-store` / `memory-recall` (and forget/override) plugin descriptions SHALL
+include concrete argv examples so models under-using opaque argv arrays can call
+them. OpenAI tool schemas for `memory-*` SHALL enrich the argv property
+description similarly.
+
+Acceptance Criteria
+- Descriptions mention `--category` / `--key` / `--query` examples.
+- `buildOpenAiTools` memory-* argv description cites examples.
+- Fixture tests assert description richness.
+
