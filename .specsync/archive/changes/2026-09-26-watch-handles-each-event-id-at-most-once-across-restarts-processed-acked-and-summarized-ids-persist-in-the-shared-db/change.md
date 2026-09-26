@@ -1,6 +1,6 @@
 ---
 id: watch-handles-each-event-id-at-most-once-across-restarts-processed-acked-and-summarized-ids-persist-in-the-shared-db
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 7af2cec07739d7af3cf3ab6e77855707cdaa1e68
 ---
