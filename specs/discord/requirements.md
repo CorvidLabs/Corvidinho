@@ -463,3 +463,14 @@ Acceptance Criteria
 - Rows written before the current rules are re-scrubbed on next open; second open is a no-op.
 - Fixture tests use runtime-built fake secrets only.
 
+### REQ-discord-128
+
+Discord call sites that spawn an agent run on behalf of a human (message
+path, `/session start`, `/work`) SHALL pass the human's own words as
+`humanText`, separate from the memory/image-enriched prompt. SAFE-4 memory
+confirm tokens SHALL be taken only from `humanText`; scheduler runs pass none.
+
+Acceptance Criteria
+- A confirm token present only in the enriched prompt (e.g. recalled memory) is not passed as human-supplied.
+- Bridge, `/session start` and `/work` pass `humanText`.
+

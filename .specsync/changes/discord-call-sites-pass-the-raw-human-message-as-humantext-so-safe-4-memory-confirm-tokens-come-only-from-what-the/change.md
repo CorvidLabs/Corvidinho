@@ -1,6 +1,6 @@
 ---
 id: discord-call-sites-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-come-only-from-what-the
-state: approved
+state: implementing
 type: bug_fix
 base_commit: a2fff442b44fef198ec6f6a6246eb361c5a8d12b
 ---
