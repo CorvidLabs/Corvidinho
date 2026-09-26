@@ -7,10 +7,11 @@
   "title": "Release 0.0.23: stop means stop (process trees), SAFE-3 cd clamp, scrub before clip, GitHub gate reads allowlist file",
   "description": "Release 0.0.23: stop means stop (process trees), SAFE-3 cd clamp, scrub before clip, GitHub gate reads allowlist file",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "a422b6a7a63908263bfa5f9ed418093287a7077b",
   "created_at": 1790465210,
-  "updated_at": 1790465211,
+  "updated_at": 1790465214,
   "affected_specs": [
     "cli"
   ],
