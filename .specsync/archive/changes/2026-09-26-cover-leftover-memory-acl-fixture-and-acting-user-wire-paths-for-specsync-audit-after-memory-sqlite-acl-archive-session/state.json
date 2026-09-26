@@ -7,11 +7,11 @@
   "title": "Cover leftover MEMORY ACL fixture and acting-user wire paths for SpecSync audit after memory-sqlite-acl archive (session/work handlers, slash-types, scheduler actingUser, memory tests, version 0.0.4 fixtures)",
   "description": "cover leftover MEMORY ACL fixture and acting-user wire paths for SpecSync audit after memory-sqlite-acl archive (session/work handlers, slash-types, scheduler actingUser, memory tests, version 0.0.4 fixtures)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "e5a926e64ece9bd428c718f0872de7a6c58ba617",
   "created_at": 1790448519,
-  "updated_at": 1790448531,
+  "updated_at": 1790448548,
   "affected_specs": [
     "discord",
     "plugins",

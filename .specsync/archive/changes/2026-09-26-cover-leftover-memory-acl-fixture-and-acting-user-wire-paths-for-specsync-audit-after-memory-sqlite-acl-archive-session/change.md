@@ -1,6 +1,6 @@
 ---
 id: cover-leftover-memory-acl-fixture-and-acting-user-wire-paths-for-specsync-audit-after-memory-sqlite-acl-archive-session
-state: implementing
+state: archived
 type: bug_fix
 base_commit: e5a926e64ece9bd428c718f0872de7a6c58ba617
 ---
