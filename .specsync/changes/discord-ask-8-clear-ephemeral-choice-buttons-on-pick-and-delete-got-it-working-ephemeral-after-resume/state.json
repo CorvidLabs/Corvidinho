@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-ask-8-clear-ephemeral-choice-buttons-on-pick-and-delete-got-it-working-ephemeral-after-resume",
+  "slug": "discord-ask-8-clear-ephemeral-choice-buttons-on-pick-and-delete-got-it-working-ephemeral-after-resume",
+  "title": "DISCORD-ASK-8: clear ephemeral choice buttons on pick and delete Got-it Working ephemeral after resume",
+  "description": "DISCORD-ASK-8: clear ephemeral choice buttons on pick and delete Got-it Working ephemeral after resume",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "4f489b6c11c4b1665c3f5e1c4c06348042d5be17",
+  "created_at": 1790466869,
+  "updated_at": 1790466883,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/bridge.ts",
+    "src/discord/gateway.ts",
+    "tests/discord.ask-ephemeral.test.ts",
+    "hi/discord.md",
+    "specs/discord/requirements.md",
+    "specs/discord/discord.spec.md",
+    "CHANGELOG.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Pick update clears components ([]); pendingAsk null before resume; re-press no second resume; deleteReply called after resume when available. HI DISCORD-ASK-8 + REQ-discord-049. tests/discord.ask-ephemeral.test.ts covers."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

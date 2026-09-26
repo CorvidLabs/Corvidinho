@@ -2,11 +2,12 @@
 
 ## 0.0.25
 
-### Discord slash ASK-7 alignment
+### Discord ask UX — slash ASK-7 + ephemeral pick cleanup (ASK-8)
 
 - **DISCORD-ASK-7** — `/session start` and `/work` collapse the thinking progress message into the final answer (same as mention/button pick) and delete the deferred slash reply when `editMessage` is available — no extra ✅ Done embed + full interaction reply.
+- **DISCORD-ASK-8** — After an ephemeral choice pick: clear option buttons immediately (`components: []`), keep `pendingAsk` cleared so a re-press is expired/no-op, and delete the ephemeral "Got it — Working on it…" once resume finishes.
 - `finalizeContent` only closes the thinking controller on a successful edit so Done/fail fallback still works when `editMessage` is missing.
-- HI + REQ-discord-048 clarify slash coverage.
+- HI + REQ-discord-048/049.
 
 ### Ops
 

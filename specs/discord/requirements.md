@@ -970,3 +970,17 @@ Acceptance Criteria
 - Slash `/session start` / `/work` success: thinking becomes the answer body and the deferred reply is deleted (or thin) when collapse succeeds.
 - Fallback preserves Done embed + separate reply when editMessage is unavailable.
 
+### REQ-discord-049
+
+After the requester presses an ephemeral choice button, the bridge SHALL clear
+or disable those option buttons immediately, SHALL keep `pendingAsk` cleared so
+a re-press is expired or otherwise a no-op (not a second agent resume), and
+SHALL delete or thin-update the ephemeral "Got it — Working on it…" message once
+the resume finishes (or immediately after pick) so it does not linger as a
+dismissible half-done UI (DISCORD-ASK-8).
+
+Acceptance Criteria
+- Pick update includes empty components (buttons gone) and clears pendingAsk before resume.
+- Re-press after clear does not spawn a second resume.
+- Ephemeral ack is deleted (or thin-updated without buttons) after resume completes when deleteReply is available.
+
