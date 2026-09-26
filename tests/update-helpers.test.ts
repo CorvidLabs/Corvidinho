@@ -119,6 +119,16 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.16", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.16`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("corvidinho daemon");
+    expect(r.stdout).toContain("web-fetch");
+    expect(r.stdout).not.toContain("ADMIN-1");
+  });
+
   test("extract_changelog_section finds 0.0.15", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.15`,
@@ -183,10 +193,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.15", () => {
+  test("package.json is 0.0.16", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.15");
+    expect(pkg.version).toBe("0.0.16");
   });
 });

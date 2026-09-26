@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-16-daemon-157-web-fetch-148-fledge-plugins-as-tools-154-pr-diff-files-153-ci-by-ref-158-project",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "7e10362762b923d70d2cf7e0b969b0775963da92",
+  "contract_digest": "dfb2c7c14338cd1ff3eea3d27b5c2e0bbb9f1d991f9bbe2f479879eb84ac47b1",
+  "execution_digest": "63f335cee305d6d2b02a09b51566d096a0af3e9e14b29a3a5b420232f2c17f13",
+  "workspace_digest": "0e0dd78d62578adea858a1d5096e4a6fdc7e78bf3d87a63f226411e8d75ee93f",
+  "timestamp": 1790457699
+}
