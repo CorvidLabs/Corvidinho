@@ -84,7 +84,7 @@ printing secret values. Help SHALL document `DISCORD_GUILD_ID` preference for
 fast guild-scoped registration.
 
 Acceptance Criteria
-- `corvidinho --protocol-version` prints `1` and exits 0.
+- `corvidinho --protocol-version` prints `CORVIDINHO_PROTOCOL_VERSION` (currently `2`) and exits 0.
 - `corvidinho discord bridge` without token exits non-zero with clean explanation.
 - `corvidinho discord register-commands` without token exits non-zero naming token env.
 - Help documents `discord bridge`, `discord register-commands`, and Discord env/allowlist vars including `DISCORD_GUILD_ID`.

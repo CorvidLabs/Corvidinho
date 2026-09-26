@@ -61,7 +61,7 @@ invoke via `bun` (never posix_spawn the `.ts` path alone — EACCES). Archive
 `shared/bridge-protocol.ts` SHALL NOT be used.
 
 Acceptance Criteria
-- `corvidinho --protocol-version` prints `1`.
+- `corvidinho --protocol-version` prints `CORVIDINHO_PROTOCOL_VERSION` (currently `2`).
 - Verifiable mismatch refuses start; unverifiable warns and continues.
 - Fixture stub-binary tests cover match/mismatch/unverifiable/timeout.
 - `.ts` bin probe uses argv starting with `bun` then the `.ts` path.
