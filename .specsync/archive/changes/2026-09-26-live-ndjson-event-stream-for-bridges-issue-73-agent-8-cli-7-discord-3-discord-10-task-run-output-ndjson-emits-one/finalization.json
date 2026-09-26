@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one",
+  "implementation_commit": "5c347e0ec048ca02ec7a38764c17c87b1ef408f8",
+  "implementation_tree": "3392a51d463e3a8cb7d1616545a4006996f91112",
+  "contract_digest": "d04e2b2d24705128a61afdf6196894ff271765fb497d8e8d777a079a15eeb337",
+  "workspace_digest": "d5e22b8eb52a9b42a890b65be151d538adad3d6be2f720c20083354bea17e45b",
+  "closing_digest": "83f0c7f87536b6294ff04b60873fd6d79a8f5d80de06408ce2614c4bcbc176bf",
+  "review_digest": "e327a8d55beb5eaac92c922e51dd428fe584f632e6bbecaf6919738b8dce9493",
+  "finalization_digest": "4d1e88254b150d5656d07c0b3240b88000282f046ff5a525728158ec70bd89bb",
+  "timestamp": 1790454036
+}

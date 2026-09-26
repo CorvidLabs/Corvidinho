@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-leftover-docs-hi-drafts-watch-reliability-md-for-specsync-audit-after-watch-reliability-archive",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "ea0ebfb14fbb2d09b061301ef5fc99e29441373c",
+  "contract_digest": "4b268fa4d18d7ccf3eed265a249f59c701e302625a3a94df10e4342e966339b8",
+  "execution_digest": "b819b3a85cca3e57680c36934efb95146f1d92a670bfaff40de58093f0a2ca84",
+  "workspace_digest": "15ad278ec43181273ec6e8ac7ed7b4b41ce49de560d8f3df14a787422b2ef15e",
+  "timestamp": 1790454135
+}
