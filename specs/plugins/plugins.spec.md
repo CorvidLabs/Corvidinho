@@ -80,4 +80,4 @@ Empty allowlists deny all targeted GH/Discord actions; deny overrides win; file+
 ## Change Log
 
 STEAL SpecSync plugins list/read/check/brief (+ coverage/change-list/ship-status) (2026-09-26, corvid-agent).
-| 2026-09-26 | steal-specsync-agent-wiring-from-merlin-fledge-plugin-specsync-typed-list-read-check-brief-coverage-change-list-ship: STEAL SpecSync agent wiring from Merlin fledge-plugin-specsync: typed list/read/check/brief/coverage + change list/ship-status; Planning companion briefing; SpecSync check blocks prove-before-done (SPECSYNC-1..7); keep CI Spec Sync Action separate from fledge verify lane |
+
