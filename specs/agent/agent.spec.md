@@ -14,9 +14,12 @@ files:
   - src/agent/spawn-argv.ts
   - src/agent/tier.ts
   - src/agent/tools.ts
+  - src/agent/events-ndjson.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
+  - tests/agent.events-ndjson.test.ts
+  - tests/agent.ndjson-spawn.test.ts
 
 db_tables: []
 depends_on:
@@ -36,11 +39,27 @@ appropriately (REQ-agent-010).
 Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
 `src/agent/index.ts`).
 
+NDJSON event stream (REQ-agent-073, issue #73): `src/agent/events-ndjson.ts`
+owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
+`usageFrame`, `resultFrame`, `serializeFrame`, `createNdjsonWriter`,
+`summarizeToolArgs`, `parseNdjsonLine`, `createNdjsonParser`,
+`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`. Frames:
+`{protocol, type}` with AgentEvent types `StateChanged` / `Text` / `ToolCall`
+(`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
+(running prompt / completion / total tokens) and a final `result`
+(`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
+totals; `extractUsage` reads OpenAI-compatible `usage`.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
 memory-recall-before-ignorance / never-invent rules. OpenAI tool argv
 descriptions for `memory-*` commands SHALL include concrete examples.
+
+NDJSON frames never carry raw tool arguments; ToolCall `argsSummary`, Text,
+ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
+AgentEvent stays frozen (usage is a separate callback), so `task run --json`
+events are unchanged.
 
 ## Behavioral Examples
 

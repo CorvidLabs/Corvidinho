@@ -1,10 +1,12 @@
 /**
  * Spawn corvidinho for chat with --no-verify (bridge latency).
+ * Reads the `task run --output ndjson` event stream so the thinking status
+ * shows real state / current tool / token counts (AGENT-8 / DISCORD-3, #73).
  * Injectable for tests; no ProcessManager.
  */
 
+import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
-import { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
@@ -31,7 +33,10 @@ export type AgentRunChatOpts = {
    * client default cwd so talks/schedules do not share a mutable checkout.
    */
   cwd?: string;
-  /** Optional live status callback (DISCORD-3); spawn path may not emit tools yet. */
+  /**
+   * Optional live status callback (DISCORD-3): state, current tool, and token
+   * counts forwarded from the NDJSON stream as frames arrive (REQ-discord-073).
+   */
   onStatus?: (update: AgentStatusUpdate) => void;
 };
 
@@ -47,7 +52,9 @@ export type SpawnAgentClientOpts = {
 };
 
 /**
- * Spawns: `<bin> task run --no-verify --task <prompt> --json`
+ * Spawns: `<bin> task run --no-verify --task <prompt> --output ndjson`
+ * and reads stdout line by line; the summary comes from the `result` frame
+ * (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
  * Passes CORVIDINHO_ACTING_DISCORD_USER_ID / CORVIDINHO_ACTING_IS_ADMIN for memory plugins.
  */
@@ -68,7 +75,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         "--no-verify",
         "--task",
         prompt,
-        "--json",
+        "--output",
+        "ndjson",
       ]);
 
       const proc = Bun.spawn(cmd, {
@@ -87,17 +95,28 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
         },
       });
-      const [exitCode, stdout, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ]);
-      const summary = summarizeTaskRunOutput(stdout, stderr, exitCode);
-      // Rough token stand-in from summary length until real usage events exist.
-      const roughTok = Math.max(1, Math.ceil(summary.length / 4));
+      const { exitCode, summary, totalTokens } = await collectTaskRunStream({
+        stdout: proc.stdout,
+        stderr: proc.stderr,
+        exited: proc.exited,
+        onProgress: (p) => {
+          onStatus?.({
+            tool: p.tool,
+            tokens:
+              p.totalTokens !== undefined
+                ? { estimated: p.totalTokens }
+                : undefined,
+            message: p.message,
+          });
+        },
+      });
+      // Provider-reported total when a usage frame arrived; else a rough
+      // stand-in from summary length (demo stub / providers without usage).
+      const finalTok =
+        totalTokens ?? Math.max(1, Math.ceil(summary.length / 4));
       onStatus?.({
         tool: "task run",
-        tokens: { estimated: roughTok },
+        tokens: { estimated: finalTok },
         message: "Agent finished",
       });
       return {

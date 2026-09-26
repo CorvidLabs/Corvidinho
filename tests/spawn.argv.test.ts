@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { buildCorvidinhoArgv } from "../src/agent/spawn-argv.ts";
-import { summarizeTaskRunOutput } from "../src/agent/task-summary.ts";
+import {
+  summarizeTaskResult,
+  summarizeTaskRunOutput,
+} from "../src/agent/task-summary.ts";
 
 describe("buildCorvidinhoArgv", () => {
   test("prefixes bun for .ts bins", () => {
@@ -26,7 +29,8 @@ describe("buildCorvidinhoArgv", () => {
       "--no-verify",
       "--task",
       "hi",
-      "--json",
+      "--output",
+      "ndjson",
     ]);
     expect(argv[0]).toBe("bun");
     expect(argv[1]).toBe("src/cli.ts");
@@ -36,7 +40,8 @@ describe("buildCorvidinhoArgv", () => {
       "--no-verify",
       "--task",
       "hi",
-      "--json",
+      "--output",
+      "ndjson",
     ]);
   });
 });
@@ -59,6 +64,23 @@ describe("summarizeTaskRunOutput", () => {
     expect(out).toContain("verifySkipped");
     expect(out).toContain("demo task attempt 1");
     expect(out).not.toContain('"events"');
+  });
+
+  test("summarizeTaskResult matches the --json path for the same result", () => {
+    const result = {
+      summary: "demo task attempt 1",
+      state: "done",
+      verified: false,
+      verifySkipped: true,
+      attempts: 1,
+      cancelled: false,
+    };
+    expect(summarizeTaskResult(result)).toBe(
+      summarizeTaskRunOutput(JSON.stringify({ result, events: [] }), "", 0),
+    );
+    expect(summarizeTaskResult(result)).toBe(
+      "state=done verified=false verifySkipped attempts=1\ndemo task attempt 1",
+    );
   });
 
   test("falls back to truncated stdout when not JSON", () => {

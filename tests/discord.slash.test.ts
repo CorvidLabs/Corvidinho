@@ -179,7 +179,7 @@ describe("slash handlers", () => {
     expect(result.ok).toBe(true);
     const body = ix.replies[0]?.content ?? "";
     expect(body).toContain("v0.0.3");
-    expect(body).toContain("Protocol: 1");
+    expect(body).toContain(`Protocol: ${CORVIDINHO_PROTOCOL_VERSION}`);
     expect(body).toContain("Active sessions: 1");
     expect(body).toContain("Channels (allowlist): 1");
     expect(body).toContain("LLM: demo stub");

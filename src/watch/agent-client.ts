@@ -1,16 +1,25 @@
 /**
  * Spawn corvidinho for WATCH chat with --no-verify (ingress latency).
+ * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
  * Injectable for tests; no ProcessManager.
  */
 
+import {
+  collectTaskRunStream,
+  type TaskProgress,
+} from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
-import { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
 
 export type AgentRunChatOpts = {
   prompt: string;
   sessionId: string;
   resume?: boolean;
+  /**
+   * Optional live progress (state / current tool / token totals) forwarded
+   * from the NDJSON stream as frames arrive (REQ-watch-073).
+   */
+  onStatus?: (progress: TaskProgress) => void;
 };
 
 export type AgentClient = {
@@ -25,14 +34,15 @@ export type SpawnAgentClientOpts = {
 
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
-    async runChat({ prompt, sessionId }) {
+    async runChat({ prompt, sessionId, onStatus }) {
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
         "--no-verify",
         "--task",
         prompt,
-        "--json",
+        "--output",
+        "ndjson",
       ]);
       const proc = Bun.spawn(cmd, {
         cwd: opts.cwd,
@@ -44,12 +54,12 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_WATCH_SESSION_ID: sessionId,
         },
       });
-      const [exitCode, stdout, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ]);
-      const summary = summarizeTaskRunOutput(stdout, stderr, exitCode);
+      const { exitCode, summary } = await collectTaskRunStream({
+        stdout: proc.stdout,
+        stderr: proc.stderr,
+        exited: proc.exited,
+        onProgress: onStatus,
+      });
       return {
         ok: exitCode === 0,
         sessionId,

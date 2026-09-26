@@ -8,7 +8,12 @@
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { runPlugin } from "../plugins/run.ts";
-import type { AgentEvent, ExecuteFn, ExecuteResult } from "./types.ts";
+import type {
+  AgentEvent,
+  AgentTokenUsage,
+  ExecuteFn,
+  ExecuteResult,
+} from "./types.ts";
 import {
   loadTierFromEnv,
   type CapabilityTier,
@@ -66,6 +71,11 @@ export type CreateTaskExecuteOpts = {
   allowlist?: ReadonlySet<string> | string[];
   /** Forward ToolCall / ToolResult / Text to the outer loop. */
   onEvent?: (event: AgentEvent) => void;
+  /**
+   * Running provider token totals across rounds and attempts, called after
+   * each OpenAI-compatible response that carries `usage` (REQ-agent-073).
+   */
+  onUsage?: (totals: AgentTokenUsage) => void;
   /** Cap LLM↔tool rounds per execute attempt (default 8). */
   maxToolRounds?: number;
   /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
@@ -125,6 +135,19 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const maxToolRounds = opts.maxToolRounds ?? 8;
   const includeDangerous = Boolean(opts.includeDangerous);
   const onEvent = opts.onEvent;
+  const totals: AgentTokenUsage = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+  const onUsage = opts.onUsage
+    ? (u: AgentTokenUsage) => {
+        totals.promptTokens += u.promptTokens;
+        totals.completionTokens += u.completionTokens;
+        totals.totalTokens += u.totalTokens;
+        opts.onUsage?.({ ...totals });
+      }
+    : undefined;
   if (opts.loadPlugins !== false) {
     loadBuiltins();
   }
@@ -146,6 +169,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         verifyFeedback,
         signal,
         tools: [],
+        onUsage,
       });
     }
 
@@ -162,6 +186,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       nonInteractive,
       allowlist,
       onEvent,
+      onUsage,
       maxToolRounds,
     });
   };
@@ -179,6 +204,7 @@ type LoopArgs = {
   nonInteractive: boolean;
   allowlist: Set<string>;
   onEvent?: (event: AgentEvent) => void;
+  onUsage?: (usage: AgentTokenUsage) => void;
   maxToolRounds: number;
 };
 
@@ -195,6 +221,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     nonInteractive,
     allowlist,
     onEvent,
+    onUsage,
     maxToolRounds,
   } = args;
 
@@ -238,6 +265,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       messages,
       tools,
       signal,
+      onUsage,
     });
 
     if (!completion.ok) {
@@ -338,6 +366,7 @@ async function singleChatCompletion(opts: {
   verifyFeedback?: string;
   signal: AbortSignal;
   tools: OpenAiToolDef[];
+  onUsage?: (usage: AgentTokenUsage) => void;
 }): Promise<ExecuteResult> {
   const userParts = [
     opts.taskText ? `Task:\n${opts.taskText}` : "Task: (none provided)",
@@ -360,6 +389,7 @@ async function singleChatCompletion(opts: {
     messages,
     tools: opts.tools,
     signal: opts.signal,
+    onUsage: opts.onUsage,
   });
   if (!completion.ok) {
     return { summary: completion.error, filesChanged: [] };
@@ -377,6 +407,7 @@ async function chatCompletions(opts: {
   messages: ChatMessage[];
   tools: OpenAiToolDef[];
   signal: AbortSignal;
+  onUsage?: (usage: AgentTokenUsage) => void;
 }): Promise<
   | { ok: true; message: ChatMessage }
   | { ok: false; error: string }
@@ -422,11 +453,45 @@ async function chatCompletions(opts: {
     return { ok: false, error: "LLM response was not JSON" };
   }
 
+  // Tokens were spent even if the message shape is off — report first.
+  const usage = extractUsage(data);
+  if (usage) opts.onUsage?.(usage);
+
   const message = extractAssistantMessage(data);
   if (!message) {
     return { ok: false, error: "LLM response missing assistant message" };
   }
   return { ok: true, message };
+}
+
+function usageCount(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0
+    ? Math.floor(v)
+    : undefined;
+}
+
+/**
+ * Read OpenAI-compatible `usage` (prompt_tokens / completion_tokens /
+ * total_tokens). Null when the provider omitted it.
+ */
+export function extractUsage(data: unknown): AgentTokenUsage | null {
+  if (!data || typeof data !== "object") return null;
+  const raw = (data as { usage?: unknown }).usage;
+  if (!raw || typeof raw !== "object") return null;
+  const u = raw as Record<string, unknown>;
+  const prompt = usageCount(u.prompt_tokens);
+  const completion = usageCount(u.completion_tokens);
+  const total = usageCount(u.total_tokens);
+  if (prompt === undefined && completion === undefined && total === undefined) {
+    return null;
+  }
+  const promptTokens = prompt ?? 0;
+  const completionTokens = completion ?? 0;
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: total ?? promptTokens + completionTokens,
+  };
 }
 
 function extractAssistantMessage(data: unknown): ChatMessage | null {

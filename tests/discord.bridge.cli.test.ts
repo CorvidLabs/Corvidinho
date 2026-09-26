@@ -6,7 +6,7 @@ import { createNullGateway } from "../src/discord/gateway.ts";
 import { routeMessage } from "../src/discord/message-router.ts";
 
 describe("discord bridge CLI / start semantics", () => {
-  test("--protocol-version prints 1", async () => {
+  test("--protocol-version prints 2 (ndjson event stream, #73)", async () => {
     const proc = Bun.spawn(["bun", "src/cli.ts", "--protocol-version"], {
       cwd: import.meta.dir + "/..",
       stdout: "pipe",
@@ -17,7 +17,8 @@ describe("discord bridge CLI / start semantics", () => {
       new Response(proc.stdout).text(),
     ]);
     expect(code).toBe(0);
-    expect(out.trim()).toBe(String(CORVIDINHO_PROTOCOL_VERSION));
+    expect(CORVIDINHO_PROTOCOL_VERSION).toBe(2);
+    expect(out.trim()).toBe("2");
   });
 
   test("discord bridge without token exits cleanly", async () => {
