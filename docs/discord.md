@@ -3,14 +3,14 @@
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
 **As of:** 2026-09-26 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6) and [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
 
 ---
 
-## Slash commands (eight: DISCORD-4 six + /schedule + /announce)
+## Slash commands (nine: DISCORD-4 six + /schedule + /announce + /admin)
 
 Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globals when `DISCORD_GUILD_ID` is set (`discord register-commands` / ClientReady).
 
@@ -30,6 +30,10 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/schedule delete` | `schedule` (id) | yes | Delete (ADMIN) |
 | `/announce channel` | `channel` (CHANNEL picker), optional `clear` (bool) | yes | Set/clear dedicated ops/dev announcements channel (ADMIN; DISCORD-ANNOUNCE-1..2/5) |
 | `/announce show` | — | yes | Show current announcements channel; empty = not configured (DISCORD-ANNOUNCE-3) |
+| `/admin users add` | `user` (user picker, required) | yes | Approve a user: add to `[discord].users` in the allowlist file + live (owner only; ADMIN-1) |
+| `/admin channels add` | `channel` (CHANNEL picker, guild text, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
+| `/admin channels remove` | `channel` (CHANNEL picker, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
+| `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
 Gate order for every slash: **channel allowlist → mute/rate → minPermission → handler**.
@@ -51,6 +55,39 @@ flowchart TD
   G -->|deny| H[Ephemeral not authorized]
   G -->|allow| I[Persist channel id in SQLite]
   J["/announce show or /status"] --> K[Show channel or not configured]
+```
+
+### Runtime admin (`/admin`, ADMIN-1..4)
+
+Owner-only (IDENTITY-2): the dispatcher floor is ADMIN **and** the handler re-checks ADMIN itself before anything else (ADMIN-4 / DISCORD-7). No owner ⇒ nobody can run `/admin`. Every reply is ephemeral.
+
+| Knob | Updatable from Discord? | Where it lands |
+|------|------------------------|----------------|
+| `[discord].users` | yes — `/admin users add` (approve) | allowlist file + live |
+| `[discord].channels` | yes — `/admin channels add` / `remove` | allowlist file + live |
+| Env lists (`CORVIDINHO_DISCORD_ALLOW_*`, `DISCORD_CHANNEL_IDS`), owner (`CORVIDINHO_OWNER_*` / `[owner]`), rate limits, roles, deny lists, `[github]` | no — shown by `/admin config show`; edit on the VM and restart | — |
+
+- **One store.** Writes go to the allowlist file the bridge already loaded (`CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml|json`; created `0600` on first write if missing). The rewrite is atomic (temp file in the same dir + fsync + rename, mode kept, symlink target followed). TOML edits touch only the one key line inside `[discord]`; `[owner]`, `[github]`, comments and blank lines stay verbatim. JSON keeps every other key and refuses files whose numeric ids would lose precision.
+- **Live, no restart.** The live list is recomputed exactly as a restart would load it (file ∪ env) and spliced in place, so the router, scheduler, slash gate and `/status` see it immediately.
+- **Env is read-only at runtime.** Env entries are never written to the file. Removing an env-only channel is refused with a pointer to the VM env; removing a file+env channel removes it from the file and says it is still live via env.
+- **Empty stays deny-all.** Deny lists still win (adding a deny-listed id is refused). Removing the last live channel is refused — it would lock out every message and slash (including `/admin`) and the bridge would refuse to start. A channel that is also on `deny_channels` does not count as live, so a removal that would leave only deny-listed channels is refused too (same lockout, since deny wins).
+- **First user narrows access.** While `users` and `roles` are both empty, callers in an allowlisted channel resolve to STANDARD. Adding the first user flips every unlisted non-owner caller to BLOCKED; the reply warns about it.
+- **Audit (SAFE-5).** Each mutation appends `started` then `ok`/`error` rows (surface `discord:admin`, actor = invoker id, args digest only) to the shared audit chain before touching the file; if the trail is unavailable the command fails closed. Guard refusals (deny-listed id, env-only entry, last channel) and a non-owner caught by the handler re-check append `denied` (the dispatcher floor refuses non-owners before the handler, without a row). The reply names the row numbers.
+- Subcommand groups: the gateway flattens `SUB_COMMAND_GROUP` options (`/admin users add`) into `subcommandGroup` + `subcommand` + options.
+
+```mermaid
+flowchart TD
+  A["/admin users|channels …"] --> B{channel allowlisted?}
+  B -->|no| T[Ephemeral tip / zero-width ack]
+  B -->|yes| C{minPermission ADMIN<br/>owner only}
+  C -->|no| N[Ephemeral not authorized]
+  C -->|yes| D{handler re-check ADMIN}
+  D -->|no| N
+  D -->|yes| E{deny-listed / env-only /<br/>last channel?}
+  E -->|yes| R[Ephemeral refusal + audit denied]
+  E -->|no| F[Audit started — fail closed]
+  F --> G[Atomic file write + live splice]
+  G --> H[Audit ok + ephemeral before/after counts]
 ```
 
 ### Memory (no slash)
@@ -95,13 +132,13 @@ Outside an allowlisted channel (or from a non-configured user when a user allowl
 | **MessageCreate** (@mention / reply / thread) | **Silent** — no public reply, no DM, no reaction | **Silent** (MessageCreate has no ephemeral; tip is slash-only) |
 | **Slash** | Ephemeral **zero-width** ack (`\u200b`) only — Discord requires a response within 3s; no useful leak | Ephemeral **allowlist tip** (how to add channel/user to config + restart) |
 
-Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`, `/schedule` mutations, `/announce channel`) still uses ephemeral `"not authorized"` (different from channel deny).
+Never post a public `"not authorized"` on channel deny. Insufficient permission for admin-shaped commands (`/mute`, `/unmute`, `/schedule` mutations, `/announce channel`, `/admin`) still uses ephemeral `"not authorized"` (different from channel deny).
 
 Admin detection: `resolvePermissionLevel` — ADMIN is owner-only (IDENTITY-2): the configured owner (IDENTITY-1: `CORVIDINHO_OWNER_DISCORD_ID` or allowlist `[owner].discord_id`) is ADMIN unless muted or deny-listed. No owner ⇒ nobody ADMIN (IDENTITY-3). `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` no longer grant ADMIN; the bridge and `doctor` warn when they are set. `/status` shows only “Owner configured: yes/no” plus the display name.
 
 Tip text (approx.):
 
-> This channel isn’t allowlisted. Add its id to discord.channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.
+> This channel isn’t allowlisted. From an allowlisted channel run `/admin channels add` and pick it (live, no restart), or add its id to [discord].channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_ALLOW_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.
 
 ```mermaid
 flowchart TD
@@ -136,6 +173,7 @@ flowchart TD
 - Types / tip constants: `src/discord/types.ts` (`ALLOWLIST_DENY_TIP`, `EPHEMERAL_SILENT_ACK`)
 - Presence: `src/discord/presence.ts`
 - Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
+- Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
 - Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
 
 

@@ -127,7 +127,7 @@ export const NOT_AUTHORIZED = "not authorized";
  * Never post this publicly; MessageCreate has no ephemeral → silent there.
  */
 export const ALLOWLIST_DENY_TIP =
-  "This channel isn’t allowlisted. Add its id to discord.channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.";
+  "This channel isn’t allowlisted. From an allowlisted channel run `/admin channels add` and pick it (live, no restart), or add its id to [discord].channels in ~/.config/corvidinho/allowlist.toml (or CORVIDINHO_DISCORD_ALLOW_CHANNELS / DISCORD_CHANNEL_IDS) and restart the bridge.";
 /**
  * Ephemeral zero-width ack for non-admin slash deny (DISCORD-DENY-3).
  * Discord requires an interaction response within 3s; true zero response is

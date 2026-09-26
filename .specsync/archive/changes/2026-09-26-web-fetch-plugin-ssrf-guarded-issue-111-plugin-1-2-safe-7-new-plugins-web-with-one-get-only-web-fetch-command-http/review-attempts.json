@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "web-fetch-plugin-ssrf-guarded-issue-111-plugin-1-2-safe-7-new-plugins-web-with-one-get-only-web-fetch-command-http",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "18bcb1569eb38ad92d2bd02fd08eb86079298521",
+      "contract_digest": "7df5878d8fd73d76dede2704938e9e793c6fe2dd95a69182662b39106fe72b69",
+      "execution_digest": "ac1d0e42ee6e0bda6e4c5fe31a62913ab8c3b50c22458033d1bc6633eab727aa",
+      "workspace_digest": "901e89bb0ea822ec55043dfd01dffe15e4ad8f1286107c62421d832eb6a4f744",
+      "timestamp": 1790456669
+    }
+  ]
+}

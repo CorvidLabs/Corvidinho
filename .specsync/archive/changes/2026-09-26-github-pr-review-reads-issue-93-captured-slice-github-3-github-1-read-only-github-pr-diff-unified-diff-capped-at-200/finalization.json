@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200",
+  "implementation_commit": "46074bb40f2c49d74d226e11c41d9848ec69e020",
+  "implementation_tree": "06770e02895472489a15a09487160dac47a2adde",
+  "contract_digest": "87097adc7a8ec1aacde5605ac8b83ac7b8c58e5667c97c5a66d7d35cc231ab83",
+  "workspace_digest": "9d6a57733b0fff50b823f0724cdd44375bab7303a0b952dca0db9009aa5260da",
+  "closing_digest": "d352e000b0ea3f79af0fa09641d93565a01817f728c311469e14dc51aaa7417c",
+  "review_digest": "12439f4eb24081466843324a996b2948d61c0f16ad472d8acc70c613ff9ad953",
+  "finalization_digest": "509bd832900f449e95363553c3f7b07ecaee66a67f84c6130869d3e571d2b697",
+  "timestamp": 1790457004
+}

@@ -1,0 +1,138 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790455693,
+      "digest": "b901da413a5b8423d973486f8976ec4f341315b50882438b7019cf4112b376e3",
+      "note": "ROLES-CHAT-2..7 gates: mutating catalog+run refuse for non-ADMIN; ADMIN behind SAFE; tests green",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat",
+        "title": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
+        "description": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "plugins/files",
+          "src/agent",
+          "src/plugins",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Non-ADMIN acting sessions: catalog omits mutating tools; runPlugin refuses files-write/edit/delete, shell-exec, github-pr-create, memory-forget with not-allowed-for-your-role. ADMIN (CORVIDINHO_ACTING_IS_ADMIN=1 + owner re-check) can reach mutating paths still gated by SAFE-1. Channel allowlist still required. Automated tests cover ROLES-CHAT-7 a/b/c. Package 0.0.13 + CHANGELOG."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "6dd537dce9b5548b3d5bb0c88a1e0e86f24a7fd9956ec84aaa81f9c599eae8b6",
+        "plugins": "c021deb02f022bd9857640cbfa8723a17ea7371c866d95e59b401296508ea7a7"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790456065,
+      "digest": "b901da413a5b8423d973486f8976ec4f341315b50882438b7019cf4112b376e3",
+      "note": "Re-approve full-section deltas after rebase wipe; package 0.0.14",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat",
+        "title": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
+        "description": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "plugins/files",
+          "src/agent",
+          "src/plugins",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Non-ADMIN acting sessions: catalog omits mutating tools; runPlugin refuses files-write/edit/delete, shell-exec, github-pr-create, memory-forget with not-allowed-for-your-role. ADMIN (CORVIDINHO_ACTING_IS_ADMIN=1 + owner re-check) can reach mutating paths still gated by SAFE-1. Channel allowlist still required. Automated tests cover ROLES-CHAT-7 a/b/c. Package 0.0.13 + CHANGELOG."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "7d1b29c170e2de1c8115bdd1bf3ffe0f7781836c63a4943374b2d9ed0fd11ede",
+        "plugins": "109caa1a99acef31887554a1c70d3c287aa6aa974680b000d744354ac0a333f3"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790456432,
+      "digest": "b901da413a5b8423d973486f8976ec4f341315b50882438b7019cf4112b376e3",
+      "note": "Clean tip rebase onto main+#159; v0.0.14",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat",
+        "title": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
+        "description": "ROLES-CHAT tool gates: non-ADMIN read/chat catalog + refuse mutating at run time; ADMIN still behind SAFE; tests ROLES-CHAT-7; bump 0.0.13",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "plugins/files",
+          "src/agent",
+          "src/plugins",
+          "tests"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Non-ADMIN acting sessions: catalog omits mutating tools; runPlugin refuses files-write/edit/delete, shell-exec, github-pr-create, memory-forget with not-allowed-for-your-role. ADMIN (CORVIDINHO_ACTING_IS_ADMIN=1 + owner re-check) can reach mutating paths still gated by SAFE-1. Channel allowlist still required. Automated tests cover ROLES-CHAT-7 a/b/c. Package 0.0.13 + CHANGELOG."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "7d1b29c170e2de1c8115bdd1bf3ffe0f7781836c63a4943374b2d9ed0fd11ede",
+        "plugins": "109caa1a99acef31887554a1c70d3c287aa6aa974680b000d744354ac0a333f3"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790456582,
+      "digest": "0b14a028136eff021d8f8510df8ecaa9a61b9d038a17bdf277186a918323dea4",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

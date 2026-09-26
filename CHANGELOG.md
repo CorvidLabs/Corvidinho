@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.0.16
+
+### New tools and a daemon
+
+- **`corvidinho daemon`** ([#157](https://github.com/CorvidLabs/Corvidinho/pull/157), #108) — ticks schedules headlessly without Discord (CLI-8 / AUTONOMOUS-4): single-instance lock, claim-once runs safe alongside the bridge ticker, never ADMIN, clean SIGTERM; systemd unit example in `docs/`.
+- **`web-fetch`** ([#148](https://github.com/CorvidLabs/Corvidinho/pull/148), #111) — GET-only, SSRF-guarded (SAFE-7): every resolved address checked, connection pinned to the checked IP with TLS verification on, redirects re-checked, size/time caps, text fenced as untrusted data. Dangerous (SAFE-1): needs consent or an allowlist entry.
+- **Fledge plugins as tools** ([#154](https://github.com/CorvidLabs/Corvidinho/pull/154), #112) — the project's registered Fledge plugins become `fledge-<command>` tools (dangerous by default, argv only, stripped env); `plugins list` shows each tool's schema/context cost (FLEDGE-4/5, PLUGIN-3/6).
+- **`github-pr-diff` / `github-pr-files`** ([#153](https://github.com/CorvidLabs/Corvidinho/pull/153), #93) — read a PR's unified diff (200 KiB cap, optional `--file`) and changed files; scrubbed, marked untrusted (GITHUB-3).
+- **`github-ci-status` by PR or ref** ([#158](https://github.com/CorvidLabs/Corvidinho/pull/158), #94) — branch/tag/SHA plus an overall `green|red|pending|none` verdict incl. legacy statuses (GITHUB-4). `--json` shape is now an object (`data.checks` holds the rows).
+- **Project instructions in the prompt** ([#150](https://github.com/CorvidLabs/Corvidinho/pull/150), #84) — `task run` reads the project's own `AGENTS.md` / `CLAUDE.md` (root-clamped, no symlink escape, 16 KiB cap, scrubbed) into the system prompt (AGENT-1).
+
+### Security
+
+- SAFE-6 scrubber: the PEM and JWT patterns are now linear-time and PR diffs are bounded before scrubbing, so a crafted diff can no longer stall a run (#153).
+
+### Ops
+
+- Package version **0.0.16** — presence (DISCORD-12) reads `v0.0.16` after restart.
+- **Restart the Discord bridge and `github watch`** to pick up the new tools; run `corvidinho daemon` under systemd if you want schedules without the bridge. `web-fetch` and `fledge-*` tools need a SAFE-1 allowlist entry for non-interactive runs.
+
+## 0.0.15
+
+### Owner-only `/admin` runtime allowlist (ADMIN-1..4, #43)
+
+- **ADMIN-1** — `/admin users add user:@x` approves a Discord user onto live `[discord].users` (file + in-memory; empty still deny-all).
+- **ADMIN-2** — `/admin channels add|remove channel:#x` with **native CHANNEL picker** (same pattern as `/announce channel`) mutates `[discord].channels` without hand-editing toml.
+- **ADMIN-3** — `/admin config show` is the audit-friendly read of live/file/env counts, owner, rate limits, mutes; updates go through ADMIN-1/2 only (safe knobs).
+- **ADMIN-4** — Dispatcher `minPermission: ADMIN` plus handler re-check; empty owner ⇒ nobody is ADMIN / deny-all.
+- Writes are atomic to the allowlist file the bridge already loaded (`CORVIDINHO_ALLOWLIST_FILE` or `~/.config/corvidinho/allowlist.toml`); env entries stay read-only; deny lists still win; last-channel and env-only removals refused; SAFE-5 audit rows on mutations.
+- Slash set is **nine** commands including `/admin`. Re-register after deploy.
+
+### Ops
+
+- Package version **0.0.15** — presence (DISCORD-12) reads `v0.0.15` after restart.
+- **Restart the Discord bridge** and run `discord register-commands` (or restart) so `/admin` appears in Discord.
+
+## 0.0.14
+
+### ROLES-CHAT tool gates (community read/chat vs ADMIN)
+
+- **ROLES-CHAT-2..6** — Non-ADMIN Discord/WATCH/schedule sessions (when `CORVIDINHO_ACTING_IS_ADMIN` is set) only get **read/chat** tools in the catalog; mutating tools never appear.
+- At tool-run time, non-ADMIN callers are refused for every mutating plugin — including `files-write` / `files-edit` (`mutating: true`, `dangerous: false`) — with a short in-session **not allowed for your role** (ROLES-CHAT-3/5).
+- ADMIN (owner + `CORVIDINHO_ACTING_IS_ADMIN=1`, re-checked each call) may use mutating tools still behind **SAFE-1..9** / ALLOW / MEMORY-ACL (ROLES-CHAT-4/6).
+- Prove-before-done: `tests/roles.chat.gates.test.ts` (ROLES-CHAT-7).
+- HI: [`hi/roles.md`](hi/roles.md) (captured in #159).
+
+### Ops
+
+- Package version **0.0.14** — presence (DISCORD-12) reads `v0.0.14` after restart.
+- **Restart the Discord bridge** so acting sessions pick up the role gates.
+
 ## 0.0.13
 
 ### Always verify on Discord / WATCH (#85 captured slice — AGENT-4 / FLEDGE-2)

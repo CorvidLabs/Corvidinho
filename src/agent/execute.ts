@@ -8,6 +8,10 @@
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
+import {
+  resolveActingIsAdmin,
+  roleSessionActive,
+} from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
 import {
   ASK_AGENT_SYSTEM_INSTRUCTIONS,
@@ -209,8 +213,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       // when this run's catalog may offer dangerous tools.
       await loadFledgePlugins({ cwd, env });
     }
+    let actingIsAdmin = true;
+    if (roleSessionActive(env)) {
+      actingIsAdmin = await resolveActingIsAdmin(env);
+    }
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
-    const tools = withAskTool(buildOpenAiTools({ tier, includeDangerous }));
+    const tools = withAskTool(
+      buildOpenAiTools({ tier, includeDangerous, actingIsAdmin }),
+    );
     return runToolLoop({
       llm: { ...llm, tier },
       fetchImpl,

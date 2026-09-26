@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "github-pr-review-reads-issue-93-captured-slice-github-3-github-1-read-only-github-pr-diff-unified-diff-capped-at-200",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "46074bb40f2c49d74d226e11c41d9848ec69e020",
+      "contract_digest": "87097adc7a8ec1aacde5605ac8b83ac7b8c58e5667c97c5a66d7d35cc231ab83",
+      "execution_digest": "3619f88d2a1b8116aa010080427b033361d368a589735c98309f2c3702ecb88a",
+      "workspace_digest": "9d6a57733b0fff50b823f0724cdd44375bab7303a0b952dca0db9009aa5260da",
+      "timestamp": 1790456995
+    }
+  ]
+}

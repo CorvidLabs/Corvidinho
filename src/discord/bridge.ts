@@ -10,6 +10,7 @@
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
  * DISCORD-12: presence/custom status shows shared package version.
  * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
+ * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2: a run that needs a human replies with its question and
  * pings the configured owner (ask-ping.ts).
  */
@@ -54,7 +55,13 @@ import {
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
-import { auditKeyFromEnv, formatAuditLine, verifyAudit } from "../audit/index.ts";
+import {
+  appendAudit,
+  auditKeyFromEnv,
+  formatAuditLine,
+  verifyAudit,
+  type AuditEntryInput,
+} from "../audit/index.ts";
 import { MemoryStore } from "../memory/index.ts";
 import {
   ScheduleStore,
@@ -239,6 +246,11 @@ export async function startBridge(
     ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
     : undefined;
   if (auditLine) console.log(`[discord] ${auditLine()}`);
+  // SAFE-5: /admin mutations append to the same chain (fail closed on error).
+  const recordAudit = db
+    ? (entry: AuditEntryInput) =>
+        appendAudit(db, entry, { key: auditKeyFromEnv(env) })
+    : undefined;
   const mutedUsers = new Set<string>(config.mutedUserIds);
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
@@ -293,6 +305,8 @@ export async function startBridge(
       memoryStore,
       announceStore,
       auditLine,
+      recordAudit,
+      // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,
       version,
