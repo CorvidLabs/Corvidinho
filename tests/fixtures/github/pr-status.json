@@ -1,0 +1,11 @@
+{
+  "number": 1,
+  "title": "BOOT: HI capture",
+  "url": "https://github.com/CorvidLabs/Corvidinho/pull/1",
+  "state": "OPEN",
+  "isDraft": true,
+  "mergeable": "MERGEABLE",
+  "headRefName": "corvidinho/boot-hi-scaffold",
+  "baseRefName": "main",
+  "statusCheckRollup": []
+}

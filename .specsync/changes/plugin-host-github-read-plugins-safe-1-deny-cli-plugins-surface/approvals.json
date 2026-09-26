@@ -1,0 +1,98 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790437064,
+      "digest": "94e71e779f9ae115e07a0075b329bfad2efcd461db3eaf7469772d48b82f76aa",
+      "note": "Deltas ADD REQs; living tree cleared for materialize",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+        "title": "Plugin host + GitHub read plugins + SAFE-1 deny + CLI plugins surface",
+        "description": "Plugin host + GitHub read plugins + SAFE-1 deny + CLI plugins surface",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          "AGENTS.md",
+          "STATUS.md",
+          "fledge.toml",
+          "package.json",
+          "plugins/",
+          "specs/",
+          "src/",
+          "tests/",
+          "tsconfig.json"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Typed plugin host (register/list/run) with dangerous deny in non-interactive unless allowlisted (SAFE-1/PLUGIN-2); builtins github-pr-list/status/ci-status/issue-list + plugins-list + danger-ping; CLI plugins list/run + --non-interactive/env; doctor shows plugin count; specs/plugins SpecSync module; bun test + fledge verify green; plugins list shows github+meta"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "349726f638dd12c3d5a5c8459ab4ade8def9e3852301a5b177de49541c29e4ee",
+        "plugins": "408ee2cc8ea770fbec5d3c73b9c4b0638c408f5eb4c94c8ed59e71a9e93fee9d"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790437115,
+      "digest": "586035665d4b2432d360b5ac2e15cb216ce6ad42d05bb509ba8856d3024e5c3d",
+      "note": "WATCH: renew after GITHUB-6 + rebase on ORIGIN main",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-host-github-read-plugins-safe-1-deny-cli-plugins-surface",
+        "title": "WATCH: plugin host + GitHub read + repo deny gate",
+        "description": "WATCH slice: typed plugin host, GitHub read tools, SAFE-1 deny, GITHUB-6 repo gate, SpecSync SDD",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".specsync/config.toml",
+          ".specsync/registry.toml",
+          "AGENTS.md",
+          "STATUS.md",
+          "docs/",
+          "fledge.toml",
+          "package.json",
+          "plugins/",
+          "specs/",
+          "src/",
+          "tests/",
+          "tsconfig.json"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Typed plugin host list/run with danger/minTier; SAFE-1 deny in non-interactive; github-pr-list/status/ci-status/issue-list read-only via gh JSON; GITHUB-6 requires --repo and honors DENY/ALLOW env; CLI plugins list/run + doctor count; bun test + fledge verify green; Spec Sync CI green"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "32de21bda2be07cae2c9d0442556bcfa4fcecb88ee3efca3d914fc4753372dba",
+        "plugins": "cfcb3e47947a420309548445ede3b448e09cbaeb2240c300a6210111c764f3ad"
+      }
+    }
+  ],
+  "reopenings": []
+}

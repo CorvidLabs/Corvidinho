@@ -6,9 +6,16 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["bun"],
+    "types": [
+      "bun"
+    ],
     "rootDir": ".",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "plugins/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

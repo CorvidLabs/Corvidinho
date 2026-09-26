@@ -18,10 +18,10 @@ ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1.
 
 ## Next (for Corvidinho bot / follow-on PRs)
 
-- Plugin host + GitHub read plugins (typed commands, SAFE-1 deny) on a follow-on draft PR
-- Flesh CLI beyond `help` / `doctor` / `version` / `plugins`
+- Land issue #6 plugin host (dangerous/min_tier) — this PR; GH read extras if small
+- Flesh agent loop beyond plugins CLI
 - Wire Discord behind HI criteria (later)
-- Turn draft `specs/cli` active when behavior stabilizes
+- Turn draft specs active when behavior stabilizes
 - Keep secrets out of repo; keep verify lane honest
 
 ## Verify locally

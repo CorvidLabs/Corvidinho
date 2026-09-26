@@ -1,0 +1,10 @@
+[
+  {
+    "number": 42,
+    "title": "Example issue",
+    "url": "https://github.com/CorvidLabs/Corvidinho/issues/42",
+    "state": "OPEN",
+    "updatedAt": "2026-09-26T12:00:00Z",
+    "labels": [{"name": "hi", "id": "1", "description": "", "color": "ededed"}]
+  }
+]
