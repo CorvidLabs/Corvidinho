@@ -21,6 +21,27 @@
         "REQ-plugins-087",
         "REQ-plugins-088"
       ]
+    },
+    {
+      "timestamp": 1790453017,
+      "commit": "1c25a910c33bfadf7e1c4e337716e6244ea73e5a",
+      "contract_digest": "39733e4dfb6f55d32586000d07b605a0baae7fc66e1277ee3221990c6a124a63",
+      "execution_digest": "412d2bcc8dca93bdbdc19cc0e12ec6968254ec2ad3661296c03bde7baa54a9e7",
+      "workspace_digest": "3c13f54a7a488ca24af21bf08a774529ac6e3c1e7e31c44dcc757eb62368699a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-015",
+        "REQ-plugins-086",
+        "REQ-plugins-087",
+        "REQ-plugins-088"
+      ]
     }
   ]
 }
