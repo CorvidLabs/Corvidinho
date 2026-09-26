@@ -56,7 +56,6 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
   `[watch] github rate-limit backoff ms=… until=… reason=…`.
 - **Ignore own mentions:** comments and issue-body mentions authored by `CORVIDINHO_WATCH_USERNAME` are omitted from fetched events.
 - **Search pagination bury risk:** Octokit search uses `per_page=100` sorted by `updated` desc. An org-wide qualifier (`org:… involves:…`) can still return more than one page of Corvidinho (or other) noise and **bury** pings on quieter repos (e.g. arcsite) past the first page. Prefer an explicit `repos` allowlist for critical targets, or accept that deep pages are not scanned in this thin slice.
-- **Comment window (REQ-watch-234):** for each search hit, issue/PR comments are fetched with `since` = the same poll window (2 days) and followed page by page (`per_page=100`, up to 10 pages), so a new @mention on a thread with more than 50 comments is seen. Comments last updated before the window are not fetched.
 
 HI: [`hi/watch.md`](../hi/watch.md).
 
