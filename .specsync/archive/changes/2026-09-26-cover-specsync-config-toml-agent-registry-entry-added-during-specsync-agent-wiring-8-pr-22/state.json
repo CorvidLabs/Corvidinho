@@ -7,11 +7,11 @@
   "title": "Cover .specsync/config.toml agent registry entry added during SpecSync agent wiring #8 / PR #22",
   "description": "Cover .specsync/config.toml agent registry entry added during SpecSync agent wiring #8 / PR #22",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "8fea09f0ebc9e37aa8619e93493d0177ebfaa9af",
   "created_at": 1790438289,
-  "updated_at": 1790438298,
+  "updated_at": 1790438308,
   "affected_specs": [],
   "affected_paths": [
     ".specsync/config.toml"

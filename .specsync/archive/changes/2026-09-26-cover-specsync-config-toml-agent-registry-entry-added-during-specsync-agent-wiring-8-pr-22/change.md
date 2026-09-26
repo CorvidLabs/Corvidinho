@@ -1,6 +1,6 @@
 ---
 id: cover-specsync-config-toml-agent-registry-entry-added-during-specsync-agent-wiring-8-pr-22
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 8fea09f0ebc9e37aa8619e93493d0177ebfaa9af
 ---
