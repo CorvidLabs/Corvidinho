@@ -1,7 +1,6 @@
 ---
 module: cli
-version: 10status: draft
-files:
+version: 10status: draftfiles:
   - src/cli.ts
 
 db_tables: []
@@ -68,4 +67,4 @@ task run + --no-verify prove-before-done surface (2026-09-26, corvid-agent).
 Document default-deny allowlists + wallet deferral (2026-09-26, corvid-agent).
 | 2026-09-26 | safe-default-deny-allowlists-for-github-orgs-repos-users-and-discord-channels-roles-users-file-env-config-on-bot-vm: SAFE: default-deny allowlists for GitHub orgs/repos/users and Discord channels/roles/users; file+env config on bot VM; empty allowlist denies all; AlgoChat wallets deferred (WALLET HI only); integrates GITHUB-6; Discord stub for HEAR #5 |
 plugins list/run + non-interactive + doctor plugin count (2026-09-26, corvid-agent).
-
+| 2026-09-26 | steal-prove-before-done-agent-loop-refuse-done-until-fledge-verify-passes-agent-4-fledge-2-states-planning-executing: STEAL prove-before-done agent loop: refuse done until fledge verify passes (AGENT-4 / FLEDGE-2); states planning/executing/verifying/done; CLI --no-verify; config verify_before_complete |
