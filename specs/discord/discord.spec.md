@@ -81,6 +81,10 @@ files:
   - tests/discord.ask-ping.test.ts
   - src/discord/thin-ack.ts
   - tests/discord.thin-ack.test.ts
+  - src/discord/ask-buttons.ts
+  - src/agent/ask-options.ts
+  - tests/discord.ask-buttons.test.ts
+  - tests/discord.ask-ephemeral.test.ts
 
 db_tables: []
 depends_on:
@@ -112,20 +116,22 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
-Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6):
-`src/discord/ask-ping.ts` exports `formatAskReply`, `defangMassMentions`,
-`ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`. Clarify mentions
-`requesterDiscordId`; stuck mentions the configured owner. `AgentSpawnResult`
-gains optional `ask` (validated from the `result` frame); the gateway `reply`
-takes optional `mentionUserIds` (live gateway sets `allowedMentions` to those
-users plus the replied-to author); `SchedulerService` takes `owner` and its
-outbound `post` forwards `mentionUserIds`. Schedule pings are deduped per
-question: `askPingKey` digests the ask; `Schedule.askPingKey` /
-`ScheduleStore.setAskPingKey` persist it in `schedules.ask_ping_key` (schema
-v7). Sessions persist `pendingAsk` in `discord_sessions.pending_ask` (schema
-v8, `SCHEMA_VERSION` 8). `src/discord/thin-ack.ts` exports `isThinAck` /
-`isCancelAsk` / `ASK_CANCELLED_ACK`: while `pendingAsk` is set, a thin-ack
-continue restates the ask without spawning the agent; cancel clears it.
+Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6 /
+DISCORD-ASK / SESSION-MULTI): `src/discord/ask-ping.ts` exports `formatAskReply`,
+`defangMassMentions`, `ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`.
+Clarify mentions `requesterDiscordId`; stuck mentions the configured owner.
+When an ask has structured options (or a numbered list in the question),
+`src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
+an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
+`ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
+`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
+Gateway `reply` accepts optional `components`; `onComponent` handles button
+custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
+in `discord_sessions.pending_ask` (schema v8). Button pending asks are NOT
+cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
+substantive continue. Message router keys sessions by Discord user id + channel
+(SESSION-MULTI-1); reply/thread continue only for the session owner.
+`src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
 
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
@@ -276,3 +282,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
 | 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
 | 2026-09-26 | agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is: Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted |
+| 2026-09-26 | discord-ask-ephemeral-buttons-session-multi: DISCORD-ASK-1..5 ephemeral button asks + SESSION-MULTI-1..4 per-user sessions (package 0.0.22) |
+| 2026-09-26 | discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22: DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22 |

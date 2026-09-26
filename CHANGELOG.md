@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.22
+
+### Ephemeral Discord button asks + multi-user sessions
+
+- **DISCORD-ASK-1..5** — Clarify/stuck choices that fit a short list use Discord **buttons** (ephemeral choice UI). Public channel gets a short Choose stub (no MCQ spam); the requester presses Choose to see options privately. Button prompts expire after ~30 minutes; late press → `that choice expired`. Free-text ask-ping remains when options cannot be listed.
+- **SESSION-MULTI-1..4** — Concurrent users in one channel each keep their own session (user id + channel). Reply/thread continue only for the session owner. Chat while buttons are open continues the conversation without clearing the pending ask; memory stays scoped to the acting Discord user.
+- **ask-human** — Optional `options` array (or numbered choices in the question) drives the button UI.
+
+### Ops
+
+- Package version **0.0.22** — restart the Discord bridge after update. No schema bump (pending_ask JSON gains askId/expiresAt/options; still schema v8).
+
+
 ## 0.0.21
 
 ### Security and correctness sweep (bug-fix PRs from an adversarial bug hunt)

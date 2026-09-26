@@ -367,4 +367,17 @@ Acceptance Criteria
 - A PEM private key that starts before the 1800-char chat body cap or the 4000-char result frame cap and ends after it leaves no header or key body in the chat body, the result frame, or the WATCH comment and spawn log.
 - Token-free summaries, stdout and stderr are trimmed and clipped exactly as before; a result frame within the cap carries the same TaskResult object.
 - Fixture tests use runtime-built fake secrets and no network.
+### REQ-agent-045
+
+`ask-human` SHALL accept an optional `options` array of short labels (2–5).
+`askFromToolArguments` / `askFromUnknown` SHALL populate `HumanAsk.options`
+when provided or when the question contains a numbered/lettered choice list
+(`resolveAskOptions`). `ASK_AGENT_SYSTEM_INSTRUCTIONS` SHALL steer the model
+to prefer options for Discord ephemeral buttons and free-text only when
+choices cannot be listed.
+
+Acceptance Criteria
+- Tool args with options:2+ → HumanAsk.options set.
+- Numbered question lines parse into options when structured options absent.
+- Single or empty options do not set HumanAsk.options.
 
