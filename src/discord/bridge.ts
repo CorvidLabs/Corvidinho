@@ -11,8 +11,8 @@
  * DISCORD-12: presence/custom status shows shared package version.
  * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
- * AUTONOMY-1/2: a run that needs a human replies with its question and
- * pings the configured owner (ask-ping.ts).
+ * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
+ * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -21,6 +21,11 @@ import {
   createSpawnAgentClient,
 } from "./agent-client.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
+import {
+  ASK_CANCELLED_ACK,
+  isCancelAsk,
+  isThinAck,
+} from "./thin-ack.ts";
 import {
   goLiveChecklist,
   loadBridgeConfig,
@@ -362,6 +367,57 @@ export async function startBridge(
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
 
+      // AUTONOMY-5/6: while waiting on an ask, thin acks restate; cancel clears.
+      if (
+        action.kind === "continue_session" &&
+        session.pendingAsk &&
+        (isThinAck(prompt) || isCancelAsk(prompt))
+      ) {
+        if (isCancelAsk(prompt)) {
+          store.setPendingAsk(session, null);
+          if (replyRef.fn) {
+            const sent = await replyRef.fn({
+              channelId,
+              content: ASK_CANCELLED_ACK,
+              replyToMessageId: msg.id,
+            });
+            if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
+          } else {
+            store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+          }
+          return;
+        }
+        // Thin ack: restate pending question once; do not spawn agent.
+        const restated = formatAskReply({
+          ask: session.pendingAsk,
+          owner: config.owner,
+          requesterDiscordId: msg.authorId,
+          replyHint: true,
+        });
+        if (replyRef.fn) {
+          const sent = await replyRef.fn({
+            channelId,
+            content: restated.content,
+            replyToMessageId: msg.id,
+            mentionUserIds: restated.mentionUserIds,
+          });
+          if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
+        } else {
+          store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+        }
+        return;
+      }
+
+      // AUTONOMY-6: substantive continue clears pending ask and carries context.
+      let agentPrompt = prompt;
+      if (action.kind === "continue_session" && session.pendingAsk) {
+        const prior = session.pendingAsk.question;
+        agentPrompt =
+          `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
+          `Human answer:\n${prompt}`;
+        store.setPendingAsk(session, null);
+      }
+
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
 
@@ -402,7 +458,7 @@ export async function startBridge(
         // above): the agent's file tools only open paths under its cwd
         // (REQ-discord-013).
         let enrichedPrompt = await enrichPromptWithImages(
-          prompt,
+          agentPrompt,
           msg.attachments,
           {
             messageId: msg.id,
@@ -485,23 +541,29 @@ export async function startBridge(
           })
         : undefined;
       const thinkExtras = { plumbing, model: llmModel };
-      // AUTONOMY-1/2: needs a human → question to the requester + owner ping.
+      // AUTONOMY-1/2/4: needs a human → question; clarify pings requester, stuck pings owner.
       const ask = result.ask
         ? formatAskReply({
             ask: result.ask,
             owner: config.owner,
+            requesterDiscordId: msg.authorId,
             context: result.summary,
             replyHint: true,
           })
         : null;
       if (ask) {
+        store.setPendingAsk(session, result.ask!);
         await (ask.failed
           ? thinking.fail(ask.status, thinkExtras)
           : thinking.done(ask.status, thinkExtras));
-        if (!ask.ownerPinged) console.warn(ASK_NO_OWNER_WARNING);
+        if (result.ask!.reason === "stuck" && !ask.ownerPinged) {
+          console.warn(ASK_NO_OWNER_WARNING);
+        }
       } else if (result.ok) {
+        if (session.pendingAsk) store.setPendingAsk(session, null);
         await thinking.done("✅ Done", thinkExtras);
       } else {
+        if (session.pendingAsk) store.setPendingAsk(session, null);
         await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
       }
 

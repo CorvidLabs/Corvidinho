@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.20
+
+### Autonomy clarify UX — AUTONOMY-4..7
+
+- **AUTONOMY-4** — Clarify asks ping the **requester** (message author / schedule creator). The configured owner is pinged only for **stuck** (verify/help), or when the requester is the owner.
+- **AUTONOMY-5** — While a session waits on an ask, thin replies (`ok`, `k`, `sure`, `hmmm`, emoji-only, …) do **not** clear blocked or mark done; the bridge restates the pending question once (no vacuous “ready when you are”).
+- **AUTONOMY-6** — Session stays blocked until a substantive answer or an explicit cancel (`cancel` / `nevermind` / …). Pending ask is durable on the session (`discord_sessions.pending_ask`, schema **v8**).
+- **AUTONOMY-7** — Impossible / joke “free energy / dark matter / zero-point” style asks: system prompt steers a witty public-safe decline or tiny toy demo — not a long formal MCQ / ask-human first.
+
+### Ops
+
+- Package version **0.0.20** — restart the Discord bridge after update (DB migrates to schema v8 on first open).
+
 ## 0.0.19
 
 ### Dogfood UX — identity, clean replies, thinking embed, public Q&A
