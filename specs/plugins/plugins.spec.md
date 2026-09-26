@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 38
+version: 39
 status: draft
 files:
   - src/plugins/types.ts
@@ -70,6 +70,9 @@ files:
   - src/plugins/toolCost.ts
   - tests/fledge.plugins.test.ts
   - tests/fledge.cli.test.ts
+  - tests/fledge.hardening.test.ts
+  - src/plugins/proc-group.ts
+  - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
 
 db_tables: []
@@ -105,6 +108,13 @@ register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
 `createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
 limiter and timeout. `PluginCommand.autonomous?: boolean`;
 `PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
+`src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
+`signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
+`trackChildProcess` and `trackedChildProcesses` for children spawned with
+`detached: true`. The registry exports `unregister(name, command)` (removes a
+name only while it is still that exact command). `plugins/fledge` exports
+`fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
+root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
 
 ## Invariants
 
@@ -180,6 +190,13 @@ time, in order, usage (exit 1), the
 AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
+
+Fledge commands (REQ-plugins-112/113) run `fledge plugins run <command> --
+<argv...>`, are bound to the project root they were discovered for (another
+root's load rebinds or removes them; a call from another cwd is refused), and
+run in their own process group so a timeout or abort stops the whole tree.
+Bounded children (Fledge runs, delegate workers, spawned schedule/chat runs)
+never outlive their limit or this process (REQ-plugins-154).
 
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
@@ -276,6 +293,8 @@ for dangerous tools. Role is re-checked via owner config each call.
 | delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
 | delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
+| fledge-* called from a cwd other than its bound project root | Refuse (exit 2); fledge not started |
+| fledge-* times out / calling run aborts | exit 124 / 130; plugin process tree killed |
 
 ## Dependencies
 
@@ -288,6 +307,7 @@ for dangerous tools. Role is re-checked via owner config each call.
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays |
+| /proc (Linux) | process-tree walk for bounded child stops (proc-group) |
 
 ## Change Log
 

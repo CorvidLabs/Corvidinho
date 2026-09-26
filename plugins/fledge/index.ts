@@ -5,10 +5,18 @@
  * Async and lazy — only `plugins list`, `plugins run fledge-*` and the tool
  * loop (when dangerous tools are offered) pay for the fledge subprocess.
  * Discovery failures never break builtins; the report says why.
+ *
+ * Project scope: the registry holds one command per name, so Fledge commands
+ * are bound to the project root (resolved cwd) they were discovered for.
+ * Loading another root rebinds same-named commands to that root and removes
+ * the ones it does not have; a bound command refuses a call from any other
+ * cwd. A long-running process therefore never offers or runs one project's
+ * plugin, tier or danger marking under another project's name.
  */
 
 import { resolve } from "node:path";
-import { get, register } from "../../src/plugins/registry.ts";
+import type { PluginCommand } from "../../src/plugins/types.ts";
+import { get, register, unregister } from "../../src/plugins/registry.ts";
 import {
   discoverFledgePlugins,
   type DiscoverOptions,
@@ -24,9 +32,28 @@ export type FledgeLoadReport = FledgeDiscovery & {
 
 const cache = new Map<string, FledgeLoadReport>();
 
-/** Test seam: forget earlier discovery results. */
+/** Fledge commands currently in the registry, by name, with their project root. */
+const bound = new Map<string, { root: string; command: PluginCommand }>();
+
+/** Test seam: forget earlier discovery results and their registrations. */
 export function resetFledgeDiscovery(): void {
   cache.clear();
+  for (const [name, b] of bound) unregister(name, b.command);
+  bound.clear();
+}
+
+/** Project root each registered Fledge command is bound to (status / tests). */
+export function fledgeBindings(): { name: string; root: string }[] {
+  return [...bound].map(([name, b]) => ({ name, root: b.root }));
+}
+
+/** A cached report still describes the registry for `root`. */
+function isCurrent(root: string, report: FledgeLoadReport): boolean {
+  for (const b of bound.values()) if (b.root !== root) return false;
+  return report.registered.every((n) => {
+    const b = bound.get(n);
+    return b !== undefined && get(n) === b.command;
+  });
 }
 
 export async function loadFledgePlugins(
@@ -34,7 +61,7 @@ export async function loadFledgePlugins(
 ): Promise<FledgeLoadReport> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const cached = cache.get(cwd);
-  if (cached && !opts.force && cached.registered.every((n) => get(n))) {
+  if (cached && !opts.force && isCurrent(cwd, cached)) {
     return cached;
   }
 
@@ -51,6 +78,8 @@ export async function loadFledgePlugins(
     };
   }
 
+  // From here on no await: the registry is rebound for `cwd` in one step.
+  const previous = new Map(bound);
   const registered: string[] = [];
   const skipped: { name: string; reason: string }[] = [];
   if (discovery.ok && discovery.fledgeBin) {
@@ -59,21 +88,35 @@ export async function loadFledgePlugins(
       for (const command of info.commands) {
         const name = fledgeCommandName(command);
         const existing = get(name);
-        if (existing) {
-          if (existing.origin === origin) {
-            registered.push(name);
-          } else {
-            skipped.push({
-              name,
-              reason: `name already registered by ${existing.origin ?? "builtin"}`,
-            });
-          }
+        const prev = previous.get(name);
+        const ours = prev !== undefined && existing === prev.command;
+        if (existing && (!ours || registered.includes(name))) {
+          // A builtin, another plugin, or an earlier command of this load.
+          skipped.push({
+            name,
+            reason: `name already registered by ${existing.origin ?? "builtin"}`,
+          });
           continue;
         }
-        register(fledgePluginCommand(info, command, discovery.fledgeBin, opts.env));
+        if (ours && prev.root === cwd && existing?.origin === origin) {
+          registered.push(name);
+          continue;
+        }
+        // Bound to another project root, or a different plugin/version now.
+        if (ours) unregister(name, prev.command);
+        const cmd = fledgePluginCommand(info, command, discovery.fledgeBin, opts.env, cwd);
+        register(cmd);
+        bound.set(name, { root: cwd, command: cmd });
         registered.push(name);
       }
     }
+  }
+  // Commands left from another root (or no longer offered here) leave the
+  // registry, so this root's catalog never lists them.
+  for (const [name, prev] of previous) {
+    if (registered.includes(name)) continue;
+    unregister(name, prev.command);
+    bound.delete(name);
   }
 
   const report: FledgeLoadReport = { ...discovery, registered, skipped };

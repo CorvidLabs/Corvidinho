@@ -37,18 +37,26 @@ function makeDue(db: Database, id: string, at: number): void {
   db.run("UPDATE schedules SET next_run_at = ? WHERE id = ?", [at, id]);
 }
 
-function gatedAgent(): { agent: AgentClient; release: () => void; calls: number[] } {
+function gatedAgent(): {
+  agent: AgentClient;
+  release: () => void;
+  calls: number[];
+  signals: Array<AbortSignal | undefined>;
+} {
   let release!: () => void;
   const gate = new Promise<void>((r) => {
     release = r;
   });
   const calls: number[] = [];
+  const signals: Array<AbortSignal | undefined> = [];
   return {
     calls,
+    signals,
     release: () => release(),
     agent: {
-      async runChat({ sessionId }) {
+      async runChat({ sessionId, signal }) {
         calls.push(Date.now());
+        signals.push(signal);
         await gate;
         return { ok: true, sessionId, summary: "done", exitCode: 0 };
       },
@@ -177,9 +185,13 @@ describe("ScheduleStore across processes", () => {
       createdByUserId: "owner",
     });
     const storeB = new ScheduleStore({ db: dbB });
+    const run1 = storeA.claimRun(s)!;
+    // storeB sees the claimed row (0 failures), then claims the next run.
+    storeB.refresh();
     const sb = storeB.get(s.id)!;
-    const run1 = storeA.markRunStarted(s);
-    const run2 = storeB.markRunStarted(sb);
+    const run2 = storeB.claimRun(sb)!;
+    expect(run1).not.toBeNull();
+    expect(run2).not.toBeNull();
     storeA.markRunFinished(s, run1, { ok: false, error: "boom" });
     // storeB's cached row is stale (0 failures) — the count still reaches 2.
     storeB.markRunFinished(sb, run2, { ok: false, error: "boom" });
@@ -231,8 +243,11 @@ describe("SchedulerService drain / abandon", () => {
     });
     expect((await service.tick()).started).toEqual([s.id]);
     expect(await service.drain(20)).toBe(false);
+    expect(gated.signals[0]?.aborted).toBe(false);
     expect(service.abandonInFlight("interrupted: test")).toEqual([s.id]);
     expect(service.runningIds()).toEqual([]);
+    // The abandoned run's agent is told to stop (its process tree is killed).
+    expect(gated.signals[0]?.aborted).toBe(true);
     gated.release();
     await settle();
     // The late agent result does not record the run a second time.

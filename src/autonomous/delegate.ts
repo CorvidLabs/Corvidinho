@@ -17,7 +17,9 @@
  * - at most 2 workers at once and 4 per lead process;
  * - workers are forced non-interactive, get the lead's effective SAFE-1
  *   allowlist and nothing more, never inherit ADMIN or human SAFE-4 confirm
- *   tokens, and are killed on abort, timeout or lead exit (AGENT-3);
+ *   tokens, and are killed on abort, timeout or lead exit (AGENT-3) — each
+ *   worker runs in its own process group and the whole tree goes (its
+ *   plugins and depth-2 workers too), not just the worker pid;
  * - workers do not inherit bridge / GitHub tokens or the audit HMAC key
  *   (SAFE-6), only what a task run needs (LLM provider keys stay);
  * - a lead in a ROLES-CHAT role session gets a non-ADMIN worker (read/chat
@@ -33,6 +35,12 @@ import {
   parseCapabilityTier,
   type CapabilityTier,
 } from "../agent/tier.ts";
+import {
+  killProcessTree,
+  signalProcessTree,
+  trackChildProcess,
+  type ProcEntry,
+} from "../plugins/proc-group.ts";
 import { roleSessionActive } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
@@ -327,29 +335,10 @@ export type DelegateChildOutcome = {
   aborted: boolean;
 };
 
-type Killable = { kill(signal?: number | NodeJS.Signals): void };
-
 /** After a worker exits (or is killed), how long its pipes may still drain. */
 export const DELEGATE_DRAIN_MS = 1000;
 /** After SIGTERM, how long before SIGKILL. */
 export const DELEGATE_KILL_GRACE_MS = 2000;
-
-const liveWorkers = new Set<Killable>();
-let exitHookInstalled = false;
-
-function installExitHook(): void {
-  if (exitHookInstalled) return;
-  exitHookInstalled = true;
-  process.once("exit", () => {
-    for (const p of liveWorkers) {
-      try {
-        p.kill("SIGKILL");
-      } catch {
-        /* already gone */
-      }
-    }
-  });
-}
 
 /**
  * Wrap a child pipe so we can end it ourselves: a grandchild that inherited
@@ -408,6 +397,8 @@ function spawnWorker(cmd: string[], cwd: string, env: Record<string, string>) {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
+    // Own process group: stopping the worker stops everything it started.
+    detached: true,
   });
 }
 
@@ -448,31 +439,25 @@ export async function runDelegateChild(opts: {
       aborted: false,
     };
   }
-  installExitHook();
-  liveWorkers.add(proc);
+  // Killed with its whole tree if the lead exits or is interrupted.
+  const untrack = trackChildProcess(proc.pid);
   const stdout = endable(proc.stdout);
   const stderr = endable(proc.stderr);
   let timedOut = false;
   let aborted = false;
-  let exited = false;
+  let stopping = false;
+  // Tree seen at SIGTERM: grandchildren orphaned by the worker's exit are
+  // still found for the SIGKILL sweep.
+  let seen: ProcEntry[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
+  const hardKill = () => {
+    seen = killProcessTree(proc.pid, { known: seen });
+  };
   const kill = () => {
-    if (exited) return;
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      /* already exited */
-    }
-    timers.push(
-      setTimeout(() => {
-        if (exited) return;
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-          /* already exited */
-        }
-      }, DELEGATE_KILL_GRACE_MS),
-    );
+    if (stopping) return;
+    stopping = true;
+    seen = signalProcessTree(proc.pid, "SIGTERM");
+    timers.push(setTimeout(hardKill, DELEGATE_KILL_GRACE_MS));
   };
   timers.push(
     setTimeout(() => {
@@ -486,8 +471,8 @@ export async function runDelegateChild(opts: {
   };
   opts.signal?.addEventListener("abort", onAbort, { once: true });
   const exitedP = proc.exited.then((code) => {
-    exited = true;
-    liveWorkers.delete(proc);
+    // Stopped by timeout / abort: nothing of the tree outlives the limit.
+    if (stopping) hardKill();
     timers.push(
       setTimeout(() => {
         stdout.end();
@@ -526,6 +511,7 @@ export async function runDelegateChild(opts: {
   } finally {
     for (const t of timers) clearTimeout(t);
     opts.signal?.removeEventListener("abort", onAbort);
-    liveWorkers.delete(proc);
+    if (stopping) hardKill();
+    untrack();
   }
 }
