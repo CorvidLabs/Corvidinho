@@ -1,6 +1,6 @@
 ---
 id: release-0-0-12-typed-git-tools-145-and-durable-watch-sessions-142-package-0-0-12-changelog-status
-state: implementing
+state: archived
 type: operations
 base_commit: b08bd5d9c4cad02ed6a2c03ad0343465052976e2
 ---
