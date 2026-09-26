@@ -169,9 +169,11 @@ cap) is below 2. Otherwise they SHALL be absent from the catalog at every tier
 loop SHALL pass its capability tier and abort signal to `runPlugin`.
 
 The delegation core (`src/autonomous/delegate.ts`) SHALL run a worker as
-`task run --non-interactive --no-verify --tier <t> --output ndjson --task <text>`
+`task run --non-interactive --tier <t> --output ndjson --task <text>`
 through `buildCorvidinhoArgv` (so a `.ts` bin runs as `bun --no-env-file`), with
-the `--task` value last. The worker bin SHALL be `CORVIDINHO_BIN` when set,
+the `--task` value last and never `--no-verify` (REQ-cli-085): a worker keeps
+the project's prove-before-done gate (AGENT-4) and reports its `verified` /
+`verifySkipped` outcome. The worker bin SHALL be `CORVIDINHO_BIN` when set,
 else this checkout's `src/cli.ts`, never the cwd's. The worker tier SHALL be
 the requested tier clamped to the lead's; an omitted tier SHALL mean the
 lead's tier and an unknown tier SHALL be refused. The worker env SHALL force
@@ -193,7 +195,7 @@ Acceptance Criteria
 - `buildOpenAiTools` omits `delegate` unless `autonomous: true`, and offers it at code tier only.
 - `createTaskExecute` in a temp project with autonomous enabled at code tier offers `delegate`; a disabled project, tool tier, or depth 2 does not; a model call to a hidden `delegate` is refused, not run.
 - A lead tool loop that calls `delegate` against a fake bin receives the worker summary in the tool message, and the worker's filesChanged join the lead's result.
-- Depth parse fails closed; tier clamp never exceeds the lead; spawn argv uses `bun --no-env-file` with `--task` last; forced worker env overrides inherited env; the limiter refuses past 2 concurrent / 4 per run.
+- Depth parse fails closed; tier clamp never exceeds the lead; spawn argv uses `bun --no-env-file` with `--task` last and no `--no-verify` flag; forced worker env overrides inherited env; the limiter refuses past 2 concurrent / 4 per run.
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
 
 ### REQ-agent-084

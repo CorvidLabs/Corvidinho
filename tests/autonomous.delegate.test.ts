@@ -143,7 +143,7 @@ describe("delegate core (safety defaults)", () => {
   test("spawn: bun --no-env-file for .ts; forced env beats inherited env", () => {
     const { cmd, env } = buildDelegateSpawn({
       bin: "/opt/corvidinho/src/cli.ts",
-      taskText: "--no-verify",
+      taskText: "--no-verify",  // task text, never a flag
       tier: "tool",
       childDepth: 1,
       allowlist: new Set(["files-write"]),
@@ -160,6 +160,8 @@ describe("delegate core (safety defaults)", () => {
     expect(cmd.slice(0, 3)).toEqual(["bun", "--no-env-file", "/opt/corvidinho/src/cli.ts"]);
     expect(cmd.slice(-2)).toEqual(["--task", "--no-verify"]);
     expect(cmd).toContain("--non-interactive");
+    // Workers keep prove-before-done (REQ-cli-085): --no-verify only as task text.
+    expect(cmd.indexOf("--no-verify")).toBe(cmd.length - 1);
     expect(cmd[cmd.indexOf("--tier") + 1]).toBe("tool");
     expect(cmd[cmd.indexOf("--output") + 1]).toBe("ndjson");
     expect(env).toMatchObject({
@@ -274,12 +276,14 @@ describe("delegate plugin handler (fake bin)", () => {
       exitCode: 0,
       state: "done",
       filesChanged: ["a.txt"],
+      verified: false,
+      verifySkipped: true,
     });
     expect(r.message).toContain("worker [docs]");
     const argv = argvOf(dir);
     expect(argv.slice(0, 2)).toEqual(["task", "run"]);
     expect(argv).toContain("--non-interactive");
-    expect(argv).toContain("--no-verify");
+    expect(argv).not.toContain("--no-verify");
     expect(argv[argv.indexOf("--tier") + 1]).toBe("read");
     expect(argv.at(-2)).toBe("--task");
     expect(argv.at(-1)).toContain("summarize README");

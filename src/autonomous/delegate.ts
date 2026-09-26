@@ -2,10 +2,12 @@
  * Delegation core for the `delegate` autonomous tool (AUTONOMOUS-5, issue #117).
  *
  * A lead agent hands one skill-tagged subtask to a worker: a child
- * `corvidinho task run` (bun --no-env-file, non-interactive, --no-verify,
- * NDJSON) in the lead's cwd. The worker's summary, tier, depth and
- * filesChanged come back as a tool result for the lead to synthesize; the
- * lead's own prove-before-done gate covers the combined changes (AGENT-4).
+ * `corvidinho task run` (bun --no-env-file, non-interactive, NDJSON) in the
+ * lead's cwd. Like every product spawn it never passes --no-verify
+ * (REQ-cli-085): the worker proves its own edits through the project's verify
+ * lane (AGENT-4), and its filesChanged also join the lead's result, so the
+ * lead's gate covers the combined change. The worker's summary, tier, depth,
+ * verify outcome and filesChanged come back for the lead to synthesize.
  *
  * Safety defaults (not HI claims — draft AUTONOMOUS-10 is not captured):
  * - a worker never runs above the lead's tier, and an omitted tier means the
@@ -208,7 +210,6 @@ export function buildDelegateSpawn(opts: {
     "task",
     "run",
     "--non-interactive",
-    "--no-verify",
     "--tier",
     opts.tier,
     "--output",
@@ -292,6 +293,9 @@ export type DelegateChildOutcome = {
   state: string;
   summary: string;
   filesChanged: string[];
+  /** Worker's prove-before-done outcome, when it reported a result. */
+  verified?: boolean;
+  verifySkipped?: boolean;
   totalTokens?: number;
   timedOut: boolean;
   aborted: boolean;
@@ -489,6 +493,8 @@ export async function runDelegateChild(opts: {
       timedOut,
       aborted,
     };
+    if (typeof r?.verified === "boolean") outcome.verified = r.verified;
+    if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
     if (out.totalTokens !== undefined) outcome.totalTokens = out.totalTokens;
     return outcome;
   } finally {

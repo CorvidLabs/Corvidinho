@@ -17,7 +17,7 @@ artifact: design
   higher global default, the Merlin m#1136 bug class); above parent is
   clamped; unknown is refused. Spawn via `buildCorvidinhoArgv` (bun
   `--no-env-file` for `.ts`):
-  `task run --non-interactive --no-verify --tier T --output ndjson --task TEXT`
+  `task run --non-interactive --tier T --output ndjson --task TEXT`
   with `--task` last. Forced env: depth+1, tier, non-interactive, the lead's
   effective allowlist, ADMIN off, no SAFE-4 confirm tokens. Bin is
   `CORVIDINHO_BIN`, else this checkout's `src/cli.ts` (never the cwd's).
@@ -34,6 +34,9 @@ artifact: design
   `PluginHandlerArgs.tier/signal`, `runPlugin` pass-through,
   `buildOpenAiTools({autonomous})` filter line, `createTaskExecute` computes
   the session gate and passes tier + signal to `runPlugin`, builtins load.
-- Workers use `--no-verify`: they share the lead's cwd; their filesChanged
-  join the lead's result so the lead's prove-before-done gate (AGENT-4) covers
-  the combined change.
+- Workers never pass `--no-verify` (REQ-cli-085, #85 always prove-before-done
+  for product spawns): a worker that changed files runs the project's verify
+  lane itself (AGENT-4 / 4.a retries), reports `verified` / `verifySkipped`,
+  and its filesChanged also join the lead's result so the lead's own gate
+  covers the combined change. Tool calls dispatch sequentially, so two workers
+  of one lead do not verify the shared cwd at the same time.

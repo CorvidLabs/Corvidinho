@@ -395,14 +395,14 @@ code, or when the concurrency / per-run budget is spent; otherwise run one
 worker (REQ-agent-117) in the plugin cwd with the lead's allowlist and abort
 signal. The result data SHALL carry `skill`, `tier`, `tierClamped`, `depth`,
 `exitCode`, `state`, `summary`, `filesChanged` and, when present,
-`totalTokens`, `timedOut`, `aborted`, so the lead can synthesize the result
+`verified`, `verifySkipped`, `totalTokens`, `timedOut`, `aborted`, so the lead can synthesize the result
 (AUTONOMOUS-5). The result SHALL be ok only when the worker exits 0 in state
 `done`.
 
 Acceptance Criteria
 - `delegate` is registered with dangerous=false, minTier=2, autonomous=true.
 - Autonomous off, depth 2, tool tier, an omitted tier with the default env tier, and a spent budget are refused with exit 2 and spawn nothing; bad args exit 1.
-- Happy path against a fake bin: argv has `task run`, `--non-interactive`, `--no-verify`, the clamped `--tier`, and `--task` last with the skill / depth provenance header; env has depth 1, the worker tier, non-interactive, the lead allowlist, ADMIN 0 and no confirm tokens; data carries skill / tier / depth / state / filesChanged.
+- Happy path against a fake bin: argv has `task run`, `--non-interactive`, no `--no-verify`, the clamped `--tier`, and `--task` last with the skill / depth provenance header; env has depth 1, the worker tier, non-interactive, the lead allowlist, ADMIN 0 and no confirm tokens; data carries skill / tier / depth / state / filesChanged / verified / verifySkipped.
 - A failed worker yields ok=false with its exit code and a SAFE-6 scrubbed summary.
 
 ### REQ-plugins-112

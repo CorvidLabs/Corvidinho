@@ -94,7 +94,8 @@ left out of the tool catalog unless the session is allowed (enabled, depth
 below 2) and appear at code tier only (SAFE-9). The tool loop passes its tier
 and abort signal to `runPlugin`. A worker never runs above the lead's tier
 (omitted = the lead's), is forced non-interactive with the lead's allowlist,
-no ADMIN and no SAFE-4 confirm tokens, runs one level deeper, and is stopped on
+no ADMIN and no SAFE-4 confirm tokens, keeps prove-before-done (never
+`--no-verify`, REQ-cli-085), runs one level deeper, and is stopped on
 lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
 These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
 

@@ -116,6 +116,10 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
           state: outcome.state,
           summary: outcome.summary,
           filesChanged: outcome.filesChanged,
+          ...(outcome.verified !== undefined ? { verified: outcome.verified } : {}),
+          ...(outcome.verifySkipped !== undefined
+            ? { verifySkipped: outcome.verifySkipped }
+            : {}),
           ...(outcome.totalTokens !== undefined
             ? { totalTokens: outcome.totalTokens }
             : {}),
