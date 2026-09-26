@@ -6,27 +6,16 @@
 import { attribution } from "../attribution.ts";
 import type { AckClient } from "./ack.ts";
 import { isAckableEventType } from "./ack.ts";
+import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
 import type { AgentSpawnResult, DetectedEvent } from "./types.ts";
 
-/** Dedup store for event ids that already received a run-summary comment. */
-export class SummarizedIdStore {
-  private ids = new Set<string>();
-  private readonly maxSize: number;
-
-  constructor(maxSize = 2000) {
-    this.maxSize = maxSize;
-  }
-
-  has(id: string): boolean {
-    return this.ids.has(id.toLowerCase());
-  }
-
-  add(id: string): void {
-    this.ids.add(id.toLowerCase());
-    if (this.ids.size > this.maxSize) {
-      const first = this.ids.values().next().value;
-      if (first !== undefined) this.ids.delete(first);
-    }
+/**
+ * Dedup store for event ids that already received a run-summary comment.
+ * With a db the ids persist across restarts (REQ-watch-247).
+ */
+export class SummarizedIdStore extends ProcessedIdStore {
+  constructor(opts: number | IdStoreOptions = {}) {
+    super(opts, "summarized");
   }
 }
 

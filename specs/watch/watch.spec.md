@@ -46,7 +46,8 @@ loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
 SessionStore options (`db`, `ttlMs`, `now`; `durable`), startWatchPoller
 `db` / `sessionStore` / `sessionTtlMs` injection,
-agent helpers, createFixtureSearchClient / createOctokitSearchClient,
+ProcessedIdStore / AckedIdStore / SummarizedIdStore options (`db`, `maxSize`;
+`durable`), agent helpers, createFixtureSearchClient / createOctokitSearchClient,
 ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),
 summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
 SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
@@ -57,7 +58,10 @@ computeRateLimitBackoffMs).
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
 allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
-dedup; no ProcessManager; no auto-merge; secrets out of repo; fixture tests
+dedup; with a DB, processed / acked / summarized ids persist per kind in
+`watch_event_ids` so a restart never replays a handled event id, and denied
+ids are kept apart in memory so they never evict a handled id (REQ-watch-247);
+no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 run summary at most once per event id and only after successful auto-ack;

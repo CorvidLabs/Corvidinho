@@ -5,6 +5,7 @@
 
 import { Octokit } from "@octokit/rest";
 import { attribution } from "../attribution.ts";
+import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
 import type { DetectedEvent } from "./types.ts";
 
 export const ACK_START =
@@ -111,25 +112,13 @@ export function createOctokitAckClient(token: string): AckClient {
   };
 }
 
-/** Dedup store for event ids that already received an ack. */
-export class AckedIdStore {
-  private ids = new Set<string>();
-  private readonly maxSize: number;
-
-  constructor(maxSize = 2000) {
-    this.maxSize = maxSize;
-  }
-
-  has(id: string): boolean {
-    return this.ids.has(id.toLowerCase());
-  }
-
-  add(id: string): void {
-    this.ids.add(id.toLowerCase());
-    if (this.ids.size > this.maxSize) {
-      const first = this.ids.values().next().value;
-      if (first !== undefined) this.ids.delete(first);
-    }
+/**
+ * Dedup store for event ids that already received an ack. With a db the ids
+ * persist across restarts (REQ-watch-247).
+ */
+export class AckedIdStore extends ProcessedIdStore {
+  constructor(opts: number | IdStoreOptions = {}) {
+    super(opts, "acked");
   }
 }
 
