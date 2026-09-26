@@ -43,6 +43,27 @@ describe("discord bridge CLI / start semantics", () => {
     expect(combined).toContain("go-live");
   });
 
+  test("discord register-commands without token exits cleanly", async () => {
+    const proc = Bun.spawn(["bun", "src/cli.ts", "discord", "register-commands"], {
+      cwd: import.meta.dir + "/..",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        DISCORD_TOKEN: "",
+        DISCORD_BOT_TOKEN: "",
+      },
+    });
+    const [code, err, out] = await Promise.all([
+      proc.exited,
+      new Response(proc.stderr).text(),
+      new Response(proc.stdout).text(),
+    ]);
+    expect(code).not.toBe(0);
+    const combined = err + out;
+    expect(combined.toLowerCase()).toContain("discord_token");
+  });
+
   test("startBridge dry path: mention→session→echo with injected gateway", async () => {
     const result = await startBridge({
       env: {

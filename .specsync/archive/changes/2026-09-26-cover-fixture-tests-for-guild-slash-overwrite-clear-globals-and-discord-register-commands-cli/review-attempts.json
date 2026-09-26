@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-fixture-tests-for-guild-slash-overwrite-clear-globals-and-discord-register-commands-cli",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "1f915e90db622d02a683b3ccacb6e65a7a31fcb6",
+      "contract_digest": "6275741eb83ab3f985168bac2a34f6c2e08b67e7d72d0b60dc76d4d94dc3b128",
+      "execution_digest": "334083090c8cee8f1ba7b32b2ba8956040c1cdc0e9a5ec8d90460d1bd569409e",
+      "workspace_digest": "b66fadf7ddbc5f3c8a2b12440a6820421076e8210daec0de3770760674c550b0",
+      "timestamp": 1790444691
+    }
+  ]
+}

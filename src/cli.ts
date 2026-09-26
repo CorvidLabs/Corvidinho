@@ -18,6 +18,7 @@ import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
   goLiveChecklist,
+  registerSlashCommandsLive,
   startBridge,
 } from "./discord/index.ts";
 import {
@@ -51,6 +52,8 @@ Usage:
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
   corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
+  corvidinho discord register-commands
+                                    Full-overwrite slash set (guild PUT + clear globals)
   corvidinho github watch           Start WATCH GitHub mention poll (ALLOW-1; poll-first)
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
@@ -72,7 +75,7 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_DISCORD_DENY_CHANNELS / _ROLES / _USERS    deny overrides
   DISCORD_TOKEN / DISCORD_BOT_TOKEN                     required for discord bridge (never commit)
   DISCORD_CHANNEL_IDS                                   non-empty channel ids (union with allowlist)
-  DISCORD_GUILD_ID                                      optional; fast guild slash registration
+  DISCORD_GUILD_ID                                      preferred; guild slash overwrite + clear globals
   GITHUB_TOKEN / GH_TOKEN                               required for github watch + Octokit reads
   CORVIDINHO_WATCH_USERNAME                             GitHub login to listen for (WATCH)
   CORVIDINHO_WATCH_INTERVAL_MS                          poll interval (default 60000, min 30000)
@@ -436,6 +439,78 @@ async function specsyncCli(
 }
 
 
+
+async function discordRegisterCommands(argv: string[]): Promise<number> {
+  let guildId = process.env.DISCORD_GUILD_ID?.trim() || undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--guild-id") {
+      const next = argv[i + 1];
+      if (next && !next.startsWith("-")) {
+        guildId = next.trim();
+        i++;
+      }
+      continue;
+    }
+    const m = a.match(/^--guild-id=(.+)$/);
+    if (m) {
+      guildId = m[1].trim();
+    }
+  }
+
+  const token =
+    process.env.DISCORD_BOT_TOKEN?.trim() ||
+    process.env.DISCORD_TOKEN?.trim() ||
+    "";
+  if (!token) {
+    console.error(
+      "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN — set the bot token in the VM env/secret store (never commit).",
+    );
+    console.error(goLiveChecklist());
+    return 1;
+  }
+
+  // Application id = base64 of first JWT segment of bot token (no secret echo).
+  let applicationId: string;
+  try {
+    const part = token.split(".")[0] ?? "";
+    const pad = "=".repeat((4 - (part.length % 4)) % 4);
+    applicationId = Buffer.from(part + pad, "base64").toString("utf8");
+    if (!/^\d+$/.test(applicationId)) {
+      throw new Error("application id decode failed");
+    }
+  } catch {
+    console.error(
+      "could not derive application id from bot token; check DISCORD_TOKEN / DISCORD_BOT_TOKEN",
+    );
+    return 1;
+  }
+
+  try {
+    const result = await registerSlashCommandsLive({
+      token,
+      applicationId,
+      guildId,
+    });
+    if (result.scope === "guild") {
+      console.log(
+        `[discord] registered ${result.registeredCount} guild slash command(s) on ${result.guildId} (globals cleared)`,
+      );
+    } else {
+      console.log(
+        `[discord] registered ${result.registeredCount} global slash command(s)`,
+      );
+      if (result.warnNoGuildId) {
+        console.warn(`[discord] ${result.warnNoGuildId}`);
+      }
+    }
+    return 0;
+  } catch (err) {
+    console.error("[discord] register-commands failed:", err);
+    return 1;
+  }
+}
+
 async function discordBridge(): Promise<number> {
   const result = await startBridge({ projectRoot: process.cwd() });
   if (!result.ok) {
@@ -529,7 +604,12 @@ export async function main(argv: string[]): Promise<number> {
     if (sub === "bridge") {
       return discordBridge();
     }
-    console.error("usage: corvidinho discord bridge\n");
+    if (sub === "register-commands") {
+      return discordRegisterCommands(rest.slice(2));
+    }
+    console.error(
+      "usage: corvidinho discord <bridge|register-commands> [--guild-id ID]\n",
+    );
     printHelp();
     return 1;
   }

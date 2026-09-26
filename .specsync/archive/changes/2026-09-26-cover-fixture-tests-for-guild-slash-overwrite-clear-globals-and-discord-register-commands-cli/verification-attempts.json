@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790444687,
+      "commit": "4c2b3a52279d8b76bb0ecc3701357e21c4927d5c",
+      "contract_digest": "6275741eb83ab3f985168bac2a34f6c2e08b67e7d72d0b60dc76d4d94dc3b128",
+      "execution_digest": "334083090c8cee8f1ba7b32b2ba8956040c1cdc0e9a5ec8d90460d1bd569409e",
+      "workspace_digest": "b66fadf7ddbc5f3c8a2b12440a6820421076e8210daec0de3770760674c550b0",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790444690,
+      "commit": "4c2b3a52279d8b76bb0ecc3701357e21c4927d5c",
+      "contract_digest": "6275741eb83ab3f985168bac2a34f6c2e08b67e7d72d0b60dc76d4d94dc3b128",
+      "execution_digest": "334083090c8cee8f1ba7b32b2ba8956040c1cdc0e9a5ec8d90460d1bd569409e",
+      "workspace_digest": "b66fadf7ddbc5f3c8a2b12440a6820421076e8210daec0de3770760674c550b0",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790444691,
+      "commit": "03355838128a09088a55623260d08c9f159f9d69",
+      "contract_digest": "6275741eb83ab3f985168bac2a34f6c2e08b67e7d72d0b60dc76d4d94dc3b128",
+      "execution_digest": "334083090c8cee8f1ba7b32b2ba8956040c1cdc0e9a5ec8d90460d1bd569409e",
+      "workspace_digest": "b66fadf7ddbc5f3c8a2b12440a6820421076e8210daec0de3770760674c550b0",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790444691,
+      "commit": "1f915e90db622d02a683b3ccacb6e65a7a31fcb6",
+      "contract_digest": "6275741eb83ab3f985168bac2a34f6c2e08b67e7d72d0b60dc76d4d94dc3b128",
+      "execution_digest": "334083090c8cee8f1ba7b32b2ba8956040c1cdc0e9a5ec8d90460d1bd569409e",
+      "workspace_digest": "b66fadf7ddbc5f3c8a2b12440a6820421076e8210daec0de3770760674c550b0",
+      "acceptance_input_digest": "0b39c165c763608fd43c1c1019402ef5be359091a4e1ddbca9b123f8a12edb6a",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "tests/discord.bridge.cli.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "43a0b4338b8e75cc11deb7dcfd1b14972338761f66a7a24a3bcec8a4f0446a57",
+            "entry_digest": "8c353230eb75c5a4f07cf11dea1a1eb799b1127934dce78c6ab013152870dd6b",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.register-commands.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "cb8ffc748559f8b1a9c59780df93e101d644cb91200c02777d6e8e5754a2e22e",
+            "entry_digest": "3f7fdf334eea915d5081facf685d058b7692296494a710e2d3720247cfab68af",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check (no spec in scope)",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    }
+  ]
+}

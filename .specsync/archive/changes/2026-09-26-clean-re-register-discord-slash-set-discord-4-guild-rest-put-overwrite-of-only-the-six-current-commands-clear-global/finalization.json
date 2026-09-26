@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global",
+  "implementation_commit": "4c2b3a52279d8b76bb0ecc3701357e21c4927d5c",
+  "implementation_tree": "65c73cef2e61257dfe37dafd112f3a3814a1d2ee",
+  "contract_digest": "bd88da25ed6d586496c805177b9033c875c98a45517279f705b14335338dfc95",
+  "workspace_digest": "b66fadf7ddbc5f3c8a2b12440a6820421076e8210daec0de3770760674c550b0",
+  "closing_digest": "fe720a29c5e46fb6735c1c0910042f586cd7a14e0b2304006fa8d21f8efde94c",
+  "review_digest": "b13f945624f0a1a31cadce00a6b2f662cb695f7b575c369734316a3fbc7f7e08",
+  "finalization_digest": "78eaec46aa2eb9f4a37b062bf95a087e1478ccfdbdcf8f732b4a046140becbfc",
+  "timestamp": 1790444668
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-fixture-tests-for-guild-slash-overwrite-clear-globals-and-discord-register-commands-cli",
+  "slug": "cover-fixture-tests-for-guild-slash-overwrite-clear-globals-and-discord-register-commands-cli",
+  "title": "Cover fixture tests for guild slash overwrite + clear-globals and discord register-commands CLI",
+  "description": "Cover fixture tests for guild slash overwrite + clear-globals and discord register-commands CLI",
+  "kind": "documentation",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "4c2b3a52279d8b76bb0ecc3701357e21c4927d5c",
+  "created_at": 1790444677,
+  "updated_at": 1790444694,
+  "affected_specs": [],
+  "affected_paths": [
+    "tests/discord.register-commands.test.ts",
+    "tests/discord.bridge.cli.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Fixture tests for REQ-discord-016 put order + CLI register-commands missing-token; no new module AC beyond already-shipped REQ-discord-016/REQ-cli-008",
+  "acceptance_criteria": [
+    "tests/discord.register-commands.test.ts and tests/discord.bridge.cli.test.ts covered by this documentation cover change; bun test green; no module AC change"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

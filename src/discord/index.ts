@@ -107,6 +107,16 @@ export {
   type SlashCommandName,
 } from "./slash-commands.ts";
 export {
+  registerSlashCommandSet,
+  registerSlashCommandsLive,
+  applicationGuildCommandsRoute,
+  applicationCommandsRoute,
+  type PutCommandsFn,
+  type RegisterSlashCommandSetOpts,
+  type RegisterSlashCommandSetResult,
+  type LiveRegisterOpts,
+} from "./register-commands.ts";
+export {
   handleSlashInteraction,
   knownSlashCommands,
 } from "./slash-dispatch.ts";
