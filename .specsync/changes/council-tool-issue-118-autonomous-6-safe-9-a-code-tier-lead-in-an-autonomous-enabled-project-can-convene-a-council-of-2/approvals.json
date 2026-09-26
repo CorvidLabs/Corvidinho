@@ -38,6 +38,45 @@
         "agent": "64887f6fd8e95a4cd305db0ee1f5ab72348cf44336e77f86ebd6a0905e3e01e2",
         "plugins": "bb881b8e04fa14d55508f4d4118eabc6c89c8b0db1f29bc7aa3f01f4e2c0d78e"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790460243,
+      "digest": "a3ffc72d3d78e39d3df29b9df7a907f3c0363fdc6af0ba8c79bdb9c20521f2ce",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2",
+        "title": "Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed",
+        "description": "Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "fledge.toml",
+          "plugins/autonomous",
+          "src/autonomous",
+          "tests/autonomous.council.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "The council tool is registered dangerous=false, mutating=true, minTier=2, autonomous=true and is absent from the tool catalog unless the session is allowed (AUTONOMOUS-1 enabled, code tier, depth below cap; non-ADMIN role sessions never see it) (SAFE-9); a code-tier lead can call council with a question and 2-5 voices (default 3) and the council runs structured phases propose (independent answers), critique (each voice sees the proposals), decide (a chair synthesis) as delegated child task runs that reuse delegate spawn, env stripping, depth and concurrency caps; voices run read tier by default (tool at most, never above the lead), as non-ADMIN role sessions with an empty SAFE-1 allowlist so they never get mutating or must-ask tools; each phase entry is SAFE-6 scrubbed and capped and the whole council has a wall-clock cap; the result carries the decision and a bounded transcript; refusals (autonomous off, depth cap, below code tier, budget) spawn nothing; fake-bin tests prove phases, prompts, env, caps and refusals with no network"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "3a6a9d28259798493c2210e5362914f32d4472296b5a3f2830dd534940570bb6",
+        "plugins": "bb881b8e04fa14d55508f4d4118eabc6c89c8b0db1f29bc7aa3f01f4e2c0d78e"
+      }
     }
   ],
   "reopenings": []
