@@ -4,6 +4,9 @@
  * Assignment events: when watch username is in issue/PR assignees (#48).
  * Own watch-username mentions/comments skipped (REQ-watch-007).
  * Search per_page=100; org-wide results can still bury pings beyond one page.
+ * Issue/PR comments: `since` = poll window, 100 per page, up to
+ * MAX_COMMENT_PAGES pages (REQ-watch-234) so a new @mention on a long thread
+ * is not hidden behind the oldest comments.
  */
 
 import { Octokit } from "@octokit/rest";
@@ -35,10 +38,12 @@ export type SearchClient = {
     repo: string;
     assignees: string[];
   }>>;
+  /** Comments updated at/after `since` (ISO) when given — REQ-watch-234. */
   listComments(
     owner: string,
     repo: string,
     number: number,
+    since?: string,
   ): Promise<Array<{
     id: number;
     body: string;
@@ -123,6 +128,9 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
   };
 }
 
+/** Page cap for one issue's comments inside the poll window (100 per page). */
+const MAX_COMMENT_PAGES = 10;
+
 async function withRateLimitRethrow<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -170,21 +178,34 @@ export function createOctokitSearchClient(token: string): SearchClient {
         });
       });
     },
-    async listComments(owner, repo, number) {
+    async listComments(owner, repo, number, since) {
       return withRateLimitRethrow(async () => {
-        const res = await octokit.rest.issues.listComments({
-          owner,
-          repo,
-          issue_number: number,
-          per_page: 50,
-        });
-        return res.data.map((c) => ({
-          id: c.id,
-          body: c.body ?? "",
-          user: c.user?.login ?? "unknown",
-          htmlUrl: c.html_url,
-          createdAt: c.created_at,
-        }));
+        // GitHub lists comments oldest-first and cannot sort descending:
+        // bound by `since` and follow pages so the newest are reached.
+        const out: Awaited<ReturnType<SearchClient["listComments"]>> = [];
+        let pages = 0;
+        for await (const res of octokit.paginate.iterator(
+          octokit.rest.issues.listComments,
+          {
+            owner,
+            repo,
+            issue_number: number,
+            per_page: 100,
+            ...(since ? { since } : {}),
+          },
+        )) {
+          for (const c of res.data) {
+            out.push({
+              id: c.id,
+              body: c.body ?? "",
+              user: c.user?.login ?? "unknown",
+              htmlUrl: c.html_url,
+              createdAt: c.created_at,
+            });
+          }
+          if (++pages >= MAX_COMMENT_PAGES) break;
+        }
+        return out;
       });
     },
     async listReviewRequests(owner, repo, number) {
@@ -278,6 +299,7 @@ export async function fetchWatchEvents(opts: {
         parts.owner,
         parts.name,
         item.number,
+        since,
       );
       for (const c of comments) {
         if (!containsMention(c.body, username)) continue;
