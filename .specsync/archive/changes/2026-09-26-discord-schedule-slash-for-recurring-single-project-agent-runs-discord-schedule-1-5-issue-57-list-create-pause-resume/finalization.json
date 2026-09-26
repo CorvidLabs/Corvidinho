@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+  "implementation_commit": "ff9a6e2479d7d55664de348ad86cce401fda991a",
+  "implementation_tree": "f536212fbbe157cd072fa1b192bf48fea8bece1e",
+  "contract_digest": "473c1609b0d0d5fe2627cb2e74bf41c7153e1503d9a71fcb3a6cff5fdb571ec1",
+  "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+  "closing_digest": "1c105b7ca988c2eb1cdc70a41086ba4f6cc6700fc7f6546f831b3cbae18b2508",
+  "review_digest": "978c9e1c66235d82e71e13e2d495e0b51d30ff73eaa27b60c8657794e55eb863",
+  "finalization_digest": "6f8281a927326bcd3579b0d97f306e0b555fcd97b45103d7e656611c6b132260",
+  "timestamp": 1790447896
+}

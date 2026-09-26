@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "ff9a6e2479d7d55664de348ad86cce401fda991a",
+      "contract_digest": "473c1609b0d0d5fe2627cb2e74bf41c7153e1503d9a71fcb3a6cff5fdb571ec1",
+      "execution_digest": "f8996d407197f5095fbf3d653154c4b9272cb176259e4c544ab4ae6aec46e953",
+      "workspace_digest": "d3b8fbc0fa0c128d8dcc665466191858bda454b39dad841ca7d2412f243641cf",
+      "timestamp": 1790447888
+    }
+  ]
+}

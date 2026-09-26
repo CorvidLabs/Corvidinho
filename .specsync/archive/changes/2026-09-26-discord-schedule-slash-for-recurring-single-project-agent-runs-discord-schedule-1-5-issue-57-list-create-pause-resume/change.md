@@ -1,6 +1,6 @@
 ---
 id: discord-schedule-slash-for-recurring-single-project-agent-runs-discord-schedule-1-5-issue-57-list-create-pause-resume
-state: implementing
+state: archived
 type: feature
 base_commit: 64e3ee175f266a41f4b8181f43f1e70b01d2c396
 ---

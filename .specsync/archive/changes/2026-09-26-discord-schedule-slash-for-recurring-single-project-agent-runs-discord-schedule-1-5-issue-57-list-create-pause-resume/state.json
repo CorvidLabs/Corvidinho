@@ -7,11 +7,11 @@
   "title": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
   "description": "Discord /schedule slash for recurring single-project agent runs (DISCORD-SCHEDULE-1..5 / issue #57): list create pause resume delete; admin mutations; 5m min interval; steal corvid-agent schedule-commands + scheduler; ticks must not starve HEAR/WATCH ingress; no flock/council/templates/on-chain",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "64e3ee175f266a41f4b8181f43f1e70b01d2c396",
   "created_at": 1790447659,
-  "updated_at": 1790447863,
+  "updated_at": 1790447903,
   "affected_specs": [
     "discord"
   ],
