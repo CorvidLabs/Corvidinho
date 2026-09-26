@@ -19,6 +19,25 @@
         "REQ-agent-244",
         "REQ-cli-244"
       ]
+    },
+    {
+      "timestamp": 1790465365,
+      "commit": "263d289bf9bd70a098a892b18e6aff8c2de0a0d8",
+      "contract_digest": "f72d235d3c24842375c0e1922338673cc076079d008bca0d16b992520930655d",
+      "execution_digest": "9da985b8e7bf7e29e61d1c79d028773e798e8a0398774c80e3a1d02b78a822f8",
+      "workspace_digest": "954210acd74594e91a0f1bd14096194b2451ff54d40cc320879c69ab92970bb1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-244",
+        "REQ-cli-244"
+      ]
     }
   ]
 }
