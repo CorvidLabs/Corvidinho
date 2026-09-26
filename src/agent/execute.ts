@@ -5,6 +5,7 @@
  * Secrets stay in env — never commit.
  */
 
+import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { runPlugin } from "../plugins/run.ts";
@@ -194,6 +195,11 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
+    if (includeDangerous && opts.loadPlugins !== false) {
+      // FLEDGE-4: Fledge commands are all dangerous, so only discover them
+      // when this run's catalog may offer dangerous tools.
+      await loadFledgePlugins({ cwd, env });
+    }
     const tools = buildOpenAiTools({ tier, includeDangerous });
     return runToolLoop({
       llm: { ...llm, tier },
