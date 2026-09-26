@@ -110,6 +110,11 @@ async function fixture(opts: {
   env?: NodeJS.ProcessEnv;
   owner?: OwnerRecord | null;
   recordAudit?: SlashContext["recordAudit"];
+  /**
+   * The file is malformed: the bridge would refuse to start on it, so model a
+   * file that broke after start (the bridge keeps the view it started with).
+   */
+  brokenAfterStart?: boolean;
 } = {}): Promise<Fixture> {
   const dir = tmp();
   const path = join(dir, opts.fileName ?? "allowlist.toml");
@@ -120,11 +125,13 @@ async function fixture(opts: {
     ...(opts.env ?? {}),
   };
   // Load exactly as the bridge does: file ∪ env, then DISCORD_CHANNEL_IDS.
-  // A malformed file refuses bridge start (fail closed); for those cases model
-  // a file that broke after start (the bridge keeps the view it started with).
-  const loaded = await loadAllowlist({ env, home: dir }).catch(() =>
-    loadAllowlist({ env, home: dir, filePath: null }),
-  );
+  let loaded: AllowlistConfig;
+  if (opts.brokenAfterStart) {
+    await expect(loadAllowlist({ env, home: dir })).rejects.toThrow(/allowlist file/);
+    loaded = await loadAllowlist({ env, home: dir, filePath: null });
+  } else {
+    loaded = await loadAllowlist({ env, home: dir });
+  }
   const channelIds = [
     ...new Set([
       ...loaded.discord.channels,
@@ -689,7 +696,7 @@ describe("allowlist file writer", () => {
     expect(j.replies[0]?.content).toContain("lose precision");
     expect(readFileSync(g.path, "utf8")).toBe(lossy);
 
-    const h = await fixture({ fileName: "allowlist.json", text: "{ not json" });
+    const h = await fixture({ fileName: "allowlist.json", text: "{ not json", brokenAfterStart: true });
     h.ctx.allowlist.discord.channels.push(CHAN_A);
     const k = ix({ subcommandGroup: "users", subcommand: "add", options: { user: OTHER_ID } });
     await handleAdminCommand(h.ctx, k);

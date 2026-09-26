@@ -670,14 +670,12 @@ describe("git-push (GITHUB-6, never force)", () => {
     const broken = join(base, `allow-broken-${Date.now()}.toml`);
     writeFileSync(broken, '[github]\ndeny_repos = [\n  "acme/widget"\n');
     process.env.CORVIDINHO_ALLOWLIST_FILE = broken;
-    let refused: string;
-    try {
-      const r = await run("git-push", [], repo);
-      refused = r.ok ? "pushed" : (r.error ?? "refused");
-    } catch (e) {
-      refused = e instanceof Error ? e.message : String(e);
-    }
-    expect(refused).toContain("allowlist file");
+    const refused = await run("git-push", [], repo);
+    expect(refused.ok).toBe(false);
+    expect(refused.exitCode).toBe(3);
+    expect(refused.error).toContain("GITHUB-6: refused — allowlist file unreadable or malformed");
+    expect(refused.error).toContain("line 2: [github].deny_repos");
+    expect(refused.error).not.toContain("acme/widget");
     expect(remoteRef(bare, "feat/push")).toBeNull();
   });
 

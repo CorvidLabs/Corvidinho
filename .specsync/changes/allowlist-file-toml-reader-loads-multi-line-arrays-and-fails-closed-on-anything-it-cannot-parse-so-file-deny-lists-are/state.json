@@ -11,10 +11,11 @@
   "canonical_applied": true,
   "base_commit": "e8bbd215036e7dc8739ac9159afa19f17ae943c6",
   "created_at": 1790464578,
-  "updated_at": 1790464851,
+  "updated_at": 1790466335,
   "affected_specs": [
     "plugins",
-    "discord"
+    "discord",
+    "cli"
   ],
   "affected_paths": [
     "src/allowlist/load.ts",
@@ -23,7 +24,15 @@
     "tests/git.plugins.test.ts",
     "tests/discord.admin-slash.test.ts",
     "allowlist.example.toml",
-    "specs/plugins/plugins.spec.md"
+    "specs/plugins/plugins.spec.md",
+    "src/allowlist/index.ts",
+    "src/cli.ts",
+    "src/discord/admin-allowlist.ts",
+    "src/plugins/githubDeny.ts",
+    "src/plugins/githubPublic.ts",
+    "plugins/discord/index.ts",
+    "plugins/git/commands.ts",
+    "tests/github.gate-allowlist-file.test.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,

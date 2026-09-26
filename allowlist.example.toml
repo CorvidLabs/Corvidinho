@@ -10,7 +10,8 @@
 #   ]
 # A file that cannot be read or parsed is refused, never skipped: the bridge,
 # watch and daemon do not start and gates refuse, so a broken deny list can
-# never fall back to env-only allow.
+# never fall back to env-only allow. `corvidinho doctor` shows the line and key.
+# deny_* keys belong in [github] / [discord] only (elsewhere they are refused).
 
 # WATCH (github watch) also requires non-empty [github] orgs and/or repos
 # plus users — empty = deny-all (ALLOW-1). See docs/WATCH.md.

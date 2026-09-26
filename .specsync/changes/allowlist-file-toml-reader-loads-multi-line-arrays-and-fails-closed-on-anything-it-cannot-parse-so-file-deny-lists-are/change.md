@@ -15,6 +15,7 @@ Allowlist file TOML reader loads multi-line arrays and fails closed on anything 
 
 - `plugins`
 - `discord`
+- `cli`
 
 ## Acceptance Criteria
 

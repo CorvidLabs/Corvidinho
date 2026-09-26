@@ -24,6 +24,8 @@ import {
   readFileAdminList,
 } from "../src/discord/admin-allowlist.ts";
 import { loadBridgeConfig } from "../src/discord/config.ts";
+import { loadBuiltins } from "../src/plugins/builtins.ts";
+import { runPlugin } from "../src/plugins/run.ts";
 import { loadWatchConfig } from "../src/watch/config.ts";
 
 const dirs: string[] = [];
@@ -192,6 +194,14 @@ describe("allowlist TOML: anything unparseable in an allow/deny section fails cl
     ["array-of-tables header", `[[github]]\ndeny_repos = ["a/b"]\n`],
     ["quoted header", `["github"]\ndeny_repos = ["a/b"]\n`],
     ["discord deny_users unterminated", `[discord]\nchannels = ["1"]\ndeny_users = [\n  "2",\n`],
+    ["deny list at the top level", `deny_repos = ["a/b"]\n[github]\norgs = ["a"]\n`],
+    ["deny list in another section", `[github]\norgs = ["a"]\n[notes]\ndeny_repos = ["a/b"]\n`],
+    ["deny list under a loose header", `[discord]\nchannels = ["1"]\n[my notes]\ndeny_users = ["2"]\n`],
+    ["hyphenated deny key in another section", `[meta]\ndeny-repos = ["a/b"]\n`],
+    ["loose header naming discord", `[my discord notes]\nx = 1\n`],
+    ["array-of-tables discord", `[[discord]]\nchannels = ["1"]\n`],
+    ["stray array line as a header", `[github]\norgs = ["a"]\n["b", "c"]\n`],
+    ["unbalanced brackets", `[[rules]\nx = 1\n`],
   ];
   for (const [name, text] of BAD) {
     test(`parseSimpleToml throws: ${name}`, () => {
@@ -209,6 +219,24 @@ describe("allowlist TOML: anything unparseable in an allow/deny section fails cl
     expect(msg).toContain("line 4");
     expect(msg).toContain("[github].deny_repos");
     expect(msg).not.toContain("corvidlabs/secret");
+  });
+
+  test("unrelated sections stay lenient, loose headers included", () => {
+    const t = parseSimpleToml(
+      `[my notes]\nanything = goes "here"\n[[rules]]\nx = 1\n['quoted']\ny = [unclosed\n[github]\norgs = ["a"]\n[discord]\nchannels = ["1"]\n`,
+    );
+    expect(t.github?.orgs).toEqual(["a"]);
+    expect(t.discord?.channels).toEqual(["1"]);
+    expect(Object.keys(t)).toEqual(["my notes", "rules", "quoted", "github", "discord"]);
+  });
+
+  test("a pasted non-breaking space (U+00A0) is whitespace", () => {
+    const nb = "\u00a0";
+    const t = parseSimpleToml(
+      `[github]\norgs =${nb}[${nb}"a",${nb}\n${nb}${nb}"b"${nb}]${nb}\ndeny_repos = [${nb}"a/x"${nb},${nb}"a/y"]\n`,
+    );
+    expect(t.github?.orgs).toEqual(["a", "b"]);
+    expect(t.github?.deny_repos).toEqual(["a/x", "a/y"]);
   });
 
   test("[owner] (read by identity/owner.ts) stays lenient", () => {
@@ -296,5 +324,113 @@ describe("/admin round-trips multi-line files (ADMIN-1/2)", () => {
     expect(plan.ok).toBe(false);
     if (!plan.ok) expect(plan.error).toContain("could not be parsed");
     expect(readFileSync(path, "utf8")).toBe(text);
+  });
+});
+
+describe("/admin rewrites around other multi-line arrays (ADMIN-1/2)", () => {
+  async function admin(text: string, key: "users" | "channels", id: string) {
+    const path = tmpFile("allowlist.toml", text);
+    const home = join(path, "..");
+    const env = { HOME: home, CORVIDINHO_ALLOWLIST_FILE: path };
+    const live = await loadAllowlist({ env, home });
+    const plan = planAdminListChange({ allowlist: live, env, home, key, op: "add", id });
+    if (!plan.ok) return { plan, path, text: readFileSync(path, "utf8"), reloaded: null };
+    commitAdminListChange(plan.plan, { allowlist: live });
+    return { plan, path, text: readFileSync(path, "utf8"), reloaded: await loadAllowlist({ env, home }) };
+  }
+
+  test("users add with only a multi-line channels array goes after its closing ]", async () => {
+    const r = await admin(`[discord]\nchannels = [\n  "111",\n  "222",\n]\n[owner]\ndiscord_id = "9"\n`, "users", "999");
+    expect(r.text).toBe(`[discord]\nchannels = [\n  "111",\n  "222",\n]\nusers = ["999"]\n[owner]\ndiscord_id = "9"\n`);
+    expect(r.reloaded?.discord.channels).toEqual(["111", "222"]);
+    expect(r.reloaded?.discord.users).toEqual(["999"]);
+  });
+
+  test("CRLF: same, line endings kept", async () => {
+    const r = await admin(`[discord]\r\nchannels = [\r\n  "111",\r\n]\r\n`, "users", "999");
+    expect(r.text).toBe(`[discord]\r\nchannels = [\r\n  "111",\r\n]\r\nusers = ["999"]\r\n`);
+    expect(r.reloaded?.discord.users).toEqual(["999"]);
+  });
+
+  test("channels add after a multi-line deny_users keeps the deny list", async () => {
+    const r = await admin(`[discord]\nusers = ["1"]\ndeny_users = [\n  "5", # blocked\n]\n\n[github]\norgs = ["a"]\n`, "channels", "999");
+    expect(r.text).toBe(`[discord]\nusers = ["1"]\ndeny_users = [\n  "5", # blocked\n]\nchannels = ["999"]\n\n[github]\norgs = ["a"]\n`);
+    expect(r.reloaded?.discord.denyUsers).toEqual(["5"]);
+    expect(r.reloaded?.discord.channels).toEqual(["999"]);
+    expect(r.reloaded?.github.orgs).toEqual(["a"]);
+  });
+
+  test('a "]" or "#" inside a quoted item does not end the array or start a comment', async () => {
+    const r = await admin(
+      `[discord]\nchannels = ["1"]\nusers = [ # team\n  "a]b",\n  "2",\n]\nroles = ["x#y"] # keep\n`,
+      "users",
+      "3",
+    );
+    expect(r.text).toBe(`[discord]\nchannels = ["1"]\nusers = ["a]b", "2", "3"] # team\nroles = ["x#y"] # keep\n`);
+    expect(r.reloaded?.discord.users).toEqual(["a]b", "2", "3"]);
+    expect(r.reloaded?.discord.roles).toEqual(["x#y"]);
+  });
+
+  test("safety net: a rewrite that would not reload the same is refused and nothing is written", async () => {
+    // An entry holding both quote kinds cannot be written back by the one-line writer.
+    const text = `[discord]\nchannels = ["1"]\nusers = ["it's \\"q\\""]\n`;
+    const r = await admin(text, "users", "3");
+    expect(r.plan.ok).toBe(false);
+    if (!r.plan.ok) expect(r.plan.error).toContain("refusing to write the allowlist file");
+    expect(r.text).toBe(text);
+  });
+});
+
+describe("gates refuse a malformed file without throwing", () => {
+  test("discord-post-message refuses with exit 3 and the file error", async () => {
+    loadBuiltins();
+    const path = tmpFile("allowlist.toml", `[discord]\nchannels = ["999"]\ndeny_channels = [\n  "999",\n`);
+    const keys = ["CORVIDINHO_ALLOWLIST_FILE", "CORVIDINHO_DISCORD_ALLOW_CHANNELS", "DISCORD_TOKEN", "CORVIDINHO_DISCORD_DRY_RUN"];
+    const prev = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    Object.assign(process.env, {
+      CORVIDINHO_ALLOWLIST_FILE: path,
+      CORVIDINHO_DISCORD_ALLOW_CHANNELS: "999",
+      DISCORD_TOKEN: "fake",
+      CORVIDINHO_DISCORD_DRY_RUN: "1",
+    });
+    try {
+      const r = await runPlugin({
+        name: "discord-post-message",
+        args: ["--channel", "999", "--content", "hi"],
+        nonInteractive: true,
+        allowlist: ["discord-post-message"],
+      });
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(3);
+      expect(r.error).toContain("not authorized: allowlist file unreadable or malformed");
+      expect(r.error).toContain("line 3: [discord].deny_channels");
+    } finally {
+      for (const k of keys) {
+        if (prev[k] === undefined) delete process.env[k];
+        else process.env[k] = prev[k];
+      }
+    }
+  });
+
+  test("corvidinho doctor fails the allowlist-file check with the parse error", async () => {
+    const path = tmpFile("allowlist.toml", `[github]\ndeny_repos = [\n  "corvidlabs/secret",\n`);
+    const doctor = async (file: string) => {
+      const proc = Bun.spawn(["bun", "src/cli.ts", "doctor"], {
+        cwd: join(import.meta.dir, ".."),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, CORVIDINHO_ALLOWLIST_FILE: file, HOME: join(path, "..") },
+      });
+      const [, out] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+      return out;
+    };
+    const bad = await doctor(path);
+    expect(bad).toContain("[fail] allowlist-file: allowlist file unreadable or malformed");
+    expect(bad).toContain("line 2: [github].deny_repos");
+    expect(bad).not.toContain("corvidlabs/secret");
+
+    writeFileSync(path, `[github]\ndeny_repos = [\n  "corvidlabs/secret",\n]\n`);
+    expect(await doctor(path)).toContain("[ok] allowlist-file:");
+    expect(await doctor(join(path, "..", "none.toml"))).toContain("[info] allowlist-file:");
   });
 });

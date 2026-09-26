@@ -33,9 +33,16 @@ function lower(list: string[]): string[] {
 }
 
 const HEADER_RE = /^\[\s*([A-Za-z0-9_.-]+)\s*\]$/;
+/**
+ * Any other one- or two-bracket header (`[my notes]`, `[[rules]]`, `["x"]`):
+ * read as an unrelated, lenient section unless it names github / discord.
+ */
+const LOOSE_HEADER_RE = /^\[(\[?)([^[\]]+)\](\]?)$/;
 const KEY_RE = /^\s*([A-Za-z0-9_]+)\s*=/;
 /** Unquoted array item / value characters. */
 const BARE_RE = /^[^\s,[\]"'#=]+/;
+/** A deny list key, in any spelling an operator might write. */
+const DENY_KEY_RE = /^["']?deny[\w-]*["']?\s*=/i;
 
 /**
  * Sections read as allow/deny lists, plus the top level (where a dotted
@@ -51,9 +58,38 @@ function tomlError(row: number, where: string, msg: string): Error {
   return new Error(`allowlist TOML line ${row + 1}: ${where}${msg}`);
 }
 
+/** Space between tokens: any Unicode whitespace (a pasted U+00A0 too). */
+function skipSpace(line: string, col: number): number {
+  while (col < line.length && /\s/.test(line[col]!)) col++;
+  return col;
+}
+
 function blankFrom(line: string, col: number): boolean {
   const rest = line.slice(col).trimStart();
   return rest === "" || rest.startsWith("#");
+}
+
+/**
+ * Section named by a header line (comment stripped, trimmed), lowercased.
+ * `[name]` is a section; another one- or two-bracket header is an unrelated
+ * lenient section, and throws when it names github / discord (a list the
+ * loader would otherwise skip). Anything else starting with `[` throws.
+ */
+function headerSection(line: string, row: number): string {
+  const sec = line.match(HEADER_RE);
+  if (sec) return sec[1]!.toLowerCase();
+  const loose = line.match(LOOSE_HEADER_RE);
+  const name = loose?.[2]!.replace(/["']/g, "").trim().toLowerCase() ?? "";
+  if (
+    !loose ||
+    loose[1]!.length !== loose[3]!.length ||
+    !name ||
+    /[,=]/.test(name) ||
+    /(^|[^a-z0-9_])(github|discord)([^a-z0-9_]|$)/.test(name)
+  ) {
+    throw tomlError(row, "", "malformed or unsupported section header");
+  }
+  return name;
 }
 
 /** `"…"` (only `\"` / `\\` escapes) or `'…'` on one line, starting at `col`. */
@@ -97,7 +133,7 @@ function readArray(
   col++;
   for (;;) {
     const line = lines[row]!;
-    while (col < line.length && (line[col] === " " || line[col] === "\t")) col++;
+    col = skipSpace(line, col);
     if (col >= line.length || line[col] === "#") {
       row++;
       col = 0;
@@ -168,20 +204,32 @@ function legacyValue(val: string): string[] {
   return parseList(val.replace(/^["']|["']$/g, ""));
 }
 
+/** One `key = value` of the allowlist TOML file, with the lines it spans. */
+export type SimpleTomlEntry = {
+  /** Lowercased section name; `""` is the top level. */
+  section: string;
+  /** Lowercased key. */
+  key: string;
+  /** First and last line (0-based, split on `\r?\n`); they differ for a multi-line array. */
+  row: number;
+  endRow: number;
+  items: string[];
+};
+
+export type SimpleTomlScan = {
+  /** Section headers in file order (0-based row, lowercased section name). */
+  headers: Array<{ row: number; section: string }>;
+  /** Every key read, in file order (duplicates included; the last one wins). */
+  entries: SimpleTomlEntry[];
+};
+
 /**
- * Minimal TOML subset for the allowlist file (ALLOW-4): `[section]` headers
- * and `key = value`, section names and keys lowercased. A value is an array
- * of quoted strings / bare words (`["a", 'b', c]`, `[]`) that may span lines
- * with a trailing comma and `#` comments, or a one-line `"a,b"` / `a b` list.
- * Single-line files read exactly as before.
- *
- * Fail closed: in `[github]`, `[discord]` and the top level, any line or
- * value outside this subset throws (line + key in the message, no values), as
- * does a malformed `[header]` anywhere. Other sections (e.g. `[owner]`, which
- * identity/owner.ts reads itself) keep the lenient one-line reading.
+ * Read the allowlist TOML subset (ALLOW-4) with line positions, so `/admin`
+ * edits exactly the lines the loader read. `parseSimpleToml` is built on it
+ * and documents the subset; this throws exactly when it does.
  */
-export function parseSimpleToml(text: string): Record<string, Record<string, string[]>> {
-  const out: Record<string, Record<string, string[]>> = {};
+export function scanSimpleToml(text: string): SimpleTomlScan {
+  const scan: SimpleTomlScan = { headers: [], entries: [] };
   const lines = text.split(/\r?\n/);
   let section = "";
   for (let row = 0; row < lines.length; row++) {
@@ -189,15 +237,19 @@ export function parseSimpleToml(text: string): Record<string, Record<string, str
     const line = raw.replace(/#.*$/, "").trim();
     if (!line) continue;
     if (line.startsWith("[")) {
-      const sec = line.match(HEADER_RE);
-      if (!sec) throw tomlError(row, "", "malformed or unsupported section header");
-      section = sec[1]!.toLowerCase();
-      if (!out[section]) out[section] = {};
+      section = headerSection(line, row);
+      scan.headers.push({ row, section });
       continue;
     }
     if (!isListSection(section)) {
+      if (DENY_KEY_RE.test(line)) {
+        throw tomlError(row, `[${section}]: `, "deny list outside [github] / [discord] (it would be ignored)");
+      }
       const kv = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
-      if (kv) out[section]![kv[1]!.toLowerCase()] = legacyValue(kv[2]!.trim());
+      if (kv) {
+        const key = kv[1]!.toLowerCase();
+        scan.entries.push({ section, key, row, endRow: row, items: legacyValue(kv[2]!.trim()) });
+      }
       continue;
     }
     const kv = raw.match(KEY_RE);
@@ -210,8 +262,11 @@ export function parseSimpleToml(text: string): Record<string, Record<string, str
     }
     const key = kv[1]!.toLowerCase();
     const where = `${section ? `[${section}].` : ""}${key}: `;
-    let col = kv[0].length;
-    while (col < raw.length && (raw[col] === " " || raw[col] === "\t")) col++;
+    if (!section && DENY_KEY_RE.test(line)) {
+      throw tomlError(row, where, "deny list outside [github] / [discord] (it would be ignored)");
+    }
+    const col = skipSpace(raw, kv[0].length);
+    const start = row;
     let items: string[];
     if (raw[col] === "[") {
       const arr = readArray(lines, row, col, where);
@@ -220,9 +275,32 @@ export function parseSimpleToml(text: string): Record<string, Record<string, str
     } else {
       items = readScalar(raw, col, row, where);
     }
-    // Top-level keys are checked (fail closed) but hold nothing the loader reads.
-    if (section) out[section]![key] = items;
+    scan.entries.push({ section, key, row: start, endRow: row, items });
   }
+  return scan;
+}
+
+/**
+ * Minimal TOML subset for the allowlist file (ALLOW-4): `[section]` headers
+ * and `key = value`, section names and keys lowercased. A value is an array
+ * of quoted strings / bare words (`["a", 'b', c]`, `[]`) that may span lines
+ * with a trailing comma and `#` comments, or a one-line `"a,b"` / `a b` list.
+ * Any Unicode whitespace separates tokens. Single-line files read as before.
+ *
+ * Fail closed: in `[github]`, `[discord]` and the top level, any line or
+ * value outside this subset throws (line + key in the message, no values).
+ * A header that names github / discord in an unsupported form
+ * (`[[github]]`, `["discord"]`, `[github`) throws, and so does a `deny…` key
+ * anywhere but `[github]` / `[discord]`, where the loader would skip it.
+ * Other sections — `[owner]` (read by identity/owner.ts), `[my notes]`,
+ * `[[rules]]` — keep the lenient one-line reading.
+ */
+export function parseSimpleToml(text: string): Record<string, Record<string, string[]>> {
+  const out: Record<string, Record<string, string[]>> = {};
+  const scan = scanSimpleToml(text);
+  for (const h of scan.headers) out[h.section] ??= {};
+  // Top-level keys are checked (fail closed) but hold nothing the loader reads.
+  for (const e of scan.entries) if (e.section) out[e.section]![e.key] = e.items;
   return out;
 }
 
@@ -328,6 +406,33 @@ export function isJsonAllowlistPath(path: string): boolean {
   return path.endsWith(".json");
 }
 
+/**
+ * The allow/deny lists the loader reads from allowlist file text (JSON when
+ * `isJsonAllowlistPath(path)`, else the TOML subset). Throws when the text
+ * cannot be parsed. `/admin` re-reads its rewrite with this before writing.
+ */
+export function parseAllowlistText(
+  text: string,
+  path: string,
+): { github: GithubAllowlists; discord: DiscordAllowlists } {
+  if (isJsonAllowlistPath(path)) {
+    const raw = JSON.parse(text) as Record<string, unknown>;
+    const gh = (raw.github ?? raw.Github ?? {}) as Record<string, unknown>;
+    const dc = (raw.discord ?? raw.Discord ?? {}) as Record<string, unknown>;
+    const asLists = (obj: Record<string, unknown>): Record<string, string[]> => {
+      const out: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (Array.isArray(v)) out[k.toLowerCase()] = normList(v);
+        else if (typeof v === "string") out[k.toLowerCase()] = parseList(v);
+      }
+      return out;
+    };
+    return { github: githubFromObj(asLists(gh)), discord: discordFromObj(asLists(dc)) };
+  }
+  const parsed = parseSimpleToml(text);
+  return { github: githubFromObj(parsed.github), discord: discordFromObj(parsed.discord) };
+}
+
 export async function loadAllowlistFile(
   path: string,
 ): Promise<
@@ -336,30 +441,7 @@ export async function loadAllowlistFile(
 > {
   try {
     const text = await Bun.file(path).text();
-    if (isJsonAllowlistPath(path)) {
-      const raw = JSON.parse(text) as Record<string, unknown>;
-      const gh = (raw.github ?? raw.Github ?? {}) as Record<string, unknown>;
-      const dc = (raw.discord ?? raw.Discord ?? {}) as Record<string, unknown>;
-      const asLists = (obj: Record<string, unknown>): Record<string, string[]> => {
-        const out: Record<string, string[]> = {};
-        for (const [k, v] of Object.entries(obj)) {
-          if (Array.isArray(v)) out[k.toLowerCase()] = normList(v);
-          else if (typeof v === "string") out[k.toLowerCase()] = parseList(v);
-        }
-        return out;
-      };
-      return {
-        ok: true,
-        github: githubFromObj(asLists(gh)),
-        discord: discordFromObj(asLists(dc)),
-      };
-    }
-    const parsed = parseSimpleToml(text);
-    return {
-      ok: true,
-      github: githubFromObj(parsed.github),
-      discord: discordFromObj(parsed.discord),
-    };
+    return { ok: true, ...parseAllowlistText(text, path) };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: `allowlist file unreadable or malformed (${path}): ${msg}` };
@@ -406,8 +488,8 @@ export type LoadOptions = {
  * Missing file is OK — env-only still works; empty allow ⇒ deny-all at gate.
  * A file that exists but cannot be read or parsed THROWS (fail closed): env
  * allow overlays would otherwise admit what the file's deny lists refuse.
- * Callers refuse on the throw (bridge / watch / daemon do not start; gates,
- * git-push and discord-post-message refuse the action).
+ * Callers refuse on the throw (bridge / watch / daemon do not start); gates
+ * use `tryLoadAllowlist` and refuse the action with its error.
  */
 export async function loadAllowlist(opts: LoadOptions = {}): Promise<AllowlistConfig> {
   const env = opts.env ?? process.env;
@@ -444,6 +526,21 @@ export async function loadAllowlist(opts: LoadOptions = {}): Promise<AllowlistCo
     discord: mergeDiscord(cfg.discord, discordFromEnv(env)),
   };
   return finalize(cfg);
+}
+
+/**
+ * `loadAllowlist` for action gates: a file that cannot be read or parsed is
+ * an error to refuse with (it names the path, line and key, never list
+ * values), not a throw, so a gate never surfaces a stack trace.
+ */
+export async function tryLoadAllowlist(
+  opts: LoadOptions = {},
+): Promise<{ ok: true; config: AllowlistConfig } | { ok: false; error: string }> {
+  try {
+    return { ok: true, config: await loadAllowlist(opts) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** Sync helper for gates that already have env overlays (no file). */

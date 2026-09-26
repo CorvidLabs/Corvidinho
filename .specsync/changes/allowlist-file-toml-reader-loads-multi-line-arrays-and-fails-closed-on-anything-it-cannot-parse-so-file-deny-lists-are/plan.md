@@ -10,3 +10,4 @@ artifact: plan
 3. Make `loadAllowlist` throw for a file that exists but fails to load. Wrap `loadBridgeConfig` so it returns `code: "allowlist"`.
 4. Update the /admin test fixture for a JSON file that broke after start, and document multi-line lists in `allowlist.example.toml`.
 5. Deltas: Modified REQ-plugins-006 and REQ-discord-004. List the new test file in the plugins spec.
+6. Review round: fix the /admin insertion point with the loader's own scanner and add the re-parse safety net; merge main (#191) and make every action gate refuse a malformed file (exit 3, no throw); reword REQ-plugins-253 and its test; NBSP whitespace, lenient loose headers, misplaced deny keys throw; `corvidinho doctor` check.
