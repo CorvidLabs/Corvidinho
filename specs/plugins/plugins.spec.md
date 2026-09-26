@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 34
+version: 35
 status: draft
 files:
   - src/plugins/types.ts
@@ -37,6 +37,11 @@ files:
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/search.plugins.test.ts
+  - plugins/git/index.ts
+  - plugins/git/commands.ts
+  - plugins/git/exec.ts
+  - plugins/git/parse.ts
+  - tests/git.plugins.test.ts
 
 db_tables: []
 depends_on: []
@@ -49,12 +54,16 @@ depends_on: []
 Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 (GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
 and file/search plugins (`files-read|write|edit|glob|list|delete`, `search-grep`)
-with SAFE-2 protected-path guards (PLUGIN-1/2 / REQ-plugins-081..084).
+with SAFE-2 protected-path guards (PLUGIN-1/2 / REQ-plugins-081..084), and
+typed git plugins (`git-status|diff|log|branch-list` reads;
+`git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
+task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
 
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
-HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
+HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`;
+git plugins via `loadGitPlugins` (`plugins/git/index.ts`).
 
 ## Invariants
 
@@ -78,6 +87,21 @@ confirmed from a different turn (SAFE-4 / REQ-plugins-011).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
+Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
+stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
+stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
+must be the repository / worktree top level (SAFE-3). Flags are strict
+(unknown refused); path args use the files-plugin clamp and go after `--` as
+literal pathspecs. Reads are `dangerous: false`, minTier 0. `git-branch-create`,
+`git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
+message, stages explicit file paths only (no directories / `--all` / amend),
+commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
+paths and staging the deletion of SAFE-2 protected infra, and reports
+`filesChanged`. `git-push` pushes only the current branch to the same-named
+ref of a configured remote (never a URL), never forces, gates every push
+URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
+(GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
+SAFE-22 default-branch policy is not enforced (awaiting HI).
 
 ## Behavioral Examples
 
@@ -86,6 +110,12 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 - **Given** builtins are loaded
 - **When** an operator or the tool loop inspects `memory-store`
 - **Then** the description includes `--category` / `person` / `identity` example argv
+
+### Scenario: git-push refuses a repo off the allowlist
+
+- **Given** the task worktree's `origin` points at OWNER/REPO not on the GitHub allowlist
+- **When** the tool loop runs `git-push` (allowlisted as a dangerous command)
+- **Then** the run fails with a GITHUB-6 error (exit 3) and nothing is pushed
 
 ## Error Cases
 
@@ -98,6 +128,11 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
+| git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
+| git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
+| git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
+| git-push remote OWNER/REPO not allowlisted or denied | Refuse (exit 3, GITHUB-6) |
+| git-push non-fast-forward | Fail (exit 1); never retried with force |
 
 ## Dependencies
 
@@ -106,6 +141,7 @@ LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 | Bun | `Bun.which`, `Bun.spawn`, `Bun.file`, `Bun.write` |
 | @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
 | node:fs / path | path clamp, symlink resolve, glob/list |
+| git (system binary) | git plugins via `Bun.spawn` argv arrays |
 
 ### Consumed By
 
@@ -128,3 +164,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge: Harden memory plugin ACL (MEMORY-ACL-1..4 / SAFE-4 / issue #59 follow-up): acting Discord user and ADMIN come only from bridge-set env never model argv (--user/--admin/--db refused); ADMIN re-checked at handler time against live admin config with empty=deny-all; include-deleted is ADMIN-only; forget/override become real two-phase with an HMAC confirm token confirmed from a different turn; Discord/WATCH spawns always overwrite acting env |
 | 2026-09-26 | safe-5-tamper-evident-audit-trail-issue-95-captured-slice-append-only-audit-log-schema-v5-update-delete-blocked-by: SAFE-5 tamper-evident audit trail (issue #95 captured slice): append-only audit_log (schema v5, UPDATE/DELETE blocked by triggers) with an HMAC-SHA256 chain keyed by CORVIDINHO_AUDIT_HMAC_KEY from the bot VM env (plain SHA-256 integrity chain when unset); runPlugin records every dangerous plugin run (started then ok/error, fail closed if the intent cannot be recorded) and denied close calls, storing action, actor, surface, args digest and outcome, never raw args; verify at bridge start and a chain-status line in /status; busy_timeout on the shared DB; tests isolate the data dir; draft SAFE-17 Discord verify command left for HI capture |
 | 2026-09-26 | memory-plugins-treat-the-configured-owner-as-admin-identity-1-42-companion-the-handler-time-admin-re-check-for-memory: Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners |
+| 2026-09-26 | plugin-vcs-tools-status-diff-log-branch-commit-push-with-cwd-clamp-no-force-repo-gate-plugin-1-2-safe-1-2-3-github-2-6: git-status/diff/log/branch-list reads + dangerous code-tier git-branch-create/commit/push; cwd clamped to the worktree top level, explicit-path commits, never force, GITHUB-6 push gate (issue #82, REQ-plugins-182); draft SAFE-22 left for HI |
