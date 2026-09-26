@@ -11,7 +11,9 @@ import type {
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
+import { buildVersionPresenceActivity } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
+import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
 export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
@@ -55,9 +57,15 @@ function optionValue(raw: unknown): SlashOptionValue {
  * Live gateway via discord.js. Dynamic import so unit tests need not load it
  * when using the null/fake gateway.
  */
+export type LiveGatewayOptions = {
+  /** Shared package version for Discord presence (DISCORD-12). */
+  version?: string;
+};
+
 export async function createLiveGateway(
   config: BridgeConfig,
   handlers: GatewayHandlers,
+  opts?: LiveGatewayOptions,
 ): Promise<DiscordGateway> {
   const discord = await import("discord.js");
   const {
@@ -65,7 +73,9 @@ export async function createLiveGateway(
     GatewayIntentBits,
     Events,
     ChannelType,
+    ActivityType,
   } = discord;
+  const presenceVersion = opts?.version ?? PACKAGE_VERSION;
 
   const client = new Client({
     intents: [
@@ -210,6 +220,22 @@ export async function createLiveGateway(
       client.on(Events.ClientReady, (ready) => {
         botUserId = ready.user.id;
         console.log(`[discord] logged in as ${ready.user.tag}`);
+        try {
+          const activity = buildVersionPresenceActivity(presenceVersion);
+          ready.user.setPresence({
+            status: "online",
+            activities: [
+              {
+                name: activity.name,
+                state: activity.state,
+                type: ActivityType.Custom,
+              },
+            ],
+          });
+          console.log(`[discord] presence set: ${activity.state}`);
+        } catch (err) {
+          console.warn("[discord] presence set failed:", err);
+        }
         handlers.onReady?.(ready.user.id);
         void registerSlashCommands();
       });

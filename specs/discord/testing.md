@@ -35,3 +35,9 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 - `tests/discord.protocol-version.test.ts` — Merlin-shaped handshake match /
   mismatch / unverifiable / timeout (stub binaries; no live token).
 
+
+## Presence version (DISCORD-12)
+
+- `tests/discord.presence.test.ts` — `formatPresenceVersionString` +
+  `buildVersionPresenceActivity` Custom type/state from shared VERSION
+  (no live token).

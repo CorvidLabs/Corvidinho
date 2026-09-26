@@ -23,3 +23,9 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-8**  If the agent tries to post to another channel on my behalf, the bridge checks that *I* could have posted there, not only that the bot could.
 - **DISCORD-9**  Images I attach are available to the agent as files it can actually look at.
 - **DISCORD-10**  If the bridge and the agent binary disagree on protocol version, the bridge refuses to start rather than misparsing quiet failure.
+- **DISCORD-12**  Under the bot name I always see the Corvidinho version (same shared version as /status) as a short Discord presence or custom status so I can tell which build is live at a glance.
+
+## Retired
+
+- **DISCORD-11**  --help
+  retired: Accidental capture of CLI --help text; unused. Real presence criterion is DISCORD-12.

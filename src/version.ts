@@ -69,3 +69,14 @@ export function formatLlmStatusLine(
   if (!llm.apiKey) return "LLM: demo stub";
   return `LLM: ${llm.model} @ ${llmBaseHost(llm.baseUrl)}`;
 }
+
+/**
+ * Short Discord presence / custom-status string from package version
+ * (DISCORD-12). Always `vX.Y.Z` shape; no extra chrome.
+ */
+export function formatPresenceVersionString(
+  version: string = VERSION,
+): string {
+  const v = version.trim() || "0.0.0";
+  return v.startsWith("v") ? v : `v${v}`;
+}

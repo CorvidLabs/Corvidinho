@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 33
+version: 34
 status: draft
 files:
   - src/discord/types.ts
@@ -13,6 +13,7 @@ files:
   - src/discord/message-router.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
+  - src/discord/presence.ts
   - src/discord/bridge.ts
   - src/discord/thinking-status.ts
   - src/discord/slash-commands.ts
@@ -28,6 +29,7 @@ files:
   - src/discord/index.ts
   - plugins/discord/index.ts
   - tests/discord.protocol-version.test.ts
+  - tests/discord.presence.test.ts
 
 db_tables: []
 depends_on:
@@ -44,7 +46,7 @@ Thin Discord HEAR bridge: gateway → message-router → session stub with live
 thinking status, slash ops, per-user rate limits/mutes, admin re-auth at
 command run time, confused-deputy requester checks on outbound posts,
 image attachments as local files for the agent, and Merlin-shaped
-protocol-version lockstep (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10).
+protocol-version lockstep, and presence version under the bot name (DISCORD-1/2/2.a/3/4/5/6/7/8/9/10/12).
 
 ## Public API
 
@@ -56,7 +58,8 @@ thinking-status builders/controller, slash command bodies + dispatch
 (handleSlashInteraction, buildSlashCommandBodies including mute/unmute, registerSlashCommandSet / registerSlashCommandsLive);
 loadDiscordPlugins registers discord-post-message (requester check);
 isImageAttachment, extractImageBlocks, enrichPromptWithImages,
-checkProtocolVersion, enforceProtocolVersionOrExit, summarizeTaskRunOutput.
+checkProtocolVersion, enforceProtocolVersionOrExit, summarizeTaskRunOutput;
+buildVersionPresenceActivity / formatPresenceVersionString (DISCORD-12).
 
 ## Invariants
 
@@ -70,7 +73,8 @@ image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
-slash registration with guild id PUTs guild commands then clears globals.
+slash registration with guild id PUTs guild commands then clears globals;
+ClientReady sets short Custom Status from shared package version (DISCORD-12).
 
 ## Behavioral Examples
 
@@ -80,7 +84,7 @@ refused; rate-limited or muted user refused while peer continues;
 discord-post-message with requester who cannot send → refuse; missing token /
 empty channels refuse cleanly; session run posts progress then Done;
 attached images land as local paths in the agent prompt; protocol version
-match proceeds, mismatch refuses start.
+match proceeds, mismatch refuses start; ClientReady sets presence to vX.Y.Z.
 
 ## Error Cases
 
@@ -101,3 +105,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
 | 2026-09-26 | bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral: Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands |
 | 2026-09-26 | clean-re-register-discord-slash-set-discord-4-guild-rest-put-overwrite-of-only-the-six-current-commands-clear-global: guild PUT of six + clear globals (REQ-discord-016); discord register-commands CLI |
+| 2026-09-26 | discord-bot-presence-shows-shared-corvidinho-package-version-discord-12-set-custom-status-on-clientready-from-src: Discord presence/custom status shows shared package version on ClientReady (DISCORD-12); fixture test; no slash/allowlist churn |
