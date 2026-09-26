@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 24
+version: 25
 status: draft
 files:
   - src/plugins/types.ts
@@ -89,4 +89,4 @@ CORVIDINHO_GITHUB_DRY_RUN=1.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26).
 
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
-
+| 2026-09-26 | github-write-plugins-for-assign-work-comment-pr-dogfood-issue-48-dangerous-github-issue-create-comment-github-pr-create: GitHub write plugins for assign→work→comment→PR dogfood (issue #48): dangerous github-issue-create/comment, github-pr-create with Made with Corvidinho attribution, github-pr-review; SAFE-1 CORVIDINHO_ALLOWLIST + GITHUB-6 repo gate; WATCH assignment events from assignees; SpecSync + fixtures no live tokens |
