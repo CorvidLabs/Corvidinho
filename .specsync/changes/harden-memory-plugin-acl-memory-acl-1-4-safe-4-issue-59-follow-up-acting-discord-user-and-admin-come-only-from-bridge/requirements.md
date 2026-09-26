@@ -28,8 +28,12 @@ artifact: requirements
    than the one that issued it. Tokens are single-use because the row's
    `updated_at` changes on forget/override. HMAC secret lives in the existing
    `schema_meta` table (no schema bump).
-5. Discord spawn SHALL always set `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when
+5. Phase 2 also needs the token to appear in the human's own message for this
+   run (bridge extracts it into `CORVIDINHO_ACTING_CONFIRM_TOKENS`). Discord and
+   WATCH spawns run non-interactive (SAFE-1). Re-storing a memory key keeps the
+   prior content as a soft-deleted row (no non-admin forget path).
+6. Discord spawn SHALL always set `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when
    no actor) and `CORVIDINHO_ACTING_IS_ADMIN`; WATCH spawn SHALL clear both.
-6. Fixture tests cover every refusal above plus the happy two-phase path;
+7. Fixture tests cover every refusal above plus the happy two-phase path;
    `bun test`, `bunx tsc --noEmit`, `specsync check`, and
    `fledge lanes run verify --non-interactive` stay green.

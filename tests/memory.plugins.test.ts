@@ -21,6 +21,7 @@ const ENV_KEYS = [
   "CORVIDINHO_DISCORD_DENY_USERS",
   "DISCORD_MUTED_USER_IDS",
   "CORVIDINHO_MEMORY_INMEM",
+  "CORVIDINHO_ACTING_CONFIRM_TOKENS",
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
@@ -46,6 +47,11 @@ async function storeAs(userId: string, key: string, content: string): Promise<st
   const r = await run("memory-store", ["--category", "person", "--key", key, content]);
   expect(r.ok).toBe(true);
   return (r.data as { id: string }).id;
+}
+
+/** The human replies with the token in a new message (bridge-extracted). */
+function humanSays(token: string): void {
+  process.env.CORVIDINHO_ACTING_CONFIRM_TOKENS = token;
 }
 
 let turn = 0;
@@ -184,6 +190,10 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     expect(sameTurn.error).toContain("new message/turn");
 
     newTurn();
+    const notHuman = await run("memory-forget", ["--id", id, "--confirm", pending.confirmToken]);
+    expect(notHuman.ok).toBe(false);
+    expect(notHuman.error).toContain("must come from the human");
+    humanSays(pending.confirmToken);
     const ok = await run("memory-forget", ["--id", id, "--confirm", pending.confirmToken]);
     expect(ok.ok).toBe(true);
     expect(ok.message).toContain("by boss");
@@ -223,6 +233,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     expect(p1.ok).toBe(true);
     const token = (p1.data as { confirmToken: string }).confirmToken;
     newTurn();
+    humanSays(token);
     const swapped = await run("memory-override", ["--id", id, "--confirm", token, "--content", "evil value"]);
     expect(swapped.ok).toBe(false);
     const ok = await run("memory-override", ["--id", id, "--confirm", token, "--content", "new value"]);
@@ -259,6 +270,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     actAs("boss", true);
     const p1 = await run("memory-forget", ["--id", id]);
     newTurn();
+    humanSays((p1.data as { confirmToken: string }).confirmToken);
     await run("memory-forget", ["--id", id, "--confirm", (p1.data as { confirmToken: string }).confirmToken]);
     const adminView = await run("memory-recall", ["--include-deleted"]);
     expect(adminView.ok).toBe(true);
@@ -330,6 +342,7 @@ describe("memory ACL hardening — review follow-ups", () => {
     actAs("boss", true);
     const p1 = await run("memory-forget", ["--id", id]);
     newTurn();
+    humanSays((p1.data as { confirmToken: string }).confirmToken);
     const ok = await run("memory-forget", ["--id", id, `--confirm=${(p1.data as { confirmToken: string }).confirmToken}`]);
     expect(ok.ok).toBe(true);
   });

@@ -5,14 +5,15 @@ change: harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting
 
 # Delta — watch (clear memory acting env)
 
-## Added
+## Modified
 
 ### REQUIREMENT REQ-watch-008
 
-The WATCH agent spawn SHALL clear `CORVIDINHO_ACTING_DISCORD_USER_ID` and set
-`CORVIDINHO_ACTING_IS_ADMIN=0`. GitHub-originated runs have no Discord acting
+The WATCH agent spawn SHALL clear `CORVIDINHO_ACTING_DISCORD_USER_ID` and
+`CORVIDINHO_ACTING_CONFIRM_TOKENS`, set `CORVIDINHO_ACTING_IS_ADMIN=0`, and run
+non-interactive (`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1). GitHub-originated runs have no Discord acting
 user, so memory plugins refuse in them (MEMORY-ACL-1) instead of inheriting a
 Discord identity from the watcher's environment.
 
 Acceptance Criteria
-- WATCH spawn env has an empty acting user and `CORVIDINHO_ACTING_IS_ADMIN=0` even when the parent env sets them.
+- WATCH spawn env has an empty acting user, no confirm tokens, `CORVIDINHO_ACTING_IS_ADMIN=0` and `CORVIDINHO_NON_INTERACTIVE=1` even when the parent env sets them.

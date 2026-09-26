@@ -11,6 +11,7 @@
 import { loadAllowlist } from "../../src/allowlist/load.ts";
 import {
   checkConfirmToken,
+  isHumanSuppliedToken,
   issueConfirmToken,
   MEMORY_ACL_DENIED,
   MemoryAclError,
@@ -255,13 +256,23 @@ async function twoPhase(opts: {
       return {
         ok: true,
         data: { pending: true, op: opts.op, ...target, confirmToken: token, expiresAt },
-        message: `pending ${opts.op} of ${row.category}/${row.key} (owner ${row.ownerUserId}); confirm from a new turn within 10m: memory-${opts.op} --id ${row.id} --confirm ${token}${opts.op === "override" ? " --content <the same content as this request>" : ""}`,
+        message: `pending ${opts.op} of ${row.category}/${row.key} (owner ${row.ownerUserId}). To confirm within 10m the human must reply with this token in a new message: ${token} — then run memory-${opts.op} --id ${row.id} --confirm <token>${opts.op === "override" ? " --content <the same content as this request>" : ""}`,
         exitCode: 0,
       };
     }
 
     const check = checkConfirmToken(db, confirm.token!, binding);
     if (!check.ok) return { ok: false, error: check.error, exitCode: 2 };
+    // SAFE-4: phase 2 needs a human act — the token must appear in the
+    // human's own message for this run (bridge-extracted), not only argv.
+    if (!isHumanSuppliedToken(confirm.token!, env)) {
+      return {
+        ok: false,
+        error:
+          "refused: confirm token must come from the human — reply with the token in a new message (SAFE-4)",
+        exitCode: 2,
+      };
+    }
 
     const done = opts.apply(store, row.id, actor, isAdmin);
     const verb = opts.op === "forget" ? "forgot" : "overrode";

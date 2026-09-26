@@ -35,6 +35,29 @@ export function setConfirmTurnForTests(fn: (() => string) | null): void {
 
 export type ConfirmOp = "forget" | "override";
 
+const TOKEN_IN_TEXT = /\bmc1\.\d{1,16}\.[A-Za-z0-9]{1,64}\.[0-9a-f]{64}\b/g;
+
+/**
+ * Confirm tokens a human typed in their message. The bridge passes these to
+ * the spawned run (CORVIDINHO_ACTING_CONFIRM_TOKENS) so phase 2 requires a
+ * human act — the model cannot confirm from its own memory (SAFE-4).
+ */
+export function extractConfirmTokens(humanText: string): string[] {
+  return [...new Set(humanText.match(TOKEN_IN_TEXT) ?? [])];
+}
+
+/** True when `token` is among the human-supplied tokens in `env`. */
+export function isHumanSuppliedToken(
+  token: string,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const list = (env.CORVIDINHO_ACTING_CONFIRM_TOKENS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.includes(token.trim());
+}
+
 export type ConfirmBinding = {
   op: ConfirmOp;
   actorUserId: string;

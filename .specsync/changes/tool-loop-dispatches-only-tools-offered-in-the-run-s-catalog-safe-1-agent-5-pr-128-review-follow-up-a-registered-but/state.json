@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "tool-loop-dispatches-only-tools-offered-in-the-run-s-catalog-safe-1-agent-5-pr-128-review-follow-up-a-registered-but",
+  "slug": "tool-loop-dispatches-only-tools-offered-in-the-run-s-catalog-safe-1-agent-5-pr-128-review-follow-up-a-registered-but",
+  "title": "Tool loop dispatches only tools offered in the run's catalog (SAFE-1 / AGENT-5, PR #128 review follow-up): a registered but not-offered (e.g. dangerous or above-tier) plugin name from the model is refused instead of run; memory store test updated for soft-deleted re-store history",
+  "description": "Tool loop dispatches only tools offered in the run's catalog (SAFE-1 / AGENT-5, PR #128 review follow-up): a registered but not-offered (e.g. dangerous or above-tier) plugin name from the model is refused instead of run; memory store test updated for soft-deleted re-store history",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "a9feb0fde12d55d7625957eb869ce49665c631d3",
+  "created_at": 1790450626,
+  "updated_at": 1790450652,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/execute.ts",
+    "tests/agent.tool-loop.test.ts",
+    "tests/memory.store.test.ts",
+    "specs/agent/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "The LLM tool loop only runs plugins present in the tool catalog it offered for this run (tier + danger filtered); any other registered name (e.g. dangerous danger-ping or memory-forget when dangerous tools are not offered) returns a refused tool result and never reaches runPlugin even in interactive mode with an allowlist; offered tools behave as before; memory store fixture reflects soft-deleted re-store history; fixture tests + SpecSync + fledge verify green"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

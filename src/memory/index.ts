@@ -24,6 +24,8 @@ export {
   CONFIRM_TOKEN_TTL_MS,
   checkConfirmToken,
   currentConfirmTurn,
+  extractConfirmTokens,
+  isHumanSuppliedToken,
   issueConfirmToken,
   setConfirmTurnForTests,
   type ConfirmBinding,

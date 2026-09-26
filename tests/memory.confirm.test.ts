@@ -5,6 +5,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   CONFIRM_TOKEN_TTL_MS,
   checkConfirmToken,
+  extractConfirmTokens,
+  isHumanSuppliedToken,
   issueConfirmToken,
   setConfirmTurnForTests,
   type ConfirmBinding,
@@ -89,5 +91,17 @@ describe("memory confirm tokens (SAFE-4)", () => {
     setConfirmTurnForTests(() => "t2");
     const r = checkConfirmToken(other, a, base, 1);
     expect(r.ok ? "ok" : r.reason).toBe("mismatch");
+  });
+});
+
+describe("human-supplied confirm tokens (SAFE-4)", () => {
+  test("extract tokens from a human message; membership check", () => {
+    const t = `mc1.5000.t1.${"a".repeat(64)}`;
+    expect(extractConfirmTokens(`ok ${t}, go`)).toEqual([t]);
+    expect(extractConfirmTokens(`${t} ${t}`)).toEqual([t]);
+    expect(extractConfirmTokens("mc1.5000.t1.short")).toEqual([]);
+    expect(isHumanSuppliedToken(t, { CORVIDINHO_ACTING_CONFIRM_TOKENS: `x,${t}` })).toBe(true);
+    expect(isHumanSuppliedToken(t, { CORVIDINHO_ACTING_CONFIRM_TOKENS: "" })).toBe(false);
+    expect(isHumanSuppliedToken(t, {})).toBe(false);
   });
 });

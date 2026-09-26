@@ -4,6 +4,7 @@
  */
 
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { extractConfirmTokens } from "../memory/confirm.ts";
 import { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import type { AgentSpawnResult } from "./types.ts";
@@ -80,8 +81,12 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_DISCORD_SESSION_ID: sessionId,
+          // Chat/schedule runs have no human at a terminal: SAFE-1 non-interactive.
+          CORVIDINHO_NON_INTERACTIVE: "1",
           // Always overwrite: never inherit an actor from the bridge env (REQ-discord-021).
           CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
+          // SAFE-4: only confirm tokens the human typed in this message count.
+          CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(prompt).join(","),
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),

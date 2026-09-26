@@ -5,7 +5,7 @@ change: harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting
 
 # Delta — plugins (memory plugin ACL hardening)
 
-## Added
+## Modified
 
 ### REQUIREMENT REQ-plugins-011
 
@@ -32,7 +32,10 @@ returns a confirm token, expiry, and target id/category/key/owner — no
 content. Phase 2 (`--confirm <token>`) SHALL succeed only when the token's
 HMAC matches op + actor + memory id + the row's `updated_at` (+ override
 content hash), it is unexpired (10 minutes), and it is confirmed from a
-different process/turn than the one that issued it. Tokens are single-use
+different process/turn than the one that issued it, and the token appears in
+the human's own message for this run (bridge-extracted into
+`CORVIDINHO_ACTING_CONFIRM_TOKENS`) so the model cannot confirm from its own
+memory. Tokens are single-use
 because the row changes. The HMAC secret lives in `schema_meta` (no schema
 version bump).
 
@@ -41,12 +44,10 @@ Acceptance Criteria
 - No acting user env ⇒ refused; other actors never see a user's memories.
 - Empty admin lists + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
 - Admin user id without the bridge bit (scheduled runs) refused; deny-listed or muted admin refused; role admin needs roles configured + env bit.
-- Phase 1 returns a token without content; same-turn confirm refused; new-turn confirm succeeds; replay refused.
+- Phase 1 returns a token without content; same-turn confirm refused; a token the human did not supply refused; new-turn human-supplied confirm succeeds; replay refused.
 - Token for another memory, another actor, or changed override content refused; expired token refused.
 - `--include-deleted` refused for non-admins; `--include-deleted=false` is off.
 - `--user` / `--admin` / `--db` are only refused in flag position; text after `--` or in `--content=` is data.
-
-## Modified
 
 ### REQUIREMENT REQ-plugins-010
 
