@@ -7,10 +7,11 @@
   "title": "Capture Leif's decision (#129): retire CLI-1, CLI-2, CLI-6, CLI-9 in hi/cli.md with reason 'no human CLI; humans use Discord/GitHub'; keep CLI-7 and CLI-8 for the daemon",
   "description": "Capture Leif's decision (#129): retire CLI-1, CLI-2, CLI-6, CLI-9 in hi/cli.md with reason 'no human CLI; humans use Discord/GitHub'; keep CLI-7 and CLI-8 for the daemon",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "06e2b08c7c53f59adb122f7a6c9025a007b55838",
   "created_at": 1790451226,
-  "updated_at": 1790451236,
+  "updated_at": 1790451237,
   "affected_specs": [],
   "affected_paths": [
     "hi/cli.md"
