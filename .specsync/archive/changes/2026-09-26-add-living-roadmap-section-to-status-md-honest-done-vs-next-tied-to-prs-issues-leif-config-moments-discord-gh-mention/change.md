@@ -1,6 +1,6 @@
 ---
 id: add-living-roadmap-section-to-status-md-honest-done-vs-next-tied-to-prs-issues-leif-config-moments-discord-gh-mention
-state: implementing
+state: archived
 type: documentation
 base_commit: b55ff627783de1b7d5ce5c0ed9c75c618d9b546b
 ---

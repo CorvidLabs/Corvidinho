@@ -7,11 +7,11 @@
   "title": "Add living ROADMAP section to STATUS.md: honest done-vs-next tied to PRs/issues, Leif config moments, Discord/GH mention expectations, phased milestones; refresh short Next bullets to point at ROADMAP",
   "description": "Add living ROADMAP section to STATUS.md: honest done-vs-next tied to PRs/issues, Leif config moments, Discord/GH mention expectations, phased milestones; refresh short Next bullets to point at ROADMAP",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "b55ff627783de1b7d5ce5c0ed9c75c618d9b546b",
   "created_at": 1790437984,
-  "updated_at": 1790438066,
+  "updated_at": 1790438114,
   "affected_specs": [],
   "affected_paths": [
     "STATUS.md"

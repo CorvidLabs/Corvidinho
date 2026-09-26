@@ -1,0 +1,32 @@
+{
+  "timestamp": 1790438066,
+  "commit": "39675055b46e50f9ed6d5c212b2492163e5b7e19",
+  "contract_digest": "56850f9131dde3f1a7ca5ebfa85521cdbe28bc2074d3ed9da38a22f230f57804",
+  "execution_digest": "23ffb29af8d07ae980f8418960d23d1543f54ac65c1db03f3c5ee3cd17ea7b44",
+  "workspace_digest": "cd5a3e75eb520130e17d232d0e8aad631476ccc5c3606e4bc567b0a4db639fdf",
+  "acceptance_input_digest": "c3da702528b815469f012e7adc9d2d1f5e06d4056c800323e7410e7f94c5a9b6",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ec1953dab986440b2b8106d96cd70b17d0cfada370303dcdeabaf07faf6e521f",
+        "entry_digest": "05e0a6388a1e643d1ac24b7e5cf8ea3e5659fedc3f9ae9ad3eed43fe03717fc9",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}
