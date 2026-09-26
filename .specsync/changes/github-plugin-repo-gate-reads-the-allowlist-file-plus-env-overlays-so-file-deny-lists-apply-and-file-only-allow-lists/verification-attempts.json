@@ -19,6 +19,25 @@
         "REQ-discord-253",
         "REQ-plugins-253"
       ]
+    },
+    {
+      "timestamp": 1790462785,
+      "commit": "bab6ad792702f9257551bdcecd0e428038ca6eb8",
+      "contract_digest": "076e41c99a246da8ad8378c2e5060b374443c3556ec87dff3531d1a997b5c2aa",
+      "execution_digest": "55d12e7cb672f59dd6471da279e3c7c3ee9be6e9b7b02b2868622f1c68006993",
+      "workspace_digest": "8c80377f0656f503f1d73b45ab03d7de3c7608287b54d9b0dc67830fd79917ce",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-253",
+        "REQ-plugins-253"
+      ]
     }
   ]
 }
