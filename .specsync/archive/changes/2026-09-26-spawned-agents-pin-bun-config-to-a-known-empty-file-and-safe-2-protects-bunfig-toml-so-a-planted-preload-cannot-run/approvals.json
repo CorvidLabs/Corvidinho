@@ -1,0 +1,52 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790460593,
+      "digest": "e92cc86898b1cab837abc05c7acfe20b0a4f9c437a3fd920e7e85b2a5ac8caaf",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "spawned-agents-pin-bun-config-to-a-known-empty-file-and-safe-2-protects-bunfig-toml-so-a-planted-preload-cannot-run",
+        "title": "Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1)",
+        "description": "Spawned agents pin Bun config to a known-empty file and SAFE-2 protects bunfig.toml so a planted preload cannot run code in the agent (#133 isolation / SAFE-1)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/files/protectedPaths.ts",
+          "src/agent/spawn-argv.ts",
+          "tests/autonomous.delegate.test.ts",
+          "tests/files.plugins.test.ts",
+          "tests/spawn.argv.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A bunfig.toml preload in the spawn cwd never runs in a spawned .ts agent (argv is bun --no-env-file --config=/dev/null <bin>); files-write/edit/delete refuse bunfig.toml and .bunfig.toml (SAFE-2)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "24e3845147bbc0b1762bc63ece2ec41b05a388146fd2780265253551605a1a10",
+        "plugins": "214df7efda2d35f769a1a8461f31547fd17d92e639fa20033a3de81a1297b01f"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790460686,
+      "digest": "099f6ed4a0c735d1e73b7389a6828577138250eca0190d6488cb803e3dac37ee",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

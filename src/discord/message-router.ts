@@ -2,10 +2,13 @@
  * Mention / reply / thread → session stub (DISCORD-1 / 2 / 2.a / 5 / 6).
  * Entry after gateway; no ProcessManager.
  * DISCORD-DENY-1..3: outside allowlist → refuse without public reply.
+ * REQ-discord-201: every start/continue also gates the actor (gateActor).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import type { OwnerRecord } from "../identity/owner.ts";
 import {
+  gateActor,
   gateInbound,
   gateRateOrMute,
   isMonitoredChannel,
@@ -26,10 +29,14 @@ export type RouterDeps = {
   store: SessionStore;
   allowlist: AllowlistConfig;
   /**
-   * When true (default for chat), only channel allowlist is required to
-   * start/continue; user/role lists still apply if you pass checkUsers.
+   * When true (default for chat), the channel gate is the channel allowlist
+   * alone; false ⇒ strict checkDiscordAction (empty user+role lists deny).
+   * Either way every start/continue also passes gateActor: deny lists win and
+   * a non-empty user/role allowlist must match (REQ-discord-201).
    */
   channelOnlyGate?: boolean;
+  /** IDENTITY-1 — configured owner; passes gateActor even when unlisted. */
+  owner?: OwnerRecord | null;
   /** DISCORD-6 — in-memory muted users. */
   mutedUsers?: Set<string>;
   /** DISCORD-6 — sliding-window rate limit state + config. */
@@ -55,6 +62,21 @@ function refuseRateOrMute(
 /** DISCORD-DENY-1: MessageCreate has no ephemeral — never public-reply on deny. */
 function silentChannelDeny(): RouteAction {
   return { kind: "refuse", reason: "channel_not_allowlisted" };
+}
+
+/**
+ * REQ-discord-201 / DISCORD-DENY-1 — deny-listed or unlisted actor: silent
+ * refuse (no public reply). Null when the actor may proceed.
+ */
+function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null {
+  const gate = gateActor({
+    userId: msg.authorId,
+    roleIds: msg.authorRoleIds,
+    allowlist: deps.allowlist,
+    owner: deps.owner,
+  });
+  if (gate.ok) return null;
+  return { kind: "refuse", reason: "user_not_allowlisted" };
 }
 
 /**
@@ -84,6 +106,8 @@ export function routeMessage(
           return silentChannelDeny();
         }
       }
+      const actorDenied = refuseActor(msg, deps);
+      if (actorDenied) return actorDenied;
       const blocked = refuseRateOrMute(msg, deps);
       if (blocked) return blocked;
       deps.store.touch(existing);
@@ -104,6 +128,8 @@ export function routeMessage(
           !isMonitoredChannel(msg.channelId, deps.allowlist)) {
         return silentChannelDeny();
       }
+      const actorDenied = refuseActor(msg, deps);
+      if (actorDenied) return actorDenied;
       const blocked = refuseRateOrMute(msg, deps);
       if (blocked) return blocked;
       deps.store.touch(existing);
@@ -136,6 +162,10 @@ export function routeMessage(
   if (!msg.mentionedBot) {
     return { kind: "ignore", reason: "no_mention" };
   }
+
+  // REQ-discord-201 — user/role allowlist + deny lists (silent refuse).
+  const actorDenied = refuseActor(msg, deps);
+  if (actorDenied) return actorDenied;
 
   // DISCORD-6 — mute / rate limit before starting a session.
   const blocked = refuseRateOrMute(msg, deps);

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "files-path-clamp-follows-dangling-symlinks-by-hand-so-files-write-cannot-escape-the-project-root-or-create-safe-2",
+  "implementation_commit": "b98e79ac539fa80899d97becce0df75fa46d6319",
+  "implementation_tree": "f5dfba08cb51d162b9a6278068751cd33237420e",
+  "contract_digest": "f703e91675d6dcfeb19154c30fd7ec9bff7ecc2844f65f849e87ce02376ad8f9",
+  "workspace_digest": "799c5995630ca5ce1cbd4f857bd8bd3fe33e9431596354e13bbbb82dcbc025bc",
+  "closing_digest": "a205ec749d2ad4d64cdafc40f22341a6e04da73f0a38ce424c9adb4daa6f4faa",
+  "review_digest": "f7a062f4392ce02329171d84beae5764ebd3d55c36f739f4f7f0fdaecd689658",
+  "finalization_digest": "359926c60742d3fddbdbbfa7e1f8676d31bac04502ea54256a1d25845de2626d",
+  "timestamp": 1790461254
+}

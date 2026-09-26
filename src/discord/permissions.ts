@@ -150,6 +150,42 @@ export function gateInbound(
 }
 
 /**
+ * Actor gate for every inbound chat message and slash command
+ * (REQ-discord-201; ALLOW-3 / ALLOW-5 / DISCORD-5 / ROLES-CHAT-1).
+ * Run after the channel gate. Deny lists always win: a deny-listed user or
+ * any deny-listed role is refused. Otherwise the actor passes unless
+ * resolvePermissionLevel says BLOCKED — i.e. when the user or role allowlist
+ * is non-empty the actor must be listed, hold a listed role, or be the
+ * configured owner; empty user+role lists leave the channel gate alone.
+ * Mute is not checked here: it keeps its own MUTED reply (DISCORD-6).
+ */
+export function gateActor(opts: {
+  userId: string;
+  roleIds?: string[];
+  allowlist: AllowlistConfig;
+  owner?: OwnerRecord | null;
+}): GateResult {
+  const denyRoles = opts.allowlist.discord.denyRoles.map((r) => r.trim().toLowerCase());
+  const roleIds = (opts.roleIds ?? []).map((r) => r.trim().toLowerCase()).filter(Boolean);
+  if (roleIds.some((r) => denyRoles.includes(r))) {
+    return { ok: false, error: "not authorized: Discord role is denied" };
+  }
+  const level = resolvePermissionLevel({
+    userId: opts.userId,
+    roleIds: opts.roleIds,
+    allowlist: opts.allowlist,
+    owner: opts.owner,
+  });
+  if (level === PermissionLevel.BLOCKED) {
+    return {
+      ok: false,
+      error: "not authorized: Discord user/role not allowlisted for this action",
+    };
+  }
+  return { ok: true };
+}
+
+/**
  * Check if a user is within their rate limit (ancestor checkRateLimit).
  * Returns true if allowed (and records the timestamp); false if rate-limited.
  * Limiting one user does not affect another (DISCORD-6).

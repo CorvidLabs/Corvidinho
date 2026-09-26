@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "9a68acd0e86ec9956365f908089aa9cb5311c8a4",
+  "contract_digest": "8a88efb81bb506bbdd91161f58c0b7e1c255d9429865ef51b80b5e1908c2ac5c",
+  "execution_digest": "f124ef4ed7a63449263a54015ffa801ad73e49e8b69b0af763c54187260968e0",
+  "workspace_digest": "9b93303a0e575b140747066d72bf63956ab683fb00ca22a1f7ac83f4aa9475bd",
+  "timestamp": 1790459694
+}
