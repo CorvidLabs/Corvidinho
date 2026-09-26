@@ -19,6 +19,7 @@ import {
   MemoryValidationError,
   type ConfirmBinding,
 } from "../../src/memory/index.ts";
+import { resolveActingIsAdmin } from "../../src/plugins/roles.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
 
