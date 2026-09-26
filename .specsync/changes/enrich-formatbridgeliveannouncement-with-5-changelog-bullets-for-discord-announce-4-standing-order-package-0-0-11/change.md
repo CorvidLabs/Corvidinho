@@ -1,6 +1,6 @@
 ---
 id: enrich-formatbridgeliveannouncement-with-5-changelog-bullets-for-discord-announce-4-standing-order-package-0-0-11
-state: approved
+state: implementing
 type: feature
 base_commit: 8747a9abb99c2322ea67c40da96fb60bc69172bc
 ---
