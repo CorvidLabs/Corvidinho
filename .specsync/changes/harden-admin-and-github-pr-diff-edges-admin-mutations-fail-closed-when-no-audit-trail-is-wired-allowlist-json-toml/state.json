@@ -7,10 +7,10 @@
   "title": "Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines",
   "description": "Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "approved",
   "base_commit": "c69e0e2fefdf11d506f55c528035d422973e4f1a",
   "created_at": 1790459394,
-  "updated_at": 1790459403,
+  "updated_at": 1790459626,
   "affected_specs": [
     "discord",
     "plugins"
