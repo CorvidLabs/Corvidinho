@@ -1,6 +1,6 @@
 ---
 id: session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho
-state: implementing
+state: archived
 type: feature
 base_commit: 59a92f9aa95a71e27e23d21967ff6afa4a209c3f
 ---

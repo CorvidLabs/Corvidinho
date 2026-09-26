@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "session-durable-store-discord-sessionstore-workstore-survive-restarts-via-local-sqlite-under-local-share-corvidinho",
+  "implementation_commit": "028c40793d75e1288b5f0b0121ed64afe60880e2",
+  "implementation_tree": "3a0a058474947603316cb166ddd021c17d6a11e4",
+  "contract_digest": "8c7a48e8fa461f2de05efd8809698822465fef7ba795c9ae4d629f58877a44a3",
+  "workspace_digest": "46736ae4d9470c702f94590a080449f52f45d9ff5e2218730d0f303d1c697471",
+  "closing_digest": "66ec30fa93660a6c6232260c0535edb59dcc91a3612e4a7abfb3c8a93c5c4762",
+  "review_digest": "cd4dd1e117fe82746dac01a1622cc028aab23bb3bfab2a8d8536e20d0414b0a9",
+  "finalization_digest": "438a043c4edc5fe5bb0b9860de82c1839d5edcc91057022f93385b4ece619c3e",
+  "timestamp": 1790447272
+}
