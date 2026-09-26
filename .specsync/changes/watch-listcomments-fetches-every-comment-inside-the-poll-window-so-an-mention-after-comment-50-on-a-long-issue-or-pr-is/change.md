@@ -1,6 +1,6 @@
 ---
 id: watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is
-state: draft
+state: implementing
 type: bug_fix
 base_commit: aef2cde685e9e9be6f0dc1c4311a916e33981afc
 ---
