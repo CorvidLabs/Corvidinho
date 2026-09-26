@@ -4,9 +4,9 @@
 
 | Item | State |
 |------|--------|
-| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) + **v0.0.10** WATCH-RELIABILITY-1..3 + **v0.0.11** enriched bridge-live announce (CHANGELOG bullets) |
+| Repo | Bootstrap / HI + allowlists + prove-before-done + SpecSync + HEAR + WATCH + LLM tool-loop + **v0.0.2** + **Leif-confirmed HI** + **v0.0.3** updater + **v0.0.4** MEMORY + **v0.0.5** SESSION-WORKTREE + **GitHub write plugins** (#48) + **v0.0.6** files/search plugins (#81) + **v0.0.7** MEMORY Discord inject + **v0.0.8** DISCORD-ANNOUNCE `/announce` + **v0.0.9** memory-ACL hardening / SAFE-6 scrub / spawn `.env` isolation / `/work` restart recovery / IDENTITY-2 owner-only ADMIN (#141) + shell-exec SAFE-3 (#83) + **v0.0.10** WATCH-RELIABILITY-1..3 + **v0.0.11** enriched bridge-live announce (CHANGELOG bullets) + **v0.0.12** typed git tools (#145) / durable WATCH sessions (#142) + **v0.0.13** always-verify Discord/WATCH (#85 AGENT-4 — no `--no-verify` on spawn) |
 | Default product | Linux-first **headless** Bun/TS agent CLI (any caller execs it; not a product UI) |
-| HI | Captured under `hi/` (17 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY compound ids) — see `hi check` |
+| HI | Captured under `hi/` (18 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH/ROLES + ALLOW/WALLET; plus DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY / ROLES-CHAT compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM. See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
 | SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
@@ -24,6 +24,9 @@ ACCESS, bounty, MainNet product surfaces. No on-chain identity in v1. Do not inv
 **HI confirmed + captured (2026-09-26, schedule/worktree/memory-ACL):** Leif confirmed DISCORD-SCHEDULE-1..5, SESSION-WORKTREE-1..5, MEMORY-ACL-1..5 with amendment **self-forget also requires ADMIN**. Live in `hi/discord.md`, `hi/session.md`, `hi/memory.md` (+ `hi/admin.md` cross-link). Impl: #57 · #58 · #59 — no code in the HI-capture PR.
 
 **HI confirmed + captured (2026-09-26, DISCORD-ANNOUNCE):** Leif confirmed DISCORD-ANNOUNCE-1..6. Live in `hi/discord.md`. Impl: `/announce` channel|show + persist + bridge-live post to announce-only channel — this PR (package **0.0.8**; MEMORY inject already shipped as **0.0.7** on main).
+
+
+**HI confirmed + captured (2026-09-26, ROLES-CHAT):** Leif confirmed ROLES-CHAT-1..7 (community chat vs ADMIN tool gates; two-tier interim until #65). Live in `hi/roles.md` (+ identity/safe/admin cross-links). Gate impl + tests follow in a separate PR before #43 ADMIN slash.
 
 
 ## Process / governance (PROCESS-1..5)
@@ -80,6 +83,9 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | IDENTITY owner + owner-only ADMIN | #42 → [#138](https://github.com/CorvidLabs/Corvidinho/pull/138), [#141](https://github.com/CorvidLabs/Corvidinho/pull/141) | Durable owner (IDENTITY-1); ADMIN = owner only, no owner ⇒ nobody (IDENTITY-2/3); admin env lists ignored + warned; in the **v0.0.9** build |
 | SAFE-5 audit trail | #95 → [#136](https://github.com/CorvidLabs/Corvidinho/pull/136) | HMAC-chained append-only `audit_log` (schema v5) for dangerous plugin runs; SAFE-17 awaits HI; in the **v0.0.9** build |
 | `--task` argv hardening | → [#143](https://github.com/CorvidLabs/Corvidinho/pull/143) | Untrusted bridge text after `--task` never becomes CLI flags (AGENT-5 / SAFE-1); in the **v0.0.10** build |
+| Typed git tools | #82 → [#145](https://github.com/CorvidLabs/Corvidinho/pull/145) | status/diff/log + dangerous branch-create/commit/push; SAFE-1/2/3, GITHUB-6 push gate; hooks off; package **0.0.12** |
+| Always verify bridges (#85 slice) | #85 → (this PR) | Discord/WATCH spawn without `--no-verify` (AGENT-4 / FLEDGE-2); empty `filesChanged` still skips lane; CLI flag local-only; package **0.0.13**; draft AGENT-14/15 deferred |
+| Durable WATCH sessions | #37 → [#142](https://github.com/CorvidLabs/Corvidinho/pull/142) | Schema v6 `watch_sessions`, soft TTL, restart-safe; clean shutdown + single-flight polls; package **0.0.12** |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |
@@ -102,7 +108,8 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Done | [#41](https://github.com/CorvidLabs/Corvidinho/issues/41) MEMORY + [#59](https://github.com/CorvidLabs/Corvidinho/issues/59) MEMORY-ACL | Shipped [#64](https://github.com/CorvidLabs/Corvidinho/pull/64) (schema v3 + ACL + plugins; package 0.0.4); ACL hardening [#128](https://github.com/CorvidLabs/Corvidinho/pull/128) (0.0.9) |
 | Done | [#42](https://github.com/CorvidLabs/Corvidinho/issues/42) IDENTITY-1..3 | Owner record [#138](https://github.com/CorvidLabs/Corvidinho/pull/138) + owner-only ADMIN [#141](https://github.com/CorvidLabs/Corvidinho/pull/141); owner extras (#36/#96/#44) await HI |
 | Done | [#73](https://github.com/CorvidLabs/Corvidinho/issues/73) NDJSON stream | [#139](https://github.com/CorvidLabs/Corvidinho/pull/139) |
-| In flight | [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) ADMIN-1..3, [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) AUTONOMY-1..3, [#37](https://github.com/CorvidLabs/Corvidinho/issues/37) WATCH sessions, [#82](https://github.com/CorvidLabs/Corvidinho/issues/82) git, [#93](https://github.com/CorvidLabs/Corvidinho/issues/93)/[#94](https://github.com/CorvidLabs/Corvidinho/issues/94) GitHub reads, [#111](https://github.com/CorvidLabs/Corvidinho/issues/111) web-fetch, [#112](https://github.com/CorvidLabs/Corvidinho/issues/112) Fledge plugins, [#108](https://github.com/CorvidLabs/Corvidinho/issues/108) daemon, [#117](https://github.com/CorvidLabs/Corvidinho/issues/117) delegate, [#88](https://github.com/CorvidLabs/Corvidinho/issues/88) issue→PR | Captured-HI slices only; drafts wait for Leif |
+| Done (slice) | [#85](https://github.com/CorvidLabs/Corvidinho/issues/85) always-verify bridges | Discord/WATCH drop `--no-verify` (this PR / **0.0.13**); draft AGENT-14/15 still open |
+| In flight | [#43](https://github.com/CorvidLabs/Corvidinho/issues/43) ADMIN-1..3, [#44](https://github.com/CorvidLabs/Corvidinho/issues/44) AUTONOMY-1..3, [#93](https://github.com/CorvidLabs/Corvidinho/issues/93)/[#94](https://github.com/CorvidLabs/Corvidinho/issues/94) GitHub reads, [#111](https://github.com/CorvidLabs/Corvidinho/issues/111) web-fetch, [#112](https://github.com/CorvidLabs/Corvidinho/issues/112) Fledge plugins, [#108](https://github.com/CorvidLabs/Corvidinho/issues/108) daemon, [#117](https://github.com/CorvidLabs/Corvidinho/issues/117) delegate, [#88](https://github.com/CorvidLabs/Corvidinho/issues/88) issue→PR | Captured-HI slices only; drafts wait for Leif |
 | Go-live | [#5](https://github.com/CorvidLabs/Corvidinho/issues/5) HEAR **live** | Token + channel allowlists on VM |
 | Defer | [#9](https://github.com/CorvidLabs/Corvidinho/issues/9) iced/billing/Windows; WALLET ACT | Explicit do-not-steal-now |
 

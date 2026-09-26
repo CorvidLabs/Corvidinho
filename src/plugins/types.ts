@@ -40,6 +40,8 @@ export type PluginCommand = {
    * the session is allowed autonomous tools (AUTONOMOUS-1 / SAFE-9).
    */
   autonomous?: boolean;
+  /** Where the command comes from (PLUGIN-6): "builtin" (default) or "fledge:<plugin>@<version>". */
+  origin?: string;
   handler: (ctx: PluginHandlerArgs) => Promise<PluginHandlerResult>;
 };
 

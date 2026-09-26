@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared",
+  "implementation_commit": "81075a56c927f9b34c0e313aa604c934dea00667",
+  "implementation_tree": "65256e0d9fa81d8f5e8312fe88889eff3e9ff6ea",
+  "contract_digest": "503aeb653a5bb140d8cab647c8f7a98b564d2e96ecea576eaf2888af94815631",
+  "workspace_digest": "7077fef547e7b1c0f3e8ef64a4704ff26a7cc62158e2ea4e00e31473515d4058",
+  "closing_digest": "c7d9a6873453336e89cfd3c222843ff317e11480332423ec9658d62965bf576e",
+  "review_digest": "1f7f678056a5858a2602dc62b2a883514cac0fea888976b7f46a612e560d7781",
+  "finalization_digest": "bbf35d4c8903164d600c6ad546f872fd922b7ebf2d9fed495da29ca765f19332",
+  "timestamp": 1790454858
+}

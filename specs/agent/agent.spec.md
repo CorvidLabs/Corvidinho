@@ -14,10 +14,12 @@ files:
   - src/agent/spawn-argv.ts
   - src/agent/tier.ts
   - src/agent/tools.ts
+  - src/agent/project-instructions.ts
   - src/agent/events-ndjson.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
+  - tests/agent.project-instructions.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
   - src/autonomous/enabled.ts
@@ -65,6 +67,16 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
 
+Project instructions (REQ-agent-084, AGENT-1, issue #84):
+`src/agent/project-instructions.ts` exports `findProjectRoot`,
+`loadProjectInstructions`, `renderProjectInstructions`,
+`describeProjectInstructions`, `withProjectInstructions`,
+`PROJECT_INSTRUCTION_FILES` (`AGENTS.md`, `CLAUDE.md`),
+`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER` and
+`projectInstructionsWarning`
+(re-exported from `src/agent/index.ts`). `createTaskExecute` loads them from
+`cwd` by default; `projectInstructions: false` opts out.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
@@ -85,6 +97,12 @@ and abort signal to `runPlugin`. A worker never runs above the lead's tier
 no ADMIN and no SAFE-4 confirm tokens, runs one level deeper, and is stopped on
 lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
 These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
+
+Project instructions come only from the project root (nearest `.git` at or
+above cwd, else cwd), never from a parent directory above it. Each file is
+capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
+project instructions that cannot widen SAFE-1 consent, the tool allowlist or
+the capability tier. The loader never throws.
 
 ## Behavioral Examples
 
@@ -119,6 +137,10 @@ These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
+| AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
+| Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
+| Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
+| Instruction file over 16 KiB | first 16 KiB kept (UTF-8 boundary) plus truncation marker; one-time Text note |
 
 ## Dependencies
 
@@ -135,3 +157,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
 | 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117: AUTONOMOUS-1 `[corvidinho.autonomous]` gate, SAFE-9 catalog hiding, delegation core with depth / tier / fan-out safety defaults (REQ-agent-117) |
 | 2026-09-26 | autonomous-1-gate-and-depth-capped-delegate-tool-issue-117-autonomous-1-5-safe-9-autonomous-mode-off-until-corvidinho: AUTONOMOUS-1 gate and depth-capped delegate tool (issue #117, AUTONOMOUS-1/5, SAFE-9): autonomous mode off until [corvidinho.autonomous] enabled = true in the project fledge.toml; a code-tier lead can delegate a skill-tagged subtask to a worker (child task run, same-or-lower tier, non-interactive, depth <= 2, capped fan-out) and synthesize its summary; delegate stays hidden from the tool catalog unless the session is allowed |
+| 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
+| 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |

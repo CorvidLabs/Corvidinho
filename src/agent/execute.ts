@@ -6,6 +6,7 @@
  */
 
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
+import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { runPlugin } from "../plugins/run.ts";
@@ -15,6 +16,12 @@ import type {
   ExecuteFn,
   ExecuteResult,
 } from "./types.ts";
+import {
+  loadProjectInstructions,
+  projectInstructionsWarning,
+  renderProjectInstructions,
+  withProjectInstructions,
+} from "./project-instructions.ts";
 import {
   loadTierFromEnv,
   type CapabilityTier,
@@ -88,6 +95,8 @@ export type CreateTaskExecuteOpts = {
   autonomous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
+  /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
+  projectInstructions?: boolean;
 };
 
 type ChatMessage = {
@@ -160,8 +169,17 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   if (opts.loadPlugins !== false) {
     loadBuiltins();
   }
+  // AGENT-1: the project's own AGENTS.md / CLAUDE.md (src/agent/project-instructions.ts).
+  const project =
+    opts.projectInstructions === false ? null : loadProjectInstructions(cwd);
+  const projectBlock = project ? renderProjectInstructions(project) : "";
+  let projectNote = project ? projectInstructionsWarning(project) : null;
 
   return async ({ attempt, verifyFeedback, signal }) => {
+    if (projectNote) {
+      emit(onEvent, { type: "Text", text: projectNote });
+      projectNote = null;
+    }
     const llm = loadLlmEnv(env);
     const tier: CapabilityTier = opts.tier ?? llm.tier;
 
@@ -179,9 +197,15 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         signal,
         tools: [],
         onUsage,
+        projectBlock,
       });
     }
 
+    if (includeDangerous && opts.loadPlugins !== false) {
+      // FLEDGE-4: Fledge commands are all dangerous, so only discover them
+      // when this run's catalog may offer dangerous tools.
+      await loadFledgePlugins({ cwd, env });
+    }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
     const tools = buildOpenAiTools({ tier, includeDangerous, autonomous });
@@ -199,6 +223,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       onEvent,
       onUsage,
       maxToolRounds,
+      projectBlock,
     });
   };
 }
@@ -217,6 +242,7 @@ type LoopArgs = {
   onEvent?: (event: AgentEvent) => void;
   onUsage?: (usage: AgentTokenUsage) => void;
   maxToolRounds: number;
+  projectBlock: string;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -234,6 +260,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     onEvent,
     onUsage,
     maxToolRounds,
+    projectBlock,
   } = args;
 
   const filesChanged = new Set<string>();
@@ -243,14 +270,16 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   const offered = new Set(tools.map((t) => t.function.name));
   let lastText = "";
 
-  const system =
+  const system = withProjectInstructions(
     "You are Corvidinho, a Linux-first headless agent CLI. " +
     "Use the provided tools (project plugins) when they help complete the task. " +
     "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
     "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
-    "Do not claim files were edited unless a tool result reported filesChanged.";
+    "Do not claim files were edited unless a tool result reported filesChanged.",
+    projectBlock,
+  );
 
   const userParts = [
     taskText ? `Task:\n${taskText}` : "Task: (none provided)",
@@ -392,6 +421,7 @@ async function singleChatCompletion(opts: {
   signal: AbortSignal;
   tools: OpenAiToolDef[];
   onUsage?: (usage: AgentTokenUsage) => void;
+  projectBlock: string;
 }): Promise<ExecuteResult> {
   const userParts = [
     opts.taskText ? `Task:\n${opts.taskText}` : "Task: (none provided)",
@@ -403,8 +433,10 @@ async function singleChatCompletion(opts: {
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content:
+      content: withProjectInstructions(
         "You are Corvidinho on the read tier (no tools). Reply with a short plain-text summary only.",
+        opts.projectBlock,
+      ),
     },
     { role: "user", content: userParts.join("") },
   ];
