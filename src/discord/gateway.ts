@@ -19,10 +19,29 @@ import { buildVersionPresenceActivity } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
+/** Thin MessageComponent interaction (DISCORD-ASK buttons). */
+export type ComponentInteraction = {
+  id: string;
+  customId: string;
+  channelId: string;
+  guildId?: string;
+  userId: string;
+  messageId?: string;
+  /** Reply (or update) — supports ephemeral choice UI. */
+  reply: (opts: {
+    content?: string;
+    ephemeral?: boolean;
+    components?: unknown[];
+    update?: boolean;
+  }) => Promise<void>;
+};
+
 export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
   /** Slash commands (DISCORD-4). */
   onSlash?: (interaction: SlashInteraction) => void | Promise<void>;
+  /** Button / select component presses (DISCORD-ASK). */
+  onComponent?: (interaction: ComponentInteraction) => void | Promise<void>;
   /**
    * Live allowlisted channel ids for `/admin channels remove` autocomplete.
    * Bridge wires `config.channelIds` (mutated in place by /admin).
@@ -39,6 +58,8 @@ export type GatewayHandlers = {
      * by this post — used for the AUTONOMY-2 owner ping.
      */
     mentionUserIds?: string[];
+    /** Discord ActionRow components (DISCORD-ASK stub buttons). */
+    components?: unknown[];
   }) => Promise<{ messageId: string } | null>;
   /** Progress embeds (DISCORD-3). */
   sendEmbed?: (opts: {
@@ -373,6 +394,14 @@ export async function createLiveGateway(
           });
           return;
         }
+        if (interaction.isMessageComponent()) {
+          if (!handlers.onComponent) return;
+          const adapted = adaptComponent(interaction as never);
+          Promise.resolve(handlers.onComponent(adapted)).catch((err) => {
+            console.error("[discord] component handler error:", err);
+          });
+          return;
+        }
         if (!interaction.isChatInputCommand()) return;
         if (!handlers.onSlash) return;
         const adapted = adaptChatInput(interaction as never);
@@ -393,7 +422,13 @@ export async function createLiveGateway(
   };
 
   // Attach reply helper for bridge
-  handlers.reply = async ({ channelId, content, replyToMessageId, mentionUserIds }) => {
+  handlers.reply = async ({
+    channelId,
+    content,
+    replyToMessageId,
+    mentionUserIds,
+    components,
+  }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
@@ -404,6 +439,7 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        ...(components?.length ? { components: components as never } : {}),
         ...(mentionUserIds
           ? {
               allowedMentions: {
@@ -471,6 +507,45 @@ export async function createLiveGateway(
   return gateway;
 }
 
+
+
+function adaptComponent(interaction: {
+  id: string;
+  customId: string;
+  channelId: string;
+  guildId: string | null;
+  user: { id: string };
+  message?: { id?: string };
+  deferred: boolean;
+  replied: boolean;
+  reply: (opts: unknown) => Promise<unknown>;
+  update: (opts: unknown) => Promise<unknown>;
+}): ComponentInteraction {
+  return {
+    id: interaction.id,
+    customId: interaction.customId,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId ?? undefined,
+    userId: interaction.user.id,
+    messageId: interaction.message?.id,
+    reply: async (opts) => {
+      const payload: Record<string, unknown> = {};
+      if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
+      if (opts.components) payload.components = opts.components as never;
+      if (opts.update) {
+        await interaction.update(payload);
+        return;
+      }
+      if (opts.ephemeral) payload.ephemeral = true;
+      if (interaction.deferred || interaction.replied) {
+        // Already acknowledged — follow-up style via reply() still works for ephemeral.
+        await interaction.reply(payload);
+      } else {
+        await interaction.reply(payload);
+      }
+    },
+  };
+}
 
 /** Discord autocomplete deadline is 3s; skip stale replies (corvid-agent pattern). */
 const AUTOCOMPLETE_DEADLINE_MS = 2500;

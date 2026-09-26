@@ -395,6 +395,8 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
           DISCORD_BOT_TOKEN: "fake",
           DISCORD_CHANNEL_IDS: "chan-1",
           CORVIDINHO_DISCORD_DRY_RUN: "1",
+          // Missing file: never read the operator's allowlist (ALLOW-4).
+          CORVIDINHO_ALLOWLIST_FILE: join(project, "no-allowlist.toml"),
         },
         projectRoot: project,
         skipProtocolCheck: true,

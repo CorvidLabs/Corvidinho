@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 41
+version: 43
 status: draft
 files:
   - src/plugins/types.ts
@@ -13,6 +13,7 @@ files:
   - src/plugins/githubDeny.ts
   - src/plugins/githubPublic.ts
   - tests/github.public.community.test.ts
+  - tests/github.gate-allowlist-file.test.ts
   - tests/files.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts
@@ -53,6 +54,7 @@ files:
   - plugins/shell/commands.ts
   - plugins/shell/clamp.ts
   - tests/shell.plugins.test.ts
+  - tests/shell.clamp-bypass.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -78,6 +80,9 @@ files:
   - src/plugins/toolCost.ts
   - tests/fledge.plugins.test.ts
   - tests/fledge.cli.test.ts
+  - tests/fledge.hardening.test.ts
+  - src/plugins/proc-group.ts
+  - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
 
 db_tables: []
@@ -117,6 +122,15 @@ limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
 injectable env, bin, limiter, council timeout and per-voice timeout.
 `PluginCommand.autonomous?: boolean`;
 `PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
+`src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
+`signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
+`trackChildProcess(pid, known?)` (the `KnownMembers` exit-snapshot getter),
+`trackedChildProcesses`, `ignoredSignals` (`SigIgn` mask parse) and
+`forwardedSignals` (hooked signals, minus those ignored at load) for children
+spawned with `detached: true`. The registry exports `unregister(name, command)` (removes a
+name only while it is still that exact command). `plugins/fledge` exports
+`fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
+root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
 
 ## Invariants
 
@@ -194,6 +208,13 @@ AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
 
+Fledge commands (REQ-plugins-112/113) run `fledge plugins run <command> --
+<argv...>`, are bound to the project root they were discovered for (another
+root's load rebinds or removes them; a call from another cwd is refused), and
+run in their own process group so a timeout or abort stops the whole tree.
+Bounded children (Fledge runs, delegate workers, spawned schedule/chat runs)
+never outlive their limit or this process (REQ-plugins-154).
+
 `council` (REQ-plugins-118) declares the same flags as `delegate`
 (`dangerous: false`, `mutating: true`, minTier 2, `autonomous: true`) and
 re-checks the same gates in the same order (usage exit 1; AUTONOMOUS-1,
@@ -206,7 +227,12 @@ bounded transcript; ok only when the chair decided.
 
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
-(SAFE-3) with exit 2. SAFE-1 non-interactive deny applies unless allowlisted.
+(SAFE-3) with exit 2. The clamp looks past prefix words (`{ } ! if then else
+elif do while until time builtin command eval`), `NAME=value` assignments,
+quoting and `cd` options (`-P -L -e -@ -n --`); `cd -`, targets the shell would
+expand (`$`, backtick, glob, brace) and CDPATH-searched targets when the
+command sets `CDPATH` refuse. The child shell does not inherit `CDPATH` or
+`OLDPWD`. SAFE-1 non-interactive deny applies unless allowlisted.
 
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
@@ -297,7 +323,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
-| shell-exec cd/pushd escapes project root | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, expansions, CDPATH) | Refuse (exit 2, SAFE-3); no spawn |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
@@ -317,6 +343,8 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | council from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | council chair fails / fewer than 2 proposals | ok=false (exit 1) with the transcript |
 | council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
+| fledge-* called from a cwd other than its bound project root | Refuse (exit 2); fledge not started |
+| fledge-* times out / calling run aborts | exit 124 / 130; plugin process tree killed |
 
 ## Dependencies
 
@@ -329,6 +357,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays |
+| /proc (Linux) | process-tree walk for bounded child stops (proc-group) |
 
 ## Change Log
 
@@ -361,3 +390,9 @@ and current rows for plugins host evolution.
 | 2026-09-26 | harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml: Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines |
 | 2026-09-26 | council-tool-issue-118-autonomous-6-safe-9-a-code-tier-lead-in-an-autonomous-enabled-project-can-convene-a-council-of-2: Council tool (issue #118, AUTONOMOUS-6, SAFE-9): a code-tier lead in an autonomous-enabled project can convene a council of 2-5 delegated voices that deliberate in structured phases (propose, critique, decide) and get back a bounded transcript and a synthesized decision; voices run read tier by default with no mutating tools, reuse delegate caps and worker env stripping, and the tool stays hidden unless the session is allowed |
 | 2026-09-26 | plugin-argv-keeps-tokens-that-start-with-files-write-content-files-edit-strings-shell-exec-command-flags-search-grep: Plugin argv keeps tokens that start with -- (files-write content, files-edit strings, shell-exec command flags, search-grep patterns) and files-write refuses to empty a non-empty file without --allow-empty |
+| 2026-09-26 | github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists: GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4) |
+| 2026-09-26 | files-edit-single-occurrence-replace-writes-new-literally-so-dollar-replacement-patterns-cannot-corrupt-the-file: Files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5) |
+| 2026-09-26 | test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a: Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file contributes nothing at the GitHub plugin gate (REQ-plugins-253) |
+| 2026-09-26 | shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops: Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root |
+| 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
+

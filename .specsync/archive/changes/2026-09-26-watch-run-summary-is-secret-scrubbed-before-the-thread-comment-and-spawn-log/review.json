@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "3d8f2ee5d6f2b75c1f2309ceca17580f84f54e36",
+  "contract_digest": "c31a2678798bed07f81576efcd6134ada45dac91e3924e2318dea6e2ceb98cf0",
+  "execution_digest": "4f7255cbc0dd8ff11a259cec32d90bd421da7374f1ea4b6fbcecbfae30b2cc0c",
+  "workspace_digest": "c4101aabcf6f4e6262db0674b74721b8a251b6db004a666481f2a48b8ce790b8",
+  "timestamp": 1790462800
+}

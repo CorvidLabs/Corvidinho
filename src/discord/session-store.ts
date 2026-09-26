@@ -22,17 +22,46 @@ import {
 } from "../worktree/index.ts";
 import { askFromUnknown } from "../agent/ask.ts";
 import type { HumanAsk } from "../agent/types.ts";
+import type { PendingAsk } from "./ask-buttons.ts";
 import type { SessionStub } from "./types.ts";
 
-function serializePendingAsk(ask: HumanAsk | null | undefined): string | null {
+function serializePendingAsk(ask: PendingAsk | null | undefined): string | null {
   if (!ask) return null;
-  return JSON.stringify({ reason: ask.reason, question: ask.question });
+  const body: Record<string, unknown> = {
+    reason: ask.reason,
+    question: ask.question,
+    askId: ask.askId,
+    expiresAt: ask.expiresAt,
+  };
+  if (ask.options?.length) body.options = ask.options;
+  if (ask.stubMessageId) body.stubMessageId = ask.stubMessageId;
+  return JSON.stringify(body);
 }
 
-function parsePendingAsk(raw: string | null | undefined): HumanAsk | null {
+function parsePendingAsk(raw: string | null | undefined): PendingAsk | null {
   if (!raw) return null;
   try {
-    return askFromUnknown(JSON.parse(raw)) ?? null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const base = askFromUnknown(parsed);
+    if (!base) return null;
+    const askId =
+      typeof parsed.askId === "string" && parsed.askId.trim()
+        ? parsed.askId.trim()
+        : "";
+    const expiresAt =
+      typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
+        ? parsed.expiresAt
+        : 0;
+    // Legacy rows (pre-button): synthesize askId/expiresAt so free-text path still works.
+    const pending: PendingAsk = {
+      ...base,
+      askId: askId || `legacy_${base.question.slice(0, 8)}`,
+      expiresAt: expiresAt || Date.now() + 30 * 60 * 1000,
+    };
+    if (typeof parsed.stubMessageId === "string" && parsed.stubMessageId.trim()) {
+      pending.stubMessageId = parsed.stubMessageId.trim();
+    }
+    return pending;
   } catch {
     return null;
   }
@@ -502,9 +531,35 @@ export class SessionStore {
    * Set or clear the pending human ask on a session (AUTONOMY-5/6).
    * Persists when a DB is configured.
    */
-  setPendingAsk(session: SessionStub, ask: HumanAsk | null): void {
+  setPendingAsk(session: SessionStub, ask: PendingAsk | null): void {
     session.pendingAsk = ask;
     this.persistSession(session);
+  }
+
+  /**
+   * Active session for this Discord user in this channel (SESSION-MULTI-1).
+   * Newest non-expired match wins. Thread-scoped talks use threadId as the
+   * channel key when present.
+   */
+  getByUserChannel(
+    userId: string,
+    channelId: string,
+    threadId?: string,
+  ): SessionStub | undefined {
+    let best: SessionStub | undefined;
+    for (const session of this.bySessionId.values()) {
+      if (this.purgeIfExpired(session)) continue;
+      if (session.userId !== userId) continue;
+      if (threadId) {
+        if (session.threadId !== threadId) continue;
+      } else {
+        if (session.channelId !== channelId) continue;
+        // Prefer non-thread sessions when looking up by parent channel.
+        if (session.threadId) continue;
+      }
+      if (!best || session.lastActivityAt > best.lastActivityAt) best = session;
+    }
+    return best;
   }
 
   /** Bind a bot outbound message id so replies continue the session (DISCORD-2). */

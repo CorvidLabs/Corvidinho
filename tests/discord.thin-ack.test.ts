@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { ASK_REPLY_HINT, formatAskReply } from "../src/discord/ask-ping.ts";
+import { toPendingAsk } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import {
@@ -139,7 +140,7 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
     });
     expect(replies).toHaveLength(1);
     expect(replies[0]!.content).toContain("> Postgres or SQLite?");
-    expect(result.store.getByBotMessage("bot_1")!.pendingAsk).toEqual(CLARIFY);
+    expect(result.store.getByBotMessage("bot_1")!.pendingAsk).toMatchObject(CLARIFY);
     expect(calls).toHaveLength(1);
 
     // Thin continue via reply to bot message
@@ -158,7 +159,7 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
     expect(replies[1]!.content).toContain("<@user-1>");
     expect(replies[1]!.content).not.toContain("SHOULD_NOT_RUN");
     expect(replies[1]!.content).not.toContain("ready when you are");
-    expect(result.store.getByBotMessage("bot_1")!.pendingAsk).toEqual(CLARIFY);
+    expect(result.store.getByBotMessage("bot_1")!.pendingAsk).toMatchObject(CLARIFY);
     expect(calls).toHaveLength(1); // agent not re-spawned
     expect(n).toBe(1);
     await result.stop();
