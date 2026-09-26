@@ -196,12 +196,35 @@ async function listFiles(
   return out;
 }
 
+/**
+ * Why a listed file has no patch. A rename, copy or mode/type change that
+ * GitHub reports with no changed lines has no content diff to show, so it is
+ * not described as binary or too large. Binary files also report 0 lines,
+ * which the rename/copy wording says.
+ */
+export function noPatchNote(f: ListedFile): string {
+  const noLines = !f.additions && !f.deletions && !f.changes;
+  if (noLines && f.status === "renamed") {
+    return "(no line changes: pure rename, content unchanged unless the file is binary)";
+  }
+  if (noLines && f.status === "copied") {
+    return "(no line changes: pure copy, content unchanged unless the file is binary)";
+  }
+  if (noLines && f.status === "changed") {
+    return "(no line changes: file mode or type change only, content unchanged)";
+  }
+  return "(no textual patch from GitHub: binary file, or the file diff is too large)";
+}
+
 /** Rebuild one file's unified-diff section from a pulls.listFiles entry. */
 export function fileDiffSection(f: ListedFile): string {
   const oldPath = f.previous_filename ?? f.filename;
   const lines = [`diff --git a/${oldPath} b/${f.filename}`];
   if (f.status === "renamed" && f.previous_filename) {
     lines.push(`rename from ${f.previous_filename}`, `rename to ${f.filename}`);
+  }
+  if (f.status === "copied" && f.previous_filename) {
+    lines.push(`copy from ${f.previous_filename}`, `copy to ${f.filename}`);
   }
   if (f.patch) {
     lines.push(
@@ -210,9 +233,20 @@ export function fileDiffSection(f: ListedFile): string {
       f.patch,
     );
   } else {
-    lines.push("(no textual patch from GitHub: binary file, or the file diff is too large)");
+    lines.push(noPatchNote(f));
   }
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Normalize a `--file` value: trim and drop leading `./`. Undefined when the
+ * flag was not given; "" when it was given but names no path (for example
+ * `./` or whitespace), which the caller refuses rather than falling back to
+ * the whole-PR diff.
+ */
+export function normalizeFileFilter(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  return raw.trim().replace(/^(?:\.\/)+/, "");
 }
 
 const DIFF_USAGE = "usage: github-pr-diff <number> --repo OWNER/REPO [--file PATH]";
@@ -238,7 +272,10 @@ function makeDiffCommand(deps: ReviewDeps): PluginCommand {
       }
       const pull_number = parsePullNumber(selector);
       if (!pull_number) return { ok: false, error: DIFF_USAGE, exitCode: 1 };
-      const file = parsed.values["--file"]?.trim().replace(/^\.\//, "") || undefined;
+      const file = normalizeFileFilter(parsed.values["--file"]);
+      if (file === "") {
+        return { ok: false, error: `--file needs a file path; ${DIFF_USAGE}`, exitCode: 1 };
+      }
 
       const octokit = clientFrom(deps);
       if (!(octokit instanceof Octokit)) return octokit;

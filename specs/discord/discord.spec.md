@@ -100,7 +100,8 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
 `ADMIN_AUDIT_SURFACE` (`command-handlers/admin.ts`); `planAdminListChange`,
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
-`setJsonDiscordList`, `writeFileAtomic` (`admin-allowlist.ts`);
+`setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
+`isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 

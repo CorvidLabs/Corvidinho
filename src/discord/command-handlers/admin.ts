@@ -218,18 +218,19 @@ async function handleMutation(
   }
 
   // SAFE-5: the intent is on the tamper-evident trail before the change.
-  let startedSeq: number | undefined;
-  if (ctx.recordAudit) {
-    try {
-      startedSeq = ctx.recordAudit(auditEntry(interaction, m.action, "started", args)).seq;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await interaction.reply({
-        content: `Refused: audit log unavailable (SAFE-5): ${msg}. Nothing changed.`,
-        ephemeral: true,
-      });
-      return;
-    }
+  // No trail wired (bridge without a DB) fails closed exactly like a trail
+  // that throws: an unaudited allowlist write is never made.
+  let startedSeq: number;
+  try {
+    if (!ctx.recordAudit) throw new Error("no audit database is wired to this bridge");
+    startedSeq = ctx.recordAudit(auditEntry(interaction, m.action, "started", args)).seq;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await interaction.reply({
+      content: `Refused: audit log unavailable (SAFE-5): ${msg}. Nothing changed.`,
+      ephemeral: true,
+    });
+    return;
   }
 
   try {
@@ -293,7 +294,7 @@ function formatApplied(
   ctx: SlashContext,
   interaction: SlashInteraction,
   plan: AdminListPlan,
-  startedSeq: number | undefined,
+  startedSeq: number,
   okSeq: number | undefined,
 ): string {
   const target = mention(plan.key, plan.id);
@@ -334,9 +335,7 @@ function formatApplied(
   ) {
     lines.push("⚠️ You ran this in that channel: messages and slash here are now refused (you get the allowlist tip).");
   }
-  if (startedSeq !== undefined) {
-    lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
-  }
+  lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
   return lines.join("\n");
 }
 
