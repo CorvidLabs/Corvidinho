@@ -127,6 +127,11 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044).
 
+`image-attachments.ts` exports `attachmentCacheDir(workDir)` and
+`WORKSPACE_ATTACHMENTS_SUBDIR` (`.corvidinho/attachments`); the bridge binds the
+worktree first, then passes `attachmentCacheDir(store.cwdFor(session))` as the
+`enrichPromptWithImages` cache dir (REQ-discord-013, DISCORD-9).
+
 `identity-inject.ts` formats/enriches the spawn prompt with acting Discord
 user id + resolved display (owner map wins for owner). Gateway fills
 `authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
@@ -150,7 +155,9 @@ progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
-local files under /tmp/corvidinho-images; protocol mismatch hard-fails start,
+local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
+git-ignored, removed with the workspace on session end) so the agent's
+file tools can open them (REQ-discord-013); protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
@@ -253,4 +260,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord: Discord searchable channel STRING+autocomplete for /admin channels add\|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17 |
 | 2026-09-26 | soft-ttl-purge-never-parks-or-drops-a-discord-session-while-its-agent-run-is-in-flight-the-run-end-counts-as-activity: Soft-TTL purge never parks or drops a Discord session while its agent run is in flight; the run end counts as activity (SESSION-2, SESSION-WORKTREE-3) |
 | 2026-09-26 | discord-chat-and-slash-paths-gate-the-actor-against-the-user-role-allowlist-and-deny-lists-not-the-channel-alone: Discord chat and slash paths gate the actor against the user/role allowlist and deny lists, not the channel alone |
+| 2026-09-26 | discord-image-attachments-are-written-inside-the-session-workspace-so-the-agent-can-open-them-discord-9: Discord image attachments are written inside the session workspace so the agent can open them (DISCORD-9) |
 | 2026-09-26 | discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6: Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3) |
