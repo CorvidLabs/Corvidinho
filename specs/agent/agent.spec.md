@@ -57,10 +57,15 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `loadProjectInstructions`, `renderProjectInstructions`,
 `describeProjectInstructions`, `withProjectInstructions`,
 `PROJECT_INSTRUCTION_FILES` (`AGENTS.md`, `CLAUDE.md`),
-`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER` and
-`projectInstructionsWarning`
+`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB), `PROJECT_INSTRUCTIONS_HEADER`,
+`NOT_COMMITTED_REASON` and `projectInstructionsWarning`
 (re-exported from `src/agent/index.ts`). `createTaskExecute` loads them from
 `cwd` by default; `projectInstructions: false` opts out.
+`ProjectInstructions.source` is `commit` when the project root holds `.git`
+(files are read from the `HEAD` commit through read-only git: `ls-tree`,
+`cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
+git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
+`uncommitted: true` when its working-tree copy differs from `HEAD`.
 
 ## Invariants
 
@@ -79,6 +84,14 @@ capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
 project instructions that cannot widen SAFE-1 consent, the tool allowlist or
 the capability tier. The loader never throws.
 
+In a git project only the `HEAD` copy of an instruction file reaches the
+system prompt. The file tools (files-write / files-edit, not dangerous) can
+change the working tree without consent, so working-tree edits and untracked
+instruction files are never loaded; only a commit, which needs a dangerous,
+consented tool such as `git-commit` (SAFE-1), changes what later runs see. A
+`.git` that git cannot read never falls back to the working tree. Committed
+symlinks are followed only as paths inside the commit, never through the
+filesystem.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
@@ -104,6 +117,10 @@ the capability tier. The loader never throws.
 | Instruction file symlink resolves outside the project | refused; named in a one-time Text note; run continues |
 | Instruction file is a directory, binary, or not UTF-8 | refused; named in a one-time Text note; run continues |
 | Instruction file over 16 KiB | first 16 KiB kept (UTF-8 boundary) plus truncation marker; one-time Text note |
+| Git project: working-tree AGENTS.md / CLAUDE.md differs from HEAD | HEAD copy loaded; one-time Text note says working-tree changes were not loaded |
+| Git project: instruction file untracked, or HEAD unborn | refused as not committed; named in the Text note |
+| Git project: `.git` unusable (not a repo top level, git missing) | present files refused; no working-tree fallback |
+| Git project: committed symlink leaves the commit, is broken, hops a symlinked dir, or loops | refused; named in the Text note |
 
 ## Dependencies
 
@@ -119,4 +136,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | spawned-agents-ignore-the-project-env-and-tests-never-create-real-worktrees-allow-4-safe-1-session-worktree-3-hygiene: Spawned agents ignore the project .env and tests never create real worktrees (ALLOW-4 / SAFE-1 / SESSION-WORKTREE-3 hygiene): bun-invoked spawns pass --no-env-file so a project worktree's .env cannot inject allowlists, admin lists or keys into the agent; bridge and slash fixture tests use temp project roots so bun test never adds talk/* worktrees or branches to the repo |
 | 2026-09-26 | live-ndjson-event-stream-for-bridges-issue-73-agent-8-cli-7-discord-3-discord-10-task-run-output-ndjson-emits-one: Live NDJSON event stream for bridges (issue #73, AGENT-8 / CLI-7 / DISCORD-3 / DISCORD-10): task run --output ndjson emits one versioned JSON object per line for StateChanged/Text/ToolCall(redacted argument summary)/ToolResult/VerifyResult, running token usage, and a final result line; Discord and WATCH spawn clients consume the stream and forward state/tool/tokens to onStatus; protocol version 1 to 2 |
 | 2026-09-26 | task-run-reads-the-project-s-own-agents-md-and-claude-md-from-the-project-root-into-the-llm-system-prompt-as-labelled: Task run reads the project's own AGENTS.md and CLAUDE.md from the project root into the LLM system prompt as labelled project instructions (AGENT-1, issue #84 captured slice): 16 KiB cap with truncation marker, symlinks outside the project refused, binary/non-UTF-8 refused, SAFE-6 scrubbed |
+| 2026-09-26 | call-registered-fledge-plugins-as-tools-issue-112-fledge-4-5-plugin-2-3-6-discover-the-project-s-fledge-plugins-via-the: Call registered Fledge plugins as tools (issue #112, FLEDGE-4/5 PLUGIN-2/3/6): discover the project's Fledge plugins via the fledge CLI, register each command as a dangerous typed plugin run through fledge plugins run with argv arrays, and show per-command tool schema cost plus a context budget line in plugins list |
+| 2026-09-26 | repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools: Repo projects load AGENTS.md and CLAUDE.md from the HEAD commit, not the working tree, so the non-dangerous file tools cannot plant system-prompt instructions for later runs (AGENT-1 hardening, issue #84, review of PR #150) |
 | 2026-09-26 | roles-chat-tool-gates-non-admin-read-chat-catalog-refuse-mutating-at-run-time-admin-still-behind-safe-tests-roles-chat: ROLES-CHAT-2 catalog omit mutating for non-ADMIN |

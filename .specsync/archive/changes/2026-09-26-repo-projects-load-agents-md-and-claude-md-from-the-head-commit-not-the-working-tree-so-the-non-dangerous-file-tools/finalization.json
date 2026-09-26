@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "repo-projects-load-agents-md-and-claude-md-from-the-head-commit-not-the-working-tree-so-the-non-dangerous-file-tools",
+  "implementation_commit": "db15130045af13e3d56c172271e7bcf9f40eb4c6",
+  "implementation_tree": "de1bb204e20d3de25dd4dbe02b36adf2309700c3",
+  "contract_digest": "addf4b4170d680203360f0b15e96615c32b1d190fb97d72905cb0072585fb9bb",
+  "workspace_digest": "ea36587c0f9edef28b7ef903dc37bebbae0c8d45cd19c102be8fe4522cdcb512",
+  "closing_digest": "e6638fdc54bccae1713ec743ee8aff0e8d5e46ddb66ab27e2b2c6f2d15724574",
+  "review_digest": "29413a054ea754b80a78ef85d0af77449078c8c07b6982e05d2d15c17d5c0f40",
+  "finalization_digest": "25599ef9d3998a27f1bb7337236f7fda49c41208d3dc4d395106c078cb5b89cb",
+  "timestamp": 1790457916
+}
