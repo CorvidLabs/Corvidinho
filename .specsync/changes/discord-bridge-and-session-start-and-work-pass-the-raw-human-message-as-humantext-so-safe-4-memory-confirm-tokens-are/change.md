@@ -1,6 +1,6 @@
 ---
 id: discord-bridge-and-session-start-and-work-pass-the-raw-human-message-as-humantext-so-safe-4-memory-confirm-tokens-are
-state: approved
+state: implementing
 type: bug_fix
 base_commit: cbff8ea4646451b42d58fc1145091f55a9532ea4
 ---

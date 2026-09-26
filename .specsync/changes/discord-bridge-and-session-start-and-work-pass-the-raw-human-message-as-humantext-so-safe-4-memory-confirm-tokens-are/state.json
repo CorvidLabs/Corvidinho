@@ -7,10 +7,11 @@
   "title": "Discord bridge and /session start and /work pass the raw human message as humanText so SAFE-4 memory confirm tokens are extracted only from what the human typed, never from recalled memory injected into the spawn prompt (PR #128 follow-up after #131)",
   "description": "Discord bridge and /session start and /work pass the raw human message as humanText so SAFE-4 memory confirm tokens are extracted only from what the human typed, never from recalled memory injected into the spawn prompt (PR #128 follow-up after #131)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "cbff8ea4646451b42d58fc1145091f55a9532ea4",
   "created_at": 1790451024,
-  "updated_at": 1790451035,
+  "updated_at": 1790451041,
   "affected_specs": [],
   "affected_paths": [
     "src/discord/bridge.ts",
