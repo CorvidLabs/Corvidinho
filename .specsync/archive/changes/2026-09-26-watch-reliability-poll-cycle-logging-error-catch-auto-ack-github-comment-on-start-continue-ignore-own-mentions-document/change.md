@@ -1,6 +1,6 @@
 ---
 id: watch-reliability-poll-cycle-logging-error-catch-auto-ack-github-comment-on-start-continue-ignore-own-mentions-document
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 4d83cc3995663588adc0a890389a3560c22853cd
 ---

@@ -1,0 +1,204 @@
+{
+  "timestamp": 1790446308,
+  "commit": "14a1cb0e5c88a524fb6da80bb48dff8af3f5af63",
+  "contract_digest": "85ba7e7a7f695065e7d0883d5cf30bef65384f51426f936fe50972b8a5cbe007",
+  "execution_digest": "5857e9f8ec53cf63fc7d343e1618b643e192b2cd380221f43667b57748ab65cd",
+  "workspace_digest": "e04a4bea00ae2aef17dba14e1d14a47e54f89e8097fa70c2d0bb399089352b43",
+  "acceptance_input_digest": "1f061eb7476f3f7c1b8b9649e9b3c101bcb100e7870376cccc3500a17bb5fe18",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a9bc119146055020dd880969c99f8ced1e4e725fa79f7e558e5455680f5fd3de",
+        "entry_digest": "d8c166161c92d3774b257f47cf5b4c4b2dcfda814c03422931a858497934d999",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "docs/WATCH.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2b7d151407c486275be20a52fa79771d084837e8bb86ed941d4c067c474456d5",
+        "entry_digest": "2fd02e479ab2825f8bd0815a4019e472d1b225403af53ca85f00229588e3cb1a",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/cli.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9f4ab927e0a88b0af1cb5a07a15ffbed22b03ef04275f5867a8e1c319bea1def",
+        "entry_digest": "cbef8f51b93da24b785ab7fdacc7c4ed22819ca61df0793bce95a50428f0f9ab",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "30c4bb67bae0b0c55b7e4814964472d129473160f738d37282ac0e4f35e44215",
+        "entry_digest": "c7ed9b7e95da5de92400b51ea7fd88d43c84ff2074f32f4af404731fc28f1262",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0992229d966239391a75a4600a920be3237ae19c45f9cc9987018b46c573909c",
+        "entry_digest": "7bc6c4306c2a367a8066d81302e2c758180dd6f7084aeca25b1160fe03bc2cb4",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d885ef8812ae1d26402a1ad5c21afd2b0a6e23613adf12bd8c90099fc0ca2be9",
+        "entry_digest": "53296b4ad13365ae83bfd03b5aa5a28e2e0d02e885d6a6dc4481484d558bb26c",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c9babf10933836dd51e98b4ddc3cc7adcd4aa50e1124368f93c3f04fa03c86db",
+        "entry_digest": "182e1e8fc11c9dd3bae69a8af2db5ed9268411e0d534977e452e2abb85b8edc3",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/watch/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+        "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1dc513d83f4e8f0a9fc0b16325f2eeb20048e9ba32bd9cc2761b05f569b2c8aa",
+        "entry_digest": "912e6c358154c5099e4a8f2cc4aa55ffdf96d3fd7330117cbf049c2848bfc73d",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "325040a88a3ca49de2e913ea46f6dba0a8a97e866c7bb91985b9117c084df2ad",
+        "entry_digest": "c36d10c30e7a4e29d81eb117c16c9eb2a446b41b745234da2d10345eaea662ca",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bbbb84af25d7f77f05a4745262660dea339a5d464649b59eee6688982aa62d5a",
+        "entry_digest": "1159a0145681bade26701a5c84276090cb999bea9a0f224c0dc8ab7da1b4774f",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/watch.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1bb89ca6e35ff1aa8f8ebf554ba64402c6763c165a1689f1f37a9a8607d7369e",
+        "entry_digest": "c57ba6d9432cc8b9684e2cc590cc25088eb53e41b026feb32efbc502410d4952",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/ack.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1700af061c29ef52f40d5ec769b2b966a240ccbdda19d6787be1e089b943ad6a",
+        "entry_digest": "339444eaa870dab314444343545f840285ddaee0aba74ce556a39718ee7ad9ec",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/index.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "55224f2b31feb6e4c80e8042811cb2fcf3b57e6704919f8fdb00b4a141adbd93",
+        "entry_digest": "ecf179e9558be9e216a690b29f45ea2cd9982cbd8412ed032c971cb719b7c9f1",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/poller.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2ab7465375a502b2d24e853d56714366f903f473253bfc9339a14787bc8c7aae",
+        "entry_digest": "c4fc839a33ac57d8d73aa0d83e52ff647efaa49d8b1f42756648d0adfc4ce42c",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/searcher.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4b5b24801ac4a7f5b8e4015a5d1cee0d27abddc7b50b75b8e2e78b200c202e12",
+        "entry_digest": "9c8c2687c46f99cd84abb1bec24ff1d6d7cc5695df0b97862ca61cccc6896082",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "tests/watch.ack.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b199d6dc14718e9388422e88fc1f38b953dbce0e50eba94612a08164c099dc73",
+        "entry_digest": "c30e3fc09ff8f0bb8db7a7817d6b75cf250b3886ea6589e97c793906fb97a970",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.poller.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "86f8f7aa733514a7d52cea53cdf14fea8bf31ff8572d7752e9102a558e999d3b",
+        "entry_digest": "a47e04a796cd138e647f1a6b66a47b73200bda4719c7f6c2400a4a570679324f",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli --spec watch",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-watch-007"
+  ]
+}

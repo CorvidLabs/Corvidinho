@@ -7,11 +7,11 @@
   "title": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
   "description": "WATCH reliability: poll cycle logging + error catch, auto-ack GitHub comment on start/continue, ignore own mentions, document search pagination bury risk (flake harden for GH watch)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "4d83cc3995663588adc0a890389a3560c22853cd",
   "created_at": 1790446128,
-  "updated_at": 1790446308,
+  "updated_at": 1790446329,
   "affected_specs": [
     "watch",
     "cli"
