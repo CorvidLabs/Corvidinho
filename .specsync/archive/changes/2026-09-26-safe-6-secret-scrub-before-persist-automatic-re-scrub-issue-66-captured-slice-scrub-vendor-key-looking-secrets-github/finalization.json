@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-6-secret-scrub-before-persist-automatic-re-scrub-issue-66-captured-slice-scrub-vendor-key-looking-secrets-github",
+  "implementation_commit": "fd7a9ea1400c734c4ef82e06e572278ec9288d61",
+  "implementation_tree": "10396e9866e5cb798147acbc991d5c8592158d1d",
+  "contract_digest": "7ce48d848762a54f2248fb785952ed54e19d418f9e5f2537d777492a29712e79",
+  "workspace_digest": "bf967461515670de4a3d222a45f54280b61d74bc826fbdd8b3bb750687d66d8d",
+  "closing_digest": "a95b0ab5f06df315c03b1a285dec89a5abcf2a41cfeef958f1598a02ee63e9fc",
+  "review_digest": "ee2db84cfc54bd40f5e14b9cdcbde1870812fa9882dcaeabc47902054df6647a",
+  "finalization_digest": "e80398d4ba3405c203b4a11b642dbd011dd3f6306f3727c6945ee1ae8b84c989",
+  "timestamp": 1790450738
+}
