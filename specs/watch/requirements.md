@@ -80,3 +80,13 @@ Acceptance Criteria
 - Own-username comments/mentions absent from fetched events (fixture).
 - docs/WATCH.md documents pagination bury risk; fixture tests need no live token.
 
+### REQ-watch-008
+
+The WATCH agent spawn SHALL clear `CORVIDINHO_ACTING_DISCORD_USER_ID` and set
+`CORVIDINHO_ACTING_IS_ADMIN=0`. GitHub-originated runs have no Discord acting
+user, so memory plugins refuse in them (MEMORY-ACL-1) instead of inheriting a
+Discord identity from the watcher's environment.
+
+Acceptance Criteria
+- WATCH spawn env has an empty acting user and `CORVIDINHO_ACTING_IS_ADMIN=0` even when the parent env sets them.
+

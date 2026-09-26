@@ -365,6 +365,12 @@ memories SHALL be refused without leaking the other user’s content
 (MEMORY-ACL-2). Soft-delete MAY retain audit fields (`deleted_at`,
 `deleted_by_user_id`).
 
+The Discord agent spawn SHALL always overwrite `CORVIDINHO_ACTING_DISCORD_USER_ID`
+(empty when the run has no acting user) and `CORVIDINHO_ACTING_IS_ADMIN`, so a
+value in the bridge's own environment never leaks into a spawned run. Memory
+plugins SHALL read identity only from that env, never from argv
+(REQ-plugins-011).
+
 No Discord slash `/memory` SHALL be invented in this requirement — exposure is
 via `MemoryStore` + memory plugins used by the agent/session path. Categories
 SHALL be `conversation` | `entity` | `person` | `personality`. Fixture tests
@@ -378,6 +384,7 @@ Acceptance Criteria
 - Admin forget soft-deletes with audit fields; refuse path leaks no content.
 - No on-chain memory; no new slash command; no ProcessManager.
 - Bridge opens MemoryStore on shared DB; package version bumped for ship.
+- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-022

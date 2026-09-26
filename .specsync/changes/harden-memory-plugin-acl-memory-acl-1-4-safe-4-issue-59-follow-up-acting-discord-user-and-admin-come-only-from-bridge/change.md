@@ -1,6 +1,6 @@
 ---
 id: harden-memory-plugin-acl-memory-acl-1-4-safe-4-issue-59-follow-up-acting-discord-user-and-admin-come-only-from-bridge
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 6cb5f18ab909f4bc5e6529b8c29df121e0833c4e
 ---
