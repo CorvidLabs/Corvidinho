@@ -417,9 +417,10 @@ describe("collectTaskRunStream protocol mismatch (DISCORD-10)", () => {
       exited: Promise.resolve(0),
     });
     expect(ok.protocolMismatch).toBeUndefined();
-    expect(ok.summary).toBe(
-      "state=done verified=false verifySkipped attempts=1\ndemo task attempt 1",
-    );
+    // DISCORD-3.a — stream summary is chat body only; plumbing stays on the embed.
+    expect(ok.summary).toBe("demo task attempt 1");
+    expect(ok.summary).not.toContain("state=");
+    expect(ok.result?.state).toBe("done");
     const plain = await collectTaskRunStream({
       stdout: streamOf(["plain text only\n"]),
       stderr: undefined,

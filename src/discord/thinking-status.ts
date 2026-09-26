@@ -29,6 +29,14 @@ export type ThinkingSnapshot = {
   /** Elapsed ms since start (controller fills). */
   elapsedMs?: number;
   sessionId?: string;
+  /** LLM model id when known (DISCORD-3.a). */
+  model?: string;
+  /**
+   * Operator plumbing for the embed only (DISCORD-3.a) — e.g.
+   * `state=done verified=false verifySkipped attempts=1`. Never put this in
+   * the final chat reply body.
+   */
+  plumbing?: string;
 };
 
 export type DiscordEmbedPayload = {
@@ -110,6 +118,7 @@ export function buildThinkingFooter(snap: ThinkingSnapshot): string {
           : "error";
   parts.push(statusLabel);
   if (snap.elapsedMs != null) parts.push(formatElapsed(snap.elapsedMs));
+  if (snap.model?.trim()) parts.push(snap.model.trim());
   const base = parts.join(" · ");
   const segments: string[] = [base];
   if (snap.tool?.trim() && snap.phase !== "done" && snap.phase !== "error") {
@@ -117,6 +126,9 @@ export function buildThinkingFooter(snap: ThinkingSnapshot): string {
   }
   const tok = formatTokenSegment(snap.tokens);
   if (tok) segments.push(tok);
+  if (snap.plumbing?.trim() && (snap.phase === "done" || snap.phase === "error")) {
+    segments.push(snap.plumbing.trim());
+  }
   return segments.join(" | ");
 }
 
@@ -147,6 +159,8 @@ export type ThinkingStatusOpts = {
   channelId: string;
   replyToMessageId?: string;
   sessionId: string;
+  /** LLM model id shown in the footer when known (DISCORD-3.a). */
+  model?: string;
   /** Debounce between edits (ancestor used 3000ms). */
   debounceMs?: number;
   /** Elapsed tick interval while waiting. */
@@ -171,6 +185,8 @@ export class ThinkingStatus {
   private tool?: string;
   private tokens?: ThinkingTokens;
   private description?: string;
+  private model?: string;
+  private plumbing?: string;
   private phase: ThinkingPhase = "starting";
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private closed = false;
@@ -180,6 +196,7 @@ export class ThinkingStatus {
     this.channelId = opts.channelId;
     this.replyToMessageId = opts.replyToMessageId;
     this.sessionId = opts.sessionId;
+    this.model = opts.model?.trim() || undefined;
     this.debounceMs = opts.debounceMs ?? 3000;
     this.tickMs = opts.tickMs ?? 3000;
     this.now = opts.now ?? (() => Date.now());
@@ -198,6 +215,8 @@ export class ThinkingStatus {
       tokens: over.tokens ?? this.tokens,
       elapsedMs: this.now() - this.startedAt,
       sessionId: this.sessionId,
+      model: over.model ?? this.model,
+      plumbing: over.plumbing ?? this.plumbing,
     };
   }
 
@@ -247,11 +266,13 @@ export class ThinkingStatus {
     tool?: string;
     tokens?: ThinkingTokens;
     description?: string;
+    model?: string;
   }): Promise<void> {
     if (this.closed || this.phase === "done" || this.phase === "error") return;
     if (partial.tool != null) this.tool = partial.tool;
     if (partial.tokens != null) this.tokens = partial.tokens;
     if (partial.description != null) this.description = partial.description;
+    if (partial.model != null) this.model = partial.model.trim() || undefined;
     this.phase = "working";
     await this.flush(false);
   }
@@ -269,20 +290,30 @@ export class ThinkingStatus {
     });
   }
 
-  async done(finalDescription?: string): Promise<void> {
+  async done(
+    finalDescription?: string,
+    extras?: { plumbing?: string; model?: string },
+  ): Promise<void> {
     if (this.closed) return;
     this.stopTicker();
     this.phase = "done";
     this.description = finalDescription ?? "✅ Done";
+    if (extras?.plumbing != null) this.plumbing = extras.plumbing.trim() || undefined;
+    if (extras?.model != null) this.model = extras.model.trim() || undefined;
     await this.flush(true);
     this.closed = true;
   }
 
-  async fail(finalDescription?: string): Promise<void> {
+  async fail(
+    finalDescription?: string,
+    extras?: { plumbing?: string; model?: string },
+  ): Promise<void> {
     if (this.closed) return;
     this.stopTicker();
     this.phase = "error";
     this.description = finalDescription ?? "❌ Failed";
+    if (extras?.plumbing != null) this.plumbing = extras.plumbing.trim() || undefined;
+    if (extras?.model != null) this.model = extras.model.trim() || undefined;
     await this.flush(true);
     this.closed = true;
   }

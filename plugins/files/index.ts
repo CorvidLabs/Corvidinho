@@ -10,5 +10,10 @@ export function loadFilesPlugins(): void {
 }
 
 export { filesCommands };
-export { isProtectedPath, protectedRefuseMessage } from "./protectedPaths.ts";
+export {
+  isProtectedPath,
+  isSecretPath,
+  protectedRefuseMessage,
+  secretRefuseMessage,
+} from "./protectedPaths.ts";
 export { resolveProjectPath, PathEscapeError } from "./resolvePath.ts";

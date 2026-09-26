@@ -19,6 +19,7 @@ Anyone in an allowlisted Discord channel can have a solid chat experience. Non-a
 - **ROLES-CHAT-5**  "Mutating" includes plugins with `dangerous: true` **and** any write/edit/delete/post/merge/config tool even if currently marked `dangerous: false` (notably file-write / file-edit today).
 - **ROLES-CHAT-6**  Role is re-checked in the plugin/runtime layer each call (same spirit as DISCORD-7 / IDENTITY-12 draft) — prompt text never grants power.
 - **ROLES-CHAT-7**  Prove-before-done: automated tests cover (a) non-admin cannot run file-write / shell / github-create-pr / memory-forget, (b) admin can reach those paths still gated by SAFE, (c) channel allowlist still required.
+- **ROLES-CHAT-8**  Non-ADMIN community Discord sessions may answer from any public GitHub plus site/roadmap; refuse private repo access and secret paths.
 
 ## Notes (not numbered AC)
 

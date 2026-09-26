@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 56
+version: 57
 status: draft
 files:
   - src/discord/types.ts
@@ -9,6 +9,8 @@ files:
   - src/discord/image-attachments.ts
   - src/discord/memory-inject.ts
   - tests/discord.memory-inject.test.ts
+  - src/discord/identity-inject.ts
+  - tests/discord.identity-inject.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
   - src/identity/index.ts
@@ -124,6 +126,15 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044).
 
+`identity-inject.ts` formats/enriches the spawn prompt with acting Discord
+user id + resolved display (owner map wins for owner). Gateway fills
+`authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
+`userUsername`). Bridge and slash handlers inject identity before memory.
+
+`ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
+and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
+Final chat reply content remains human text only (DISCORD-3.a).
+
 ## Invariants
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
@@ -197,6 +208,7 @@ No `/memory` slash command.
 
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
+| 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: IDENTITY-4 inject; DISCORD-3.a model+plumbing in thinking footer; clean chat body |
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
 | 2026-09-26 | bump-corvidinho-to-0-0-2-shared-version-helper-from-package-json-for-cli-and-discord-bridge-status-enrich-ephemeral: Bump Corvidinho to 0.0.2; shared version helper from package.json for CLI and Discord bridge /status; enrich ephemeral /status with uptime protocol channels sessions work LLM model+host (no key) slash command names optional git tip SHA; STATUS dogfood polish note; no new slash commands |
@@ -232,3 +244,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | work-opens-a-draft-pr-from-its-verified-worktree-issue-88-autonomous-3-github-2-github-5-agent-4-after-a-work-run-only: /work opens a draft PR from its verified worktree (issue 88, AUTONOMOUS-3, GITHUB-2, GITHUB-5, AGENT-4): after a /work run, only when git-commit, git-push and github-pr-create are allowlisted for non-interactive use, commit and push the talk branch and open a draft PR through the existing git and github plugins with a description built from the real diff and the verify result; otherwise reply plainly why no PR was opened |
 | 2026-09-26 | work-ships-a-pr-only-for-admin-owner-per-roles-chat-3-and-only-from-the-work-branch-never-the-base-or-a-switched: /work ships a PR only for ADMIN (owner) per ROLES-CHAT-3, and only from the work branch (never the base or a switched/detached HEAD) |
 | 2026-09-26 | discord-searchable-channel-string-autocomplete-for-admin-channels-add-remove-and-announce-channel-admin-2-ux-discord: Discord searchable channel STRING+autocomplete for /admin channels add\|remove and /announce channel (ADMIN-2 UX / DISCORD-ANNOUNCE-2 amend); replace limited native CHANNEL picker; package 0.0.17 |
+
