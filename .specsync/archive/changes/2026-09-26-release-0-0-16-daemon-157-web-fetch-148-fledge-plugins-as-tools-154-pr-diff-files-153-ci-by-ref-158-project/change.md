@@ -1,6 +1,6 @@
 ---
 id: release-0-0-16-daemon-157-web-fetch-148-fledge-plugins-as-tools-154-pr-diff-files-153-ci-by-ref-158-project
-state: implementing
+state: archived
 type: operations
 base_commit: 8ed2ed5d7dc9ece3184b1ceda35f932830addce2
 ---
