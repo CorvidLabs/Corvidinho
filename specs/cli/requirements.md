@@ -67,12 +67,19 @@ Acceptance Criteria
 
 ### REQ-cli-007
 
-`corvidinho task run` SHALL drive the prove-before-done loop with an injectable execute path: demo stub when no LLM key is configured; when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is set, OpenAI-compatible execute including the plugin tool loop (tier tool|code) or read-tier chat. `--no-verify` remains for bridge latency. `--json` emits structured result+events for Discord/WATCH callers to parse.
+`corvidinho task run` SHALL drive the prove-before-done loop with an injectable
+execute path: demo stub when no LLM key is configured; thin env-gated
+OpenAI-compatible chat when `CORVIDINHO_LLM_API_KEY` (or documented fallback) is
+set. `--no-verify` remains for **local/operator opt-out only** — Discord and
+WATCH bridges MUST NOT pass it (REQ-discord-085 / REQ-watch-085 / AGENT-4).
+`--json` / `--output ndjson` emit structured result+events for callers to parse.
+Package version after this change is **0.0.13**.
 
 Acceptance Criteria
-- Help still documents task run / --no-verify / --json / --tier.
+- Help still documents `task run` / `--no-verify` / `--json` / `--output`.
 - Without LLM key, demo execute behaves as before (verify gate exercise).
-- With key env documented in `.env.example` (no secret values).
+- Help / fledge.toml no longer tell bridges to pass `--no-verify` for latency.
+- Package `0.0.13`.
 
 ### REQ-cli-008
 
@@ -276,6 +283,17 @@ Acceptance Criteria
 - CLI `version` prints `0.0.12`.
 - CHANGELOG has a 0.0.12 section that the updater's changelog helper extracts exactly.
 - STATUS records #145 and #142.
+
+### REQ-cli-085
+
+The CLI SHALL keep `--no-verify` as an explicit local skip of prove-before-done
+(AGENT-4). Product bridges (Discord HEAR, GitHub WATCH) SHALL NOT use that flag
+(REQ-discord-085 / REQ-watch-085). Removing the flag entirely (draft AGENT-14)
+awaits HI capture. Package **0.0.13**.
+
+Acceptance Criteria
+- `corvidinho task run --no-verify --json` still exits 0 with `verifySkipped`.
+- Bridge spawn clients do not pass `--no-verify` (covered under discord/watch).
 
 ### REQ-cli-112
 

@@ -78,7 +78,7 @@ Usage:
                                     --json = --output json (one result); ndjson = live event stream
                                     for bridges, one versioned frame per line (AGENT-8 / CLI-7)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
-  corvidinho --no-verify ...        Skip verify gate (bridges / WATCH latency)
+  corvidinho --no-verify ...        Skip verify gate (local/operator opt-out only)
 
 Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE  same as --non-interactive
@@ -423,7 +423,8 @@ export function parseTaskOutputMode(
 
 /**
  * Demo task: marks a synthetic file change so the verify gate exercises
- * (unless --no-verify). Bridges should pass --no-verify for latency.
+ * (unless --no-verify). Bridges MUST NOT pass --no-verify (REQ-cli-085 /
+ * REQ-discord-085 / REQ-watch-085 / AGENT-4); the flag is local opt-out only.
  * `ndjson` streams one frame per line (REQ-cli-073 / REQ-agent-073).
  */
 async function taskRun(opts: {
