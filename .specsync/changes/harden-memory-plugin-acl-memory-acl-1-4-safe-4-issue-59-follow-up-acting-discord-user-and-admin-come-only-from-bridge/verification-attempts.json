@@ -168,6 +168,27 @@
         "REQ-plugins-011",
         "REQ-watch-008"
       ]
+    },
+    {
+      "timestamp": 1790451160,
+      "commit": "860d8bb8831aebd2ea857a002af10af8aeb4c228",
+      "contract_digest": "32a28a88d5a89b551896b949747c9880d35bc567cc5f285dd2d5527d8dbcc619",
+      "execution_digest": "1edc5b798a5b20e7f888d9ffbbeac2830a838c1bf52b25556c220e0e103cdb1d",
+      "workspace_digest": "fd6a9622fb44b1bebbe9a4552eb9dd848ddec37e95586c02e8f2dbce98e33dd6",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-021",
+        "REQ-plugins-010",
+        "REQ-plugins-011",
+        "REQ-watch-008"
+      ]
     }
   ]
 }
