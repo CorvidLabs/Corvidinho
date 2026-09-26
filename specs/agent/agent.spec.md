@@ -14,9 +14,11 @@ files:
   - src/agent/spawn-argv.ts
   - src/agent/tier.ts
   - src/agent/tools.ts
+  - src/agent/project-instructions.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/spawn.argv.test.ts
+  - tests/agent.project-instructions.test.ts
 
 db_tables: []
 depends_on:
@@ -36,11 +38,26 @@ appropriately (REQ-agent-010).
 Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
 `src/agent/index.ts`).
 
+Project instructions (REQ-agent-084, AGENT-1, issue #84):
+`src/agent/project-instructions.ts` exports `findProjectRoot`,
+`loadProjectInstructions`, `renderProjectInstructions`,
+`describeProjectInstructions`, `withProjectInstructions`,
+`PROJECT_INSTRUCTION_FILES` (`AGENTS.md`, `CLAUDE.md`),
+`PROJECT_INSTRUCTIONS_MAX_BYTES` (16 KiB) and `PROJECT_INSTRUCTIONS_HEADER`
+(re-exported from `src/agent/index.ts`). `createTaskExecute` loads them from
+`cwd` by default; `projectInstructions: false` opts out.
+
 ## Invariants
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
 memory-recall-before-ignorance / never-invent rules. OpenAI tool argv
 descriptions for `memory-*` commands SHALL include concrete examples.
+
+Project instructions come only from the project root (nearest `.git` at or
+above cwd, else cwd), never from a parent directory above it. Each file is
+capped at 16 KiB with a truncation marker, SAFE-6 scrubbed, and labelled as
+project instructions that cannot widen SAFE-1 consent, the tool allowlist or
+the capability tier. The loader never throws.
 
 ## Behavioral Examples
 
@@ -60,6 +77,10 @@ descriptions for `memory-*` commands SHALL include concrete examples.
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
+| AGENTS.md / CLAUDE.md missing | skipped; system prompt unchanged |
+| Instruction file symlink resolves outside the project | refused; named in the Text note; run continues |
+| Instruction file is a directory, binary, or not UTF-8 | refused; named in the Text note; run continues |
+| Instruction file over 16 KiB | first 16 KiB kept (UTF-8 boundary) plus truncation marker |
 
 ## Dependencies
 

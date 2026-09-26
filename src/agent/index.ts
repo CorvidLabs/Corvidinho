@@ -49,3 +49,19 @@ export {
 export type { BuildToolsOpts, OpenAiToolDef } from "./tools.ts";
 
 export { summarizeTaskRunOutput } from "./task-summary.ts";
+
+export {
+  describeProjectInstructions,
+  findProjectRoot,
+  loadProjectInstructions,
+  PROJECT_INSTRUCTION_FILES,
+  PROJECT_INSTRUCTIONS_HEADER,
+  PROJECT_INSTRUCTIONS_MAX_BYTES,
+  renderProjectInstructions,
+  withProjectInstructions,
+} from "./project-instructions.ts";
+export type {
+  LoadProjectInstructionsOptions,
+  ProjectInstructionFile,
+  ProjectInstructions,
+} from "./project-instructions.ts";
