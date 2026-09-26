@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790460080,
+      "digest": "e432be051b506a595297ba09d0679b4bb370961593f4a1502a54fbbaca681d47",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "schedule-runs-name-worktrees-and-branches-from-the-full-schedule-and-run-ids-and-stale-branch-cleanup-parks-a-branch",
+        "title": "Schedule runs name worktrees and branches from the full schedule and run ids, and stale-branch cleanup parks a branch with commits instead of deleting it (SESSION-WORKTREE-1/3, DISCORD-SCHEDULE-3)",
+        "description": "Schedule runs name worktrees and branches from the full schedule and run ids, and stale-branch cleanup parks a branch with commits instead of deleting it (SESSION-WORKTREE-1/3, DISCORD-SCHEDULE-3)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/discord/discord.spec.md",
+          "src/scheduler/service.ts",
+          "src/worktree/cleanup.ts",
+          "tests/scheduler.worktree.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "every schedule run gets its own worktree dir and talk/ branch named from the full schedule and run ids, so a later run never deletes an earlier run's commits and two concurrent schedules never share a worktree; stale-branch cleanup renames a branch with commits not on HEAD to BRANCH-parked-TIMESTAMP instead of force-deleting it"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "f859716a3ca171c02b3bc9fee2c72d3ce785cc6e388b2d693b7bddd052fd1f93"
+      }
+    }
+  ],
+  "reopenings": []
+}
