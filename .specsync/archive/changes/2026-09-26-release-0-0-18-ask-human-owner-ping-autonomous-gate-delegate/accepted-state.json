@@ -7,11 +7,11 @@
   "title": "Release 0.0.18: ask-human + owner ping, autonomous gate + delegate",
   "description": "Release 0.0.18: ask-human + owner ping, autonomous gate + delegate",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "c69e0e2fefdf11d506f55c528035d422973e4f1a",
   "created_at": 1790459185,
-  "updated_at": 1790459190,
+  "updated_at": 1790459195,
   "affected_specs": [
     "cli"
   ],

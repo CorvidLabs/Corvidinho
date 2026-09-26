@@ -1,6 +1,6 @@
 ---
 id: release-0-0-18-ask-human-owner-ping-autonomous-gate-delegate
-state: implementing
+state: archived
 type: operations
 base_commit: c69e0e2fefdf11d506f55c528035d422973e4f1a
 ---
