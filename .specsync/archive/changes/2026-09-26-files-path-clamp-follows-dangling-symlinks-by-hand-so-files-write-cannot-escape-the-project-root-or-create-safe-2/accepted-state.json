@@ -7,11 +7,11 @@
   "title": "Files path clamp follows dangling symlinks by hand so files-write cannot escape the project root or create SAFE-2 protected files through a link whose target does not exist yet",
   "description": "Files path clamp follows dangling symlinks by hand so files-write cannot escape the project root or create SAFE-2 protected files through a link whose target does not exist yet",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
   "created_at": 1790460966,
-  "updated_at": 1790461159,
+  "updated_at": 1790461254,
   "affected_specs": [
     "plugins"
   ],
