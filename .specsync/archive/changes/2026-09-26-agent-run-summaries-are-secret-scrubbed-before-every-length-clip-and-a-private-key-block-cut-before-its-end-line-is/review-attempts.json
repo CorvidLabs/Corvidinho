@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "0f9090a2ea88a09e0bcb120ac078ba7e5f9bd65d",
+      "contract_digest": "d082a8285c38caf04ed4d92394040aa4b4184c5657f2e0347aa6d560e0c8f0b9",
+      "execution_digest": "7d3b0052de0f3963c563bbbee52e9a46fdfe4d1f0420e62e48821e4bd65a2dba",
+      "workspace_digest": "1be1ef1d38b2bdf2d70df164c6e4c1d79174f97190917dc0779c894ab6b63974",
+      "timestamp": 1790464824
+    }
+  ]
+}

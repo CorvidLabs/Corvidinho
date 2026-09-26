@@ -69,14 +69,17 @@ describe("discord bridge CLI / start semantics", () => {
   });
 
   test("startBridge dry path: mention→session→echo with injected gateway", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-"));
     const result = await startBridge({
       env: {
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        // Missing file: never read the operator's allowlist (ALLOW-4).
+        CORVIDINHO_ALLOWLIST_FILE: join(projectRoot, "no-allowlist.toml"),
       },
       // Temp non-git project: never create real worktrees/branches in this repo.
-      projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-bridge-proj-")),
+      projectRoot,
       skipProtocolCheck: true,
       agent: createEchoAgentClient(),
       gatewayFactory: async () => createNullGateway(),
