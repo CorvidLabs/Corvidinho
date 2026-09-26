@@ -89,6 +89,7 @@ export async function handleWorkCommand(
       }) >= PermissionLevel.ADMIN;
     result = await ctx.agent.runChat({
       prompt: description,
+      humanText: description,
       sessionId: session.id,
       resume: false,
       actingUserId: interaction.userId,
