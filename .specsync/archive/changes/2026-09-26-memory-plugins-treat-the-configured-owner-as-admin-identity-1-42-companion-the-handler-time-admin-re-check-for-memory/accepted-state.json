@@ -7,11 +7,11 @@
   "title": "Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners",
   "description": "Memory plugins treat the configured owner as ADMIN (IDENTITY-1, #42 companion): the handler-time ADMIN re-check for memory forget/override/include-deleted also accepts the owner's Discord snowflake from the owner config, still requiring the bridge's per-dispatch admin bit and never for muted or deny-listed owners",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "5f1db8a2a44464694bdde6d4695f6c186d29cfc0",
   "created_at": 1790452497,
-  "updated_at": 1790452506,
+  "updated_at": 1790452531,
   "affected_specs": [
     "plugins"
   ],
