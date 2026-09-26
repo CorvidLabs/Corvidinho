@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "cover-release-yml-slash-list-to-include-schedule-for-v0-0-4-release-notes-seven-command-set-already-in-box-update",
+  "slug": "cover-release-yml-slash-list-to-include-schedule-for-v0-0-4-release-notes-seven-command-set-already-in-box-update",
+  "title": "Cover release.yml slash list to include /schedule for v0.0.4 Release notes (seven-command set already in BOX-UPDATE)",
+  "description": "Cover release.yml slash list to include /schedule for v0.0.4 Release notes (seven-command set already in BOX-UPDATE)",
+  "kind": "documentation",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "3d4dc309abda56f512e884e8f449520114f6d4ab",
+  "created_at": 1790448345,
+  "updated_at": 1790448356,
+  "affected_specs": [],
+  "affected_paths": [
+    ".github/workflows/release.yml"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Release workflow slash-list string only; documents already-shipped /schedule in tag→Release notes; no HI/canonical AC",
+  "acceptance_criteria": [
+    "release.yml SLASH string lists /schedule (list|create|pause|resume|delete) alongside existing six; matches BOX-UPDATE seven-command set; no other workflow behavior change"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790448355,
+      "digest": "5d0934ec32e7ab5e1815695a0a17a6038f108b02c5ba2b3e04ad2ea8e42169bf",
+      "note": "Cover release.yml slash list for /schedule in v0.0.4 notes",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-release-yml-slash-list-to-include-schedule-for-v0-0-4-release-notes-seven-command-set-already-in-box-update",
+        "title": "Cover release.yml slash list to include /schedule for v0.0.4 Release notes (seven-command set already in BOX-UPDATE)",
+        "description": "Cover release.yml slash list to include /schedule for v0.0.4 Release notes (seven-command set already in BOX-UPDATE)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          ".github/workflows/release.yml"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Release workflow slash-list string only; documents already-shipped /schedule in tag→Release notes; no HI/canonical AC",
+        "acceptance_criteria": [
+          "release.yml SLASH string lists /schedule (list|create|pause|resume|delete) alongside existing six; matches BOX-UPDATE seven-command set; no other workflow behavior change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
