@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.0.10
+
+### ⚠ Upgrade notes
+
+- **Set the owner before deploying.** ADMIN is now owner-only (IDENTITY-2). Set `CORVIDINHO_OWNER_DISCORD_ID` (or `[owner] discord_id` in the allowlist file) on the box. With no owner, nobody is ADMIN: `/mute`, `/unmute`, `/announce`, `/schedule` mutations and memory forget/override refuse everyone (IDENTITY-3 default-deny). `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` are ignored; the bridge and `doctor` warn when they are set.
+- **Restart the bridge and the checkout together.** The wire protocol is now `2` (DISCORD-10); a new bridge refuses an old binary.
+
+### Live NDJSON event stream for bridges (#73) — [#139](https://github.com/CorvidLabs/Corvidinho/pull/139)
+
+- `task run --output text|json|ndjson`; `--json` stays an alias and its output is unchanged.
+- `--output ndjson` writes one versioned JSON object per line as the run progresses: `StateChanged`, `Text`, `ToolCall` (a truncated, secret-scrubbed argument summary — never raw args), `ToolResult`, `VerifyResult`, running provider-reported `usage`, and a final `result` frame (summary capped at 4000 chars).
+- The Discord thinking embed and WATCH read the stream live: current state, current tool, and the real running token total when the provider reports usage (AGENT-8 / CLI-7 / DISCORD-3).
+- Frames from another protocol are never turned into reply text; the reply becomes a "protocol mismatch — restart the bridge" notice. Unoffered tool names show as "(unknown tool)".
+
+### IDENTITY: durable owner record (#42) — [#138](https://github.com/CorvidLabs/Corvidinho/pull/138), owner-only ADMIN — [#141](https://github.com/CorvidLabs/Corvidinho/pull/141)
+
+- Owner = Discord snowflake + optional GitHub login + display name, from `CORVIDINHO_OWNER_DISCORD_ID` / `_GITHUB_LOGIN` / `_DISPLAY` or the allowlist file `[owner]` section (env wins per field); survives restarts; the display name never matches anything (IDENTITY-1, ALLOW-4).
+- The owner is the only ADMIN, re-checked at handler time in the bridge, slash dispatch and the memory plugins; muted or deny-listed owner is not ADMIN (IDENTITY-2/3, ADMIN-4).
+- `/status` and `doctor` show "owner configured yes/no" plus the display name only — never ids, logins or tokens.
+
+### SAFE-5 tamper-evident audit trail (#95) — [#136](https://github.com/CorvidLabs/Corvidinho/pull/136)
+
+- Every dangerous plugin run appends HMAC-chained `started` → `ok`/`error` (or `denied`) rows to `audit_log` in the shared DB (schema v5, append-only triggers); raw args are never stored, only a digest; a dangerous run is refused if its `started` row cannot be written.
+- `verifyAudit` finds the first tampered row; key from `CORVIDINHO_AUDIT_HMAC_KEY`. Draft SAFE-17 (wider coverage, Discord verify) awaits HI.
+
+### Security fix — `--task` text can no longer become CLI flags — [#143](https://github.com/CorvidLabs/Corvidinho/pull/143)
+
+- The bridges pass untrusted Discord/GitHub text after `--task`. A message such as `--tier=code` or `--no-verify` used to lose its task text and be parsed as a flag, letting message text pick the capability tier. `--task` now always takes the next argv item; `--task=TEXT` keeps multi-line text (AGENT-5 / SAFE-1).
+
 ## 0.0.9
 
 ### Security — memory ACL hardening (#59 follow-up) — [#128](https://github.com/CorvidLabs/Corvidinho/pull/128)
