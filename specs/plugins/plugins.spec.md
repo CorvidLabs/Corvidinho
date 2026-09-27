@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 47
+version: 48
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -63,6 +63,7 @@ files:
   - tests/shell.plugins.test.ts
   - tests/shell.clamp-bypass.test.ts
   - tests/shell.clamp-failclosed.test.ts
+  - tests/shell.clamp-quoting.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -240,15 +241,27 @@ bounded transcript; ok only when the chair decided.
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2, and the clamp fails closed on anything it cannot resolve
-to an in-root target. It joins backslash-newline continuations and tokenizes
-with quote awareness (quoted separators are not separators; quotes and
-backslashes are removed before checking), looks past prefix words (`{ } ! if
+to an in-root target. It tokenizes the way the shell reads a command: quoted
+and backslash-escaped text joins into one word (quoted separators are not
+separators; quotes and backslashes are removed before checking), a
+`\`-newline outside single quotes is a continuation (an escaped `\` before a
+newline is not), `#` at a word start comments to the end of the line, and a
+`$(…)` ends where those same rules say. A command with `<<` is checked both as
+dash reads it (the here-doc body is data; only an unquoted one's `$(…)` /
+backticks are analysed) and as bash may read it (`(( x << 2 ))` is arithmetic,
+so the lines after it are commands), and refuses if either does; a command
+with `$'` is also checked with `$'…'` read as bash's ANSI-C quoting (a
+backslash escape in it counts as an expansion). Each `eval` argument, and the
+`-c` string of a shell (`sh bash dash zsh ksh mksh ash yash posh`, by name or
+path, anywhere in the command: behind `env`, `timeout`, `xargs`, `find -exec`
+…), is checked the same way as a command. A `cd` / `pushd` left open by an unterminated quote or a
+trailing `\` refuses, as does a command nested too deeply to check. It looks past prefix words (`{ } ! if
 then else elif do while until time builtin command`, `function NAME`) and
 `NAME=value` / `NAME+=value` assignments, drops redirections (with their
 targets and any `fd` prefix such as `2>&1`, never splitting on a redirection
 `&`) and skips `cd` options (`-P -L -e -@ -n --`). It refuses `cd -`, a target
 the shell would expand (`$`, backtick, glob, brace), a command word that would
-expand, an `eval` with an expanded argument, escaping `cd` inside a command
+expand, an `eval` or shell `-c` string that would expand, escaping `cd` inside a command
 substitution (`$(…)` / backticks), and `DIRSTACK` writes. CDPATH is not refused
 lexically: the child shell runs `CDPATH=; readonly CDPATH` and does not inherit
 `CDPATH` or `OLDPWD`, so a `CDPATH` set (even dynamically) in the command cannot
@@ -323,6 +336,12 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 - **Given** builtins loaded and `shell-exec` allowlisted
 - **When** the agent runs a `cd` outside the root hidden behind a redirection (`cd 2>&1 /etc`), quoting (`X=';' cd /etc`), a `\`-newline continuation, an expanded command word (`$(echo cd) /etc`) or a command substitution (`echo $(cd /etc && cat x)`)
 - **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn
+
+### Scenario: SAFE-3 clamp reads quoting like the shell
+
+- **Given** builtins loaded and `shell-exec` allowlisted
+- **When** the agent runs `cd "a b/../.."`, `cd a\ b/../..`, `X="a b" cd /etc`, a `cd /etc` after an escaped `\` and a newline, after a `#` comment or here-doc body holding a lone quote, or a `cd "sub` left open
+- **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn; `cd "sub dir"` and `cd sub # comment` still run
 
 ### Scenario: SAFE-3 CDPATH cannot redirect a relative cd
 
@@ -404,7 +423,8 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 | specsync-read/brief name not a plain module name, or a spec/companion/specs dir whose real path leaves the project specs dir | Refuse (exit 1); nothing read |
 | specsync-coverage/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
-| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
 | Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
@@ -490,3 +510,4 @@ and current rows for plugins host evolution.
 | 2026-09-27 | specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real: Specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root |
 | 2026-09-27 | search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles: Search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8) |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
+| 2026-09-27 | safe-3-shell-exec-cd-clamp-reads-quoting-the-way-the-shell-does-escaped-backslash-before-a-newline-comments-and-here: SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused |
