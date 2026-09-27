@@ -7,10 +7,11 @@
   "title": "Docs and the doctor docs-facts test follow #225: doctor reads the allowlist file, checks data-dir and llm, and its checks live in src/doctor.ts",
   "description": "docs and the doctor docs-facts test follow #225: doctor reads the allowlist file, checks data-dir and llm, and its checks live in src/doctor.ts",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "a0e27ae09119184dc2c2c48e71076f8f3c7aaf35",
   "created_at": 1790475617,
-  "updated_at": 1790475637,
+  "updated_at": 1790475639,
   "affected_specs": [],
   "affected_paths": [
     "docs/BOX-UPDATE.md",
