@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-31-owner-only-channel-autocomplete-keystore-and-specsync-write-protection-audited-schedule-delete-per-user",
+  "implementation_commit": "63a2ac17462a690e593fd144806a7ecf49e3a650",
+  "implementation_tree": "cc313db97b7431d6c8be216837cff9f84c704584",
+  "contract_digest": "e47fb27c253ba0c7cebab2d22a639ac6d02c7d81b8ac54b3bce180d8a8b4981a",
+  "workspace_digest": "e17f6a9f2d0036534669c299d82adb51b781beaf7c5819e56f21204e4a5419f1",
+  "closing_digest": "7250b7e38988c91879dda4d85881297bad90ada0c21f94459fa8500a7f814d12",
+  "review_digest": "e2526ec7a31364fe83ea31f85d511f8ddf995cc36f0ded828468738f5b2b90c5",
+  "finalization_digest": "9bb57545b51465f5a2ae87e108654b3d11faa2cb75e85f4a73f07d0c0e1b82be",
+  "timestamp": 1790535073
+}
