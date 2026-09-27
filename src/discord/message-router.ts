@@ -21,8 +21,33 @@ import {
   type RouteAction,
 } from "./types.ts";
 
-function stripMentions(content: string): string {
-  return content.replace(/<@!?\d+>/g, "").trim();
+/**
+ * Strip Discord <@id> tokens from the chat body and append a lookup-friendly
+ * `[mentioned: Discord user id …]` trailer (IDENTITY-5). The body stays usable
+ * for thin-ack detection (AUTONOMY-5: "<@bot> ok" → "ok"); the trailer keeps
+ * snowflakes available for discord-user-lookup.
+ */
+export function stripMentions(content: string): string {
+  const ids: string[] = [];
+  const without = content.replace(/<@!?(\d+)>/g, (_m, id: string) => {
+    ids.push(id);
+    return " ";
+  });
+  const body = without.replace(/\s+/g, " ").trim();
+  if (ids.length === 0) return body;
+  const note = [...new Set(ids)]
+    .map((id) => `Discord user id ${id}`)
+    .join(", ");
+  return body ? `${body}\n[mentioned: ${note}]` : `[mentioned: ${note}]`;
+}
+
+/** Drop the IDENTITY-5 mention trailer so thin-ack / cancel see the body only. */
+export function promptBodyForAskGate(prompt: string): string {
+  return prompt
+    .replace(/\n?\[mentioned:[^\]]*\]\s*$/i, "")
+    .replace(/\bDiscord user id \d+\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export type RouterDeps = {

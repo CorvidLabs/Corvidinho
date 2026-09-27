@@ -83,3 +83,5 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   only; another user's reply neither runs the agent nor touches the ask; a
   finished run keeps no pending ask; without `editMessage` an @mention `ok`
   still restates (no live Discord).
+## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
+`tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
