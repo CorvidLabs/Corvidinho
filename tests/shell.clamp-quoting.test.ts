@@ -96,10 +96,20 @@ describe("shell-exec SAFE-3 clamp reads quoting like the shell (REQ-plugins-087)
     expect(firstDisallowedCd('cd sub && echo "x', root)).toBeNull();
   });
 
-  test("unit: nesting too deep to check refuses instead of throwing", () => {
-    const depth = 100_000;
-    const cmd = `echo ${"$(echo ".repeat(depth)}cd /etc${")".repeat(depth)}`;
-    expect(firstDisallowedCd(cmd, root)).not.toBeNull();
+  test("unit: nesting too deep to check refuses instead of recursing without bound", () => {
+    const nest = (depth: number, inner: string) =>
+      `echo ${"$(echo ".repeat(depth)}${inner}${")".repeat(depth)}`;
+    expect(firstDisallowedCd(nest(20, "cd sub"), root)).toBeNull();
+    expect(firstDisallowedCd(`${"eval ".repeat(20)}cd sub`, root)).toBeNull();
+    expect(firstDisallowedCd(nest(100, "cd sub"), root)).toBe(
+      "(nested too deeply to check)",
+    );
+    expect(firstDisallowedCd(`${"eval ".repeat(100)}cd sub`, root)).toBe(
+      "(nested too deeply to check)",
+    );
+    expect(firstDisallowedCd(nest(100_000, "cd /etc"), root)).toBe(
+      "(nested too deeply to check)",
+    );
   });
 
   test("unit: in-root forms with quoting, comments, here-docs and continuations stay allowed", () => {

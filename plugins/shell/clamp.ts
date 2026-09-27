@@ -116,6 +116,8 @@ type Lexed = {
   text: string;
   frags: Tok[][];
   subs: Lexed[];
+  /** Nesting depth: substitutions and `eval` re-parses around this text. */
+  depth: number;
   /** Index just past the scan (past the closing `)` when inside `$( )`). */
   end: number;
   /**
@@ -124,6 +126,16 @@ type Lexed = {
    */
   open: boolean;
 };
+
+/**
+ * Deepest nesting of command substitutions and `eval` re-parses the clamp
+ * reads. Real commands stay far below it; past it the clamp refuses rather
+ * than recurse without bound (a stack overflow can take the process down).
+ */
+const MAX_NESTING = 64;
+
+/** Thrown when a command nests past `MAX_NESTING`. */
+class NestedTooDeep extends Error {}
 
 /** A here-doc (`<<` / `<<-`) whose body starts after the next newline. */
 type HereDoc = { delim: string; stripTabs: boolean; literal: boolean };
@@ -152,16 +164,17 @@ function captureSubstitution(
   at: number,
   subs: Lexed[],
   hereDocs: boolean,
+  depth: number,
 ): number {
   if (s[at] === "`") {
     const end = matchBacktick(s, at);
     const body = s.slice(at + 1, end < 0 ? s.length : end - 1);
-    const inner = tokenize(body, hereDocs);
+    const inner = tokenize(body, hereDocs, depth + 1);
     if (end < 0) inner.open = true;
     subs.push(inner);
     return end;
   }
-  const inner = tokenize(s, hereDocs, at + 2, true);
+  const inner = tokenize(s, hereDocs, depth + 1, at + 2, true);
   subs.push(inner);
   return inner.open ? -1 : inner.end;
 }
@@ -171,7 +184,11 @@ function captureSubstitution(
  * onto `subs`: the shell expands them, so they run as commands. `\` escapes
  * the next character.
  */
-function hereDocSubstitutions(body: string, subs: Lexed[]): void {
+function hereDocSubstitutions(
+  body: string,
+  subs: Lexed[],
+  depth: number,
+): void {
   for (let k = 0; k < body.length; k++) {
     const c = body[k]!;
     if (c === "\\") {
@@ -179,7 +196,7 @@ function hereDocSubstitutions(body: string, subs: Lexed[]): void {
       continue;
     }
     if ((c === "$" && body[k + 1] === "(") || c === "`") {
-      const end = captureSubstitution(body, k, subs, true);
+      const end = captureSubstitution(body, k, subs, true, depth);
       if (end < 0) return;
       k = end - 1;
     }
@@ -204,9 +221,11 @@ function hereDocSubstitutions(body: string, subs: Lexed[]): void {
 function tokenize(
   cmd: string,
   hereDocs: boolean,
+  depth: number,
   from = 0,
   inSubst = false,
 ): Lexed {
+  if (depth > MAX_NESTING) throw new NestedTooDeep();
   const n = cmd.length;
   const frags: Tok[][] = [];
   const subs: Lexed[] = [];
@@ -215,7 +234,7 @@ function tokenize(
   let expands = false;
   let quoted = false;
   let start = -1; // where the current word began; -1 between words
-  let depth = 0; // bare `(` nesting inside a `$( )` body
+  let parens = 0; // bare `(` nesting inside a `$( )` body
   // The next word is a here-doc delimiter (true: `<<-`).
   let delimNext: boolean | null = null;
   // Here-docs whose body starts after the next newline.
@@ -247,7 +266,7 @@ function tokenize(
   const substitution = (at: number): number => {
     beginWord(at);
     expands = true;
-    const end = captureSubstitution(cmd, at, subs, hereDocs);
+    const end = captureSubstitution(cmd, at, subs, hereDocs, depth);
     value += cmd.slice(at, end < 0 ? n : end);
     return end;
   };
@@ -268,7 +287,7 @@ function tokenize(
         i = next;
       }
       if (!doc.literal) {
-        hereDocSubstitutions(cmd.slice(bodyStart, bodyEnd), subs);
+        hereDocSubstitutions(cmd.slice(bodyStart, bodyEnd), subs, depth);
       }
     }
     return i;
@@ -372,7 +391,7 @@ function tokenize(
       continue;
     }
     if (c === "(") {
-      if (inSubst) depth++;
+      if (inSubst) parens++;
       endFrag();
       i++;
       continue;
@@ -381,8 +400,10 @@ function tokenize(
       endFrag();
       i++;
       if (inSubst) {
-        if (depth === 0) return { text: cmd, frags, subs, end: i, open: false };
-        depth--;
+        if (parens === 0) {
+          return { text: cmd, frags, subs, depth, end: i, open: false };
+        }
+        parens--;
       }
       continue;
     }
@@ -450,7 +471,7 @@ function tokenize(
   }
   endFrag();
   // Inside `$( )`, running out of text means the `)` never came.
-  return { text: cmd, frags, subs, end: n, open: open || inSubst };
+  return { text: cmd, frags, subs, depth, end: n, open: open || inSubst };
 }
 
 /** Words of a fragment with each redirection operator + its target dropped. */
@@ -555,13 +576,15 @@ function analyzeFragment(
  */
 export function firstDisallowedCd(cmd: string, root: string): string | null {
   try {
-    return checkReadings(cmd, root, false);
+    return checkReadings(cmd, root, false, 0);
   } catch (e) {
-    // Nesting deep enough to exhaust the stack cannot be checked: refuse.
-    if (e instanceof RangeError) return "(nested too deeply to check)";
+    if (e instanceof NestedTooDeep) return "(nested too deeply to check)";
     throw e;
   }
 }
+
+/** Checks an `eval` argument found in a text at nesting `depth`. */
+type EvalCheck = (cmd: string, depth: number) => string | null;
 
 /**
  * dash reads the lines after `<<` as a here-doc body, bash may read them as
@@ -575,19 +598,24 @@ function checkReadings(
   cmd: string,
   root: string,
   covered: boolean,
+  depth: number,
 ): string | null {
   const both = !covered && cmd.includes("<<");
-  const r = analyzeLexed(tokenize(cmd, true), root, (inner) =>
-    checkReadings(inner, root, covered || both),
+  const r = analyzeLexed(tokenize(cmd, true, depth), root, (inner, d) =>
+    checkReadings(inner, root, covered || both, d),
   );
   if (r != null || !both) return r;
-  return checkCodeOnly(cmd, root);
+  return checkCodeOnly(cmd, root, depth);
 }
 
 /** `cmd` with `<<` read as a plain redirection and every line as code. */
-function checkCodeOnly(cmd: string, root: string): string | null {
-  return analyzeLexed(tokenize(cmd, false), root, (inner) =>
-    checkCodeOnly(inner, root),
+function checkCodeOnly(
+  cmd: string,
+  root: string,
+  depth: number,
+): string | null {
+  return analyzeLexed(tokenize(cmd, false, depth), root, (inner, d) =>
+    checkCodeOnly(inner, root, d),
   );
 }
 
@@ -595,15 +623,17 @@ function checkCodeOnly(cmd: string, root: string): string | null {
 function analyzeLexed(
   lx: Lexed,
   root: string,
-  evalCommand: (cmd: string) => string | null,
+  evalCommand: EvalCheck,
 ): string | null {
+  // An `eval` argument is re-parsed one level deeper than its text.
+  const evalHere = (inner: string) => evalCommand(inner, lx.depth + 1);
   for (let k = 0; k < lx.frags.length; k++) {
     // Only the last command can be the one the text ran out in.
     const openText = lx.open && k === lx.frags.length - 1 ? lx.text : null;
     const r = analyzeFragment(
       stripRedirections(lx.frags[k]!),
       root,
-      evalCommand,
+      evalHere,
       openText,
     );
     if (r != null) return r;

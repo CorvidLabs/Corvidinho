@@ -38,9 +38,14 @@ values for existing inputs are unchanged.
   (`Lexed.subs`) and `analyzeLexed` walks it, so each character is tokenized
   once per reading instead of once per nesting level (a 22 KB nested
   here-doc input went from ~100 s to ~0.2 s during development).
-- Stack exhaustion (tens of thousands of nested `$(`, which also overflowed
-  `main`'s clamp) is caught in `firstDisallowedCd` and refused as
-  `(nested too deeply to check)` instead of throwing out of `shell-exec`.
+- Nesting cap: every `Lexed` records its depth (command substitutions plus
+  `eval` re-parses around it). `tokenize` throws an internal `NestedTooDeep`
+  past `MAX_NESTING` (64), and `firstDisallowedCd` turns that into the refusal
+  `(nested too deeply to check)`. `main`'s clamp recursed once per level and
+  threw `RangeError` out of `shell-exec` at ~20,000 nested `$(` after seconds
+  of work; catching `RangeError` is not enough, since a stack overflow can
+  crash the runtime, so the recursion is bounded instead. It also caps the
+  quadratic cost of long `eval` chains.
 - Open text: `tokenize` reports `open` when it ends inside a quote, after a lone
   trailing `\`, or inside an unclosed `$(…)` / backtick. `Word` now carries its
   `start` offset. For the last command only, `analyzeFragment` refuses a
