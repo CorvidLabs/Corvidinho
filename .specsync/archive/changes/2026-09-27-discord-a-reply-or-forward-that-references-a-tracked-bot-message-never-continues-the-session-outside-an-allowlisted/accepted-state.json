@@ -7,11 +7,11 @@
   "title": "Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1)",
   "description": "Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "dc65cf70d4a46d59c35f80acd91822df3eddf3f1",
   "created_at": 1790469522,
-  "updated_at": 1790472843,
+  "updated_at": 1790472970,
   "affected_specs": [
     "discord"
   ],
