@@ -35,6 +35,28 @@ code-tier / dangerous / ADMIN-only catalog, abort and timeout kill the tree;
 an empty PATH registers nothing and `plugins list` (CLI spawn) exits 0 naming
 each missing runner; a deleted binary returns exit 127. Real `node`, `python3`
 and `cargo` smoke tests are skipped where the toolchain is not installed.
+
+## Fledge core builtins (REQ-plugins-461, PLUGIN-1)
+
+`tests/fledge.core.test.ts` — a fake `fledge` /bin/sh script in a mkdtemp PATH
+dir records argv, cwd and env: `loadBuiltins` registers `fledge-lanes-list` /
+`fledge-lanes-validate` (not dangerous, minTier 0) and `fledge-lanes-run` /
+`fledge-run` (dangerous, minTier 2); tool-tier / code-tier / dangerous /
+non-ADMIN catalogs; a Fledge plugin command named `run` or `lanes-list` is
+skipped and the builtin keeps the name; lanes list / validate argv and typed
+data (control chars cleaned, fledge's path not passed on), `--strict`,
+invalid lanes ok=false, args / a path refused before spawning; SAFE-1 deny for
+the runs without an allowlist entry and fledge not started, allowlisted
+`lanes run verify` in the project root with the scrubbed env; `run <task> --
+<args>` verbatim, no `--` without args; option-like or non-plain lane / task
+names refused before spawning; exit code, secret scrub, timeout 124 and abort
+130; fledge only on an absolute PATH entry, else exit 127. Real-fledge tests
+(a temp `fledge.toml`, and `corvidinho plugins run fledge-lanes-list` in this
+repo) are skipped where fledge is not installed (CI).
+`tests/fledge.plugins.test.ts` "default catalog (no includeDangerous) never
+discovers or offers Fledge commands" now expects the two read-only core
+builtins and no Fledge plugin command (REQ-agent-112).
+
 ## files-read image mode (REQ-plugins-427, DISCORD-9)
 
 `tests/files.plugins.test.ts` ("files-read image mode") — real 1x1 PNG in a
