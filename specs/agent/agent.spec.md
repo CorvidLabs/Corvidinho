@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 25
+version: 26
 status: draft
 files:
   - src/agent/types.ts
@@ -64,6 +64,11 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
+`LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
+completions request (headers and body); `createTaskExecute` takes
+`llmTimeoutMs?: number` to override it. No env var.
+
 Daily spend cap (REQ-agent-098, issue #98, SAFE-8 as amended / AUTONOMOUS-8):
 `src/agent/spend.ts` exports `SPEND_CAP_ENV`
 (`CORVIDINHO_DAILY_SPEND_CAP_USD`), `SPEND_WINDOW_MS` (rolling 24 h),
@@ -97,6 +102,7 @@ back under 80%, leaving the warning pending) / `releaseSpendWarnings` and
 `release()`, and `claimCapPing()` → `SpendCapPingClaim` with `release()`, or
 null when the episode already pinged), the delivery side the Discord bridge
 uses.
+
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
 `loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
@@ -231,6 +237,13 @@ pick a module the request never names.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
+An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
+the default verify runner runs fledge in its own process group and an abort
+kills the lane's whole tree (then waits at most 250 ms for its output
+pipes); an abort while verify runs is a cancel (no
+`VerifyResult`, no retry, no `stuck` ask); each LLM request is bounded by a
+timeout, and a caller abort is never reported as a timeout.
+
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
 is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
@@ -273,6 +286,9 @@ model.
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
+| AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
+| Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
+| LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
@@ -328,3 +344,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened: Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened |
 | 2026-09-26 | safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend: SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask |
 | 2026-09-27 | agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a: Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary |
+| 2026-09-26 | task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out: Task run stops on SIGINT/SIGTERM with a cancelled result and a stopped verify lane, and a stalled LLM request times out (agent-loop-4) |
+| 2026-09-27 | task-run-leaves-a-sigint-it-started-with-ignored-alone-and-an-interrupted-verify-lane-stops-waiting-on-a-pipe-an: Task run leaves a SIGINT it started with ignored alone, and an interrupted verify lane stops waiting on a pipe an escaped lane process holds (agent-loop-4 follow-up) |
