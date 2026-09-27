@@ -21,8 +21,13 @@ import {
   type RouteAction,
 } from "./types.ts";
 
-function stripMentions(content: string): string {
-  return content.replace(/<@!?\d+>/g, "").trim();
+/**
+ * Rewrite Discord user mentions to a lookup-friendly form that keeps the
+ * snowflake (IDENTITY-5). Stripping <@id> entirely made "who is <@…>"
+ * unresolvable; prefer "Discord user id <snowflake>".
+ */
+export function stripMentions(content: string): string {
+  return content.replace(/<@!?(\d+)>/g, "Discord user id $1").trim();
 }
 
 export type RouterDeps = {
