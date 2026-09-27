@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "schedule-ticks-re-check-the-creator-against-the-live-discord-user-allowlist-and-the-daemon-ticks-against-the-live",
+  "slug": "schedule-ticks-re-check-the-creator-against-the-live-discord-user-allowlist-and-the-daemon-ticks-against-the-live",
+  "title": "Schedule ticks re-check the creator against the live Discord user allowlist, and the daemon ticks against the live allowlist (DISCORD-SCHEDULE-3)",
+  "description": "Schedule ticks re-check the creator against the live Discord user allowlist, and the daemon ticks against the live allowlist (DISCORD-SCHEDULE-3)",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
+  "created_at": 1790519453,
+  "updated_at": 1790519466,
+  "affected_specs": [
+    "discord",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/scheduler/service.ts",
+    "src/daemon/daemon.ts",
+    "tests/scheduler.actor-gate.test.ts",
+    "tests/daemon.test.ts",
+    "docs/DAEMON.md",
+    "docs/discord.md",
+    "specs/discord/discord.spec.md",
+    "specs/cli/cli.spec.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A schedule whose creator is deny-listed, or missing from a non-empty Discord user/role allowlist and not the configured owner, is refused at tick in the bridge and the daemon: no worktree, no agent run, no post, recorded failed ('creator not allowlisted: ...') and counted toward the 5-failure auto-pause; a creator deny-listed mid-run gets no post; the owner and listed users still run and empty user/role lists stay channel-gated; the daemon re-reads the allowlist before each tick, so a channel removed or a user deny-listed in the file after start is refused on the next tick, and an unloadable file skips the tick with 'tick.allowlist_failed' (fail closed; due schedules stay due); tests/scheduler.actor-gate.test.ts and tests/daemon.test.ts cover this and fail on origin/main"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}

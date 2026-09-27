@@ -4,9 +4,14 @@ A headless process that keeps `/schedule` work ticking on the Linux host
 without Discord and without anyone sitting at a REPL (**CLI-8**,
 **AUTONOMOUS-4**). It runs the same scheduler as the Discord bridge: a 60 s
 poll, at most 2 runs at once, no catch-up, and auto-pause after 5 failures in
-a row. Each run gets its own worktree (SESSION-WORKTREE). A run whose channel
-is not on the allowlist is refused (DISCORD-SCHEDULE-3). Agents it spawns run
-non-interactive, so dangerous tools stay denied unless allowlisted (SAFE-1).
+a row. Each run gets its own worktree (SESSION-WORKTREE). Before each tick
+the daemon re-reads the allowlist (file and env), so `/admin` edits made in the
+bridge apply without a restart; while the file cannot be loaded, ticks are
+skipped (`tick.allowlist_failed`). A run whose channel is not on the allowlist,
+or whose creator would be refused in live chat (deny-listed, or missing from a
+non-empty user/role list and not the configured owner), is refused
+(DISCORD-SCHEDULE-3). Agents it spawns run non-interactive, so dangerous tools
+stay denied unless allowlisted (SAFE-1).
 
 ```bash
 cd /path/to/Corvidinho          # default project root for relative schedule projects
@@ -103,6 +108,7 @@ scrubbed for secrets (SAFE-6).
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first. |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
+| `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (nothing ran; due schedules stay due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |
 | `daemon.stopping` / `daemon.abandoned` / `daemon.stopped` | Shutdown steps |
 

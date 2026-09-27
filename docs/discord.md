@@ -217,6 +217,7 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 | Branch | `talk/{sessionPrefix}-{digest}` (16-char id prefix + 16 hex of sha256 of the full id); schedule runs use `talk/schedule_{scheduleId}_{runId}` |
 | End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
 | Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
+| Schedule tick gates | Before the worktree and again before the post, the channel must be allowlisted and the schedule creator must pass the same actor gate as live chat (deny list wins; a non-empty user/role list must list them unless they are the owner). A refused run runs nothing, posts nothing, is recorded failed (`creator not allowlisted` / `channel not allowlisted`) and counts toward the 5-failure auto-pause (DISCORD-SCHEDULE-3) |
 | Schedule run at bridge stop / restart | Stop records a run still going as failed (`interrupted: bridge shutdown`), kills its agent and parks its worktree within ~3 s. Start fails runs a dead process left "running" (`interrupted: process restarted`) and parks leftover `talk-schedule_*` worktrees of runs its data dir recorded as ended; runs a live `corvidinho daemon` on the same data dir owns, and worktrees of runs another data dir owns, are left alone (REQ-discord-346) |
 
 Ops: restart the Discord bridge after every update so presence and spawn
