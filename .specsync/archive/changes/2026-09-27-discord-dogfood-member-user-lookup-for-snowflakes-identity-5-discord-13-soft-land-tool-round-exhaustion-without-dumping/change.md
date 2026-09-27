@@ -1,6 +1,6 @@
 ---
 id: discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping
-state: verifying
+state: archived
 type: feature
 base_commit: 0214ea613515b4b3af079459b42d5a47c036450e
 ---

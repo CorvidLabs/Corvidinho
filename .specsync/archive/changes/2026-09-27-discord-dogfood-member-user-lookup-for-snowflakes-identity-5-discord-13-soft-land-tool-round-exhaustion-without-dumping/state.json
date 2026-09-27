@@ -7,11 +7,11 @@
   "title": "Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.27",
   "description": "Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.27",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "0214ea613515b4b3af079459b42d5a47c036450e",
   "created_at": 1790470921,
-  "updated_at": 1790471245,
+  "updated_at": 1790471320,
   "affected_specs": [
     "discord",
     "agent",
