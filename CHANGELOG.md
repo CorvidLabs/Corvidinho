@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.27
+
+### Light agent.3md adopt (docs + dep + smoke)
+
+- **Guidance-only `agent.3md`** at the repo root (Magpie/let convention): identity plane + playbooks for HI-first, Discord ask UX, SpecSync SDD, no-secrets, and SAFE plugins — **no** `tool=` bindings that duplicate the plugin registry.
+- **Dependency** `@corvidlabs/agent3md` ^1.0.0; bun smoke (`tests/agent3md.smoke.test.ts`) runs `validateAgent` + `Agent.route` / `Agent.get` on the shipped file.
+- **Not** AGENT-13 runtime: does not replace hi/, SpecSync, MEMORY, sessions, or SAFE plugins; progressive disclosure is **not** wired into the agent loop yet (STATUS still waits on AGENT-13 HI).
+- HI Notes in `hi/agent.md`; SpecSync REQ-agent-260.
+
+### Ops
+
+- Package version **0.0.27** — docs/dep/smoke only; Discord bridge restart **not** required for presence (no runtime loop change). Optional: pull for the new `agent.3md` catalog on disk.
+
 ## 0.0.26
 
 ### Daily spend cap — warn at 80%, ask at 100% (SAFE-8 amended, AUTONOMOUS-8)

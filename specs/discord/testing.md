@@ -90,3 +90,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `tests/discord.ask-ephemeral.test.ts`, `tests/discord.thin-ack.test.ts`,
   `tests/discord.inflight-replies.test.ts` — collapsed answers that mention
   someone now expect the one ping post (was: no fresh post at all).
+## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
+
+- `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
+  runs that stop to ask keep a free-text pending ask (options dropped; never a
+  spend-cap stop) and `/work` records the task `blocked`; the collapsed slash
+  answer maps to its session, so a reply `ok` restates without running the
+  agent, `cancel` clears with the short ack, and a substantive reply resumes
+  the same session with the question as context; a stuck `/work` ask pings
+  the owner once (the notice post) and a thin reply restates to the owner
+  only; another user's reply neither runs the agent nor touches the ask; a
+  finished run keeps no pending ask; without `editMessage` an @mention `ok`
+  still restates (no live Discord).

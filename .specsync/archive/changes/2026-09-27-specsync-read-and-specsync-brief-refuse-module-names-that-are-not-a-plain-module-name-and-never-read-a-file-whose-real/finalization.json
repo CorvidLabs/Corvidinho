@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real",
+  "implementation_commit": "cf3aead0b9a7d2b513d753d147430a4e1242c5e8",
+  "implementation_tree": "f48662a54869b3a2c3982cf4a3566de27015b5a6",
+  "contract_digest": "82325661bd8dadc5181f204750b9e980e6bff2b8975640704faee479d33d5058",
+  "workspace_digest": "b968bf030b86944c94f4e4db633823c0268f7d07fe5fc36925654cddb1c3a117",
+  "closing_digest": "9d60b00c2cfbc523415423791ede8266418528f2c58522a077a9ef44936dccf6",
+  "review_digest": "ef8ddf8c8b6bc2819ccea78d7d0e9c4c5d7a96b68e8ee08c8091c511accfe1da",
+  "finalization_digest": "fcaa793b9ef30c0178255aaf82d30576c1d94458db55003ae32f4b1e8057030f",
+  "timestamp": 1790470976
+}
