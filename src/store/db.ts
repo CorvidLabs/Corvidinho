@@ -180,7 +180,25 @@ const SCHEMA_V7_COLUMNS = ["ask_ping_key"] as const;
  */
 const SCHEMA_V8_COLUMNS = ["pending_ask"] as const;
 
-export const SCHEMA_VERSION = 8;
+/**
+ * v9 — in-flight Discord replies (DISCORD-3 / AGENT-3, REQ-discord-311): one
+ * row while the bridge works on a reply, deleted when it finishes, so the
+ * next bridge start can mark a reply a dead process left frozen as
+ * interrupted. Ids and a timestamp only, never message text.
+ */
+const SCHEMA_V9_SQL = `
+CREATE TABLE IF NOT EXISTS discord_inflight_replies (
+  id TEXT PRIMARY KEY NOT NULL,
+  session_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  parent_channel_id TEXT,
+  progress_message_id TEXT,
+  request_message_id TEXT NOT NULL,
+  started_at INTEGER NOT NULL
+);
+`;
+
+export const SCHEMA_VERSION = 9;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -260,6 +278,11 @@ export function migrateCorvidinhoDb(db: Database): void {
     }
     db.run("UPDATE schema_meta SET value = '8' WHERE key = 'version'");
     version = 8;
+  }
+  if (version < 9) {
+    db.exec(SCHEMA_V9_SQL);
+    db.run("UPDATE schema_meta SET value = '9' WHERE key = 'version'");
+    version = 9;
   }
 }
 

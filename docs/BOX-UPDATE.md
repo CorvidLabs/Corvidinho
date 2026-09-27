@@ -27,33 +27,40 @@ CORVIDINHO_UPDATE_DRY_RUN=1 ./scripts/corvidinho-update.sh
 6. Restart the bridge (pidfile mode unless a unit or command is configured; see below)
 7. On failure after checkout: force-checkout previous SHA + reinstall; **exit 1** with log lines only (no Discord notify)
 
-`doctor` runs in the updater's own environment, **before** `CORVIDINHO_ENV_FILE` is sourced
-(that file is only sourced to start the bridge in pidfile mode). Every doctor check must pass
-there — `discord`, `github`, `github-watch`, `fledge`, `specsync`, `plugins` — or the update
-rolls back. Run the updater from a shell that has the box env loaded, or set
-`CORVIDINHO_SKIP_DOCTOR=1` knowingly.
+The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `doctor` — so
+`doctor`, every restart path (pidfile, systemd, command) and a rollback restart all see the
+same env. A systemd unit's bridge still takes its env from the unit's own `EnvironmentFile=`,
+not from the updater (`systemctl` does not pass the caller's env on), so keep the two in step.
+Every doctor check must pass there — `discord`, `github`, `github-watch`, `fledge`,
+`specsync`, `plugins` — or the update rolls back. If the env file is missing, the updater's own
+environment is used; set `CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
 
 ## Restart configuration
 
 The script picks one restart mode:
 
-1. **pidfile** when `CORVIDINHO_USE_PIDFILE=1`, when the pidfile already exists, or when
-   neither `CORVIDINHO_BRIDGE_UNIT` nor `CORVIDINHO_BRIDGE_CMD` is set. It stops the pid
-   (SIGTERM, then SIGKILL), sources `CORVIDINHO_ENV_FILE`, starts
+1. **pidfile** when `CORVIDINHO_USE_PIDFILE=1`; otherwise, if `CORVIDINHO_BRIDGE_UNIT` is not
+   set, when the pidfile already exists or `CORVIDINHO_BRIDGE_CMD` is not set. It stops the pid
+   (SIGTERM, then SIGKILL), starts
    `bun <CORVIDINHO_BIN or src/cli.ts> discord bridge` with `nohup`, and waits for
    `[discord] logged in` or `protocol version N OK` in the log.
 2. **systemd** — `systemctl restart $CORVIDINHO_BRIDGE_UNIT`, then checks the unit is active.
-3. **command** — runs `CORVIDINHO_BRIDGE_CMD`.
+   A set unit wins over a leftover pidfile (no second `nohup` bridge next to the unit's): a
+   stale pidfile is removed; one naming a live pid is left alone with a log line. If that pid
+   is a second bridge an earlier update started next to the unit's, stop it by hand
+   (`kill <pid>`) and remove the pidfile.
+3. **command** — runs `CORVIDINHO_BRIDGE_CMD` in `bash -lc`, passing the command text through
+   the environment (not the shell's argv), so a `pkill -f` pattern in it cannot match that shell.
 
 | Env | Purpose |
 |-----|---------|
 | `CORVIDINHO_BRIDGE_UNIT` | systemd unit to `systemctl restart` (e.g. `corvidinho-bridge`) |
-| `CORVIDINHO_BRIDGE_CMD` | shell command used when no unit (e.g. `pkill -f 'discord bridge' \|\| true; nohup bun src/cli.ts discord bridge &`) |
+| `CORVIDINHO_BRIDGE_CMD` | shell command used when no unit (e.g. `pkill -f '^[^ ]*bun [^ ]*cli\.ts discord bridge' \|\| true; nohup bun src/cli.ts discord bridge &` — the anchored pattern matches only the bridge process, never a shell whose command line holds this text) |
 | `CORVIDINHO_USE_PIDFILE=1` | force pidfile mode |
 | `CORVIDINHO_PIDFILE` | pidfile path (default `/tmp/corvidinho-discord-bridge.pid`) |
 | `CORVIDINHO_BRIDGE_LOG` | bridge log in pidfile mode (default `/tmp/corvidinho-discord-bridge.log`) |
 | `CORVIDINHO_READY_TIMEOUT` | seconds to wait for the ready line (default 60) |
-| `CORVIDINHO_ENV_FILE` | secrets env sourced before a pidfile start (default `~/.config/corvidinho/env`) |
+| `CORVIDINHO_ENV_FILE` | secrets env sourced once before doctor, for doctor, restart and rollback (default `~/.config/corvidinho/env`) |
 | `CORVIDINHO_ROOT` | repo root (default: the checkout holding the script) |
 | `CORVIDINHO_SKIP_RESTART=1` | update code only |
 | `CORVIDINHO_SKIP_DOCTOR=1` | skip doctor (not recommended) |
@@ -91,7 +98,7 @@ cd /path/to/Corvidinho   # or Corvidinho-run checkout
 export DISCORD_GUILD_ID=...   # do not echo the token
 bun src/cli.ts discord register-commands
 # or restart the bridge so ClientReady re-registers:
-# pkill -f 'discord bridge' || true; nohup bun src/cli.ts discord bridge &
+# pkill -f '^[^ ]*bun [^ ]*cli\.ts discord bridge' || true; nohup bun src/cli.ts discord bridge &
 ```
 
 3. Confirm with Discord API (source of truth): guild commands = the current slash set, nine

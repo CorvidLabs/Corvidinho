@@ -23,6 +23,7 @@ files:
   - src/allowlist/github.ts
   - src/allowlist/discord.ts
   - src/allowlist/index.ts
+  - tests/allowlist.toml-multiline.test.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/ciStatus.ts
@@ -55,6 +56,7 @@ files:
   - plugins/shell/clamp.ts
   - tests/shell.plugins.test.ts
   - tests/shell.clamp-bypass.test.ts
+  - tests/shell.clamp-failclosed.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -227,12 +229,20 @@ bounded transcript; ok only when the chair decided.
 
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
-(SAFE-3) with exit 2. The clamp looks past prefix words (`{ } ! if then else
-elif do while until time builtin command eval`), `NAME=value` assignments,
-quoting and `cd` options (`-P -L -e -@ -n --`); `cd -`, targets the shell would
-expand (`$`, backtick, glob, brace) and CDPATH-searched targets when the
-command sets `CDPATH` refuse. The child shell does not inherit `CDPATH` or
-`OLDPWD`. SAFE-1 non-interactive deny applies unless allowlisted.
+(SAFE-3) with exit 2, and the clamp fails closed on anything it cannot resolve
+to an in-root target. It joins backslash-newline continuations and tokenizes
+with quote awareness (quoted separators are not separators; quotes and
+backslashes are removed before checking), looks past prefix words (`{ } ! if
+then else elif do while until time builtin command`, `function NAME`) and
+`NAME=value` / `NAME+=value` assignments, drops redirections (with their
+targets and any `fd` prefix such as `2>&1`, never splitting on a redirection
+`&`) and skips `cd` options (`-P -L -e -@ -n --`). It refuses `cd -`, a target
+the shell would expand (`$`, backtick, glob, brace), a command word that would
+expand, an `eval` with an expanded argument, escaping `cd` inside a command
+substitution (`$(…)` / backticks), and `DIRSTACK` writes. CDPATH is not refused
+lexically: the child shell runs `CDPATH=; readonly CDPATH` and does not inherit
+`CDPATH` or `OLDPWD`, so a `CDPATH` set (even dynamically) in the command cannot
+redirect a relative `cd`. SAFE-1 non-interactive deny applies unless allowlisted.
 
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
@@ -268,6 +278,18 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **Given** a project with subdirectory `sub`
 - **When** `shell-exec` runs `cd sub && …` allowlisted
 - **Then** the command runs with initial cwd at project root and succeeds if the subcommand does
+
+### Scenario: SAFE-3 clamp fails closed on obfuscated cd
+
+- **Given** builtins loaded and `shell-exec` allowlisted
+- **When** the agent runs a `cd` outside the root hidden behind a redirection (`cd 2>&1 /etc`), quoting (`X=';' cd /etc`), a `\`-newline continuation, an expanded command word (`$(echo cd) /etc`) or a command substitution (`echo $(cd /etc && cat x)`)
+- **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn
+
+### Scenario: SAFE-3 CDPATH cannot redirect a relative cd
+
+- **Given** `shell-exec` allowlisted
+- **When** the command sets `CDPATH` (literally or dynamically) to an outside dir and then runs `cd sub`
+- **Then** the child shell's `readonly CDPATH` and dropped `CDPATH`/`OLDPWD` env keep `cd sub` under the root; no outside path is reached
 
 ### Scenario: web-fetch refuses cloud metadata
 
@@ -323,7 +345,8 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
-| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, expansions, CDPATH) | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
@@ -392,7 +415,9 @@ and current rows for plugins host evolution.
 | 2026-09-26 | plugin-argv-keeps-tokens-that-start-with-files-write-content-files-edit-strings-shell-exec-command-flags-search-grep: Plugin argv keeps tokens that start with -- (files-write content, files-edit strings, shell-exec command flags, search-grep patterns) and files-write refuses to empty a non-empty file without --allow-empty |
 | 2026-09-26 | github-plugin-repo-gate-reads-the-allowlist-file-plus-env-overlays-so-file-deny-lists-apply-and-file-only-allow-lists: GitHub plugin repo gate reads the allowlist file plus env overlays so file deny lists apply and file-only allow lists work (GITHUB-6, ALLOW-4) |
 | 2026-09-26 | files-edit-single-occurrence-replace-writes-new-literally-so-dollar-replacement-patterns-cannot-corrupt-the-file: Files-edit single-occurrence replace writes --new literally so dollar replacement patterns cannot corrupt the file (plugins-exec-5) |
-| 2026-09-26 | test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a: Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file contributes nothing at the GitHub plugin gate (REQ-plugins-253) |
+| 2026-09-26 | test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a: Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file makes the GitHub plugin gate refuse (REQ-plugins-253) |
 | 2026-09-26 | shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops: Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root |
 | 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
 
+| 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
+| 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |

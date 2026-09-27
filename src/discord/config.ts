@@ -106,12 +106,22 @@ export async function loadBridgeConfig(
   const projectRoot = opts.projectRoot ?? process.cwd();
   const requireToken = opts.requireToken !== false;
 
-  const allowlist = await loadAllowlist({
-    env,
-    home: opts.home,
-    filePath: opts.filePath,
-    preloaded: opts.preloaded,
-  });
+  let allowlist: AllowlistConfig;
+  try {
+    allowlist = await loadAllowlist({
+      env,
+      home: opts.home,
+      filePath: opts.filePath,
+      preloaded: opts.preloaded,
+    });
+  } catch (err) {
+    // A malformed allowlist file refuses start (fail closed), like WATCH.
+    return {
+      ok: false,
+      code: "allowlist",
+      message: `allowlist load failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 
   const channelIds = mergeChannelIds(allowlist, env);
   if (channelIds.length === 0) {

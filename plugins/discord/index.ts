@@ -4,7 +4,7 @@
  */
 
 import { checkChannel } from "../../src/allowlist/discord.ts";
-import { loadAllowlist } from "../../src/allowlist/load.ts";
+import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
 import {
@@ -66,8 +66,12 @@ const discordPostMessage: PluginCommand = {
       };
     }
 
-    const allow = await loadAllowlist({ env: process.env });
-    const gate = checkChannel(channelId, allow);
+    // A malformed / unreadable allowlist file refuses (fail closed), never env-only.
+    const loaded = await tryLoadAllowlist({ env: process.env });
+    if (!loaded.ok) {
+      return { ok: false, error: `not authorized: ${loaded.error}`, exitCode: 3 };
+    }
+    const gate = checkChannel(channelId, loaded.config);
     if (!gate.ok) {
       return {
         ok: false,
