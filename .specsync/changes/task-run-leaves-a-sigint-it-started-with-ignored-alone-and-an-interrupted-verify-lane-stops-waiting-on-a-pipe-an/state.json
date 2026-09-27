@@ -7,10 +7,11 @@
   "title": "Task run leaves a SIGINT it started with ignored alone, and an interrupted verify lane stops waiting on a pipe an escaped lane process holds (agent-loop-4 follow-up)",
   "description": "task run leaves a SIGINT it started with ignored alone, and an interrupted verify lane stops waiting on a pipe an escaped lane process holds (agent-loop-4 follow-up)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "4dccb453fe3170cb77327622916a232d2294d6dc",
   "created_at": 1790468786,
-  "updated_at": 1790468972,
+  "updated_at": 1790468980,
   "affected_specs": [
     "cli",
     "agent"

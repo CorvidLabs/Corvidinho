@@ -1,6 +1,6 @@
 ---
 id: task-run-leaves-a-sigint-it-started-with-ignored-alone-and-an-interrupted-verify-lane-stops-waiting-on-a-pipe-an
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 4dccb453fe3170cb77327622916a232d2294d6dc
 ---
