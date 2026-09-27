@@ -52,6 +52,7 @@ files:
   - src/discord/list-scope.ts
   - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
+  - tests/discord.slash-reply-continuity.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
@@ -137,7 +138,7 @@ an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 `ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
 Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
-(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
+(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
@@ -464,3 +465,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners: Scope /session list to the acting member and hide host paths from non-owners |
 | 2026-09-27 | discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted: Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1) |
 | 2026-09-27 | schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write: Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree |
+| 2026-09-27 | replying-to-a-session-start-or-work-answer-continues-that-session-discord-2: Replying to a /session start or /work answer continues that session (DISCORD-2) |
