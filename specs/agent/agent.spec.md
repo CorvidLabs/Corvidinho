@@ -316,6 +316,15 @@ pick a module the request never names.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
+In a non-ADMIN role session the tool loop answers a not-offered registered
+mutating / dangerous plugin with the role refusal `runPlugin` gives (`Denied:
+plugin "<name>" is not allowed for your role (ROLES-CHAT-3).`, exit 2) instead
+of the catalog refusal, and never runs it; an unregistered name keeps the
+catalog refusal. Once any call in a task run is refused for the role, every
+summary of that run ends with `(not allowed for your role)` once, exported as
+`ROLE_REFUSED_SUMMARY_NOTE` / `withRoleRefusalNote` from `src/agent/execute.ts`
+(REQ-agent-333). Event names and progress lines stay as they are.
+
 An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
 the default verify runner runs fledge in its own process group and an abort
 kills the lane's whole tree (then waits at most 250 ms for its output
@@ -357,6 +366,13 @@ model.
 - **Given** a project whose `fledge.toml` has no `[corvidinho.autonomous]`
 - **When** a code-tier task run builds its tool catalog
 - **Then** `delegate` is not offered, and a model call naming it is refused
+
+### Scenario: community user's model invents a file write
+
+- **Given** a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN=0`) at code tier
+- **When** the model calls `files-write`, which its catalog does not offer
+- **Then** the call gets the `not allowed for your role` refusal, nothing is
+  written, and the run summary ends with `(not allowed for your role)`
 
 ### Scenario: lead delegates a subtask
 
@@ -410,6 +426,7 @@ model.
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
+| Non-ADMIN role session names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once (ROLES-CHAT-3, REQ-agent-333) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
 | Council: fewer than 2 voices propose | No critique or decide; ok=false with the transcript |

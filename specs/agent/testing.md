@@ -69,3 +69,15 @@ messages) and completes, also against a provider that rejects that role
 order; 404 / 413 / 415 / 422 fall back too, 401 / 429 / 500 do not; a refusal
 drops earlier rounds' images too; a later image after a refusal gets the note
 with no second retry; 400 on the retry, or with no image, stays an error.
+
+## Role refusal for invented calls (REQ-agent-333)
+
+`tests/roles.chat.gates.test.ts` "ROLES-CHAT-3 invented mutating calls in the
+tool loop": with a fake provider and no network, a non-ADMIN role session's
+invented call to every registered mutating plugin gets exactly `runPlugin`'s
+role refusal, runs nothing, keeps the live progress lines free of the refusal
+and the names, and the summary ends with `(not allowed for your role)` (kept on
+a later attempt); an offered `files-write` refused by `runPlugin` after the
+owner is muted mid-run also adds the note; an unregistered name, ADMIN and the
+local CLI keep the "not offered" refusal with no note; a summary that already
+says it gets no second note.

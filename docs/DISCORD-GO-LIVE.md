@@ -266,9 +266,12 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `memory-store`/`-recall` (scoped to the acting user), `discord-user-lookup` (members of
   the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
-- **Run time:** a mutating call the model makes anyway is refused with
-  `not allowed for your role` (ROLES-CHAT-3). ADMIN is re-checked on every call against
-  the live owner config; the prompt never grants it.
+- **Run time:** a mutating call the model makes anyway, including one to a tool it was never
+  offered, is refused with `not allowed for your role` (ROLES-CHAT-3) and nothing runs. The
+  refusal is not posted on its own; the reply ends with a short `(not allowed for your role)`
+  line instead. A call to a name that is not a plugin at all keeps the plain "not offered"
+  refusal and adds no line. ADMIN is re-checked on every call against the live owner
+  config; the prompt never grants it.
 - **Public Q&A (ROLES-CHAT-8):** GitHub reads work for any **public** repo. Private repos, and
   repos whose visibility cannot be confirmed, are refused; deny lists still win. Secret-looking
   paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
