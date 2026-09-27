@@ -7,10 +7,11 @@
   "title": "Every package version gets a vX.Y.Z tag and GitHub Release from CI: release.yml tags each version's bump commit on pushes to main (catching up untagged versions), releases hand-pushed tags, and backfills on dispatch",
   "description": "every package version gets a vX.Y.Z tag and GitHub Release from CI: release.yml tags each version's bump commit on pushes to main (catching up untagged versions), releases hand-pushed tags, and backfills on dispatch",
   "kind": "operations",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "9f3fbb1a2e188c50a8f2d957a2c32aac04945f6e",
   "created_at": 1790480852,
-  "updated_at": 1790480875,
+  "updated_at": 1790480900,
   "affected_specs": [],
   "affected_paths": [
     ".github/workflows/release.yml",

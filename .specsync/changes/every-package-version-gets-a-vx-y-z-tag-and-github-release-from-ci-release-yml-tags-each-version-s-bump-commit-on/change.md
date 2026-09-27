@@ -1,6 +1,6 @@
 ---
 id: every-package-version-gets-a-vx-y-z-tag-and-github-release-from-ci-release-yml-tags-each-version-s-bump-commit-on
-state: approved
+state: implementing
 type: operations
 base_commit: 9f3fbb1a2e188c50a8f2d957a2c32aac04945f6e
 ---
