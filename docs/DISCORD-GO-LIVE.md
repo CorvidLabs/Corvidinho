@@ -58,10 +58,13 @@ bun src/cli.ts discord bridge
 
 When doctor/bridge are green **except** missing real token, status is **READY-FOR-SECRETS** — then ping CoS/Leif via the secure room for the token + confirm channel IDs.
 
-`doctor`'s Discord check reads the environment only (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`
-plus `DISCORD_CHANNEL_IDS` or `CORVIDINHO_DISCORD_ALLOW_CHANNELS`). A box that lists its
-channels only in the allowlist file still starts the bridge, but `doctor` reports the
-channel allowlist as missing.
+`doctor`'s Discord check loads the channel allowlist the way the bridge does: the allowlist
+file `[discord].channels` plus `CORVIDINHO_DISCORD_ALLOW_CHANNELS` and `DISCORD_CHANNEL_IDS`.
+A channel that is also deny-listed does not count (deny wins). The line names where the
+channels came from (`file`, `env` or `file + env`) and how many, never the ids. The
+`github-watch` check does the same for `[github]` repos / orgs and
+`CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS`. `doctor` also warns when no LLM key is set
+(`task run` uses the demo stub) and checks the data dir is writable (`data-dir`).
 
 ## D. Run
 

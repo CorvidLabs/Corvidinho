@@ -33,6 +33,14 @@ import {
   startWatchPoller,
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
+import {
+  dataDirDoctorCheck,
+  discordDoctorCheck,
+  githubWatchDoctorCheck,
+  llmDoctorCheck,
+  loadDoctorAllowlist,
+  type DoctorCheck,
+} from "./doctor.ts";
 import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
@@ -50,14 +58,6 @@ import { VERSION } from "./version.ts";
 
 export { VERSION };
 
-type DoctorCheck = {
-  name: string;
-  ok: boolean;
-  detail: string;
-  /** Printed label override (informational checks never fail doctor). */
-  mark?: string;
-};
-
 function printHelp(): void {
   console.log(`corvidinho ${VERSION}
 
@@ -69,7 +69,7 @@ Usage:
   corvidinho version                Print version
   corvidinho attribution             Print the canonical attribution footer
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
-  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
+  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins / LLM key / data dir
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
   corvidinho discord register-commands
                                     Full-overwrite slash set (guild PUT + clear globals)
@@ -211,19 +211,11 @@ async function doctor(): Promise<number> {
   loadBuiltins();
   const checks: DoctorCheck[] = [];
 
-  const discordTokenSet = envPresent("DISCORD_TOKEN") || envPresent("DISCORD_BOT_TOKEN");
-  const discordChannels =
-    envPresent("DISCORD_CHANNEL_IDS") ||
-    envPresent("CORVIDINHO_DISCORD_ALLOW_CHANNELS");
-  checks.push({
-    name: "discord",
-    ok: discordTokenSet && discordChannels,
-    detail: discordTokenSet
-      ? discordChannels
-        ? "token + channel allowlist env present (values not shown)"
-        : "token present but channel allowlist empty — set DISCORD_CHANNEL_IDS or CORVIDINHO_DISCORD_ALLOW_CHANNELS"
-      : "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN (go-live: token + non-empty Discord allowlists)",
-  });
+  // CLI-4 / ALLOW-3/4 — channel / repo allowlists through the bridge / WATCH
+  // loader (allowlist file + env overlays, deny wins); source named, values not.
+  const allow = await loadDoctorAllowlist(process.env);
+  const discordCheck = discordDoctorCheck(allow, process.env);
+  checks.push(discordCheck);
 
   const tokenOk = envPresent("GITHUB_TOKEN") || envPresent("GH_TOKEN");
   checks.push({
@@ -234,21 +226,8 @@ async function doctor(): Promise<number> {
       : "missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins",
   });
 
-  const watchUser = envPresent("CORVIDINHO_WATCH_USERNAME") || envPresent("GITHUB_WATCH_USERNAME");
-  const watchRepos =
-    envPresent("CORVIDINHO_GITHUB_ALLOW_REPOS") ||
-    envPresent("CORVIDINHO_GITHUB_ALLOW_ORGS");
-  checks.push({
-    name: "github-watch",
-    ok: tokenOk && watchUser && watchRepos,
-    detail: !tokenOk
-      ? "WATCH needs GITHUB_TOKEN/GH_TOKEN (poll-first; see docs/WATCH.md)"
-      : !watchUser
-        ? "set CORVIDINHO_WATCH_USERNAME (login to listen for)"
-        : !watchRepos
-          ? "set CORVIDINHO_GITHUB_ALLOW_REPOS / ORGS (empty = deny-all)"
-          : "token + username + repo allow env present (values not shown)",
-  });
+  const watchCheck = githubWatchDoctorCheck(allow, process.env);
+  checks.push(watchCheck);
 
   const fledgePath = which("fledge");
   checks.push({
@@ -319,6 +298,11 @@ async function doctor(): Promise<number> {
     });
   }
 
+  // CLI-4 — task run without a key uses the demo stub (warn, never fails doctor);
+  // the bridge, watch, daemon and memory tools need a writable data dir.
+  checks.push(llmDoctorCheck(process.env));
+  checks.push(dataDirDoctorCheck(process.env));
+
   // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
   checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
 
@@ -337,11 +321,11 @@ async function doctor(): Promise<number> {
   console.log(
     "One or more checks failed. Install/configure the missing pieces; secrets stay out of the repo.",
   );
-  if (!discordTokenSet || !discordChannels) {
+  if (!discordCheck.ok) {
     console.log("");
     console.log(goLiveChecklist());
   }
-  if (!tokenOk || !watchUser || !watchRepos) {
+  if (!watchCheck.ok) {
     console.log("");
     console.log(watchGoLiveChecklist());
   }

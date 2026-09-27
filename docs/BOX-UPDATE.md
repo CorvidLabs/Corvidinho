@@ -32,7 +32,9 @@ The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `
 same env. A systemd unit's bridge still takes its env from the unit's own `EnvironmentFile=`,
 not from the updater (`systemctl` does not pass the caller's env on), so keep the two in step.
 Every doctor check must pass there — `discord`, `github`, `github-watch`, `fledge`,
-`specsync`, `plugins` — or the update rolls back. If the env file is missing, the updater's own
+`specsync`, `plugins`, `data-dir` — or the update rolls back. `discord` and `github-watch`
+read the allowlist file and env like the bridge and watch; `[warn]` / `[info]` lines (for
+example `llm` without a key) do not fail doctor. If the env file is missing, the updater's own
 environment is used; set `CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
 
 ## Restart configuration

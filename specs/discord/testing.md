@@ -102,5 +102,16 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   only; another user's reply neither runs the agent nor touches the ask; a
   finished run keeps no pending ask; without `editMessage` an @mention `ok`
   still restates (no live Discord).
+
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
+
+## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
+
+- `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
+  fake gateway: after `/session start` (or `/work`) A then B, the owner's reply
+  to A's answer resumes session A with the reply ping on and off; a fallback
+  answer (no collapse, deferred reply id from `editReply`) is tracked too;
+  a member's `/work` A/B works the same, and another user's reply (even the
+  configured owner's) never resumes A; a throwing tracking write still lets
+  the answer collapse and the deferred reply be deleted (no live Discord).
