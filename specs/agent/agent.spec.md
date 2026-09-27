@@ -173,7 +173,8 @@ with `buildVerifyEnv()`.
 The default verify runner spawns fledge with the parent's env minus the
 delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
 `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_ACTING_*`) and the LLM API keys
-(`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`): tests the agent wrote never see
+(`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+`OPENROUTER_API_KEY`): tests the agent wrote never see
 operator secrets (SAFE-6).
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /

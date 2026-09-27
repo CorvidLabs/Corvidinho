@@ -14,3 +14,4 @@ artifact: tasks
 - [x] Full suite with operator vars set leaves the operator dir empty; `task run` with verify leaves it empty.
 - [x] tsc, bun test, SpecSync checks and `fledge lanes run verify --non-interactive`.
 - [x] Review: preload also unsets `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY` (bot-box verify lane was red on GITHUB-6 and spend-cap cases); probe case added; merged origin/main (verify runner keeps main's process-group abort handling).
+- [x] Review: verify runner also drops `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` (the vendor LLM keys `plugins/fledge/spawn.ts` already drops for Fledge plugin children).

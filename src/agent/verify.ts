@@ -18,8 +18,16 @@ export const VERIFY_ARGS = [
   "--non-interactive",
 ] as const;
 
-/** LLM provider keys: a worker needs them, the verify lane does not. */
-const VERIFY_ENV_DROP = new Set(["CORVIDINHO_LLM_API_KEY", "OPENAI_API_KEY"]);
+/**
+ * LLM provider keys: a worker needs them, the verify lane does not. Also the
+ * vendor keys the Fledge plugin child env drops (plugins/fledge/spawn.ts).
+ */
+const VERIFY_ENV_DROP = new Set([
+  "CORVIDINHO_LLM_API_KEY",
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "OPENROUTER_API_KEY",
+]);
 
 /**
  * True when an inherited env key must not reach the verify lane (SAFE-6): the

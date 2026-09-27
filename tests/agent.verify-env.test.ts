@@ -16,6 +16,8 @@ const SECRETS: Record<string, string> = {
   GH_TOKEN: "gho_ghtokensecret",
   OPENAI_API_KEY: "sk-openai-secret",
   CORVIDINHO_LLM_API_KEY: "sk-corvidinho-llm-secret",
+  ANTHROPIC_API_KEY: "sk-ant-anthropic-secret",
+  OPENROUTER_API_KEY: "sk-or-openrouter-secret",
   CORVIDINHO_AUDIT_HMAC_KEY: "audit-hmac-secret",
   CORVIDINHO_ACTING_IS_ADMIN: "1",
   CORVIDINHO_ACTING_CONFIRM_TOKENS: "confirm-token-secret",
