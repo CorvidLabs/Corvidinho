@@ -6,7 +6,8 @@
  * - the Discord bridge's stop() records an in-flight schedule run failed,
  *   kills its agent tree and removes its worktree, like the daemon;
  * - bridge start fails runs a crashed process left "running" and removes
- *   their worktrees, but never touches a run a live process still owns.
+ *   their worktrees, but never touches a run a live process still owns, nor
+ *   a schedule-run worktree whose run another data dir owns.
  * Fixtures only: temp git repos, temp SQLite files, fake `sh` agent bins and
  * child Bun processes; no Discord, no network, no token.
  */
@@ -23,6 +24,7 @@ import { SchedulerService, type ScheduleRunFinished } from "../src/scheduler/ser
 import { readProcStart } from "../src/daemon/lock.ts";
 import { ScheduleStore, type Schedule } from "../src/scheduler/store.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
+import { createWorktree } from "../src/worktree/index.ts";
 
 const SRC = join(import.meta.dir, "..", "src");
 const cleanups: Array<() => void> = [];
@@ -378,6 +380,47 @@ describe("bridge stop and start (REQ-discord-346)", () => {
     expect(scheduleWorktrees(project)).toEqual([alive.cwd]);
     expect(scheduleBranches(project)).toHaveLength(1);
     expect(scheduleBranches(project)[0]).toContain(live.id);
+  });
+
+  test("start never touches a schedule-run worktree whose run another data dir owns", async () => {
+    const root = tempDir("corvidinho-bridge-foreign-");
+    const project = join(root, "proj");
+    initGitRepo(project);
+    useWorktreeBase(join(root, "wts"));
+    // Another data dir (a second bridge or daemon) runs a schedule on this repo.
+    const otherDb = openCorvidinhoDb({ path: join(root, "other.db") });
+    cleanups.push(() => otherDb.close());
+    const s = seedDue(otherDb, "Other data dir");
+    const otherStore = new ScheduleStore({ db: otherDb });
+    const run = otherStore.claimRun(otherStore.get(s.id)!, Date.now());
+    const key = `schedule_${s.id}_${run!.id}`;
+    const wt = await createWorktree({
+      projectWorkingDir: project,
+      branchName: `talk/${key}`,
+      worktreeId: `talk-${key}`,
+    });
+    expect(wt.success).toBe(true);
+    writeFileSync(join(wt.worktreeDir, "wip.txt"), "not committed yet\n");
+
+    // A bridge on its own data dir, started inside that worktree.
+    const db = openCorvidinhoDb({ path: join(root, "corvidinho.db") });
+    cleanups.push(() => db.close());
+    const result = await startBridge({
+      env: bridgeEnv(project),
+      projectRoot: wt.worktreeDir,
+      db,
+      skipProtocolCheck: true,
+      agent: { runChat: async ({ sessionId }) => ({ ok: true, sessionId, summary: "", exitCode: 0 }) },
+      gatewayFactory: async () => createNullGateway(),
+      schedulerPollIntervalMs: 60_000,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    await result.stop();
+
+    expect(existsSync(join(wt.worktreeDir, "wip.txt"))).toBe(true);
+    expect(scheduleWorktrees(project)).toEqual([wt.worktreeDir]);
+    expect(scheduleBranches(project)).toEqual([`talk/${key}`]);
   });
 });
 

@@ -26,6 +26,11 @@ are killed with SIGKILL. No Discord, no network, no token.
   `failed` (`interrupted: process restarted`, `completed_at` set) and removes
   its worktree; the live child's run stays `running` with its worktree and
   branch.
+- **Another data dir's worktree, bridge (review fix).** A second data dir
+  claims a run and creates its worktree with an uncommitted file; a bridge on
+  its own data dir started with that worktree as its project root leaves the
+  worktree, the file and the branch alone. Fails on the first version of
+  this change.
 - **Schema v10.** A claimed run records `<pid>:<proc start>`; the store never
   recovers its own live run; a v9 DB (no `runner` column) with a leftover
   `running` row migrates to v10 and that row is recovered.
@@ -62,7 +67,11 @@ Also updated: `tests/watch.session-store.durable.test.ts` and
 - **Before** (`src/` from `main` bf9a5b2 — and 6e5370d before the rebase — same tests): 9 fail, 0 pass. Each
   fails on its assertion (row still `running`, no event, worktree/branch still
   listed); the schema test fails because `runner` does not exist.
-- **After:** 9 pass. Related suites (`tests/scheduler.*`, `tests/daemon*`,
+- **Review fix:** the two "another data dir's worktree" guards (daemon and
+  bridge) fail on the first version of this change (a57778e: the worktree,
+  its uncommitted file and its branch are removed) and pass on `main`, which
+  has no start-up worktree cleanup at all.
+- **After:** all 11 pass. Related suites (`tests/scheduler.*`, `tests/daemon*`,
   `tests/discord.schedule`, `tests/discord.work-store.recovery`,
   `tests/discord.inflight-replies`, `tests/worktree*`, session-worktree,
   bridge tests) pass: 185 tests across 21 files.
@@ -74,7 +83,7 @@ Also run: `bunx tsc --noEmit`, `bun test`, `specsync check
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-discord-346` | `tests/scheduler.never-stuck.test.ts` | One throwing outcome write is retried and recorded `completed` with one event; two throwing writes log `[scheduler] run failed: could not record run …` and report `ok: false`; bridge `stop()` records the in-flight run `failed` (`interrupted: bridge shutdown`), kills the agent and removes worktree and branch; bridge start after `kill -9` fails the dead runner's run (`interrupted: process restarted`) and removes its worktree while a live runner's run and worktree stay; runner recorded and v9 → v10 migration recovers a runner-less row. |
+| `REQ-discord-346` | `tests/scheduler.never-stuck.test.ts` | One throwing outcome write is retried and recorded `completed` with one event; two throwing writes log `[scheduler] run failed: could not record run …` and report `ok: false`; bridge `stop()` records the in-flight run `failed` (`interrupted: bridge shutdown`), kills the agent and removes worktree and branch; bridge start after `kill -9` fails the dead runner's run (`interrupted: process restarted`) and removes its worktree while a live runner's run and worktree stay; runner recorded and v9 → v10 migration recovers a runner-less row; a bridge start never touches another data dir's schedule-run worktree. |
 | `REQ-discord-346` | `tests/daemon.restart-recovery.test.ts` | Daemon start recovery and the bounded settle after abandon remove worktrees and empty branches and keep a branch with commits. |
 | `REQ-cli-108` | `tests/daemon.restart-recovery.test.ts` | Stop after the grace removes the abandoned run's worktree and empty branch before resolving (branch with commits kept); start after `kill -9` records the run failed, removes its worktree and logs `daemon.recovered`; start removes a leftover worktree of an ended run and leaves other worktrees alone; start never touches another data dir's schedule-run worktree. |
 | `REQ-cli-108` | `tests/daemon.test.ts`, `tests/daemon.cli.test.ts` | Existing lock, tick, grace, forced stop, process-tree kill and CLI SIGTERM behaviour unchanged. |

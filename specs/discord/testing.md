@@ -116,6 +116,8 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and branch; bridge start after a `kill -9` of a child process that was
   running a schedule run fails it (`interrupted: process restarted`) and
   removes its worktree, while a live child's run, worktree and branch stay;
+  a bridge started inside a schedule-run worktree whose run another data dir
+  owns leaves that worktree, its uncommitted file and its branch alone;
   a claimed run records `<pid>:<proc start>` and a v9 DB migrates to v10 with
   its old `running` row recovered. Temp git repos and SQLite files, no live
   Discord.
