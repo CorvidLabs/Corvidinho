@@ -11,5 +11,5 @@ artifact: tasks
 - [x] Prompt + mention rewrite
 - [x] Tests (`discord.user-lookup`, `agent.soft-land`)
 - [x] package 0.0.27 / CHANGELOG / docs / STATUS
-- [ ] SpecSync approve + check + verify lane
-- [ ] PR / merge / bridge restart + announce
+- [x] SpecSync approve + check + verify lane
+- [x] PR / merge / bridge restart + announce (ship after verify)
