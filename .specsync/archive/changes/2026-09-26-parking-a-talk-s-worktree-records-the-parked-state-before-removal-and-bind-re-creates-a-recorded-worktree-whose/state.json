@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose",
+  "slug": "parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose",
+  "title": "Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3)",
+  "description": "Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3)",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "213900d3875250f6d845b036d9eebc1ab7e1d4b1",
+  "created_at": 1790463921,
+  "updated_at": 1790466893,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/session-store.ts",
+    "src/discord/bridge.ts",
+    "tests/discord.session-worktree.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Parking a session worktree persists worktree_state=parked before any removal side effect, so a crash between park and row delete never restarts with a row that says active at a removed directory; a park cut short (row parked, path recorded) is finished when the talk ends; bindWorktree re-creates a recorded active worktree whose directory is gone for the same project and session (never the repo root or another talk dir; project switch still refused); the bridge binds on every turn so a thread continue after restart runs in an existing worktree; fixture tests with a real temp git repo and a reopened DB file fail before and pass after"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}

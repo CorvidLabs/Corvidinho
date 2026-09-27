@@ -41,8 +41,29 @@ Acceptance Criteria
 
 The bridge SHALL load allowlists from file and env. It SHALL require a non-empty channel allowlist and SHALL fail to start if the channel list is empty.
 
+When the allowlist file exists but cannot be read or parsed (REQ-plugins-006),
+`loadBridgeConfig` SHALL return `code: "allowlist"` and the bridge SHALL NOT
+start; it SHALL NOT fall back to env channels alone. Multi-line
+`[discord]` arrays (`channels`, `users`, `deny_*`) SHALL load in full.
+`/admin` (REQ-discord-043) SHALL read a multi-line `users` / `channels`
+array in full and SHALL refuse (not rewrite) a file it cannot parse. It SHALL
+find the lines to edit with the loader's own reader, so a `]` or `#` inside a
+quoted item neither ends an array nor starts a comment, and a key it adds goes
+after the closing `]` of any multi-line array. Before any write it SHALL
+re-read the new text exactly as the loader will after a restart and SHALL
+refuse, writing nothing, unless it loads, the edited list reads back as
+intended and every other list and key (`[owner]` included) is unchanged — so
+a file it rewrites always reloads with every existing entry and every other
+list intact.
+
 Acceptance Criteria
 - DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
+- A malformed allowlist file → `allowlist` error; the bridge does not start.
+- A multi-line `deny_channels` loads and refuses its channel.
+- `/admin users add` on a file with a multi-line `users` array keeps the existing entries, and the reloaded file keeps `deny_users` and `[github].deny_repos`.
+- `/admin users add` on a file whose `[discord]` has only a multi-line `channels` array (LF and CRLF), and `/admin channels add` after a multi-line `deny_users`, put the new key after the closing `]`; the file reloads with every list intact.
+- A `]` or `#` inside a quoted item survives an `/admin` rewrite; the comment on the edited key's first line is kept.
+- A rewrite that would not reload as intended (an entry the one-line writer cannot quote) is refused and the file is left byte-for-byte unchanged.
 
 ### REQ-discord-005
 
@@ -927,6 +948,41 @@ Acceptance Criteria
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
 
+### REQ-discord-331
+
+A schedule tick that throws SHALL NOT take down the process that runs it
+(DISCORD-SCHEDULE-4 / CLI-8 / AUTONOMOUS-4). The store calls a tick makes
+(`refresh`, `listDue`, `claimRun`) can throw, for example `SQLITE_BUSY` after
+the 5 s busy timeout while the bridge, `corvidinho daemon`, watch and agents
+share one data dir. Bun exits the process on an unhandled rejection.
+
+- The scheduler's own interval (`SchedulerService.start()`, which the Discord
+  bridge uses) SHALL catch a rejected tick and log one stderr line,
+  `[scheduler] tick failed: <message>`. The message SHALL be passed through
+  `scrubSecrets` (SAFE-6) and capped. No stack is logged.
+- `tick()` SHALL still reject for direct callers, so the daemon keeps its own
+  `tick.failed` JSON log line. A tick that throws SHALL release its tick lock,
+  so the next tick runs. Runs it claimed before the throw SHALL keep running.
+- The fire-and-forget run promise that a tick starts SHALL never reject. An
+  error that escapes a run (for example, recording its failure also throws)
+  SHALL be logged the same way as `[scheduler] run failed: <message>`.
+- A run SHALL always free its running slot when it ends, even when parking its
+  worktree throws, so that schedule can run again and the concurrency cap is
+  not used up.
+- No global `unhandledRejection` handler SHALL be installed.
+
+Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
+no catch-up, auto-pause after 5 failures, the atomic claim (REQ-discord-108)
+and the non-blocking tick. No new env var, slash command, CLI flag, table or
+column.
+
+Acceptance Criteria
+- With the interval running, `listDue` or `claimRun` throwing once gives no unhandled rejection, one scrubbed `[scheduler] tick failed:` line with no raw token, and the next tick starts the due run.
+- A separate Bun process that runs the scheduler interval, with a store that throws once, stays up and exits 0. Before the fix it exited 1.
+- A manual `tick()` whose `claimRun` throws on the second due schedule rejects. The first run keeps going, and the next `tick()` starts the second.
+- A run whose agent throws and whose `markRunFinished` also throws logs `[scheduler] run failed:` and frees its slot, with no unhandled rejection.
+- A run whose `parkWorktree` throws frees its slot, and the same schedule starts again on a later tick.
+
 ### REQ-discord-253
 
 The GITHUB-6 repo gate the `/work` draft-PR step (REQ-discord-088) applies to
@@ -941,6 +997,29 @@ Acceptance Criteria
 - File deny + env allow: the `/work` PR step says `not opened` with the GITHUB-6 denial, calls no plugin and pushes nothing.
 - File-only allow: the `/work` PR step opens the draft PR (dry run in tests).
 
+### REQ-discord-357
+
+Parking a Discord session's worktree SHALL persist `worktree_state = parked`
+on its session row before any removal side effect, and the final state once
+the removal is done, without re-inserting a row that was already deleted. A
+crash between the park and the row delete SHALL NOT leave a row that restarts
+as `active` at a removed directory (SESSION-WORKTREE-3). A park cut short
+(row `parked` with its path still recorded) SHALL be finished when the talk
+ends. Binding a session SHALL reuse a recorded `active` worktree only when its
+directory exists; otherwise it SHALL re-create the worktree for the same
+session and project through the existing worktree manager, never falling back
+to the repo root or another talk's directory, and a different project SHALL
+still be refused (SESSION-WORKTREE-4). The bridge SHALL bind on every turn
+(a chat continue and a button-ask pick alike) so a turn after a restart never
+spawns in a missing directory, a parked worktree, or the repo root.
+
+Acceptance Criteria
+- The row reads `parked` as soon as a park starts, before the worktree is removed.
+- After a restart, a talk whose park finished or was cut short is not `active`; its next turn runs in an existing worktree that is not the repo root.
+- A `parked` row whose directory is still there is removed when the talk ends.
+- An `active` row at a removed directory is re-bound to an existing worktree for the same project; a different project is refused.
+- A button-ask pick after a restart on a `parked` row runs in an existing worktree that is not the repo root.
+- No new env vars, slash commands, or schema changes.
 ### REQ-discord-047
 
 When the bridge posts a button ask (Choose stub + components), it SHALL NOT leave a
@@ -956,15 +1035,31 @@ Acceptance Criteria
 
 ### REQ-discord-048
 
-On successful completion after a button pick, or on a normal successful mention
-done, the bridge SHALL prefer editing the existing stub or thinking progress
-message into the final answer content instead of posting an extra "✅ Done"
-thinking status plus a new reply, when `editMessage` is available (DISCORD-ASK-7).
+On successful completion after a button pick, on a normal successful mention
+done, or on successful `/session start` / `/work` completion, the bridge SHALL
+prefer editing the existing stub or thinking progress message into the final
+answer content instead of posting an extra "✅ Done" thinking status plus a new
+reply, when `editMessage` is available (DISCORD-ASK-7). For slash, when collapse
+succeeds the deferred interaction reply SHALL be deleted (or thin-resolved).
 Ephemeral Choose → options remains unchanged (DISCORD-ASK-1..5).
 
 Acceptance Criteria
 - Mention success: progress message becomes the answer body when collapse succeeds.
 - Button pick success: stub (reused as thinking) becomes the answer when collapse succeeds.
+- Slash `/session start` / `/work` success: thinking becomes the answer body and the deferred reply is deleted (or thin) when collapse succeeds.
 - Fallback preserves Done embed + separate reply when editMessage is unavailable.
 
+### REQ-discord-049
+
+After the requester presses an ephemeral choice button, the bridge SHALL clear
+or disable those option buttons immediately, SHALL keep `pendingAsk` cleared so
+a re-press is expired or otherwise a no-op (not a second agent resume), and
+SHALL delete or thin-update the ephemeral "Got it — Working on it…" message once
+the resume finishes (or immediately after pick) so it does not linger as a
+dismissible half-done UI (DISCORD-ASK-8).
+
+Acceptance Criteria
+- Pick update includes empty components (buttons gone) and clears pendingAsk before resume.
+- Re-press after clear does not spawn a second resume.
+- Ephemeral ack is deleted (or thin-updated without buttons) after resume completes when deleteReply is available.
 

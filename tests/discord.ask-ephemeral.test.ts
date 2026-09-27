@@ -189,6 +189,7 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
     expect(String(eph[0]!.content)).toContain("Which DB?");
     expect(eph[0]!.components).toBeDefined();
 
+    let deleted = 0;
     await handlers.onComponent!({
       id: "ix-pick",
       customId: pickCustomId(askId, "1"),
@@ -198,10 +199,36 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
       reply: async (opts) => {
         eph.push(opts as Record<string, unknown>);
       },
+      deleteReply: async () => {
+        deleted += 1;
+      },
     });
     expect(calls.length).toBeGreaterThanOrEqual(2);
     expect(calls[1]!.humanText).toBe("Postgres");
     expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    // DISCORD-ASK-8 — pick update clears option buttons; ephemeral deleted after resume.
+    const pickAck = eph.find(
+      (e) => typeof e.content === "string" && String(e.content).includes("Got it"),
+    );
+    expect(pickAck).toBeDefined();
+    expect(pickAck!.update).toBe(true);
+    expect(pickAck!.components).toEqual([]);
+    expect(deleted).toBe(1);
+    // Re-press after clear is no-op / already-answered (no second resume).
+    const before = calls.length;
+    const reEph: string[] = [];
+    await handlers.onComponent!({
+      id: "ix-repress",
+      customId: pickCustomId(askId, "2"),
+      channelId: "chan-1",
+      userId: "user-1",
+      messageId: stubId,
+      reply: async (opts) => {
+        reEph.push(opts.content ?? "");
+      },
+    });
+    expect(calls.length).toBe(before);
+    expect(reEph[0]?.toLowerCase()).toContain("already");
     // DISCORD-ASK-7 — final answer edited into stub/thinking; no extra reply.
     expect(replies.some((r) => r.content.includes("Using Postgres"))).toBe(false);
     const answerEdit = outbound.contentEdits.find(
