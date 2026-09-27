@@ -1,6 +1,6 @@
 ---
 id: a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message
-state: verifying
+state: implementing
 type: bug_fix
 base_commit: dc65cf70d4a46d59c35f80acd91822df3eddf3f1
 ---
