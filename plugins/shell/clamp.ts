@@ -137,6 +137,18 @@ const MAX_NESTING = 64;
 /** Thrown when a command nests past `MAX_NESTING`. */
 class NestedTooDeep extends Error {}
 
+/**
+ * How the tokenizer reads syntax dash and bash disagree on. dash reads
+ * here-docs, and `$'` as a `$` then a single-quoted string. bash reads `$'…'`
+ * as ANSI-C quoting (`\` escapes, even `\'`), and may read the lines after
+ * `<<` as code (`(( x << 2 ))` is arithmetic there): `hereDocs` false reads
+ * `<<` as a plain redirection.
+ */
+type Reading = { hereDocs: boolean; ansiC: boolean };
+const DASH: Reading = { hereDocs: true, ansiC: false };
+const BASH: Reading = { hereDocs: true, ansiC: true };
+const BASH_CODE: Reading = { hereDocs: false, ansiC: true };
+
 /** A here-doc (`<<` / `<<-`) whose body starts after the next newline. */
 type HereDoc = { delim: string; stripTabs: boolean; literal: boolean };
 
@@ -163,18 +175,18 @@ function captureSubstitution(
   s: string,
   at: number,
   subs: Lexed[],
-  hereDocs: boolean,
+  reading: Reading,
   depth: number,
 ): number {
   if (s[at] === "`") {
     const end = matchBacktick(s, at);
     const body = s.slice(at + 1, end < 0 ? s.length : end - 1);
-    const inner = tokenize(body, hereDocs, depth + 1);
+    const inner = tokenize(body, reading, depth + 1);
     if (end < 0) inner.open = true;
     subs.push(inner);
     return end;
   }
-  const inner = tokenize(s, hereDocs, depth + 1, at + 2, true);
+  const inner = tokenize(s, reading, depth + 1, at + 2, true);
   subs.push(inner);
   return inner.open ? -1 : inner.end;
 }
@@ -187,6 +199,7 @@ function captureSubstitution(
 function hereDocSubstitutions(
   body: string,
   subs: Lexed[],
+  reading: Reading,
   depth: number,
 ): void {
   for (let k = 0; k < body.length; k++) {
@@ -196,7 +209,7 @@ function hereDocSubstitutions(
       continue;
     }
     if ((c === "$" && body[k + 1] === "(") || c === "`") {
-      const end = captureSubstitution(body, k, subs, true, depth);
+      const end = captureSubstitution(body, k, subs, reading, depth);
       if (end < 0) return;
       k = end - 1;
     }
@@ -212,15 +225,13 @@ function hereDocSubstitutions(
  * continuation (an escaped `\` before a newline is not), `#` at the start of a
  * word comments to the end of the line, and a here-doc body is data, apart
  * from the substitutions an unquoted one expands. Every command substitution
- * is tokenized in place and kept in `subs` for analysis. With `hereDocs`
- * false, `<<` is an ordinary redirection and the lines after it are read as
- * commands (bash reads `(( x << 2 ))` as arithmetic, not a here-doc). With
- * `inSubst` the scan starts just inside a `$(` at `from` and stops after its
- * `)`.
+ * is tokenized in place and kept in `subs` for analysis. `reading` picks
+ * how `$'` and `<<` are read (see `Reading`). With `inSubst` the scan starts
+ * just inside a `$(` at `from` and stops after its `)`.
  */
 function tokenize(
   cmd: string,
-  hereDocs: boolean,
+  reading: Reading,
   depth: number,
   from = 0,
   inSubst = false,
@@ -266,7 +277,7 @@ function tokenize(
   const substitution = (at: number): number => {
     beginWord(at);
     expands = true;
-    const end = captureSubstitution(cmd, at, subs, hereDocs, depth);
+    const end = captureSubstitution(cmd, at, subs, reading, depth);
     value += cmd.slice(at, end < 0 ? n : end);
     return end;
   };
@@ -287,7 +298,8 @@ function tokenize(
         i = next;
       }
       if (!doc.literal) {
-        hereDocSubstitutions(cmd.slice(bodyStart, bodyEnd), subs, depth);
+        const body = cmd.slice(bodyStart, bodyEnd);
+        hereDocSubstitutions(body, subs, reading, depth);
       }
     }
     return i;
@@ -433,7 +445,7 @@ function tokenize(
       }
       i++;
       const d = cmd[i];
-      if (hereDocs && c === "<" && d === "<" && cmd[i + 1] !== "<") {
+      if (reading.hereDocs && c === "<" && d === "<" && cmd[i + 1] !== "<") {
         // `<<` / `<<-` here-doc: the next word is its delimiter.
         i++;
         delimNext = cmd[i] === "-";
@@ -450,6 +462,30 @@ function tokenize(
         i++;
       }
       cur.push({ redir: true });
+      continue;
+    }
+    if (reading.ansiC && c === "$" && cmd[i + 1] === "'") {
+      // bash `$'…'`: `\` escapes the next character, even a `'`.
+      beginWord(i);
+      quoted = true;
+      let k = i + 2;
+      let escaped = false;
+      while (k < n && cmd[k] !== "'") {
+        if (cmd[k] === "\\") {
+          escaped = true;
+          k++;
+        }
+        k++;
+      }
+      if (k >= n) {
+        value += cmd.slice(i + 2);
+        open = true;
+        break;
+      }
+      value += cmd.slice(i + 2, k);
+      // Escapes decode to text the clamp does not model: an expansion.
+      if (escaped) expands = true;
+      i = k + 1;
       continue;
     }
     if (
@@ -495,6 +531,57 @@ function stripRedirections(frag: Tok[]): Word[] {
   return words;
 }
 
+/** Shells whose `-c` string runs as a command (matched by name or path). */
+const SHELLS = new Set([
+  "sh", "bash", "dash", "zsh", "ksh", "mksh", "ash", "yash", "posh",
+]);
+
+/** Shell options that take the next word as their argument. */
+const SHELL_OPT_ARGS = new Set([
+  "-o", "+o", "-O", "+O", "--rcfile", "--init-file",
+]);
+
+/**
+ * Check the `-c` string of every shell named in `words` like an `eval`
+ * argument. Any word counts, not just the command word, so a shell behind
+ * `env`, `exec`, `nohup`, `timeout`, `xargs` or `find -exec` is seen too. A
+ * `-c` string that would expand refuses.
+ */
+function shellScripts(
+  words: Word[],
+  evalCommand: (cmd: string) => string | null,
+): string | null {
+  for (let k = 0; k < words.length; k++) {
+    const name = words[k]!.value;
+    if (!SHELLS.has(name.slice(name.lastIndexOf("/") + 1))) continue;
+    let dashC = false;
+    let m = k + 1;
+    for (; m < words.length; m++) {
+      const v = words[m]!.value;
+      if (v === "--") {
+        m++;
+        break;
+      }
+      if (SHELL_OPT_ARGS.has(v)) {
+        m++;
+        continue;
+      }
+      if (/^[-+][A-Za-z]+$/.test(v)) {
+        if (v[0] === "-" && v.includes("c")) dashC = true;
+        continue;
+      }
+      if (v.startsWith("--")) continue; // --norc, --login, --posix …
+      break;
+    }
+    const script = words[m];
+    if (!dashC || !script) continue;
+    if (script.expands) return script.value || "$(...)";
+    const r = evalCommand(script.value);
+    if (r != null) return r;
+  }
+  return null;
+}
+
 /**
  * First offending cd/pushd target within one simple command, else null.
  * `openText` is the tokenized text when this command is the one the text ran
@@ -536,7 +623,9 @@ function analyzeFragment(
     }
     return evalCommand(rest.map((w) => w.value).join(" "));
   }
-  if (head.value !== "cd" && head.value !== "pushd") return null;
+  if (head.value !== "cd" && head.value !== "pushd") {
+    return shellScripts(words.slice(i), evalCommand);
+  }
 
   let j = i + 1;
   while (j < words.length) {
@@ -576,46 +665,57 @@ function analyzeFragment(
  */
 export function firstDisallowedCd(cmd: string, root: string): string | null {
   try {
-    return checkReadings(cmd, root, false, 0);
+    return checkReadings(cmd, root, { bash: false, code: false }, 0);
   } catch (e) {
     if (e instanceof NestedTooDeep) return "(nested too deeply to check)";
     throw e;
   }
 }
 
-/** Checks an `eval` argument found in a text at nesting `depth`. */
+/** Checks an `eval` argument or `-c` string found in a text at `depth`. */
 type EvalCheck = (cmd: string, depth: number) => string | null;
 
+/** Which bash passes an enclosing text already runs over this one. */
+type Covered = { bash: boolean; code: boolean };
+
 /**
- * dash reads the lines after `<<` as a here-doc body, bash may read them as
- * commands (`(( x << 2 ))` is arithmetic there): refuse if either reading
- * does. Quote removal can form a `<<` (`<''<`) inside an `eval` argument that
- * the outer text lacks, so each `eval` is checked the same way. `covered`: an
- * enclosing text's code-only reading already takes in this one, so it is not
- * run again (keeping the work polynomial).
+ * `cmd` read as dash reads it and, where bash reads it differently, as bash
+ * does: refuse if any reading does. A text holding `$'` gets a bash pass
+ * (ANSI-C quoting) and one holding `<<` a bash pass with every line read as
+ * code (`(( x << 2 ))` is arithmetic in bash). Quote removal can form either
+ * inside an `eval` argument or a shell's `-c` string (`<''<`), so those are
+ * checked the same way; `covered` skips a bash pass that an enclosing text's
+ * pass already takes in, keeping the work polynomial.
  */
 function checkReadings(
   cmd: string,
   root: string,
-  covered: boolean,
+  covered: Covered,
   depth: number,
 ): string | null {
-  const both = !covered && cmd.includes("<<");
-  const r = analyzeLexed(tokenize(cmd, true, depth), root, (inner, d) =>
-    checkReadings(inner, root, covered || both, d),
+  const bash = !covered.bash && cmd.includes("$'");
+  const code = !covered.code && cmd.includes("<<");
+  const inner = { bash: covered.bash || bash, code: covered.code || code };
+  const r = analyzeLexed(tokenize(cmd, DASH, depth), root, (sub, d) =>
+    checkReadings(sub, root, inner, d),
   );
-  if (r != null || !both) return r;
-  return checkCodeOnly(cmd, root, depth);
+  if (r != null) return r;
+  if (bash) {
+    const b = checkOne(cmd, root, BASH, depth);
+    if (b != null) return b;
+  }
+  return code ? checkOne(cmd, root, BASH_CODE, depth) : null;
 }
 
-/** `cmd` with `<<` read as a plain redirection and every line as code. */
-function checkCodeOnly(
+/** `cmd` under one bash reading, and every `eval` / `-c` string in it too. */
+function checkOne(
   cmd: string,
   root: string,
+  reading: Reading,
   depth: number,
 ): string | null {
-  return analyzeLexed(tokenize(cmd, false, depth), root, (inner, d) =>
-    checkCodeOnly(inner, root, d),
+  return analyzeLexed(tokenize(cmd, reading, depth), root, (sub, d) =>
+    checkOne(sub, root, reading, d),
   );
 }
 

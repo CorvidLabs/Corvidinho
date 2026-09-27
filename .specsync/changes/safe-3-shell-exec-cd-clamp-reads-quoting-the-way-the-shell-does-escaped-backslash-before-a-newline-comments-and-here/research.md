@@ -37,8 +37,17 @@ artifact: research
   continuations, substitutions, separators and `cd` targets, run through dash
   with a `cd` wrapper that records any landing outside the root) found 15
   misses in ~6000 samples on #210's clamp, mostly comment-driven.
-- Still out of a pure lexer's reach (unchanged leftover risk): `sh -c '…'`,
-  `exec env -C`, `.`/`source`, `trap`, `alias`, symlink `pwd -P`, and bash-only
-  `$'…'` quoting.
+- bash `$'…'`: in `echo $'\''; cd /etc #'` bash ends the quote after `\'` and
+  runs `cd /etc`, while dash reads `$` + `'\'` + an open quote; the dash-only
+  clamp returned null and `bash --posix` landed in `/etc`. bash also decodes
+  `cd $'\x2e\x2e'` to `cd ..`.
+- A child shell's `-c` string runs outside the root just like `( … )`:
+  `sh -c 'cd /etc && pwd'`, `bash -c`, `/bin/sh -ec`, `env sh -c`,
+  `timeout 5 sh -c`, `xargs sh -c` and `find . -exec sh -c … \;` all printed
+  `/etc` under dash and bash with the clamp returning null.
+- Still out of a pure lexer's reach (leftover risk): other interpreters
+  (`python3 -c`, `perl -e`, `node -e` can `chdir`), a shell running a script
+  file (`sh script.sh`), `.`/`source`, `exec env -C` and other tools' `-C dir`
+  flags, `trap`, `alias`, and symlink `pwd -P`.
 - Callers: only `plugins/shell/commands.ts` uses `firstDisallowedCd`; the
   exports in `plugins/shell/index.ts` are unchanged.

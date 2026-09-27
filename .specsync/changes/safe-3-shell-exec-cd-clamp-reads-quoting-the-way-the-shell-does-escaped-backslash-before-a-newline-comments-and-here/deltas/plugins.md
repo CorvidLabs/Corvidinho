@@ -34,7 +34,11 @@ body — while
 bash may read them as commands (`(( x << 2 ))` is arithmetic there), so a
 command containing `<<` SHALL be checked under both readings and SHALL refuse
 if either refuses, and so SHALL the re-parsed argument of `eval`; a quote
-inside a here-doc body therefore cannot hide the commands after it. A `cd` or
+inside a here-doc body therefore cannot hide the commands after it. bash reads
+`$'…'` as ANSI-C quoting, where `\` escapes even a `'`, while dash reads a `$`
+then a single-quoted string, so a command containing `$'` SHALL also be
+checked as bash reads it; a `$'…'` word holding a backslash escape counts as
+an expansion. A `cd` or
 `pushd` command that the text leaves open — an unterminated quote or a
 trailing backslash — SHALL refuse, and so SHALL a command nested too deeply
 to check. It SHALL find
@@ -51,7 +55,10 @@ It SHALL refuse `-` (OLDPWD); a target containing `$`, a backtick, a glob or a
 brace; a command word that the shell would expand (a command word containing
 `$`, `$(…)` or a backtick); an `eval` whose argument would expand; and a write
 to `DIRSTACK`. It SHALL re-parse the literal argument of `eval` as a command,
-and SHALL analyse the body of each command substitution (`$(…)` and backticks)
+and likewise the `-c` string of a shell (`sh`, `bash`, `dash`, `zsh`, `ksh`,
+`mksh`, `ash`, `yash`, `posh`, named by name or path anywhere in a simple
+command, so also behind `env`, `exec`, `nohup`, `timeout`, `xargs` or
+`find -exec`), refusing a `-c` string that would expand; and it SHALL analyse the body of each command substitution (`$(…)` and backticks)
 as a command, refusing an escaping `cd`/`pushd` found inside. The spawned shell
 SHALL run `CDPATH=; readonly CDPATH` before the command and SHALL NOT inherit
 `CDPATH` or `OLDPWD` from the bot's environment, so a `CDPATH` set anywhere in
@@ -64,6 +71,7 @@ Acceptance Criteria
 - Redirection-hidden targets refuse: `>/dev/null cd /etc`, `cd >/dev/null /etc`, `cd</dev/null /etc`, `cd 2>&1 /etc`, `cd -P >/dev/null /etc`; an in-root `cd sub >/dev/null` and `cd 2>&1 sub` stay allowed.
 - Quote-aware forms refuse: `X="a b" cd /etc`, `X=';' cd /etc`, `cd "x /../.."`, `cd 'sub dir/../..'`; a backslash-newline `cd` (`c\`+newline+`d /etc`, `cd sub/\`+newline+`../..`) refuses; `cd "sub dir"` and `X=';' cd sub` stay allowed.
 - Quoting is read as the shell reads it: `mkdir -p "a b" && cd "a b/../.."`, `cd "zz q/../.."`, `cd a\ b/../..`, `cd 'a b'/../..` and `cd sub/..\`+newline+`/..` refuse; so does a `cd /etc` after an escaped backslash and a newline (`echo a\\`+newline), after a `#` comment holding a quote, after a here-doc body holding a lone quote (`<<EOF`, `<<'EOF'`, `<<-EOF`), or after a `$(…)` whose comment or here-doc holds a `)`; an escaping `cd` in a `$(…)` or backtick of an unquoted here-doc body refuses, also when the delimiter holds a backtick (`cat <<`+backtick+`x`+newline+`#' $(cd ..)`); `(( x = 1 << 2 ))`+newline+`cd /etc` refuses, also inside `eval` when quote removal forms the `<<`; `cd "sub`, `cd 'sub` and `cd sub\` refuse; `$(`-nesting too deep to check refuses instead of throwing; `cd sub # comment`, `cd sub \`+newline+`&& ls`, and an in-root `cd sub` after a here-doc whose body holds a stray quote or apostrophe stay allowed; `eval "cd /; ls"` refuses `/`. End to end each refused form returns exit 2 with SAFE-3 and nothing is spawned.
+- bash `$'…'` is read as bash reads it: `echo $'\''; cd /etc #'` refuses, and so do `cd $'\x2e\x2e'` and `$'\x63d' /etc`. A shell's `-c` string is checked like an `eval` argument: `sh -c 'cd /etc'`, `/bin/sh -ec 'cd /etc'`, `bash --norc -o pipefail -c 'cd ..'`, `env X=1 sh -c 'cd /etc'`, `timeout 5 sh -c 'cd /etc'`, `xargs sh -c 'cd /etc'`, `find . -exec sh -c 'cd /etc' \;` and `sh -c "cd $X"` refuse; `sh -c 'cd sub && ls'`, `bash -lc 'echo hi'` and `bash scripts/build.sh` stay allowed.
 - Expansion forms refuse: `$(echo cd) /etc`, `` `echo cd` /etc ``, `x=cd; $x /etc`, `cd${IFS}/etc`, `eval $(printf 'cd /etc')`, `echo` `` `cd /etc` `` and `echo $(cd /etc && cat x)`; `echo $(cd sub && ls)` and `eval 'cd sub'` stay allowed.
 - Bash `X+=1 cd /etc` refuses; a `DIRSTACK[...]=` write refuses.
 - With `OLDPWD` set outside the root in the bot's environment, `cd -` is refused before spawn; with `CDPATH` set outside the root, `cd sub && pwd` prints the in-root `sub`; a command that sets `CDPATH` to an outside dir and then runs a relative `cd sub` does not print the outside path.

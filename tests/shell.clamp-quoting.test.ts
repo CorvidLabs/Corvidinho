@@ -112,6 +112,37 @@ describe("shell-exec SAFE-3 clamp reads quoting like the shell (REQ-plugins-087)
     );
   });
 
+  test("unit: bash's $'…' quoting is read as bash reads it too", () => {
+    // bash ends `$'\''` after the escaped quote; dash reads `$` then `'\'`
+    expect(firstDisallowedCd("echo $'\\''; cd /etc #'", root)).toBe("/etc");
+    expect(firstDisallowedCd("echo $'a\\'b'; X=\"a;b\" cd /etc #'", root)).toBe("/etc");
+    // escapes decode to text the clamp does not model, so they count as expansions
+    expect(firstDisallowedCd("cd $'\\x2e\\x2e'", root)).not.toBeNull();
+    expect(firstDisallowedCd("$'\\x63d' /etc", root)).not.toBeNull();
+    expect(firstDisallowedCd("echo $'a\\tb' && cd sub", root)).toBeNull();
+  });
+
+  test("unit: a shell's -c string is checked like an eval argument", () => {
+    expect(firstDisallowedCd("sh -c 'cd /etc && pwd'", root)).toBe("/etc");
+    expect(firstDisallowedCd("bash -c 'cd /etc'", root)).toBe("/etc");
+    expect(firstDisallowedCd("/bin/sh -ec 'cd /etc; pwd'", root)).toBe("/etc");
+    expect(firstDisallowedCd("bash --norc -o pipefail -c 'cd ..'", root)).toBe("..");
+    expect(firstDisallowedCd("sh -c -- 'cd /etc'", root)).toBe("/etc");
+    // behind wrappers: any word naming a shell counts
+    expect(firstDisallowedCd("env X=1 sh -c 'cd /etc; pwd'", root)).toBe("/etc");
+    expect(firstDisallowedCd("timeout 5 sh -c 'cd /etc'", root)).toBe("/etc");
+    expect(firstDisallowedCd("echo x | xargs sh -c 'cd /etc'", root)).toBe("/etc");
+    expect(firstDisallowedCd("find . -exec sh -c 'cd /etc; pwd' \\;", root)).toBe("/etc");
+    // nested quoting inside the -c string, and a string that would expand
+    expect(firstDisallowedCd("sh -c 'cd \"a b/../..\"'", root)).toBe("a b/../..");
+    expect(firstDisallowedCd('sh -c "cd $X"', root)).toBe("cd $X");
+    // in-root -c strings and shells without -c stay allowed
+    expect(firstDisallowedCd("sh -c 'cd sub && ls'", root)).toBeNull();
+    expect(firstDisallowedCd("bash -lc 'echo hi'", root)).toBeNull();
+    expect(firstDisallowedCd("bash scripts/build.sh", root)).toBeNull();
+    expect(firstDisallowedCd('grep -r "sh -c" .', root)).toBeNull();
+  });
+
   test("unit: in-root forms with quoting, comments, here-docs and continuations stay allowed", () => {
     expect(firstDisallowedCd('cd "sub dir"', root)).toBeNull();
     expect(firstDisallowedCd("cd sub\\ dir && ls", root)).toBeNull();
@@ -159,6 +190,9 @@ describe("shell-exec SAFE-3 quoting end to end (REQ-plugins-087)", () => {
       'touch spawned; x=$(echo hi # )"\n); cd /etc && pwd #"',
       'touch spawned; cd "sub',
       "touch spawned; cd sub\\",
+      "touch spawned; sh -c 'cd /etc && pwd'",
+      "touch spawned; echo x | xargs sh -c 'cd /etc && pwd'",
+      "touch spawned; echo $'\\''; cd /etc && pwd #'",
     ];
     for (const command of escapes) {
       const result = await run(command);
@@ -179,6 +213,7 @@ describe("shell-exec SAFE-3 quoting end to end (REQ-plugins-087)", () => {
       ["cd sub # don't go up\npwd", join(dir, "sub")],
       ["cat <<EOF\ndon't\nEOF\ncd sub && pwd", join(dir, "sub")],
       ["cd sub \\\n&& pwd", join(dir, "sub")],
+      ["sh -c 'cd sub && pwd'", join(dir, "sub")],
     ];
     for (const [command, want] of allowed) {
       const result = await run(command);

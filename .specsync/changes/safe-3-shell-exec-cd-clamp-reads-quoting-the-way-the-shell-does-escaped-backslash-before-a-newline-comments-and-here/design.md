@@ -38,6 +38,23 @@ values for existing inputs are unchanged.
   (`Lexed.subs`) and `analyzeLexed` walks it, so each character is tokenized
   once per reading instead of once per nesting level (a 22 KB nested
   here-doc input went from ~100 s to ~0.2 s during development).
+- bash `$'…'`: `tokenize` takes a `Reading` (`DASH`, `BASH`, `BASH_CODE`)
+  instead of the `hereDocs` flag. With `ansiC`, `$'…'` is one quoted word
+  that ends at the first unescaped `'`; if it holds a backslash escape the
+  word counts as an expansion (the decoded text is not modelled).
+  `checkReadings` always runs the dash reading, adds a `BASH` pass when the
+  text holds `$'` and a `BASH_CODE` pass (bash with `<<` as code) when it
+  holds `<<`; `covered` skips a pass an enclosing text's pass already takes
+  in. Each bash pass recurses into `eval` / `-c` strings under the same
+  reading.
+- Shell `-c` strings: `shellScripts` scans every word of a simple command for
+  a shell (`sh bash dash zsh ksh mksh ash yash posh`, by basename). After its
+  options (clusters like `-ec`; `-o` / `-O` / `--rcfile` take an argument;
+  long `--` options; `--` ends them), if `-c` was given the next word is the
+  command string and goes through the same check as an `eval` argument (one
+  nesting level deeper); a string that would expand refuses. Scanning every
+  word catches `env`, `exec`, `nohup`, `timeout`, `xargs` and `find -exec`
+  wrappers; the cost is refusing `echo sh -c 'cd /etc'`.
 - Nesting cap: every `Lexed` records its depth (command substitutions plus
   `eval` re-parses around it). `tokenize` throws an internal `NestedTooDeep`
   past `MAX_NESTING` (64), and `firstDisallowedCd` turns that into the refusal

@@ -9,5 +9,6 @@ artifact: tasks
 - [x] Tokenizer reads continuations, comments, here-docs and `$( )` ends the way the shell does; both readings of `<<` are checked, including inside `eval`.
 - [x] Tokenizer returns a substitution tree so each character is tokenized once per reading; nesting too deep to check refuses instead of throwing.
 - [x] A `cd` / `pushd` left open by an unterminated quote or trailing `\` refuses.
+- [x] bash `$'…'` read as bash reads it (extra pass when the text holds `$'`); a shell's `-c` string checked like an `eval` argument, behind any wrapper.
 - [x] Delta modifies REQ-plugins-087; spec invariant, scenario, error rows and files list updated.
 - [x] specsync check, tsc, bun test, fledge verify green; differential fuzz against dash and bash clean.
