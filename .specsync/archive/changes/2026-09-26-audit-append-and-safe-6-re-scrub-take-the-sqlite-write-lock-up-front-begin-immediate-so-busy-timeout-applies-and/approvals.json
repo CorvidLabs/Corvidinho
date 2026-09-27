@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790466279,
+      "digest": "fbbdf4ccfd665b59c8d725476df5110b44f76d44c024a88c82c13d49f699ba70",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and",
+        "title": "Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6)",
+        "description": "Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "specs/plugins",
+          "src/audit/log.ts",
+          "src/store/scrub.ts",
+          "tests/store.busy-lock.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "While another process holds the shared DB write lock and then commits, appendAudit (SAFE-5 dangerous-run rows) and rescrubDatabase (SAFE-6 re-scrub) wait under busy_timeout and succeed instead of failing at once with database is locked; the waiting audit row links to the other writer's row and the chain verifies"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "de0ea271a24691eda99c41cd51af4a240f4911841d365d672c75421a1fcbeb85",
+        "plugins": "a8af227015630a21aed09eb78309b892fdcb80dbe9bb59d398a367ee215f4094"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790466525,
+      "digest": "88fbb27cae53f9d858bbbfee2689093dc375745ce9188c45d4120d363fd0c6a8",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

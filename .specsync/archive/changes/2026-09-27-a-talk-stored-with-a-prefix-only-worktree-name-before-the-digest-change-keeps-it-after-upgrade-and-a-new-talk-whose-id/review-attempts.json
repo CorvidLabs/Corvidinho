@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "a-talk-stored-with-a-prefix-only-worktree-name-before-the-digest-change-keeps-it-after-upgrade-and-a-new-talk-whose-id",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "8627ed41216ec93fc9447922b26a2a2d5f556030",
+      "contract_digest": "d220009d2a11393810e00643841afbbe9206e18a37d5c5853cec87be911e18a1",
+      "execution_digest": "c76871256b659ce9d437857329fe115b18a396fcb25d434fc4ea9cba8e5f4f51",
+      "workspace_digest": "13958990f13820439995c9ac7b002379950dca89cadd125ef6b490a4c773c8c1",
+      "timestamp": 1790469923
+    }
+  ]
+}

@@ -112,13 +112,20 @@ Acceptance Criteria
 
 Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
 
+The tools SHALL stay inside the project: they read this repo's `specs/` and the companions next to a spec, using project files only (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6), as typed plugin commands (PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
+
 Acceptance Criteria
 - `plugins list` includes the SpecSync command names.
 - `specsync-list` returns registered module names from `.specsync/registry.toml`.
 - `specsync-read <module>` returns `specs/<module>/<module>.spec.md` contents.
 - `specsync-check` runs project `spec-check` (fledge task or `specsync check` fallback) and fails non-zero on drift.
 - `specsync-brief <module>` returns companion files when present.
-
+- `specsync-read` / `specsync-brief` with a name that is not a plain module name — a relative traversal (`../../<outside>/outside`, `../../../..<abs>`), an absolute path, `.` / `..`, a path separator (`/` or `\`), a NUL byte or any other character — fail with exit 1 and a one-line `invalid spec module name` error (the name JSON-escaped, never a raw NUL) and read nothing.
+- A module spec, legacy flat spec, module dir or companion that is a symlink resolving outside the project's `specs/` dir, or a `specs/` dir that resolves outside the project root, is refused with exit 1 and a `resolves outside` error naming only the in-project path; a refused companion fails the whole brief; no outside content is returned.
+- Symlinks that stay inside `specs/` still read, and a missing module still reports `spec '<name>' not found`.
+- `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` given `--root <dir>` or `--root=<dir>` fail with exit 1 (`refused: --root is not allowed; SpecSync tools run on this project only`) and `specsync` is not spawned.
+- A tool-loop `specsync-read` call with a traversal name returns the refusal to the model, not the outside file.
+- The Planning spec briefing (`loadRelevantSpecs`), which reads through the same helpers, leaves out a registered module whose spec or module dir resolves outside `specs/` and never includes a companion that does.
 
 ### REQ-plugins-009
 
@@ -309,12 +316,22 @@ The chain SHALL be HMAC-SHA256 keyed by `CORVIDINHO_AUDIT_HMAC_KEY` from the
 bot-VM environment (never stored in the DB); without a key it is a SHA-256
 integrity chain reported as unkeyed. `verifyAudit` SHALL recompute the chain
 and report the first tampered row; keyed rows are unverifiable without the key.
+Once the chain holds a keyed row it SHALL stay keyed: `appendAudit` without a
+key SHALL refuse to append after a keyed row, and `verifyAudit` SHALL report
+an unkeyed row that follows a keyed row as the first tampered row, so a keyed
+row cannot be rewritten and relinked as a plain SHA-256 link while a keyed row
+before it stays. An unkeyed prefix followed by keyed rows (key set later)
+SHALL still verify. Rewriting every keyed row, from the first keyed row on, as
+unkeyed links, or dropping the newest rows, is not detectable from the DB
+alone; catching it needs an anchor kept outside the DB.
 
 Acceptance Criteria
 - Allowed dangerous run appends started + ok rows; raw args are not stored.
 - Non-interactive denial appends a denied row; safe plugins append nothing.
 - A dangerous run is refused when its started row cannot be written.
 - Tampering is detected at the first bad row; wrong/missing key fails verify.
+- A keyed row that follows a keyed row, edited and relinked with the rows after it as unkeyed SHA-256 links, fails verify with the key at that row (`chain BROKEN at #N`).
+- Without the key, appending after a keyed row is refused, so a keyless dangerous run fails closed and the chain stays keyed; an unkeyed prefix followed by keyed rows still verifies (`mixed keyed/unkeyed`).
 
 ### REQ-plugins-042
 
@@ -833,4 +850,21 @@ JavaScript replacement patterns in `--new` (`$$`, `$&`, `$'`, `` $` ``,
 Acceptance Criteria
 - A single-occurrence edit whose `--new` contains `$$`, `$'`, `$&`, `` $` ``, `$1` and `$<n>` leaves exactly that text in the file.
 - A `--replace-all` edit with the same `--new` writes the same literal text at every match.
+
+### REQ-plugins-287
+
+`appendAudit` SHALL take the shared DB write lock before it reads the
+previous chain hash (BEGIN IMMEDIATE), so a concurrent writer in another
+process is waited for under the DB busy_timeout instead of failing at once
+with "database is locked", and the new row links to the latest committed row.
+A SAFE-5 row for a dangerous run SHALL NOT be lost only because another
+process was writing the shared DB. When the lock is not free within
+busy_timeout the append still fails, and `runPlugin` still refuses a run
+whose `started` row cannot be written (REQ-plugins-095). No new env var,
+config key, pragma, slash command or plugin.
+
+Acceptance Criteria
+- While another process holds the write lock and then commits, `appendAudit` waits and succeeds; its `prev_hash` is the other writer's row hash and the chain verifies.
+- Concurrent appenders in several processes lose no rows.
+- Several processes that each open the shared DB file, append one row and close it (as dangerous plugin runs do), all at once, get every append in and the chain verifies.
 
