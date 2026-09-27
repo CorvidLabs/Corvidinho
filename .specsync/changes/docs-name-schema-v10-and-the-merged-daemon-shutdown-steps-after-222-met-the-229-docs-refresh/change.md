@@ -1,6 +1,6 @@
 ---
 id: docs-name-schema-v10-and-the-merged-daemon-shutdown-steps-after-222-met-the-229-docs-refresh
-state: approved
+state: implementing
 type: documentation
 base_commit: c2dcbc8bc284cf2de74f5c782f7c175f67c7cedb
 ---
