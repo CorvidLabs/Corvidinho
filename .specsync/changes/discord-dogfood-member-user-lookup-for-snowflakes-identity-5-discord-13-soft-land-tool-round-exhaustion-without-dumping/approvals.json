@@ -46,6 +46,54 @@
         "discord": "ccfe73d7aaf3ec24fc631b1727c6631c0ab9b7fd47a0c0071dfb5a02e12a1161",
         "plugins": "035be00ff272326ba73efdbfa699972d6e0a5706169dc59d4701b6ed281727f9"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790471242,
+      "digest": "3da28ede25112786faa99d4d64327599ad91e47a40e7f2a29b8268aa64e3d7fc",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping",
+        "title": "Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.27",
+        "description": "Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.27",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "docs/discord.md",
+          "hi/",
+          "package.json",
+          "plugins/discord/",
+          "specs/",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/task-summary.ts",
+          "src/discord/message-router.ts",
+          "tests/"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "IDENTITY-5/DISCORD-13: read-only discord-user-lookup resolves snowflake/@mention/name within DISCORD_GUILD_ID only (refuse other guilds); agent prompt prefers Discord lookup then prose for social chat; SpecSync/git/github/files only when clearly Corvidinho code/product. AGENT-9: tool-round exhaustion returns best prose or a short clarify ask — never 'Stopped after N tool rounds' in Discord chat body (thinking/plumbing may note it). ROLES-CHAT-9: community chat prefers conversational reply. Package 0.0.27; fixture tests cover lookup gate, soft-land summary, and chatBody scrub."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "c9071f5a1be64fc3f20202f3d801a2c4cadfd54a2ba21a05651fea3f6243fd9f",
+        "discord": "ccfe73d7aaf3ec24fc631b1727c6631c0ab9b7fd47a0c0071dfb5a02e12a1161",
+        "plugins": "035be00ff272326ba73efdbfa699972d6e0a5706169dc59d4701b6ed281727f9"
+      }
     }
   ],
   "reopenings": []
