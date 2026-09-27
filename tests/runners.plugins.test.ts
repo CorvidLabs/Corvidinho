@@ -16,6 +16,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -135,6 +136,18 @@ describe("runners register when the toolchain is on PATH (REQ-plugins-313)", () 
     expect(rel.startsWith("/")).toBe(false);
     expect(resolveRunnerBin(spec("node-exec"), { PATH: `${rel}:.` })).toBeNull();
     expect(resolveRunnerBin(spec("node-exec"), { PATH: `${rel}:${fake.bin}` })).toBe(join(fake.bin, "node"));
+  });
+
+  test("Bun's own node shim is not node: a real node later on PATH wins, else node-exec is not loaded", () => {
+    const shim = makeFake([]);
+    symlinkSync(process.execPath, join(shim.bin, "node"));
+    expect(resolveRunnerBin(spec("node-exec"), { PATH: shim.bin })).toBeNull();
+    const real = makeFake(["node"]);
+    expect(resolveRunnerBin(spec("node-exec"), { PATH: `${shim.bin}:${real.bin}` })).toBe(join(real.bin, "node"));
+    const report = loadRunnerPlugins({ PATH: shim.bin });
+    expect(report.loaded).toEqual([]);
+    expect(get("node-exec")).toBeUndefined();
+    expect(runnerStatusLines(report).join("\n")).toContain("node-exec not loaded: node not found on PATH");
   });
 
   test("argv reaches the toolchain verbatim with no shell, cwd pinned to the project root", async () => {
@@ -361,6 +374,22 @@ describe("a missing toolchain degrades cleanly (REQ-plugins-314)", () => {
     expect(out).toContain("Language runners (PLUGIN-4): none loaded");
     expect(out).toContain("node-exec not loaded: node not found on PATH");
     expect(out).toContain("cargo-exec not loaded: cargo not found on PATH");
+    expect(out).not.toMatch(/^\s+node-exec\s+\[/m);
+  });
+
+  test("`bun run corvidinho plugins list` without node: the node shim bun run adds does not load node-exec", async () => {
+    const fake = makeFake([]);
+    symlinkSync(process.execPath, join(fake.bin, "bun"));
+    const proc = Bun.spawn([process.execPath, "run", "--silent", "corvidinho", "plugins", "list"], {
+      cwd: join(import.meta.dir, ".."),
+      env: { ...process.env, PATH: fake.bin },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [code, out] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+    expect(code).toBe(0);
+    expect(out).toContain("shell-exec");
+    expect(out).toContain("node-exec not loaded: node not found on PATH");
     expect(out).not.toMatch(/^\s+node-exec\s+\[/m);
   });
 

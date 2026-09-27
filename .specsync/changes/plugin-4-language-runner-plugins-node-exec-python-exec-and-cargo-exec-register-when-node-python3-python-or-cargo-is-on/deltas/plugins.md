@@ -12,7 +12,9 @@ change: plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-re
 When `node`, `python3` (else `python`) or `cargo` resolves on an absolute
 PATH entry at builtin load, the system SHALL register `node-exec`,
 `python-exec` or `cargo-exec` respectively (PLUGIN-4), bound to the absolute
-binary found. A relative PATH entry SHALL NOT be used to resolve a runner. Each
+binary found. A relative PATH entry SHALL NOT be used to resolve a runner, and
+a hit whose real path is the running Bun binary (the `node` shim `bun run` puts
+on PATH) SHALL NOT count as the toolchain; resolution continues on PATH. Each
 runner SHALL be `dangerous: true` and `minTier: 2` (PLUGIN-2), so a
 non-interactive run that has not allowlisted it is denied (SAFE-1), every run
 is audited (SAFE-5), non-ADMIN role sessions never see or run it
@@ -32,6 +34,7 @@ config key.
 Acceptance Criteria
 - With stub `node`, `python3` and `cargo` on PATH, `node-exec`, `python-exec` and `cargo-exec` are registered with dangerous=true, mutating=true, minTier=2; a second load keeps the same commands.
 - `python-exec` binds `python3` when both `python3` and `python` exist and `python` when only it exists; a toolchain only on a relative PATH entry is not resolved.
+- A `node` that is a symlink to the running Bun binary is skipped: with only it on PATH `node-exec` is not loaded (`node not found on PATH`), with a real `node` later on PATH that one is bound; `bun run corvidinho plugins list` without node lists no `node-exec`.
 - `python-exec` with `` ["-c","x","$(id)","--json","a b","*","--","`id`"] `` reaches the binary as exactly those argv words, with cwd = the project root; a stub exit 3 returns ok=false, exitCode 3.
 - The child env has no `GITHUB_TOKEN`, `DISCORD_TOKEN`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_ACTING_*`, `CDPATH` or `OLDPWD`, and `CORVIDINHO_PROJECT_ROOT` is the project root.
 - Non-interactive with an empty allowlist each runner is denied (exit 2, SAFE-1) and nothing is spawned; allowlisted, it runs.

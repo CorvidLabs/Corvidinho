@@ -322,7 +322,8 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 `specsync-list` and `specsync-check` take no path input.
 Language runners (PLUGIN-4, REQ-plugins-313..314): at builtin load each of
 `node`, `python3` (else `python`) and `cargo` is resolved with `Bun.which` over
-the absolute entries of PATH only; a found toolchain registers `node-exec` /
+the absolute entries of PATH only, skipping a hit that is the running Bun
+binary (the `node` shim `bun run` adds); a found toolchain registers `node-exec` /
 `python-exec` / `cargo-exec` bound to that absolute binary, a missing one
 registers nothing (never offered, never a tool that cannot start). Each runner
 is `dangerous: true`, `minTier: 2`, and spawns `[bin, ...argv]` (no shell) with
@@ -333,7 +334,11 @@ timeout or the calling run's abort (exit 130); output is secret-scrubbed. Empty
 argv is a usage error (exit 1, nothing spawned); a binary that cannot start
 returns exit 127. `plugins list` prints which runners loaded (with the binary)
 and one line per missing toolchain, and still exits 0. `shell-exec` is
-unchanged and always registered.
+unchanged and always registered. The pinned cwd is where the runner starts,
+not a sandbox: the code it runs can `process.chdir` / `os.chdir`, and
+`cargo --manifest-path` can name another crate; no SAFE-3 `cd` clamp applies
+(the runners add no shell). They are gated like `shell-exec` instead:
+dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 
 ## Behavioral Examples
 

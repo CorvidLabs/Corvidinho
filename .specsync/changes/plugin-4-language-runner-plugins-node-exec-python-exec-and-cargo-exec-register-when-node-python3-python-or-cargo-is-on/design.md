@@ -25,7 +25,10 @@ artifact: design
   knob.
 - `plugins/runners/index.ts`: `resolveRunnerBin(spec, env)` runs `Bun.which`
   over the absolute PATH entries only (a relative entry such as `.` would let
-  the project choose the binary). `loadRunnerPlugins(env = process.env)`
+  the project choose the binary), one entry at a time, skipping a hit whose
+  real path is the running Bun binary: `bun run` adds a `bun-node-*` dir with
+  a `node` symlink to Bun when node is missing (and first under `--bun`), which
+  is not the node toolchain. `loadRunnerPlugins(env = process.env)`
   registers a runner per toolchain found, is idempotent (a runner it already
   registered is kept and reported), and returns
   `{ loaded: [{name, tool, bin}], missing: [{name, tool, reason}] }`.

@@ -4,11 +4,13 @@
  *
  * Each toolchain is resolved once per load with `Bun.which` over the absolute
  * PATH entries only (a relative entry such as `.` would let the project pick
- * the binary). A runner whose toolchain is missing is not registered, so the
- * model is never offered a tool that cannot start; `plugins list` names what
- * is missing. `shell-exec` is separate and always registered.
+ * the binary), skipping Bun's own `node` shim. A runner whose toolchain is
+ * missing is not registered, so the model is never offered a tool that cannot
+ * start; `plugins list` names what is missing. `shell-exec` is separate and
+ * always registered.
  */
 
+import { realpathSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
@@ -22,14 +24,33 @@ export type RunnerLoadReport = {
 /** Runner commands this module registered, with the binary each is bound to. */
 const bound = new Map<string, { command: PluginCommand; bin: string }>();
 
-/** First candidate binary found on the absolute entries of `env.PATH`, else null. */
+function realPathOrNull(p: string): string | null {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * First candidate binary found on the absolute entries of `env.PATH`, else
+ * null. A hit that is the running Bun binary is skipped: `bun run` puts a
+ * `node` symlink to Bun on PATH (in a `bun-node-*` temp dir) when node is not
+ * installed, and `bun run --bun` puts it ahead of a real node. That is not the
+ * node toolchain, so it neither registers `node-exec` nor hides a real node
+ * later on PATH.
+ */
 export function resolveRunnerBin(spec: RunnerSpec, env: NodeJS.ProcessEnv): string | null {
   const dirs = (env.PATH ?? "").split(":").filter((d) => d !== "" && isAbsolute(d));
   if (dirs.length === 0) return null;
-  const PATH = dirs.join(":");
+  const self = realPathOrNull(process.execPath);
   for (const candidate of spec.candidates) {
-    const found = Bun.which(candidate, { PATH });
-    if (found && isAbsolute(found)) return found;
+    for (const dir of dirs) {
+      const found = Bun.which(candidate, { PATH: dir });
+      if (!found || !isAbsolute(found)) continue;
+      if (self && realPathOrNull(found) === self) continue;
+      return found;
+    }
   }
   return null;
 }

@@ -28,7 +28,8 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
 
 `tests/runners.plugins.test.ts` — stub `node` / `python3` / `cargo` /bin/sh
 scripts in a mkdtemp PATH dir: registration and danger/tier markings, python3
-before python, relative PATH entries ignored, argv verbatim (no shell) and cwd
+before python, relative PATH entries ignored, a `node` symlink to Bun skipped
+(also under `bun run corvidinho plugins list`), argv verbatim (no shell) and cwd
 = project root, non-zero exit, usage error, scrubbed child env, SAFE-1 deny,
 code-tier / dangerous / ADMIN-only catalog, abort and timeout kill the tree;
 an empty PATH registers nothing and `plugins list` (CLI spawn) exits 0 naming
