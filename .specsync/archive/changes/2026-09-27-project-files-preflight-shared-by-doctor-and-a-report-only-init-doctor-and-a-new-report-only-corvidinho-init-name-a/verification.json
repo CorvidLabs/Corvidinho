@@ -1,0 +1,134 @@
+{
+  "timestamp": 1790538702,
+  "commit": "fa5ed30efc792179ef990c8e9ba47e04a774e480",
+  "contract_digest": "e98a4d939f65640b039d722e44482b94f7384d1a103f063736ac9d5f1f5c968b",
+  "execution_digest": "e33d235fb7061024594f5e936a09b434d9cf8c933b8b91933ab3f74cc24624dd",
+  "workspace_digest": "53e19081dafcdcb97a58a06693d49b48bdbaef43b790b03c57f2914154c42015",
+  "acceptance_input_digest": "0dcaae2bef0c8027c36e15ee121152a0c55cddb9483c16c73919bd28efa53e4d",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "README.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "23581848370c115b04b8675c15eebbebc2da973b51267c89f789c490fe569840",
+        "entry_digest": "cbba8eaee5f5eef8f0cdf59bd779f8d190af1a4af3c7c8c32501779e02db8a7f",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/BOX-UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "42672d8e7665447a750db94eb7d4eb4d4bb00a480783ea76a910ee680ead0592",
+        "entry_digest": "2ba1b9d9d24791187e751d0e1fe2957ca93bf7db22dab3c658d373566939b468",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/cli.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "53cea202c58da9700207db51207b9d11d462a098821500baf7534f365030506b",
+        "entry_digest": "833f3b07826e107bd1179fa3a3fcf96686f5395a8ac8615cd08fd5977ddb11ed",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "30c4bb67bae0b0c55b7e4814964472d129473160f738d37282ac0e4f35e44215",
+        "entry_digest": "c7ed9b7e95da5de92400b51ea7fd88d43c84ff2074f32f4af404731fc28f1262",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "cef5a3dd2c0f244c1bffed966aa120b210687d84fb2170c440bba40c48e63e2c",
+        "entry_digest": "324636db33292f6af0234dc443e6acb35069c074d4c041a7fb9c7dd1a9e9a64e",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d885ef8812ae1d26402a1ad5c21afd2b0a6e23613adf12bd8c90099fc0ca2be9",
+        "entry_digest": "53296b4ad13365ae83bfd03b5aa5a28e2e0d02e885d6a6dc4481484d558bb26c",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "55d5c63da798c07e72a53fb7f876eb52b881108eefc7ea215943fdeadcaa3af6",
+        "entry_digest": "726a2d5f60cc2424667ad14b5d4527285790e51896d00a7a763f9b688ff5b67d",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "src/cli.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e955aa481a026e9d7becc1862a8b814b14b8df9edea998bf0c22c9da7b2aeab6",
+        "entry_digest": "a9409954e70b7ac3cc257785926cc3d9351489eeb2bb8dd6b282c4eee6cb856f",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "src/doctor.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8b614a8cdc05b6846ad820d25b4ff46f33189a46f73fce3297f2ac45863f461b",
+        "entry_digest": "d081bb157210f593ebdfd24108e9c109c280cb3ab6a3dfb9fe0fd21800361c65",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "tests/cli.doctor-truth.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5523cfb669bd499509a237b9fac94b17e419de22ade5c5a5174d525b0a475b4a",
+        "entry_digest": "70c07ea7964500bbc4ae55ed233fdf0e3ab089949e5eda4c04ead097efa53093",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/docs.operator-facts.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c523a53117c50d59451786f4a5fa2404f295d1461400aed452df52891f1a3869",
+        "entry_digest": "f7dbdabd663958118a66200a0f1e7f9b86f9e936ce17980b9827de8c1b675948",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-cli-430"
+  ]
+}

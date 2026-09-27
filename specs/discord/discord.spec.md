@@ -58,6 +58,7 @@ files:
   - src/discord/list-scope.ts
   - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
+  - tests/discord.slash-choose-ask.test.ts
   - tests/discord.slash-reply-continuity.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
@@ -200,11 +201,20 @@ one, whoever owns it; another user starting a session in the thread never
 replaces the first user's (DISCORD-2.a / SESSION-MULTI-1/2, REQ-discord-046).
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
 `/work` and `/session start` keep a clarify or stuck ask as their session's
-free-text `pendingAsk` (options dropped: the slash answer has no Choose
-buttons; never a `spend-cap` stop), and the bridge sets
+`pendingAsk` (never a `spend-cap` stop), and the bridge sets
 `SlashContext.trackBotMessage` so the slash answer message continues its
-session: a thin reply restates, cancel clears, a substantive reply resumes
-with the question (AUTONOMY-1/5/6 / REQ-discord-044).
+session (AUTONOMY-1/5/6 / REQ-discord-044). When the ask's choices fit a
+short list, `buttonAskFor` (`ask-buttons.ts`, over `resolveAskOptions`;
+returns a `ButtonAsk` or null) makes the answer the chat's Choose stub
+(DISCORD-ASK-1/4): the pending ask keeps its options, `finishSlashWithThinking` / `finishSlashWithOwnerNotice` carry
+the stub's `components` on the collapsed edit, the fallback reply
+(`SlashReplyPayload.components`) and the owner-notice re-edit, and
+`recordSlashStub` stores the answer message id as `stubMessageId` from
+`onDelivered(mode, messageId)` (only while that ask is still the pending ask
+of a live session), so the chat `onComponent` open/pick path
+resumes the session in that message. Otherwise the answer is the free-text
+ask: a thin reply restates, cancel clears, a substantive reply resumes with
+the question.
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
 AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
@@ -409,9 +419,11 @@ pinged twice in a turn (the slash owner notice post counts), a spend-cap ask
 whose episode already pinged carries no owner mention, and a fallback reply
 (already a fresh post) gets no extra post (REQ-discord-215).
 A `/work` or `/session start` run that stopped to ask leaves its session
-waiting on that ask exactly like a chat ask (free text, never a spend-cap
-stop), and its answer message is tracked like a chat reply, so a reply to it
-by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
+waiting on that ask exactly like a chat ask (a Choose-button ask when its
+choices fit a short list, else free text; never a spend-cap stop), and its
+answer message is tracked like a chat reply, so a reply to it by the
+requester never goes unheard (AUTONOMY-1/5/6 / DISCORD-ASK-1/4 /
+REQ-discord-044).
 
 ## Behavioral Examples
 
@@ -582,6 +594,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | discord-version-presence-rides-every-gateway-identify-via-the-client-presence-option-and-is-still-set-on-clientready: Discord version presence rides every gateway IDENTIFY via the Client presence option and is still set on ClientReady (DISCORD-12) |
 | 2026-09-27 | safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin: SAFE-5: /schedule delete appends audit rows before deleting a schedule and its run history, and fails closed like /admin when the audit trail is unavailable |
 | 2026-09-27 | discord-channel-autocomplete-for-admin-and-announce-returns-no-choices-unless-the-invoker-is-admin-in-an-allowlisted: Discord channel autocomplete for /admin and /announce returns no choices unless the invoker is ADMIN in an allowlisted channel |
+| 2026-09-27 | work-and-session-start-answer-an-ask-whose-choices-fit-a-short-list-with-the-chat-s-choose-stub-and-ephemeral-pick-free: /work and /session start answer an ask whose choices fit a short list with the chat's Choose stub and ephemeral pick, free text only when the options cannot be listed (DISCORD-ASK-1/4) |
 | 2026-09-27 | discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per: Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3) |
 | 2026-09-27 | discord-button-pick-resume-injects-the-presser-s-display-name-and-username-like-a-chat-message-identity-4: Discord button-pick resume injects the presser's display name and username like a chat message (IDENTITY-4) |
 | 2026-09-27 | the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the: The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a) |

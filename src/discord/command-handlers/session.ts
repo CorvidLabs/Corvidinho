@@ -11,11 +11,11 @@ import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { actorIsAdmin, projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
-import { finishSlashWithThinking } from "../slash-finish.ts";
+import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
-import { toPendingAsk } from "../ask-buttons.ts";
+import { buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
@@ -205,9 +205,17 @@ export async function handleSessionStart(
   // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
   // is not "Done"; the owner is pinged (once per cap episode).
   const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
+  // DISCORD-ASK-1/4 (REQ-discord-044): choices that fit a short list get the
+  // chat's public Choose stub (the question and options open ephemerally for
+  // the requester); free text only when they cannot be listed.
+  const choice = result.ask
+    ? buttonAskFor({ ask: result.ask, requesterDiscordId: interaction.userId })
+    : null;
   // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
   // pinged in a separate post (below) for stuck and spend-cap.
-  const ask = result.ask
+  const ask = choice
+    ? choice.stub
+    : result.ask
     ? formatAskReply({
         ask: result.ask,
         owner: null,
@@ -220,12 +228,14 @@ export async function handleSessionStart(
     console.warn(ASK_NO_OWNER_WARNING);
   }
   // AUTONOMY-5/6 (REQ-discord-044): the session waits on this ask like a
-  // chat ask — free text, as the answer shows it. A SAFE-8 spend-cap stop is
-  // never pending: a reply cannot lift the cap.
+  // chat ask — a button ask with its options, else free text, as the answer
+  // shows it. A SAFE-8 spend-cap stop is never pending: a reply cannot lift
+  // the cap.
   if (result.ask && result.ask.reason !== "spend-cap") {
     ctx.store.setPendingAsk(
       session,
-      toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
+      choice?.pending ??
+        toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
     );
   }
 
@@ -234,14 +244,16 @@ export async function handleSessionStart(
     : result.ok
       ? result.summary.slice(0, 1500)
       : `failed (exit ${result.exitCode})`;
-  // AGENT-6 (REQ-discord-072): the answer joins the thread. The ask shows as
-  // text (no buttons); a spend-cap stop records no answer (REQ-discord-098).
+  // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
+  // its question and choices); a spend-cap stop records no answer
+  // (REQ-discord-098).
   ctx.store.recordTurn(
     session,
     "agent",
     answerTurnText(
       summary,
-      result.ask ? { reason: result.ask.reason, question: result.ask.question } : null,
+      choice?.pending ??
+        (result.ask ? { reason: result.ask.reason, question: result.ask.question } : null),
     ),
   );
   const wt = session.worktreePath
@@ -271,6 +283,13 @@ export async function handleSessionStart(
     ok: result.ok,
     failStatus: `❌ exit ${result.exitCode}`,
     ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+    ...(choice
+      ? {
+          components: choice.components,
+          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+            recordSlashStub(ctx.store, session, choice.pending, messageId),
+        }
+      : {}),
     notice,
     post: ctx.post,
   });
