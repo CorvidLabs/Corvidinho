@@ -7,10 +7,11 @@
   "title": "PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root",
   "description": "PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "0940db343de30fdb4d79d83cfa44b95c5a247681",
   "created_at": 1790536036,
-  "updated_at": 1790536309,
+  "updated_at": 1790536329,
   "affected_specs": [
     "plugins",
     "agent"
