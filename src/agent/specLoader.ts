@@ -92,6 +92,25 @@ export function selectRelevantSpecs(
   return scored.slice(0, topN);
 }
 
+/** A bridge label such as `[WATCH issue_comment]` at the start of a line. */
+const BRIDGE_LABEL_RE = /^[ \t]*\[[A-Z][A-Z0-9_-]*(?:[ \t][^\]\n]*)?\][ \t]*/gm;
+
+/**
+ * The part of a task that picks modules at Planning (REQ-agent-004): the
+ * request itself, not the context a bridge wraps around it. Paragraphs that
+ * open with a `[Corvidinho …]` header (the Discord identity and memory blocks)
+ * and all-caps line labels (`[WATCH issue_comment]`) are left out, so words
+ * such as "Discord" or "WATCH" in that wrapper do not select a module the
+ * request never names and send its briefing to the model on every run.
+ */
+export function planningSelectionText(task: string): string {
+  return task
+    .split(/\r?\n[ \t]*\r?\n/)
+    .filter((para) => !/^\s*\[Corvidinho /.test(para))
+    .join("\n\n")
+    .replace(BRIDGE_LABEL_RE, "");
+}
+
 function stripFrontmatter(content: string): string {
   const trimmed = content.replace(/^\uFEFF?/, "").replace(/^\s*/, "");
   if (!trimmed.startsWith("---\n") && !trimmed.startsWith("---\r\n")) {
@@ -162,7 +181,7 @@ export function loadRelevantSpecs(opts: LoadRelevantSpecsOptions): string {
   names = names.filter((n) => n && !n.startsWith("(") && !/\s/.test(n));
   if (names.length === 0) return "";
 
-  const picks = selectRelevantSpecs(opts.task, names, topN);
+  const picks = selectRelevantSpecs(planningSelectionText(opts.task), names, topN);
   if (picks.length === 0) return "";
 
   const parts: string[] = [];

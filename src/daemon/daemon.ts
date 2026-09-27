@@ -14,6 +14,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "../agent/spend-notice.ts";
 import { loadAllowlist } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import {
@@ -167,6 +168,26 @@ export async function startDaemon(
         ...(e.error ? { error: e.error.slice(0, 500) } : {}),
         ...(e.autoPaused ? { autoPaused: true } : {}),
       });
+      // SAFE-8 / AUTONOMY-2: the daemon has no Discord, so the operator hears
+      // about the spend cap here; the warning row stays pending for a bridge.
+      if (e.spendWarning) {
+        log("warn", "spend.warning", {
+          scheduleId: e.scheduleId,
+          runId: e.runId,
+          spentMicroUsd: e.spendWarning.spentMicroUsd,
+          capMicroUsd: e.spendWarning.capMicroUsd,
+          percent: e.spendWarning.percent,
+          message: formatSpendWarningLine(e.spendWarning),
+        });
+      }
+      if (e.askReason) {
+        log("warn", "run.needs_human", {
+          scheduleId: e.scheduleId,
+          runId: e.runId,
+          reason: e.askReason,
+          ...(e.askReason === "spend-cap" ? { message: SPEND_CAP_SUMMARY } : {}),
+        });
+      }
     },
   });
 
