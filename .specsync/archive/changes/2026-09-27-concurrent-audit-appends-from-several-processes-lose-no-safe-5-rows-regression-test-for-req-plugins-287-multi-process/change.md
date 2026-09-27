@@ -1,6 +1,6 @@
 ---
 id: concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 9cab0ec853d8b4b55acda7f1ff708a6b68a1a130
 ---

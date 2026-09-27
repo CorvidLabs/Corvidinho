@@ -7,11 +7,11 @@
   "title": "Concurrent audit appends from several processes lose no SAFE-5 rows: regression test for REQ-plugins-287 multi-process acceptance (review follow-up for PR 211)",
   "description": "Concurrent audit appends from several processes lose no SAFE-5 rows: regression test for REQ-plugins-287 multi-process acceptance (review follow-up for PR 211)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "9cab0ec853d8b4b55acda7f1ff708a6b68a1a130",
   "created_at": 1790469311,
-  "updated_at": 1790469884,
+  "updated_at": 1790470012,
   "affected_specs": [
     "plugins"
   ],
