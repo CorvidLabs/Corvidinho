@@ -1,6 +1,6 @@
 ---
 id: safe-3-shell-exec-cd-clamp-reads-quoting-the-way-the-shell-does-escaped-backslash-before-a-newline-comments-and-here
-state: verifying
+state: implementing
 type: bug_fix
 base_commit: 07fa953887ab61dde8a0e32ee1161b5981695dea
 ---
