@@ -7,11 +7,11 @@
   "title": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
   "description": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
   "created_at": 1790530164,
-  "updated_at": 1790532772,
+  "updated_at": 1790532998,
   "affected_specs": [
     "discord"
   ],
