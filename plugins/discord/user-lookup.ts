@@ -87,7 +87,8 @@ function memberFromApi(
   body: DiscordApiMember,
 ): DiscordMemberLookup | null {
   const user = body.user;
-  const id = user?.id?.trim() ?? "";
+  if (!user) return null;
+  const id = user.id?.trim() ?? "";
   if (!id) return null;
   const username = (user.username ?? "").trim() || id;
   const globalName = (user.global_name ?? null)?.trim() || null;
