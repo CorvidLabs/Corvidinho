@@ -9,6 +9,7 @@
  * never a button ask. Fixtures only: fake gateway, in-memory outbound.
  */
 import { describe, expect, test } from "bun:test";
+import { Client, Events } from "discord.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,11 +25,16 @@ import {
 import { ASK_REPLY_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
+  createLiveGateway,
   createNullGateway,
   type ComponentInteraction,
   type GatewayHandlers,
 } from "../src/discord/gateway.ts";
+import { SessionStore } from "../src/discord/session-store.ts";
+import { recordSlashStub } from "../src/discord/slash-finish.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
+import type { BridgeConfig } from "../src/discord/types.ts";
+import { openCorvidinhoDb } from "../src/store/db.ts";
 
 const OWNER_ID = "111122223333444455";
 const REQUESTER = "222233334444555566";
@@ -378,5 +384,129 @@ describe("/work and /session start ask with Choose buttons when the options can 
     expect(pending).toMatchObject(clarify);
     expect(pending.options).toBeUndefined();
     await bridge.result.stop();
+  });
+});
+
+describe("recordSlashStub (DISCORD-ASK-1, REQ-discord-044)", () => {
+  function storeWithAsk() {
+    const db = openCorvidinhoDb({ memory: true });
+    const store = new SessionStore({ db });
+    const session = store.create({ channelId: "chan-1", userId: REQUESTER, topic: "t" });
+    const choice = buttonAskFor({ ask: OPTIONS_ASK, requesterDiscordId: REQUESTER })!;
+    store.setPendingAsk(session, choice.pending);
+    return { db, store, session, pending: choice.pending };
+  }
+  const storedAsk = (db: ReturnType<typeof openCorvidinhoDb>, id: string) =>
+    (db.query("SELECT pending_ask FROM discord_sessions WHERE id = ?").get(id) as
+      | { pending_ask: string | null }
+      | null);
+
+  test("records the answer message id on the still-pending ask, in memory and at rest", () => {
+    const { db, store, session, pending } = storeWithAsk();
+    recordSlashStub(store, session, pending, "stub_1");
+    expect(session.pendingAsk?.stubMessageId).toBe("stub_1");
+    expect(JSON.parse(storedAsk(db, session.id)!.pending_ask!).stubMessageId).toBe("stub_1");
+    db.close();
+  });
+
+  test("a pick that already took the ask is not undone", () => {
+    const { db, store, session, pending } = storeWithAsk();
+    store.setPendingAsk(session, null);
+    recordSlashStub(store, session, pending, "stub_1");
+    expect(session.pendingAsk ?? null).toBeNull();
+    expect(storedAsk(db, session.id)!.pending_ask).toBeNull();
+    db.close();
+  });
+
+  test("a session ended before the stub went out is not written back", async () => {
+    const { db, store, session, pending } = storeWithAsk();
+    await store.endSession(session);
+    recordSlashStub(store, session, pending, "stub_1");
+    expect(storedAsk(db, session.id)).toBeNull();
+    expect(store.get(session.id)).toBeUndefined();
+    db.close();
+  });
+});
+
+/**
+ * The live gateway adapter forwards a slash answer's components (the Choose
+ * button) to discord.js on both the deferred-reply edit and a plain reply.
+ * Real `login` with the socket connect stubbed out: no token, no network.
+ */
+describe("live gateway slash replies carry components (DISCORD-ASK-1)", () => {
+  async function startOffline(onSlash: (ix: SlashInteraction) => Promise<void>) {
+    const realLogin = Client.prototype.login;
+    let client: Client | null = null;
+    Client.prototype.login = async function (this: Client, token?: string) {
+      client = this;
+      (this.ws as unknown as { connect: () => Promise<void> }).connect = async () => {};
+      return realLogin.call(this, token);
+    };
+    try {
+      const gateway = await createLiveGateway(
+        { token: "fixture-token-not-real", channelIds: ["chan-1"] } as unknown as BridgeConfig,
+        { onMessage: () => {}, onSlash },
+        { version: "9.9.9" },
+      );
+      await gateway.start();
+      if (!client) throw new Error("login was not called");
+      return { gateway, client: client as Client };
+    } finally {
+      Client.prototype.login = realLogin;
+    }
+  }
+
+  function rawInteraction(deferred: boolean) {
+    const calls: Array<{ kind: "reply" | "editReply"; payload: Record<string, unknown> }> = [];
+    const raw = {
+      id: "ix_live",
+      commandName: "work",
+      channelId: "chan-1",
+      guildId: null,
+      user: { id: REQUESTER, username: "requester" },
+      member: null,
+      options: { getSubcommand: () => null, getSubcommandGroup: () => null, data: [] },
+      deferred,
+      replied: false,
+      isAutocomplete: () => false,
+      isMessageComponent: () => false,
+      isChatInputCommand: () => true,
+      reply: async (p: Record<string, unknown>) => void calls.push({ kind: "reply", payload: p }),
+      deferReply: async () => {},
+      editReply: async (p: Record<string, unknown>) => {
+        calls.push({ kind: "editReply", payload: p });
+        return { id: "reply_msg" };
+      },
+      deleteReply: async () => {},
+    };
+    return { raw, calls };
+  }
+
+  test("editReply and reply both pass the Choose button through", async () => {
+    const components = buildOpenStubComponents("askLive1");
+    const seen: Array<Promise<unknown>> = [];
+    const { gateway, client } = await startOffline(async (ix) => {
+      const edit = ix.editReply!({ content: "stub", components });
+      seen.push(edit);
+      await edit;
+      await ix.reply({ content: "stub", components });
+    });
+    try {
+      const deferred = rawInteraction(true);
+      client.emit(Events.InteractionCreate, deferred.raw as never);
+      const plain = rawInteraction(false);
+      client.emit(Events.InteractionCreate, plain.raw as never);
+      for (let i = 0; i < 20 && (deferred.calls.length < 2 || plain.calls.length < 2); i++) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      expect(await seen[0]).toEqual({ messageId: "reply_msg" });
+      // Deferred: both the edit and the reply go through editReply.
+      expect(deferred.calls.map((c) => c.kind)).toEqual(["editReply", "editReply"]);
+      for (const c of deferred.calls) expect(c.payload.components).toEqual(components);
+      expect(plain.calls.map((c) => c.kind)).toEqual(["editReply", "reply"]);
+      for (const c of plain.calls) expect(c.payload.components).toEqual(components);
+    } finally {
+      await gateway.stop();
+    }
   });
 });

@@ -137,7 +137,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   nobody and the owner notice is the one fresh post; when that notice post
   fails the re-edited stub keeps its Choose button; without `editMessage` the
   deferred reply carries the stub and button and its id is `stubMessageId`;
-  without listable options the answer stays free text with no button. The
+  without listable options the answer stays free text with no button;
+  `recordSlashStub` records the stub id only on a still-pending ask of a live
+  session (not after a pick took it, not after the session ended); the live
+  gateway adapter forwards the Choose button on `editReply` and `reply`. The
   bridge-level tests fail on the base sources (free-text answer, options
   dropped).
 

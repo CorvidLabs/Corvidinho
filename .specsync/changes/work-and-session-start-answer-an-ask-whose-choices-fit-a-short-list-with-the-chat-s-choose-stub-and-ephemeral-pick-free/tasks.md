@@ -13,3 +13,4 @@ artifact: tasks
 - [x] `tests/discord.slash-pending-ask.test.ts`: the two "options dropped" tests now use asks whose options cannot be listed.
 - [x] `docs/discord.md`, `specs/discord/discord.spec.md` (prose, `files:`), `specs/discord/testing.md`; delta Modified REQ-discord-044.
 - [x] `specsync check --require-coverage 100`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive`.
+- [x] Review fixes: `recordSlashStub` skips a session that is no longer live (no DB upsert of an ended session); tests for the pick-first and ended-session cases and for the live gateway `components` forward; stale Invariants sentence in `discord.spec.md` (slash asks were "free text"); merged `origin/main` (docs conflict kept both sides).

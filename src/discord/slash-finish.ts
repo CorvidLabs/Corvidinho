@@ -108,16 +108,19 @@ export async function finishSlashWithThinking(
  * DISCORD-ASK-1 (REQ-discord-044): once a `/work` or `/session start` Choose
  * stub is out, record its message id on the session's pending ask, so a pick
  * resumes in that message (DISCORD-ASK-7), as on the chat path. Only while
- * that ask is still the pending one. Best effort: a failed write is logged
- * and never keeps the deferred reply from resolving.
+ * that ask is still the pending one of a live session: a pick that already
+ * took it, or a session ended meanwhile, is left alone (the write is an
+ * upsert, so it would bring an ended session's row back). Best effort: a
+ * failed write is logged and never keeps the deferred reply from resolving.
  */
 export function recordSlashStub(
-  store: Pick<SessionStore, "setPendingAsk">,
+  store: Pick<SessionStore, "get" | "setPendingAsk">,
   session: SessionStub,
   pending: PendingAsk,
   messageId: string | undefined,
 ): void {
   if (!messageId || session.pendingAsk?.askId !== pending.askId) return;
+  if (store.get(session.id) !== session) return;
   pending.stubMessageId = messageId;
   try {
     store.setPendingAsk(session, pending);

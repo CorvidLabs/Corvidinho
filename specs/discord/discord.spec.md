@@ -197,7 +197,8 @@ returns a `ButtonAsk` or null) makes the answer the chat's Choose stub
 the stub's `components` on the collapsed edit, the fallback reply
 (`SlashReplyPayload.components`) and the owner-notice re-edit, and
 `recordSlashStub` stores the answer message id as `stubMessageId` from
-`onDelivered(mode, messageId)`, so the chat `onComponent` open/pick path
+`onDelivered(mode, messageId)` (only while that ask is still the pending ask
+of a live session), so the chat `onComponent` open/pick path
 resumes the session in that message. Otherwise the answer is the free-text
 ask: a thin reply restates, cancel clears, a substantive reply resumes with
 the question.
@@ -395,9 +396,11 @@ pinged twice in a turn (the slash owner notice post counts), a spend-cap ask
 whose episode already pinged carries no owner mention, and a fallback reply
 (already a fresh post) gets no extra post (REQ-discord-215).
 A `/work` or `/session start` run that stopped to ask leaves its session
-waiting on that ask exactly like a chat ask (free text, never a spend-cap
-stop), and its answer message is tracked like a chat reply, so a reply to it
-by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
+waiting on that ask exactly like a chat ask (a Choose-button ask when its
+choices fit a short list, else free text; never a spend-cap stop), and its
+answer message is tracked like a chat reply, so a reply to it by the
+requester never goes unheard (AUTONOMY-1/5/6 / DISCORD-ASK-1/4 /
+REQ-discord-044).
 
 ## Behavioral Examples
 
