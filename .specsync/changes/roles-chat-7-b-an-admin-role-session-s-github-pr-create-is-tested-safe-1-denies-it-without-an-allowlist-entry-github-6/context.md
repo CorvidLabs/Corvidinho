@@ -36,5 +36,9 @@ file's per-test env snapshot now also clears and restores the GitHub allow/deny
 keys, `CORVIDINHO_GITHUB_DRY_RUN`, `GITHUB_TOKEN` and `GH_TOKEN`, so an
 operator's env can neither admit the repo nor reach the network.
 
-Out of scope: ADMIN `memory-forget` under ROLES-CHAT-7(b) (MEMORY-ACL confirm
-path) is a separate slice. Open PRs #232 and #233 are not touched.
+The other ROLES-CHAT-7(b) paths are already covered on main: `files-write`
+and `shell-exec` in this file, and ADMIN `memory-forget` in
+`tests/memory.plugins.test.ts` ("dangerous forget/override still SAFE-1 denied
+without allowlist" runs as the owner with the bridge bit; "admin user/role
+lists no longer grant memory ADMIN" shows the owner's allowlisted forget goes
+through). Open PRs #232 and #233 are not touched.
