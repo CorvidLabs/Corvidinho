@@ -140,12 +140,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   message (`humanText` the new message only); a second bridge on the same DB
   file continues the thread; replies to `/session start` and `/work` answers
   carry the topic/description and answer; a button pick carries the original
-  request; a spend-cap stop keeps the request but no cap text; replayed and
-  stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
+  request; a spend-cap stop keeps the request but no cap text; the request is
+  stored as its run starts (a restart mid-run finds it) and a run that
+  throws (chat, `/session start`, `/work`) keeps it for the next message; `planningSelectionText` of a continued prompt is the new message
+  only (REQ-agent-004); replayed and stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
   replay; another user's session never sees my turns; confirm tokens only
   from the current message (no live Discord).
 - `tests/discord.session-thread.unit.test.ts` — the renderer (budget,
-  opening request + newest turns, exact omitted count, per-turn clip,
+  opening request + newest turns, exact omitted count, per-turn clip that
+  never cuts a surrogate pair, one paragraph that Planning selection skips,
   `answerTurnText`) and `SessionStore` turns (module-owned table without a
   schema version change, reload after reopen, delete on end/TTL, orphan
   sweep, turn cap, scrub on write, `SCRUB_TARGETS` + `rescrubDatabase`).

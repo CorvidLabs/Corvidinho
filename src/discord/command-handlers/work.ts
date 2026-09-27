@@ -109,6 +109,10 @@ export async function handleWorkCommand(
     username: interaction.userUsername,
     owner: ctx.owner,
   });
+  // AGENT-6 (REQ-discord-072): the description opens the session's thread as
+  // the run starts, so a reply to this answer carries it (even after a
+  // failure).
+  ctx.store.recordTurn(session, "human", description);
   let result;
   try {
     // Busy while the agent runs: the soft-TTL purge must not park this
@@ -135,6 +139,7 @@ export async function handleWorkCommand(
     const msg = err instanceof Error ? err.message : "agent error";
     ctx.workStore.setStatus(task, "failed", msg);
     const body = `Work \`${task.id}\` failed: ${msg}`;
+    ctx.store.recordTurn(session, "agent", body);
     // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
     await finishSlashWithThinking({
       thinking,
@@ -202,12 +207,11 @@ export async function handleWorkCommand(
     : result.ok
       ? result.summary.slice(0, 1500)
       : `failed (exit ${result.exitCode})`;
-  // AGENT-6 (REQ-discord-072): the description and its answer open the
-  // session's thread, so a reply to this answer carries them. The ask shows
-  // as text (no buttons); a spend-cap stop records no answer (REQ-discord-098).
-  ctx.store.recordExchange(
+  // AGENT-6 (REQ-discord-072): the answer joins the thread. The ask shows as
+  // text (no buttons); a spend-cap stop records no answer (REQ-discord-098).
+  ctx.store.recordTurn(
     session,
-    description,
+    "agent",
     answerTurnText(
       summary,
       result.ask ? { reason: result.ask.reason, question: result.ask.question } : null,

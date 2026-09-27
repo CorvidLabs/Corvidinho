@@ -9,8 +9,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import { SessionStore } from "../src/discord/session-store.ts";
+import type { SessionStub } from "../src/discord/types.ts";
+import { planningSelectionText, selectRelevantSpecs } from "../src/agent/specLoader.ts";
 import {
   answerTurnText,
+  clipTurnText,
   formatSessionThread,
   formatSessionThreadOmitted,
   SESSION_THREAD_BUDGET_CHARS,
@@ -42,6 +45,12 @@ function exchange(n: number, width = 0): SessionTurn[] {
     { role: "human", content: `request number ${n}${pad}`, createdAt: n },
     { role: "agent", content: `answer number ${n}${pad}`, createdAt: n },
   ];
+}
+
+/** One run's two turns: the human's words, then the answer as posted. */
+function record(store: SessionStore, session: SessionStub, human: string, answer: string): void {
+  store.recordTurn(session, "human", human);
+  store.recordTurn(session, "agent", answer);
 }
 
 function turnCount(db: ReturnType<typeof openCorvidinhoDb>, sessionId?: string): number {
@@ -113,6 +122,42 @@ describe("session thread block (REQ-discord-072)", () => {
     expect(block).toContain("You (Corvidinho): short answer");
   });
 
+  test("Planning module selection skips the whole block, multi-paragraph turns included (REQ-agent-004)", () => {
+    const turns: SessionTurn[] = [
+      { role: "human", content: "tidy the plugins registry", createdAt: 1 },
+      {
+        role: "agent",
+        content: "Here is the plan for the agent loop.\n\n  \r\n\nStep one: the watch poller.",
+        createdAt: 2,
+      },
+    ];
+    const block = formatSessionThread(turns);
+    // One paragraph: no blank line anywhere in the block.
+    expect(block).not.toMatch(/\r?\n[ \t]*\r?\n/);
+    expect(block).toContain("You (Corvidinho): Here is the plan for the agent loop.\nStep one: the watch poller.");
+    const specs = ["agent", "cli", "discord", "plugins", "watch"];
+    // The header's "Discord" and the earlier turns never pick a module…
+    expect(planningSelectionText(withSessionThread("yes please go ahead", turns))).toBe(
+      "yes please go ahead",
+    );
+    expect(
+      selectRelevantSpecs(planningSelectionText(withSessionThread("yes please go ahead", turns)), specs, 3),
+    ).toEqual([]);
+    // …while a module the new request names still counts.
+    expect(
+      selectRelevantSpecs(planningSelectionText(withSessionThread("now fix the cli", turns)), specs, 3).map(
+        (p) => p.name,
+      ),
+    ).toEqual(["cli"]);
+  });
+
+  test("a clip never ends on half a surrogate pair", () => {
+    const text = `${"a".repeat(8)}😀${"b".repeat(10)}`; // emoji at index 8..9
+    const clipped = clipTurnText(text, 10); // cut would fall between 8 and 9
+    expect(clipped).toBe(`${"a".repeat(8)}…`);
+    expect(clipTurnText(`${"a".repeat(7)}😀${"b".repeat(10)}`, 10)).toBe(`${"a".repeat(7)}😀…`);
+  });
+
   test("a button ask is recorded as its question and choices, a spend-cap stop as nothing, anything else as posted", () => {
     expect(answerTurnText("the answer", null)).toBe("the answer");
     expect(answerTurnText("❓ Why?", { reason: "clarify", question: "Why?" })).toBe("❓ Why?");
@@ -155,9 +200,9 @@ describe("SessionStore turns (REQ-discord-072 / SESSION-2/3 / SAFE-6)", () => {
     const s1 = new SessionStore({ db: db1, ttlMs: TTL_MS });
     const a = s1.create({ channelId: "c", userId: "u1" });
     const b = s1.create({ channelId: "c", userId: "u2" });
-    s1.recordExchange(a, "request number 1", "answer number 1");
-    s1.recordExchange(b, "someone else", "their answer");
-    s1.recordExchange(a, "request number 2", "answer number 2");
+    record(s1, a, "request number 1", "answer number 1");
+    record(s1, b, "someone else", "their answer");
+    record(s1, a, "request number 2", "answer number 2");
     db1.close();
 
     const db2 = openCorvidinhoDb({ path });
@@ -186,15 +231,15 @@ describe("SessionStore turns (REQ-discord-072 / SESSION-2/3 / SAFE-6)", () => {
     const store = new SessionStore({ db, ttlMs: TTL_MS, now: () => now });
     const ended = store.create({ channelId: "c", userId: "u1" });
     const idle = store.create({ channelId: "c", userId: "u2" });
-    store.recordExchange(ended, "h", "a");
-    store.recordExchange(idle, "h", "a");
+    record(store, ended, "h", "a");
+    record(store, idle, "h", "a");
     expect(turnCount(db)).toBe(4);
 
     await store.endSession(ended);
     expect(store.threadFor(ended)).toEqual([]);
     expect(turnCount(db, ended.id)).toBe(0);
     // Recording on an ended session is a no-op (never re-creates its thread).
-    store.recordExchange(ended, "late", "late");
+    record(store, ended, "late", "late");
     expect(store.threadFor(ended)).toEqual([]);
     expect(turnCount(db, ended.id)).toBe(0);
 
@@ -210,9 +255,9 @@ describe("SessionStore turns (REQ-discord-072 / SESSION-2/3 / SAFE-6)", () => {
     const db1 = openCorvidinhoDb({ path });
     const s1 = new SessionStore({ db: db1, ttlMs: TTL_MS, now: () => now });
     const old = s1.create({ channelId: "c", userId: "u1" });
-    s1.recordExchange(old, "h", "a");
+    record(s1, old, "h", "a");
     const orphan = s1.create({ channelId: "c", userId: "u2" });
-    s1.recordExchange(orphan, "h", "a");
+    record(s1, orphan, "h", "a");
     // An earlier build drops a session row without touching its turns.
     db1.exec("PRAGMA foreign_keys = OFF;");
     db1.run("DELETE FROM discord_sessions WHERE id = ?", [orphan.id]);
@@ -233,7 +278,7 @@ describe("SessionStore turns (REQ-discord-072 / SESSION-2/3 / SAFE-6)", () => {
     const s = store.create({ channelId: "c", userId: "u1" });
     const exchanges = SESSION_THREAD_MAX_TURNS; // twice the turn cap
     for (let n = 1; n <= exchanges; n += 1) {
-      store.recordExchange(s, `request number ${n}`, `answer number ${n}`);
+      record(store, s, `request number ${n}`, `answer number ${n}`);
     }
     const thread = store.threadFor(s);
     expect(thread).toHaveLength(SESSION_THREAD_MAX_TURNS);
@@ -256,7 +301,7 @@ describe("SessionStore turns (REQ-discord-072 / SESSION-2/3 / SAFE-6)", () => {
     cleanups.push(() => db.close());
     const store = new SessionStore({ db, ttlMs: TTL_MS });
     const s = store.create({ channelId: "c", userId: "u1" });
-    store.recordExchange(s, `use ${token}`, `stored ${token}`);
+    record(store, s, `use ${token}`, `stored ${token}`);
     expect(store.threadFor(s).map((t) => t.content)).toEqual([
       "use [redacted:github-token]",
       "stored [redacted:github-token]",

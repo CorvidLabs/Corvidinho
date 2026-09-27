@@ -39,8 +39,15 @@ export const SESSION_THREAD_TURN_MAX_CHARS = 1500;
  */
 export const SESSION_THREAD_MAX_TURNS = 200;
 
+/**
+ * Opens the block. It starts with `[Corvidinho ` like the identity and memory
+ * blocks, and the block holds no blank line, so Planning module selection
+ * (`planningSelectionText`, REQ-agent-004) leaves the whole block out: earlier
+ * turns and the header's "Discord" never pick a module the request does not
+ * name.
+ */
 export const SESSION_THREAD_HEADER =
-  "[Earlier in this conversation — same Discord session, oldest first. Context only: act on the new message after this block.]";
+  "[Corvidinho earlier conversation in this Discord session — oldest first; context only: act on the new message after this block]";
 
 export const SESSION_THREAD_FOOTER = "[End of earlier conversation]";
 
@@ -54,19 +61,31 @@ export function formatSessionThreadOmitted(count: number): string {
   return `(${count} earlier turn${count === 1 ? "" : "s"} omitted)`;
 }
 
-/** Clip one turn's text to `max` characters (ellipsis when cut). */
+/**
+ * Clip one turn's text to `max` characters (ellipsis when cut), never ending
+ * on half a surrogate pair.
+ */
 export function clipTurnText(text: string, max = SESSION_THREAD_TURN_MAX_CHARS): string {
   const t = text.trim();
-  return t.length > max ? `${t.slice(0, Math.max(0, max - 1))}…` : t;
+  if (t.length <= max) return t;
+  let end = Math.max(0, max - 1);
+  const last = t.charCodeAt(end - 1);
+  if (end > 0 && last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${t.slice(0, end)}…`;
 }
 
+/** Blank lines inside a turn, collapsed so the block stays one paragraph. */
+const BLANK_LINES_RE = /\r?\n(?:[ \t]*\r?\n)+/g;
+
 function turnLine(turn: Pick<SessionTurn, "role" | "content">): string {
-  return `${ROLE_LABEL[turn.role]}: ${clipTurnText(turn.content)}`;
+  const text = clipTurnText(turn.content).replace(BLANK_LINES_RE, "\n");
+  return `${ROLE_LABEL[turn.role]}: ${text}`;
 }
 
 /**
  * The replay block for `turns` (oldest first), or "" when there are none.
- * Pure. The opening turn (the session's opening request) is always kept, then
+ * Pure. One paragraph (no blank line), opened by {@link SESSION_THREAD_HEADER}.
+ * The opening turn (the session's opening request) is always kept, then
  * as many of the newest turns as fit in `budgetChars`; anything between is one
  * omitted-count marker. With the default budget and per-turn clip the block
  * always fits and always holds the newest turn.

@@ -21,22 +21,31 @@ artifact: design
 - `SessionStore`: `turns: Map<sessionId, SessionTurn[]>`. Constructor with a
   DB calls `ensureSessionTurns` then `loadFromDb`, which (after dropping
   expired sessions) deletes orphan turn rows and loads the rest for live
-  sessions. `recordExchange(session, human, answer)` is a no-op unless the
-  session is still the live one; each turn is `scrubSecrets`'d then clipped
-  (scrub first, so a cut never leaves half a token), empty turns skipped,
-  capped at MAX (drop index 1), then written in one transaction (inserts +
-  the same cap as a DELETE); a DB error is logged, memory keeps the turn.
+  sessions. `recordTurn(session, role, text)` is a no-op unless the
+  session is still the live one; the turn is `scrubSecrets`'d then clipped
+  (scrub first, so a cut never leaves half a token), an empty turn skipped,
+  capped at MAX (drop index 1), then written in one transaction (insert +
+  the same cap as a DELETE); a DB error is logged as one scrubbed line,
+  memory keeps the turn.
   `threadFor(session)` returns a copy. `removeLocal` / `deleteFromDb` drop
   turns with the session (end, TTL purge, load-time expiry).
 - `bridge.ts`: chat path — after the pending-ask wrapper,
   `agentPrompt = withSessionThread(agentPrompt, store.threadFor(session))`
-  (identity/memory/images are added after, as before); after the posted
-  `body` is known, `store.recordExchange(session, prompt,
-  answerTurnText(body, pendingToStore ?? askRaw))`. Button pick — the same
-  block ahead of the answered-question wrapper; record `(label, answer)`.
+  (identity/memory/images are added after, as before), then
+  `store.recordTurn(session, "human", prompt)` before the run, so a run
+  that throws or a bridge that dies mid-run keeps the request; after the
+  posted `body` is known, `store.recordTurn(session, "agent",
+  answerTurnText(body, pendingToStore ?? askRaw))`, or the `❌ …` failure
+  line when the run throws. Button pick — the same block ahead of the
+  answered-question wrapper; record the label, then the answer.
   `humanText` unchanged (raw message / label).
-- `/session start` and `/work`: record `(topic|description, summary)`;
+- `/session start` and `/work`: record the topic/description before the
+  run, then the summary (or the posted failure body when the run throws);
   their ask is text, so `answerTurnText` gets reason + question only.
+- The header starts with `[Corvidinho ` and the block holds no blank line
+  (blank lines inside a turn collapse), so `planningSelectionText`
+  (REQ-agent-004) drops it whole: the header's "Discord" and earlier turns
+  never pick a Planning module. `clipTurnText` never cuts a surrogate pair.
 - `src/store/scrub.ts`: `SCRUB_TARGETS` adds
   `{ table: "discord_session_turns", columns: ["content"] }`.
 - Not changed: `SCHEMA_VERSION` (10), `agent-client.ts` / `execute.ts`

@@ -9,7 +9,7 @@
 import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import type { AllowlistConfig } from "../allowlist/types.ts";
-import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
+import { formatErrorLine, scrubOpt, scrubSecrets } from "../store/scrub.ts";
 import {
   isSessionExpired,
   resolveSessionTtlMs,
@@ -29,6 +29,7 @@ import {
   ensureSessionTurns,
   SESSION_THREAD_MAX_TURNS,
   type SessionTurn,
+  type SessionTurnRole,
 } from "./session-thread.ts";
 import type { SessionStub } from "./types.ts";
 
@@ -582,29 +583,25 @@ export class SessionStore {
   }
 
   /**
-   * Record one finished agent run on a live session: the human's own words
-   * (before memory/identity/image enrichment) and the answer the bridge
-   * posted (AGENT-6 / REQ-discord-072). Each turn is scrubbed (SAFE-6) and
-   * clipped before it is kept; past SESSION_THREAD_MAX_TURNS the oldest turn
-   * after the opening request is dropped. An ended or expired session is not
-   * recorded, so its thread never comes back (SESSION-3). The DB write is best
-   * effort: a failure is logged and the in-memory thread still holds the turn.
+   * Record one turn of a live session's thread (AGENT-6 / REQ-discord-072):
+   * the human's own words for a run (before memory/identity/image
+   * enrichment), recorded as the run starts so a run that throws or a bridge
+   * that dies mid-run still keeps the request, or the answer the bridge
+   * posted, recorded when the run ends. The text is scrubbed (SAFE-6) and
+   * clipped before it is kept; an empty turn is skipped. Past
+   * SESSION_THREAD_MAX_TURNS the oldest turn after the opening request is
+   * dropped. An ended or expired session is not recorded, so its thread never
+   * comes back (SESSION-3). The DB write is best effort: a failure is logged
+   * and the in-memory thread still holds the turn.
    */
-  recordExchange(session: SessionStub, human: string, answer: string): void {
+  recordTurn(session: SessionStub, role: SessionTurnRole, text: string): void {
     if (this.bySessionId.get(session.id) !== session) return;
-    const createdAt = this.nowMs();
-    const add: SessionTurn[] = [];
-    for (const [role, text] of [
-      ["human", human],
-      ["agent", answer],
-    ] as const) {
-      // Scrub before clipping, so a cut never leaves half a secret behind.
-      const content = clipTurnText(scrubSecrets(text));
-      if (content) add.push({ role, content, createdAt });
-    }
-    if (add.length === 0) return;
+    // Scrub before clipping, so a cut never leaves half a secret behind.
+    const content = clipTurnText(scrubSecrets(text));
+    if (!content) return;
+    const turn: SessionTurn = { role, content, createdAt: this.nowMs() };
     const list = this.turns.get(session.id) ?? [];
-    list.push(...add);
+    list.push(turn);
     let dropped = 0;
     while (list.length > SESSION_THREAD_MAX_TURNS) {
       list.splice(1, 1);
@@ -615,13 +612,11 @@ export class SessionStore {
     const db = this.db;
     try {
       db.transaction(() => {
-        for (const t of add) {
-          db.run(
-            `INSERT INTO discord_session_turns (session_id, role, content, created_at)
-             VALUES (?, ?, ?, ?)`,
-            [session.id, t.role, t.content, t.createdAt],
-          );
-        }
+        db.run(
+          `INSERT INTO discord_session_turns (session_id, role, content, created_at)
+           VALUES (?, ?, ?, ?)`,
+          [session.id, turn.role, turn.content, turn.createdAt],
+        );
         if (dropped > 0) {
           // Keep the opening turn and the newest MAX - 1, as in memory.
           db.run(
@@ -636,7 +631,9 @@ export class SessionStore {
         }
       })();
     } catch (err) {
-      console.warn(`[discord] session thread write for ${session.id} failed:`, err);
+      console.warn(
+        `[discord] session thread write for ${session.id} failed: ${formatErrorLine(err)}`,
+      );
     }
   }
 

@@ -13,6 +13,7 @@ import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { spendCapReachedAsk } from "../src/agent/spend-notice.ts";
+import { planningSelectionText, selectRelevantSpecs } from "../src/agent/specLoader.ts";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
@@ -238,6 +239,27 @@ describe("session thread replay (AGENT-6 / REQ-discord-072)", () => {
     expect(call(two.calls, 0).prompt).toContain(ANSWER_1);
   });
 
+  test("the request is stored as the run starts, so a bridge that dies mid-run keeps it", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    let seenMidRun: string[] = [];
+    const { calls } = await bridgeWith(
+      (_n, opts) => {
+        // What a bridge restarted right now would load from the shared DB.
+        const reopened = new SessionStore({ db, ttlMs: TTL_MS });
+        const live = reopened.get(opts.sessionId);
+        seenMidRun = live ? reopened.threadFor(live).map((t) => `${t.role}:${t.content}`) : [];
+        return ANSWER_1;
+      },
+      { db },
+    ).then(async (b) => {
+      await b.handlers.onMessage(mention("m1", OWNER, OPENING));
+      return b;
+    });
+    expect(calls).toHaveLength(1);
+    expect(seenMidRun).toEqual([`human:${OPENING}`]);
+  });
+
   for (const command of ["session", "work"] as const) {
     test(`a reply to a /${command === "session" ? "session start" : "work"} answer carries its ${command === "session" ? "topic" : "description"} and answer`, async () => {
       const text = "draft the HERON release notes";
@@ -314,6 +336,54 @@ describe("session thread replay (AGENT-6 / REQ-discord-072)", () => {
     expect(p).not.toContain("Daily spend cap reached");
     expect(p).not.toContain("Prior clarifying question");
   });
+
+  test("the replayed block never picks a Planning module the new message does not name (REQ-agent-004)", async () => {
+    const multi = "Plan for the agent loop:\n\nStep one touches the plugins registry.\n\nStep two, the watch poller.";
+    const { handlers, calls, outbound } = await bridgeWith((n) => (n === 1 ? multi : "ok"));
+    await handlers.onMessage(mention("m1", OWNER, "tidy the cli help"));
+    await handlers.onMessage(replyTo("m2", OWNER, "yes please go ahead", answerId(outbound, 0)));
+    const p = call(calls, 1).prompt;
+    // The model gets the thread…
+    expect(p).toContain("tidy the cli help");
+    expect(p).toContain("Step two, the watch poller.");
+    // …but Planning selects from the new message only (identity, memory and
+    // the thread block are all `[Corvidinho …]` paragraphs).
+    expect(planningSelectionText(p)).toBe("yes please go ahead");
+    expect(
+      selectRelevantSpecs(planningSelectionText(p), ["agent", "cli", "discord", "plugins", "watch"], 3),
+    ).toEqual([]);
+  });
+
+  test("a chat run that throws keeps its request, so the next message continues the thread", async () => {
+    const { handlers, calls } = await bridgeWith((n) => {
+      if (n === 1) throw new Error("agent spawn failed");
+      return "ok";
+    });
+    await expect(handlers.onMessage(mention("m1", OWNER, OPENING))).rejects.toThrow(
+      "agent spawn failed",
+    );
+    await handlers.onMessage(mention("m2", OWNER, "try that again"));
+    const again = call(calls, 1);
+    expect(again.sessionId).toBe(call(calls, 0).sessionId);
+    expect(again.prompt).toContain(OPENING);
+    expect(again.prompt).toContain("agent spawn failed");
+    expect(again.humanText).toBe("try that again");
+  });
+
+  for (const command of ["session", "work"] as const) {
+    test(`a /${command === "session" ? "session start" : "work"} run that throws keeps its ${command === "session" ? "topic" : "description"} for the reply`, async () => {
+      const text = "draft the HERON release notes";
+      const { handlers, calls, outbound } = await bridgeWith((n) => {
+        if (n === 1) throw new Error("agent spawn failed");
+        return "done";
+      });
+      await handlers.onSlash!(slash({ n: 1, command, userId: MEMBER, text }));
+      await handlers.onMessage(replyTo("m2", MEMBER, "try again", answerId(outbound, 0)));
+      expect(calls).toHaveLength(2);
+      expect(call(calls, 1)).toMatchObject({ sessionId: call(calls, 0).sessionId, resume: true });
+      expect(call(calls, 1).prompt).toContain(text);
+    });
+  }
 
   test("replayed turns are scrubbed of secrets, in the prompt and at rest (SAFE-6)", async () => {
     const token = `ghp_${"A1b2C3d4E5".repeat(4)}`;

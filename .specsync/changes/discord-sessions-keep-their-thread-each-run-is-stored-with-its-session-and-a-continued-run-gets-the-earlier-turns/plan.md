@@ -11,7 +11,7 @@ artifact: plan
 2. `src/discord/session-thread.ts`: turn type, budget constants, pure
    renderer (`formatSessionThread` / `withSessionThread`), `answerTurnText`,
    `ensureSessionTurns` (module-owned table).
-3. `SessionStore`: in-memory turns per session, `recordExchange` (scrub,
+3. `SessionStore`: in-memory turns per session, `recordTurn` (scrub,
    clip, cap, best-effort DB write), `threadFor`, load/sweep on open,
    delete with the session.
 4. Wire the four entry points in `bridge.ts` and the slash handlers; add the
