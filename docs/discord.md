@@ -192,7 +192,7 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 | Explicit project | Optional `project` on `/session start` and `/work`; required on `/schedule create` |
 | Mid-conversation | Project never silently switches once set |
 | Root on disk | `{dirname(project)}/.corvid-worktrees/` or `WORKTREE_BASE_DIR` |
-| Branch | `talk/{sessionPrefix}` |
+| Branch | `talk/{sessionPrefix}-{digest}` (16-char id prefix + 16 hex of sha256 of the full id); schedule runs use `talk/schedule_{scheduleId}_{runId}` |
 | End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
 | Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
 
