@@ -38,6 +38,45 @@
       "approved_delta_digests": {
         "discord": "d80db756096fa0e544c8d5f4e06f00a19b40faeb32fad60097eb55b58fe2ff32"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790472434,
+      "digest": "48c9ed88f55a21a68a71d0add637adb765926cb1aa28b5923f71f83f1f95811b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "replying-to-a-session-start-or-work-answer-continues-that-session-discord-2",
+        "title": "Replying to a /session start or /work answer continues that session (DISCORD-2)",
+        "description": "Replying to a /session start or /work answer continues that session (DISCORD-2)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/bridge.ts",
+          "src/discord/gateway.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/slash-types.ts",
+          "tests/discord.slash-reply-continuity.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Owner runs /session start (or /work) topic A, then topic B, then replies to A's answer: with or without the reply ping the run continues session A (resume), not B, and not nothing; the same holds when collapse fails and the answer lands in the deferred slash reply; another user's reply to A's answer never continues A (ping off: ignored; ping on: their own new session); tests/discord.slash-reply-continuity.test.ts covers all of these and fails on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "3c4870dd778bd6d5c6dff051bf4abf9e472dce9546909c33815953c8b34de65e"
+      }
     }
   ],
   "reopenings": []
