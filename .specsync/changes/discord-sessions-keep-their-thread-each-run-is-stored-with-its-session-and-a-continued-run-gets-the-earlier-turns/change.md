@@ -1,6 +1,6 @@
 ---
 id: discord-sessions-keep-their-thread-each-run-is-stored-with-its-session-and-a-continued-run-gets-the-earlier-turns
-state: approved
+state: implementing
 type: feature
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---
