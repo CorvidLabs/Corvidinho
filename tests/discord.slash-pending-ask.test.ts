@@ -147,16 +147,10 @@ async function runSlash(
 
 describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY-1/5/6, REQ-discord-044)", () => {
   test("/work with a clarify ask: task blocked (not completed), pending ask stored, answer message continues the session", async () => {
-    // Structured options too: the slash answer is free text (no Choose
-    // buttons), so the pending ask is kept as free text.
-    const withOptions: HumanAsk = {
-      ...CLARIFY,
-      options: [
-        { id: "pg", label: "Postgres" },
-        { id: "sqlite", label: "SQLite" },
-      ],
-    };
-    const { agent, calls } = askingAgent({ ask: withOptions, summary: "Needs your input: Postgres or SQLite?" });
+    // No listable options: the slash answer is free text, so the pending ask
+    // is free text too. (Listable options get a Choose stub and a button
+    // pending ask — tests/discord.slash-choose-ask.test.ts, DISCORD-ASK-1/4.)
+    const { agent, calls } = askingAgent({ ask: CLARIFY, summary: "Needs your input: Postgres or SQLite?" });
     const bridge = await bridgeWith(agent);
     const answerId = await runSlash(bridge, "work", { description: "pick a DB" }, "Postgres or SQLite?");
     if (!bridge.result.ok) throw new Error("bridge did not start");
@@ -165,7 +159,6 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(session).toBeDefined();
     expect(session!.id).toBe(calls[0]!.sessionId);
     expect(session!.pendingAsk).toMatchObject(CLARIFY);
-    // Free text, like the slash answer itself (no Choose buttons were posted).
     expect(session!.pendingAsk!.options).toBeUndefined();
     await bridge.result.stop();
   });
@@ -253,15 +246,13 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     await bridge.result.stop();
   });
 
-  test("/session start with structured options keeps a free-text pending ask (no Choose buttons were posted)", async () => {
-    const withOptions: HumanAsk = {
+  test("/session start with options that cannot be listed (one choice) keeps a free-text pending ask (DISCORD-ASK-4)", async () => {
+    // A single option is not a short list of choices, so no Choose buttons.
+    const oneOption: HumanAsk = {
       ...CLARIFY,
-      options: [
-        { id: "pg", label: "Postgres" },
-        { id: "sqlite", label: "SQLite" },
-      ],
+      options: [{ id: "pg", label: "Postgres" }],
     };
-    const { agent, calls } = askingAgent({ ask: withOptions, summary: "Needs your input: Postgres or SQLite?" });
+    const { agent, calls } = askingAgent({ ask: oneOption, summary: "Needs your input: Postgres or SQLite?" });
     const bridge = await bridgeWith(agent);
     const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Postgres or SQLite?");
     const pending = bridge.result.store.getByBotMessage(answerId)!.pendingAsk;
