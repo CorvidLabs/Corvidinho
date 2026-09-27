@@ -7,11 +7,11 @@
   "title": "Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89)",
   "description": "Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
   "created_at": 1790519373,
-  "updated_at": 1790523147,
+  "updated_at": 1790523353,
   "affected_specs": [
     "plugins",
     "cli",
