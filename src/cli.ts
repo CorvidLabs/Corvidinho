@@ -257,6 +257,27 @@ export function readStartEnv(path = "/proc/self/environ"): Record<string, string
   }
 }
 
+/**
+ * The `.env` flags Bun was started with (`--no-env-file`, `--env-file=<path>`,
+ * `--env-file <path>`), in order, so the `--project` probe loads exactly the
+ * env files a process started in the project with the same flags would: a
+ * process run with `--no-env-file` never loads the project's `.env` either
+ * (CLI-5 / REQ-cli-505).
+ */
+export function envFileFlags(execArgv: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const a = execArgv[i];
+    if (a === "--no-env-file" || a.startsWith("--env-file=")) {
+      out.push(a);
+    } else if (a === "--env-file" && i + 1 < execArgv.length) {
+      out.push(a, execArgv[i + 1]);
+      i++;
+    }
+  }
+  return out;
+}
+
 /** Prints the env a Bun process started in its cwd gets (never logged). */
 const PROJECT_ENV_PROBE = "process.stdout.write(JSON.stringify(process.env))";
 /** Cap on the one-off env probe `--project` runs. */
@@ -272,12 +293,14 @@ export type EnterProjectResult =
  *
  * The env is what Bun builds for a process started there: Bun's own `.env*`
  * loading (`.env`, `.env.<NODE_ENV>`, `.env.local`, `$VAR` expansion; set
- * variables win) run once in `path` from `startEnv` (default
+ * variables win; the process's own `--no-env-file` / `--env-file` flags,
+ * {@link envFileFlags}) run once in `path` from `startEnv` (default
  * {@link readStartEnv}), so the start directory's `.env*` values do not carry
  * over. The probe pins Bun config to {@link SPAWN_BUN_CONFIG}: the project's
  * `bunfig.toml` is never read. Then `process.chdir(path)`, so every command
- * reads that project's `fledge.toml`, specs and files through `process.cwd()`.
- * On any failure nothing is changed.
+ * reads that project's `fledge.toml`, specs and files through `process.cwd()`,
+ * and children the CLI starts without an explicit `env` get the new env too
+ * ({@link spawnsInheritProcessEnv}). On any failure nothing is changed.
  */
 export function enterProject(
   path: string,
@@ -305,7 +328,13 @@ export function enterProject(
   let env: Record<string, string>;
   try {
     const probe = Bun.spawnSync(
-      [process.execPath, `--config=${SPAWN_BUN_CONFIG}`, "-e", PROJECT_ENV_PROBE],
+      [
+        process.execPath,
+        ...envFileFlags(process.execArgv),
+        `--config=${SPAWN_BUN_CONFIG}`,
+        "-e",
+        PROJECT_ENV_PROBE,
+      ],
       {
         cwd: dir,
         env: base,
@@ -336,7 +365,36 @@ export function enterProject(
     if (!(k in env)) delete process.env[k];
   }
   Object.assign(process.env, env);
+  spawnsInheritProcessEnv();
   return { ok: true, dir };
+}
+
+let spawnEnvFollowsProcessEnv = false;
+
+/**
+ * `Bun.spawn` / `Bun.spawnSync` with no `env` pass the environment Bun started
+ * with (the start directory's `.env*` values included), not `process.env` as
+ * {@link enterProject} rewrote it. Default their `env` to the current
+ * `process.env` (what `node:child_process` does), so a child the CLI starts
+ * (`specsync`, `fledge run spec-check`, git) gets the project's env, never the
+ * start directory's `.env*` values (CLI-5 / REQ-cli-505). Idempotent.
+ */
+function spawnsInheritProcessEnv(): void {
+  if (spawnEnvFollowsProcessEnv) return;
+  spawnEnvFollowsProcessEnv = true;
+  type SpawnFn = (...args: unknown[]) => unknown;
+  const withCurrentEnv =
+    (spawn: SpawnFn): SpawnFn =>
+    (...args: unknown[]) => {
+      // Bun.spawn(argv, opts?) or Bun.spawn({ cmd, ...opts }).
+      const i = Array.isArray(args[0]) ? 1 : 0;
+      const opts = (args[i] ?? {}) as { env?: unknown };
+      if (opts.env === undefined) args[i] = { ...opts, env: { ...process.env } };
+      return spawn(...args);
+    };
+  const bun = Bun as unknown as { spawn: SpawnFn; spawnSync: SpawnFn };
+  bun.spawn = withCurrentEnv(bun.spawn);
+  bun.spawnSync = withCurrentEnv(bun.spawnSync);
 }
 
 /** A `--project` path that cannot be used (CLI-5); carries its own hint (REQ-cli-419). */

@@ -26,6 +26,19 @@ artifact: design
   stderr never printed); then `process.chdir(dir)`; only then replace
   `process.env` (delete keys the probe does not have, assign the rest). Any
   failure returns before `process.env` or the cwd changes.
+- The probe argv also carries `envFileFlags(process.execArgv)`: the CLI's
+  own Bun `--no-env-file` / `--env-file` flags, so `bun --no-env-file
+  src/cli.ts --project P` loads no `.env` from P, exactly as started in P
+  with that flag (a `--no-env-file` process never picks up a repo's `.env`).
+- After the swap, `spawnsInheritProcessEnv()` wraps `Bun.spawn` /
+  `Bun.spawnSync` (once) so a call with no `env` gets `{ ...process.env }`,
+  as `node:child_process` does. Bun otherwise hands such children the env it
+  started with — the start directory's `.env*` values included, the
+  project's missing — so `specsync`, `fledge run spec-check` and git
+  children would see A's `.env` (the same wrapper `tests/preload.ts` uses).
+  Spawns with an explicit `env` (agents, verify lane, delegate, plugins)
+  already build it from `process.env`. Nothing else writes `process.env`,
+  so the default is exactly the project's env.
 
 Security: `--project` is operator argv only. The bridges pass untrusted text
 only behind `--task`, and spawned agents never get `--project`; they keep

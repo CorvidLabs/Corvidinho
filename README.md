@@ -42,9 +42,13 @@ bun src/cli.ts doctor --project=../other
 `--project <path>` (any command, before a `--`) runs the CLI as if it had been started in
 `<path>`: it reads that project's `fledge.toml`, specs and files, and its `.env` files as Bun
 loads them there (`.env`, `.env.<NODE_ENV>`, `.env.local`; variables already set in the
-environment win). The start directory's `.env` values do not carry over, and the project's
-`bunfig.toml` is never read. Only this process: spawned agents still run with `--no-env-file`.
-A path that does not exist or is not a directory stops with one error line (exit 1).
+environment win; a CLI run with `bun --no-env-file` loads none). The start directory's `.env`
+values do not carry over, to this process or to the tools it starts (`specsync`, `fledge`, git),
+and the project's `bunfig.toml` is never read. Spawned agents still run with `--no-env-file`.
+`discord bridge`, `github watch` and `daemon` take `<path>` as their project root, so their agent
+binary defaults to `<path>/src/cli.ts` as when started there; set `CORVIDINHO_BIN` when `<path>`
+is not a Corvidinho checkout. A path that does not exist or is not a directory stops with one
+error line (exit 1).
 
 ## Discord HEAR (thin)
 

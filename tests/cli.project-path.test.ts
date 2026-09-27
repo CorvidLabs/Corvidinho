@@ -5,11 +5,11 @@
  * never the start directory's. Subprocess cases run the real CLI from one temp
  * dir (A) against another (P); no network, no real keys.
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { enterProject, parseGlobalFlags, readStartEnv } from "../src/cli.ts";
+import { enterProject, envFileFlags, parseGlobalFlags, readStartEnv } from "../src/cli.ts";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
@@ -40,11 +40,11 @@ function fixture(): Fixture {
   const p = join(root, "P");
   write(
     join(a, ".env"),
-    `CORVIDINHO_DAILY_SPEND_CAP_USD=3.00\nCORVIDINHO_LLM_API_KEY=${FAKE_LLM_KEY}\n`,
+    `CORVIDINHO_DAILY_SPEND_CAP_USD=3.00\nCORVIDINHO_LLM_API_KEY=${FAKE_LLM_KEY}\nA_MARK=from-a\n`,
   );
   write(join(a, "fledge.toml"), "[corvidinho]\nverify_before_complete = true\nmax_retries = 0\n");
   // Bun's own loading: .env.local over .env, with $VAR expansion.
-  write(join(p, ".env"), "P_CAP=6.50\nCORVIDINHO_DAILY_SPEND_CAP_USD=7.25\n");
+  write(join(p, ".env"), "P_CAP=6.50\nCORVIDINHO_DAILY_SPEND_CAP_USD=7.25\nP_MARK=from-p\n");
   write(join(p, ".env.local"), "P_CAP=8.00\nCORVIDINHO_DAILY_SPEND_CAP_USD=${P_CAP}\n");
   write(join(p, "fledge.toml"), "[corvidinho]\nverify_before_complete = false\n");
   write(join(p, ".specsync", "registry.toml"), '[specs]\nwidget = "specs/widget/widget.spec.md"\n');
@@ -72,8 +72,9 @@ async function cli(
   args: string[],
   cwd: string,
   env: Record<string, string>,
+  bunFlags: string[] = [],
 ): Promise<Run> {
-  const proc = Bun.spawn(["bun", CLI, ...args], {
+  const proc = Bun.spawn(["bun", ...bunFlags, CLI, ...args], {
     cwd,
     env,
     stdin: "ignore",
@@ -142,6 +143,14 @@ describe("readStartEnv / enterProject (CLI-5)", () => {
     expect(readStartEnv(join(dir, "missing"))).toBeNull();
   });
 
+  test("envFileFlags keeps only Bun's .env flags, in order", () => {
+    expect(
+      envFileFlags(["--smol", "--no-env-file", "--env-file", "a.env", "--env-file=b.env", "--hot"]),
+    ).toEqual(["--no-env-file", "--env-file", "a.env", "--env-file=b.env"]);
+    expect(envFileFlags(["--smol"])).toEqual([]);
+    expect(envFileFlags(["--env-file"])).toEqual([]);
+  });
+
   test("an unusable path changes nothing (no chdir, no env)", () => {
     const cwd = process.cwd();
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-enter-"));
@@ -196,6 +205,38 @@ describe("corvidinho --project <path> (CLI-5, REQ-cli-505)", () => {
     expect(viaFlag.out).toBe(viaCd.out);
     expect(viaFlag.code).toBe(viaCd.code);
     for (const r of [inA, viaCd, viaFlag]) expect(r.out + r.err).not.toContain(FAKE_LLM_KEY);
+  }, T);
+
+  test("children the CLI spawns get the project's env, not the start dir's .env values", async () => {
+    const f = fixture();
+    // A fake `specsync` first on PATH: `specsync check` (P defines no Fledge
+    // spec-check task) spawns it with no explicit env; it prints both marks.
+    const bin = join(f.root, "bin");
+    write(
+      join(bin, "specsync"),
+      '#!/bin/sh\nprintf \'child A_MARK=%s P_MARK=%s\\n\' "${A_MARK-unset}" "${P_MARK-unset}"\n',
+    );
+    chmodSync(join(bin, "specsync"), 0o755);
+    const env = { ...f.env, PATH: `${bin}:${f.env.PATH}` };
+    const inA = await cli(["specsync", "check"], f.a, env);
+    expect(inA.out).toContain("child A_MARK=from-a P_MARK=unset");
+    const viaCd = await cli(["specsync", "check"], f.p, env);
+    expect(viaCd.out).toContain("child A_MARK=unset P_MARK=from-p");
+    const viaFlag = await cli(["--project", f.p, "specsync", "check"], f.a, env);
+    expect(viaFlag.code).toBe(0);
+    expect(viaFlag.out).toBe(viaCd.out);
+  }, T);
+
+  test("a CLI started with --no-env-file loads no .env from the project either", async () => {
+    const f = fixture();
+    const noEnv = ["--no-env-file"];
+    const viaCd = await cli(["doctor"], f.p, f.env, noEnv);
+    const viaFlag = await cli(["--project", f.p, "doctor"], f.a, f.env, noEnv);
+    // No cap from P's .env / .env.local, and no key from A's.
+    expect(line(viaFlag.out, "spend")).toContain("no daily cap set");
+    expect(line(viaFlag.out, "llm")).toContain("[warn] llm");
+    expect(viaFlag.out).toBe(viaCd.out);
+    expect(viaFlag.code).toBe(viaCd.code);
   }, T);
 
   test("a variable set in the environment still wins over the project's .env", async () => {

@@ -9,7 +9,9 @@ artifact: requirements
   top-level process as if started in `<path>` — Bun's own `.env*` loading
   there from the exec-time env (start directory's `.env*` values dropped,
   set variables win, project `bunfig.toml` never read), then `chdir`, so
-  `fledge.toml`, specs and files are the project's; unusable path → one
+  `fledge.toml`, specs and files are the project's; children started
+  without an explicit `env` get the project's env; the CLI's own
+  `--no-env-file` / `--env-file` flags apply to the probe; unusable path → one
   REQ-cli-419 line + hint, exit 1, nothing changed; spawns unchanged. Full
   text in `deltas/cli.md` and `specs/cli/requirements.md`.
 - Unchanged and still honoured: REQ-cli-419 (error shape), REQ-cli-085
