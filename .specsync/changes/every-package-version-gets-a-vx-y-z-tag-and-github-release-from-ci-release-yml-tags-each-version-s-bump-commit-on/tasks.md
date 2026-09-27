@@ -9,4 +9,4 @@ artifact: tasks
 - [x] Workflow rewrite + shape test.
 - [x] Docs.
 - [x] Adversarial review fixes (catch-up so v0.0.29 gets range v0.0.28..v0.0.29, bad-ref failure, dispatch newline/comma parsing, version-format guard, bump-commit warning, concurrent-tag fallback, deletion/non-main dispatch skip, Latest repair, `--match v[0-9]*`).
-- [ ] Post-merge: confirm tags + Releases.
+After merge (outside this change): confirm the push run tagged the 12 versions and created their Releases.
