@@ -182,7 +182,7 @@ flowchart TD
 | Message content | Hard-cap **1900** at gateway / slash adapt / `discord-post-message` |
 | Thinking embeds | Description + footer only; one embed |
 | Mermaid | **Repo docs only** — not Discord chat |
-| Presence | Custom Status `vX.Y.Z` (DISCORD-12) |
+| Presence | Custom Status `vX.Y.Z` (DISCORD-12), sent on every gateway IDENTIFY (Client `presence` option, also on the DISCORD-8 requester-check login) and set again on ready |
 
 ---
 
