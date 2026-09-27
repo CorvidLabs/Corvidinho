@@ -14,6 +14,7 @@ import {
   roleSessionActive,
 } from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
+import type { PluginHandlerResult, PluginImage } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { createSpendGuard } from "./spend.ts";
 import { formatSpendWarningLine } from "./spend-notice.ts";
@@ -209,12 +210,20 @@ export type CreateTaskExecuteOpts = {
   onSpendWarning?: (warning: SpendWarning) => void;
 };
 
+/** One part of a multi-part user message (OpenAI-compatible chat). */
+type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content: string | ChatContentPart[] | null;
   tool_calls?: ToolCallPayload[];
   tool_call_id?: string;
 };
+
+/** What the provider sends back: text content only. */
+type AssistantMessage = ChatMessage & { content: string | null };
 
 type ToolCallPayload = {
   id: string;
@@ -441,6 +450,10 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     { role: "system", content: system },
     { role: "user", content: userParts.join("") },
   ];
+  // DISCORD-9 (REQ-agent-428): user messages holding image parts, and the
+  // images in each, so a model that refuses images gets text notes instead.
+  const imageMessages = new Map<ChatMessage, PluginImage[]>();
+  let imagesRefused = false;
 
   for (let round = 1; round <= maxToolRounds; round++) {
     if (signal.aborted) {
@@ -450,15 +463,32 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       };
     }
 
-    const completion = await chatCompletions({
-      llm,
-      fetchImpl,
-      messages,
-      tools,
-      signal,
-      timeoutMs,
-      onUsage,
-    });
+    const request = () =>
+      chatCompletions({
+        llm,
+        fetchImpl,
+        messages,
+        tools,
+        signal,
+        timeoutMs,
+        onUsage,
+      });
+    let completion = await request();
+
+    if (!completion.ok && completion.status === 400 && imageMessages.size > 0) {
+      // A model without vision: swap the image parts for a text note and
+      // retry this request once; later images go as notes too.
+      for (const [m, images] of imageMessages) {
+        m.content = imageFallbackText(images);
+      }
+      imageMessages.clear();
+      imagesRefused = true;
+      emit(onEvent, {
+        type: "Text",
+        text: "[operator] the model refused image input (HTTP 400); retried once with a text note",
+      });
+      completion = await request();
+    }
 
     if (!completion.ok) {
       return {
@@ -489,6 +519,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       };
     }
 
+    const roundImages: PluginImage[] = [];
     for (const tc of calls) {
       if (signal.aborted) {
         return {
@@ -520,7 +551,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         return askExecuteResult(asked.ask, filesChanged);
       }
 
-      let result;
+      let result: PluginHandlerResult;
       try {
         result = asked
           ? asked.refusal
@@ -565,6 +596,19 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         tool_call_id: tc.id || name,
         content: stringifyToolPayload(result),
       });
+      if (result.ok && result.image) roundImages.push(result.image);
+    }
+
+    // Tool messages must directly follow the assistant tool_calls, so the
+    // round's images ride one user message after them.
+    if (roundImages.length > 0) {
+      if (imagesRefused) {
+        messages.push({ role: "user", content: imageFallbackText(roundImages) });
+      } else {
+        const m = imageUserMessage(roundImages);
+        messages.push(m);
+        imageMessages.set(m, roundImages);
+      }
     }
   }
 
@@ -640,8 +684,8 @@ async function chatCompletions(opts: {
   timeoutMs: number;
   onUsage?: (usage: AgentTokenUsage) => void;
 }): Promise<
-  | { ok: true; message: ChatMessage }
-  | { ok: false; error: string }
+  | { ok: true; message: AssistantMessage }
+  | { ok: false; error: string; status?: number }
 > {
   const body: Record<string, unknown> = {
     model: opts.llm.model,
@@ -687,6 +731,7 @@ async function chatCompletions(opts: {
       return {
         ok: false,
         error: `LLM HTTP ${resp.status}: ${text || resp.statusText}`,
+        status: resp.status,
       };
     }
 
@@ -741,7 +786,7 @@ export function extractUsage(data: unknown): AgentTokenUsage | null {
   };
 }
 
-function extractAssistantMessage(data: unknown): ChatMessage | null {
+function extractAssistantMessage(data: unknown): AssistantMessage | null {
   if (!data || typeof data !== "object") return null;
   const choices = (data as { choices?: unknown }).choices;
   if (!Array.isArray(choices) || choices.length === 0) return null;
@@ -785,6 +830,34 @@ function extractAssistantMessage(data: unknown): ChatMessage | null {
     content,
     tool_calls: tool_calls.length ? tool_calls : undefined,
   };
+}
+
+function imagePathsLine(images: PluginImage[]): string {
+  return `Image(s) opened with files-read: ${images.map((i) => i.path).join(", ")}`;
+}
+
+/** The round's images as one user message of image_url parts (REQ-agent-428). */
+function imageUserMessage(images: PluginImage[]): ChatMessage {
+  return {
+    role: "user",
+    content: [
+      { type: "text", text: imagePathsLine(images) },
+      ...images.map(
+        (i): ChatContentPart => ({
+          type: "image_url",
+          image_url: { url: `data:${i.mediaType};base64,${i.base64}` },
+        }),
+      ),
+    ],
+  };
+}
+
+/** Text in place of image parts for a model that refused them. */
+function imageFallbackText(images: PluginImage[]): string {
+  return [
+    imagePathsLine(images),
+    ...images.map((i) => `[image ${i.path} could not be shown to this model]`),
+  ].join("\n");
 }
 
 function stringifyToolPayload(result: {

@@ -300,7 +300,9 @@ outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
-file tools can open them (REQ-discord-013); protocol mismatch hard-fails start,
+file tools can open them, and opening one with `files-read` hands the model
+the image itself as an image part, not decoded bytes (REQ-discord-013,
+REQ-plugins-427 / REQ-agent-428); protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;

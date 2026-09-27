@@ -261,6 +261,19 @@ pipes); an abort while verify runs is a cancel (no
 `VerifyResult`, no retry, no `stuck` ask); each LLM request is bounded by a
 timeout, and a caller abort is never reported as a timeout.
 
+Images reach the model as pixels (DISCORD-9 / REQ-agent-428, extends
+REQ-agent-008): a tool result carrying `PluginHandlerResult.image` (`files-read`
+of an image, REQ-plugins-427) keeps only its metadata in the tool message and
+the `ToolResult` detail; once the round's tool messages are all pushed (they
+must directly follow the assistant `tool_calls`), the loop adds one user
+message `[{type:"text", text:"Image(s) opened with files-read: <paths>"},
+{type:"image_url", image_url:{url:"data:<mime>;base64,<b64>"}}, …]`. The
+base64 never reaches tool text, events or ndjson. If a request carrying image
+parts gets HTTP 400, every image part is replaced by `[image <path> could not
+be shown to this model]`, an `[operator]` Text note is emitted, and that
+request is retried once; later images in the run go as the same text note. No
+new env var, flag or protocol field.
+
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
 is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
@@ -293,6 +306,18 @@ model.
 - **When** the model calls `council` with `--question ...` (3 voices by default)
 - **Then** 3 read-tier voices propose, each critiques the proposals, a chair decides, and the tool result carries the decision and a bounded transcript
 
+### Scenario: the model looks at an attached image
+
+- **Given** a tool-tier run whose model calls `files-read` on a PNG under the session cwd
+- **When** the next chat/completions request is sent
+- **Then** it carries the small tool message and, right after it, one user message with an `image_url` part holding `data:image/png;base64,…` of the file
+
+### Scenario: a model without vision refuses the image
+
+- **Given** the request carrying an image part gets HTTP 400
+- **When** the loop handles it
+- **Then** it swaps the part for `[image <path> could not be shown to this model]`, retries once, and the run completes with the model's reply
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -305,6 +330,8 @@ model.
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
+| HTTP 400 on a request carrying image parts (model without vision) | image parts replaced by `[image <path> could not be shown to this model]`, `[operator]` Text note, request retried once; later images sent as that note (REQ-agent-428) |
+| HTTP 400 again on that retry, or on a request with no image parts | provider error as today (`LLM HTTP 400`, `ExecuteResult.error`; REQ-agent-242) |
 | LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
