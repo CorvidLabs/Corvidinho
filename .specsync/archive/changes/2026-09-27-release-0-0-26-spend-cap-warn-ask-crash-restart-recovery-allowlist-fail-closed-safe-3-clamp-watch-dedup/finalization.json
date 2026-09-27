@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-26-spend-cap-warn-ask-crash-restart-recovery-allowlist-fail-closed-safe-3-clamp-watch-dedup",
+  "implementation_commit": "7909d58821256854441ad1710482811fb1bde048",
+  "implementation_tree": "713e58c9788613b25583585f2ed92fe6f18c8c24",
+  "contract_digest": "03185f66fad2abae001490a1a7b7e9e8e937bf3dbe36bf668319336a157d7c6a",
+  "workspace_digest": "4e2b2a1fcbaacf5d4bdeacdc4378674757c7fe915c78121bf33cfea420ef9403",
+  "closing_digest": "3f0a68b0d2ca6ee338de8c8a6296c385bbbf827da27f35323e1f232c553f9daa",
+  "review_digest": "87d0108b945c59f985005216382b3a2cc158addbb8a2ef99c3b3ecc46d43d4e0",
+  "finalization_digest": "71cfbd3fe8f6c349a47f4b7e8cdf240f3306a998a7a23ae9b5f55c1eadf71750",
+  "timestamp": 1790469470
+}
