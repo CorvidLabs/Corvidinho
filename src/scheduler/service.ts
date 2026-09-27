@@ -208,6 +208,8 @@ export class SchedulerService {
   private tickInFlight = false;
   /** The pending-ask delivery pass in flight (REQ-discord-347), if any. */
   private askDelivery: Promise<void> | null = null;
+  /** Set by `stop()`: no delivery pass takes another ask (REQ-discord-347). */
+  private stopped = false;
 
   constructor(opts: SchedulerServiceOpts) {
     this.store = opts.store;
@@ -228,6 +230,7 @@ export class SchedulerService {
   }
 
   start(): void {
+    this.stopped = false;
     if (this.timer) return;
     this.timer = setInterval(() => {
       // REQ-discord-331: a tick that throws (e.g. SQLITE_BUSY from another
@@ -241,7 +244,12 @@ export class SchedulerService {
     }
   }
 
+  /**
+   * Stop ticking. A pending-ask delivery pass in flight takes no further
+   * ask; `settleAskDelivery` waits for the post it is making.
+   */
   stop(): void {
+    this.stopped = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -309,9 +317,29 @@ export class SchedulerService {
     return { started, skipped };
   }
 
-  /** Resolves once the pending-ask delivery pass in flight (if any) is done. */
-  async settleAskDelivery(): Promise<void> {
-    await this.askDelivery;
+  /**
+   * Wait for the pending-ask delivery pass in flight (if any), up to
+   * `timeoutMs` when given. Resolves true when none is left in flight. A
+   * stop waits on it so a post in flight either goes out or hands its ask
+   * back before the gateway closes (REQ-discord-347).
+   */
+  async settleAskDelivery(timeoutMs?: number): Promise<boolean> {
+    const pass = this.askDelivery;
+    if (!pass) return true;
+    if (timeoutMs === undefined) {
+      await pass;
+      return true;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, Math.max(0, timeoutMs));
+    });
+    try {
+      await Promise.race([pass, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    return this.askDelivery === null;
   }
 
   /**
@@ -322,13 +350,16 @@ export class SchedulerService {
    * run would (owner / creator ping, once-per-question and once-per-episode
    * rules, pending 80% warning). A channel the allowlist refuses is skipped;
    * the ask is claimed atomically first and handed back when its post does
-   * not go out, so the next tick retries it. One pass at a time; never
-   * rejects.
+   * not go out, so the next tick retries it. The claim re-checks that the
+   * ask is still its schedule's newest, so one a later run made moot while
+   * this pass was posting is skipped; after `stop()` no further ask is
+   * taken. One pass at a time; never rejects.
    */
   private deliverPendingAsks(): void {
-    if (!this.outbound?.post || this.askDelivery) return;
+    if (!this.outbound?.post || this.askDelivery || this.stopped) return;
     const pass = (async () => {
       for (const pending of this.store.pendingAsks()) {
+        if (this.stopped) break;
         const schedule = this.store.get(pending.scheduleId);
         if (!schedule?.channelId) continue;
         if (!checkChannel(schedule.channelId, this.allowlist).ok) continue;

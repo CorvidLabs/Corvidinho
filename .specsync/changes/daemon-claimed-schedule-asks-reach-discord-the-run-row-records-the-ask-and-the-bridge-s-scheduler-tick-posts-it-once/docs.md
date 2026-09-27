@@ -10,6 +10,8 @@ artifact: docs
   once (owner for stuck / spend-cap, creator for clarify; only the newest;
   none once a later run finished; waits for a bridge when only the daemon
   runs); the log events table lists `run.needs_human`.
+- `docs/DISCORD-GO-LIVE.md` (E.4): the daemon never posts itself, but a
+  daemon run that asks a human is posted by the bridge's next tick.
 - `docs/BOX-UPDATE.md`: the shared DB is schema v11.
 - `specs/discord/discord.spec.md`: needs-human outbox paragraph (schema v11,
   store and service API), `files:` lists the new test; the v10 sentence no

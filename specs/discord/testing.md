@@ -137,9 +137,13 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   that resolves `false` or throws is retried with its ping; a run the bridge
   posted itself is never posted again and two bridge tickers post a pending
   ask once; a v10 DB migrates to v11; the question is scrubbed at rest and
-  re-scrubbed by `rescrubDatabase`; `startDaemon` logs `run.needs_human` and
-  a `startBridge` on the same data dir posts the ask to the owner once. No
-  live Discord.
+  re-scrubbed by `rescrubDatabase`; a later run that finishes while a pass
+  is posting another schedule's ask makes that ask moot; after `stop()` a
+  pass finishes its post in flight and takes no other ask, and
+  `settleAskDelivery(ms)` is bounded; `startDaemon` logs `run.needs_human`
+  and a `startBridge` on the same data dir posts the ask to the owner once;
+  the bridge's stop closes the gateway only after a pending-ask post in
+  flight resolved. No live Discord.
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a

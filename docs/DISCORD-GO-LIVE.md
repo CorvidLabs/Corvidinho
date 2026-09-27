@@ -204,7 +204,10 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
   (mode 600, not in git).
 - One daemon per data dir: `<data dir>/daemon.lock`. A second one logs `daemon.lock_held` and exits 1.
 - It can run next to the bridge on the same DB. Each due run is claimed once. Runs the daemon
-  claims are recorded in the run history only; it never posts to Discord.
+  claims are recorded in the run history; the daemon itself never posts to Discord. A daemon
+  run that stops to ask a human (stuck, clarify, spend cap) keeps its question on the run row,
+  and the bridge's next scheduler tick posts it to the schedule's channel once (see
+  [`DAEMON.md`](DAEMON.md)).
 - Scheduled runs are never ADMIN (read/chat tools only, E.6) and always non-interactive (E.3).
 - Stop is SIGTERM: it waits up to 30 s for in-flight runs, so keep `TimeoutStopSec` above that
   (the example uses 60). Runs still going after the wait are recorded as failed and their whole

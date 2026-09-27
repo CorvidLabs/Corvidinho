@@ -36,8 +36,9 @@ on the same data dir:
 - Updates write only the columns they own. A run that ends in the daemon
   never undoes a `/schedule pause` made in the bridge.
 - A run the bridge claims is posted to the schedule's channel. A run the
-  daemon claims is only recorded in the run history, because the daemon has
-  no Discord connection.
+  daemon claims is recorded in the run history and not posted, because the
+  daemon has no Discord connection. The exception is a run that needs a
+  human (next point).
 - A daemon run that stops to ask a human (stuck, a clarify question, or the
   daily spend cap) records its question on the run row and logs
   `run.needs_human`. The bridge's next scheduler tick (within about 60 s)

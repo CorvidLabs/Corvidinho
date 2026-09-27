@@ -453,13 +453,7 @@ export class ScheduleStore {
    */
   pendingAsks(): PendingScheduleAsk[] {
     if (!this.db) {
-      const newest = new Map<string, ScheduleRun>();
-      for (const r of this.runsMemory.values()) {
-        if (r.completedAt === undefined) continue;
-        const cur = newest.get(r.scheduleId);
-        if (!cur || r.completedAt >= cur.completedAt!) newest.set(r.scheduleId, r);
-      }
-      return [...newest.values()]
+      return [...this.newestFinishedRunsMemory().values()]
         .filter((r) => r.ask && r.askPostedAt === undefined)
         .sort((a, b) => a.completedAt! - b.completedAt!)
         .map((r) => ({
@@ -506,22 +500,49 @@ export class ScheduleStore {
   /**
    * Take a run's pending ask to post it: a compare-and-set on
    * `ask_posted_at IS NULL`, so a bridge and another ticker on one data dir
-   * never both post it. False when the run has no ask or it was taken.
+   * never both post it. The same write re-checks that the run is still its
+   * schedule's newest finished run, so an ask a later run made moot after
+   * `pendingAsks()` listed it is never taken (REQ-discord-347). False when
+   * the run has no ask, it was taken, or it is moot.
    */
   claimRunAsk(runId: string, now = Date.now()): boolean {
     const run = this.runsMemory.get(runId);
     if (this.db) {
       const res = this.db.run(
         `UPDATE schedule_runs SET ask_posted_at = ?
-         WHERE id = ? AND ask_reason IS NOT NULL AND ask_posted_at IS NULL`,
+         WHERE id = ? AND ask_reason IS NOT NULL AND ask_posted_at IS NULL
+           AND completed_at IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM schedule_runs l
+             WHERE l.schedule_id = schedule_runs.schedule_id
+               AND l.completed_at IS NOT NULL
+               AND (l.completed_at > schedule_runs.completed_at
+                    OR (l.completed_at = schedule_runs.completed_at
+                        AND l.rowid > schedule_runs.rowid))
+           )`,
         [now, runId],
       );
       if (res.changes === 0) return false;
-    } else if (!run?.ask || run.askPostedAt !== undefined) {
+    } else if (
+      !run?.ask ||
+      run.askPostedAt !== undefined ||
+      this.newestFinishedRunsMemory().get(run.scheduleId) !== run
+    ) {
       return false;
     }
     if (run) run.askPostedAt = now;
     return true;
+  }
+
+  /** Memory store: each schedule's newest finished run (ties: the later one). */
+  private newestFinishedRunsMemory(): Map<string, ScheduleRun> {
+    const newest = new Map<string, ScheduleRun>();
+    for (const r of this.runsMemory.values()) {
+      if (r.completedAt === undefined) continue;
+      const cur = newest.get(r.scheduleId);
+      if (!cur || r.completedAt >= cur.completedAt!) newest.set(r.scheduleId, r);
+    }
+    return newest;
   }
 
   /** Hand a claimed ask back (its post did not go out): the next tick retries. */

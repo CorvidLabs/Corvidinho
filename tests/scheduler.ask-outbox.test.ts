@@ -431,6 +431,142 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
   });
 });
 
+describe("a delivery pass that is still posting (REQ-discord-347 staleness, stop)", () => {
+  const CHAN_A = "chan-a";
+  const CHAN_B = "chan-b";
+
+  /**
+   * Two schedules on one DB, a daemon-wired and a bridge-wired scheduler; the
+   * bridge's post can be held open to stand for a slow Discord call.
+   */
+  function twoSchedules() {
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const clock = { now: Date.parse("2026-09-27T10:30:00Z") };
+    const setup = new ScheduleStore({ db });
+    const mk = (name: string, channelId: string) =>
+      setup.create({
+        name,
+        cronExpression: "0 * * * *",
+        project: "proj-a",
+        prompt: "do thing",
+        createdByUserId: CREATOR_ID,
+        channelId,
+        now: clock.now,
+      });
+    const a = mk("Alpha", CHAN_A);
+    const b = mk("Beta", CHAN_B);
+    const steps: { next: Step } = { next: "ok" };
+    const daemon = new SchedulerService({
+      store: new ScheduleStore({ db }),
+      agent: stepAgent(steps),
+      allowlist: allow([CHAN_A, CHAN_B]),
+      manual: true,
+      useWorktrees: false,
+      now: () => clock.now,
+    });
+    const started: Post[] = [];
+    const posts: Post[] = [];
+    let held: Promise<void> | null = null;
+    const bridge = new SchedulerService({
+      store: new ScheduleStore({ db }),
+      agent: stepAgent({ next: "ok" }),
+      allowlist: allow([CHAN_A, CHAN_B]),
+      manual: true,
+      useWorktrees: false,
+      owner: OWNER,
+      now: () => clock.now,
+      outbound: {
+        post: async (p) => {
+          started.push(p);
+          if (held) await held;
+          posts.push(p);
+          return true;
+        },
+      },
+    });
+    /** Only schedule `id` is due; the daemon runs it to `step`. */
+    async function daemonRun(id: string, step: Step): Promise<void> {
+      steps.next = step;
+      clock.now += HOUR;
+      db.run("UPDATE schedules SET next_run_at = CASE WHEN id = ? THEN ? ELSE ? END", [
+        id,
+        clock.now - 1,
+        clock.now + 10 * HOUR,
+      ]);
+      expect((await daemon.tick()).started).toEqual([id]);
+      await runsSettled(daemon);
+    }
+    /** Hold the bridge's posts open until the returned function is called. */
+    function hold(): () => void {
+      let open!: () => void;
+      held = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return open;
+    }
+    function askPostedAt(scheduleId: string): number | null {
+      return (
+        db
+          .query(
+            `SELECT ask_posted_at FROM schedule_runs
+             WHERE schedule_id = ? AND ask_reason IS NOT NULL ORDER BY rowid DESC LIMIT 1`,
+          )
+          .get(scheduleId) as { ask_posted_at: number | null }
+      ).ask_posted_at;
+    }
+    return { a, b, bridge, started, posts, daemonRun, hold, askPostedAt };
+  }
+
+  test("an ask a later run makes moot while the pass is posting another one is not posted", async () => {
+    const h = twoSchedules();
+    await h.daemonRun(h.a.id, STUCK);
+    await h.daemonRun(h.b.id, CLARIFY);
+    const open = h.hold();
+    await h.bridge.tick(); // the pass lists both asks and posts Alpha's first
+    expect(h.started.map((p) => p.channelId)).toEqual([CHAN_A]);
+    // Meanwhile Beta runs again and finishes clean: its question is moot.
+    await h.daemonRun(h.b.id, "ok");
+    open();
+    await h.bridge.settleAskDelivery();
+    expect(h.posts.map((p) => p.channelId)).toEqual([CHAN_A]);
+    expect(h.askPostedAt(h.b.id)).toBeNull();
+    await h.bridge.tick();
+    await h.bridge.settleAskDelivery();
+    expect(h.posts).toHaveLength(1);
+  });
+
+  test("stop() ends the pass before its next claim; settleAskDelivery waits for the post in flight", async () => {
+    const h = twoSchedules();
+    await h.daemonRun(h.a.id, STUCK);
+    await h.daemonRun(h.b.id, CLARIFY);
+    const open = h.hold();
+    await h.bridge.tick();
+    expect(h.started).toHaveLength(1);
+    h.bridge.stop();
+    // Bounded: the post in flight is still going.
+    expect(await h.bridge.settleAskDelivery(20)).toBe(false);
+    open();
+    expect(await h.bridge.settleAskDelivery(1000)).toBe(true);
+    expect(h.posts.map((p) => p.channelId)).toEqual([CHAN_A]);
+    expect(h.askPostedAt(h.a.id)).not.toBeNull();
+    // Beta's ask was not taken: it waits for the next start.
+    expect(h.askPostedAt(h.b.id)).toBeNull();
+    await h.bridge.tick();
+    await h.bridge.settleAskDelivery();
+    expect(h.posts).toHaveLength(1);
+    h.bridge.start();
+    try {
+      await h.bridge.tick();
+      await h.bridge.settleAskDelivery();
+      expect(h.posts.map((p) => p.channelId)).toEqual([CHAN_A, CHAN_B]);
+      expect(pinged(h.posts[1]!, CREATOR_ID)).toBe(true);
+    } finally {
+      h.bridge.stop();
+    }
+  });
+});
+
 describe("schema v11 schedule_runs ask columns (REQ-discord-347, SAFE-6)", () => {
   function columns(db: Database): string[] {
     return (db.query("PRAGMA table_info(schedule_runs)").all() as Array<{ name: string }>).map(
@@ -590,5 +726,86 @@ describe("`corvidinho daemon` + Discord bridge on one data dir (AUTONOMOUS-4 / A
       await bridge.stop();
       db.close();
     }
+  });
+
+  test("bridge stop waits for a pending-ask post in flight before closing the gateway", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "corvidinho-ask-outbox-stop-"));
+    const projectRoot = mkdtempSync(join(tmpdir(), "corvidinho-ask-outbox-stop-proj-"));
+    cleanups.push(() => {
+      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
+    });
+    const db = openCorvidinhoDb({ env: { CORVIDINHO_DATA_DIR: dataDir } });
+    cleanups.push(() => db.close());
+    const store = new ScheduleStore({ db });
+    const s = store.create({
+      name: "Nightly",
+      cronExpression: "0 * * * *",
+      project: ".",
+      prompt: "summarize",
+      createdByUserId: CREATOR_ID,
+      channelId: CHANNEL,
+    });
+    db.run("UPDATE schedules SET next_run_at = ? WHERE id = ?", [Date.now() - 1000, s.id]);
+    const daemon = new SchedulerService({
+      store,
+      agent: stepAgent({ next: STUCK }),
+      allowlist: allow([CHANNEL]),
+      manual: true,
+      useWorktrees: false,
+    });
+    await daemon.tick();
+    await runsSettled(daemon);
+
+    const events: string[] = [];
+    let open!: () => void;
+    const held = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const outbound = memoryThinkingOutbound();
+    const bridge = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: CHANNEL,
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
+        CORVIDINHO_ALLOWLIST_FILE: join(dataDir, "none.toml"),
+        CORVIDINHO_DATA_DIR: dataDir,
+      },
+      db,
+      projectRoot,
+      skipProtocolCheck: true,
+      schedulerPollIntervalMs: 20,
+      thinkingOutbound: { sendEmbed: outbound.sendEmbed, editEmbed: outbound.editEmbed },
+      agent: stepAgent({ next: "ok" }),
+      gatewayFactory: async (_cfg, handlers) => {
+        handlers.reply = async () => {
+          events.push("post.start");
+          await held;
+          events.push("post.end");
+          return { messageId: "bot_1" };
+        };
+        const gw = createNullGateway();
+        return {
+          ...gw,
+          stop: async () => {
+            events.push("gateway.stop");
+            await gw.stop();
+          },
+        };
+      },
+    });
+    expect(bridge.ok).toBe(true);
+    if (!bridge.ok) return;
+    for (let i = 0; i < 150 && !events.includes("post.start"); i++) await Bun.sleep(20);
+    expect(events).toEqual(["post.start"]);
+    const stopping = bridge.stop();
+    setTimeout(() => open(), 50);
+    await stopping;
+    expect(events).toEqual(["post.start", "post.end", "gateway.stop"]);
+    const row = db
+      .query("SELECT ask_posted_at FROM schedule_runs WHERE schedule_id = ?")
+      .get(s.id) as { ask_posted_at: number | null };
+    expect(row.ask_posted_at).not.toBeNull();
   });
 });
