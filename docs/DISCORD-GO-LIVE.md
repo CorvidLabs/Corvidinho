@@ -158,7 +158,8 @@ in the owner's tool catalog, see below). The allowlist file
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
 `corvidinho plugins run` run the tool and offers it to the model in the owner's runs, except
-`shell-exec` and the runners (see "What an entry unlocks" below):
+`shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` (see
+"What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|

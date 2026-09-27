@@ -8,8 +8,7 @@
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { DELEGATE_COMMAND_NAME } from "../../plugins/autonomous/commands.ts";
 import { FLEDGE_COMMAND_PREFIX } from "../../plugins/fledge/commands.ts";
-import { FLEDGE_CORE_COMMAND_NAMES } from "../../plugins/fledge/core.ts";
-import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
+import { FLEDGE_CORE_COMMAND_NAMES, loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { isMutatingPlugin } from "../plugins/mutating.ts";

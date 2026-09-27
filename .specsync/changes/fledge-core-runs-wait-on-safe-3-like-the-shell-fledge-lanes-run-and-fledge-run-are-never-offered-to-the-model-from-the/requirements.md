@@ -16,6 +16,8 @@ artifact: requirements
 - REQ-agent-112 (modified): Fledge plugin discovery starts only for an
   allowlisted Fledge *plugin* command; naming one of the four core builtins
   starts none.
-- REQ-agent-502 is unchanged in text: `editsFilesUnreported` already covers
-  every `SAFE3_PENDING_TOOLS` name, so it now names the two core runs.
+- REQ-agent-502 (modified): `editsFilesUnreported` covers every
+  `SAFE3_PENDING_TOOLS` name, so it now names the two core runs; a
+  `delegate` is named as an unreported edit only when the allowlist names a
+  Fledge plugin command (not a core builtin), matching `allowsFledge`.
 - No env var, config key, flag, slash command, schema or package version.

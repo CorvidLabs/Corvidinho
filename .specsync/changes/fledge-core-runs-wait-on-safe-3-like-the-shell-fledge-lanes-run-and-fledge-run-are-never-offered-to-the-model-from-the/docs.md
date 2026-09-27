@@ -12,6 +12,9 @@ artifact: docs
   decision", like the `shell-exec` and runner rows.
 - The "Never from the allowlist" bullet names the two core runs.
 - The Fledge discovery bullet says naming a core builtin starts no discovery.
+- The dangerous-tools intro names the two core runs next to the shell and
+  the runners.
 
 `specs/agent/agent.spec.md`: the `SAFE3_PENDING_TOOLS` export list, the
-discovery rule, the allowlist invariant and the error-case row.
+discovery rule, the `delegate` unreported-edit rule, the allowlist invariant
+and the error-case rows.

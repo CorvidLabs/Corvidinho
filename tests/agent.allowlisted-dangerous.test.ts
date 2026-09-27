@@ -2,7 +2,8 @@
  * `task run` offers allowlisted dangerous tools to the model (REQ-agent-501,
  * CLI-3 / SAFE-1, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3): a dangerous plugin is
  * in the catalog only when the run's allowlist names it, never the
- * SAFE-3-pending shell and runners, and never for a non-ADMIN role session.
+ * SAFE-3-pending shell, runners and Fledge core runs, and never for a
+ * non-ADMIN role session.
  * A non-git run whose Fledge command may have changed files verifies anyway
  * (REQ-agent-502, AGENT-4). Fake provider, fake `fledge`, GitHub dry-run: no
  * network, no tokens.

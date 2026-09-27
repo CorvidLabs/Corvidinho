@@ -78,3 +78,38 @@ Acceptance Criteria
 - An allowlist naming only `github-pr-review`: fledge is never spawned; no Fledge plugin command (`fledge-hello`) is offered or registered, and the only `fledge-` tools offered are the read-only core builtins `fledge-lanes-list` and `fledge-lanes-validate`.
 - An allowlist naming only the four Fledge core builtins: fledge is never spawned and `fledge-hello` is neither offered nor registered.
 - A non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN=0`) with `fledge-hello` allowlisted never spawns fledge and offers or registers no Fledge plugin command; the only `fledge-` tools it offers are the read-only core builtins `fledge-lanes-list` and `fledge-lanes-validate` (read tools, ROLES-CHAT-2). The owner's ADMIN role session with the same allowlist discovers and offers `fledge-hello`.
+
+### REQUIREMENT REQ-agent-502
+
+Non-git verify gate after unreported edits (AGENT-4). A tool whose file edits
+no tool result reports (`editsFilesUnreported`: a Fledge command, whose
+`origin` starts with `fledge:`, and every `SAFE3_PENDING_TOOLS` name: the
+shell, the runners and the Fledge core runs) that the tool loop dispatched
+from the offered catalog SHALL be named in the attempt's
+`ExecuteResult.unreportedEditTools` (absent when none ran).
+A `delegate` call that started a worker (its result carries data) SHALL be
+named too when the run has no role session and its allowlist names a Fledge
+plugin command (a `fledge-*` name other than the four Fledge core builtins):
+the worker gets that allowlist, so it may have run the Fledge command and its
+edits reach the lead's result as no file (a role-session worker is non-ADMIN
+and offered none).
+`runTask` SHALL union these names across attempts and, when the verify gate is
+on, no git snapshot is available (the cwd is not in a git work tree, or the
+start snapshot could not be read), no file was reported and a name was
+recorded, SHALL run the verify lane anyway (fail closed) and emit one `Text`
+event per such attempt starting `Verify gate: no git working tree to diff`
+that names the tools; the run then ends `done` only when verify passes, and
+otherwise retries and fails plainly. A run in a git work tree keeps the real
+diff (REQ-agent-085); a non-git run that called only tools that report their
+files or change no project files (GitHub, memory, Discord) still skips verify;
+`--no-verify` is unchanged. No env var, config key, flag, slash command or
+schema is added.
+
+Acceptance Criteria
+- Non-git project, allowlisted `fledge-hello` that writes `app.ts` and reports no files: verify runs once in the project dir, the run ends `failed` with `verified=false` and `filesChanged: []`, and the `Text` note names `fledge-hello`.
+- The same with `includeDangerous` (every dangerous tool offered) also runs verify and fails.
+- Non-git project whose only tool call was an allowlisted `github-pr-review` (dry run, success): verify is skipped and the run ends `done`.
+- The verify gate off: the Fledge run ends `done` with verify skipped.
+- The execute result of an attempt that ran `fledge-hello` has `unreportedEditTools: ["fledge-hello"]`.
+- Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no Fledge plugin command the same run skips verify and ends `done`.
+- `editsFilesUnreported` names `fledge-lanes-run` and `fledge-run`.
