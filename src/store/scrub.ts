@@ -67,6 +67,74 @@ export function scrubSecrets(text: string): string {
   return out;
 }
 
+/**
+ * Env vars whose values are secrets (`.env.example`). An error line never
+ * echoes one, even when the value has no vendor-key shape (e.g. a mistyped
+ * bot token).
+ */
+const SECRET_ENV_NAMES = [
+  "DISCORD_TOKEN",
+  "DISCORD_BOT_TOKEN",
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "CORVIDINHO_LLM_API_KEY",
+  "OPENAI_API_KEY",
+  "CORVIDINHO_AUDIT_HMAC_KEY",
+] as const;
+
+/** Shorter values are too likely to be ordinary words to redact safely. */
+const MIN_ENV_SECRET_LEN = 8;
+
+/** Programming-error classes whose name says more than the message alone. */
+const NAMED_ERRORS = new Set(["TypeError", "RangeError", "ReferenceError", "SyntaxError"]);
+
+/** Cap for {@link formatErrorLine}. */
+export const ERROR_LINE_MAX = 300;
+
+/**
+ * One SAFE-6 line for an error shown to an operator (CLI-4): the message's
+ * first line only (no stack, code frame or library object dump), vendor-key
+ * shapes scrubbed, the literal value of any set secret env var redacted, and
+ * capped at `max` characters.
+ */
+export function formatErrorLine(
+  err: unknown,
+  opts: { env?: NodeJS.ProcessEnv; max?: number } = {},
+): string {
+  let text: string;
+  try {
+    if (err instanceof Error) {
+      const msg = typeof err.message === "string" ? err.message.trim() : "";
+      const name = typeof err.name === "string" ? err.name : "";
+      text = !msg ? name || "Error" : NAMED_ERRORS.has(name) ? `${name}: ${msg}` : msg;
+    } else if (typeof err === "string") {
+      text = err;
+    } else if (
+      err &&
+      typeof err === "object" &&
+      typeof (err as { message?: unknown }).message === "string"
+    ) {
+      text = (err as { message: string }).message;
+    } else {
+      text = String(err);
+    }
+  } catch {
+    // e.g. String() of a null-prototype object: the report itself must not throw.
+    text = "(unprintable error)";
+  }
+  const env = opts.env ?? process.env;
+  for (const name of SECRET_ENV_NAMES) {
+    const v = env[name]?.trim();
+    if (v && v.length >= MIN_ENV_SECRET_LEN) {
+      text = text.split(v).join("[redacted:env-secret]");
+    }
+  }
+  let line = scrubSecrets(text.trim()).split(/\r?\n/)[0]?.trim() ?? "";
+  if (!line) line = "unknown error";
+  const max = opts.max ?? ERROR_LINE_MAX;
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
 /** Nullable column helper: null/undefined stay null. */
 export function scrubOpt(text: string | null | undefined): string | null {
   return text == null ? null : scrubSecrets(text);

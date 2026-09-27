@@ -16,6 +16,7 @@ files:
   - src/watch/spawn-log.ts
   - src/watch/rate-limit.ts
   - src/watch/index.ts
+  - tests/watch.auth-stop.test.ts
 
 db_tables: []
 depends_on:
@@ -52,7 +53,8 @@ ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),
 summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
 SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
 rate-limit helpers (parseGithubRateLimit, GithubRateLimitError,
-computeRateLimitBackoffMs).
+computeRateLimitBackoffMs), `StartWatchResult.fatal` / `WatchFatal`
+(REQ-watch-418).
 
 ## Invariants
 
@@ -77,6 +79,10 @@ and the next event on that issue starts fresh; one session per
 only after the in-flight cycle ends (REQ-watch-037). Poll cycles are
 single-flight; after stop no further event is routed, acked, or spawned; one
 failing event is logged and marked processed without aborting the cycle.
+A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
+`GITHUB_TOKEN / GH_TOKEN`, and settles `fatal` with exit code 1; the default
+error sink prints one SAFE-6 scrubbed line per error, never the error object
+(REQ-watch-418).
 
 ## Behavioral Examples
 
@@ -93,7 +99,8 @@ start_session with a new id.
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
-(user/repo); already processed; GitHub 403 rate-limit backoff.
+(user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
+(bad or revoked token) stops the loop with exit 1.
 
 ## Dependencies
 

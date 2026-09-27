@@ -38,13 +38,15 @@ import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { get, list, size } from "./plugins/registry.ts";
-import { runPlugin } from "./plugins/run.ts";
+import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
   formatPluginsListText,
   toolSurfaceReport,
   withToolCost,
 } from "./plugins/toolCost.ts";
 import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
+import { DEFAULT_DATA_DIR_REL } from "./store/paths.ts";
+import { formatErrorLine } from "./store/scrub.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
@@ -376,14 +378,20 @@ async function pluginsRun(
   if (name.startsWith("fledge-") && !get(name)) {
     await loadFledgePlugins({ cwd: process.cwd() });
   }
-  const result = await runPlugin({
-    name,
-    args: passArgs,
-    json: opts.json,
-    nonInteractive: opts.nonInteractive,
-    allowlist: allowlistFromEnv(),
-    cwd: process.cwd(),
-  });
+  let result: Awaited<ReturnType<typeof runPlugin>>;
+  try {
+    result = await runPlugin({
+      name,
+      args: passArgs,
+      json: opts.json,
+      nonInteractive: opts.nonInteractive,
+      allowlist: allowlistFromEnv(),
+      cwd: process.cwd(),
+    });
+  } catch (err) {
+    // REQ-cli-419: an unknown name or a throwing handler is one clean line.
+    return reportCliError(err, { json: opts.json });
+  }
   if (!result.ok) {
     if (opts.json) {
       console.log(JSON.stringify({ ok: false, error: result.error, data: result.data }, null, 2));
@@ -644,7 +652,15 @@ async function discordRegisterCommands(argv: string[]): Promise<number> {
     }
     return 0;
   } catch (err) {
-    console.error("[discord] register-commands failed:", err);
+    // REQ-cli-419: one scrubbed line, never the raw DiscordAPIError dump.
+    const status = httpStatusOf(err);
+    const hint =
+      status === 401 || status === 403
+        ? " — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and --guild-id"
+        : "";
+    console.error(
+      `[discord] register-commands failed${status ? ` (${status})` : ""}: ${formatErrorLine(err)}${hint}`,
+    );
     return 1;
   }
 }
@@ -682,11 +698,11 @@ async function githubWatch(): Promise<number> {
     `[watch] poll-first started for @${result.config.mentionUsername} on ${result.config.repos.join(", ")} every ${result.config.intervalMs}ms` +
       (result.config.dryRun ? " (dry-run)" : ""),
   );
-  await new Promise<void>((resolve) => {
+  return new Promise<number>((resolve) => {
     const stop = async () => {
       console.log("[watch] shutting down...");
       await result.stop();
-      resolve();
+      resolve(0);
     };
     process.once("SIGINT", () => {
       void stop();
@@ -694,8 +710,12 @@ async function githubWatch(): Promise<number> {
     process.once("SIGTERM", () => {
       void stop();
     });
+    // REQ-cli-419: a rejected token (401) stops the poller; exit non-zero.
+    void result.fatal.then(async (f) => {
+      await result.stop();
+      resolve(f.exitCode);
+    });
   });
-  return 0;
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -816,7 +836,83 @@ export async function main(argv: string[]): Promise<number> {
   return 1;
 }
 
+/** HTTP status on a library error (DiscordAPIError, Octokit RequestError). */
+function httpStatusOf(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { status?: unknown; response?: { status?: unknown } };
+  const s = e.status ?? e.response?.status;
+  return typeof s === "number" && s >= 100 && s <= 599 ? s : undefined;
+}
+
+/** One next step for the operator, matched to the error kind (CLI-4). */
+export function cliErrorHint(err: unknown): string {
+  if (err instanceof PluginNotFoundError) {
+    return "run `corvidinho plugins list` for the available commands";
+  }
+  const e = err as { code?: unknown; path?: unknown } | null;
+  if (
+    e &&
+    typeof e === "object" &&
+    typeof e.code === "string" &&
+    /^E[A-Z]+$/.test(e.code) &&
+    typeof e.path === "string"
+  ) {
+    return `check that the path exists and is writable; the data dir is CORVIDINHO_DATA_DIR (default ~/${DEFAULT_DATA_DIR_REL})`;
+  }
+  return "run `corvidinho doctor` to check the environment";
+}
+
+function cliExitCode(err: unknown): number {
+  const c = (err as { exitCode?: unknown } | null)?.exitCode;
+  return typeof c === "number" && Number.isInteger(c) && c >= 1 && c <= 255 ? c : 1;
+}
+
+/**
+ * REQ-cli-419 (CLI-4 / CLI-7 / SAFE-6): report a failed command as one
+ * scrubbed line plus a hint, never a stack or a library dump. Text mode:
+ * `corvidinho: <line>` then `hint: …` on stderr. `--json`: `{ ok: false,
+ * error }` on stdout (the `plugins run --json` error shape), hint on stderr.
+ * Returns the error's own `exitCode` (1–255) or 1.
+ */
+export function reportCliError(err: unknown, opts: { json?: boolean } = {}): number {
+  const line = formatErrorLine(err);
+  if (opts.json) {
+    console.log(JSON.stringify({ ok: false, error: line }, null, 2));
+  } else {
+    console.error(`corvidinho: ${line}`);
+  }
+  console.error(`hint: ${cliErrorHint(err)}`);
+  return cliExitCode(err);
+}
+
+/** True when argv asks for a single JSON result (`--json` / `--output json`). */
+function wantsJson(args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--") break;
+    if (a === "--json" || a === "--output=json") return true;
+    if (a === "--output" && args[i + 1] === "json") return true;
+  }
+  return false;
+}
+
+/**
+ * Top-level CLI error boundary (REQ-cli-419): runs `main` and turns anything
+ * it throws into {@link reportCliError} output and a non-zero exit code, so
+ * no command ends in a stack trace or Bun's crash footer.
+ */
+export async function runCli(
+  argv: string[],
+  run: (argv: string[]) => Promise<number> = main,
+): Promise<number> {
+  try {
+    return await run(argv);
+  } catch (err) {
+    return reportCliError(err, { json: wantsJson(argv.slice(2)) });
+  }
+}
+
 if (import.meta.main) {
-  const code = await main(process.argv);
+  const code = await runCli(process.argv);
   process.exit(code);
 }

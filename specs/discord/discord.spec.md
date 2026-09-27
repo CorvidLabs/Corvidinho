@@ -41,6 +41,7 @@ files:
   - src/discord/gateway.ts
   - src/discord/presence.ts
   - src/discord/bridge.ts
+  - tests/discord.login-failure.test.ts
   - src/discord/thinking-status.ts
   - src/discord/slash-finish.ts
   - src/discord/slash-commands.ts
@@ -112,6 +113,10 @@ allowlists at runtime (ADMIN-1..4 / REQ-discord-043); channel options use
 STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
+
+Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
+(`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
+`formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login.
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
@@ -317,6 +322,7 @@ reply may not notify), with allowed mentions limited to the owner.
 | Leftover in-flight reply, edit and reply both fail | Logged as unreachable; row deleted; bridge start continues |
 | Leftover in-flight reply in a channel no longer allowlisted | Nothing edited or posted; logged as skipped; row deleted |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
+| Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
 ## Dependencies
 
