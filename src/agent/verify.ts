@@ -1,5 +1,6 @@
 /**
- * Default verify runner: fledge lanes run verify --non-interactive (FLEDGE-2/3).
+ * Default verify runner: fledge lanes run verify --non-interactive (FLEDGE-2/3),
+ * and the excerpt of its output a retry sends the model (AGENT-4.a).
  */
 
 import { isWorkerEnvDropped } from "../autonomous/delegate.ts";
@@ -114,5 +115,124 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
     untrack();
   }
 };
+
+/**
+ * Most verify lane output a retry sends the model (AGENT-4.a, REQ-agent-002).
+ * The tool loop and the read-tier chat both cap the feedback here.
+ */
+export const VERIFY_FEEDBACK_MAX_CHARS = 4000;
+
+/** fledge's own failure line: `Lane 'verify' failed at step 3 (test) after …`. */
+const LANE_FAILED_RE = /Lane '([^'\n]*)' failed at step (\d+) \(([^)\n]*)\)/g;
+/** fledge's step marker on stdout: `  ▶️ Running task: test`. */
+const RUNNING_TASK_RE = /^[^\n]*Running task: (\S+)[ \t]*$/gm;
+/** Lines kept from the failing step when its output is over the cap. */
+const ERROR_LINE_RE = /error|fail|panic|exception|\bexpected\b|\breceived\b|[✗✘✖]/i;
+/** Passing tests and steps, even when a test name says "fails". */
+const PASS_LINE_RE = /^\s*(?:\(pass\)|\(skip\)|\(todo\)|✓|✔)/;
+const ERROR_LINE_MAX_CHARS = 300;
+/** A tail cut mid-line moves to the next line start when one is this close. */
+const TAIL_LINE_SNAP_CHARS = 200;
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/** At most `n` chars from the end, from a line start when one is near. */
+function tailOf(text: string, n: number): string {
+  if (n <= 0) return "";
+  if (text.length <= n) return text;
+  let start = text.length - n;
+  if (text[start - 1] !== "\n") {
+    const nl = text.indexOf("\n", start);
+    if (nl !== -1 && nl - start < TAIL_LINE_SNAP_CHARS && nl + 1 < text.length) {
+      start = nl + 1;
+    }
+  }
+  // Never start on half a surrogate pair.
+  if (isLowSurrogate(text.charCodeAt(start))) start += 1;
+  return text.slice(start);
+}
+
+/** One kept error line, at most ERROR_LINE_MAX_CHARS. */
+function capLine(line: string): string {
+  if (line.length <= ERROR_LINE_MAX_CHARS) return line;
+  let cut = ERROR_LINE_MAX_CHARS - 1;
+  if (isHighSurrogate(line.charCodeAt(cut - 1))) cut -= 1;
+  return `${line.slice(0, cut)}…`;
+}
+
+/**
+ * The verify lane output a retry sends the model (AGENT-4.a, REQ-agent-002).
+ * Output within `max` chars is returned unchanged. Over it, the start of the
+ * log (earlier steps that passed, such as a typecheck or a `--help` smoke) is
+ * left out and the failing step is kept: its name from fledge's `Lane '…'
+ * failed at step N (name)` line, its output from its `Running task: <name>`
+ * marker on when that fits, else the error / fail lines of that output and
+ * the end of the log. Never longer than `max`; never cut inside a surrogate
+ * pair.
+ */
+export function verifyFeedbackExcerpt(
+  output: string,
+  max: number = VERIFY_FEEDBACK_MAX_CHARS,
+): string {
+  if (output.length <= max) return output;
+
+  let lane: { name: string; step: string; task: string } | undefined;
+  for (const m of output.matchAll(LANE_FAILED_RE)) {
+    lane = { name: m[1] ?? "", step: m[2] ?? "", task: m[3] ?? "" };
+  }
+  // The failing step's output starts at its (last) marker. A lane runs its
+  // steps in order, so without a named match the last marker is the step
+  // that failed. The log is stdout then stderr, so stderr is in the section.
+  let lastNamed: number | undefined;
+  let lastAny: number | undefined;
+  for (const m of output.matchAll(RUNNING_TASK_RE)) {
+    lastAny = m.index;
+    if (lane && m[1] === lane.task) lastNamed = m.index;
+  }
+  const sectionStart = lastNamed ?? lastAny ?? 0;
+  const section = output.slice(sectionStart);
+
+  let fixed =
+    `[verify output is ${output.length} chars, over the feedback cap: ` +
+    `this is the failing step's output, not the start of the log]\n`;
+  if (lane) {
+    fixed += `Failing step: ${lane.task} (step ${lane.step} of lane '${lane.name}')\n`;
+  }
+  if (fixed.length >= max) return tailOf(output, max);
+
+  const avail = max - fixed.length;
+  if (section.length <= avail) return fixed + section;
+
+  const errorsLabel = "Error lines from the failing step:\n";
+  const tailLabel = "\n… end of the verify output:\n";
+  const body = avail - errorsLabel.length - tailLabel.length;
+  if (body <= 0) return fixed + tailOf(output, avail);
+  // At least half the room is the end of the log. Error lines before it get
+  // the rest, first ones first (the first error is often the cause).
+  const tailBudget = Math.ceil(body / 2);
+  const scanEnd = Math.max(sectionStart, output.length - tailBudget);
+  const seen = new Set<string>();
+  const errorLines: string[] = [];
+  let used = 0;
+  for (const raw of output.slice(sectionStart, scanEnd).split("\n")) {
+    const line = capLine(raw.trimEnd());
+    if (!line.trim() || seen.has(line)) continue;
+    if (!ERROR_LINE_RE.test(line) || PASS_LINE_RE.test(line)) continue;
+    if (used + line.length + 1 > body - tailBudget) break;
+    seen.add(line);
+    errorLines.push(line);
+    used += line.length + 1;
+  }
+  if (errorLines.length === 0) return fixed + tailOf(output, avail);
+  const errors = `${errorsLabel}${errorLines.join("\n")}\n`;
+  const tail = tailOf(output, avail - errors.length - tailLabel.length);
+  return `${fixed}${errors}${tailLabel}${tail}`;
+}
 
 export type { VerifyResult };

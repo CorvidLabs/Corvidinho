@@ -33,6 +33,8 @@ files:
   - tests/agent.spend-ask.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
+  - tests/agent.verify-feedback.test.ts
+  - tests/fixtures/verify-lane-log.ts
   - agent.3md
   - tests/agent3md.smoke.test.ts
   - src/autonomous/enabled.ts
@@ -195,6 +197,13 @@ Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 `isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
 with `buildVerifyEnv()`.
 
+Verify retry feedback (REQ-agent-002, AGENT-4.a): `src/agent/verify.ts` also
+exports `VERIFY_FEEDBACK_MAX_CHARS` (4000) and `verifyFeedbackExcerpt(output,
+max?)`, the lane output a retry sends the model. `runTask` builds
+`ExecuteContext.verifyFeedback` with it (prefix included, within the cap) and
+the LLM execute (tool loop and read-tier chat) caps feedback with it instead
+of a head cut. No flag, env var or config key.
+
 ## Invariants
 
 The verify gate trusts the working tree, not only the tools (REQ-agent-085):
@@ -205,6 +214,16 @@ verify lane; a run ends `done` without verify
 only when no tool reported files and the real diff is empty. A diff git
 cannot read after a good snapshot verifies anyway (fail closed). The diff is
 read-only git plus in-process hashing: it never writes the index or objects.
+
+A verify retry works from the failing step's output, not the start of the
+lane log (REQ-agent-002, AGENT-4.a). The runner's output is stdout then
+stderr, so steps that passed first (a typecheck, a `--help` smoke) can fill
+the head. Output within `VERIFY_FEEDBACK_MAX_CHARS` reaches the model whole;
+over it, the feedback names the failing step (fledge's `Lane '<lane>' failed
+at step N (<name>)` line) and carries that step's output from its `Running
+task: <name>` marker when it fits, else its error / fail lines (first ones
+first, passing-test lines left out) and the end of the log. It is never
+longer than the cap and never cut inside a surrogate pair.
 
 The default verify runner spawns fledge with the parent's env minus the
 delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
@@ -363,6 +382,7 @@ model.
 | Condition | Behavior |
 |-----------|----------|
 | Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Verify lane log over 4000 chars (passing steps such as the `--help` smoke fill its head) | the retry gets the failing step's name, its output (or its error lines and the end of the log) within 4000 chars, never the start of the log (REQ-agent-002, AGENT-4.a) |
 | Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
 | Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085) |

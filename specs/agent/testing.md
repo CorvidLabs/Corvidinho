@@ -40,6 +40,19 @@ dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
 reaches the verify gate": end to end through the real `shell-exec` plugin.
+## Verify retry feedback (REQ-agent-002, AGENT-4.a)
+
+`tests/agent.verify-feedback.test.ts`: `verifyFeedbackExcerpt` on a fledge
+lane log shaped like Corvidinho's own (`tests/fixtures/verify-lane-log.ts`:
+`lint` and a `--help` smoke over 4000 chars pass, then `test` fails) keeps the
+failing step whole and drops the `--help` head; a failing step whose own
+output is over the cap keeps its first error lines and the end of the log,
+with no passing-test lines; a log with no fledge markers keeps its end; output
+within the cap is unchanged; never over the cap and never half a surrogate
+pair. `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
+names the failing test within 4000 chars; a short output arrives whole.
+`tests/agent.tool-loop.test.ts`: the tool loop's retry request and the
+read-tier chat carry the failing step, not the first 4000 chars.
 ## Images as image parts (REQ-agent-428, DISCORD-9)
 
 `tests/agent.tool-loop.test.ts` ("files-read images reach the model as image
