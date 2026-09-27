@@ -38,12 +38,17 @@ function serializePendingAsk(ask: PendingAsk | null | undefined): string | null 
   return JSON.stringify(body);
 }
 
+/**
+ * A stored pending ask (AUTONOMY-5/6). A spend-cap stop is never pending —
+ * a reply cannot lift the cap (SAFE-8) — so one persisted by an earlier
+ * build loads as no pending ask.
+ */
 function parsePendingAsk(raw: string | null | undefined): PendingAsk | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const base = askFromUnknown(parsed);
-    if (!base) return null;
+    if (!base || base.reason === "spend-cap") return null;
     const askId =
       typeof parsed.askId === "string" && parsed.askId.trim()
         ? parsed.askId.trim()

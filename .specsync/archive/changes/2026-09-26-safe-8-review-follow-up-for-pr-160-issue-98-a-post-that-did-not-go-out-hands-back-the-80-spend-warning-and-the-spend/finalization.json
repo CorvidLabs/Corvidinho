@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend",
+  "implementation_commit": "7d2ac505958ecdf98fc132da7339006d34f5b608",
+  "implementation_tree": "e573072554d6defe8456249b0c224d117500caf7",
+  "contract_digest": "9efe3d1e608aa187cad8220756e29dae72ba8ae6290e85edd4b6a2a10de3be6d",
+  "workspace_digest": "6595d608d7cce23736f627dc8a63f7095e2f56340794bb1fb332fc42811cb78b",
+  "closing_digest": "ad6439c1584b3f64736aeb559177b46950adb96a875ae27141e2674f4b807fc1",
+  "review_digest": "66bd2da6ab2ad6fd3ac71c5828c5cf64ed1ea78c8a4da03c846ceb65d2a0c3e5",
+  "finalization_digest": "92a2ab03734629be325ede641516edd77925f0488892f23d298653fe3ede4d65",
+  "timestamp": 1790467109
+}

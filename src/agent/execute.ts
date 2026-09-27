@@ -14,6 +14,8 @@ import {
   roleSessionActive,
 } from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
+import { createSpendGuard } from "./spend.ts";
+import { formatSpendWarningLine } from "./spend-notice.ts";
 import {
   ASK_AGENT_SYSTEM_INSTRUCTIONS,
   ASK_TOOL_NAME,
@@ -28,6 +30,7 @@ import type {
   AgentTokenUsage,
   ExecuteFn,
   ExecuteResult,
+  SpendWarning,
 } from "./types.ts";
 import {
   loadProjectInstructions,
@@ -132,6 +135,8 @@ export type CreateTaskExecuteOpts = {
   loadPlugins?: boolean;
   /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
   projectInstructions?: boolean;
+  /** SAFE-8 80% spend warning (once per crossing); also emitted as a Text event. */
+  onSpendWarning?: (warning: SpendWarning) => void;
 };
 
 type ChatMessage = {
@@ -180,7 +185,17 @@ function toAllowSet(
  */
 export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const env = opts.env ?? process.env;
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  // SAFE-8: warn at 80% of the daily spend cap; a call that would pass it is
+  // not sent and the attempt ends with a spend-cap ask (no cap = untouched fetch).
+  const spend = createSpendGuard(opts.fetchImpl ?? fetch, {
+    env,
+    readUsage: extractUsage,
+    onWarning: (w) => {
+      emit(opts.onEvent, { type: "Text", text: formatSpendWarningLine(w) });
+      opts.onSpendWarning?.(w);
+    },
+  });
+  const fetchImpl = spend.fetch;
   const taskText = opts.taskText?.trim() ?? "";
   const cwd = opts.cwd ?? process.cwd();
   const nonInteractive = opts.nonInteractive ?? true;
@@ -211,7 +226,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const projectBlock = project ? renderProjectInstructions(project) : "";
   let projectNote = project ? projectInstructionsWarning(project) : null;
 
-  return async ({ attempt, verifyFeedback, signal }) => {
+  const run: ExecuteFn = async ({ attempt, verifyFeedback, signal }) => {
     if (projectNote) {
       emit(onEvent, { type: "Text", text: projectNote });
       projectNote = null;
@@ -276,6 +291,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       projectBlock,
     });
   };
+  // SAFE-8: an attempt stopped at the cap ends with its spend-cap ask (blocked).
+  return async (ctx) => spend.finish(await run(ctx));
 }
 
 type LoopArgs = {
