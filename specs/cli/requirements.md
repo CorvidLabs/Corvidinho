@@ -500,7 +500,12 @@ updater SHALL source `CORVIDINHO_ENV_FILE` once, after `bun install` and before 
 env. `CORVIDINHO_BRIDGE_CMD` SHALL run in `bash -lc` with its text passed through the
 environment rather than the shell's argv, so a `pkill -f` pattern in it cannot match that shell,
 and the documented `pkill -f` examples SHALL match the bridge process but not a shell whose
-command line holds the example.
+command line holds the example. In pidfile mode the updater SHALL count the restarted bridge
+ready only when its log holds the line the gateway prints on Discord ClientReady
+(`[discord] logged in as <tag>`), never on the pre-login `[discord] protocol version N OK`
+line; if the bridge exits or that line does not appear within `CORVIDINHO_READY_TIMEOUT`, the
+update SHALL roll back and exit 1 with log lines only. Unit mode SHALL keep its
+`systemctl is-active` check.
 
 Acceptance Criteria
 - Unit set + leftover stale pidfile: `systemctl restart <unit>` runs, no `discord bridge` is started, the pidfile is removed.
@@ -510,6 +515,11 @@ Acceptance Criteria
 - A rollback restart after a failed `bun install` or a failed `doctor` sees `CORVIDINHO_ENV_FILE`.
 - A `CORVIDINHO_BRIDGE_CMD` containing `pkill -f '<pattern>'` completes (exit 0, no rollback) instead of killing its own shell.
 - Each `pkill -f` pattern in `docs/BOX-UPDATE.md` matches `bun src/cli.ts discord bridge` and an absolute-path bridge command line, and does not match `bash -lc` holding the example.
+- `log_indicates_ready` rejects a log holding only `[discord] protocol version N OK` (with or without a following login error) and accepts one holding `[discord] logged in as <tag>`, the line `src/discord/gateway.ts` prints inside its `Events.ClientReady` handler.
+- Pidfile mode, a bridge that prints the protocol line and then exits 1: the update rolls back to the previous SHA and exits 1; it never logs "ready signal observed" or "OK updated".
+- Pidfile mode, a bridge that prints the protocol line and never logs in: after `CORVIDINHO_READY_TIMEOUT` the updater logs a ready timeout naming the login line, rolls back and exits 1.
+- Pidfile mode, a bridge that prints the login line: the update exits 0 with no rollback.
+- Unit mode still runs `systemctl is-active --quiet <unit>`; an inactive unit rolls back and exits 1.
 
 ### REQ-cli-026
 

@@ -25,7 +25,7 @@ CORVIDINHO_UPDATE_DRY_RUN=1 ./scripts/corvidinho-update.sh
 4. `bun install` (frozen lockfile, then fallback)
 5. `bun src/cli.ts doctor` (refuse to restart if doctor fails → rollback)
 6. Restart the bridge (pidfile mode unless a unit or command is configured; see below)
-7. On failure after checkout: force-checkout previous SHA + reinstall; **exit 1** with log lines only (no Discord notify)
+7. On failure after checkout (install, doctor, or the restarted bridge not ready — see below): force-checkout previous SHA + reinstall; **exit 1** with log lines only (no Discord notify)
 
 The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `doctor` — so
 `doctor`, every restart path (pidfile, systemd, command) and a rollback restart all see the
@@ -45,8 +45,13 @@ The script picks one restart mode:
    set, when the pidfile already exists or `CORVIDINHO_BRIDGE_CMD` is not set. It stops the pid
    (SIGTERM, then SIGKILL), starts
    `bun <CORVIDINHO_BIN or src/cli.ts> discord bridge` with `nohup`, and waits for
-   `[discord] logged in` or `protocol version N OK` in the log.
-2. **systemd** — `systemctl restart $CORVIDINHO_BRIDGE_UNIT`, then checks the unit is active.
+   `[discord] logged in as <bot tag>` in the log. The bridge prints that line only once
+   Discord login succeeds (ClientReady). `[discord] protocol version N OK` comes earlier,
+   before login, and does **not** count: a bridge with a bad `DISCORD_TOKEN` prints it and
+   then exits. If the bridge exits, or no login line shows up within
+   `CORVIDINHO_READY_TIMEOUT`, the update rolls back (exit 1, log lines only).
+2. **systemd** — `systemctl restart $CORVIDINHO_BRIDGE_UNIT`, then checks the unit is active
+   (`systemctl is-active`; the updater does not read the bridge log in this mode).
    A set unit wins over a leftover pidfile (no second `nohup` bridge next to the unit's): a
    stale pidfile is removed; one naming a live pid is left alone with a log line. If that pid
    is a second bridge an earlier update started next to the unit's, stop it by hand
@@ -61,7 +66,7 @@ The script picks one restart mode:
 | `CORVIDINHO_USE_PIDFILE=1` | force pidfile mode |
 | `CORVIDINHO_PIDFILE` | pidfile path (default `/tmp/corvidinho-discord-bridge.pid`) |
 | `CORVIDINHO_BRIDGE_LOG` | bridge log in pidfile mode (default `/tmp/corvidinho-discord-bridge.log`) |
-| `CORVIDINHO_READY_TIMEOUT` | seconds to wait for the ready line (default 60) |
+| `CORVIDINHO_READY_TIMEOUT` | pidfile mode: seconds to wait for `[discord] logged in as …` before rolling back (default 60) |
 | `CORVIDINHO_ENV_FILE` | secrets env sourced once before doctor, for doctor, restart and rollback (default `~/.config/corvidinho/env`) |
 | `CORVIDINHO_ROOT` | repo root (default: the checkout holding the script) |
 | `CORVIDINHO_SKIP_RESTART=1` | update code only |

@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790470179,
+      "digest": "945a088e93e3fa62f861a27034e04f51bcf513fc4b2cea7e9d0b6559611c594c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved",
+        "title": "DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window",
+        "description": "DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/command-handlers/mute.ts",
+          "src/discord/message-router.ts",
+          "src/discord/permissions.ts",
+          "src/discord/slash-dispatch.ts",
+          "tests/discord.rate-mute-limits.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With DISCORD_RATE_LIMIT_MAX=3 and DISCORD_RATE_LIMIT_BY_LEVEL={\"3\":100} the owner's 4th and later /status and @mentions within the window are served while a STANDARD member is still refused at 4, and a level override applies on chat and slash from the actor's resolved permission level (user, roles, owner); /mute of the invoker or of the configured owner is refused with an ephemeral message and leaves the mute set unchanged, so the owner can never lock themselves out until restart; a muted or rate-limited user's @mention/reply/thread messages get at most one public notice per user per rate-limit window (later refusals in the window are silent, the next window may notify once again), other users are unaffected, and slash refusals stay ephemeral on every call; tests/discord.rate-mute-limits.test.ts covers each and fails on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "550eca88feea4510dcc485b31a8ec76f0b7baef412eec18f15b6594559423c2c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790475491,
+      "digest": "e18249fca0a84b744e38043c45d541e78539230954ec51b32659b9ad0b5f8ff6",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

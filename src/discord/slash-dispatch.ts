@@ -155,7 +155,15 @@ export async function handleSlashInteraction(
         ? {
             state: ctx.rateLimitState,
             config: ctx.rateLimitConfig,
-            permLevel: ctx.permLevelFor?.(interaction.userId),
+            // REQ-discord-010 — rateLimitByLevel applies to the actor's level.
+            permLevel:
+              ctx.permLevelFor?.(interaction.userId) ??
+              resolvePermissionLevel({
+                userId: interaction.userId,
+                roleIds: interaction.roleIds,
+                allowlist: ctx.allowlist,
+                owner: ctx.owner,
+              }),
           }
         : undefined,
   });

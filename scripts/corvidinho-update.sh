@@ -15,7 +15,9 @@
 #                             (default ~/.config/corvidinho/env)
 #   CORVIDINHO_PIDFILE        default /tmp/corvidinho-discord-bridge.pid
 #   CORVIDINHO_BRIDGE_LOG     default /tmp/corvidinho-discord-bridge.log
-#   CORVIDINHO_READY_TIMEOUT  seconds (default 60)
+#   CORVIDINHO_READY_TIMEOUT  seconds (default 60) to wait, in pidfile mode, for the bridge's
+#                             Discord login line "[discord] logged in as …" (not the earlier
+#                             "protocol version N OK" line); no login line in time → rollback
 #   CORVIDINHO_USE_PIDFILE=1  force pidfile stop/start (default: pidfile unless a UNIT is set;
 #                             with no UNIT, pidfile if the file exists or no CMD)
 #   CORVIDINHO_BRIDGE_UNIT    systemd unit (optional; wins over a leftover pidfile)
@@ -167,7 +169,7 @@ start_via_pidfile() {
 
 wait_for_ready() {
   local deadline=$((SECONDS + READY_TIMEOUT))
-  log "waiting up to ${READY_TIMEOUT}s for ready in $BRIDGE_LOG"
+  log "waiting up to ${READY_TIMEOUT}s for ${BRIDGE_READY_LINE} … in $BRIDGE_LOG"
   while [ "$SECONDS" -lt "$deadline" ]; do
     if [ -f "$BRIDGE_LOG" ] && log_indicates_ready "$(cat "$BRIDGE_LOG" 2>/dev/null || true)"; then
       log "ready signal observed"
@@ -183,7 +185,7 @@ wait_for_ready() {
     fi
     sleep 0.5
   done
-  log "ready timeout — log only (no Discord panic)"
+  log "ready timeout: no '${BRIDGE_READY_LINE} …' line within ${READY_TIMEOUT}s — log only (no Discord panic)"
   return 1
 }
 
