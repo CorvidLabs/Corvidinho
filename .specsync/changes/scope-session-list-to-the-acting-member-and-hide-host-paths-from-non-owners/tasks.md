@@ -13,3 +13,4 @@ artifact: tasks
 - [x] Regression tests in `tests/discord.session-list-scope.test.ts`; new files listed in `specs/discord/discord.spec.md` `files:`.
 - [x] Added delta for REQ-discord-418.
 - [x] `specsync check --require-coverage 100`, `bunx tsc --noEmit`, `bun test` and `fledge lanes run verify --non-interactive`.
+- [x] Review follow-up: legacy `adminUserIds` / `adminRoleIds` test (IDENTITY-2), and test store without worktree ensure, temp roots removed.

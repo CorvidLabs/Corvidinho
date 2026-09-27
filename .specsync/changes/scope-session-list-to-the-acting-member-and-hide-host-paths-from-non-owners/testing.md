@@ -22,6 +22,9 @@ owner "boss"):
   string starting with `/`.
 - **Owner sees all.** boss gets "Active sessions (3)" with every id, mention,
   topic and the full project path.
+- **Legacy admin lists (IDENTITY-2).** With `adminUserIds` / `adminRoleIds`
+  naming alice and her role, alice still sees only her own session and no
+  absolute path: only the configured owner is ADMIN.
 - **No owner configured (IDENTITY-3).** Nobody is ADMIN; "boss" sees only
   their own session.
 - **`/status` for a member** is counts-only: "Active sessions: 3", no ids,
@@ -33,10 +36,12 @@ owner "boss"):
 
 ## Before and after
 
-- **Before the fix** (`main` handlers, same behaviour tests without the
-  `projectLabel` unit block): 5 fail, 2 pass. The passing two are "owner
-  sees all" and "`/status` counts-only", which already held.
-- **After the fix:** 8 pass, 0 fail. `tests/discord.slash.test.ts`,
+- **Before the fix** (`main` handlers with `list-scope.ts` present): 6 fail,
+  3 pass. The passing three are "owner sees all", "`/status` counts-only"
+  and the `projectLabel` unit block, which already held.
+- **After the fix:** 9 pass, 0 fail. The store is built without worktree
+  ensure and each temp project root is removed after its test, so the file
+  leaves nothing behind in the temp dir. `tests/discord.slash.test.ts`,
   `tests/discord.schedule.test.ts`, `tests/discord.session-worktree.test.ts`
   and `tests/discord.slash-ask7.test.ts` still pass.
 
@@ -48,5 +53,5 @@ Also run: `bun test`, `bunx tsc --noEmit`,
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-discord-418` | `tests/discord.session-list-scope.test.ts` | A member's `/session list` shows only their own sessions, no other user's id, mention or topic, and the project name instead of the absolute host path; a member with none gets "No active sessions."; the owner gets every session with full paths; no owner means nobody is ADMIN; `/status` stays counts-only; `/schedule list` shows a member the project name and the owner the full path. 5 fail on `main`, all pass after. |
+| `REQ-discord-418` | `tests/discord.session-list-scope.test.ts` | A member's `/session list` shows only their own sessions, no other user's id, mention or topic, and the project name instead of the absolute host path; a member with none gets "No active sessions."; the owner gets every session with full paths; legacy admin user/role lists grant no wider list; no owner means nobody is ADMIN; `/status` stays counts-only; `/schedule list` shows a member the project name and the owner the full path. 6 fail on `main`, all pass after. |
 | `REQ-discord-201` | `tests/discord.slash.test.ts` | Channel and actor gates and the existing `/session list` empty/populated case pass unchanged. |

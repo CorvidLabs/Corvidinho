@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 /**
@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
  * surfaces (/status, /schedule list) carry no other user's session data or
  * absolute host path to a member either.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { projectLabel } from "../src/discord/list-scope.ts";
@@ -24,6 +24,13 @@ import { WorkStore } from "../src/discord/work-store.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 
 const OWNER = "boss";
+
+const tempRoots: string[] = [];
+afterEach(() => {
+  for (const dir of tempRoots.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 function allowCfg() {
   const cfg = emptyConfig();
@@ -53,8 +60,14 @@ function ix(
 
 function setup(opts: { owner?: boolean } = { owner: true }) {
   // Temp non-git project root: an absolute host path every session resolves to.
+  // No worktree ensure: the list only reads the resolved project, and a
+  // scoped dir per session would be left behind next to the temp root.
   const projectRoot = mkdtempSync(join(tmpdir(), "corvidinho-list-scope-"));
-  const store = new SessionStore({ defaultProjectRoot: projectRoot });
+  tempRoots.push(projectRoot);
+  const store = new SessionStore({
+    defaultProjectRoot: projectRoot,
+    ensureWorktree: false,
+  });
   const ctx: SlashContext = {
     store,
     workStore: new WorkStore(),
@@ -138,6 +151,23 @@ describe("/session list scope (REQ-discord-418)", () => {
       expect(body).toContain(s.topic!);
     }
     expect(body).toContain(projectRoot);
+  });
+
+  test("legacy admin user/role lists do not widen a member's list (IDENTITY-2)", async () => {
+    const { ctx, alice, bob, boss, projectRoot } = setup();
+    ctx.adminUserIds = ["alice"];
+    ctx.adminRoleIds = ["role-mods"];
+    const i = ix("alice", "session", "list");
+    i.roleIds = ["role-mods"];
+    await handleSlashInteraction(ctx, i);
+    const body = i.replies[0]?.content ?? "";
+    expect(body).toContain("Active sessions (1)");
+    expect(body).toContain(alice.id);
+    for (const other of [bob, boss]) {
+      expect(body).not.toContain(other.id);
+      expect(body).not.toContain(`<@${other.userId}>`);
+    }
+    expect(body).not.toContain(projectRoot);
   });
 
   test("no owner configured: nobody is ADMIN, so everyone sees only their own (IDENTITY-3)", async () => {
