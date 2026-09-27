@@ -20,6 +20,7 @@ Anyone in an allowlisted Discord channel can have a solid chat experience. Non-a
 - **ROLES-CHAT-6**  Role is re-checked in the plugin/runtime layer each call (same spirit as DISCORD-7 / IDENTITY-12 draft) — prompt text never grants power.
 - **ROLES-CHAT-7**  Prove-before-done: automated tests cover (a) non-admin cannot run file-write / shell / github-create-pr / memory-forget, (b) admin can reach those paths still gated by SAFE, (c) channel allowlist still required.
 - **ROLES-CHAT-8**  Non-ADMIN community Discord sessions may answer from any public GitHub plus site/roadmap; refuse private repo access and secret paths.
+- **ROLES-CHAT-9**  In Discord community chat, prefer a conversational prose reply for social or game banter; only open SpecSync, git, github, or project file tools when the query clearly needs Corvidinho codebase or product data.
 
 ## Notes (not numbered AC)
 

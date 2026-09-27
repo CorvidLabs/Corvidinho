@@ -117,7 +117,7 @@ When a run needs a human, the reply is a question instead of a summary. Two case
 - **Clarify** — the agent called its `ask-human` tool (the task cannot go on without a human choice). The run ends in state `blocked` (never `done`, verify not run).
 - **Stuck** — verification still fails after every retry. The run stays `failed` (AGENT-4) and asks how to proceed.
 
-The reply quotes the question, mentions the configured owner (`CORVIDINHO_OWNER_DISCORD_ID` / allowlist `[owner]`, IDENTITY-1) on its first line, and for mentions ends with "Reply to this message to answer." — replying continues the same session (DISCORD-2). The post limits allowed mentions to the owner plus the replied-to user; `@everyone` / `@here` in the model's text are defanged and secrets scrubbed. No owner configured means no ping (IDENTITY-3); the question still posts and the bridge logs a warning. Scheduled runs post the same question (prefixed with the schedule line) to the schedule's channel and ping the owner once per question: a schedule stuck on the same question keeps posting it each tick without a mention until a run succeeds, the schedule is paused/resumed, or the question changes (digest kept in the schedule row, schema v7). Pings go only where the bridge already posts — no DMs. `/work` and `/session start` show the question in their summary text but do not ping yet; a `/work` run waiting on an answer opens no PR.
+The reply quotes the question, mentions the configured owner (`CORVIDINHO_OWNER_DISCORD_ID` / allowlist `[owner]`, IDENTITY-1) on its first line, and for mentions ends with "Reply to this message to answer." — replying continues the same session (DISCORD-2). The post limits allowed mentions to the owner plus the replied-to user; `@everyone` / `@here` in the model's text are defanged and secrets scrubbed. No owner configured means no ping (IDENTITY-3); the question still posts and the bridge logs a warning. Scheduled runs post the same question (prefixed with the schedule line) to the schedule's channel and ping the owner once per question: a schedule stuck on the same question keeps posting it each tick without a mention until a run succeeds, the schedule is paused/resumed, or the question changes (digest kept in the schedule row, schema v7). Pings go only where the bridge already posts — no DMs. `/work` and `/session start` show the question in their one answer message (no Choose buttons); a stuck or spend-cap stop pings the owner in a separate channel post. The session then waits on that question like a chat ask: reply to the answer (or @mention the bot in that channel) — a thin reply (`ok`) restates it, `cancel` drops it, and a real answer resumes the session with the question as context. A spend-cap stop is never waiting on a reply. A `/work` run waiting on an answer records its task `blocked` (stuck: `failed`) and opens no PR.
 
 ### Slash replies
 
@@ -199,7 +199,7 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 | Explicit project | Optional `project` on `/session start` and `/work`; required on `/schedule create` |
 | Mid-conversation | Project never silently switches once set |
 | Root on disk | `{dirname(project)}/.corvid-worktrees/` or `WORKTREE_BASE_DIR` |
-| Branch | `talk/{sessionPrefix}` |
+| Branch | `talk/{sessionPrefix}-{digest}` (16-char id prefix + 16 hex of sha256 of the full id); schedule runs use `talk/schedule_{scheduleId}_{runId}` |
 | End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
 | Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
 
@@ -228,3 +228,16 @@ diffstat, commits) plus the verify result, with repo/model text in code fences
 and secrets scrubbed. Allowlisting these plugins is process-wide: the spawned
 agent can call them too.
 
+
+## Discord user lookup (IDENTITY-5 / DISCORD-13)
+
+Community chat often mentions people by snowflake id (`bug 3040…`), `@mention`, or name. The read-only plugin `discord-user-lookup` resolves members **inside the configured `DISCORD_GUILD_ID` only** (refuse other guilds):
+
+```
+discord-user-lookup --user-id 304028152194138114
+discord-user-lookup --query Gaspar
+```
+
+Inbound `<@id>` mentions are rewritten to `Discord user id <id>` so the snowflake survives for lookup. Casual social/game banter should get a prose reply; SpecSync/git/github/files are for clear Corvidinho code/product questions (ROLES-CHAT-9).
+
+When the tool-round budget runs out, the channel gets the best prose so far or a short clarifying ask — never a raw `Stopped after N tool rounds` line (AGENT-9).

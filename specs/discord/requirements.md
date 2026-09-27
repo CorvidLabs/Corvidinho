@@ -926,12 +926,32 @@ continue the conversation WITHOUT clearing pending; only button pick, cancel,
 or expiry SHALL clear it. Clarify asks SHALL mention the requester; stuck
 asks SHALL mention the configured owner.
 
+A `/work` or `/session start` run that stopped with a clarify or stuck ask
+SHALL store that ask as its session's free-text pending ask (the slash answer
+shows it as free text, with no Choose buttons), and `/work` SHALL record the
+task `blocked` (a stuck ask stays `failed`), never `completed`
+(AUTONOMY-1). The slash answer message SHALL be bound to its session like a
+chat reply (DISCORD-2), so a reply to it by the requester continues that
+session and the rules above apply (AUTONOMY-5/6). A SAFE-8 spend-cap stop
+SHALL NOT be stored as the pending ask.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
 - Cancel clears pendingAsk.
 - Free-text substantive continue clears pending and runs agent.
 - Button pending survives unrelated chat turns until pick/cancel/expiry.
+- `/work` with a clarify ask (even one with structured options): the task is `blocked`, the session's pending ask is the free-text clarify ask, and the collapsed answer message maps to that session.
+- A thin reply (`ok`) to the `/work` answer restates the question (requester mention, reply hint) and does not run the agent; the pending ask remains.
+- `cancel` in reply to the `/work` answer clears the pending ask with the short ack and does not run the agent.
+- A substantive reply to the `/work` answer resumes the same session (`resume: true`) with the prior question and the human answer in the prompt, and clears the pending ask.
+- `/work` or `/session start` stopped at the spend cap stores no pending ask; a later `ok` to the `/work` answer runs the agent with no prior-question or cap text.
+- `/session start` with a clarify ask: the pending ask is stored; a thin reply restates, a substantive reply resumes with the question.
+- `/session start` with a clarify ask that has structured options: the pending ask is free text (no options), so a substantive reply answers and clears it.
+- `/work` with a stuck ask: the task is `failed`, the pending ask is stored; the owner is pinged once by the separate notice post (the answer itself pings nobody), and a thin reply restates the question with allowed mentions limited to the owner (never the requester).
+- A reply to the `/work` answer by another user (`ok`, `cancel` or a substantive answer) neither runs the agent nor clears or restates the requester's pending ask (SESSION-MULTI-1).
+- A finished `/work` run (`completed`) stores no pending ask and its answer still continues the session.
+- Without an editable thinking message the pending ask is still stored, and an @mention `ok` from the requester restates it without running the agent.
 
 ### REQ-discord-045
 
@@ -1044,6 +1064,25 @@ Acceptance Criteria
 - A sibling checkout runs only when its origin passes the GitHub repo allowlist; a denied, unlisted or non-git sibling is refused.
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
+
+### REQ-discord-241
+
+The default worktree id and `talk/` branch name that `ensureTalkWorkspace`
+derives from a session or run id (`talkWorktreeId` /
+`generateTalkBranchName`) SHALL be deterministic for that id and SHALL
+include a collision-resistant digest of the full id, not only a shortened
+prefix, so two ids that share a prefix never get the same worktree dir,
+scoped dir or branch, and creating one talk's workspace never removes another
+talk's live working tree (SESSION-WORKTREE-1 / SESSION-WORKTREE-3 /
+DISCORD-SCHEDULE-1). Explicit `worktreeId` / `branchName` overrides and
+names already stored on a session SHALL be used as given. No new env var,
+slash command or schema change.
+
+Acceptance Criteria
+- Two ids that share their first 16 characters (e.g. `schedule_sched_a1111111_run_aaaa` and `schedule_sched_a2222222_run_bbbb`) get different default worktree ids and branch names; the same id always gets the same names.
+- `ensureTalkWorkspace` with default naming for two such ids creates two different worktrees and branches; the first's uncommitted files survive the second's setup.
+- In a non-git project the two ids get different scoped dirs and the first's files survive.
+- A talk stored before the digest change with a prefix-only worktree path and `talk/` branch keeps that path and branch when it re-binds after a restart, and a new talk whose id shares that prefix gets a different worktree and branch and leaves the stored talk's worktree, branch and uncommitted files in place.
 
 ### REQ-discord-331
 
@@ -1189,4 +1228,69 @@ Acceptance Criteria
 - Edit and reply both failing still lets the bridge start; the row is deleted.
 - With no rows, bridge start sends, edits and replies nothing.
 - A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
+
+### REQ-discord-215
+
+Discord does not notify a mention added by a message edit. Whenever the
+bridge delivers an answer by editing the thinking (or Choose stub) message
+(DISCORD-ASK-6/7: the chat answer, the answer to a run a button pick resumed,
+`/work` and `/session start`) and that answer mentions the requester (a
+clarify ask, AUTONOMY-4) and/or the configured owner (a stuck ask,
+AUTONOMY-2; a spend-cap ask or the 80% warning, SAFE-8), the bridge SHALL
+additionally send one short fresh post to the same channel, replying to the
+edited answer, whose content is only those mentions with a one-line pointer
+(`↑ question for you` for the requester the clarify ask addresses, `↑ needs
+you` for everyone else) and whose allowed mentions are exactly those users
+(no `@everyone`, `@here` or roles). The bridge SHALL NOT ping a user twice in
+one turn: a user a fresh post already pinged (the slash owner notice of
+REQ-discord-098) is left out, and the spend cap's once-per-episode owner ping
+(`claimCapPing`) still applies, so a spend-cap ask whose episode already
+pinged adds no owner ping. When the answer went out as a fresh reply (the
+fallback when the edit is unavailable or fails) or mentions nobody, no extra
+post SHALL be sent. A chat or button-pick ping post SHALL be tracked like the
+answer, so replying to it continues the session (DISCORD-2). The ping is best
+effort: a failed or throwing post SHALL NOT fail the turn or undo the
+answer. The one-message layout of DISCORD-ASK-6/7 is otherwise unchanged; no
+slash command, env var or schema change.
+
+Acceptance Criteria
+- A chat clarify ask collapsed into the thinking message (free text or Choose stub) is followed by exactly one fresh post, `<@requester> ↑ question for you`, replying to the edited answer, with allowed mentions exactly the requester; a reply to that post continues the session.
+- A chat stuck ask collapsed into the thinking message is followed by exactly one fresh post, `<@owner> ↑ needs you`, with allowed mentions exactly the owner (the requester is not pinged).
+- A collapsed clarify ask carrying a pending 80% warning is followed by one post pinging the requester (question) and the owner (needs you), allowed mentions exactly those two.
+- Two chat spend-cap stops in one cap episode produce one owner ping post in total.
+- A collapsed answer that mentions nobody, an answer delivered as a fallback reply, and a failed ping post add no post; the turn still finishes.
+- A button pick whose resumed run gets stuck collapses the stub into the ask and is followed by one owner ping replying to the stub.
+- `/work` with a clarify ask collapses the answer, deletes the deferred reply and is followed by one requester ping, with no owner notice.
+- `/work` at the spend cap with a pending warning sends exactly one owner post (the REQ-discord-098 notice) and no duplicate ping; `/session start` with a clarify ask by the owner and a pending warning sends only the owner notice.
+- When the slash owner notice post fails and is appended to the collapsed answer, one owner ping post follows.
+- A slash answer delivered through the deferred reply (no collapse) adds no ping post.
+
+### REQ-discord-287
+
+`rescrubDatabase` (the SAFE-6 re-scrub run by `ensureScrubbed` on DB open when
+`SCRUB_RULES_VERSION` increases, REQ-discord-066) SHALL take the shared DB
+write lock before it reads rows (BEGIN IMMEDIATE), so a concurrent writer or
+opener in another process is waited for under the DB busy_timeout instead of
+failing at once with "database is locked". No new env var, config key,
+pragma, CLI or slash surface.
+
+Acceptance Criteria
+- While another process holds the write lock and then commits, `rescrubDatabase` waits, re-scrubs the pending rows and returns their count.
+
+### REQ-discord-312
+
+Inbound Discord chat content that mentions a user as `<@id>` or `<@!id>` SHALL be rewritten to `Discord user id <id>` before the agent prompt so the snowflake remains available for `discord-user-lookup` (IDENTITY-5). Mentions SHALL NOT be stripped to empty. Package version SHALL be `0.0.28` with CHANGELOG and docs covering lookup, soft-land, and chat tool discipline (DISCORD-13 / ROLES-CHAT-9). Discord channel replies from tool-round exhaustion SHALL never show the raw internal stop reason (AGENT-9 / REQ-agent-312).
+
+Acceptance Criteria
+- `stripMentions("hey <@3040…>")` contains `Discord user id 3040…`.
+- Package `0.0.27`; CHANGELOG + `docs/discord.md` document lookup and soft-land.
+- Fixture coverage via soft-land + user-lookup tests.
+
+### REQ-discord-313
+
+When inbound content is rewritten for IDENTITY-5 mention preservation, the chat body used for AUTONOMY-5/6 thin-ack and cancel detection SHALL ignore the mention trailer / `Discord user id` annotations so that messages like `<@bot> ok` still thin-ack a pending ask without spawning the agent. The full prompt (including the trailer) SHALL still be passed to the agent on substantive continues.
+
+Acceptance Criteria
+- `stripMentions("<@999> ok")` body line is `ok` and includes a mentioned trailer with the snowflake.
+- Bridge pending-ask path: `@mention ok` restates without a second agent run (`tests/discord.slash-pending-ask.test.ts`).
 

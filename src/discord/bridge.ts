@@ -15,6 +15,8 @@
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
+ * A /work or /session start answer is tracked too, so its ask is answered
+ * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * SESSION-MULTI: per-user sessions.
  */
@@ -66,7 +68,7 @@ import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
-import { routeMessage } from "./message-router.ts";
+import { promptBodyForAskGate, routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
   isMonitoredChannel,
@@ -110,7 +112,7 @@ import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 import { readSpendSnapshot } from "../agent/spend.ts";
 import { formatSpendStatusLine } from "../agent/spend-notice.ts";
 import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
-import { askPingOwner } from "./spend-post.ts";
+import { askPingOwner, postCollapsedPing } from "./spend-post.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -458,6 +460,12 @@ export async function startBridge(
       thinkingOutbound: resolveOutbound(),
       thinkingDebounceMs: opts.thinkingDebounceMs,
       thinkingTickMs: opts.thinkingTickMs,
+      // DISCORD-2 / AUTONOMY-5/6: a reply to a /work or /session start
+      // answer continues that session (and answers its pending ask).
+      trackBotMessage: (messageId, sessionId) => {
+        const session = store.get(sessionId);
+        if (session) store.trackBotMessage(messageId, session);
+      },
       mutedUsers,
       rateLimitState,
       rateLimitConfig,
@@ -501,9 +509,10 @@ export async function startBridge(
       if (
         action.kind === "continue_session" &&
         session.pendingAsk &&
-        (isThinAck(prompt) || isCancelAsk(prompt))
+        (isThinAck(promptBodyForAskGate(prompt)) ||
+          isCancelAsk(promptBodyForAskGate(prompt)))
       ) {
-        if (isCancelAsk(prompt)) {
+        if (isCancelAsk(promptBodyForAskGate(prompt))) {
           store.setPendingAsk(session, null);
           if (replyRef.fn) {
             const sent = await replyRef.fn({
@@ -819,6 +828,16 @@ export async function startBridge(
               pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+            // AUTONOMY-2/4, SAFE-8: an edit does not notify its mentions, so
+            // whoever the answer mentions gets one fresh ping post.
+            const ping = await postCollapsedPing({
+              post: replyRef.fn,
+              channelId,
+              replyToMessageId: collapsed.messageId,
+              mentionUserIds: out.mentionUserIds,
+              questionUserIds: askRaw?.reason === "clarify" ? askBody?.mentionUserIds : undefined,
+            });
+            if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             // Fallback when editMessage unavailable: status embed + separate reply.
             if (askBody) {
@@ -1133,6 +1152,15 @@ export async function startBridge(
               pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+            // As on a chat answer: the edit's mentions get one fresh ping post.
+            const ping = await postCollapsedPing({
+              post: replyRef.fn,
+              channelId,
+              replyToMessageId: collapsed.messageId,
+              mentionUserIds: out.mentionUserIds,
+              questionUserIds: askRaw?.reason === "clarify" ? askBody?.mentionUserIds : undefined,
+            });
+            if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             if (askBody) {
               await (askBody.failed

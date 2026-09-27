@@ -108,8 +108,13 @@ describe("ephemeral button ask bridge (DISCORD-ASK)", () => {
       content: "@bot pick a DB",
       mentionedBot: true,
     });
-    // DISCORD-ASK-6 — collapse thinking into one Choose stub (no separate reply).
-    expect(replies).toHaveLength(0);
+    // DISCORD-ASK-6 — collapse thinking into one Choose stub (no separate
+    // stub reply); an edit does not notify, so one fresh post pings the
+    // requester with no buttons (REQ-discord-215).
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toBe("<@user-1> ↑ question for you");
+    expect(replies[0]!.mentionUserIds).toEqual(["user-1"]);
+    expect(replies[0]!.components).toBeUndefined();
     expect(outbound.sends).toHaveLength(1);
     const stubEdit = outbound.contentEdits.find(
       (e) => typeof e.content === "string" && e.content.includes("Choose"),

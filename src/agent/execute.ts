@@ -91,6 +91,42 @@ export const PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS =
   "Public Q&A (ROLES-CHAT-8): In community / non-ADMIN Discord sessions, answer from public GitHub, the project site, and the roadmap. " +
   "Never access private repos or secret paths (.env, keys, keystores). Prefer read-only tools. ";
 
+/**
+ * IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9 — Discord social chat tool discipline.
+ * Prefer prose + discord-user-lookup; do not thrash SpecSync/git/github for banter.
+ */
+export const DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS =
+  "Discord chat (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): " +
+  "(a) For social/game banter or vague chat, reply in conversational prose first — do not thrash SpecSync/git/github/files. " +
+  "(b) When the message mentions a Discord snowflake (long digit id), an @mention rewritten as 'Discord user id …', or asks about a guild member by name, call discord-user-lookup (configured guild only) before repo tools. " +
+  "(c) Only use SpecSync/git/github/project file tools when the query clearly needs Corvidinho codebase or product data. " +
+  "(d) A bare 'bug <snowflake>' in Discord chat is almost always a Discord user id, not a GitHub issue. ";
+
+/** AGENT-9 — human chat body when the tool-round budget is exhausted. */
+export const TOOL_ROUNDS_EXHAUSTED_CLARIFY =
+  "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?";
+
+/**
+ * Soft-land tool-round exhaustion (AGENT-9): never put "Stopped after N tool rounds"
+ * in the chat summary. Prefer last model prose; else a brief clarifying ask.
+ * `operatorNote` is for thinking/NDJSON only.
+ */
+export function softLandToolRoundExhaustion(opts: {
+  lastText: string;
+  maxToolRounds: number;
+  toolNamesUsed: string[];
+}): { summary: string; operatorNote: string } {
+  const unique = [...new Set(opts.toolNamesUsed)];
+  const operatorNote =
+    `Stopped after ${opts.maxToolRounds} tool rounds` +
+    (unique.length ? ` (tools: ${unique.join(", ")})` : "");
+  const prose = opts.lastText.trim();
+  return {
+    summary: prose || TOOL_ROUNDS_EXHAUSTED_CLARIFY,
+    operatorNote,
+  };
+}
+
 /** Cap on the Planning SpecSync briefing sent to the model (REQ-agent-004). */
 const SPEC_BRIEFING_MAX_CHARS = 8000;
 
@@ -129,6 +165,13 @@ export type FetchLike = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+/**
+ * Cap on one chat completions request, headers and body (AGENT-3,
+ * REQ-agent-244): a stalled provider fails the request instead of hanging
+ * the run. Same wall clock as a whole delegate worker run.
+ */
+export const LLM_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+
 export type CreateTaskExecuteOpts = {
   taskText?: string;
   cwd?: string;
@@ -149,6 +192,8 @@ export type CreateTaskExecuteOpts = {
   onUsage?: (totals: AgentTokenUsage) => void;
   /** Cap LLM↔tool rounds per execute attempt (default 8). */
   maxToolRounds?: number;
+  /** Per-request LLM timeout (default {@link LLM_REQUEST_TIMEOUT_MS}). */
+  llmTimeoutMs?: number;
   /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
   includeDangerous?: boolean;
   /**
@@ -226,6 +271,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const nonInteractive = opts.nonInteractive ?? true;
   const allowlist = toAllowSet(opts.allowlist ?? allowlistFromEnv());
   const maxToolRounds = opts.maxToolRounds ?? 8;
+  const timeoutMs = opts.llmTimeoutMs ?? LLM_REQUEST_TIMEOUT_MS;
   const includeDangerous = Boolean(opts.includeDangerous);
   const onEvent = opts.onEvent;
   const totals: AgentTokenUsage = {
@@ -270,6 +316,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         attempt,
         verifyFeedback,
         signal,
+        timeoutMs,
         tools: [],
         onUsage,
         projectBlock,
@@ -304,6 +351,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       attempt,
       verifyFeedback,
       signal,
+      timeoutMs,
       tools,
       cwd,
       nonInteractive,
@@ -326,6 +374,7 @@ type LoopArgs = {
   attempt: number;
   verifyFeedback?: string;
   signal: AbortSignal;
+  timeoutMs: number;
   tools: ChatToolDef[];
   cwd: string;
   nonInteractive: boolean;
@@ -345,6 +394,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     attempt,
     verifyFeedback,
     signal,
+    timeoutMs,
     tools,
     cwd,
     nonInteractive,
@@ -366,11 +416,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   const system = withProjectInstructions(
     "You are Corvidinho, a Linux-first headless agent CLI. " +
     "Use the provided tools (project plugins) when they help complete the task. " +
-    "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
+    "Prefer SpecSync plugins (list/read/check/brief) when the task is about project specs or code — not for casual Discord social chat. " +
     "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
     IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
     PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
+    DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS +
     ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.",
@@ -405,6 +456,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       messages,
       tools,
       signal,
+      timeoutMs,
       onUsage,
     });
 
@@ -516,13 +568,15 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     }
   }
 
+  // AGENT-9: soft-land — never dump internal stop reason into the chat summary.
+  const landed = softLandToolRoundExhaustion({
+    lastText,
+    maxToolRounds,
+    toolNamesUsed,
+  });
+  emit(onEvent, { type: "Text", text: `[operator] ${landed.operatorNote}` });
   return {
-    summary:
-      (lastText ? `${lastText}\n\n` : "") +
-      `Stopped after ${maxToolRounds} tool rounds` +
-      (toolNamesUsed.length
-        ? ` (tools: ${[...new Set(toolNamesUsed)].join(", ")})`
-        : ""),
+    summary: landed.summary,
     filesChanged: [...filesChanged],
   };
 }
@@ -534,6 +588,7 @@ async function singleChatCompletion(opts: {
   attempt: number;
   verifyFeedback?: string;
   signal: AbortSignal;
+  timeoutMs: number;
   tools: OpenAiToolDef[];
   onUsage?: (usage: AgentTokenUsage) => void;
   projectBlock: string;
@@ -563,6 +618,7 @@ async function singleChatCompletion(opts: {
     messages,
     tools: opts.tools,
     signal: opts.signal,
+    timeoutMs: opts.timeoutMs,
     onUsage: opts.onUsage,
   });
   if (!completion.ok) {
@@ -581,6 +637,7 @@ async function chatCompletions(opts: {
   messages: ChatMessage[];
   tools: ChatToolDef[];
   signal: AbortSignal;
+  timeoutMs: number;
   onUsage?: (usage: AgentTokenUsage) => void;
 }): Promise<
   | { ok: true; message: ChatMessage }
@@ -595,36 +652,52 @@ async function chatCompletions(opts: {
     body.tools = opts.tools;
   }
 
-  const url = `${opts.llm.baseUrl}/chat/completions`;
-  let resp: Response;
-  try {
-    resp = await opts.fetchImpl(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${opts.llm.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: opts.signal,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: `LLM request failed: ${msg}` };
-  }
-
-  if (!resp.ok) {
-    const text = (await resp.text().catch(() => "")).slice(0, 400);
-    return {
-      ok: false,
-      error: `LLM HTTP ${resp.status}: ${text || resp.statusText}`,
-    };
-  }
-
+  // AGENT-3: the caller's abort, or the per-request timeout, ends the request
+  // while waiting for headers or reading the body (a stalled provider).
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), opts.timeoutMs);
+  const signal = AbortSignal.any([opts.signal, timeout.signal]);
+  const timedOut = () => timeout.signal.aborted && !opts.signal.aborted;
+  const timeoutError = {
+    ok: false as const,
+    error: `LLM request timed out after ${opts.timeoutMs}ms`,
+  };
   let data: unknown;
   try {
-    data = await resp.json();
-  } catch {
-    return { ok: false, error: "LLM response was not JSON" };
+    const url = `${opts.llm.baseUrl}/chat/completions`;
+    let resp: Response;
+    try {
+      resp = await opts.fetchImpl(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${opts.llm.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (err) {
+      if (timedOut()) return timeoutError;
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: `LLM request failed: ${msg}` };
+    }
+
+    if (!resp.ok) {
+      const text = (await resp.text().catch(() => "")).slice(0, 400);
+      return {
+        ok: false,
+        error: `LLM HTTP ${resp.status}: ${text || resp.statusText}`,
+      };
+    }
+
+    try {
+      data = await resp.json();
+    } catch {
+      if (timedOut()) return timeoutError;
+      return { ok: false, error: "LLM response was not JSON" };
+    }
+  } finally {
+    clearTimeout(timer);
   }
 
   // Tokens were spent even if the message shape is off — report first.

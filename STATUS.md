@@ -1,6 +1,6 @@
 # STATUS — Corvidinho
 
-**As of:** 2026-09-26 (America/Denver)
+**As of:** 2026-09-26 evening (America/Denver)
 
 | Item | State |
 |------|--------|
@@ -90,7 +90,7 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | SSRF-guarded web-fetch | #111 → [#148](https://github.com/CorvidLabs/Corvidinho/pull/148) | SAFE-7 fetch side; dangerous; web-search not captured; package **0.0.16** |
 | Fledge plugins as tools | #112 → [#154](https://github.com/CorvidLabs/Corvidinho/pull/154) | FLEDGE-4/5, PLUGIN-3/6; package **0.0.16** |
 | GitHub PR diff/files + CI by ref | #93/#94 → [#153](https://github.com/CorvidLabs/Corvidinho/pull/153), [#158](https://github.com/CorvidLabs/Corvidinho/pull/158) | GITHUB-3/4 read halves; GITHUB-10/11 drafts wait; linear SAFE-6 scrub; package **0.0.16** |
-| Project instructions in prompt | #84 → [#150](https://github.com/CorvidLabs/Corvidinho/pull/150) | AGENT-1; AGENT-13 skills draft waits; package **0.0.16** |
+| Project instructions in prompt | #84 → [#150](https://github.com/CorvidLabs/Corvidinho/pull/150) | AGENT-1; package **0.0.16** |
 | `/work` → draft PR | #88 → [#166](https://github.com/CorvidLabs/Corvidinho/pull/166) | AUTONOMOUS-3 / GITHUB-2/5 / AGENT-4; owner-only (ROLES-CHAT-3); in the **v0.0.17** build |
 | Instructions from HEAD | #84 → [#169](https://github.com/CorvidLabs/Corvidinho/pull/169) | AGENT-1 hardening; in the **v0.0.17** build |
 | Ask-human + owner ping | #44 → [#163](https://github.com/CorvidLabs/Corvidinho/pull/163) | AUTONOMY-1..3 / AUTONOMOUS-7; schema v7; package **0.0.18** |
@@ -98,6 +98,10 @@ Honest, issue-tied. Update this section when milestones land — do not invent s
 | Bug sweep + councils (0.0.21) | #175–#186 | Actor allowlist/deny gating, /work project clamp, schedule worktree isolation + safe branch cleanup, TTL never parks a live run, pinned Bun config, attachments in root, symlink clamp, `--` argv kept; council tool (#118); /admin + pr-diff edges; operator guide; package **0.0.21** |
 | Ephemeral Discord button asks (0.0.22) | DISCORD-ASK / SESSION-MULTI | Choose stub + ephemeral option buttons (~30m TTL); per-user sessions; ask-human options; package **0.0.22** |
 | Stop-means-stop + security fixes (0.0.23) | #185 #187 #188 #190 #191 | Process-tree kill on timeout/abort/exit/signals (AGENT-3), daemon kills abandoned runs, Fledge `--` + per-project binding; SAFE-3 cd clamp bypasses; files-edit literal `$`; scrub-before-clip (SAFE-6); GitHub gate honours allowlist-file deny lists (GITHUB-6); package **0.0.23** |
+| Light agent.3md adopt (0.0.27) | this PR | Root guidance-only `agent.3md` + `@corvidlabs/agent3md` + validate/route smoke (REQ-agent-260); **not** AGENT-13 runtime — progressive disclosure still waits on separate HI; package **0.0.27** |
+| Discord user lookup + soft-land (0.0.28) | IDENTITY-5 / AGENT-9 / DISCORD-13 / ROLES-CHAT-9 | `discord-user-lookup` (configured guild only); soft-land tool-round exhaustion; package **0.0.28** |
+| Spend cap + recovery + security (0.0.26) | #160 #193 #194 #195 #196 #197 #199 #201 #202 #203 #210 | SAFE-8 warn 80% / ask 100% + AUTONOMOUS-8 spend in doctor & /status; tick errors never crash the bridge; interrupted replies marked (schema v9); park state; updater single bridge; allowlist multi-line TOML + fail closed; SAFE-3 clamp fail-closed; verify/provider errors never "done"; WATCH durable dedup + pagination; package **0.0.26** |
+| Discord user lookup + soft-land (0.0.27) | IDENTITY-5 / AGENT-9 / DISCORD-13 / ROLES-CHAT-9 | `discord-user-lookup` (configured guild only); soft-land tool-round exhaustion (no `Stopped after N` in channel); chat prefers prose over SpecSync thrash; package **0.0.27** |
 | Discord deny polish | → (this PR) | DISCORD-DENY-1..3: MessageCreate silent outside allowlist; slash admin ephemeral tip / non-admin zero-width ack; [`docs/discord.md`](docs/discord.md) slash+outbound+deny mermaid |
 
 | Files/search plugins + SAFE-2 | #81 → [#127](https://github.com/CorvidLabs/Corvidinho/pull/127) | `files-read/write/edit/glob/list/delete` + `search-grep`; path clamp; SAFE-2 protected infra refuse; package **0.0.6**; Discord restart for presence only |

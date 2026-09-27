@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.0.28
+
+### Discord identity lookup + soft-land tool thrash (dogfood)
+
+- **IDENTITY-5 / DISCORD-13** — New read-only `discord-user-lookup` plugin resolves a guild member by snowflake (`--user-id`) or name (`--query`) inside the configured `DISCORD_GUILD_ID` only (refuse other guilds). Prefer this before SpecSync/git/github when chat mentions a Discord person. A bare `bug <snowflake>` in Discord is treated as a user id, not a GitHub issue.
+- **AGENT-9** — Tool-round budget exhaustion soft-lands: keep the best prose so far, or ask a brief clarifying question. Never dump `Stopped after N tool rounds` into the Discord channel body (operator note may appear on the thinking/NDJSON path). `chatBodyFromTaskResult` also strips leftover stop lines.
+- **ROLES-CHAT-9** — Community Discord chat prefers conversational prose for social/game banter; SpecSync/git/github/files only when the query clearly needs Corvidinho codebase or product data.
+- Mentions: `<@id>` in inbound chat is rewritten to `Discord user id <id>` so the snowflake stays available for lookup.
+
+### Ops
+
+- Package version **0.0.28** — restart the Discord bridge after update. No schema bump.
+
+## 0.0.27
+
+### Light agent.3md adopt (docs + dep + smoke)
+
+- **Guidance-only `agent.3md`** at the repo root (Magpie/let convention): identity plane + playbooks for HI-first, Discord ask UX, SpecSync SDD, no-secrets, and SAFE plugins — **no** `tool=` bindings that duplicate the plugin registry.
+- **Dependency** `@corvidlabs/agent3md` ^1.0.0; bun smoke (`tests/agent3md.smoke.test.ts`) runs `validateAgent` + `Agent.route` / `Agent.get` on the shipped file.
+- **Not** AGENT-13 runtime: does not replace hi/, SpecSync, MEMORY, sessions, or SAFE plugins; progressive disclosure is **not** wired into the agent loop yet (STATUS still waits on AGENT-13 HI).
+- HI Notes in `hi/agent.md`; SpecSync REQ-agent-260.
+
+### Ops
+
+- Package version **0.0.27** — docs/dep/smoke only; Discord bridge restart **not** required for presence (no runtime loop change). Optional: pull for the new `agent.3md` catalog on disk.
+
+## 0.0.26
+
+### Daily spend cap — warn at 80%, ask at 100% (SAFE-8 amended, AUTONOMOUS-8)
+
+- **Spend cap** — [#160](https://github.com/CorvidLabs/Corvidinho/pull/160) (#98): set `CORVIDINHO_DAILY_SPEND_CAP_USD` for a rolling 24 h cap on provider LLM spend (per-model price table). At **80%** the owner gets one warning per crossing — whichever surface made the call (chat, `/work`, `/session`, schedules, WATCH, daemon, delegate workers) — delivered by the bridge on its next post, handed back if a post fails, re-armed under 70% / after 24 h / on a cap change. At **100%** the provider call is not sent: the run ends **blocked** with a spend-cap ask and the owner is pinged once per cap episode (fresh post). A spend-cap stop is never shown as "✅ Done" and never stored as a pending clarify question. `corvidinho doctor` and `/status` show 24 h spend vs the cap.
+
+### Crash and restart recovery (from the recovery audit)
+
+- **Scheduler tick errors never crash the bridge** — [#193](https://github.com/CorvidLabs/Corvidinho/pull/193): `SQLITE_BUSY` (or any store error) in a schedule tick is logged as one scrubbed line and the next tick runs (DISCORD-SCHEDULE-4, CLI-8).
+- **Interrupted replies** — [#194](https://github.com/CorvidLabs/Corvidinho/pull/194) (DISCORD-3): replies in flight are recorded (schema **v9** `inflight_replies`); after a restart the stale "working…" message is marked interrupted instead of spinning forever.
+- **Session park state** — [#197](https://github.com/CorvidLabs/Corvidinho/pull/197) (SESSION-WORKTREE-3): a crash while ending a talk no longer leaves its thread bound to a removed worktree; every turn re-binds (re-creates a missing worktree, never the repo root).
+- **Box updater** — [#201](https://github.com/CorvidLabs/Corvidinho/pull/201): a set `CORVIDINHO_BRIDGE_UNIT` wins over a leftover pidfile (no second `nohup` bridge), and the env file is loaded for doctor and rollback restarts.
+
+### Security and correctness
+
+- **Allowlist file** — [#203](https://github.com/CorvidLabs/Corvidinho/pull/203): multi-line TOML arrays load (deny lists written across lines were silently dropped). **A malformed allowlist file now fails closed**: the bridge, watch and daemon refuse to start and GitHub/Discord gates refuse, with the line and key named (never values). `/admin` never writes a file the loader would reject. `doctor` reports the allowlist file.
+- **SAFE-3 `cd` clamp fails closed** — [#210](https://github.com/CorvidLabs/Corvidinho/pull/210): redirections, quoting, line continuations, expanded command words and runtime `CDPATH` (read-only in the shell) no longer escape the project root.
+- **Agent loop honesty** — [#199](https://github.com/CorvidLabs/Corvidinho/pull/199) (AGENT-4): a failed verify or a provider error is never reported as done; [#202](https://github.com/CorvidLabs/Corvidinho/pull/202): the planning SpecSync briefing reaches the model, not only the event stream.
+- **WATCH** — [#195](https://github.com/CorvidLabs/Corvidinho/pull/195): handled event ids are durable, so a restart or a stranger's comment flood no longer replays trusted requests (duplicate acks, summaries and agent runs); [#196](https://github.com/CorvidLabs/Corvidinho/pull/196): comments are read across every page, so @mentions after comment #50 are seen.
+
+### Ops
+
+- Package version **0.0.26** — restart the Discord bridge, `corvidinho daemon` and watch after update. **Schema migrates to v9** on first open (`inflight_replies`). Check your allowlist file with `corvidinho doctor` before restarting: a file the loader cannot parse now stops startup instead of silently falling back to env-only.
+
 ## 0.0.25
 
 ### Discord ask UX — slash ASK-7 + ephemeral pick cleanup (ASK-8)

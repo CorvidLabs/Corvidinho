@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 68
+version: 70
 status: draft
 files:
   - src/discord/types.ts
@@ -143,6 +143,12 @@ cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
 substantive continue. Message router keys sessions by Discord user id + channel
 (SESSION-MULTI-1); reply/thread continue only for the session owner.
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
+`/work` and `/session start` keep a clarify or stuck ask as their session's
+free-text `pendingAsk` (options dropped: the slash answer has no Choose
+buttons; never a `spend-cap` stop), and the bridge sets
+`SlashContext.trackBotMessage` so the slash answer message continues its
+session: a thin reply restates, cancel clears, a substantive reply resumes
+with the question (AUTONOMY-1/5/6 / REQ-discord-044).
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
 AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
@@ -189,6 +195,24 @@ ping (stuck and spend-cap only) and the warning go out as a fresh post after
 the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
+
+Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
+DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
+`ask-ping.ts` exports `formatCollapsedPing` (one line: each mentioned user with
+`COLLAPSED_PING_QUESTION` "↑ question for you" for the requester a clarify ask
+addresses, `COLLAPSED_PING_NEEDS` "↑ needs you" for everyone else — the owner
+on stuck, spend cap or the 80% warning; users in `alreadyPinged` left out;
+null when nobody is left) and the `CollapsedPing` type. `spend-post.ts`
+exports `postCollapsedPing` (sends that line as a fresh post replying to the
+collapsed answer, allowed mentions exactly those users; best effort, never
+throws, null when nothing went out); `ChannelPost` gains optional
+`replyToMessageId`. The chat answer and the answer to a run a button pick
+resumed call it after `finalizeContent` succeeds with the answer's
+`mentionUserIds` (ask mention plus the 80% warning's owner) and track the ping
+post like the answer, so a reply to it continues the session.
+`finishSlashWithOwnerNotice` calls it after a collapsed slash answer (also
+when there is no owner notice), leaving out the users its owner notice post
+already pinged. A fallback reply is itself a fresh post, so it gets no ping.
 
 Interrupted replies (REQ-discord-311, DISCORD-3 / AGENT-3):
 `src/discord/inflight-replies.ts` exports `InflightReplyStore` (`begin`,
@@ -286,6 +310,17 @@ never carries the "reply to answer" hint (a reply cannot lift the cap); it
 pings the owner once per cap episode across chat, slash commands and
 schedules. A slash run's owner ping is a fresh post (an edit of a deferred
 reply may not notify), with allowed mentions limited to the owner.
+An answer delivered by editing the thinking message (DISCORD-ASK-6/7) that
+mentions anyone is followed by exactly one short fresh post, replying to that
+answer, holding only those mentions and a one-line pointer, with allowed
+mentions exactly those users (never `@everyone`, `@here` or roles); no user is
+pinged twice in a turn (the slash owner notice post counts), a spend-cap ask
+whose episode already pinged carries no owner mention, and a fallback reply
+(already a fresh post) gets no extra post (REQ-discord-215).
+A `/work` or `/session start` run that stopped to ask leaves its session
+waiting on that ask exactly like a chat ask (free text, never a spend-cap
+stop), and its answer message is tracked like a chat reply, so a reply to it
+by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 
 ## Behavioral Examples
 
@@ -313,6 +348,16 @@ reply may not notify), with allowed mentions limited to the owner.
   before/after counts and warns that unlisted callers now resolve to BLOCKED,
   and the audit chain gains `started` + `ok` rows
 
+### Scenario: Collapsed clarify ask pings the requester
+
+- **Given** an editable thinking message and a run that stops with a clarify
+  ask for requester R
+- **When** the bridge edits the thinking message into the ask (mentioning R)
+- **Then** it posts one fresh reply to that message, `<@R> ↑ question for
+  you`, with allowed mentions exactly `[R]`; a stuck ask instead posts
+  `<@owner> ↑ needs you`; the same ask answered by a fallback reply adds no
+  post (REQ-discord-215)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -326,6 +371,7 @@ reply may not notify), with allowed mentions limited to the owner.
 | Leftover in-flight reply, edit and reply both fail | Logged as unreachable; row deleted; bridge start continues |
 | Leftover in-flight reply in a channel no longer allowlisted | Nothing edited or posted; logged as skipped; row deleted |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
+| Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 
 ## Dependencies
 
@@ -336,6 +382,7 @@ reply may not notify), with allowed mentions limited to the owner.
 
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
+| 2026-09-26 | discord-dogfood user lookup + mention rewrite + soft-land UX (REQ-discord-312 / IDENTITY-5 / DISCORD-13) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: IDENTITY-4 inject; DISCORD-3.a model+plumbing in thinking footer; clean chat body |
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
@@ -392,9 +439,16 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
 | 2026-09-26 | discord-ask-6-7-tighten-ask-ux: DISCORD-ASK-6/7 collapse thinking into Choose stub; edit stub/thinking into final answer; package 0.0.23 |
 | 2026-09-26 | discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of: DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23 |
+| 2026-09-26 | audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and: Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6) |
 | 2026-09-26 | align-session-start-and-work-with-discord-ask-7-collapse-thinking-into-one-final-message-instead-of-done-embed-plus: Align /session start and /work with DISCORD-ASK-7: collapse thinking into one final message instead of Done embed plus interaction reply |
 | 2026-09-26 | discord-ask-8-clear-ephemeral-choice-buttons-on-pick-and-delete-got-it-working-ephemeral-after-resume: DISCORD-ASK-8: clear ephemeral choice buttons on pick and delete Got-it Working ephemeral after resume |
 | 2026-09-26 | bridge-marks-a-reply-interrupted-after-a-restart-in-flight-replies-are-recorded-in-the-shared-db-and-the-next-bridge: Bridge marks a reply interrupted after a restart: in-flight replies are recorded in the shared DB and the next bridge start edits the frozen progress embed to a failed interrupted status (or replies to the request message) instead of leaving it at working forever |
+| 2026-09-26 | default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix: Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree |
+| 2026-09-27 | a-talk-stored-with-a-prefix-only-worktree-name-before-the-digest-change-keeps-it-after-upgrade-and-a-new-talk-whose-id: A talk stored with a prefix-only worktree name before the digest change keeps it after upgrade, and a new talk whose id shares that prefix gets its own worktree |
 | 2026-09-26 | safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend: SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask |
 | 2026-09-27 | safe-8-x-discord-ask-7-issue-98-merge-of-208-work-and-session-start-answer-in-one-collapsed-message-and-keep-the-safe-8: SAFE-8 x DISCORD-ASK-7 (issue #98, merge of #208): /work and /session start answer in one collapsed message and keep the SAFE-8 owner notice a fresh channel post; an ask run never shows Done, and claims go back when nothing carried the notice |
+| 2026-09-27 | collapsed-ask-pings-notify-when-an-answer-is-delivered-by-editing-the-thinking-message-discord-ask-6-7-and-mentions-the: Collapsed ask pings notify: when an answer is delivered by editing the thinking message (DISCORD-ASK-6/7) and mentions the requester or owner, one short fresh post pings exactly those users (AUTONOMY-2/4, SAFE-8), without double pings |
+| 2026-09-27 | a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message: A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending |
+| 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
+| 2026-09-27 | thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup: Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land) |
 | 2026-09-27 | discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved: DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window |
