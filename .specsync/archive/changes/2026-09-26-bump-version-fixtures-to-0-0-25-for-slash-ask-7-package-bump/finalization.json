@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "bump-version-fixtures-to-0-0-25-for-slash-ask-7-package-bump",
+  "implementation_commit": "169d015553cf75c2e669b2d1a11175da60c7c411",
+  "implementation_tree": "b9191513c0fab8de1df96e8a18df1bb05a7f66be",
+  "contract_digest": "0156d668eab44cd8537901de457b6e6ac4fd1cf475956ebf72d65dfa191551ce",
+  "workspace_digest": "3cb2a8743d059dd8754a4eda545a1d366ca87f125f26db65a7e7afe892ac414b",
+  "closing_digest": "8355b86ba04644aa65b922aee7f45fe29d12c2182a7f2cd4c228da9e08a1ffd1",
+  "review_digest": "f2386dc5b83b0fc975d11bf97ffbd65d4c0bf0aaaf7740c925b02976f0bec265",
+  "finalization_digest": "0979a35c46c7ef9c66d1ea48c46610f1b9c3021c3c5d4ac397650a41fb21cf99",
+  "timestamp": 1790466611
+}

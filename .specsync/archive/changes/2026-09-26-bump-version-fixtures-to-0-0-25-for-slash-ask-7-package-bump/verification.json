@@ -1,0 +1,42 @@
+{
+  "timestamp": 1790466603,
+  "commit": "169d015553cf75c2e669b2d1a11175da60c7c411",
+  "contract_digest": "0156d668eab44cd8537901de457b6e6ac4fd1cf475956ebf72d65dfa191551ce",
+  "execution_digest": "571d6d1e35ae4c10f4bbfe34ccafb0a9cdca4bfe3e85285561d54f562b06435b",
+  "workspace_digest": "3cb2a8743d059dd8754a4eda545a1d366ca87f125f26db65a7e7afe892ac414b",
+  "acceptance_input_digest": "170915ea0e65731e90fe753703e1903baad0e564cc13c449417b3b2a1a338750",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "tests/update-helpers.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "675cafadc1c937c7f869ca2235cb99682c09e40d6dc4f1ae335c6eb09dd02708",
+        "entry_digest": "77438520862210e4af271c0eeb5b07e53a7d2defe18bf896c4fdb613cd09d703",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/version.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f2134f887c1fd6746433c93e75c4502eef455bb6fc6e39103648505b53da0d3d",
+        "entry_digest": "17119bebf45e4c273420ba59e7d154fa611f07e7143c945d8d4f441008971856",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

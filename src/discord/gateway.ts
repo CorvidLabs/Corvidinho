@@ -19,10 +19,34 @@ import { buildVersionPresenceActivity } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
+/** Thin MessageComponent interaction (DISCORD-ASK buttons). */
+export type ComponentInteraction = {
+  id: string;
+  customId: string;
+  channelId: string;
+  guildId?: string;
+  userId: string;
+  messageId?: string;
+  /** Reply (or update) — supports ephemeral choice UI. */
+  reply: (opts: {
+    content?: string;
+    ephemeral?: boolean;
+    components?: unknown[];
+    update?: boolean;
+  }) => Promise<void>;
+  /**
+   * DISCORD-ASK-8 — drop the ephemeral choice / "Got it" message after pick
+   * or when resume finishes (discord.js deleteReply after update/reply).
+   */
+  deleteReply?: () => Promise<void>;
+};
+
 export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
   /** Slash commands (DISCORD-4). */
   onSlash?: (interaction: SlashInteraction) => void | Promise<void>;
+  /** Button / select component presses (DISCORD-ASK). */
+  onComponent?: (interaction: ComponentInteraction) => void | Promise<void>;
   /**
    * Live allowlisted channel ids for `/admin channels remove` autocomplete.
    * Bridge wires `config.channelIds` (mutated in place by /admin).
@@ -39,6 +63,8 @@ export type GatewayHandlers = {
      * by this post — used for the AUTONOMY-2 owner ping.
      */
     mentionUserIds?: string[];
+    /** Discord ActionRow components (DISCORD-ASK stub buttons). */
+    components?: unknown[];
   }) => Promise<{ messageId: string } | null>;
   /** Progress embeds (DISCORD-3). */
   sendEmbed?: (opts: {
@@ -50,6 +76,19 @@ export type GatewayHandlers = {
     channelId: string;
     messageId: string;
     embed: DiscordEmbedPayload;
+  }) => Promise<boolean>;
+  /** Richer in-place edit (DISCORD-ASK-6/7 collapse). */
+  editMessage?: (opts: {
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: DiscordEmbedPayload | null;
+    components?: unknown[] | null;
+    mentionUserIds?: string[];
+  }) => Promise<boolean>;
+  deleteMessage?: (opts: {
+    channelId: string;
+    messageId: string;
   }) => Promise<boolean>;
 };
 
@@ -132,6 +171,7 @@ export async function createLiveGateway(
     Events,
     ChannelType,
     ActivityType,
+    MessageFlags,
   } = discord;
   const presenceVersion = opts?.version ?? PACKAGE_VERSION;
 
@@ -199,6 +239,7 @@ export async function createLiveGateway(
     reply: (opts: unknown) => Promise<unknown>;
     deferReply: (opts?: unknown) => Promise<unknown>;
     editReply: (opts: unknown) => Promise<unknown>;
+    deleteReply?: () => Promise<unknown>;
     deferred: boolean;
     replied: boolean;
   }): SlashInteraction {
@@ -234,7 +275,7 @@ export async function createLiveGateway(
         }));
       }
       if (mode === "reply") {
-        if (opts.ephemeral) payload.ephemeral = true;
+        if (opts.ephemeral) payload.flags = MessageFlags.Ephemeral;
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply(payload);
         } else {
@@ -278,11 +319,20 @@ export async function createLiveGateway(
       },
       deferReply: async (opts) => {
         if (!interaction.deferred && !interaction.replied) {
-          await interaction.deferReply({ ephemeral: opts?.ephemeral ?? false });
+          await interaction.deferReply(
+            opts?.ephemeral
+              ? { flags: MessageFlags.Ephemeral }
+              : {},
+          );
         }
       },
       editReply: async (opts) => {
         await send(opts, "edit");
+      },
+      deleteReply: async () => {
+        if (typeof interaction.deleteReply === "function") {
+          await interaction.deleteReply();
+        }
       },
     };
   }
@@ -373,6 +423,14 @@ export async function createLiveGateway(
           });
           return;
         }
+        if (interaction.isMessageComponent()) {
+          if (!handlers.onComponent) return;
+          const adapted = adaptComponent(interaction as never);
+          Promise.resolve(handlers.onComponent(adapted)).catch((err) => {
+            console.error("[discord] component handler error:", err);
+          });
+          return;
+        }
         if (!interaction.isChatInputCommand()) return;
         if (!handlers.onSlash) return;
         const adapted = adaptChatInput(interaction as never);
@@ -393,7 +451,13 @@ export async function createLiveGateway(
   };
 
   // Attach reply helper for bridge
-  handlers.reply = async ({ channelId, content, replyToMessageId, mentionUserIds }) => {
+  handlers.reply = async ({
+    channelId,
+    content,
+    replyToMessageId,
+    mentionUserIds,
+    components,
+  }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
@@ -404,6 +468,7 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        ...(components?.length ? { components: components as never } : {}),
         ...(mentionUserIds
           ? {
               allowedMentions: {
@@ -468,9 +533,129 @@ export async function createLiveGateway(
     }
   };
 
+  handlers.editMessage = async ({
+    channelId,
+    messageId,
+    content,
+    embed,
+    components,
+    mentionUserIds,
+  }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (
+        channel as {
+          messages: {
+            fetch: (id: string) => Promise<{ edit: (p: unknown) => Promise<unknown> }>;
+          };
+        }
+      ).messages;
+      const msg = await messages.fetch(messageId);
+      const payload: Record<string, unknown> = {};
+      if (content === null) payload.content = null;
+      else if (content !== undefined) payload.content = content.slice(0, 1900);
+      if (embed === null) payload.embeds = [];
+      else if (embed) {
+        payload.embeds = [
+          {
+            description: embed.description,
+            color: embed.color,
+            footer: embed.footer,
+          },
+        ];
+      }
+      if (components === null) payload.components = [];
+      else if (components) payload.components = components;
+      if (mentionUserIds) {
+        payload.allowedMentions = {
+          parse: [],
+          users: mentionUserIds,
+          repliedUser: true,
+        };
+      }
+      await msg.edit(payload);
+      return true;
+    } catch (err) {
+      console.error("[discord] editMessage failed:", err);
+      return false;
+    }
+  };
+
+  handlers.deleteMessage = async ({ channelId, messageId }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (
+        channel as {
+          messages: {
+            fetch: (id: string) => Promise<{ delete: () => Promise<unknown> }>;
+          };
+        }
+      ).messages;
+      const msg = await messages.fetch(messageId);
+      await msg.delete();
+      return true;
+    } catch (err) {
+      console.error("[discord] deleteMessage failed:", err);
+      return false;
+    }
+  };
+
   return gateway;
 }
 
+
+
+function adaptComponent(interaction: {
+  id: string;
+  customId: string;
+  channelId: string;
+  guildId: string | null;
+  user: { id: string };
+  message?: { id?: string };
+  deferred: boolean;
+  replied: boolean;
+  reply: (opts: unknown) => Promise<unknown>;
+  update: (opts: unknown) => Promise<unknown>;
+  deleteReply?: () => Promise<unknown>;
+}): ComponentInteraction {
+  return {
+    id: interaction.id,
+    customId: interaction.customId,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId ?? undefined,
+    userId: interaction.user.id,
+    messageId: interaction.message?.id,
+    reply: async (opts) => {
+      const payload: Record<string, unknown> = {};
+      if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
+      // Explicit empty array clears buttons (DISCORD-ASK-8); do not use truthiness.
+      if (opts.components !== undefined) {
+        payload.components = opts.components as never;
+      }
+      if (opts.update) {
+        await interaction.update(payload);
+        return;
+      }
+      if (opts.ephemeral) {
+        // MessageFlags.Ephemeral (64) — avoid deprecated ephemeral: true warning.
+        payload.flags = 64;
+      }
+      if (interaction.deferred || interaction.replied) {
+        // Already acknowledged — follow-up style via reply() still works for ephemeral.
+        await interaction.reply(payload);
+      } else {
+        await interaction.reply(payload);
+      }
+    },
+    deleteReply: async () => {
+      if (typeof interaction.deleteReply === "function") {
+        await interaction.deleteReply();
+      }
+    },
+  };
+}
 
 /** Discord autocomplete deadline is 3s; skip stale replies (corvid-agent pattern). */
 const AUTOCOMPLETE_DEADLINE_MS = 2500;

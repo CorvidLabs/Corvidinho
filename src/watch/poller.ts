@@ -11,6 +11,7 @@
 import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { scrubSecrets } from "../store/scrub.ts";
 import {
   createEchoAgentClient,
   createSpawnAgentClient,
@@ -415,7 +416,8 @@ export async function startWatchPoller(
           exitCode: spawnExit,
           errorClass: classifySpawnError(spawnOk, spawnExit, threw),
           durationMs: Math.max(0, finishedAtMs - startedAtMs),
-          summaryPreview: spawnSummary.slice(0, 240),
+          // SAFE-6 (REQ-watch-231): scrub before clipping and persisting.
+          summaryPreview: scrubSecrets(spawnSummary).slice(0, 240),
         };
         spawnOutcomes.append(outcome);
         log(formatSpawnOutcomeLog(outcome));

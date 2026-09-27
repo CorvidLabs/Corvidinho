@@ -6,6 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { scrubOpt } from "../store/scrub.ts";
 import {
@@ -21,17 +22,46 @@ import {
 } from "../worktree/index.ts";
 import { askFromUnknown } from "../agent/ask.ts";
 import type { HumanAsk } from "../agent/types.ts";
+import type { PendingAsk } from "./ask-buttons.ts";
 import type { SessionStub } from "./types.ts";
 
-function serializePendingAsk(ask: HumanAsk | null | undefined): string | null {
+function serializePendingAsk(ask: PendingAsk | null | undefined): string | null {
   if (!ask) return null;
-  return JSON.stringify({ reason: ask.reason, question: ask.question });
+  const body: Record<string, unknown> = {
+    reason: ask.reason,
+    question: ask.question,
+    askId: ask.askId,
+    expiresAt: ask.expiresAt,
+  };
+  if (ask.options?.length) body.options = ask.options;
+  if (ask.stubMessageId) body.stubMessageId = ask.stubMessageId;
+  return JSON.stringify(body);
 }
 
-function parsePendingAsk(raw: string | null | undefined): HumanAsk | null {
+function parsePendingAsk(raw: string | null | undefined): PendingAsk | null {
   if (!raw) return null;
   try {
-    return askFromUnknown(JSON.parse(raw)) ?? null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const base = askFromUnknown(parsed);
+    if (!base) return null;
+    const askId =
+      typeof parsed.askId === "string" && parsed.askId.trim()
+        ? parsed.askId.trim()
+        : "";
+    const expiresAt =
+      typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
+        ? parsed.expiresAt
+        : 0;
+    // Legacy rows (pre-button): synthesize askId/expiresAt so free-text path still works.
+    const pending: PendingAsk = {
+      ...base,
+      askId: askId || `legacy_${base.question.slice(0, 8)}`,
+      expiresAt: expiresAt || Date.now() + 30 * 60 * 1000,
+    };
+    if (typeof parsed.stubMessageId === "string" && parsed.stubMessageId.trim()) {
+      pending.stubMessageId = parsed.stubMessageId.trim();
+    }
+    return pending;
   } catch {
     return null;
   }
@@ -276,21 +306,48 @@ export class SessionStore {
     this.db.run(`DELETE FROM discord_sessions WHERE id = ?`, [sessionId]);
   }
 
+  /**
+   * Write a session row's worktree columns. UPDATE only, so a row already
+   * deleted (ended or TTL-purged talk) is never re-inserted.
+   */
+  private persistWorktreeState(session: SessionStub): void {
+    if (!this.db) return;
+    this.db.run(
+      `UPDATE discord_sessions
+       SET worktree_path = ?, worktree_branch = ?, worktree_state = ?
+       WHERE id = ?`,
+      [
+        session.worktreePath ?? null,
+        session.worktreeBranch ?? null,
+        session.worktreeState ?? null,
+        session.id,
+      ],
+    );
+  }
+
   /** Park/remove worktree so another talk cannot reuse it as cwd. */
   async parkSessionWorktree(session: SessionStub): Promise<void> {
     if (!session.worktreePath || !session.project) {
       session.worktreeState = "removed";
       return;
     }
-    if (session.worktreeState === "parked" || session.worktreeState === "removed") {
+    // `parked` with a path still recorded is a park cut short (crash before
+    // the removal finished): parking is idempotent, so finish it.
+    if (session.worktreeState === "removed") {
       return;
     }
+    // Record `parked` before any removal side effect: a crash from here on
+    // restarts with a row that bindWorktree re-binds fresh, never one that
+    // still says `active` at a removed directory (SESSION-WORKTREE-3).
+    session.worktreeState = "parked";
+    this.persistWorktreeState(session);
     const state = await parkWorktree(session.project, session.worktreePath, {
       kind: session.worktreeBranch ? "worktree" : "scoped_dir",
       branchName: session.worktreeBranch,
     });
     session.worktreeState = state;
     session.worktreePath = undefined;
+    this.persistWorktreeState(session);
   }
 
   /**
@@ -305,6 +362,9 @@ export class SessionStore {
   /**
    * Bind an isolated workspace onto a session (idempotent if already bound).
    * Never silently switches project mid-conversation (SESSION-WORKTREE-4).
+   * A recorded worktree whose directory is gone (crash mid-park, removed out
+   * of band) is re-created for the same project and session, never handed
+   * out as cwd (SESSION-WORKTREE-3).
    */
   async bindWorktree(
     session: SessionStub,
@@ -327,17 +387,20 @@ export class SessionStore {
           };
         }
       }
-      return {
-        ok: true,
-        workspace: {
-          kind: session.worktreeBranch ? "worktree" : "scoped_dir",
-          workDir: session.worktreePath,
-          projectWorkingDir: session.project ?? session.worktreePath,
-          branchName: session.worktreeBranch,
-          worktreeId: session.id,
-          state: "active",
-        },
-      };
+      if (existsSync(session.worktreePath)) {
+        return {
+          ok: true,
+          workspace: {
+            kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+            workDir: session.worktreePath,
+            projectWorkingDir: session.project ?? session.worktreePath,
+            branchName: session.worktreeBranch,
+            worktreeId: session.id,
+            state: "active",
+          },
+        };
+      }
+      // Recorded worktree is gone: fall through and re-create it below.
     }
 
     const defaultRoot =
@@ -468,9 +531,35 @@ export class SessionStore {
    * Set or clear the pending human ask on a session (AUTONOMY-5/6).
    * Persists when a DB is configured.
    */
-  setPendingAsk(session: SessionStub, ask: HumanAsk | null): void {
+  setPendingAsk(session: SessionStub, ask: PendingAsk | null): void {
     session.pendingAsk = ask;
     this.persistSession(session);
+  }
+
+  /**
+   * Active session for this Discord user in this channel (SESSION-MULTI-1).
+   * Newest non-expired match wins. Thread-scoped talks use threadId as the
+   * channel key when present.
+   */
+  getByUserChannel(
+    userId: string,
+    channelId: string,
+    threadId?: string,
+  ): SessionStub | undefined {
+    let best: SessionStub | undefined;
+    for (const session of this.bySessionId.values()) {
+      if (this.purgeIfExpired(session)) continue;
+      if (session.userId !== userId) continue;
+      if (threadId) {
+        if (session.threadId !== threadId) continue;
+      } else {
+        if (session.channelId !== channelId) continue;
+        // Prefer non-thread sessions when looking up by parent channel.
+        if (session.threadId) continue;
+      }
+      if (!best || session.lastActivityAt > best.lastActivityAt) best = session;
+    }
+    return best;
   }
 
   /** Bind a bot outbound message id so replies continue the session (DISCORD-2). */
@@ -507,7 +596,11 @@ export class SessionStore {
     return out.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
   }
 
-  /** Agent cwd for a session: worktree when active, else project, else default. */
+  /**
+   * Agent cwd for a session: worktree when active, else project, else default.
+   * Call after bindWorktree, which verifies the recorded worktree directory
+   * and re-creates a missing one.
+   */
   cwdFor(session: SessionStub): string | undefined {
     if (session.worktreePath && session.worktreeState === "active") {
       return session.worktreePath;

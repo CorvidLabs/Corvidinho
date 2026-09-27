@@ -13,9 +13,10 @@
  * carry a truncated, secret-scrubbed `argsSummary` (SAFE-6). Event-frame free
  * text (Text, ToolResult detail, VerifyResult output) is scrubbed and capped.
  * The `result` frame carries the same TaskResult as `--json` — not scrubbed,
- * same exposure as `--json` — except `summary` is capped at
- * NDJSON_LIMITS.resultSummary (frame then says `truncated: true`) so one line
- * stays well under the parser's NDJSON_LIMITS.maxLine.
+ * same exposure as `--json` — except an over-long `summary` is secret-scrubbed
+ * and then capped at NDJSON_LIMITS.resultSummary (frame then says
+ * `truncated: true`) so one line stays well under the parser's
+ * NDJSON_LIMITS.maxLine and the cap never cuts a secret (REQ-agent-232).
  *
  * Consumers never turn frame content into reply text: a frame from another
  * protocol is withheld and reported as a protocol mismatch (DISCORD-10).
@@ -270,9 +271,12 @@ export function usageFrame(u: AgentTokenUsage): NdjsonUsageFrame {
 }
 
 /**
- * Final frame. `summary` is capped (not scrubbed — same as `--json`) so an
- * oversized reply cannot push the line past the parser cap and blank the
- * bridge reply.
+ * Final frame. `summary` is capped so an oversized reply cannot push the line
+ * past the parser cap and blank the bridge reply. A summary within the cap is
+ * passed through as-is (same as `--json`; readers scrub before they clip). An
+ * over-long one is secret-scrubbed first, so the cap never cuts a secret into
+ * a shape a reader's scrub misses — a short token prefix, or a private key
+ * without its END line (REQ-agent-232 / SAFE-6).
  */
 export function resultFrame(result: TaskResult): NdjsonResultFrame {
   const protocol = CORVIDINHO_PROTOCOL_VERSION;
@@ -280,10 +284,14 @@ export function resultFrame(result: TaskResult): NdjsonResultFrame {
   if (typeof result.summary !== "string" || result.summary.length <= max) {
     return { protocol, type: "result", result };
   }
+  const { text, truncated } = capHead(result.summary, max);
+  if (!truncated) {
+    return { protocol, type: "result", result: { ...result, summary: text } };
+  }
   return {
     protocol,
     type: "result",
-    result: { ...result, summary: `${result.summary.slice(0, max)}…` },
+    result: { ...result, summary: text },
     truncated: true,
   };
 }

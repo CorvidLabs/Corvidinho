@@ -6,12 +6,12 @@
 
 import {
   checkGithubRepo,
-  configFromEnvOnly,
+  tryLoadAllowlist,
   type AllowlistConfig,
 } from "../allowlist/index.ts";
 import { createOctokit, splitOwnerRepo } from "../../plugins/github/api.ts";
 import { resolveActingIsAdmin, roleSessionActive } from "./roles.ts";
-import type { RepoGateResult } from "./githubDeny.ts";
+import { allowlistFileRefusal, type RepoGateResult } from "./githubDeny.ts";
 
 export type RepoVisibility = "public" | "private" | "unknown";
 
@@ -52,9 +52,14 @@ export async function checkRepoGateForActingRole(
   } = {},
 ): Promise<RepoGateResult> {
   const env = opts.env ?? process.env;
-  const cfg =
-    opts.cfg ??
-    configFromEnvOnly(env);
+  // ALLOW-4: allowlist file + env overlays (same loader as WATCH ingress).
+  // A malformed / unreadable file refuses (fail closed), never env-only.
+  let cfg = opts.cfg;
+  if (!cfg) {
+    const loaded = await tryLoadAllowlist({ env });
+    if (!loaded.ok) return allowlistFileRefusal(repo, loaded.error);
+    cfg = loaded.config;
+  }
 
   if (!repo || !repo.includes("/")) {
     return {

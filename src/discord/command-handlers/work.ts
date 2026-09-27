@@ -11,6 +11,7 @@ import {
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
@@ -124,13 +125,18 @@ export async function handleWorkCommand(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
     ctx.workStore.setStatus(task, "failed", msg);
-    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Work \`${task.id}\` failed: ${msg}`;
-    if (interaction.editReply) {
-      await interaction.editReply({ content: body });
-    } else {
-      await interaction.reply({ content: body });
-    }
+    // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
+    await finishSlashWithThinking({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras: { model: llmModel },
+      ok: false,
+      failStatus: `❌ ${msg}`,
+    });
     return;
   }
 
@@ -146,14 +152,12 @@ export async function handleWorkCommand(
   const thinkExtras = { plumbing, model: llmModel };
   if (result.ok) {
     ctx.workStore.setStatus(task, "completed", result.summary.slice(0, 500));
-    await thinking?.done("✅ Done", thinkExtras);
   } else {
     ctx.workStore.setStatus(
       task,
       "failed",
       `exit ${result.exitCode}`,
     );
-    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
   }
 
   const summary = result.ok
@@ -185,11 +189,17 @@ export async function handleWorkCommand(
     summary,
   ].join("\n");
 
-  if (interaction.editReply) {
-    await interaction.editReply({ content: body });
-  } else {
-    await interaction.reply({ content: body });
-  }
+  // DISCORD-ASK-7 — collapse thinking into the final body; drop deferred reply.
+  await finishSlashWithThinking({
+    thinking,
+    body,
+    interaction,
+    sessionId: session.id,
+    trackBotMessage: ctx.trackBotMessage,
+    thinkExtras,
+    ok: result.ok,
+    failStatus: `❌ exit ${result.exitCode}`,
+  });
 }
 
 /** One reply line for the /work PR step; never throws (REQ-discord-088). */
