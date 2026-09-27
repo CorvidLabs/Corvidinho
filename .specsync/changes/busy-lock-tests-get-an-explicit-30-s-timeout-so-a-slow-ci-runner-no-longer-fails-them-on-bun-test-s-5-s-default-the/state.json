@@ -7,10 +7,11 @@
   "title": "Busy-lock tests get an explicit 30 s timeout so a slow CI runner no longer fails them on bun:test's 5 s default (the lock holder is a child bun process)",
   "description": "Busy-lock tests get an explicit 30 s timeout so a slow CI runner no longer fails them on bun:test's 5 s default (the lock holder is a child bun process)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
   "created_at": 1790517619,
-  "updated_at": 1790517764,
+  "updated_at": 1790517766,
   "affected_specs": [],
   "affected_paths": [
     "tests/store.busy-lock.test.ts"
