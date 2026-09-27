@@ -36,6 +36,9 @@ export {
   MEMORY_AGENT_SYSTEM_INSTRUCTIONS,
   IDENTITY_AGENT_SYSTEM_INSTRUCTIONS,
   PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS,
+  DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS,
+  TOOL_ROUNDS_EXHAUSTED_CLARIFY,
+  softLandToolRoundExhaustion,
   loadLlmEnv,
   UNKNOWN_TOOL_LABEL,
 } from "./execute.ts";
@@ -75,6 +78,7 @@ export {
   chatBodyFromTaskResult,
   chatBodyFromTaskRunOutput,
   formatTaskPlumbing,
+  stripInternalStopReason,
   summarizeTaskResult,
   summarizeTaskRunOutput,
 } from "./task-summary.ts";

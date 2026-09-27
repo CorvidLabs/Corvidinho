@@ -68,7 +68,11 @@ import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
-import { routeMessage } from "./message-router.ts";
+import {
+  componentChannelAllowlisted,
+  promptBodyForAskGate,
+  routeMessage,
+} from "./message-router.ts";
 import {
   defaultRateLimitConfig,
   isMonitoredChannel,
@@ -87,7 +91,12 @@ import {
   ThinkingStatus,
   type ThinkingOutbound,
 } from "./thinking-status.ts";
-import type { BridgeConfig, InboundMessage } from "./types.ts";
+import {
+  ALLOWLIST_DENY_TIP,
+  EPHEMERAL_SILENT_ACK,
+  type BridgeConfig,
+  type InboundMessage,
+} from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import {
   InflightReplyStore,
@@ -113,7 +122,7 @@ import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 import { readSpendSnapshot } from "../agent/spend.ts";
 import { formatSpendStatusLine } from "../agent/spend-notice.ts";
 import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
-import { askPingOwner } from "./spend-post.ts";
+import { askPingOwner, postCollapsedPing } from "./spend-post.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -528,9 +537,10 @@ export async function startBridge(
       if (
         action.kind === "continue_session" &&
         session.pendingAsk &&
-        (isThinAck(prompt) || isCancelAsk(prompt))
+        (isThinAck(promptBodyForAskGate(prompt)) ||
+          isCancelAsk(promptBodyForAskGate(prompt)))
       ) {
-        if (isCancelAsk(prompt)) {
+        if (isCancelAsk(promptBodyForAskGate(prompt))) {
           store.setPendingAsk(session, null);
           if (replyRef.fn) {
             const sent = await replyRef.fn({
@@ -846,6 +856,16 @@ export async function startBridge(
               pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+            // AUTONOMY-2/4, SAFE-8: an edit does not notify its mentions, so
+            // whoever the answer mentions gets one fresh ping post.
+            const ping = await postCollapsedPing({
+              post: replyRef.fn,
+              channelId,
+              replyToMessageId: collapsed.messageId,
+              mentionUserIds: out.mentionUserIds,
+              questionUserIds: askRaw?.reason === "clarify" ? askBody?.mentionUserIds : undefined,
+            });
+            if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             // Fallback when editMessage unavailable: status embed + separate reply.
             if (askBody) {
@@ -897,6 +917,29 @@ export async function startBridge(
       const session = store.list().find(
         (s) => s.pendingAsk?.askId === parsed.askId,
       );
+
+      // DISCORD-5 / DISCORD-DENY-2/3 / REQ-discord-212 — a press counts only in
+      // an allowlisted channel (inside the session's thread, its allowlisted
+      // parent counts, DISCORD-2.a), and only while the session's own channel
+      // is still allowlisted, since the resumed run posts there. Otherwise the
+      // ack is ephemeral only: the tip for an admin, zero-width for anyone else.
+      if (!componentChannelAllowlisted(interaction.channelId, session, config.allowlist)) {
+        const admin =
+          resolvePermissionLevel({
+            userId: interaction.userId,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+          }) >= PermissionLevel.ADMIN;
+        await interaction.reply({
+          content: admin ? ALLOWLIST_DENY_TIP : EPHEMERAL_SILENT_ACK,
+          ephemeral: true,
+        });
+        return;
+      }
+
       const pending = session?.pendingAsk ?? null;
 
       // Wrong user or unknown ask → short ephemeral, do not leak.
@@ -1160,6 +1203,15 @@ export async function startBridge(
               pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+            // As on a chat answer: the edit's mentions get one fresh ping post.
+            const ping = await postCollapsedPing({
+              post: replyRef.fn,
+              channelId,
+              replyToMessageId: collapsed.messageId,
+              mentionUserIds: out.mentionUserIds,
+              questionUserIds: askRaw?.reason === "clarify" ? askBody?.mentionUserIds : undefined,
+            });
+            if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             if (askBody) {
               await (askBody.failed

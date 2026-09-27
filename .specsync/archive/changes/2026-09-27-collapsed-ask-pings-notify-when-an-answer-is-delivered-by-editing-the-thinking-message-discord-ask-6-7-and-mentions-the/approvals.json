@@ -1,0 +1,55 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790469893,
+      "digest": "cc506f2cdf8f7efa4c9e1c6ea8e7d85e22e64c091a3aa21ca1bd25c60033e5bd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "collapsed-ask-pings-notify-when-an-answer-is-delivered-by-editing-the-thinking-message-discord-ask-6-7-and-mentions-the",
+        "title": "Collapsed ask pings notify: when an answer is delivered by editing the thinking message (DISCORD-ASK-6/7) and mentions the requester or owner, one short fresh post pings exactly those users (AUTONOMY-2/4, SAFE-8), without double pings",
+        "description": "Collapsed ask pings notify: when an answer is delivered by editing the thinking message (DISCORD-ASK-6/7) and mentions the requester or owner, one short fresh post pings exactly those users (AUTONOMY-2/4, SAFE-8), without double pings",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/discord",
+          "src/discord/ask-ping.ts",
+          "src/discord/bridge.ts",
+          "src/discord/spend-post.ts",
+          "tests/discord.ask-ephemeral.test.ts",
+          "tests/discord.ask-ping.test.ts",
+          "tests/discord.collapsed-ping.test.ts",
+          "tests/discord.inflight-replies.test.ts",
+          "tests/discord.spend.test.ts",
+          "tests/discord.thin-ack.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When a chat, button-pick, /work or /session start answer is delivered by editing the thinking message (DISCORD-ASK-6/7 collapse) and that answer mentions the requester (clarify, AUTONOMY-4) and/or the owner (stuck AUTONOMY-2, spend-cap or 80% warning SAFE-8), the bridge sends one short fresh post (a reply to the edited message) containing only those mentions and a one-line pointer (requester: '↑ question for you'; owner: '↑ needs you'), with allowed mentions limited to exactly those users (no @everyone, no roles). No extra post when the answer mentions nobody, when it went out as a fresh reply (fallback path), or for a user a fresh post already pinged this turn (the slash owner notice from #160); a spend-cap ask already pinged this cap episode still carries no owner mention, so no ping. The one-message layout of DISCORD-ASK-6/7 is otherwise unchanged; a failed ping post never fails the turn. No new slash command, env var or schema."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "1594588407e20bd012b0825ec9bf144498191c040e0a5320db4d4197fef30ba1"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790471267,
+      "digest": "6908dc64d371a5c5c6cf79b9ba01bd0369001cb6d14ab8c3e6cc0b1e3209f40c",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -91,6 +91,42 @@ export const PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS =
   "Public Q&A (ROLES-CHAT-8): In community / non-ADMIN Discord sessions, answer from public GitHub, the project site, and the roadmap. " +
   "Never access private repos or secret paths (.env, keys, keystores). Prefer read-only tools. ";
 
+/**
+ * IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9 — Discord social chat tool discipline.
+ * Prefer prose + discord-user-lookup; do not thrash SpecSync/git/github for banter.
+ */
+export const DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS =
+  "Discord chat (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): " +
+  "(a) For social/game banter or vague chat, reply in conversational prose first — do not thrash SpecSync/git/github/files. " +
+  "(b) When the message mentions a Discord snowflake (long digit id), an @mention rewritten as 'Discord user id …', or asks about a guild member by name, call discord-user-lookup (configured guild only) before repo tools. " +
+  "(c) Only use SpecSync/git/github/project file tools when the query clearly needs Corvidinho codebase or product data. " +
+  "(d) A bare 'bug <snowflake>' in Discord chat is almost always a Discord user id, not a GitHub issue. ";
+
+/** AGENT-9 — human chat body when the tool-round budget is exhausted. */
+export const TOOL_ROUNDS_EXHAUSTED_CLARIFY =
+  "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?";
+
+/**
+ * Soft-land tool-round exhaustion (AGENT-9): never put "Stopped after N tool rounds"
+ * in the chat summary. Prefer last model prose; else a brief clarifying ask.
+ * `operatorNote` is for thinking/NDJSON only.
+ */
+export function softLandToolRoundExhaustion(opts: {
+  lastText: string;
+  maxToolRounds: number;
+  toolNamesUsed: string[];
+}): { summary: string; operatorNote: string } {
+  const unique = [...new Set(opts.toolNamesUsed)];
+  const operatorNote =
+    `Stopped after ${opts.maxToolRounds} tool rounds` +
+    (unique.length ? ` (tools: ${unique.join(", ")})` : "");
+  const prose = opts.lastText.trim();
+  return {
+    summary: prose || TOOL_ROUNDS_EXHAUSTED_CLARIFY,
+    operatorNote,
+  };
+}
+
 /** Cap on the Planning SpecSync briefing sent to the model (REQ-agent-004). */
 const SPEC_BRIEFING_MAX_CHARS = 8000;
 
@@ -380,11 +416,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   const system = withProjectInstructions(
     "You are Corvidinho, a Linux-first headless agent CLI. " +
     "Use the provided tools (project plugins) when they help complete the task. " +
-    "Prefer SpecSync plugins (list/read/check/brief) before guessing about specs. " +
+    "Prefer SpecSync plugins (list/read/check/brief) when the task is about project specs or code — not for casual Discord social chat. " +
     "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
     MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
     IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
     PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
+    DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS +
     ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.",
@@ -531,13 +568,15 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     }
   }
 
+  // AGENT-9: soft-land — never dump internal stop reason into the chat summary.
+  const landed = softLandToolRoundExhaustion({
+    lastText,
+    maxToolRounds,
+    toolNamesUsed,
+  });
+  emit(onEvent, { type: "Text", text: `[operator] ${landed.operatorNote}` });
   return {
-    summary:
-      (lastText ? `${lastText}\n\n` : "") +
-      `Stopped after ${maxToolRounds} tool rounds` +
-      (toolNamesUsed.length
-        ? ` (tools: ${[...new Set(toolNamesUsed)].join(", ")})`
-        : ""),
+    summary: landed.summary,
     filesChanged: [...filesChanged],
   };
 }

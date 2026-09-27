@@ -16,7 +16,14 @@ import type {
   PluginHandlerArgs,
   PluginHandlerResult,
 } from "../../src/plugins/types.ts";
-import { isProtectedPath, protectedRefuseMessage } from "../files/protectedPaths.ts";
+import {
+  isProtectedPath,
+  isSecretPath,
+  protectedRefuseMessage,
+  SECRET_GIT_EXCLUDE_PATHSPECS,
+  secretPathsRefused,
+  secretRefuseMessage,
+} from "../files/protectedPaths.ts";
 import { isInsideRoot, PathEscapeError, resolveProjectPath } from "../files/resolvePath.ts";
 import {
   GIT_WRITE_TIMEOUT_MS,
@@ -296,23 +303,56 @@ export const gitCommands: PluginCommand[] = [
           DIFF_HARD_MAX_BYTES,
           "--max-bytes",
         );
-        const paths = a.positional.map((p) => clampRel(root, p));
+        // ROLES-CHAT-8: non-ADMIN role sessions never see a tracked secret
+        // file's diff, the same gate files-read and search-grep apply.
+        const hideSecrets = await secretPathsRefused();
+        const paths = a.positional.map((p) => {
+          const rel = clampRel(root, p);
+          if (
+            hideSecrets &&
+            (isSecretPath(p) ||
+              isSecretPath(rel) ||
+              isSecretPath(relative(root, resolveProjectPath(root, p))))
+          ) {
+            throw new ArgError(secretRefuseMessage(p), 2);
+          }
+          return rel;
+        });
+        // The secret excludes need pathspec magic, so a non-ADMIN run turns
+        // GIT_LITERAL_PATHSPECS off and keeps user paths literal per element.
+        const pathspecs = hideSecrets
+          ? [...paths.map((p) => `:(literal)${p}`), ...SECRET_GIT_EXCLUDE_PATHSPECS]
+          : paths;
+        const literalPathspecs = !hideSecrets;
         const which = staged ? ["--cached"] : [];
         const ns = await runGit(
           root,
-          ["diff", "--name-status", "-z", "--no-ext-diff", ...which, "--", ...paths],
-          { maxStdoutBytes: DIFF_HARD_MAX_BYTES },
+          ["diff", "--name-status", "-z", "--no-ext-diff", ...which, "--", ...pathspecs],
+          { maxStdoutBytes: DIFF_HARD_MAX_BYTES, literalPathspecs },
         );
         if (ns.code !== 0) return gitFail(ns, "git diff");
-        const d = await runGit(
-          root,
-          ["diff", "--no-color", "--no-ext-diff", "--no-textconv", ...which, "--", ...paths],
-          { maxStdoutBytes: maxBytes },
-        );
-        if (d.code !== 0) return gitFail(d, "git diff");
         const files = parseNameStatusZ(
           ns.truncated ? ns.stdout.slice(0, ns.stdout.lastIndexOf("\0") + 1) : ns.stdout,
         );
+        // Fail closed if a secret path got past the excludes.
+        const leaked = hideSecrets
+          ? files.find((f) => isSecretPath(f.path) || (f.origPath != null && isSecretPath(f.origPath)))
+          : undefined;
+        if (leaked) return fail(secretRefuseMessage(leaked.path), 2);
+        const d = await runGit(
+          root,
+          [
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+            ...which,
+            "--",
+            ...pathspecs,
+          ],
+          { maxStdoutBytes: maxBytes, literalPathspecs },
+        );
+        if (d.code !== 0) return gitFail(d, "git diff");
         const data = {
           staged,
           files,

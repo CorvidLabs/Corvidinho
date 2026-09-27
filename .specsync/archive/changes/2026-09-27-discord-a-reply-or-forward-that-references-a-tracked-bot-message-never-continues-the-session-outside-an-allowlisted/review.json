@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "ac6ae95219784cfd2c4c861a64b8e8befe07f889",
+  "contract_digest": "5425185c51aacc381046e4de69fbd74b0979ac0b56eb1e5b8dcec83d9ce07898",
+  "execution_digest": "19b0aac73b8256fd34c51ce802c379a39381dc23536ea5cae6e635c7a8e266f6",
+  "workspace_digest": "73bf80a2ad1e3dad1e5909e99ba75ca4f24edcf9f9a8398e22adf00fa34e9328",
+  "timestamp": 1790472961
+}

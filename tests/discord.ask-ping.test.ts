@@ -192,8 +192,12 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     });
     await handlers.onMessage(MENTION);
 
-    // DISCORD-ASK-6/7 — collapsed into thinking message (no separate reply).
-    expect(replies).toHaveLength(0);
+    // DISCORD-ASK-6/7 — collapsed into thinking message (no separate answer
+    // reply); an edit does not notify, so the only fresh post is the
+    // requester ping (REQ-discord-215).
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toBe(`<@${MENTION.authorId}> ↑ question for you`);
+    expect(replies[0]!.mentionUserIds).toEqual([MENTION.authorId]);
     const edit = outbound.contentEdits.find(
       (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
     );
@@ -215,7 +219,10 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
     );
     await handlers.onMessage(MENTION);
-    expect(replies).toHaveLength(0);
+    // Collapsed answer + one fresh owner ping (REQ-discord-215).
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toBe(`<@${OWNER_ID}> ↑ needs you`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
     const edit = outbound.contentEdits.find(
       (e) => typeof e.content === "string" && e.content.includes("I'm stuck"),
     );
@@ -229,7 +236,9 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
   test("no owner configured → clarify still pings requester (AUTONOMY-4)", async () => {
     const { result, handlers, outbound, replies } = await bridgeWith(askingAgent(CLARIFY), {});
     await handlers.onMessage(MENTION);
-    expect(replies).toHaveLength(0);
+    // Collapsed answer + one fresh requester ping (REQ-discord-215).
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.mentionUserIds).toEqual([MENTION.authorId]);
     const edit = outbound.contentEdits.find(
       (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
     );

@@ -14,6 +14,19 @@ import {
   type RequesterCheckResult,
 } from "../../src/discord/requester-perms.ts";
 
+import {
+  discordUserLookup,
+  DISCORD_USER_LOOKUP_NAME,
+} from "./user-lookup.ts";
+
+export {
+  extractUserSnowflake,
+  resolveLookupGuildId,
+  USER_SNOWFLAKE_RE,
+  DISCORD_USER_LOOKUP_NAME,
+  buildDiscordUserLookupCommand,
+} from "./user-lookup.ts";
+
 export { setRequesterPermCheckerForTests };
 
 function parseFlag(args: string[], name: string): string | undefined {
@@ -170,6 +183,6 @@ const discordPostMessage: PluginCommand = {
 
 export function loadDiscordPlugins(): void {
   // Re-register after clearRegistry() in other tests (module flag would stick).
-  if (get("discord-post-message")) return;
-  register(discordPostMessage);
+  if (!get("discord-post-message")) register(discordPostMessage);
+  if (!get(DISCORD_USER_LOOKUP_NAME)) register(discordUserLookup);
 }
