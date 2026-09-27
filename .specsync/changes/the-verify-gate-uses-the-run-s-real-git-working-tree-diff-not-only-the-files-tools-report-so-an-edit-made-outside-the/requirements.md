@@ -15,12 +15,18 @@ AGENT-4.a (a retry keeps working with the failure output) inherited.
   gitignored paths do not count; no git work tree ⇒ tool-reported only; an
   unreadable diff after a good snapshot fails closed; the gate off takes no
   snapshot; read-only git; no new flag / env / config / slash command.
+  Cost and output stay bounded: only start-dirty paths are fingerprinted
+  again, content hashing stops after a 64 MiB budget (stat after that), and
+  at most 1000 real-diff paths per run join `filesChanged` so the NDJSON
+  `result` line stays under the parser cap.
 - REQ-agent-002 (modified): verify runs when the run changed files, reported
   by a tool or in the real diff. New acceptance criterion for an unreported
   working-tree change.
 - REQ-agent-008 (modified): the execute result's tool-reported
   `filesChanged` is a lower bound for the gate, not all of it. New
   acceptance criterion for a code-tier `shell-exec` edit.
+- REQ-discord-014 (modified): the "skips the verify lane when
+  `filesChanged` is empty" clause follows the real diff too.
 - REQ-discord-085, REQ-watch-085, REQ-watch-006 (modified): "empty
   filesChanged skips verify" becomes "an empty real diff with no
   tool-reported files skips verify".

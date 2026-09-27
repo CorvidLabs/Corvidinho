@@ -74,9 +74,12 @@ totals; `extractUsage` reads OpenAI-compatible `usage`.
 Real-diff verify gate (REQ-agent-085, AGENT-4): `src/agent/workspace-diff.ts`
 exports `startWorkspaceDiff(cwd)` (a `WorkspaceDiffTracker` whose `changed()`
 lists cwd-relative paths changed since the snapshot, or null when git cannot
-be read; null tracker outside a git work tree), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`
-and `WORKSPACE_DIFF_HASH_MAX_BYTES`. `RunTaskOptions.workspaceDiff` is a test
-seam like `verifyRunner`, not a product surface.
+be read; null tracker outside a git work tree; an optional second argument
+`WorkspaceDiffLimits` lowers the hash budget in tests),
+`WORKSPACE_DIFF_MAX_OUTPUT_BYTES`, `WORKSPACE_DIFF_HASH_MAX_BYTES`,
+`WORKSPACE_DIFF_HASH_BUDGET_BYTES` and `WORKSPACE_DIFF_MAX_FILES` (real-diff
+paths one run adds to `filesChanged`). `RunTaskOptions.workspaceDiff` is a
+test seam like `verifyRunner`, not a product surface.
 
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
@@ -186,7 +189,8 @@ with `buildVerifyEnv()`.
 The verify gate trusts the working tree, not only the tools (REQ-agent-085):
 with the gate on, any path the run changed on disk since its start snapshot
 (git status, `HEAD` moves, content of already-dirty paths) is in
-`filesChanged` and forces the verify lane; a run ends `done` without verify
+`filesChanged` (up to `WORKSPACE_DIFF_MAX_FILES` per run) and forces the
+verify lane; a run ends `done` without verify
 only when no tool reported files and the real diff is empty. A diff git
 cannot read after a good snapshot verifies anyway (fail closed). The diff is
 read-only git plus in-process hashing: it never writes the index or objects.
@@ -318,6 +322,7 @@ model.
 | Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
+| Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |

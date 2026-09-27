@@ -25,9 +25,12 @@ export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";
 export {
   startWorkspaceDiff,
+  WORKSPACE_DIFF_HASH_BUDGET_BYTES,
   WORKSPACE_DIFF_HASH_MAX_BYTES,
+  WORKSPACE_DIFF_MAX_FILES,
   WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
 } from "./workspace-diff.ts";
+export type { WorkspaceDiffLimits } from "./workspace-diff.ts";
 
 export {
   extractConstraintSections,

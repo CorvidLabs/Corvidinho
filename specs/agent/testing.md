@@ -24,6 +24,9 @@ file; same-size edit to an already-dirty file; commit through a shell; first
 commit on an unborn HEAD; shell-only retry re-verified with feedback; cwd
 subdirectory (cwd-relative paths, edits outside ignored); untouched pre-run
 dirt, gitignored-only change and a non-git cwd still skip; an unreadable diff
-fails closed; the gate off takes no snapshot.
+fails closed; a 30000-path diff adds `WORKSPACE_DIFF_MAX_FILES` paths and the
+streamed NDJSON result still parses; with the hash budget spent an untouched
+dirty file stays quiet and an edit to it is caught; the gate off takes no
+snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
 reaches the verify gate": end to end through the real `shell-exec` plugin.

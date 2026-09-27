@@ -2,8 +2,15 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  createNdjsonParser,
+  NDJSON_LIMITS,
+  resultFrame,
+  serializeFrame,
+} from "../src/agent/events-ndjson.ts";
 import { runTask } from "../src/agent/loop.ts";
 import type { AgentEvent, VerifyRunner } from "../src/agent/types.ts";
+import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "../src/agent/workspace-diff.ts";
 
 function collect() {
   const events: AgentEvent[] = [];
@@ -663,6 +670,57 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     expect(result.verifySkipped).toBe(false);
     const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
     expect(texts).toContain("Verify gate: could not read the git working-tree diff, so verifying anyway.");
+  });
+
+  test("a huge real diff adds at most WORKSPACE_DIFF_MAX_FILES paths, so the streamed NDJSON result still says verification failed", async () => {
+    // An install or branch switch through a shell: tens of thousands of paths.
+    const huge = Array.from(
+      { length: 30_000 },
+      (_, i) => `node_modules/@scope/package-${i % 900}/dist/esm/file-${i}.js`,
+    );
+    const v = counter([false]);
+    const c = collect();
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 1,
+      verifyRunner: v.runner,
+      onEvent: c.onEvent,
+      workspaceDiff: async () => ({ changed: async () => huge }),
+      execute: async () => ({ summary: "installed", filesChanged: ["package.json"] }),
+    });
+    expect(v.calls.length).toBe(2);
+    expect(result.state).toBe("failed");
+    expect(result.filesChanged.length).toBe(1 + WORKSPACE_DIFF_MAX_FILES);
+    expect(result.filesChanged.slice(0, 2)).toEqual(["package.json", huge[0]!]);
+    const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(
+      texts.some((t) =>
+        t.includes(`30000 changed path(s) no tool reported`) &&
+        t.includes(`${WORKSPACE_DIFF_MAX_FILES} of them listed in filesChanged`),
+      ),
+    ).toBe(true);
+    // A bridge reads the child's stdout in chunks: the result line must parse.
+    const line = `${serializeFrame(resultFrame(result))}\n`;
+    expect(line.length).toBeLessThan(NDJSON_LIMITS.maxLine);
+    const parser = createNdjsonParser({ protocol: 2 });
+    const frames = [];
+    for (let i = 0; i < line.length; i += 65_536) frames.push(...parser.push(line.slice(i, i + 65_536)));
+    frames.push(...parser.end());
+    const last = frames.at(-1)?.frame;
+    expect(last?.type).toBe("result");
+    expect(last?.type === "result" ? last.result.summary : "").toContain("Verification failed after 1 retries");
+  });
+
+  test("an already-dirty file past the hash budget is compared by stat: untouched is quiet, edited is caught", async () => {
+    const dir = makeRepo();
+    writeFileSync(join(dir, "app.ts"), "export const x = 6;\n");
+    writeFileSync(join(dir, "notes.md"), "wip\n");
+    const tracker = await startWorkspaceDiff(dir, { hashBudgetBytes: 0 });
+    expect(tracker).not.toBeNull();
+    expect(await tracker!.changed()).toEqual([]);
+    writeFileSync(join(dir, "app.ts"), "export const x = 7;\n");
+    expect(await tracker!.changed()).toEqual(["app.ts"]);
   });
 
   test("with the gate off (--no-verify) no snapshot is taken and verify is skipped", async () => {

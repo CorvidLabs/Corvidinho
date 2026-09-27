@@ -15,7 +15,7 @@ import {
 import { loadAgentConfig } from "./config.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
 import { defaultVerifyRunner } from "./verify.ts";
-import { startWorkspaceDiff } from "./workspace-diff.ts";
+import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.ts";
 import type {
   AgentEvent,
   AgentState,
@@ -82,6 +82,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   // Output of the last failed verify, kept for the human-facing summary.
   let lastVerifyFailure: string | undefined;
   let retries = 0;
+  // Real-diff paths added to filesChanged so far (capped per run).
+  let realDiffAdded = 0;
 
   setState(onEvent, "planning");
   if (isAborted(signal)) {
@@ -208,11 +210,23 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
         if (unreported.length > 0) {
           const shown = unreported.slice(0, UNREPORTED_PREVIEW).join(", ");
           const more = unreported.length > UNREPORTED_PREVIEW ? ", …" : "";
+          // Bounded so a huge diff (an install, a branch switch) cannot push
+          // the NDJSON result line past the parser cap and lose the reply.
+          // The gate is unaffected: filesChanged is non-empty either way.
+          const added = unreported.slice(
+            0,
+            Math.max(0, WORKSPACE_DIFF_MAX_FILES - realDiffAdded),
+          );
+          const capped =
+            added.length < unreported.length
+              ? `; ${added.length} of them listed in filesChanged`
+              : "";
           emit(onEvent, {
             type: "Text",
-            text: `Verify gate: the git working tree has ${unreported.length} changed path(s) no tool reported (${shown}${more}).`,
+            text: `Verify gate: the git working tree has ${unreported.length} changed path(s) no tool reported (${shown}${more})${capped}.`,
           });
-          filesChanged = [...filesChanged, ...unreported];
+          filesChanged = [...filesChanged, ...added];
+          realDiffAdded += added.length;
         }
       }
     }

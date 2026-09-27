@@ -251,9 +251,10 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 Discord chat reply SHALL surface a parsed summary (state / verified /
 attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
 `--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
-agent loop still skips the verify lane when `filesChanged` is empty so plain
-chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
-without a live Discord token.
+agent loop still skips the verify lane when no tool reported files and the
+run's git working tree is unchanged (REQ-agent-085), so plain chat stays
+fast. Fixture tests SHALL cover argv shape and summary parsing without a live
+Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.

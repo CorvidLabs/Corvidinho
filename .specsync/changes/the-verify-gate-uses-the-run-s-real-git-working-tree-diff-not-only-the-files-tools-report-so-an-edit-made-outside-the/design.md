@@ -13,22 +13,28 @@ artifact: design
   pathspec `-- <cwd-relative-to-root>` and maps paths back to the cwd.
   Snapshot = HEAD (sha / null unborn) + `status --porcelain=v1 -z
   --untracked-files=all --no-renames` entries keyed by path to
-  `XY:fingerprint`. Fingerprint (in process, never throws): SHA-256 of a
-  regular file up to 4 MiB plus mode and size; stat identity (ino, mtime,
-  ctime) above it or when unreadable; `link:<target>` for a symlink (never
-  followed); `other:<mode>` for a directory (nested repo / submodule) or
-  fifo, never read; `missing`. `changed()` takes a new snapshot and
-  returns the sorted union of: `diff --name-only -z --no-renames
-  <startHead|emptyTree> <nowHead|emptyTree>` when HEAD moved, paths whose
-  `XY:fingerprint` differs or that are new, and start-dirty paths that are
-  now clean. Any unreadable step returns null.
+  `XY` + fingerprint kind + fingerprint. Fingerprint (in process, never
+  throws): SHA-256 of a regular file up to 4 MiB plus mode and size, read
+  through `open(O_NOFOLLOW|O_NONBLOCK)` + `fstat` so a path swapped for a
+  link or fifo after `lstat` is never read; stat identity (ino, mtime,
+  ctime) above the size cap, once the 64 MiB content budget of the start
+  snapshot is spent, or when unreadable; `link:<target>` for a symlink
+  (never followed); `other:<mode>` for a directory (nested repo /
+  submodule) or fifo, never read; `missing`. `changed()` lists status
+  again and returns the sorted union of: `diff --name-only -z --no-renames
+  <startHead|emptyTree> <nowHead|emptyTree>` when HEAD moved, paths that are
+  newly dirty (no fingerprint needed), start-dirty paths whose `XY` or
+  fingerprint (same kind as at the start) differs, and start-dirty paths
+  that are now clean. Any unreadable step returns null.
 - **`runTask` (src/agent/loop.ts).** With the gate on it starts the tracker
   once after Planning (`opts.workspaceDiff ?? startWorkspaceDiff`; a throw
   counts as null). After an attempt that ended without an ask, a provider
   error or an abort, it calls `changed()`: null ⇒ `diffUnreadable`, a
   Text note, and `wantVerify` is true (fail closed); otherwise paths not
   already in `filesChanged` (compared after resolving against the cwd) are
-  appended and one Text note names up to five. `wantVerify =
+  appended (at most `WORKSPACE_DIFF_MAX_FILES` = 1000 per run, so the NDJSON
+  `result` line stays under the 1 MiB parser cap) and one Text note names up
+  to five and counts them all. `wantVerify =
   verifyBeforeComplete && (filesChanged.length > 0 || diffUnreadable)`.
   Everything after (verify, retries with feedback, stuck ask, cancel) is
   unchanged, and the union across attempts (REQ-agent-242) keeps real-diff
