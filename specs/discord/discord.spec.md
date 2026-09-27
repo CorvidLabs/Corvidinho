@@ -17,6 +17,9 @@ files:
   - tests/identity.owner.test.ts
   - tests/discord.owner.test.ts
   - src/discord/session-store.ts
+  - src/discord/session-thread.ts
+  - tests/discord.session-thread.test.ts
+  - tests/discord.session-thread.unit.test.ts
   - src/store/db.ts
   - src/store/index.ts
   - src/store/paths.ts
@@ -83,6 +86,7 @@ files:
   - tests/scheduler.worktree.test.ts
   - tests/scheduler.tick-errors.test.ts
   - tests/scheduler.never-stuck.test.ts
+  - tests/scheduler.actor-gate.test.ts
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
@@ -120,6 +124,16 @@ allowlists at runtime (ADMIN-1..4 / REQ-discord-043); channel options use
 STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
+
+Session thread (AGENT-6 / REQ-discord-072): `src/discord/session-thread.ts`
+exports `SessionTurn`, `formatSessionThread` / `withSessionThread` (the
+labelled replay block, `SESSION_THREAD_HEADER` / `SESSION_THREAD_FOOTER`,
+`formatSessionThreadOmitted`), `clipTurnText`, `answerTurnText`,
+`ensureSessionTurns` and the limits `SESSION_THREAD_BUDGET_CHARS` (6000),
+`SESSION_THREAD_TURN_MAX_CHARS` (1500) and `SESSION_THREAD_MAX_TURNS` (200);
+`SessionStore.recordTurn(session, role, text)` records one turn (the
+human's words as a run starts, the posted answer or failure line when it
+ends) and `SessionStore.threadFor(session)` returns them oldest first.
 
 Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 (`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
@@ -304,7 +318,9 @@ outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
-file tools can open them (REQ-discord-013); protocol mismatch hard-fails start,
+file tools can open them, and opening one with `files-read` hands the model
+the image itself as an image part, not decoded bytes (REQ-discord-013,
+REQ-plugins-427 / REQ-agent-428); protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
@@ -314,6 +330,7 @@ every MessageCreate is processed only when its own channel (thread parent or the
 every @mention/reply/thread message and every slash command also passes `gateActor` after the channel gate: deny-listed users/roles are refused, and when the user or role allowlist is non-empty only listed users, allowed roles or the owner pass; empty user+role lists keep the channel-only path; refusal is silent on MessageCreate and a zero-width ephemeral ack on slash (ALLOW-3/5 / DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-201);
 an ask button press (open or pick) passes channel → `gateActor` (with the press's role ids) → mute/rate (shared per-user state, presser's resolved level) before it opens choices or resumes; a refusal is ephemeral only — zero-width ack for an actor deny, `MUTED` / `RATE_LIMITED` for mute/rate — with no agent run, nothing sent or edited, and the pending ask kept (DISCORD-6 / DISCORD-DENY-3 / REQ-discord-201 / REQ-discord-010);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
+every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
@@ -321,14 +338,16 @@ a message reply or button-pick run keeps one `discord_inflight_replies` row (ids
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 `/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
 Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108). A run never stays "running" forever (REQ-discord-346): `finish()` counts a run recorded only after `markRunFinished` (one IMMEDIATE transaction) succeeds, retrying a throwing write once and otherwise logging `[scheduler] run failed: could not record run …` and counting it failed; the bridge's `stop()` abandons in-flight runs like the daemon (`interrupted: bridge shutdown`); both stops wait ≤3 s (`settleAbandoned`, `ABANDONED_SETTLE_MS`) for aborted runs to park their worktree; each claimed run records its runner (`schedule_runs.runner` = `<pid>:<proc start>`, schema v10, `SCHEMA_VERSION` 10), and the bridge and daemon start with `recoverAbandoned()`, which fails runs whose runner is gone (`interrupted: process restarted`, `RUN_INTERRUPTED_BY_RESTART`) and parks leftover `talk-schedule_<schedule>_<run>` worktrees of runs this data dir recorded as no longer running, deleting a branch only when it has no commits of its own; a live runner's run and worktree are left alone, and a schedule-run worktree whose run this data dir does not know (another data dir's, e.g. `bun test` run inside it) is never touched.
+Each schedule run is gated against the live allowlist before any worktree or agent run and again before its post (DISCORD-SCHEDULE-3 / REQ-discord-020): `SchedulerService` checks the creator with `gateActor` (REQ-discord-201: deny wins; a non-empty user/role list must list the creator's id unless it is the configured `owner`; a tick has no member roles) and the channel with `checkChannel`. A refused run spawns nothing, posts nothing and is recorded failed (`creator not allowlisted: …` / `channel not allowlisted: <id>`), counting toward the 5-failure auto-pause. The bridge ticker shares the allowlist `/admin` edits in place; the daemon reloads it before each tick (REQ-cli-108).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
 No `/memory` slash command.
 Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
-from `src/agent/spend.ts`, REQ-discord-098) are created with CREATE TABLE IF
-NOT EXISTS without a schema version bump, and their free-text columns are
+from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
+`src/discord/session-thread.ts`, REQ-discord-072) are created with CREATE
+TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
 scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
 no free-text column (a constant kind and integers).
 The spend warning line and `/status` spend line are built from integer
@@ -490,4 +509,8 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write: Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree |
 | 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |
 | 2026-09-27 | replying-to-a-session-start-or-work-answer-continues-that-session-discord-2: Replying to a /session start or /work answer continues that session (DISCORD-2) |
+| 2026-09-27 | schedule-ticks-re-check-the-creator-against-the-live-discord-user-allowlist-and-the-daemon-ticks-against-the-live: Schedule ticks re-check the creator against the live Discord user allowlist, and the daemon ticks against the live allowlist (DISCORD-SCHEDULE-3) |
+| 2026-09-27 | discord-sessions-keep-their-thread-each-run-is-stored-with-its-session-and-a-continued-run-gets-the-earlier-turns: Discord sessions keep their thread: each run is stored with its session and a continued run gets the earlier turns replayed, bounded (AGENT-6) |
+| 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
+| 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
 | 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |

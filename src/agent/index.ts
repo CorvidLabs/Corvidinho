@@ -13,6 +13,8 @@ export type {
   TaskResult,
   VerifyResult,
   VerifyRunner,
+  WorkspaceDiffStart,
+  WorkspaceDiffTracker,
 } from "./types.ts";
 export {
   agentConfigDefaults,
@@ -21,6 +23,14 @@ export {
 } from "./config.ts";
 export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";
+export {
+  startWorkspaceDiff,
+  WORKSPACE_DIFF_HASH_BUDGET_BYTES,
+  WORKSPACE_DIFF_HASH_MAX_BYTES,
+  WORKSPACE_DIFF_MAX_FILES,
+  WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
+} from "./workspace-diff.ts";
+export type { WorkspaceDiffLimits } from "./workspace-diff.ts";
 
 export {
   extractConstraintSections,
@@ -45,9 +55,12 @@ export {
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
 export {
+  DEFAULT_LLM_MODEL,
   loadTierFromEnv,
+  modelForTier,
   parseCapabilityTier,
   tierAllowsPlugin,
+  TIER_MODEL_ENV,
   TIER_RANK,
 } from "./tier.ts";
 export type { CapabilityTier } from "./tier.ts";

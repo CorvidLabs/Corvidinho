@@ -25,9 +25,13 @@ description = "CLI --help exits 0 (placeholder/smoke)"
 cmd = "hi check"
 description = "Validate hi/ criterion structure (optional if hi not on PATH)"
 
+# Same strictness as the CI Spec Sync Action (.github/workflows/spec-sync.yml:
+# require-coverage "100" → --require-coverage 100; strict false → no --strict),
+# so the verify lane fails on what CI Spec Sync fails on (SPECSYNC-2/7).
+# tests/specsync.check-parity.test.ts fails if the two drift apart.
 [tasks.spec-check]
-cmd = "specsync check"
-description = "SpecSync drift check — also on verify lane; CI Spec Sync Action remains"
+cmd = "specsync check --require-coverage 100"
+description = "SpecSync drift check at CI strictness — also on verify lane; CI Spec Sync Action remains"
 
 [lanes.pre-commit]
 description = "Run before committing"

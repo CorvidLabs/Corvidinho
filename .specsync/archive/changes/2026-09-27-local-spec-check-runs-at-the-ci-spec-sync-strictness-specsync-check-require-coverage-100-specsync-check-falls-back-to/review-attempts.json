@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "local-spec-check-runs-at-the-ci-spec-sync-strictness-specsync-check-require-coverage-100-specsync-check-falls-back-to",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "6abcbdbf58d76f34afde31055a1d5d29d5294700",
+      "contract_digest": "7889d2b61a6681e5b5396bc291ce9434964f2208ae92e6f07b74b25bbaf07408",
+      "execution_digest": "ab26242058df5427500f9cf1066dfd4dd68e9693157bbeba73e44fee3447feeb",
+      "workspace_digest": "31e60ff34c33a38bd1a9e0b0ed733ef38c33fcecab6ac176719588dea43af2f3",
+      "timestamp": 1790523340
+    }
+  ]
+}

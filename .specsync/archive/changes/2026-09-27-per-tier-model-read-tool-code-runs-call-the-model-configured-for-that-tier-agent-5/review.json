@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "per-tier-model-read-tool-code-runs-call-the-model-configured-for-that-tier-agent-5",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "273a7e28e75d9987ce0a72ecafd1e16cfe3b4777",
+  "contract_digest": "89223645fe25ec24041aea1a432b58e68326aab43e9faded0af10bb839472356",
+  "execution_digest": "0f5faaa3ff80ea19a1ed64a844e71c9c8ef7e82ee599137027208ca3f9537baa",
+  "workspace_digest": "c2a302709db857dcae59b561b781f73a61c7a3971718f4a1a31a8e206ee7a0fc",
+  "timestamp": 1790523912
+}

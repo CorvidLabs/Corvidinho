@@ -20,6 +20,7 @@
 
 import { scrubSecrets } from "../store/scrub.ts";
 import type { SpendWindow } from "./spend.ts";
+import type { CapabilityTier } from "./tier.ts";
 import type { HumanAsk, SpendWarning } from "./types.ts";
 
 /** Operator knob: daily (rolling 24 h) USD cap on provider calls. Unset = off. */
@@ -130,13 +131,22 @@ export function spendCapInvalidAsk(): HumanAsk {
   );
 }
 
-/** A model with no known price is never counted as free. */
-export function spendCapUnpricedAsk(model: string, capMicroUsd: number): HumanAsk {
+/**
+ * A model with no known price is never counted as free. `modelKey` is the env
+ * key that set the run's model (AGENT-5: a per-tier key such as
+ * `CORVIDINHO_LLM_MODEL_READ` wins over `CORVIDINHO_LLM_MODEL`), so the ask
+ * names the key that actually has to change.
+ */
+export function spendCapUnpricedAsk(
+  model: string,
+  capMicroUsd: number,
+  modelKey = "CORVIDINHO_LLM_MODEL",
+): HumanAsk {
   const shown = scrubSecrets(model).replace(/\s+/g, " ").trim().slice(0, 80) || "(none)";
   return spendCapAsk(
     `Spend cap can't be enforced (SAFE-8): model "${shown}" has no known price, so I can't ` +
       `count it against the ${formatUsd(capMicroUsd)} daily cap and stopped before calling ` +
-      "the provider. To continue, the operator switches CORVIDINHO_LLM_MODEL to a priced model " +
+      `the provider. To continue, the operator switches ${modelKey} to a priced model ` +
       `or unsets ${SPEND_CAP_ENV} ${OPERATOR_HINT}; then ask again. ${NO_REPLY_NOTE}`,
   );
 }
@@ -163,9 +173,14 @@ export type SpendSnapshot =
       kind: "cap";
       capMicroUsd: number;
       window: SpendWindow;
-      /** Configured provider model (CORVIDINHO_LLM_MODEL). */
+      /**
+       * Model price-checked: the configured model (loadLlmEnv().model), or,
+       * when it is priced but a per-tier model is not (AGENT-5), that one.
+       */
       model: string;
       priced: boolean;
+      /** Set when `model` is the unpriced model of this tier only (AGENT-5). */
+      tier?: CapabilityTier;
     };
 
 export type SpendDoctorLine = { ok: true; mark: "ok" | "warn" | "info"; detail: string };
@@ -203,7 +218,10 @@ export function formatSpendDoctorLine(s: SpendSnapshot): SpendDoctorLine {
         notes.push(`past the ${SPEND_WARN_PERCENT}% warning — a call that would pass the cap stops and asks first`);
       }
       if (!s.priced) {
-        notes.push(`model "${scrubSecrets(s.model)}" has no known price, so ${STOPS_AND_ASKS}`);
+        const runs = s.tier ? `${s.tier}-tier runs` : "runs";
+        notes.push(
+          `model "${scrubSecrets(s.model)}" has no known price, so ${runs} stop and ask before calling the provider`,
+        );
       }
       return {
         ok: true,
@@ -232,7 +250,11 @@ export function formatSpendStatusLine(s: SpendSnapshot): string {
       let line = `Spend (24h): ${formatUsd(w.spentMicroUsd)} of ${formatUsd(cap)} daily cap (${pct}%)`;
       if (w.spentMicroUsd >= cap) line += " — 🛑 cap reached, runs stop and ask";
       else if (atWarnThreshold(w.spentMicroUsd, cap)) line += ` — ⚠️ past ${SPEND_WARN_PERCENT}%`;
-      if (!s.priced) line += " — ⚠️ model has no known price, runs stop and ask";
+      if (!s.priced) {
+        line += s.tier
+          ? ` — ⚠️ ${s.tier}-tier model has no known price, ${s.tier}-tier runs stop and ask`
+          : " — ⚠️ model has no known price, runs stop and ask";
+      }
       return line;
     }
   }

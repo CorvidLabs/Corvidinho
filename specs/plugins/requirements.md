@@ -110,20 +110,25 @@ Acceptance Criteria
 
 ### REQ-plugins-008
 
-Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
+Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-score`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
 
-The tools SHALL stay inside the project: they read this repo's `specs/` and the companions next to a spec, using project files only (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6), as typed plugin commands (PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
+`specsync-check` SHALL run `fledge run spec-check` only when `fledge` is on PATH and the project's own `fledge.toml` defines a `spec-check` task; otherwise it SHALL run the local `specsync check` (SPECSYNC-2/7). A `fledge.toml` that cannot be read or parsed SHALL keep the Fledge path (fail closed). `specsync-score` SHALL be read-only (tier 0, not dangerous) and return the local `specsync score` report with the forwarded args (SPECSYNC-3).
+
+The tools SHALL stay inside the project: they read this repo's `specs/` and the companions next to a spec, using project files only (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6), as typed plugin commands (PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-score`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
 
 Acceptance Criteria
-- `plugins list` includes the SpecSync command names.
+- `plugins list` includes the SpecSync command names, `specsync-score` among them.
 - `specsync-list` returns registered module names from `.specsync/registry.toml`.
 - `specsync-read <module>` returns `specs/<module>/<module>.spec.md` contents.
 - `specsync-check` runs project `spec-check` (fledge task or `specsync check` fallback) and fails non-zero on drift.
+- With fledge on PATH and a project `fledge.toml` that has no `spec-check` task, or no `fledge.toml`, `specsync-check` runs `specsync check` and returns its result (no `Unknown task 'spec-check'` failure); with the task defined it runs `fledge run spec-check` and a failing task fails `specsync-check` (exit 1, `spec check failed`).
+- `projectDefinesSpecCheckTask` is true for a `fledge.toml` that cannot be parsed, false for one without the task or no file.
+- `specsync-score [args]` spawns the local `specsync score [args]` (e.g. `cli --explain`, `--format json`) and returns its report; a non-zero `specsync score` exit (e.g. `--min-score`) passes through with the report. It is offered in the default tool-tier catalog.
 - `specsync-brief <module>` returns companion files when present.
 - `specsync-read` / `specsync-brief` with a name that is not a plain module name — a relative traversal (`../../<outside>/outside`, `../../../..<abs>`), an absolute path, `.` / `..`, a path separator (`/` or `\`), a NUL byte or any other character — fail with exit 1 and a one-line `invalid spec module name` error (the name JSON-escaped, never a raw NUL) and read nothing.
 - A module spec, legacy flat spec, module dir or companion that is a symlink resolving outside the project's `specs/` dir, or a `specs/` dir that resolves outside the project root, is refused with exit 1 and a `resolves outside` error naming only the in-project path; a refused companion fails the whole brief; no outside content is returned.
 - Symlinks that stay inside `specs/` still read, and a missing module still reports `spec '<name>' not found`.
-- `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` given `--root <dir>` or `--root=<dir>` fail with exit 1 (`refused: --root is not allowed; SpecSync tools run on this project only`) and `specsync` is not spawned.
+- `specsync-coverage`, `specsync-score`, `specsync-change-list` and `specsync-ship-status` given `--root <dir>` or `--root=<dir>` fail with exit 1 (`refused: --root is not allowed; SpecSync tools run on this project only`) and `specsync` is not spawned.
 - A tool-loop `specsync-read` call with a traversal name returns the refusal to the model, not the outside file.
 - The Planning spec briefing (`loadRelevantSpecs`), which reads through the same helpers, leaves out a registered module whose spec or module dir resolves outside `specs/` and never includes a companion that does.
 
@@ -930,4 +935,79 @@ Acceptance Criteria
 - Dry-run by id or query succeeds with `dryRun: true`.
 - Mocked REST returns display name / username / id; 404 → clean not-a-member error.
 - Fixture: `tests/discord.user-lookup.test.ts`.
+
+### REQ-plugins-313
+
+When `node`, `python3` (else `python`) or `cargo` resolves on an absolute
+PATH entry at builtin load, the system SHALL register `node-exec`,
+`python-exec` or `cargo-exec` respectively (PLUGIN-4), bound to the absolute
+binary found. A relative PATH entry SHALL NOT be used to resolve a runner, and
+a hit whose real path is the running Bun binary (the `node` shim `bun run` puts
+on PATH) SHALL NOT count as the toolchain; resolution continues on PATH. Each
+runner SHALL be `dangerous: true` and `minTier: 2` (PLUGIN-2), so a
+non-interactive run that has not allowlisted it is denied (SAFE-1), every run
+is audited (SAFE-5), non-ADMIN role sessions never see or run it
+(ROLES-CHAT-2/3), and the tool catalog offers it only at code tier with
+dangerous tools included. A runner SHALL spawn `[bin, ...argv]` with the
+caller's argv verbatim (no shell, no expansion, its own flags kept) and SHALL
+pin the child's cwd to the plugin cwd (project root / task worktree), with no
+cwd option. The child SHALL get the verify lane's scrubbed env (no Discord
+config, GitHub tokens, audit key, acting identity or LLM keys) without
+`CDPATH` / `OLDPWD`, stdin closed, a timeout (exit 124), per-stream output
+caps, and its process group killed on timeout or the calling run's abort (exit
+130); output SHALL be secret-scrubbed (SAFE-6). A non-zero exit SHALL return
+ok=false with that exit code; empty argv SHALL be a usage error (exit 1) that
+spawns nothing. `shell-exec` is unchanged. No new slash command, env var or
+config key.
+
+Acceptance Criteria
+- With stub `node`, `python3` and `cargo` on PATH, `node-exec`, `python-exec` and `cargo-exec` are registered with dangerous=true, mutating=true, minTier=2; a second load keeps the same commands.
+- `python-exec` binds `python3` when both `python3` and `python` exist and `python` when only it exists; a toolchain only on a relative PATH entry is not resolved.
+- A `node` that is a symlink to the running Bun binary is skipped: with only it on PATH `node-exec` is not loaded (`node not found on PATH`), with a real `node` later on PATH that one is bound; `bun run corvidinho plugins list` without node lists no `node-exec`.
+- `python-exec` with `` ["-c","x","$(id)","--json","a b","*","--","`id`"] `` reaches the binary as exactly those argv words, with cwd = the project root; a stub exit 3 returns ok=false, exitCode 3.
+- The child env has no `GITHUB_TOKEN`, `DISCORD_TOKEN`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_ACTING_*`, `CDPATH` or `OLDPWD`, and `CORVIDINHO_PROJECT_ROOT` is the project root.
+- Non-interactive with an empty allowlist each runner is denied (exit 2, SAFE-1) and nothing is spawned; allowlisted, it runs.
+- `buildOpenAiTools` lists the runners at code tier with dangerous tools for ADMIN only; not at tool tier, not without dangerous tools, not for a non-ADMIN session.
+- An aborted calling run returns exit 130 and kills the runner's process tree; a run past the timeout returns exit 124 and kills the tree.
+- Where real `node` / `python3` / `cargo` are installed, `node-exec -e 'console.log(process.cwd())'` and `python-exec -c 'import os; print(os.getcwd())'` print the project root and `cargo-exec --version` succeeds.
+
+### REQ-plugins-314
+
+A language runner whose toolchain is missing SHALL degrade cleanly (PLUGIN-4):
+it SHALL NOT be registered, so it is never offered to the model and never
+listed as a command; `corvidinho plugins list` SHALL still exit 0 and SHALL
+print one line per missing runner naming the missing tool (`<name> not loaded:
+<tool> not found on PATH`) next to the runners that loaded and their binary;
+every other builtin (`shell-exec`, `files-*`, …) SHALL load unchanged. A
+registered runner whose binary can no longer start SHALL return ok=false with
+exit 127 and the reason instead of throwing.
+
+Acceptance Criteria
+- With an empty PATH (or no PATH) none of the three runners is registered, the load report lists each as missing, and `runnerStatusLines` prints `Language runners (PLUGIN-4): none loaded` and `node-exec not loaded: node not found on PATH`, `python-exec not loaded: python3 / python not found on PATH`, `cargo-exec not loaded: cargo not found on PATH`; `buildOpenAiTools({tier:"code",includeDangerous:true})` has no runner.
+- With only `python3` on PATH, only `python-exec` loads and the other two are reported not loaded.
+- `loadBuiltins()` with PATH lacking the toolchains still registers `shell-exec` and `files-*`; with only `node` on PATH it also registers `node-exec` alone.
+- After a registered stub binary is deleted, calling the runner returns ok=false, exit 127 with `<name>: <tool> could not start`, and the promise does not reject.
+- `corvidinho plugins list` with no toolchain on PATH exits 0, lists `shell-exec`, prints the `none loaded` and per-runner `not loaded` lines and lists no runner command; with only `cargo` on PATH it lists `cargo-exec  [dangerous, tier>=2]` and `cargo-exec (<bin>)`.
+### REQ-plugins-427
+
+`files-read` SHALL recognise a PNG, JPEG, GIF or WebP file by its leading
+magic bytes (not its name) and, after the path clamp (REQ-plugins-082), the
+ROLES-CHAT-8 secret-path gate and the existing-file check, SHALL return it as
+an image the model can look at (DISCORD-9): `data` `{path, bytes, mediaType,
+image: true}` and the message `image <path> (<mime>, N bytes) opened for
+viewing`, with no UTF-8 `content`. The file's bytes SHALL travel base64 only on
+`PluginHandlerResult.image` `{path, mediaType, base64}`, which is never
+serialized into tool text, events, ndjson or CLI output; the agent tool loop
+sends it to the model as an image part (REQ-agent-428). An image over 20 MB
+(`MAX_IMAGE_SIZE_BYTES`, the Discord attachment cap) SHALL be refused with a
+clear error and no bytes. Any other file SHALL read exactly as before. No new
+env var, flag or command.
+
+Acceptance Criteria
+- files-read of a real PNG under `<cwd>/.corvidinho/attachments/` returns `data.image` true, `mediaType` `image/png` and no `data.content`; `image.base64` round-trips to the file bytes; `{ok, message, data}` stringified is under 1 KB with no U+FFFD and no base64.
+- JPEG / GIF / WebP heads are images whatever the name; a text file named `.png` reads as text; a PNG named `.txt` is an image.
+- An image over 20 MB is refused (`refused: image '<path>' is N bytes, over the 20MB image limit`); an image of exactly 20 MB is still read.
+- A text file read still returns `{path, bytes, content}` with the content as the message.
+- A PNG outside the root, or at a secret path in a non-ADMIN role session, is refused with no `image`.
+- Fixture: `tests/files.plugins.test.ts` ("files-read image mode"), no network.
 

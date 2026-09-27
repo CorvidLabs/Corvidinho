@@ -122,6 +122,18 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   a claimed run records `<pid>:<proc start>` and a v9 DB migrates to v10 with
   its old `running` row recovered. Temp git repos and SQLite files, no live
   Discord.
+
+## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
+
+- `tests/scheduler.actor-gate.test.ts` — a deny-listed creator's due schedule
+  is refused at tick (no agent run, no post, `creator not allowlisted: …`,
+  one consecutive failure); with a non-empty user list an unlisted creator is
+  refused while a listed user and the configured owner (not on the list) run
+  and post; a deny-listed owner is refused; a creator deny-listed while the
+  run is in flight gets no post; refused ticks auto-pause the schedule after
+  5; empty user and role lists still run any creator. In-memory store,
+  injected agent, no live Discord.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
@@ -131,3 +143,31 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   a member's `/work` A/B works the same, and another user's reply (even the
   configured owner's) never resumes A; a throwing tracking write still lets
   the answer collapse and the deferred reply be deleted (no live Discord).
+
+## Session thread replay (REQ-discord-072, AGENT-6 / SESSION-3 / SESSION-MULTI-1 / SAFE-4 / SAFE-6)
+
+- `tests/discord.session-thread.test.ts` — through `startBridge` with a fake
+  gateway and a recording agent: a reply, the same user's @mention and
+  further replies carry every earlier turn oldest first before the new
+  message (`humanText` the new message only); a second bridge on the same DB
+  file continues the thread; replies to `/session start` and `/work` answers
+  carry the topic/description and answer; a button pick carries the original
+  request; a spend-cap stop keeps the request but no cap text; the request is
+  stored as its run starts (a restart mid-run finds it) and a run that
+  throws (chat, `/session start`, `/work`) keeps it for the next message; `planningSelectionText` of a continued prompt is the new message
+  only (REQ-agent-004); replayed and stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
+  replay; another user's session never sees my turns; confirm tokens only
+  from the current message (no live Discord).
+- `tests/discord.session-thread.unit.test.ts` — the renderer (budget,
+  opening request + newest turns, exact omitted count, per-turn clip that
+  never cuts a surrogate pair, one paragraph that Planning selection skips,
+  `answerTurnText`) and `SessionStore` turns (module-owned table without a
+  schema version change, reload after reopen, delete on end/TTL, orphan
+  sweep, turn cap, scrub on write, `SCRUB_TARGETS` + `rescrubDatabase`).
+## Attached images reach the model (REQ-discord-013 modified, DISCORD-9)
+
+- `tests/discord.image-attachments.test.ts` bridge e2e now downloads a real
+  PNG: `files-read` on the prompt's cited path returns `mediaType`
+  `image/png` and `result.image` base64 equal to the downloaded bytes (not a
+  UTF-8 decode). The tool-loop half is in `tests/agent.tool-loop.test.ts`
+  (REQ-agent-428).

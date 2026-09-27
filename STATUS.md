@@ -9,7 +9,7 @@
 | HI | Captured under `hi/` (18 families incl. MEMORY/IDENTITY/ADMIN/AUTONOMY/SESSION/WATCH/ROLES + ALLOW/WALLET; plus DISCORD-SCHEDULE / DISCORD-ANNOUNCE / DISCORD-ASK / DISCORD-DENY / SESSION-WORKTREE / SESSION-MULTI / MEMORY-ACL / ROLES-CHAT / WATCH-RELIABILITY compound ids) — see `hi check` |
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM; a file that cannot be parsed refuses start (fail closed, #203). See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
-| SpecSync | Agent tools `specsync-list/read/check/brief` + plan-time briefing; SDD ON; CI Spec Sync Action still dedicated |
+| SpecSync | Agent tools `specsync-list/read/check/brief/coverage/score/change-list/ship-status` + plan-time briefing; local `spec-check` at CI strictness (`--require-coverage 100`); SDD ON; CI Spec Sync Action still dedicated |
 | Trust / Augur / Attest | **Not** wired — do not re-add Trust thrash on this bootstrap |
 | Merge policy | Merge when verify + SpecSync change cycle are green (Leif/CoS standing order) |
 | Box update | `scripts/corvidinho-update.sh` + `docs/BOX-UPDATE.md` / `docs/UPDATE.md` — pidfile ready-wait + rollback; no Discord panic spam |
@@ -194,7 +194,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 
 **Honest gaps before first flip (not inventing HI):**
 
-- Full LLM tool loop on top of prove-before-done — **shipped** [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) (thin MVP: env-gated OpenAI tools → plugins; read/tool/code tier; SAFE-1 deny unchanged). Remaining gaps: no turn persistence/replay (AGENT-6; durable sessions only live within the soft TTL), no mid-run tier escalation, dangerous tools not offered to the model in `task run` (SAFE-1). MEMORY (#64/#131), the NDJSON event stream (#139) and the files/search plugins (#127) shipped
+- Full LLM tool loop on top of prove-before-done — **shipped** [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) (thin MVP: env-gated OpenAI tools → plugins; read/tool/code tier; SAFE-1 deny unchanged). Remaining gaps: Discord sessions keep their thread within the soft TTL (AGENT-6, REQ-discord-072: turns stored per session and replayed, bounded, into continued runs), but CLI `task run` has no session resume (CLI-6), a WATCH (GitHub) continue still carries only the newest event, and long threads are elided, not summarised (#72 drafts SESSION-5/6 are not captured); no mid-run tier escalation, dangerous tools not offered to the model in `task run` (SAFE-1). MEMORY (#64/#131), the NDJSON event stream (#139) and the files/search plugins (#127) shipped
 - SpecSync agent tools (#8→#22) so the live CLI can list/read/check specs — **shipped**
 - For Discord callers: HEAR (#5) **live on Leif's box** (token + allowlists); bun-spawn for `.ts` fixed in [#32](https://github.com/CorvidLabs/Corvidinho/pull/32)
 - For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later

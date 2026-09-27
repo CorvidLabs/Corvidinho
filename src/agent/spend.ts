@@ -48,6 +48,7 @@ import {
   type SpendDoctorLine,
   type SpendSnapshot,
 } from "./spend-notice.ts";
+import { perTierModels, type CapabilityTier } from "./tier.ts";
 import type {
   AgentTokenUsage,
   ExecuteResult,
@@ -327,6 +328,11 @@ export type SpendCapOptions = {
    * ledger). Without a listener no warning is recorded.
    */
   onWarning?: (warning: SpendWarning) => void;
+  /**
+   * Env key that sets the run's model (AGENT-5, modelKeyForTier), named in the
+   * unpriced-model ask. Default `CORVIDINHO_LLM_MODEL`.
+   */
+  modelKey?: string;
   /** Test seam: ledger DB. Default: shared DB under CORVIDINHO_DATA_DIR, opened on first call. */
   db?: Database;
   now?: () => number;
@@ -405,7 +411,7 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     const body = typeof init?.body === "string" ? init.body : "";
     const model = modelFromRequestBody(body);
     const price = priceForModel(model);
-    if (!price) return stop(spendCapUnpricedAsk(model, cap.capMicroUsd));
+    if (!price) return stop(spendCapUnpricedAsk(model, cap.capMicroUsd, opts.modelKey));
     let hold: SpendReservation;
     const estimate = estimateCallMicroUsd(price, Buffer.byteLength(body, "utf8"));
     try {
@@ -476,9 +482,27 @@ export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): Spen
 }
 
 /**
+ * AGENT-5: with per-tier model keys set, the first tier (read, tool, code)
+ * whose model has no known price. Runs at that tier (e.g. read-tier delegate
+ * workers and council voices) stop and ask, so doctor and /status flag it up
+ * front. Null when no per-tier key is set or every tier's model is priced.
+ */
+function unpricedTierModel(
+  env: NodeJS.ProcessEnv,
+): { tier: CapabilityTier; model: string } | null {
+  const models = perTierModels(env);
+  if (!models) return null;
+  for (const tier of ["read", "tool", "code"] as const) {
+    if (priceForModel(models[tier]) === null) return { tier, model: models[tier] };
+  }
+  return null;
+}
+
+/**
  * AUTONOMOUS-8 — rolling 24 h spend against the cap right now (doctor,
  * Discord /status). Opens the shared DB only when a cap is set and closes it
- * again unless `db` was passed in. Never throws.
+ * again unless `db` was passed in. Never throws. `model` unpriced ⇒ flagged
+ * as before; else an unpriced per-tier model is flagged with its tier.
  */
 export function readSpendSnapshot(opts: {
   env?: NodeJS.ProcessEnv;
@@ -495,12 +519,15 @@ export function readSpendSnapshot(opts: {
   try {
     db = opts.db ?? openCorvidinhoDb({ env });
     const window = new SpendLedger(db).window(opts.now ?? Date.now());
+    const priced = priceForModel(opts.model) !== null;
+    const tierGap = priced ? unpricedTierModel(env) : null;
     return {
       kind: "cap",
       capMicroUsd: cap.capMicroUsd,
       window,
-      model: opts.model,
-      priced: priceForModel(opts.model) !== null,
+      model: tierGap?.model ?? opts.model,
+      priced: priced && !tierGap,
+      ...(tierGap ? { tier: tierGap.tier } : {}),
     };
   } catch (err) {
     return { kind: "unreadable", error: err instanceof Error ? err.message : String(err) };
