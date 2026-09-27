@@ -13,7 +13,8 @@
  * - `fledge-run <task> [args…]`  → `fledge --non-interactive run <task> [-- args…]`
  *
  * Danger (PLUGIN-2 / SAFE-1): listing and validating lanes only read the
- * project's fledge.toml → `dangerous: false`, minTier 0. Running a lane or a
+ * project's lane sources (fledge.toml and `.fledge/lanes/*.toml`) →
+ * `dangerous: false`, minTier 0. Running a lane or a
  * task runs the project's own commands with the operator's privileges →
  * `dangerous: true`, minTier 2 (code), like `shell-exec` and the language
  * runners: denied non-interactively unless allowlisted, audited, never
@@ -25,6 +26,16 @@
  * directory). Task args go after fledge's `--` verbatim (fledge appends them
  * to the task's command and never splices them into its string).
  *
+ * Lane sources (read-only commands): fledge prints the offending line of a
+ * lane source it cannot parse. Before `fledge-lanes-list` or
+ * `fledge-lanes-validate` starts fledge, each lane source that exists must
+ * resolve (symlinks followed) to a regular file inside the real project root
+ * (`.fledge/lanes` to a directory there) and not to a secret path (.env*,
+ * .ssh, keys, keystores), else the call is refused (exit 2) and fledge never
+ * starts, as `files-read` refuses the same paths (ROLES-CHAT-8). This is a
+ * start-time check. The runs are code-tier, ADMIN-only and allowlisted like
+ * `shell-exec`, which reads any file anyway, so they are not clamped.
+ *
  * Spawn: fledge is resolved when the command runs, on the absolute PATH
  * entries only (a relative entry such as `.` would let the project pick the
  * binary a read-only command starts). argv arrays only (no shell), cwd pinned
@@ -35,11 +46,14 @@
  * secret-scrubbed (SAFE-6).
  */
 
-import { isAbsolute, resolve } from "node:path";
+import { lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { buildVerifyEnv } from "../../src/agent/verify.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
+import { isSecretPath } from "../files/protectedPaths.ts";
+import { isInsideRoot, realRoot } from "../files/resolvePath.ts";
 import { cleanText } from "./discover.ts";
 import { spawnCapped, type SpawnCappedResult } from "./spawn.ts";
 
@@ -53,7 +67,7 @@ export const FLEDGE_CORE_COMMAND_NAMES = [
 /** A lane or task name: no leading `-`, no whitespace, no path separators. */
 export const FLEDGE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 
-/** `lanes list` / `lanes validate` only parse fledge.toml. */
+/** `lanes list` / `lanes validate` only parse the lane sources. */
 export const FLEDGE_CORE_READ_TIMEOUT_MS = 30_000;
 /** A lane or task runs builds and tests: as long as a language runner. */
 export const FLEDGE_CORE_RUN_TIMEOUT_MS = 600_000;
@@ -90,6 +104,77 @@ export function fledgeCoreChildEnv(
 
 function usage(error: string): PluginHandlerResult {
   return { ok: false, error, exitCode: 1 };
+}
+
+/** Lane sources `lanes list` / `lanes validate` parse: this file and each `*.toml` in the dir. */
+const LANES_FILE = "fledge.toml";
+const LANES_DIR = ".fledge/lanes";
+
+/**
+ * Why `rel` (under the real project `root`) must not be handed to fledge, or
+ * null when it is missing or resolves to an allowed `kind` of entry. Errors
+ * name the project-relative path only, never an outside target.
+ */
+function laneSourceProblem(root: string, rel: string, kind: "file" | "dir"): string | null {
+  const abs = join(root, rel);
+  try {
+    lstatSync(abs);
+  } catch {
+    return null; // missing: fledge reports that itself
+  }
+  let real: string;
+  try {
+    real = realpathSync(abs);
+  } catch {
+    return `${rel} cannot be resolved`;
+  }
+  if (!isInsideRoot(root, real)) return `${rel} resolves outside the project directory`;
+  if (isSecretPath(rel) || isSecretPath(relative(root, real))) return `${rel} resolves to a secret path`;
+  let isKind: boolean;
+  try {
+    const st = statSync(real);
+    isKind = kind === "file" ? st.isFile() : st.isDirectory();
+  } catch {
+    return `${rel} cannot be read`;
+  }
+  if (!isKind) return `${rel} is not a ${kind === "file" ? "regular file" : "directory"}`;
+  return null;
+}
+
+/**
+ * Why the lane sources of the project at `cwd` must not be parsed by fledge
+ * (see the module doc), or null when every one that exists resolves to an
+ * allowed entry inside the real project root.
+ */
+export function laneSourcesRefusal(cwd: string): string | null {
+  const root = realRoot(cwd);
+  const file = laneSourceProblem(root, LANES_FILE, "file");
+  if (file) return file;
+  const dir = laneSourceProblem(root, LANES_DIR, "dir");
+  if (dir) return dir;
+  let entries: string[];
+  try {
+    entries = readdirSync(join(root, LANES_DIR));
+  } catch {
+    return null; // no lanes dir
+  }
+  for (const entry of entries.sort()) {
+    if (!entry.toLowerCase().endsWith(".toml")) continue;
+    const problem = laneSourceProblem(root, `${LANES_DIR}/${entry}`, "file");
+    if (problem) return problem;
+  }
+  return null;
+}
+
+/** A read command's refusal (exit 2; fledge is not started), or null. */
+function laneSourcesRefused(name: string, cwd: string): PluginHandlerResult | null {
+  const why = laneSourcesRefusal(cwd);
+  if (!why) return null;
+  return {
+    ok: false,
+    error: `refused: ${name}: ${why} (fledge would print its contents; ROLES-CHAT-8)`,
+    exitCode: 2,
+  };
 }
 
 type Spawned =
@@ -264,6 +349,8 @@ export function fledgeCoreCommands(opts: FledgeCoreOptions = {}): PluginCommand[
       async handler(ctx) {
         const name = "fledge-lanes-list";
         if (ctx.args.length > 0) return usage(`usage: ${name} (no args; lists the lanes of the project's fledge.toml)`);
+        const refused = laneSourcesRefused(name, ctx.cwd);
+        if (refused) return refused;
         const timeoutMs = readTimeout();
         const s = await spawnFledge(name, ["lanes", "list", "--json"], ctx.cwd, timeoutMs, opts, ctx.signal);
         if (!s.ok) return s.result;
@@ -296,6 +383,8 @@ export function fledgeCoreCommands(opts: FledgeCoreOptions = {}): PluginCommand[
         if (ctx.args.length > 0 && !strict) {
           return usage(`usage: ${name} [--strict] (validates the project's fledge.toml; no path argument)`);
         }
+        const refused = laneSourcesRefused(name, ctx.cwd);
+        if (refused) return refused;
         const timeoutMs = readTimeout();
         const args = ["lanes", "validate", "--json", ...(strict ? ["--strict"] : [])];
         const s = await spawnFledge(name, args, ctx.cwd, timeoutMs, opts, ctx.signal);

@@ -17,8 +17,20 @@ artifact: design
   `lanes-run` is skipped by the existing collision rule (REQ-plugins-112) and
   `plugins list` prints the skip line. fledge itself already shadows a plugin
   command `run` with its own `run`.
-- **Danger / tier:** list and validate only parse `fledge.toml` →
-  `dangerous: false`, minTier 0 (like `specsync-list`, `git-status`).
+- **Danger / tier:** list and validate only parse the lane sources
+  (`fledge.toml`, `.fledge/lanes/*.toml`) → `dangerous: false`, minTier 0
+  (like `specsync-list`, `git-status`).
+- **Lane-source clamp:** fledge prints the offending line of a lane source
+  it cannot parse, so a read that followed a link out of the project (or
+  onto `.env`) would print that file to any session, non-ADMIN included.
+  Before the reads start fledge, each lane source that exists must resolve
+  inside the real project root, to a regular file (the dir to a directory),
+  and not to a secret path (`isSecretPath`, as named and as resolved);
+  otherwise exit 2 naming the project-relative path, like `files-read`'s
+  symlink-escape and ROLES-CHAT-8 refusals and the SpecSync reads' clamp.
+  A start-time check (only ADMIN code-tier tools can write the tree). The
+  runs are not clamped: they are ADMIN-only code-tier tools like
+  `shell-exec`.
   A lane or task runs the project's own commands with the operator's
   privileges → `dangerous: true`, minTier 2 (like `shell-exec` and the
   runners). `--dry-run` is not exposed, so there is no "safe" run variant to

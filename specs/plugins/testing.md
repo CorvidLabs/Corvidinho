@@ -50,9 +50,15 @@ the runs without an allowlist entry and fledge not started, allowlisted
 `lanes run verify` in the project root with the scrubbed env; `run <task> --
 <args>` verbatim, no `--` without args; option-like or non-plain lane / task
 names refused before spawning; exit code, secret scrub, timeout 124 and abort
-130; fledge only on an absolute PATH entry, else exit 127. Real-fledge tests
-(a temp `fledge.toml`, and `corvidinho plugins run fledge-lanes-list` in this
-repo) are skipped where fledge is not installed (CI).
+130; fledge only on an absolute PATH entry, else exit 127; lane sources
+(`fledge.toml`, `.fledge/lanes`, `.fledge/lanes/*.toml`) linked outside the
+project, to `.env` or a `.env.toml`, or of the wrong entry type are refused by
+both reads (exit 2, no contents or link target) before fledge starts, while
+in-project links, non-`.toml` entries and a missing `fledge.toml` still reach
+fledge and the runs are not clamped. Real-fledge tests (a temp `fledge.toml`,
+an outside-linked `.fledge/lanes/y.toml` refused, and `corvidinho plugins run
+fledge-lanes-list` in this repo) are skipped where fledge is not installed
+(CI).
 `tests/fledge.plugins.test.ts` "default catalog (no includeDangerous) never
 discovers or offers Fledge commands" now expects the two read-only core
 builtins and no Fledge plugin command (REQ-agent-112).

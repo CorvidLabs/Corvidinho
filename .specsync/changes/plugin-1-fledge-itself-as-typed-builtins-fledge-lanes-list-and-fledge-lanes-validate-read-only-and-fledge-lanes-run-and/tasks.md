@@ -12,4 +12,5 @@ artifact: tasks
 - [x] `tests/fledge.plugins.test.ts`: the default-catalog assertion names the two core reads and still no Fledge plugin command.
 - [x] Deltas (plugins Added REQ-plugins-461, agent Modified REQ-agent-112), spec prose and files, plugins testing and tasks companions.
 - [x] `docs/DISCORD-GO-LIVE.md`: dangerous-tool table row, collision note on `fledge-<command>`, non-ADMIN read tools.
+- [x] Review: lane-source clamp for the reads (`laneSourcesRefusal`): `fledge.toml` / `.fledge/lanes` / `.fledge/lanes/*.toml` linked outside the project or to a secret path are refused before fledge starts (real fledge echoes a line of a file it cannot parse); tests fail without it.
 - [x] `specsync check --require-coverage 100`, `bunx tsc --noEmit`, `bun test` and `fledge lanes run verify --non-interactive` green.

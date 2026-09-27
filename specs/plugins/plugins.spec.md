@@ -166,7 +166,7 @@ the Fledge core builtins via `loadFledgeCorePlugins(opts?)` (called by
 `fledgeCoreCommands(opts?)` (test seams: `env`, `readTimeoutMs`,
 `runTimeoutMs`, `maxOutputBytes`), `FLEDGE_CORE_COMMAND_NAMES`,
 `FLEDGE_NAME_RE`, `resolveFledgeBin(env)`, `fledgeCoreChildEnv(base, root)`,
-`parseLanesList` and `parseLanesValidate`.
+`laneSourcesRefusal(cwd)`, `parseLanesList` and `parseLanesValidate`.
 `plugins/specsync/api.ts` exports `listRegisteredModules` (in a project that
 has a `.specsync/` dir, each `specs/<name>/<name>.spec.md` that
 `readModuleSpec` reads, plus the `[specs]` names of `.specsync/registry.toml`
@@ -427,7 +427,15 @@ no leading `-`), so model argv never becomes a fledge option (`--init`,
 and `CORVIDINHO_PROJECT_ROOT`; stdin closed, 64 KiB per-stream caps, process
 group killed on timeout (exit 124) or the calling run's abort (exit 130);
 output and parsed fields are secret-scrubbed, parsed fields control-char
-cleaned and capped. Builtins load before the project's Fledge plugins, so a
+cleaned and capped. fledge prints the offending line of a lane source it
+cannot parse, so before either read starts fledge, `fledge.toml`, the
+`.fledge/lanes` dir and each `.fledge/lanes/*.toml` that exists must resolve
+(symlinks followed) inside the real project root, to a regular file (the dir
+to a directory), at a path that is not a secret path as named or as resolved
+(`isSecretPath`); otherwise `laneSourcesRefusal` names the project-relative
+path and the read is refused (exit 2, fledge not started; ROLES-CHAT-8, as
+`files-read`). The runs are not clamped (code tier, ADMIN only, allowlisted
+like `shell-exec`). Builtins load before the project's Fledge plugins, so a
 Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or
 `lanes-run` is skipped by that load with `name already registered by builtin`
 (REQ-plugins-112), as fledge's own `run` shadows such a plugin command on its
@@ -625,6 +633,7 @@ command line.
 | fledge-lanes-run / fledge-run lane or task name not a plain name (leading `-`, space, `/`, empty), extra lanes-run args, or any fledge-lanes-list arg / non-`--strict` fledge-lanes-validate arg | Usage error (exit 1); fledge not started |
 | fledge core builtin with no fledge on an absolute PATH entry | ok=false, exit 127 `<name>: fledge not on PATH`; never throws |
 | fledge-lanes-validate on lanes with errors (or warnings under `--strict`) | ok=false with fledge's exit code (1), the errors and warnings |
+| fledge-lanes-list / fledge-lanes-validate with a lane source (`fledge.toml`, `.fledge/lanes`, `.fledge/lanes/*.toml`) resolving outside the project, to a secret path, or to the wrong entry type | Refuse (exit 2) naming the project-relative path; fledge not started; contents and link target not returned |
 | Fledge plugin command named `run` / `lanes-list` / `lanes-validate` / `lanes-run` | Skipped by the Fledge plugin load (`name already registered by builtin`); the builtin keeps the name |
 | node / python3+python / cargo not on PATH at builtin load | Runner not registered or offered; `plugins list` names it `not loaded` and exits 0 (PLUGIN-4) |
 | node-exec / python-exec / cargo-exec non-interactive + not allowlisted | Deny (exit 2, SAFE-1); nothing spawned |

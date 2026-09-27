@@ -16,6 +16,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -336,6 +337,94 @@ describe("fledge-lanes-list / fledge-lanes-validate (read-only)", () => {
   });
 });
 
+describe("lane sources stay inside the project (ROLES-CHAT-8)", () => {
+  // fledge prints the offending line of a lane source it cannot parse, so a
+  // read that followed a link out of the project would print that file.
+  const SECRET = "TOKEN=outside-secret-value-123";
+
+  function outsideFile(fake: Fake): string {
+    const p = join(fake.bin, "..", "outside.txt");
+    writeFileSync(p, `${SECRET}\n`);
+    return p;
+  }
+
+  async function expectRefused(fake: Fake, why: string): Promise<void> {
+    for (const name of READS) {
+      const r = await call(name, fake, []);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toBe(`refused: ${name}: ${why} (fledge would print its contents; ROLES-CHAT-8)`);
+      // Neither the file's contents nor where the link points come back.
+      expect(JSON.stringify(r)).not.toContain("outside-secret-value");
+      expect(JSON.stringify(r)).not.toContain(fake.bin.split("/").slice(0, -1).join("/"));
+    }
+    expect(argvLog(fake)).toEqual([]);
+  }
+
+  test("fledge.toml linked outside the project is refused and fledge never starts", async () => {
+    const fake = makeFake();
+    symlinkSync(outsideFile(fake), join(fake.project, "fledge.toml"));
+    await expectRefused(fake, "fledge.toml resolves outside the project directory");
+  });
+
+  test("a .fledge/lanes/*.toml file, or the .fledge/lanes dir, linked outside is refused", async () => {
+    const fake = makeFake();
+    writeFileSync(join(fake.project, "fledge.toml"), "[tasks.a]\ncmd = \"true\"\n");
+    mkdirSync(join(fake.project, ".fledge", "lanes"), { recursive: true });
+    writeFileSync(join(fake.project, ".fledge", "lanes", "a.toml"), "");
+    symlinkSync(outsideFile(fake), join(fake.project, ".fledge", "lanes", "b.toml"));
+    await expectRefused(fake, ".fledge/lanes/b.toml resolves outside the project directory");
+
+    const dirFake = makeFake();
+    const outsideDir = join(dirFake.bin, "..", "outside-lanes");
+    mkdirSync(outsideDir);
+    mkdirSync(join(dirFake.project, ".fledge"));
+    symlinkSync(outsideDir, join(dirFake.project, ".fledge", "lanes"));
+    await expectRefused(dirFake, ".fledge/lanes resolves outside the project directory");
+  });
+
+  test("a lane source that is a secret path inside the project, or not a regular file, is refused", async () => {
+    const fake = makeFake();
+    writeFileSync(join(fake.project, ".env"), `${SECRET}\n`);
+    symlinkSync(".env", join(fake.project, "fledge.toml"));
+    await expectRefused(fake, "fledge.toml resolves to a secret path");
+
+    const lanes = makeFake();
+    writeFileSync(join(lanes.project, "fledge.toml"), "");
+    mkdirSync(join(lanes.project, ".fledge", "lanes"), { recursive: true });
+    writeFileSync(join(lanes.project, ".fledge", "lanes", ".env.toml"), "");
+    await expectRefused(lanes, ".fledge/lanes/.env.toml resolves to a secret path");
+
+    const dir = makeFake();
+    mkdirSync(join(dir.project, "fledge.toml"));
+    await expectRefused(dir, "fledge.toml is not a regular file");
+  });
+
+  test("links that stay inside the project, other files and a missing fledge.toml still reach fledge", async () => {
+    const fake = makeFake();
+    mkdirSync(join(fake.project, "conf"));
+    writeFileSync(join(fake.project, "conf", "fledge.toml"), "");
+    symlinkSync("conf/fledge.toml", join(fake.project, "fledge.toml"));
+    mkdirSync(join(fake.project, ".fledge", "lanes"), { recursive: true });
+    symlinkSync(join(fake.project, "conf", "fledge.toml"), join(fake.project, ".fledge", "lanes", "in.toml"));
+    // Not a lane source: fledge only parses *.toml there.
+    symlinkSync(outsideFile(fake), join(fake.project, ".fledge", "lanes", "README.md"));
+    for (const name of READS) expect((await call(name, fake, [])).ok).toBe(true);
+    expect(argvLog(fake)).toHaveLength(2);
+
+    const missing = makeFake();
+    expect((await call("fledge-lanes-list", missing, [])).ok).toBe(true);
+  });
+
+  test("lane and task runs (code tier, ADMIN only, allowlisted) are not clamped", async () => {
+    const fake = makeFake();
+    symlinkSync(outsideFile(fake), join(fake.project, "fledge.toml"));
+    expect((await call("fledge-lanes-run", fake, ["verify"])).ok).toBe(true);
+    expect((await call("fledge-run", fake, ["test"])).ok).toBe(true);
+    expect(argvLog(fake)).toHaveLength(2);
+  });
+});
+
 describe("fledge-lanes-run / fledge-run (dangerous, code tier)", () => {
   test("SAFE-1: non-interactive without an allowlist entry is denied and fledge never starts", async () => {
     const fake = makeFake();
@@ -509,6 +598,21 @@ steps = ["hello"]
     const v = await real("fledge-lanes-validate", dir, []);
     expect(v.ok).toBe(false);
     expect(v.error).toContain("references undefined task 'nosuch'");
+  });
+
+  test("a lane source linked outside the project is refused; its contents never come back", async () => {
+    const dir = realProject(TOML);
+    const secret = join(dir, "..", `${dir.split("/").pop()}-outside.txt`);
+    temps.push(secret);
+    writeFileSync(secret, "TOKEN=real-outside-secret-456\n");
+    mkdirSync(join(dir, ".fledge", "lanes"), { recursive: true });
+    symlinkSync(secret, join(dir, ".fledge", "lanes", "y.toml"));
+    for (const name of ["fledge-lanes-list", "fledge-lanes-validate"]) {
+      const r = await real(name, dir, []);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(JSON.stringify(r)).not.toContain("real-outside-secret-456");
+    }
   });
 
   test("corvidinho plugins run fledge-lanes-list lists this repo's verify lane", async () => {

@@ -1034,7 +1034,8 @@ Fledge itself SHALL be available as typed builtin plugin commands (PLUGIN-1),
 registered by `loadBuiltins` whether or not fledge is installed, next to the
 Fledge plugin bridge (`fledge-<command>`, REQ-plugins-112..113):
 `fledge-lanes-list` and `fledge-lanes-validate` SHALL be `dangerous: false`
-with `minTier` 0 (they only read the project's `fledge.toml`), and
+with `minTier` 0 (they only read the project's lane sources, `fledge.toml`
+and `.fledge/lanes/*.toml`), and
 `fledge-lanes-run` and `fledge-run` SHALL be `dangerous: true` with
 `minTier` 2 (they run the project's own commands), so a non-interactive run
 that has not allowlisted them is denied (SAFE-1), every run is audited
@@ -1064,7 +1065,14 @@ timeout (30 s for list / validate, 10 minutes for a run; exit 124),
 per-stream output caps, and its process group killed on timeout or the
 calling run's abort (exit 130); output SHALL be secret-scrubbed (SAFE-6).
 Fledge missing from every absolute PATH entry SHALL return ok=false, exit
-127, never a throw. A Fledge plugin command named `run`, `lanes-list`,
+127, never a throw. Because fledge prints the offending line of a lane source
+it cannot parse, before `fledge-lanes-list` or `fledge-lanes-validate` starts
+fledge each lane source that exists SHALL resolve (symlinks followed) to a
+regular file inside the real project root (`.fledge/lanes` to a directory
+there) whose path, as named and as resolved, is not a secret path (`.env*`,
+`.ssh`, keys, keystores), else the call SHALL be refused (exit 2, fledge not
+started) with the project-relative path and never the link target
+(ROLES-CHAT-8, as `files-read`); the lane and task runs are not clamped. A Fledge plugin command named `run`, `lanes-list`,
 `lanes-validate` or `lanes-run` SHALL be skipped by the Fledge plugin load
 with a reason (REQ-plugins-112) and the builtin SHALL keep the name. No new
 slash command, env var or config key.
@@ -1080,5 +1088,6 @@ Acceptance Criteria
 - A lane or task exiting 3 returns ok=false, exitCode 3 with fledge's output; a `sk-ant-…` key in the output is redacted; a run past a 200 ms timeout returns 124; an aborted calling run returns 130.
 - With no fledge on an absolute PATH entry each command returns ok=false, exit 127 `<name>: fledge not on PATH`; a relative PATH entry that leads to a fledge is not used.
 - A discovered Fledge plugin with commands `run`, `lanes-list` and `hello` registers only `fledge-hello`; `fledge-run` and `fledge-lanes-list` are skipped with `name already registered by builtin` and `plugins list` prints the skip line.
-- Where fledge is installed: a real project's lanes are listed, validated (a lane naming an undefined task is reported) and run, `fledge-run pwd` prints the project root, an unknown task is ok=false with fledge's error, and `corvidinho plugins run fledge-lanes-list --json` in this repo lists the `verify` lane.
+- `fledge.toml`, a `.fledge/lanes/*.toml` file or the `.fledge/lanes` dir linked outside the project, `fledge.toml` linked to `.env`, a `.fledge/lanes/.env.toml` and a `fledge.toml` directory are each refused by both reads (exit 2, `refused: <name>: <relative path> …`, neither the file's contents nor the link target in the result) and fledge never starts; links that stay inside the project, a non-`.toml` entry linked outside and a missing `fledge.toml` still reach fledge; the lane and task runs are not clamped.
+- Where fledge is installed: a real project's lanes are listed, validated (a lane naming an undefined task is reported) and run, `fledge-run pwd` prints the project root, an unknown task is ok=false with fledge's error, a `.fledge/lanes/y.toml` linked to a file outside the project is refused by both reads without its contents in the result, and `corvidinho plugins run fledge-lanes-list --json` in this repo lists the `verify` lane.
 
