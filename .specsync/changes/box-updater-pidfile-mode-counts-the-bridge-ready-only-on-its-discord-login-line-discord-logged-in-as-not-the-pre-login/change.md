@@ -1,6 +1,6 @@
 ---
 id: box-updater-pidfile-mode-counts-the-bridge-ready-only-on-its-discord-login-line-discord-logged-in-as-not-the-pre-login
-state: draft
+state: approved
 type: bug_fix
 base_commit: 0e6e8d26b983a31b5518bc7013f75d5513fd94ba
 ---
