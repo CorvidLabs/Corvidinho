@@ -41,6 +41,7 @@ files:
   - src/discord/message-router.ts
   - tests/discord.actor-gate.test.ts
   - tests/discord.forward-channel.test.ts
+  - tests/discord.thread-sessions-per-user.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
   - src/discord/presence.ts
@@ -178,7 +179,12 @@ custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
 in `discord_sessions.pending_ask` (schema v8). Button pending asks are NOT
 cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
 substantive continue. Message router keys sessions by Discord user id + channel
-(SESSION-MULTI-1); reply/thread continue only for the session owner.
+(SESSION-MULTI-1); reply/thread continue only for the session owner. The
+store's thread index (`SessionStore.byThreadUser`) is keyed by thread id +
+Discord user id: `getByThread(threadId, userId)` returns that user's session
+in the thread, and `getByThread(threadId)` the thread's most recently active
+one, whoever owns it; another user starting a session in the thread never
+replaces the first user's (DISCORD-2.a / SESSION-MULTI-1/2, REQ-discord-046).
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
 `/work` and `/session start` keep a clarify or stuck ask as their session's
 free-text `pendingAsk` (options dropped: the slash answer has no Choose
@@ -539,6 +545,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
 | 2026-09-27 | schedule-ask-outbox-delivery-re-checks-the-creator-and-channel-against-the-live-discord-schedule-3-gate: Schedule ask outbox delivery re-checks the creator and channel against the live DISCORD-SCHEDULE-3 gate |
+| 2026-09-27 | discord-thread-sessions-are-keyed-by-thread-user-so-a-second-user-starting-a-session-in-a-thread-never-takes-over-the: Discord thread sessions are keyed by (thread, user), so a second user starting a session in a thread never takes over the first user's plain-message continuation (SESSION-MULTI-1/2) |
 | 2026-09-27 | schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the: Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2) |
 | 2026-09-27 | discord-version-presence-rides-every-gateway-identify-via-the-client-presence-option-and-is-still-set-on-clientready: Discord version presence rides every gateway IDENTIFY via the Client presence option and is still set on ClientReady (DISCORD-12) |
 | 2026-09-27 | safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin: SAFE-5: /schedule delete appends audit rows before deleting a schedule and its run history, and fails closed like /admin when the audit trail is unavailable |

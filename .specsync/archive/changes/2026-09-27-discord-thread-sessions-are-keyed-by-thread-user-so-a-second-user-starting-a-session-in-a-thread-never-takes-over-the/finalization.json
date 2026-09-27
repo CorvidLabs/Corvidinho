@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-thread-sessions-are-keyed-by-thread-user-so-a-second-user-starting-a-session-in-a-thread-never-takes-over-the",
+  "implementation_commit": "569056a020412bc9b6dc0d6d639598a49e9d1cbe",
+  "implementation_tree": "f6f7dbde11febec0de4783ede5aac1e99630e7fd",
+  "contract_digest": "2b54993b7bd66b8f9c027e32e9683c0b8f4c013389f6e557b61346d4512a9431",
+  "workspace_digest": "9f597bb52fc215e61e68ac4f86a6f5399c3f3eb0a7a7e15a65e9c720642a1a18",
+  "closing_digest": "078e658d5d38575ee81277cfbeeead2768aebcbc9f23eb9cdc3aa2da4c6db2d4",
+  "review_digest": "2edbd72864d80fdfa33388ab7d5e9fab6e3d788b55bcf397f4041c12f01371d5",
+  "finalization_digest": "5265c6c038e07be289b09116c5cc95a8765a27baf14d29d86e73b15c2636c17f",
+  "timestamp": 1790533536
+}
