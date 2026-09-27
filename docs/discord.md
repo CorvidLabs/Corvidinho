@@ -98,7 +98,7 @@ flowchart TD
 
 ### Memory (no slash)
 
-MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite in the data dir (`CORVIDINHO_DATA_DIR`, default `~/.local/share/corvidinho/`; shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); no owner configured = nobody is ADMIN (IDENTITY-3). The acting user and ADMIN come only from the env the bridge sets per spawn (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`) — never from tool argv (`--user` / `--admin` / `--db` are refused). Forget/override are two-phase (**SAFE-4**): the first call returns a confirm token (no content); `--confirm TOKEN` must come from a new turn within 10 minutes, and the token must be typed by the human. Today they are **operator-only** (`corvidinho plugins run memory-forget …` with the acting env set): dangerous tools are not offered to the model, so a Discord chat cannot reach them. There is no Discord path for them; `/admin` (#43 / #147) covers allowlists only.
+MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite in the data dir (`CORVIDINHO_DATA_DIR`, default `~/.local/share/corvidinho/`; shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); no owner configured = nobody is ADMIN (IDENTITY-3). The acting user and ADMIN come only from the env the bridge sets per spawn (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`) — never from tool argv (`--user` / `--admin` / `--db` are refused). Forget/override are two-phase (**SAFE-4**): the first call returns a confirm token (no content); `--confirm TOKEN` must come from a new turn within 10 minutes, and the token must be typed by the human. They are dangerous, so the model is offered them only in the owner's (ADMIN) chat and only when `CORVIDINHO_ALLOWLIST` names them (CLI-3 / SAFE-1, [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.3); a non-owner's chat never gets them (ROLES-CHAT-2). The operator path `corvidinho plugins run memory-forget …` (with the acting env set) still works. There is no slash command for them; `/admin` (#43 / #147) covers allowlists only.
 
 ---
 
@@ -248,9 +248,10 @@ Steps run through the existing typed plugins (`git-commit` → `git-push` →
 `github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
 is built from the real diff against the remote default branch (name-status,
 diffstat, commits) plus the verify result, with repo/model text in code fences
-and secrets scrubbed. Allowlisting these plugins does not expose them to the
-spawned agent: `task run` leaves dangerous tools out of its catalog, so only this
-bridge step (and `corvidinho plugins run`) can use them.
+and secrets scrubbed. Allowlisting these plugins also offers them to the owner's
+spawned agent (`task run` offers allowlisted dangerous tools to ADMIN runs, CLI-3), so
+the model can commit, push or open a PR itself before the run's verify; this step
+still opens the PR only after verify passes. Non-owner runs never get them.
 
 
 ## Discord user lookup (IDENTITY-5 / DISCORD-13)

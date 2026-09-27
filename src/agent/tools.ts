@@ -1,6 +1,8 @@
 /**
  * Map registered plugins → OpenAI-compatible tool definitions (AGENT-3 flesh).
  * Runtime still enforces SAFE-1 dangerous deny via runPlugin.
+ * A dangerous plugin is offered only when the run's allowlist names it
+ * (SAFE-1 / CLI-3), never the SAFE-3-pending shell and runners.
  */
 
 import { isMutatingPlugin } from "../plugins/mutating.ts";
@@ -26,10 +28,49 @@ export type OpenAiToolDef = {
   };
 };
 
+/**
+ * Dangerous tools a task run never offers from the allowlist: the shell and
+ * the language runners (their cwd is a start dir, not a clamp) wait on Leif's
+ * SAFE-3 decision. `includeDangerous` (a test seam) still offers them.
+ */
+export const SAFE3_PENDING_TOOLS: ReadonlySet<string> = new Set([
+  "shell-exec",
+  "node-exec",
+  "python-exec",
+  "cargo-exec",
+]);
+
+/**
+ * True when the allowlist puts dangerous plugin `name` in the catalog
+ * (SAFE-1 / CLI-3): named in it and not SAFE-3 pending.
+ */
+export function allowlistOffers(
+  allowlist: ReadonlySet<string> | undefined,
+  name: string,
+): boolean {
+  return Boolean(allowlist?.has(name)) && !SAFE3_PENDING_TOOLS.has(name);
+}
+
+/**
+ * AGENT-4: a tool whose file edits no tool result reports (a Fledge command
+ * runs arbitrary project code; the shell and runners run commands). Without a
+ * git snapshot to diff, a run that called one verifies anyway.
+ */
+export function editsFilesUnreported(name: string): boolean {
+  if (SAFE3_PENDING_TOOLS.has(name)) return true;
+  return Boolean(get(name)?.origin?.startsWith("fledge:"));
+}
+
 export type BuildToolsOpts = {
   tier: CapabilityTier;
-  /** When false (default), omit dangerous plugins from the catalog entirely. */
+  /** When true, offer every dangerous plugin (test seam; no product caller). */
   includeDangerous?: boolean;
+  /**
+   * SAFE-1 / CLI-3: the run's allowlist. A dangerous plugin named here is
+   * offered (tier, role and SAFE-9 filters still apply), except
+   * {@link SAFE3_PENDING_TOOLS}; unnamed dangerous plugins stay out.
+   */
+  allowlist?: ReadonlySet<string>;
   /**
    * When false (non-ADMIN acting session), omit all mutating tools (ROLES-CHAT-2).
    * Default true when unset (local CLI / no role session).
@@ -44,15 +85,18 @@ export type BuildToolsOpts = {
 
 /**
  * Build the tools array for chat/completions.
- * Read tier → []. Dangerous plugins omitted unless includeDangerous;
- * autonomous extras omitted unless `autonomous` (SAFE-9).
+ * Read tier → []. Dangerous plugins omitted unless allowlisted (never the
+ * SAFE-3-pending ones) or includeDangerous; autonomous extras omitted unless
+ * `autonomous` (SAFE-9).
  */
 export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
   const includeDangerous = Boolean(opts.includeDangerous);
   const actingIsAdmin = opts.actingIsAdmin !== false;
   const out: OpenAiToolDef[] = [];
   for (const entry of list()) {
-    if (entry.dangerous && !includeDangerous) continue;
+    if (entry.dangerous && !includeDangerous && !allowlistOffers(opts.allowlist, entry.name)) {
+      continue;
+    }
     if (!actingIsAdmin && isMutatingPlugin(entry)) continue;
     if (!opts.autonomous && get(entry.name)?.autonomous) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;

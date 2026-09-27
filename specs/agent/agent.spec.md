@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 30
+version: 31
 status: draft
 files:
   - src/agent/types.ts
@@ -24,6 +24,7 @@ files:
   - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
+  - tests/agent.allowlisted-dangerous.test.ts
   - tests/agent.soft-land.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
@@ -204,6 +205,19 @@ max?)`, the lane output a retry sends the model. `runTask` builds
 the LLM execute (tool loop and read-tier chat) caps feedback with it instead
 of a head cut. No flag, env var or config key.
 
+Allowlisted dangerous tools (REQ-agent-501, CLI-3 / SAFE-1): `src/agent/tools.ts`
+exports `SAFE3_PENDING_TOOLS` (`shell-exec`, `node-exec`, `python-exec`,
+`cargo-exec`), `allowlistOffers(allowlist, name)` (named and not SAFE-3
+pending) and `editsFilesUnreported(name)` (a Fledge command or a SAFE-3-pending
+tool, REQ-agent-502). `BuildToolsOpts` gains `allowlist?: ReadonlySet<string>`;
+`createTaskExecute` passes its effective allowlist (the `allowlist` option,
+else `CORVIDINHO_ALLOWLIST`) and loads Fledge plugins when `includeDangerous`
+is set or the allowlist names a `fledge-*` command and the session is not a
+non-ADMIN role session (the ADMIN check runs first). `ExecuteResult` gains
+optional `unreportedEditTools?: string[]`; outside a role session, with a
+`fledge-*` command allowlisted, a `delegate` call that started a worker is
+named there too. No env var, config key, flag or slash command.
+
 ## Invariants
 
 The verify gate trusts the working tree, not only the tools (REQ-agent-085):
@@ -214,6 +228,18 @@ verify lane; a run ends `done` without verify
 only when no tool reported files and the real diff is empty. A diff git
 cannot read after a good snapshot verifies anyway (fail closed). The diff is
 read-only git plus in-process hashing: it never writes the index or objects.
+With no git snapshot (a non-git cwd, or an unreadable start snapshot), a run
+that called a tool whose edits no result reports (a Fledge command, or the
+shell / a runner, or a local run's `delegate` whose worker could have run an
+allowlisted Fledge command) verifies anyway, with one `Text` note per attempt
+naming the tools; other non-git runs keep tool-reported files only
+(REQ-agent-502).
+
+A task run offers the model a dangerous tool only when the run's allowlist
+names it (SAFE-1 consent, CLI-3), never `shell-exec` or the language runners
+until the SAFE-3 decision, and never to a non-ADMIN role session: the role,
+tier and SAFE-9 filters apply first, and every runtime gate still runs
+(REQ-agent-501). An empty allowlist gives the same catalog as before.
 
 A verify retry works from the failing step's output, not the start of the
 lane log (REQ-agent-002, AGENT-4.a). The runner's output is stdout then
@@ -382,6 +408,15 @@ model.
 - **When** the loop handles it
 - **Then** it drops the image message, puts `[image <path> could not be shown to this model]` in that image's tool message, retries once, and the run completes with the model's reply
 
+### Scenario: the owner asks for a PR review with the tool allowlisted
+
+- **Given** `CORVIDINHO_ALLOWLIST=github-pr-review` and an ADMIN (owner) run at tool tier
+- **When** the task run builds its tool catalog and the model calls `github-pr-review`
+- **Then** the tool is offered, the review goes through the GitHub plugin
+  (GITHUB-6 repo gate, SAFE-5 audit), and an unlisted `github-issue-create`
+  call is refused as not offered; a non-owner run with the same allowlist is
+  offered neither (REQ-agent-501)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -390,7 +425,9 @@ model.
 | Verify lane log over 4000 chars (passing steps such as the `--help` smoke fill its head) | the retry gets the failing step's name, its output (or its error lines and the end of the log) within 4000 chars, never the start of the log (REQ-agent-002, AGENT-4.a) |
 | Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
 | Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
-| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085) |
+| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a `fledge-*` command allowlisted), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
+| Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
+| `shell-exec`, `node-exec`, `python-exec` or `cargo-exec` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
@@ -471,3 +508,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
 | 2026-09-27 | verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first: Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85) |
 | 2026-09-27 | roles-chat-7-b-an-admin-role-session-s-github-pr-create-is-tested-safe-1-denies-it-without-an-allowlist-entry-github-6: ROLES-CHAT-7(b): an ADMIN role session's github-pr-create is tested: SAFE-1 denies it without an allowlist entry, GITHUB-6 still refuses an unlisted repo, and the dry-run PR goes through with the allowlist entry plus the GITHUB-6 repo allowlist |
+| 2026-09-27 | task-run-offers-allowlisted-dangerous-tools-to-the-model-a-dangerous-plugin-enters-the-catalog-only-when-corvidinho: Task run offers allowlisted dangerous tools to the model: a dangerous plugin enters the catalog only when CORVIDINHO_ALLOWLIST names it (tier, role and SAFE-9 filters unchanged); shell-exec and the node/python/cargo runners stay out pending the SAFE-3 decision; a non-git run whose Fledge command may have changed files verifies anyway (CLI-3, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3, AGENT-4) |
