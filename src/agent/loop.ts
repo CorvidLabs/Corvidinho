@@ -2,8 +2,11 @@
  * Prove-before-done task loop (Merlin agent-loop Verifying steal).
  * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5).
  * Verifying: fledge lanes run verify (includes spec-check when wired).
+ * The gate sees tool-reported files plus the real git working-tree diff
+ * (REQ-agent-085).
  */
 
+import { relative, resolve } from "node:path";
 import {
   blockedTaskResult,
   formatAskSummary,
@@ -12,12 +15,17 @@ import {
 import { loadAgentConfig } from "./config.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
 import { defaultVerifyRunner } from "./verify.ts";
+import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.ts";
 import type {
   AgentEvent,
   AgentState,
   RunTaskOptions,
   TaskResult,
+  WorkspaceDiffTracker,
 } from "./types.ts";
+
+/** Changed paths named in the gate's Text note before "…". */
+const UNREPORTED_PREVIEW = 5;
 
 function emit(
   onEvent: ((e: AgentEvent) => void) | undefined,
@@ -74,6 +82,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   // Output of the last failed verify, kept for the human-facing summary.
   let lastVerifyFailure: string | undefined;
   let retries = 0;
+  // Real-diff paths added to filesChanged so far (capped per run).
+  let realDiffAdded = 0;
 
   setState(onEvent, "planning");
   if (isAborted(signal)) {
@@ -109,6 +119,18 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       type: "Text",
       text: "Planning: ready to execute (pass task text for SpecSync briefing).",
     });
+  }
+
+  // AGENT-4 (REQ-agent-085): snapshot the git working tree before the first
+  // attempt so the gate also sees edits no tool reports. No git work tree
+  // (or an unreadable one) ⇒ null: tool-reported files only, as before.
+  let workspace: WorkspaceDiffTracker | null = null;
+  if (verifyBeforeComplete) {
+    try {
+      workspace = await (opts.workspaceDiff ?? startWorkspaceDiff)(opts.cwd);
+    } catch {
+      workspace = null;
+    }
   }
 
   for (;;) {
@@ -160,8 +182,57 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       };
     }
 
+    // AGENT-4 (REQ-agent-085): add the run's real git diff to the gate, so an
+    // edit made outside the file tools (code-tier shell-exec, a delegate
+    // worker, a commit through a shell) is verified too. A diff git cannot
+    // read after a good snapshot fails closed: verify runs.
+    let diffUnreadable = false;
+    if (workspace) {
+      let real: string[] | null;
+      try {
+        real = await workspace.changed();
+      } catch {
+        real = null;
+      }
+      if (isAborted(signal)) {
+        return cancelledResult(summary, filesChanged, attempts);
+      }
+      if (real === null) {
+        diffUnreadable = true;
+        emit(onEvent, {
+          type: "Text",
+          text: "Verify gate: could not read the git working-tree diff, so verifying anyway.",
+        });
+      } else {
+        const root = resolve(opts.cwd);
+        const reported = new Set(filesChanged.map((f) => relative(root, resolve(root, f))));
+        const unreported = real.filter((p) => !reported.has(p));
+        if (unreported.length > 0) {
+          const shown = unreported.slice(0, UNREPORTED_PREVIEW).join(", ");
+          const more = unreported.length > UNREPORTED_PREVIEW ? ", …" : "";
+          // Bounded so a huge diff (an install, a branch switch) cannot push
+          // the NDJSON result line past the parser cap and lose the reply.
+          // The gate is unaffected: filesChanged is non-empty either way.
+          const added = unreported.slice(
+            0,
+            Math.max(0, WORKSPACE_DIFF_MAX_FILES - realDiffAdded),
+          );
+          const capped =
+            added.length < unreported.length
+              ? `; ${added.length} of them listed in filesChanged`
+              : "";
+          emit(onEvent, {
+            type: "Text",
+            text: `Verify gate: the git working tree has ${unreported.length} changed path(s) no tool reported (${shown}${more})${capped}.`,
+          });
+          filesChanged = [...filesChanged, ...added];
+          realDiffAdded += added.length;
+        }
+      }
+    }
+
     const wantVerify =
-      verifyBeforeComplete && filesChanged.length > 0;
+      verifyBeforeComplete && (filesChanged.length > 0 || diffUnreadable);
 
     if (!wantVerify) {
       setState(onEvent, "done");
