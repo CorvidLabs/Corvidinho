@@ -4,6 +4,8 @@ version: 55
 status: draft
 files:
   - src/cli.ts
+  - src/doctor.ts
+  - tests/cli.doctor-truth.test.ts
   - src/version.ts
   - src/attribution.ts
   - src/daemon/daemon.ts
@@ -41,6 +43,13 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `readProcStart` | `pid: number` | `string or null` | Field 22 of /proc/<pid>/stat |
 | `createDaemonLogger` | `opts?: DaemonLoggerOptions` | `DaemonLogger` | JSON-line logger (scrubbed) |
 | `formatDaemonLogLine` | `level, event, fields?, now?` | `string` | One scrubbed JSON log line |
+| `loadDoctorAllowlist` | `env?, home?` | `Promise<DoctorAllowlist>` | Allowlists as the bridge / WATCH load them (file + env), plus the file-only and env-only halves; `ok: false` when the file does not load |
+| `discordChannelUsage` | `allow, env?` | `AllowlistUsage` | Bridge channel set (`mergeChannelIds`) minus deny-listed channels: listed / usable count and sources |
+| `githubRepoUsage` | `allow` | `AllowlistUsage` | WATCH repo set (`expandWatchRepos`) minus deny-listed repos / orgs: listed / usable count and sources |
+| `discordDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `discord` line (token + usable channels, source named) |
+| `githubWatchDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `github-watch` line (token + username + usable repos, source named) |
+| `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
+| `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 
 ### Exported Constants
 
@@ -62,11 +71,14 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `StartDaemonOptions` / `StartDaemonResult` / `DaemonStopSummary` | Daemon start/stop contract (test seams: agent, db, poll, grace, lock) |
 | `DaemonLock` / `DaemonLockHolder` / `AcquireDaemonLockOptions` / `AcquireDaemonLockResult` | Single-instance lock |
 | `DaemonLogger` / `DaemonLogLevel` / `DaemonLogFields` / `DaemonLoggerOptions` | JSON-line logger |
+| `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
+| `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, usable-entry count and source (`file` / `env`) |
 
 ## Invariants
 
 task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
+doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `discord` and `github-watch` checks load allowlists through the bridge / WATCH loader (allowlist file + env overlays, `mergeChannelIds` / `expandWatchRepos`), drop deny-listed entries (deny wins), and name the source (`file`, `env`, `file + env`) and count, never ids, repos or tokens; a file that does not load fails both. The `llm` line is `ok` with `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (value not shown) and `warn` (task run uses the demo stub) without, never changing the exit code. The `data-dir` line probes the shared data dir with a temp dir it removes: `ok` exists + writable, `info` missing but creatable (not created), `fail` otherwise (exit 1).
 Attribution output uses only the project name and repository link and contains no account handle.
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning stays pending for a bridge to deliver.
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
@@ -92,6 +104,10 @@ doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info`
 | Unknown command | Print error + help; exit 1 |
 | Attribution command | Print the canonical markdown footer; exit 0 |
 | Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
+| Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
+| Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
+| Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor: data dir not a directory, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Task verify exhausted | Exit 1; JSON verified false |
 | Daemon lock held by a live daemon | `daemon.lock_held` log line; exit 1 |
 | Daemon `CORVIDINHO_BIN` protocol mismatch | `daemon.protocol_mismatch` log line; lock released; exit 1 |
