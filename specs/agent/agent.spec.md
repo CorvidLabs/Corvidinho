@@ -226,6 +226,15 @@ consented tool such as `git-commit` (SAFE-1), changes what later runs see. A
 symlinks are followed only as paths inside the commit, never through the
 filesystem.
 
+The Planning SpecSync briefing reaches the model on every execute attempt
+(`ExecuteContext.specBriefing`, AGENT-2 / REQ-agent-004) in the user message,
+never the system prompt: spec files are working-tree data, so the block is
+labelled as project data, fenced, SAFE-6 scrubbed and capped at 8000 chars.
+Planning selects modules from the request only (`planningSelectionText`):
+`[Corvidinho …]` context paragraphs (Discord identity and memory) and all-caps
+line labels such as `[WATCH <kind>]` do not count, so a bridge wrapper cannot
+pick a module the request never names.
+
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
 An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
@@ -331,6 +340,8 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is: Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted |
 | 2026-09-26 | discord-ask-ephemeral-buttons-session-multi: ask-human options + ask-options parse for DISCORD-ASK buttons |
 | 2026-09-26 | discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22: DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22 |
+| 2026-09-26 | planning-specsync-briefing-reaches-the-model-runtask-passes-the-loaded-spec-constraints-and-companions-to-every-execute: Planning SpecSync briefing reaches the model: runTask passes the loaded spec constraints and companions to every execute attempt and the LLM user message carries them fenced as project data (AGENT-2, SPECSYNC-1/5) |
+| 2026-09-27 | planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened: Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened |
 | 2026-09-26 | safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend: SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask |
 | 2026-09-27 | agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a: Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary |
 | 2026-09-26 | task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out: Task run stops on SIGINT/SIGTERM with a cancelled result and a stopped verify lane, and a stalled LLM request times out (agent-loop-4) |

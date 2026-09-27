@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   extractConstraintSections,
   loadRelevantSpecs,
+  planningSelectionText,
   selectRelevantSpecs,
 } from "../src/agent/specLoader.ts";
 
@@ -76,5 +77,29 @@ ignore me
     });
     expect(text).toContain("# Spec: agent");
     expect(text).toContain("## Purpose");
+  });
+
+  test("planningSelectionText drops bridge context, keeps the request", () => {
+    const discord =
+      "[Corvidinho memory for this Discord user — use these facts]\n- person/tone: short discord replies\n\n" +
+      "[Corvidinho acting Discord user — use these facts]\n- discord_user_id: 42\n\n" +
+      "fix the agent loop retry";
+    const text = planningSelectionText(discord);
+    expect(text).toBe("fix the agent loop retry");
+    expect(selectRelevantSpecs(text, ["agent", "discord"], 3).map((p) => p.name)).toEqual([
+      "agent",
+    ]);
+
+    const watch = planningSelectionText(
+      "[WATCH issue_comment] org/repo#1 by @x\nTitle: plugins crash\n\n[image: discord.png (image/png)]",
+    );
+    expect(watch).toContain("org/repo#1 by @x");
+    expect(watch).toContain("Title: plugins crash");
+    expect(watch).not.toContain("WATCH");
+    // Lower-case brackets are the human's own text and still count.
+    expect(watch).toContain("[image: discord.png");
+
+    const plain = "Refactor the agent loop and plugins tools";
+    expect(planningSelectionText(plain)).toBe(plain);
   });
 });
