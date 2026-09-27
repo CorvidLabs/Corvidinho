@@ -1,0 +1,41 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790469623,
+      "digest": "35484cb946a607969e5ad2b25bff81bc329df267aeba42dd4522c74377f2c0cd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted",
+        "title": "Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1)",
+        "description": "Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/discord/gateway.ts",
+          "src/discord/message-router.ts",
+          "tests/discord.forward-channel.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A message in a non-allowlisted channel that references a tracked bot message from an allowlisted channel (a Discord forward, or any reference) is silent: no session continue, no agent spawn, no embed/edit/reply posted there. The gateway drops forward-type references and references whose channel is not the message's own channel (or its thread parent). A reply in the same allowlisted channel still continues the session, and a thread under an allowlisted parent still continues its session."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "73f572519c9b562e576fc82675b5d38a2aa93941c8db2c03ddfc69be0a66a016"
+      }
+    }
+  ],
+  "reopenings": []
+}
