@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and",
+  "slug": "audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and",
+  "title": "Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6)",
+  "description": "Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "05b269af23ea2be9e9c41966f6cf9ee41dfeac02",
+  "created_at": 1790466094,
+  "updated_at": 1790466525,
+  "affected_specs": [
+    "plugins",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/audit/log.ts",
+    "src/store/scrub.ts",
+    "tests/store.busy-lock.test.ts",
+    "specs/plugins"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "While another process holds the shared DB write lock and then commits, appendAudit (SAFE-5 dangerous-run rows) and rescrubDatabase (SAFE-6 re-scrub) wait under busy_timeout and succeed instead of failing at once with database is locked; the waiting audit row links to the other writer's row and the chain verifies"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}
