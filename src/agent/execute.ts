@@ -104,12 +104,19 @@ const SPEC_BRIEFING_HEADER =
 function renderSpecBriefing(briefing: string | undefined): string {
   const text = briefing?.trim() ?? "";
   if (!text) return "";
+  // `</ specsync-briefing>` and other spaced forms read as a close tag too.
   let body = scrubSecrets(text).replace(
-    /<\/specsync-briefing/gi,
+    /<\s*\/\s*specsync-briefing/gi,
     "<\\/specsync-briefing",
   );
   if (body.length > SPEC_BRIEFING_MAX_CHARS) {
-    body = `${body.slice(0, SPEC_BRIEFING_MAX_CHARS)}\n[SpecSync briefing truncated at ${SPEC_BRIEFING_MAX_CHARS} chars]`;
+    // Never end on half a surrogate pair: a lone surrogate is not valid Unicode.
+    const high = body.charCodeAt(SPEC_BRIEFING_MAX_CHARS - 1);
+    const cut =
+      high >= 0xd800 && high <= 0xdbff
+        ? SPEC_BRIEFING_MAX_CHARS - 1
+        : SPEC_BRIEFING_MAX_CHARS;
+    body = `${body.slice(0, cut)}\n[SpecSync briefing truncated at ${SPEC_BRIEFING_MAX_CHARS} chars]`;
   }
   return `\n\n${SPEC_BRIEFING_HEADER}\n\n<specsync-briefing>\n${body}\n</specsync-briefing>`;
 }

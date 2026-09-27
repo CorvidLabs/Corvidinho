@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790467795,
+      "digest": "1f7d7e92af729b9b3de886facffe844527917d15c970cae1a0f140c473a2e64e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened",
+        "title": "Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened",
+        "description": "Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/specLoader.ts",
+          "tests/agent.execute.test.ts",
+          "tests/specLoader.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A Discord chat whose request names no module gets no SpecSync briefing even though the identity and memory blocks say Discord, and a WATCH run whose header says WATCH gets no watch briefing; a request that names a module still gets its briefing; a spaced close tag such as </ specsync-briefing > in a spec cannot end the fence; the 8000-char cap never leaves half a surrogate pair"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "b9cf39f1fe8bad3b768a500756674156e00b66262f3814d83636c20895639ffa"
+      }
+    }
+  ],
+  "reopenings": []
+}

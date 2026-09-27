@@ -169,6 +169,10 @@ The Planning SpecSync briefing reaches the model on every execute attempt
 (`ExecuteContext.specBriefing`, AGENT-2 / REQ-agent-004) in the user message,
 never the system prompt: spec files are working-tree data, so the block is
 labelled as project data, fenced, SAFE-6 scrubbed and capped at 8000 chars.
+Planning selects modules from the request only (`planningSelectionText`):
+`[Corvidinho …]` context paragraphs (Discord identity and memory) and all-caps
+line labels such as `[WATCH <kind>]` do not count, so a bridge wrapper cannot
+pick a module the request never names.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
