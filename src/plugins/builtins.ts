@@ -1,6 +1,7 @@
 import { loadAutonomousPlugins } from "../../plugins/autonomous/index.ts";
 import { loadDiscordPlugins } from "../../plugins/discord/index.ts";
 import { loadFilesPlugins } from "../../plugins/files/index.ts";
+import { loadFledgeCorePlugins } from "../../plugins/fledge/index.ts";
 import { loadGitPlugins } from "../../plugins/git/index.ts";
 import { loadGithubPlugins } from "../../plugins/github/index.ts";
 import { loadMemoryPlugins } from "../../plugins/memory/index.ts";
@@ -29,6 +30,8 @@ export function loadBuiltins(): void {
   loadRunnerPlugins();
   loadWebPlugins();
   loadGitPlugins();
+  // PLUGIN-1: Fledge itself (lanes list/validate/run, run <task>) as typed commands.
+  loadFledgeCorePlugins();
   loadAutonomousPlugins();
   loaded = true;
 }

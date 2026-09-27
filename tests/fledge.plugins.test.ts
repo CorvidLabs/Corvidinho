@@ -559,7 +559,11 @@ describe("tool loop can call a Fledge plugin when dangerous tools are offered", 
       maxToolRounds: 2,
     });
     await exec({ attempt: 1, signal: new AbortController().signal });
-    expect(offered.some((n) => n.startsWith("fledge-"))).toBe(false);
+    // No Fledge plugin command; only the read-only Fledge core builtins (PLUGIN-1, REQ-plugins-461).
+    expect(offered.filter((n) => n.startsWith("fledge-")).sort()).toEqual([
+      "fledge-lanes-list",
+      "fledge-lanes-validate",
+    ]);
     expect(get("fledge-hello")).toBeUndefined();
   });
 });

@@ -5,6 +5,7 @@
  */
 
 import type { AskOption } from "../agent/types.ts";
+import { scrubSecrets } from "../store/scrub.ts";
 
 /** Discord allows ≤5 buttons per ActionRow; we use one row. */
 export const ASK_OPTIONS_MAX = 5;
@@ -58,7 +59,12 @@ export function normalizeAskOptions(raw: unknown): AskOption[] | undefined {
         typeof rec.id === "string" && rec.id.trim()
           ? rec.id.trim().slice(0, 32)
           : String(i + 1);
-      const id = idRaw.replace(/[^a-zA-Z0-9_-]/g, "") || String(i + 1);
+      const cleanId = idRaw.replace(/[^a-zA-Z0-9_-]/g, "");
+      // The id rides in the button custom_id and is stored with the open ask
+      // (discord_sessions.pending_ask), where it must stay byte-identical for
+      // the button to work after a restart. So one that looks like a secret
+      // falls back to its position instead of being redacted at rest (SAFE-6).
+      const id = cleanId && scrubSecrets(cleanId) === cleanId ? cleanId : String(i + 1);
       const o = toOption(id, label);
       if (o) out.push(o);
     }

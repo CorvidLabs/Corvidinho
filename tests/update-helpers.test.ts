@@ -158,6 +158,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.32", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.32`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Fledge itself is a set of typed plugin commands");
+    expect(r.stdout).toContain("The final answer keeps the model and run state in a small footer");
+  });
+
   test("extract_changelog_section finds 0.0.31", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.31`,
@@ -871,10 +880,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.31", () => {
+  test("package.json is 0.0.32", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.31");
+    expect(pkg.version).toBe("0.0.32");
   });
 });

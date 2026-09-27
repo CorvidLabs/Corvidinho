@@ -1,6 +1,8 @@
 /**
  * Register the project's Fledge plugins as Corvidinho plugin commands
  * (FLEDGE-4 / PLUGIN-3): no Corvidinho release needed for a new Fledge plugin.
+ * Fledge's own commands (lanes list / validate / run, run <task>) are typed
+ * builtins in core.ts (PLUGIN-1), loaded with the other builtins.
  *
  * Async and lazy — only `plugins list`, `plugins run fledge-*` and the tool
  * loop (when dangerous tools are offered) pay for the fledge subprocess.
@@ -137,6 +139,11 @@ export function fledgeStatusLines(report: FledgeLoadReport): string[] {
   return lines;
 }
 
+export {
+  FLEDGE_CORE_COMMAND_NAMES,
+  fledgeCoreCommands,
+  loadFledgeCorePlugins,
+} from "./core.ts";
 export { discoverFledgePlugins } from "./discover.ts";
 export type { FledgeDiscovery, FledgePluginInfo } from "./discover.ts";
 export {

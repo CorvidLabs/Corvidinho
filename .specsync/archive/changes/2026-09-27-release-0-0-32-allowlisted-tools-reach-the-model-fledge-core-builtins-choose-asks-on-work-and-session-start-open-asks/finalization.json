@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-32-allowlisted-tools-reach-the-model-fledge-core-builtins-choose-asks-on-work-and-session-start-open-asks",
+  "implementation_commit": "5105cf8585683031c36e92158337d720645b44fb",
+  "implementation_tree": "2b53cf1716dd524319533f0eab2476474f29b9c2",
+  "contract_digest": "90b5f02dcfd523bebea2a75079076a34c616bfd98ee198fd9fcb886a3bdcaaf6",
+  "workspace_digest": "0c8eebec7189f1f68d781144e0b0c1ef72bbc5bdcc1c169a313267af1d1e04b3",
+  "closing_digest": "7f952eabbd3c2bdbe626a6c70e36e0748722cb759a1511d49a9856cf5fefd460",
+  "review_digest": "61044dbdeebcfcabb1ff34a7ed44a508a6736627afe2d941257b2511025293d1",
+  "finalization_digest": "d95df5b187cf4ee42c745acc11a27a85e801fe3d649fde33be370a6e3825b0a1",
+  "timestamp": 1790541903
+}
