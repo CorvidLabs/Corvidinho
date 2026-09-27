@@ -70,3 +70,18 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and the dry path (no reply surface) also delete it; a reply collapsed before
   a restart leaves nothing to recover, and a crash mid button pick marks the
   reused Choose stub interrupted.
+
+## Schedule runs never stuck (REQ-discord-346)
+
+- `tests/scheduler.never-stuck.test.ts` — a `markRunFinished` that throws
+  once is retried (row `completed`, one `ok: true` event, "retrying once"
+  logged); one that throws twice logs `[scheduler] run failed: could not
+  record run …` and reports the run failed; bridge `stop()` with a real spawn
+  client and a fake `sh` agent records the in-flight run `failed`
+  (`interrupted: bridge shutdown`), kills the agent and removes its worktree
+  and branch; bridge start after a `kill -9` of a child process that was
+  running a schedule run fails it (`interrupted: process restarted`) and
+  removes its worktree, while a live child's run, worktree and branch stay;
+  a claimed run records `<pid>:<proc start>` and a v9 DB migrates to v10 with
+  its old `running` row recovered. Temp git repos and SQLite files, no live
+  Discord.

@@ -67,12 +67,20 @@ On SIGTERM or SIGINT the daemon:
 1. stops ticking;
 2. waits up to 30 s for in-flight runs;
 3. records any runs still going as failed (`interrupted: daemon shutdown`), so
-   history never shows a run stuck at "running";
-4. removes the lock and exits **0**.
+   history never shows a run stuck at "running", and kills their agents;
+4. waits up to 3 s more for those runs to remove their worktree (a `talk/`
+   branch with commits of its own is kept);
+5. removes the lock and exits **0**.
 
-A second signal skips the rest of the wait. Under systemd the stop signal goes
-to the whole control group, so a spawned `task run` gets it too and usually
-finishes inside the wait.
+A second signal skips the rest of the 30 s wait (not the 3 s worktree
+cleanup). Under systemd the stop signal goes to the whole control group, so a
+spawned `task run` gets it too and usually finishes inside the wait.
+
+On start, before the first tick, the daemon (like the Discord bridge) records
+runs a dead process left "running" (for example after `kill -9`) as failed
+(`interrupted: process restarted`) and removes leftover schedule-run
+worktrees, again keeping any branch with commits. Runs that another live
+bridge or daemon on the same data dir is still running are left alone.
 
 ## Logs
 
@@ -91,6 +99,7 @@ scrubbed for secrets (SAFE-6).
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first. |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
+| `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |
 | `daemon.stopping` / `daemon.abandoned` / `daemon.stopped` | Shutdown steps |
 
 ```bash
