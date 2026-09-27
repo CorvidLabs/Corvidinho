@@ -24,7 +24,8 @@ import {
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
-import type { EditMessageOpts, ThinkingOutbound } from "../src/discord/thinking-status.ts";
+import { finishSlashWithOwnerNotice } from "../src/discord/spend-post.ts";
+import { ThinkingStatus, type EditMessageOpts, type ThinkingOutbound } from "../src/discord/thinking-status.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 
 const OWNER_ID = "111122223333444455";
@@ -355,6 +356,46 @@ describe("chat and button-pick answers collapsed into the thinking message", () 
     await result.stop();
   });
 
+  test("in a thread: the ping goes to the thread and replies to the collapsed answer there", async () => {
+    const { result, handlers, replies, finals } = await bridgeWith(askAgent(CLARIFY));
+    await handlers.onMessage({ ...MENTION, threadId: "thread-1" });
+    expect(finals).toHaveLength(1);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.channelId).toBe("thread-1");
+    expect(replies[0]!.replyToMessageId).toBe(finals[0]!.messageId);
+    expectExactPing(replies[0]!, [REQUESTER_ID]);
+    await result.stop();
+  });
+
+  test("replying to the ping answers the clarify; a resumed run that gets stuck pings the owner once, replying to its own answer", async () => {
+    let n = 0;
+    const agent = askAgent(() => {
+      n += 1;
+      return n === 1 ? CLARIFY : STUCK;
+    });
+    const { result, handlers, replies, finals } = await bridgeWith(agent);
+    await handlers.onMessage(MENTION);
+    expect(replies).toHaveLength(1);
+    const session = result.store.list()[0]!;
+    expect(session.pendingAsk?.question).toBe(CLARIFY.question);
+    await handlers.onMessage({
+      ...MENTION,
+      id: "m2",
+      content: "Use SQLite",
+      mentionedBot: false,
+      referencedMessageId: "bot_1",
+    });
+    expect(n).toBe(2);
+    expect(result.store.list()).toHaveLength(1);
+    expect(finals).toHaveLength(2);
+    expect(finals[1]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(replies).toHaveLength(2);
+    expect(replies[1]!.content).toBe(NEEDS);
+    expect(replies[1]!.replyToMessageId).toBe(finals[1]!.messageId);
+    expectExactPing(replies[1]!, [OWNER_ID]);
+    await result.stop();
+  });
+
   test("button pick answered without mentions adds no post", async () => {
     let n = 0;
     const agent: AgentClient = {
@@ -456,6 +497,40 @@ describe("slash answers collapsed into the thinking message (/work, /session sta
     expect(replies[0]!.content).toBe(NEEDS);
     expectExactPing(replies[0]!, [OWNER_ID]);
     await result.stop();
+  });
+
+  test("a collapsed slash answer whose deferred reply cannot be resolved still gets its ping; the error is re-thrown", async () => {
+    const { outbound, finals } = thinkingOutbound(true);
+    const thinking = new ThinkingStatus({ outbound, channelId: "chan-1", sessionId: "s1", debounceMs: 0, tickMs: 60_000 });
+    await thinking.start({ description: "Work" });
+    const { ix } = slashInteraction("work", { description: "add storage" });
+    ix.deleteReply = async () => {
+      throw new Error("Unknown interaction");
+    };
+    const posts: Reply[] = [];
+    const tracked: string[] = [];
+    await expect(
+      finishSlashWithOwnerNotice({
+        thinking,
+        interaction: ix,
+        sessionId: "s1",
+        trackBotMessage: (id) => void tracked.push(id),
+        ok: true,
+        body: `❓ I need your input before I can continue. <@${REQUESTER_ID}>`,
+        mentionUserIds: [REQUESTER_ID],
+        notice: null,
+        post: async (p) => {
+          posts.push(p);
+          return { messageId: "ping_1" };
+        },
+      }),
+    ).rejects.toThrow("Unknown interaction");
+    expect(finals).toHaveLength(1);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.content).toBe(QUESTION);
+    expect(posts[0]!.replyToMessageId).toBe(finals[0]!.messageId);
+    expectExactPing(posts[0]!, [REQUESTER_ID]);
+    expect(tracked).toEqual([finals[0]!.messageId, "ping_1"]);
   });
 
   test("slash fallback (no collapse): the deferred reply carries the answer and no ping post is added", async () => {
