@@ -7,11 +7,11 @@
   "title": "Release 0.0.26: spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup",
   "description": "Release 0.0.26: spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd",
   "created_at": 1790469451,
-  "updated_at": 1790469460,
+  "updated_at": 1790469470,
   "affected_specs": [
     "cli"
   ],

@@ -1,6 +1,6 @@
 ---
 id: release-0-0-26-spend-cap-warn-ask-crash-restart-recovery-allowlist-fail-closed-safe-3-clamp-watch-dedup
-state: implementing
+state: archived
 type: operations
 base_commit: 3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd
 ---
