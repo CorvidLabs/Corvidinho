@@ -79,6 +79,18 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   (`/session start` and `/work`); collapse assertions in ask-ping, spend and
   inflight-replies tests expect the footer-only embed (no live Discord).
 
+## Button-pick resume identity (REQ-discord-446, IDENTITY-4)
+
+- `tests/discord.identity-pick.test.ts` — through `startBridge` with a fake
+  gateway and a recording agent: a non-owner's pick resume carries
+  `display_name` from the press's Discord display name, or its username when
+  there is none; the owner's pick keeps the owner map display and role line;
+  a pick with no names known injects the id only. `componentActorNames` maps
+  member display → nickname → global name → user display and the username,
+  trimmed, blank as undefined. A button press emitted on the live gateway's
+  client (real `login`, socket connect stubbed) reaches `onComponent` with the
+  presser's names, or neither when none is known (no live Discord).
+
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
 - `tests/discord.inflight-replies.test.ts` — schema v9 table + v8→v9

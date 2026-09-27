@@ -1081,8 +1081,12 @@ export async function startBridge(
         let result;
         try {
           let enrichedPrompt = agentPrompt;
+          // IDENTITY-4 / REQ-discord-446 — the presser's Discord names, as on
+          // the chat path (the presser is the session's user, checked above).
           const idInject = enrichPromptWithIdentity(enrichedPrompt, {
             userId: interaction.userId,
+            displayName: interaction.userDisplayName,
+            username: interaction.userUsername,
             owner: config.owner ?? null,
           });
           if (idInject.injected) enrichedPrompt = idInject.prompt;
