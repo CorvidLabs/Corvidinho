@@ -23,3 +23,12 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
 ## discord-user-lookup (REQ-plugins-312)
 
 `tests/discord.user-lookup.test.ts` — see also discord testing companion.
+
+## files-read image mode (REQ-plugins-427, DISCORD-9)
+
+`tests/files.plugins.test.ts` ("files-read image mode") — real 1x1 PNG in a
+mkdtemp cwd: image metadata with no `content`, `result.image` base64
+round-trips, stringified result < 1 KB with no U+FFFD; JPEG / GIF / WebP heads
+sniffed whatever the name, a text `.png` stays text; > 20 MB refused (sparse
+file), exactly 20 MB read; text read unchanged; path clamp and ROLES-CHAT-8
+secret gate still refuse first. No network.

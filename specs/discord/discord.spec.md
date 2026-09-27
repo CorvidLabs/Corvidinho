@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 70
+version: 71
 status: draft
 files:
   - src/discord/types.ts
@@ -300,7 +300,9 @@ outbound post with requesting_user_id verifies requester channel perms;
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
-file tools can open them (REQ-discord-013); protocol mismatch hard-fails start,
+file tools can open them, and opening one with `files-read` hands the model
+the image itself as an image part, not decoded bytes (REQ-discord-013,
+REQ-plugins-427 / REQ-agent-428); protocol mismatch hard-fails start,
 unverifiable soft-continues; `.ts` bins always bun-invoked for protocol and agent spawn;
 Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
@@ -485,3 +487,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write: Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree |
 | 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |
 | 2026-09-27 | replying-to-a-session-start-or-work-answer-continues-that-session-discord-2: Replying to a /session start or /work answer continues that session (DISCORD-2) |
+| 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
