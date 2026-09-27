@@ -56,8 +56,9 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 - **Spawn outcome log (WATCH-RELIABILITY-2):** each spawn emits structured  
   `[watch] spawn start …` / `[watch] spawn outcome event=… exit=… error_class=… duration_ms=…`  
   and appends a JSONL record (default `<data dir>/watch-spawn.jsonl` — data dir = `CORVIDINHO_DATA_DIR` or `~/.local/share/corvidinho`; override `CORVIDINHO_WATCH_SPAWN_LOG`) so ops can read outcomes without Discord.
-- **GitHub 403 rate-limit backoff (WATCH-RELIABILITY-3):** on 403 rate-limit (or 429), WATCH backs off using `Retry-After` or `x-ratelimit-reset`, else a documented **60s** default; skips tight re-poll while backing off; logs  
-  `[watch] github rate-limit backoff ms=… until=… reason=…`.
+- **GitHub 403 rate-limit backoff (WATCH-RELIABILITY-3):** on 403 rate-limit (or 429) from the poll fetch, the auto-ack comment or the run-summary comment, WATCH backs off using `Retry-After` or `x-ratelimit-reset`, else a documented **60s** default; skips tight re-poll while backing off; logs  
+  `[watch] github rate-limit backoff ms=… until=… reason=…`  
+  (for a comment, right after its `[watch] ack failed …` / `[watch] summary failed …` line). A plain 403 on a comment (no rate-limit signal) only logs the failure. A failed ack or summary is not retried.
 - **GitHub 401 (bad or revoked token, REQ-watch-418):** WATCH stops polling instead of retrying forever, logs one line  
   `[watch] github auth failed (401): … — check GITHUB_TOKEN / GH_TOKEN; watch stopped`  
   and `corvidinho github watch` exits 1. Other poll errors print one scrubbed line each (`[watch] pollOnce error: …`, SAFE-6) and polling continues.

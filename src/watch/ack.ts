@@ -6,6 +6,7 @@
 import { Octokit } from "@octokit/rest";
 import { attribution } from "../attribution.ts";
 import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
+import type { RateLimitHeaders } from "./rate-limit.ts";
 import type { DetectedEvent } from "./types.ts";
 
 export const ACK_START =
@@ -46,6 +47,13 @@ export type AckCommentResult = {
   id?: number;
   url?: string;
   error?: string;
+  /**
+   * HTTP status of a failed post and its rate-limit headers (`retry-after`,
+   * `x-ratelimit-remaining`, `x-ratelimit-reset`), so the poller can back off
+   * on a 403/429 rate limit (WATCH-RELIABILITY-3).
+   */
+  status?: number;
+  headers?: RateLimitHeaders;
 };
 
 export type AckClient = {
@@ -103,13 +111,46 @@ export function createOctokitAckClient(token: string): AckClient {
           url: res.data.html_url,
         };
       } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        };
+        return commentFailure(e);
       }
     },
   };
+}
+
+const RATE_LIMIT_HEADER_NAMES = [
+  "retry-after",
+  "x-ratelimit-remaining",
+  "x-ratelimit-reset",
+] as const;
+
+/**
+ * Failed-post result from a thrown Octokit error: the message plus the HTTP
+ * status and only the rate-limit headers (WATCH-RELIABILITY-3).
+ */
+function commentFailure(e: unknown): AckCommentResult {
+  const out: AckCommentResult = {
+    ok: false,
+    error: e instanceof Error ? e.message : String(e),
+  };
+  if (!e || typeof e !== "object") return out;
+  const err = e as {
+    status?: unknown;
+    headers?: unknown;
+    response?: { status?: unknown; headers?: unknown };
+  };
+  const status = err.status ?? err.response?.status;
+  if (typeof status === "number") out.status = status;
+  const raw = err.response?.headers ?? err.headers;
+  if (raw && typeof raw === "object") {
+    const headers: RateLimitHeaders = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const name = k.toLowerCase();
+      if (!(RATE_LIMIT_HEADER_NAMES as readonly string[]).includes(name)) continue;
+      if (typeof v === "string" || typeof v === "number") headers[name] = String(v);
+    }
+    if (Object.keys(headers).length > 0) out.headers = headers;
+  }
+  return out;
 }
 
 /**
@@ -150,8 +191,14 @@ export async function maybePostWatchAck(opts: {
   ackClient: AckClient;
   acked: AckedIdStore;
   log?: (msg: string) => void;
+  /**
+   * Called with the failed post result after the `ack failed` line; the
+   * poller uses it for rate-limit backoff (WATCH-RELIABILITY-3).
+   */
+  onPostFailed?: (res: AckCommentResult) => void;
 }): Promise<AckAttemptResult> {
-  const { event, kind, mentionUsername, ackClient, acked, log } = opts;
+  const { event, kind, mentionUsername, ackClient, acked, log, onPostFailed } =
+    opts;
   if (!shouldAckEvent(event, mentionUsername)) {
     return { attempted: false, posted: false };
   }
@@ -187,5 +234,6 @@ export async function maybePostWatchAck(opts: {
     return { attempted: true, posted: true };
   }
   log?.(`[watch] ack failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`);
+  onPostFailed?.(res);
   return { attempted: true, posted: false };
 }

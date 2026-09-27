@@ -54,7 +54,11 @@ summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
 SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
 rate-limit helpers (parseGithubRateLimit, GithubRateLimitError,
 computeRateLimitBackoffMs), `StartWatchResult.fatal` / `WatchFatal`
-(REQ-watch-418).
+(REQ-watch-418). A failed `AckCommentResult` carries the HTTP `status` and the
+rate-limit `headers` (`retry-after`, `x-ratelimit-remaining`,
+`x-ratelimit-reset`) of the failed post; `maybePostWatchAck` /
+`maybePostWatchSummary` take an optional `onPostFailed(res)` called after the
+`ack failed` / `summary failed` line (REQ-watch-011).
 
 ## Invariants
 
@@ -67,8 +71,10 @@ no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 run summary at most once per event id and only after successful auto-ack;
-spawn outcomes logged structurally and appended to durable JSONL; on GitHub
-403 rate-limit back off via Retry-After/reset (default 60s) without tight loop;
+spawn outcomes logged structurally and appended to durable JSONL; on a GitHub
+403/429 rate-limit on the poll fetch, the auto-ack or the run-summary comment
+back off via Retry-After/reset (default 60s) before the next poll cycle without
+tight loop;
 WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
 `CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
 user (REQ-watch-008). With a DB, WATCH sessions reload on restart; a session
@@ -92,7 +98,8 @@ empty repos refuse start cleanly; poll cycle logs six counters; mention/comment
 start/continue posts ack unless sender is watch username or already acked;
 own-username comment omitted from events; after successful ack + spawn finish,
 summary comment once per event id; spawn start/outcome log + JSONL row; 403
-rate-limit schedules backoff and skips tight re-poll. Poller restarted on the
+rate-limit on the fetch, the ack or the summary comment schedules backoff and
+skips tight re-poll; a plain 403 on a comment logs the failure only. Poller restarted on the
 same data dir continues the same issue session; issue idle past TTL →
 start_session with a new id.
 
