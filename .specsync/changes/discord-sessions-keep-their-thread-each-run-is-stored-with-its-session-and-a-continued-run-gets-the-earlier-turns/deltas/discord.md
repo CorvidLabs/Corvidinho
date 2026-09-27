@@ -37,8 +37,9 @@ block SHALL open with a `[Corvidinho …]` header and hold no blank line
 (blank lines inside a turn are collapsed), so Planning module selection
 leaves the whole block out and earlier turns or the header never pick a
 module the new message does not name (REQ-agent-004). A clipped turn SHALL
-never end on half a surrogate pair. No model summarising. A session keeps at most `SESSION_THREAD_MAX_TURNS`
-(200) turns: past it the oldest turn after the opening request is dropped.
+never end on half a surrogate pair. No model summarising. A session keeps
+at most `SESSION_THREAD_MAX_TURNS` (200) turns: past it the oldest turn
+after the opening request is dropped.
 
 Turns SHALL persist in the shared SQLite DB in the module-owned
 `discord_session_turns` table (CREATE TABLE IF NOT EXISTS when a
