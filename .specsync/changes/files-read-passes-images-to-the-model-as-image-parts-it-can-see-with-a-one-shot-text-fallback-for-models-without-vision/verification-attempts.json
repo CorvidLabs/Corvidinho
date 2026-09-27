@@ -60,6 +60,26 @@
         "REQ-discord-013",
         "REQ-plugins-427"
       ]
+    },
+    {
+      "timestamp": 1790521875,
+      "commit": "396e466add39807ae3b59ed2d9ceb7caf2abf698",
+      "contract_digest": "d3a178f7321ef6518140b39f70efa3dffc7e2f79659e24d32a31c147fdfc1fcb",
+      "execution_digest": "7df41ba9a3af51079ef9f5a261732ff42109f4b3050d64c307aefbc93661536a",
+      "workspace_digest": "3c726820e9b0f72aa54328346da1939ed4b8e3ddf15cb057183350699ef771d8",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-428",
+        "REQ-discord-013",
+        "REQ-plugins-427"
+      ]
     }
   ]
 }
