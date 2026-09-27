@@ -1,6 +1,6 @@
 ---
 id: agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a
-state: implementing
+state: archived
 type: bug_fix
 base_commit: a5b699c326901e3556d6c233674e6be6698454a4
 ---
