@@ -54,6 +54,24 @@
       "requirement_ids": [
         "REQ-agent-004"
       ]
+    },
+    {
+      "timestamp": 1790468024,
+      "commit": "20997dd61d17e9b201093dedadb013f077a6a0c5",
+      "contract_digest": "1f7d7e92af729b9b3de886facffe844527917d15c970cae1a0f140c473a2e64e",
+      "execution_digest": "db390e5a0e021fe3864473e0e8a7ec18e1b0155603edbab7e453066c8a1d2c48",
+      "workspace_digest": "7d908f1943431c2616b43bd536162a62cd675827292a0275d6692da05d016704",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-004"
+      ]
     }
   ]
 }
