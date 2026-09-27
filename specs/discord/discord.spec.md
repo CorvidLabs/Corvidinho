@@ -56,6 +56,7 @@ files:
   - src/work/pr-body.ts
   - tests/work.pr.test.ts
   - src/discord/command-handlers/mute.ts
+  - tests/discord.rate-mute-limits.test.ts
   - src/discord/command-handlers/schedule.ts
   - src/discord/command-handlers/announce.ts
   - src/discord/command-handlers/admin.ts
@@ -229,6 +230,14 @@ Final chat reply content remains human text only (DISCORD-3.a).
 deny lists win, non-empty user/role allowlist must match or be the owner);
 `RouterDeps.owner` passes the configured owner to `routeMessage`
 (REQ-discord-201).
+
+DISCORD-6 (REQ-discord-010): `rateLimitByLevel` keys on the actor's
+`resolvePermissionLevel` on chat and slash unless `RouterDeps.rateLimit.permLevel`
+/ `SlashContext.permLevelFor` pins one; `claimRefusalNotice` (with the optional
+`RateLimitState.refusalNoticeAt` map) limits public MessageCreate mute/rate
+notices to one per user per window; `command-handlers/mute.ts` exports
+`MUTE_SELF_OR_OWNER_REFUSED`, the ephemeral refusal for `/mute` of yourself or
+the configured owner.
 
 ## Invariants
 

@@ -8,10 +8,12 @@
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import {
+  claimRefusalNotice,
   gateActor,
   gateInbound,
   gateRateOrMute,
   isMonitoredChannel,
+  resolvePermissionLevel,
   type RateLimitConfig,
   type RateLimitState,
 } from "./permissions.ts";
@@ -39,7 +41,11 @@ export type RouterDeps = {
   owner?: OwnerRecord | null;
   /** DISCORD-6 — in-memory muted users. */
   mutedUsers?: Set<string>;
-  /** DISCORD-6 — sliding-window rate limit state + config. */
+  /**
+   * DISCORD-6 — sliding-window rate limit state + config. `permLevel` is an
+   * optional fixed override; when absent, `rateLimitByLevel` keys on the
+   * actor's resolved permission level (user, roles, owner).
+   */
   rateLimit?: { state: RateLimitState; config: RateLimitConfig; permLevel?: number };
   /** Injectable clock for tests. */
   nowMs?: number;
@@ -49,13 +55,40 @@ function refuseRateOrMute(
   msg: InboundMessage,
   deps: RouterDeps,
 ): RouteAction | null {
+  const rateLimit = deps.rateLimit
+    ? {
+        ...deps.rateLimit,
+        // REQ-discord-010 — rateLimitByLevel applies to the actor's level.
+        permLevel:
+          deps.rateLimit.permLevel ??
+          resolvePermissionLevel({
+            userId: msg.authorId,
+            roleIds: msg.authorRoleIds,
+            allowlist: deps.allowlist,
+            owner: deps.owner,
+          }),
+      }
+    : undefined;
   const gate = gateRateOrMute({
     userId: msg.authorId,
     mutedUsers: deps.mutedUsers,
-    rateLimit: deps.rateLimit,
+    rateLimit,
     nowMs: deps.nowMs,
   });
   if (gate.ok) return null;
+  // DISCORD-6 — no ephemeral on MessageCreate: at most one public notice per
+  // user per rate-limit window; later refusals in the window are silent.
+  if (
+    deps.rateLimit &&
+    !claimRefusalNotice(
+      deps.rateLimit.state,
+      msg.authorId,
+      deps.rateLimit.config.windowMs,
+      deps.nowMs,
+    )
+  ) {
+    return { kind: "refuse", reason: gate.reason };
+  }
   return { kind: "refuse", reason: gate.reason, reply: gate.reply };
 }
 
