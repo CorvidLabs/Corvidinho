@@ -6,7 +6,8 @@
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   createNdjsonWriter,
   createTaskExecute,
@@ -21,6 +22,7 @@ import {
   type TaskResult,
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
+import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
 import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
@@ -98,6 +100,8 @@ Usage:
                                     for bridges, one versioned frame per line (AGENT-8 / CLI-7)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --no-verify ...        Skip verify gate (local/operator opt-out only)
+  corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
+                                    and .env files, as Bun loads them there (CLI-5)
 
 Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE  same as --non-interactive
@@ -144,6 +148,10 @@ function envPresent(name: string): boolean {
  * starts with `-`: the bridges pass untrusted Discord / GitHub text there, and
  * a message like `--tier=code` or `--no-verify` must stay task text, never
  * become a flag (AGENT-5 / SAFE-1). `--task=TEXT` may span lines.
+ *
+ * `--project <path>` / `--project=<path>` (CLI-5) is read only before a `--`
+ * separator, so a plugin argument after `--` is never taken. `project` is ""
+ * when the flag has no path (a missing value or one starting with `-`).
  */
 export function parseGlobalFlags(args: string[]): {
   rest: string[];
@@ -153,6 +161,7 @@ export function parseGlobalFlags(args: string[]): {
   maxRetries: number | undefined;
   taskText: string | undefined;
   tier: CapabilityTier | undefined;
+  project: string | undefined;
 } {
   const rest: string[] = [];
   let nonInteractiveFlag = false;
@@ -161,8 +170,24 @@ export function parseGlobalFlags(args: string[]): {
   let maxRetries: number | undefined;
   let taskText: string | undefined;
   let tier: CapabilityTier | undefined;
+  let project: string | undefined;
+  let afterSeparator = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    if (a === "--") afterSeparator = true;
+    if (!afterSeparator) {
+      if (a === "--project") {
+        const next = args[i + 1];
+        project = next !== undefined && !next.startsWith("-") ? next : "";
+        if (project) i++;
+        continue;
+      }
+      const pf = a.match(/^--project=(.*)$/s);
+      if (pf) {
+        project = pf[1];
+        continue;
+      }
+    }
     if (a === "--non-interactive") {
       nonInteractiveFlag = true;
       continue;
@@ -215,7 +240,178 @@ export function parseGlobalFlags(args: string[]): {
     }
     rest.push(a);
   }
-  return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier };
+  return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project };
+}
+
+/**
+ * The environment this process was started with, before Bun added the start
+ * directory's `.env*` values (Linux `/proc/self/environ`; Bun never writes
+ * there). Null when it cannot be read.
+ */
+export function readStartEnv(path = "/proc/self/environ"): Record<string, string> | null {
+  try {
+    const env: Record<string, string> = {};
+    for (const entry of readFileSync(path, "utf8").split("\0")) {
+      const eq = entry.indexOf("=");
+      if (eq <= 0) continue;
+      const key = entry.slice(0, eq);
+      if (!(key in env)) env[key] = entry.slice(eq + 1);
+    }
+    return env;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The `.env` flags Bun was started with (`--no-env-file`, `--env-file=<path>`,
+ * `--env-file <path>`), in order, so the `--project` probe loads exactly the
+ * env files a process started in the project with the same flags would: a
+ * process run with `--no-env-file` never loads the project's `.env` either
+ * (CLI-5 / REQ-cli-505).
+ */
+export function envFileFlags(execArgv: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const a = execArgv[i];
+    if (a === "--no-env-file" || a.startsWith("--env-file=")) {
+      out.push(a);
+    } else if (a === "--env-file" && i + 1 < execArgv.length) {
+      out.push(a, execArgv[i + 1]);
+      i++;
+    }
+  }
+  return out;
+}
+
+/** Prints the env a Bun process started in its cwd gets (never logged). */
+const PROJECT_ENV_PROBE = "process.stdout.write(JSON.stringify(process.env))";
+/** Cap on the one-off env probe `--project` runs. */
+export const PROJECT_ENV_TIMEOUT_MS = 15_000;
+
+export type EnterProjectResult =
+  | { ok: true; dir: string }
+  | { ok: false; error: string; hint: string };
+
+/**
+ * CLI-5 / REQ-cli-505: make this process run as if it had been started in
+ * `path` (the top-level process only; spawns keep `--no-env-file`).
+ *
+ * The env is what Bun builds for a process started there: Bun's own `.env*`
+ * loading (`.env`, `.env.<NODE_ENV>`, `.env.local`, `$VAR` expansion; set
+ * variables win; the process's own `--no-env-file` / `--env-file` flags,
+ * {@link envFileFlags}) run once in `path` from `startEnv` (default
+ * {@link readStartEnv}), so the start directory's `.env*` values do not carry
+ * over. The probe pins Bun config to {@link SPAWN_BUN_CONFIG}: the project's
+ * `bunfig.toml` is never read. Then `process.chdir(path)`, so every command
+ * reads that project's `fledge.toml`, specs and files through `process.cwd()`,
+ * and children the CLI starts without an explicit `env` get the new env too
+ * ({@link spawnsInheritProcessEnv}). On any failure nothing is changed.
+ */
+export function enterProject(
+  path: string,
+  opts: { startEnv?: Record<string, string> | null } = {},
+): EnterProjectResult {
+  const fail = (error: string, hint: string): EnterProjectResult => ({ ok: false, error, hint });
+  const usage = "pass --project the path of an existing project directory";
+  if (!path) return fail("--project needs a directory path", usage);
+  const dir = resolve(path);
+  try {
+    if (!statSync(dir).isDirectory()) return fail(`--project ${dir} is not a directory`, usage);
+  } catch (e) {
+    const code = (e as { code?: unknown } | null)?.code;
+    return code === "ENOENT" || code === "ENOTDIR"
+      ? fail(`--project ${dir} does not exist`, usage)
+      : fail(`--project ${dir} cannot be read (${String(code ?? "error")})`, usage);
+  }
+
+  const startEnv = opts.startEnv === undefined ? readStartEnv() : opts.startEnv;
+  const base: Record<string, string> = {};
+  for (const [k, v] of Object.entries(startEnv ?? process.env)) {
+    if (typeof v === "string") base[k] = v;
+  }
+  const envHint = `check that ${dir} can be entered and its .env files read`;
+  let env: Record<string, string>;
+  try {
+    const probe = Bun.spawnSync(
+      [
+        process.execPath,
+        ...envFileFlags(process.execArgv),
+        `--config=${SPAWN_BUN_CONFIG}`,
+        "-e",
+        PROJECT_ENV_PROBE,
+      ],
+      {
+        cwd: dir,
+        env: base,
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: PROJECT_ENV_TIMEOUT_MS,
+      },
+    );
+    if (probe.exitCode !== 0) {
+      return fail(`--project ${dir}: could not load its .env files (bun exit ${probe.exitCode ?? "signal"})`, envHint);
+    }
+    const parsed: unknown = JSON.parse(probe.stdout.toString());
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    env = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string") env[k] = v;
+    }
+    process.chdir(dir);
+  } catch (e) {
+    const code = (e as { code?: unknown } | null)?.code;
+    return fail(
+      `--project ${dir}: could not load its .env files${typeof code === "string" ? ` (${code})` : ""}`,
+      envHint,
+    );
+  }
+  for (const k of Object.keys(process.env)) {
+    if (!(k in env)) delete process.env[k];
+  }
+  Object.assign(process.env, env);
+  spawnsInheritProcessEnv();
+  return { ok: true, dir };
+}
+
+let spawnEnvFollowsProcessEnv = false;
+
+/**
+ * `Bun.spawn` / `Bun.spawnSync` with no `env` pass the environment Bun started
+ * with (the start directory's `.env*` values included), not `process.env` as
+ * {@link enterProject} rewrote it. Default their `env` to the current
+ * `process.env` (what `node:child_process` does), so a child the CLI starts
+ * (`specsync`, `fledge run spec-check`, git) gets the project's env, never the
+ * start directory's `.env*` values (CLI-5 / REQ-cli-505). Idempotent.
+ */
+function spawnsInheritProcessEnv(): void {
+  if (spawnEnvFollowsProcessEnv) return;
+  spawnEnvFollowsProcessEnv = true;
+  type SpawnFn = (...args: unknown[]) => unknown;
+  const withCurrentEnv =
+    (spawn: SpawnFn): SpawnFn =>
+    (...args: unknown[]) => {
+      // Bun.spawn(argv, opts?) or Bun.spawn({ cmd, ...opts }).
+      const i = Array.isArray(args[0]) ? 1 : 0;
+      const opts = (args[i] ?? {}) as { env?: unknown };
+      if (opts.env === undefined) args[i] = { ...opts, env: { ...process.env } };
+      return spawn(...args);
+    };
+  const bun = Bun as unknown as { spawn: SpawnFn; spawnSync: SpawnFn };
+  bun.spawn = withCurrentEnv(bun.spawn);
+  bun.spawnSync = withCurrentEnv(bun.spawnSync);
+}
+
+/** A `--project` path that cannot be used (CLI-5); carries its own hint (REQ-cli-419). */
+export class ProjectDirError extends Error {
+  constructor(
+    message: string,
+    readonly hint: string,
+  ) {
+    super(message);
+    this.name = "ProjectDirError";
+  }
 }
 
 /** `fledge` / `specsync` on PATH (the verify lane needs both). */
@@ -779,7 +975,17 @@ export async function main(argv: string[]): Promise<number> {
     maxRetries,
     taskText,
     tier,
+    project,
   } = parseGlobalFlags(raw);
+  // CLI-5: enter the project before anything reads the cwd or the env.
+  if (project !== undefined) {
+    const entered = enterProject(project);
+    if (!entered.ok) {
+      return reportCliError(new ProjectDirError(entered.error, entered.hint), {
+        json: wantsJson(raw),
+      });
+    }
+  }
   const nonInteractive = isNonInteractive({ nonInteractiveFlag });
 
   if (
@@ -895,6 +1101,7 @@ export function cliErrorHint(err: unknown): string {
   if (err instanceof PluginNotFoundError) {
     return "run `corvidinho plugins list` for the available commands";
   }
+  if (err instanceof ProjectDirError) return err.hint;
   const e = err as { code?: unknown; path?: unknown } | null;
   const code = e && typeof e === "object" && typeof e.code === "string" ? e.code : "";
   if (

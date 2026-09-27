@@ -20,6 +20,7 @@ files:
   - tests/fixtures/preload-probe.ts
   - tests/cli.clean-errors.test.ts
   - tests/fixtures/fake-http-401.ts
+  - tests/cli.project-path.test.ts
 
 db_tables: []
 depends_on:
@@ -42,7 +43,11 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `main` | `argv: string[]` | `Promise<number>` | CLI entry; exit code |
 | `runCli` | `argv: string[], run?: (argv) => Promise<number>` | `Promise<number>` | Top-level error boundary around `main` (REQ-cli-419) |
 | `reportCliError` | `err: unknown, opts?: { json?: boolean }` | `number` | One scrubbed error line + hint; returns the exit code (REQ-cli-419) |
-| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error) |
+| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error; a `ProjectDirError` carries its own) |
+| `parseGlobalFlags` | `args: string[]` | `{ rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505) |
+| `readStartEnv` | `path?: string` | `Record<string, string> or null` | The env this process was started with (`/proc/self/environ`), before Bun added the start directory's `.env*` values (REQ-cli-505) |
+| `enterProject` | `path: string, opts?: { startEnv? }` | `EnterProjectResult` | CLI-5 `--project`: env as Bun builds it for a process started in `path` (probe pinned to `SPAWN_BUN_CONFIG`), then `chdir`; later `Bun.spawn` / `Bun.spawnSync` without `env` pass the new `process.env`; changes nothing on failure (REQ-cli-505) |
+| `envFileFlags` | `execArgv: readonly string[]` | `string[]` | Bun's `--no-env-file` / `--env-file` flags from `execArgv`, in order, forwarded to the `--project` probe (REQ-cli-505) |
 | `attribution` | `format?: "markdown" or "plain"` | `string` | Return the canonical footer in the requested format |
 | `startDaemon` | `opts?: StartDaemonOptions` | `Promise<StartDaemonResult>` | Take the data-dir lock and arm the headless schedule ticker (CLI-8 / AUTONOMOUS-4) |
 | `runDaemon` | `opts?: StartDaemonOptions` | `Promise<number>` | `corvidinho daemon`: start, then stop cleanly on SIGTERM/SIGINT |
@@ -72,6 +77,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `ATTRIBUTION_PLAIN` | Canonical plain-text footer without account handles |
 | `DEFAULT_SHUTDOWN_GRACE_MS` | Daemon stop waits this long (30 s) for in-flight runs |
 | `DAEMON_LOCK_FILE` | `daemon.lock` in the data dir |
+| `PROJECT_ENV_TIMEOUT_MS` | Cap (15 s) on the one-off `.env` probe `--project` runs (REQ-cli-505) |
 
 ### Exported Types
 
@@ -82,6 +88,8 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `DaemonLock` / `DaemonLockHolder` / `AcquireDaemonLockOptions` / `AcquireDaemonLockResult` | Single-instance lock |
 | `DaemonLogger` / `DaemonLogLevel` / `DaemonLogFields` / `DaemonLoggerOptions` | JSON-line logger |
 | `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
+| `EnterProjectResult` | `{ ok: true, dir }` or `{ ok: false, error, hint }` from `enterProject` (REQ-cli-505) |
+| `ProjectDirError` | Error class for an unusable `--project`; `hint` is the operator's next step (REQ-cli-505) |
 | `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
 
 ## Invariants
@@ -100,6 +108,7 @@ No command ends in a stack trace, a library object dump or Bun's crash footer (R
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
 doctor and the report-only `corvidinho init` check the project files in the current dir through `projectFilesDoctorChecks` (CLI-4, REQ-cli-430), one line each: `fledge.toml` (present and valid TOML), `verify-lane` (`[lanes.verify]` in fledge.toml or a `.fledge/lanes/*.toml` import, read in directory order like fledge, runs spec-check: the defined `spec-check` task, or a step or task `deps` chain that runs `specsync check`; every task its steps and their `deps` name is defined), `.specsync` and `specs` (directories). A missing item is `[missing]` (exit 1), named in plain language with what fails without it and, where Fledge / SpecSync has one, the command that creates it (`fledge run --init`, `specsync init`, `specsync generate`); below a git project root that has the item, the line names that root to run from instead. Only regular files are opened; file contents and parser messages are never printed. `init` prints the `llm`, `fledge` and `specsync` lines plus the project-file lines, creates and changes nothing, and exits 1 only when an item is missing (the `llm` `warn` does not fail); Discord / GitHub keys and allowlists stay in doctor.
 
+`--project <path>` (CLI-5, REQ-cli-505) runs the top-level process as if started in `<path>`: before any command, the env becomes what Bun builds for a process started there (Bun's own `.env*` loading, probed once in `<path>` from `/proc/self/environ` with the CLI's own `--no-env-file` / `--env-file` flags and Bun config pinned to `SPAWN_BUN_CONFIG`; set variables win; the start directory's `.env*` values do not carry over, to this process or to any child it starts: a `Bun.spawn` / `Bun.spawnSync` without `env` gets the new `process.env`), then the process `chdir`s there, so `fledge.toml`, specs and project files are `<path>`'s. A missing, non-directory, unreadable or empty `--project` is one `reportCliError` line (exit 1) and changes nothing. Read only before `--`, never from `--task` text; spawned agents keep `--no-env-file`.
 `bun test` never writes the operator's state (REQ-cli-262, SAFE-5): the preload always points `CORVIDINHO_DATA_DIR` at its own temp dir, unsets `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR` plus the run settings that change test outcomes (`CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`), and makes `Bun.spawn` / `Bun.spawnSync` without an explicit `env` pass that env to children.
 
 ## Behavioral Examples
@@ -115,6 +124,11 @@ doctor and the report-only `corvidinho init` check the project files in the curr
 - **Given** a directory with no `fledge.toml`, `.specsync/` or `specs/`
 - **When** the operator runs `corvidinho init` there
 - **Then** it prints `[missing]` for `fledge.toml`, `verify-lane`, `.specsync` and `specs`, each in plain language with the command that creates it where one exists, creates nothing and exits 1
+### Scenario: Another project without cd
+
+- **Given** the operator's shell is in directory A and project P has its own `fledge.toml`, specs and `.env`
+- **When** the operator runs `corvidinho --project P task run --task "…"`
+- **Then** the run uses P's `fledge.toml`, plans with P's specs and has P's `.env` values (not A's), exactly as when started in P
 
 ### Scenario: Second daemon on one data dir
 
@@ -127,6 +141,8 @@ doctor and the report-only `corvidinho init` check the project files in the curr
 | Condition | Behavior |
 |-----------|----------|
 | Unknown command | Print error + help; exit 1 |
+| `--project` path missing, not a directory, unreadable, or no path given | `corvidinho: --project …` + `hint: pass --project the path of an existing project directory`; exit 1; no command runs; `--json` → `{ok:false,error}` (REQ-cli-505) |
+| `--project` `.env` probe fails | `corvidinho: --project <dir>: could not load its .env files …` + hint to check the dir and its `.env` files; exit 1; nothing changed (REQ-cli-505) |
 | `specsync` with no or an unknown subcommand | Usage line naming every subcommand (`score` included); exit 1 |
 | `plugins run` unknown name (incl. `fledge-*`) | `corvidinho: Unknown plugin command: <name>` + `hint:` (`plugins list`); exit 1; `--json` → `{ok:false,error}` |
 | A command throws (plugin handler, unusable data dir, …) | One scrubbed line + `hint:`; exit the error's `exitCode` or 1; no stack, no crash footer |
@@ -196,3 +212,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-27 | release-0-0-30-session-threads-images-to-the-model-real-diff-verify-per-tier-models-creator-gated-schedule-ticks-daemon: Release 0.0.30: session threads, images to the model, real-diff verify, per-tier models, creator-gated schedule ticks + daemon asks reach Discord (schema v11), CI-strict spec-check, language runners, CI tags every version |
 | 2026-09-27 | release-0-0-31-owner-only-channel-autocomplete-keystore-and-specsync-write-protection-audited-schedule-delete-per-user: Release 0.0.31: owner-only channel autocomplete, keystore and .specsync/ write protection, audited /schedule delete, per-user thread sessions, failing-step verify feedback, paused schedules ping the owner, presence on every IDENTIFY, SpecSync lists specs/ |
 | 2026-09-27 | project-files-preflight-shared-by-doctor-and-a-report-only-init-doctor-and-a-new-report-only-corvidinho-init-name-a: Project-files preflight shared by doctor and a report-only init: doctor and a new report-only corvidinho init name a missing fledge.toml, verify lane with spec-check, .specsync/ and specs/ in plain language before task run fails on them mid-task (CLI-4) |
+| 2026-09-27 | global-project-path-flag-runs-the-cli-as-if-started-in-that-directory-that-project-s-fledge-toml-specs-and-env-files-as: Global --project <path> flag runs the CLI as if started in that directory: that project's fledge.toml, specs and .env files as Bun loads them there, never the start directory's (CLI-5) |
