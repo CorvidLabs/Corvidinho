@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 import { Database as SqliteDatabase } from "bun:sqlite";
+import { loadLlmEnv } from "../src/agent/execute.ts";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
@@ -426,7 +427,11 @@ describe("DISCORD-ASK-6/7 collapsed replies clear the in-flight row (REQ-discord
     const edit = calls.messageEdits[0]!;
     expect(edit.messageId).toBe("sent_1");
     expect(edit.content).toBe("all done");
-    expect(edit.embed).toBeNull();
+    // DISCORD-3.a — the answer keeps a footer-only embed (model).
+    expect(edit.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: { text: loadLlmEnv(process.env).model },
+    });
     expect(calls.replies).toHaveLength(0);
     expect(rowsAtCollapse).toEqual([1]);
     expect(inflightRows(db)).toEqual([]);

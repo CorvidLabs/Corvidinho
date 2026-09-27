@@ -292,6 +292,14 @@ user id + resolved display (owner map wins for owner). Gateway fills
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
 Final chat reply content remains human text only (DISCORD-3.a).
+`ThinkingStatus.finalizeContent` takes optional `extras` (`plumbing`, `model`)
+and `failed`: a final answer (no `components`) keeps a footer-only embed from
+`buildAnswerFooterEmbed` (`model | plumbing`, done or error color; null when
+neither is known), a Choose stub (`components`) carries none, and a later
+re-edit keeps the first footer and outcome (REQ-discord-457). The bridge chat
+and button-pick paths and `finishSlashWithThinking` pass the run's
+`thinkExtras` and the same failed/done outcome as their fallback status.
+`DiscordEmbedPayload.description` is optional (omitted on that embed).
 
 Listing scope (REQ-discord-418, SESSION-MULTI-1 / IDENTITY-2/3):
 `src/discord/list-scope.ts` exports `actorIsAdmin` (the acting user resolves
