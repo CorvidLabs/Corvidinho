@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "f463b5e8141370e2b13b9e54f8ac9b6c37c6d9e3",
+  "contract_digest": "d615b46117b064372f0663064279f6255efd34db0ef6badae763af5ca50b425c",
+  "execution_digest": "acbe791e8350dd755557913f3ebbe4bf493d52fd435e72d5e2115e912e4e7e69",
+  "workspace_digest": "50fe74e4ff67832c32f6c41b417cfb383b5e1864ca887f790d19389e4be19a1a",
+  "timestamp": 1790464450
+}

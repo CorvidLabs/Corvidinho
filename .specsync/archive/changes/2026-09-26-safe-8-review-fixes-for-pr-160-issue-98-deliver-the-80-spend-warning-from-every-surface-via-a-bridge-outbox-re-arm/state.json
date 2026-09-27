@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm",
+  "slug": "safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm",
+  "title": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+  "description": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "ede5f461fdd16166e8cfee218b0bf8e860fa5499",
+  "created_at": 1790463159,
+  "updated_at": 1790464540,
+  "affected_specs": [],
+  "affected_paths": [
+    "src/agent/spend-alerts.ts",
+    "src/agent/spend-outbox.ts",
+    "src/daemon/daemon.ts",
+    "src/discord/command-handlers/session.ts",
+    "src/discord/command-handlers/work.ts",
+    "src/discord/spend-post.ts",
+    "src/discord/work-store.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Implementation-only paths for REQ-agent-098, REQ-discord-098 and REQ-cli-098 as modified by change safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run; the canonical requirement text, spec prose and files lists for these paths are carried by that change's deltas",
+  "acceptance_criteria": [
+    "A warning recorded by a run with no Discord reply (WATCH-style guard on a shared DB file, daemon, delegate worker) is posted once with an owner ping on the bridge's next post (chat, /work, /session start or schedule), and handed back when that post fails; after spend is seen under 70% of the cap a second crossing inside 24 h warns again while spend hovering between 70% and 80% does not; the owner is pinged once per spend-cap episode across chat, slash commands and schedules; /work at the cap records the task as blocked with a paused status, the ask and a spend-cap PR line, and pings the owner in a fresh post; /session start at the cap shows the ask and pings the owner; the daemon logs spend.warning and run.needs_human warn lines; fixture tests only (mocked fetch, in-memory or temp SQLite, fake gateway)"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/agent/spend-alerts.ts",
+      "module": "agent",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 2,
+      "path": "src/agent/spend-outbox.ts",
+      "module": "agent",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 3,
+      "path": "src/daemon/daemon.ts",
+      "module": "cli",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 4,
+      "path": "src/discord/command-handlers/session.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 5,
+      "path": "src/discord/command-handlers/work.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 6,
+      "path": "src/discord/spend-post.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    },
+    {
+      "schema_version": 1,
+      "sequence": 7,
+      "path": "src/discord/work-store.ts",
+      "module": "discord",
+      "actor": "corvid-agent",
+      "reason": "no-spec-change review-fix change recorded no canonical owners; each path is listed in exactly one spec files: list (agent/cli/discord)",
+      "timestamp": 1790464432
+    }
+  ],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}

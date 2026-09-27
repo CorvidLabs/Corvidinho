@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790467725,
+      "digest": "342bb3ed63fabbbae6a96e63c7d2434287a0384bf92b9d6074ae8891098114cc",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-x-discord-ask-7-issue-98-merge-of-208-work-and-session-start-answer-in-one-collapsed-message-and-keep-the-safe-8",
+        "title": "SAFE-8 x DISCORD-ASK-7 (issue #98, merge of #208): /work and /session start answer in one collapsed message and keep the SAFE-8 owner notice a fresh channel post; an ask run never shows Done, and claims go back when nothing carried the notice",
+        "description": "SAFE-8 x DISCORD-ASK-7 (issue #98, merge of #208): /work and /session start answer in one collapsed message and keep the SAFE-8 owner notice a fresh channel post; an ask run never shows Done, and claims go back when nothing carried the notice",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/discord/",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/spend-post.ts",
+          "tests/discord.spend.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When the thinking message can be edited, /work and /session start answer in one message (DISCORD-ASK-7: the thinking message becomes the answer and the deferred reply is deleted) that carries the ask content: a clarify ask addresses the requester (allowed mentions limited to them), a stuck or spend-cap stop shows the ask, never ✅ Done, and /work records it blocked (stuck stays failed). The owner ping for a stuck or spend-cap ask (once per cap episode) and the pending SAFE-8 80% warning go out as a fresh channel post with allowed mentions limited to the owner; when that post cannot be sent the notice is appended to the answer that went out (the collapsed message edited again, or the fallback reply); without an edit the fallback status shows the ask status, not Done. When nothing carried the notice (answer and owner post both failed, e.g. an expired interaction token) the claimed warning and cap ping are handed back to the next bridge post and the answer's error is still raised. #208 slash tests pass unchanged; fixture tests only."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "27b967ca64a1ff005007fbe9f681bb2297db16569037caffb347107f693676a9"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790468033,
+      "digest": "ccea717a685aa7618e9727687e41ba22874260d63225e7f0f6661b7b4f56bcbc",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -30,6 +30,8 @@ export type StatusReportInput = {
   workActive: number;
   workDone: number;
   workFailed: number;
+  /** Work paused on a question (e.g. the SAFE-8 spend cap); listed when > 0. */
+  workBlocked?: number;
   /** Env for LLM line (tests inject). */
   env?: NodeJS.ProcessEnv;
   /** Optional precomputed LLM line (tests). */
@@ -44,6 +46,8 @@ export type StatusReportInput = {
   ownerLine?: string;
   /** SAFE-5 — audit chain verify line (bridge supplies). */
   auditLine?: string;
+  /** AUTONOMOUS-8 — 24 h spend vs the daily cap (bridge supplies). */
+  spendLine?: string;
 };
 
 /** Pure formatter for `/status` body — fixture-friendly. */
@@ -58,7 +62,8 @@ export function formatStatusReport(input: StatusReportInput): string {
     `Protocol: ${input.protocolVersion}`,
     `Channels (allowlist): ${input.channelCount}`,
     `Active sessions: ${input.sessions}`,
-    `Work: ${input.workActive} active · ${input.workDone} done · ${input.workFailed} failed`,
+    `Work: ${input.workActive} active · ${input.workDone} done · ${input.workFailed} failed` +
+      (input.workBlocked ? ` · ${input.workBlocked} waiting for input` : ""),
     llmLine,
     `Slash commands: ${names.join(", ")}`,
     formatAnnounceChannelLine(input.announceChannelId),
@@ -68,6 +73,9 @@ export function formatStatusReport(input: StatusReportInput): string {
   }
   if (input.auditLine) {
     lines.push(input.auditLine);
+  }
+  if (input.spendLine) {
+    lines.push(input.spendLine);
   }
   if (input.gitTipSha) {
     lines.push(`Git tip: ${input.gitTipSha}`);
@@ -84,6 +92,7 @@ export async function handleStatusCommand(
     ctx.workStore.countByStatus("queued") + ctx.workStore.countByStatus("running");
   const workDone = ctx.workStore.countByStatus("completed");
   const workFailed = ctx.workStore.countByStatus("failed");
+  const workBlocked = ctx.workStore.countByStatus("blocked");
 
   const content = formatStatusReport({
     version: ctx.version,
@@ -94,11 +103,13 @@ export async function handleStatusCommand(
     workActive,
     workDone,
     workFailed,
+    workBlocked,
     env: ctx.env,
     gitTipSha: ctx.gitTipSha,
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
     ownerLine: formatOwnerStatus(ctx.owner),
     auditLine: ctx.auditLine?.(),
+    spendLine: ctx.spendLine?.(),
   });
 
   await interaction.reply({
