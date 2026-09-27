@@ -7,11 +7,11 @@
   "title": "Replying to a /session start or /work answer continues that session (DISCORD-2)",
   "description": "Replying to a /session start or /work answer continues that session (DISCORD-2)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "6e5370dd5174f006ec16ffc609116c016055a7b8",
   "created_at": 1790469316,
-  "updated_at": 1790475048,
+  "updated_at": 1790475286,
   "affected_specs": [
     "discord"
   ],

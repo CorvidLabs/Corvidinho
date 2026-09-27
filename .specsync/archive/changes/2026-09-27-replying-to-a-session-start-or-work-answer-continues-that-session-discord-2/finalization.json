@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "replying-to-a-session-start-or-work-answer-continues-that-session-discord-2",
+  "implementation_commit": "115a88ae273788f1fee5579d7d2b99f29faaa3b4",
+  "implementation_tree": "ebdfa336d998ab1ec68c4a216b973add53a215a4",
+  "contract_digest": "48c9ed88f55a21a68a71d0add637adb765926cb1aa28b5923f71f83f1f95811b",
+  "workspace_digest": "9f9a5f1b4a5fd6a778b57cd20966b47020e09cf124f0c2d493a5300aa6295fe4",
+  "closing_digest": "f03af81e309cbf345f069078fff6ee40b24cf8517e3ad8135f9c9d00f913802d",
+  "review_digest": "5aa4e516bfb3b4bbf64ac532df738242af11a536cf14d09227f03e28b9589bad",
+  "finalization_digest": "3d4e779f020ac8bd029a42be70227d8a4defe1b6ab7760a54afda9727c15ee74",
+  "timestamp": 1790475178
+}

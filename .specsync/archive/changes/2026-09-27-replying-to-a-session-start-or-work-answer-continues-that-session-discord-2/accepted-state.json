@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "replying-to-a-session-start-or-work-answer-continues-that-session-discord-2",
+  "slug": "replying-to-a-session-start-or-work-answer-continues-that-session-discord-2",
+  "title": "Replying to a /session start or /work answer continues that session (DISCORD-2)",
+  "description": "Replying to a /session start or /work answer continues that session (DISCORD-2)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "6e5370dd5174f006ec16ffc609116c016055a7b8",
+  "created_at": 1790469316,
+  "updated_at": 1790475178,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/bridge.ts",
+    "src/discord/slash-finish.ts",
+    "src/discord/slash-types.ts",
+    "src/discord/gateway.ts",
+    "tests/discord.slash-reply-continuity.test.ts",
+    "docs/discord.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Owner runs /session start (or /work) topic A, then topic B, then replies to A's answer: with or without the reply ping the run continues session A (resume), not B, and not nothing; the same holds when collapse fails and the answer lands in the deferred slash reply; another user's reply to A's answer never continues A (ping off: ignored; ping on: their own new session); tests/discord.slash-reply-continuity.test.ts covers all of these and fails on the previous code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
