@@ -7,11 +7,11 @@
   "title": "ROLES-CHAT-7(b): an ADMIN role session's github-pr-create is tested: SAFE-1 denies it without an allowlist entry, GITHUB-6 still refuses an unlisted repo, and the dry-run PR goes through with the allowlist entry plus the GITHUB-6 repo allowlist",
   "description": "ROLES-CHAT-7(b): an ADMIN role session's github-pr-create is tested: SAFE-1 denies it without an allowlist entry, GITHUB-6 still refuses an unlisted repo, and the dry-run PR goes through with the allowlist entry plus the GITHUB-6 repo allowlist",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
   "created_at": 1790530150,
-  "updated_at": 1790532762,
+  "updated_at": 1790533135,
   "affected_specs": [
     "agent"
   ],
