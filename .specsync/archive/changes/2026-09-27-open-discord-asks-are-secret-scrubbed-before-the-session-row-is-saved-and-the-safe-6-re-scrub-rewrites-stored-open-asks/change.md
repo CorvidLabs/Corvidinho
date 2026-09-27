@@ -1,6 +1,6 @@
 ---
 id: open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 606b993d7175c2f32759e3f02865492e5e884389
 ---

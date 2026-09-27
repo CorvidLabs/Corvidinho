@@ -7,11 +7,11 @@
   "title": "Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6)",
   "description": "Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "606b993d7175c2f32759e3f02865492e5e884389",
   "created_at": 1790544330,
-  "updated_at": 1790547345,
+  "updated_at": 1790547782,
   "affected_specs": [
     "discord"
   ],
