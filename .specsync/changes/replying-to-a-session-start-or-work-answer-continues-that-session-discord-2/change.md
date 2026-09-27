@@ -1,6 +1,6 @@
 ---
 id: replying-to-a-session-start-or-work-answer-continues-that-session-discord-2
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 6e5370dd5174f006ec16ffc609116c016055a7b8
 ---
