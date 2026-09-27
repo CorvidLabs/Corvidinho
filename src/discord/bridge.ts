@@ -439,6 +439,13 @@ export async function startBridge(
       thinkingOutbound: resolveOutbound(),
       thinkingDebounceMs: opts.thinkingDebounceMs,
       thinkingTickMs: opts.thinkingTickMs,
+      // DISCORD-2 (REQ-discord-002): a /session start or /work answer maps to
+      // its session, so a reply to it continues that session (the router keeps
+      // SESSION-MULTI-1: only the session's own user continues it).
+      trackBotMessage: (messageId, sessionId) => {
+        const session = store.get(sessionId);
+        if (session) store.trackBotMessage(messageId, session);
+      },
       mutedUsers,
       rateLimitState,
       rateLimitConfig,

@@ -70,3 +70,11 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and the dry path (no reply surface) also delete it; a reply collapsed before
   a restart leaves nothing to recover, and a crash mid button pick marks the
   reused Choose stub interrupted.
+
+## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
+
+- `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
+  fake gateway: after `/session start` (or `/work`) A then B, the owner's reply
+  to A's answer resumes session A with the reply ping on and off; a fallback
+  answer (no collapse, deferred reply id from `editReply`) is tracked too;
+  another user's reply never resumes A (no live Discord).

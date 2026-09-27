@@ -49,6 +49,7 @@ files:
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
   - tests/discord.slash-ask7.test.ts
+  - tests/discord.slash-reply-continuity.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
@@ -131,7 +132,7 @@ an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 `ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
 Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
-(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
+(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002). After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)

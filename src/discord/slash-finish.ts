@@ -52,7 +52,9 @@ export async function finishSlashWithThinking(
     }
   }
   if (opts.interaction.editReply) {
-    await opts.interaction.editReply({ content: opts.body });
+    const sent = await opts.interaction.editReply({ content: opts.body });
+    // DISCORD-2: a reply to the fallback answer continues the session too.
+    if (sent?.messageId) opts.trackBotMessage?.(sent.messageId, opts.sessionId);
   } else {
     await opts.interaction.reply({ content: opts.body });
   }

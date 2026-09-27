@@ -282,8 +282,13 @@ export async function createLiveGateway(
           await interaction.reply(payload);
         }
       } else {
-        await interaction.editReply(payload);
+        // discord.js resolves editReply with the reply Message; its id lets a
+        // fallback slash answer continue the session on reply (DISCORD-2).
+        const sent = await interaction.editReply(payload);
+        const id = (sent as { id?: unknown } | null | undefined)?.id;
+        return typeof id === "string" && id ? { messageId: id } : undefined;
       }
+      return undefined;
     };
 
     const roleIds: string[] = [];
@@ -326,9 +331,7 @@ export async function createLiveGateway(
           );
         }
       },
-      editReply: async (opts) => {
-        await send(opts, "edit");
-      },
+      editReply: (opts) => send(opts, "edit"),
       deleteReply: async () => {
         if (typeof interaction.deleteReply === "function") {
           await interaction.deleteReply();
