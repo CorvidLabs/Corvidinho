@@ -1,6 +1,6 @@
 ---
 id: req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 80ed1996639f4947d4f709d4410cc49a1474a95f
 ---
