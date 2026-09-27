@@ -23,6 +23,7 @@ import type { SessionStore } from "./session-store.ts";
 import {
   type InboundMessage,
   type RouteAction,
+  type SessionStub,
 } from "./types.ts";
 
 function stripMentions(content: string): string {
@@ -76,6 +77,32 @@ function silentChannelDeny(): RouteAction {
 function ownChannelAllowlisted(msg: InboundMessage, deps: RouterDeps): boolean {
   if (isMonitoredChannel(msg.channelId, deps.allowlist)) return true;
   return msg.threadId !== undefined && isMonitoredChannel(msg.threadId, deps.allowlist);
+}
+
+/**
+ * DISCORD-5 / REQ-discord-212 — may an ask button press in `channelId` resume
+ * `session`? The press channel must be allowlisted, or be the session's thread
+ * under an allowlisted parent (DISCORD-2.a); and the session's own channel
+ * (parent or thread), where the resumed run posts, must still be allowlisted.
+ * With no session only the press channel is checked.
+ */
+export function componentChannelAllowlisted(
+  channelId: string,
+  session: Pick<SessionStub, "channelId" | "threadId"> | undefined,
+  allowlist: AllowlistConfig,
+): boolean {
+  if (session) {
+    const sessionOk =
+      isMonitoredChannel(session.channelId, allowlist) ||
+      (session.threadId !== undefined && isMonitoredChannel(session.threadId, allowlist));
+    if (!sessionOk) return false;
+  }
+  if (isMonitoredChannel(channelId, allowlist)) return true;
+  return (
+    session?.threadId !== undefined &&
+    session.threadId === channelId &&
+    isMonitoredChannel(session.channelId, allowlist)
+  );
 }
 
 /**

@@ -10,4 +10,5 @@ artifact: tasks
 - [x] Own-channel allowlist gate before every `routeMessage` path; session channel no longer stands in.
 - [x] Gateway: `replyReferenceMessageId` drops forwards and other-channel references.
 - [x] Spec files list, Public API, invariant; delta REQ-discord-212 (Added).
+- [x] Review follow-up: ask button press gated on the press channel and the session's own channel (DISCORD-5 / DISCORD-DENY-2/3), tests, spec, deny-table doc row.
 - [x] Verify: specsync check, tsc, bun test, fledge verify lane.

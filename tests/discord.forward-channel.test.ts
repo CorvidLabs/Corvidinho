@@ -10,18 +10,25 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MessageReferenceType } from "discord.js";
+import type { HumanAsk } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
+import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   createNullGateway,
   REFERENCE_TYPE_FORWARD,
   replyReferenceMessageId,
+  type ComponentInteraction,
   type GatewayHandlers,
 } from "../src/discord/gateway.ts";
-import { routeMessage } from "../src/discord/message-router.ts";
+import { componentChannelAllowlisted, routeMessage } from "../src/discord/message-router.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
-import type { InboundMessage } from "../src/discord/types.ts";
+import {
+  ALLOWLIST_DENY_TIP,
+  EPHEMERAL_SILENT_ACK,
+  type InboundMessage,
+} from "../src/discord/types.ts";
 
 const OWNER_ID = "111122223333444455";
 const ON = "chan-on";
@@ -114,6 +121,37 @@ describe("router: own channel must be allowlisted (DISCORD-5 / DISCORD-DENY-1)",
     );
     expect(cont.kind).toBe("continue_session");
     if (cont.kind === "continue_session") expect(cont.session.id).toBe(start.session.id);
+  });
+});
+
+describe("componentChannelAllowlisted (DISCORD-5 / DISCORD-2.a)", () => {
+  test("press channel and the session's own channel must both be allowlisted", () => {
+    const allowlist = allowCfg();
+    expect(componentChannelAllowlisted(ON, { channelId: ON }, allowlist)).toBe(true);
+    expect(componentChannelAllowlisted(OFF, { channelId: ON }, allowlist)).toBe(false);
+    expect(componentChannelAllowlisted(ON, { channelId: OFF }, allowlist)).toBe(false);
+    expect(componentChannelAllowlisted(ON, undefined, allowlist)).toBe(true);
+    expect(componentChannelAllowlisted(OFF, undefined, allowlist)).toBe(false);
+  });
+
+  test("a press inside the session's thread counts under its allowlisted parent", () => {
+    const allowlist = allowCfg();
+    const inThread = { channelId: ON, threadId: "thr-1" };
+    expect(componentChannelAllowlisted("thr-1", inThread, allowlist)).toBe(true);
+    // Another thread id is not the session's thread.
+    expect(componentChannelAllowlisted("thr-2", inThread, allowlist)).toBe(false);
+    // A thread under a non-allowlisted parent does not count.
+    expect(componentChannelAllowlisted("thr-1", { channelId: OFF, threadId: "thr-1" }, allowlist)).toBe(false);
+    // An allowlisted thread counts on its own.
+    expect(
+      componentChannelAllowlisted("thr-1", { channelId: OFF, threadId: "thr-1" }, allowCfg(["thr-1"])),
+    ).toBe(true);
+  });
+
+  test("a deny-listed session channel is not allowlisted", () => {
+    const allowlist = allowCfg();
+    allowlist.discord.denyChannels = [ON];
+    expect(componentChannelAllowlisted(ON, { channelId: ON }, allowlist)).toBe(false);
   });
 });
 
@@ -235,7 +273,7 @@ async function bridgeWith() {
 
 function postedIn(
   channelId: string,
-  b: Awaited<ReturnType<typeof bridgeWith>>,
+  b: Pick<Awaited<ReturnType<typeof bridgeWith>>, "replies" | "outbound">,
 ): number {
   const { replies, outbound } = b;
   return [
@@ -301,5 +339,157 @@ describe("bridge: forward of a tracked bot message into a non-allowlisted channe
     expect(prompts[1]).toContain("more in thread");
     expect(result.store.list()).toHaveLength(1);
     await result.stop();
+  });
+});
+
+describe("bridge: an ask button press resumes only in an allowlisted channel (DISCORD-5 / DISCORD-DENY-2/3)", () => {
+  const BUTTON_ASK: HumanAsk = {
+    reason: "clarify",
+    question: "Which DB?",
+    options: [
+      { id: "1", label: "Postgres" },
+      { id: "2", label: "SQLite" },
+    ],
+  };
+
+  async function askBridge(ownerId = OWNER_ID) {
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const outbound = memoryThinkingOutbound();
+    const replies: Reply[] = [];
+    const prompts: string[] = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId, prompt }) {
+        prompts.push(prompt);
+        if (prompts.length === 1) {
+          return {
+            ok: true,
+            sessionId,
+            summary: "need input",
+            exitCode: 0,
+            ask: BUTTON_ASK,
+            task: { verified: false, verifySkipped: true, state: "blocked" },
+          };
+        }
+        return { ok: true, sessionId, summary: `answer ${prompts.length}`, exitCode: 0 };
+      },
+    };
+    const result = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: ON,
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: join(mkdtempSync(join(tmpdir(), "corvidinho-fwd-ask-")), "none.toml"),
+        CORVIDINHO_OWNER_DISCORD_ID: ownerId,
+      },
+      projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-fwd-ask-proj-")),
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      thinkingOutbound: outbound,
+      thinkingDebounceMs: 0,
+      thinkingTickMs: 60_000,
+      agent,
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        handlers.reply = async (opts) => {
+          replies.push(opts);
+          return { messageId: `bot_${replies.length}` };
+        };
+        return createNullGateway();
+      },
+    });
+    if (!result.ok || !box.handlers) throw new Error("bridge did not start");
+    return { result, handlers: box.handlers, replies, prompts, outbound };
+  }
+
+  function press(
+    askId: string,
+    channelId: string,
+    userId: string,
+    ephemeral: Array<{ content?: string; ephemeral?: boolean }>,
+  ): ComponentInteraction {
+    return {
+      id: `ix-${channelId}`,
+      customId: pickCustomId(askId, "1"),
+      channelId,
+      userId,
+      reply: async (opts) => {
+        ephemeral.push(opts);
+      },
+    };
+  }
+
+  function sent(b: Awaited<ReturnType<typeof askBridge>>): number {
+    const { replies, outbound } = b;
+    return (
+      replies.length +
+      outbound.sends.length +
+      outbound.edits.length +
+      outbound.contentEdits.length +
+      outbound.deletes.length
+    );
+  }
+
+  async function withButtonAsk(threadId?: string, ownerId = OWNER_ID) {
+    const b = await askBridge(ownerId);
+    await b.handlers.onMessage(msg({ id: "m-ask", authorId: USER_ID, threadId }));
+    const pending = b.result.store.list()[0]?.pendingAsk;
+    if (!pending?.options?.length) throw new Error("no button ask");
+    return { ...b, askId: pending.askId };
+  }
+
+  const USER_ID = "222233334444555566";
+
+  test("press from a non-allowlisted channel: silent zero-width ack, no resume, nothing posted", async () => {
+    const b = await withButtonAsk();
+    const before = sent(b);
+    const eph: Array<{ content?: string; ephemeral?: boolean }> = [];
+    await b.handlers.onComponent!(press(b.askId, OFF, USER_ID, eph));
+    expect(b.prompts).toHaveLength(1);
+    expect(sent(b)).toBe(before);
+    expect(eph).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+    // The ask stays open for a press where the session lives.
+    expect(b.result.store.list()[0]!.pendingAsk?.askId).toBe(b.askId);
+    await b.result.stop();
+  });
+
+  test("press after the session's channel left the allowlist: no resume, nothing posted there", async () => {
+    const b = await withButtonAsk();
+    const before = sent(b);
+    b.result.config.allowlist.discord.channels = ["chan-other"];
+    const eph: Array<{ content?: string; ephemeral?: boolean }> = [];
+    await b.handlers.onComponent!(press(b.askId, ON, USER_ID, eph));
+    expect(b.prompts).toHaveLength(1);
+    expect(sent(b)).toBe(before);
+    expect(postedIn(ON, b)).toBe(before);
+    expect(eph).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+    await b.result.stop();
+  });
+
+  test("admin press outside the allowlist gets only the ephemeral tip (DISCORD-DENY-2)", async () => {
+    const b = await withButtonAsk(undefined, USER_ID);
+    const eph: Array<{ content?: string; ephemeral?: boolean }> = [];
+    await b.handlers.onComponent!(press(b.askId, OFF, USER_ID, eph));
+    expect(b.prompts).toHaveLength(1);
+    expect(eph).toEqual([{ content: ALLOWLIST_DENY_TIP, ephemeral: true }]);
+    await b.result.stop();
+  });
+
+  test("press in the allowlisted channel still resumes (DISCORD-ASK-3)", async () => {
+    const b = await withButtonAsk();
+    const eph: Array<{ content?: string; ephemeral?: boolean }> = [];
+    await b.handlers.onComponent!(press(b.askId, ON, USER_ID, eph));
+    expect(b.prompts).toHaveLength(2);
+    expect(b.prompts[1]).toContain("Postgres");
+    expect(postedIn(OFF, b)).toBe(0);
+    await b.result.stop();
+  });
+
+  test("press inside the session's thread under an allowlisted parent still resumes (DISCORD-2.a)", async () => {
+    const b = await withButtonAsk("thr-1");
+    const eph: Array<{ content?: string; ephemeral?: boolean }> = [];
+    await b.handlers.onComponent!(press(b.askId, "thr-1", USER_ID, eph));
+    expect(b.prompts).toHaveLength(2);
+    expect(b.prompts[1]).toContain("Postgres");
+    await b.result.stop();
   });
 });

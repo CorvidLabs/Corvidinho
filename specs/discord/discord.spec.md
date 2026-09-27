@@ -239,6 +239,8 @@ deny lists win, non-empty user/role allowlist must match or be the owner);
 `replyReferenceMessageId`, `REFERENCE_TYPE_FORWARD` and
 `RawMessageReference` (`gateway.ts`) turn a MessageCreate `reference` into
 `InboundMessage.referencedMessageId` only for a same-channel reply
+(REQ-discord-212). `componentChannelAllowlisted` (`message-router.ts`) gates
+an ask button press on the press channel and the session's own channel
 (REQ-discord-212).
 
 ## Invariants
@@ -258,7 +260,7 @@ Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
 ClientReady sets short Custom Status from shared package version (DISCORD-12);
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
-every MessageCreate is processed only when its own channel (thread parent or the thread itself) is allowlisted — a reply or forward that references a tracked bot message never continues the session in another channel, and the gateway keeps a reference only for a same-channel reply (never a forward) (DISCORD-5 / DISCORD-DENY-1 / REQ-discord-212);
+every MessageCreate is processed only when its own channel (thread parent or the thread itself) is allowlisted — a reply or forward that references a tracked bot message never continues the session in another channel, and the gateway keeps a reference only for a same-channel reply (never a forward); an ask button press resumes only in an allowlisted channel (or the session's thread under an allowlisted parent) while the session's own channel is still allowlisted, else an ephemeral tip (admin) or zero-width ack with no resume (DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-212);
 every @mention/reply/thread message and every slash command also passes `gateActor` after the channel gate: deny-listed users/roles are refused, and when the user or role allowlist is non-empty only listed users, allowed roles or the owner pass; empty user+role lists keep the channel-only path; refusal is silent on MessageCreate and a zero-width ephemeral ack on slash (ALLOW-3/5 / DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-201);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);

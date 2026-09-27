@@ -21,6 +21,16 @@ artifact: design
   `referencedMessageId`. The forward constant stays a plain number so the
   module still does not load discord.js eagerly; a test pins it to
   `discord.js` `MessageReferenceType.Forward`.
+- Ask buttons (review follow-up): `onComponent` in `src/discord/bridge.ts`
+  never checked a channel, so a press resumed the session and the run posted
+  in the session's channel even after `/admin channels remove` took it off
+  the allowlist, and a press from another channel was heard. It now calls
+  `componentChannelAllowlisted(channelId, session, allowlist)`
+  (`message-router.ts`, pure): the press channel must be allowlisted or be the
+  session's thread under an allowlisted parent, and the session's own channel
+  (parent or thread) must still be allowlisted. On failure the press gets
+  the same ephemeral answer as a slash deny (tip for an admin, zero-width ack
+  otherwise) and the ask stays pending.
 - Both layers fail closed on their own: a forward that still reached the
   router (or a future path that sets `referencedMessageId`) is stopped by the
   own-channel gate.
