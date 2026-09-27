@@ -22,7 +22,9 @@ artifact: research
   column. A text scrub of the JSON column can break it: the private-key rule
   (REQ-discord-066) runs to the end of the text when the END line is missing,
   eating the closing quote and brace (the loader then drops the ask). Hence a
-  JSON-aware pass: parse, scrub string values except id keys, re-serialize.
+  JSON-aware pass: parse, scrub every string value, re-serialize. Option ids
+  are model-chosen (`normalizeAskOptions` keeps 32 chars of `[A-Za-z0-9_-]`),
+  so an id can hold a whole AWS key id: an id exemption would keep it raw.
 - `ensureScrubbed` runs the re-scrub once per `SCRUB_RULES_VERSION`; DBs
   already at version 2 need a bump to 3 to re-scrub existing `pending_ask`
   rows. `SCHEMA_VERSION` is untouched.

@@ -35,9 +35,11 @@ import type { SessionStub } from "./types.ts";
 
 /**
  * One open ask as stored. The question and option labels are model-written
- * text, so they are secret-scrubbed like every stored text (SAFE-6); askId,
- * expiresAt, option ids and stubMessageId are kept as they are, so open
- * buttons keep working.
+ * text, so they are secret-scrubbed like every stored text (SAFE-6). Option
+ * ids are scrubbed too, as a backstop: `normalizeAskOptions` already swaps a
+ * secret-looking id for its position, so for every ask it made the scrub is a
+ * no-op and askId, expiresAt, option ids and stubMessageId are stored as they
+ * are, so open buttons keep working.
  */
 function pendingAskBody(ask: PendingAsk): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -47,7 +49,11 @@ function pendingAskBody(ask: PendingAsk): Record<string, unknown> {
     expiresAt: ask.expiresAt,
   };
   if (ask.options?.length) {
-    body.options = ask.options.map((o) => ({ ...o, label: scrubSecrets(o.label) }));
+    body.options = ask.options.map((o) => ({
+      ...o,
+      id: scrubSecrets(o.id),
+      label: scrubSecrets(o.label),
+    }));
   }
   if (ask.stubMessageId) body.stubMessageId = ask.stubMessageId;
   return body;

@@ -7,9 +7,11 @@ artifact: plan
 
 1. Re-check the gap on main (probe: raw token in `pending_ask`, re-scrub
    leaves it).
-2. `session-store.ts`: scrub question and option labels in `pendingAskBody`.
-3. `scrub.ts`: `scrubJsonText`; `SCRUB_TARGETS` `json` columns with keep
-   keys; JSON-aware pass, `jsonUnparsed` count and content-free log line in
+2. `session-store.ts`: scrub question, option labels and option ids in
+   `pendingAskBody`; `ask-options.ts`: a secret-looking option id falls back
+   to its position.
+3. `scrub.ts`: `scrubJsonText`; `SCRUB_TARGETS` `json` columns; JSON-aware
+   pass, `jsonUnparsed` count and content-free log line in
    `rescrubDatabase`; `SCRUB_RULES_VERSION` 3.
 4. Regression tests in `tests/store.scrub.test.ts` (fail on main, pass on the
    branch).

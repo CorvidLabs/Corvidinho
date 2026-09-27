@@ -145,36 +145,32 @@ export function scrubOpt(text: string | null | undefined): string | null {
 }
 
 /**
- * Scrub the string values of a stored JSON document (SAFE-6 re-scrub). Key
- * names and the values under `keepKeys` (ids) stay as they are; when a value
- * changes the document is re-serialized, so it stays valid JSON — a text scrub
- * could cut a closing quote or brace (a private-key block with no END line
- * runs to the end of the text). Unchanged input is returned as is. Text that
+ * Scrub every string value of a stored JSON document (SAFE-6 re-scrub). Key
+ * names stay as they are; when a value changes the document is re-serialized,
+ * so it stays valid JSON — a text scrub could cut a closing quote or brace (a
+ * private-key block with no END line runs to the end of the text). Unchanged
+ * input is returned as is. Ids are values too: an id that does not look like
+ * a secret is left alone by the scrub, so it stays byte-identical. Text that
  * does not parse (`parsed: false`) is scrubbed as text: nothing reads it as
  * JSON, so the scrub cannot break it.
  */
-export function scrubJsonText(
-  raw: string,
-  keepKeys: readonly string[],
-): { text: string; parsed: boolean } {
-  const keep = new Set(keepKeys);
+export function scrubJsonText(raw: string): { text: string; parsed: boolean } {
   let changed = false;
-  const walk = (v: unknown, key: string | undefined): unknown => {
+  const walk = (v: unknown): unknown => {
     if (typeof v === "string") {
-      if (key !== undefined && keep.has(key)) return v;
       const s = scrubSecrets(v);
       if (s !== v) changed = true;
       return s;
     }
-    if (Array.isArray(v)) return v.map((x) => walk(x, key));
+    if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === "object") {
-      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x, k)]));
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
     }
     return v;
   };
   let next: unknown;
   try {
-    next = walk(JSON.parse(raw), undefined);
+    next = walk(JSON.parse(raw));
   } catch {
     return { text: scrubSecrets(raw), parsed: false };
   }
@@ -185,22 +181,17 @@ export function scrubJsonText(
  * Every free-text column Corvidinho persists. Keep in sync with src/store/db.ts
  * and module-owned tables (spend_ledger: src/agent/spend.ts;
  * discord_session_turns: src/discord/session-thread.ts). `json` columns hold a
- * JSON document and are re-scrubbed value by value ({@link scrubJsonText}),
- * keeping the values of the listed id keys byte-identical.
+ * JSON document and are re-scrubbed value by value ({@link scrubJsonText}).
  */
 export const SCRUB_TARGETS: ReadonlyArray<{
   table: string;
   columns: readonly string[];
-  json?: Readonly<Record<string, readonly string[]>>;
+  json?: readonly string[];
 }> = [
-  {
-    table: "discord_sessions",
-    columns: ["topic"],
-    // Open asks (src/discord/session-store.ts): an open Choose button carries
-    // askId and the option id in its custom_id, and the stub message id
-    // edits the posted stub, so those stay as they are.
-    json: { pending_ask: ["askId", "stubMessageId", "id"] },
-  },
+  // Open asks (src/discord/session-store.ts) are JSON: their askId, option
+  // ids and stub message id never look like a secret, so they stay as they
+  // are and an open Choose button keeps working.
+  { table: "discord_sessions", columns: ["topic"], json: ["pending_ask"] },
   { table: "discord_session_turns", columns: ["content"] },
   { table: "discord_work_tasks", columns: ["description", "summary"] },
   { table: "schedules", columns: ["name", "description", "prompt"] },
@@ -234,9 +225,8 @@ export function rescrubDatabase(db: Database): {
   const unparsed: Record<string, number> = {};
   let rowsUpdated = 0;
   db.transaction(() => {
-    for (const { table, columns, json = {} } of SCRUB_TARGETS) {
+    for (const { table, columns, json: jsonColumns = [] } of SCRUB_TARGETS) {
       if (!tableExists(db, table)) continue;
-      const jsonColumns = Object.keys(json);
       const rows = db
         .query(
           `SELECT rowid AS _rid, id, ${[...columns, ...jsonColumns].join(", ")} FROM ${table}`,
@@ -254,7 +244,7 @@ export function rescrubDatabase(db: Database): {
         for (const col of jsonColumns) {
           const v = row[col];
           if (typeof v !== "string") continue;
-          const r = scrubJsonText(v, json[col]!);
+          const r = scrubJsonText(v);
           if (!r.parsed) {
             const where = `${table}.${col}`;
             unparsed[where] = (unparsed[where] ?? 0) + 1;

@@ -139,12 +139,11 @@ human's words as a run starts, the posted answer or failure line when it
 ends) and `SessionStore.threadFor(session)` returns them oldest first.
 
 Scrub at rest (REQ-discord-066, SAFE-6): `src/store/scrub.ts` exports
-`scrubSecrets` / `scrubOpt`, `scrubJsonText(raw, keepKeys)` (scrubs the string
-values of one stored JSON document, key names and the values under `keepKeys`
-unchanged, re-serialized only when a value changed; text that does not parse
-is scrubbed as text, `parsed: false`), `SCRUB_TARGETS` (text `columns` per
-table plus `json` columns with their id keys: `discord_sessions.pending_ask`
-keeps `askId`, `stubMessageId` and option `id`), `rescrubDatabase` (returns
+`scrubSecrets` / `scrubOpt`, `scrubJsonText(raw)` (scrubs every string value
+of one stored JSON document, key names unchanged, re-serialized only when a
+value changed; text that does not parse is scrubbed as text, `parsed: false`),
+`SCRUB_TARGETS` (text `columns` per table plus `json` columns:
+`discord_sessions.pending_ask`), `rescrubDatabase` (returns
 `rowsUpdated`, `byTable` and `jsonUnparsed`, and logs one
 `[scrub] <table>.<column>: N stored value(s) were not valid JSON` line per
 column, never the text) and `ensureScrubbed`; `SCRUB_RULES_VERSION` is 3.
@@ -193,10 +192,12 @@ custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
 restates and a free-text reply answers, and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
-array (oldest first, newest last) when several are. The stored question and
-option labels are secret-scrubbed (SAFE-6 / REQ-discord-066); askId,
-expiresAt, option ids and stubMessageId are stored as they are, and the SAFE-6
-re-scrub rewrites the column value by value as JSON (`scrubJsonText`). `SessionStore.setPendingAsk(session, ask)`
+array (oldest first, newest last) when several are. The stored question,
+option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
+and the SAFE-6 re-scrub rewrites the column value by value as JSON
+(`scrubJsonText`). `normalizeAskOptions` replaces a model-chosen option id
+that looks like a secret with its position, so askId, expiresAt, option ids
+and stubMessageId are stored byte-identical. `SessionStore.setPendingAsk(session, ask)`
 stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
@@ -464,6 +465,14 @@ REQ-discord-044).
 - **Then** `discord_sessions.pending_ask` holds `[redacted:github-token]` and
   `[redacted:anthropic-key]` in valid JSON, with the same askId, option ids,
   expiresAt and stubMessageId, so the Choose button still opens the choices
+
+### Scenario: A secret-looking option id never reaches a button or the row (SAFE-6)
+
+- **Given** a run asks with an option whose id is an AWS key id
+- **When** the ask is made and its session saved
+- **Then** that option's id is its position (`2`), so neither the button
+  custom id nor `discord_sessions.pending_ask` carries the key; an older
+  build's row that stored it is redacted by the re-scrub, other ids unchanged
 
 ### Scenario: Empty owner scope
 

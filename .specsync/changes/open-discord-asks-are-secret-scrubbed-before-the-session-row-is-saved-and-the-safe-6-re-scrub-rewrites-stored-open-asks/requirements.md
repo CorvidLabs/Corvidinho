@@ -8,8 +8,10 @@ artifact: requirements
 Modifies **REQ-discord-066** (SAFE-6 scrub before persist + re-scrub): open
 asks in `discord_sessions.pending_ask` are among the texts scrubbed before
 they are saved; scrub rules version 3 re-scrubs them value by value as JSON
-with ids byte-identical; a value that is not JSON is scrubbed as text and
-counted, and the log never carries stored text. See `deltas/discord.md`.
+with ids byte-identical; a model-chosen option id that looks like a secret is
+replaced by its position when the ask is made (an older row's is redacted); a
+value that is not JSON is scrubbed as text and counted, and the log never
+carries stored text. See `deltas/discord.md`.
 
 Source HI: SAFE-6 (captured, `hi/safe.md`). Out of scope: outbound / posted
 option labels and a Discord-admin re-scrub command (draft SAFE-10).

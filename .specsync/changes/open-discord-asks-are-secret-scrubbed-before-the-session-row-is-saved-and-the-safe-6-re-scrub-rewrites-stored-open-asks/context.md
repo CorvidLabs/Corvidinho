@@ -26,7 +26,9 @@ re-scrubbed, so `pending_ask` was the one session column left raw.
 
 Constraints: no SQLite schema bump; no new CLI, slash command, env var or
 config key; open buttons must keep working (askId, option ids, expiresAt and
-stubMessageId byte-identical); the re-scrub must not run a text scrub over
+stubMessageId byte-identical, which holds because no id an ask carries looks
+like a secret once a secret-looking option id falls back to its position);
+the re-scrub must not run a text scrub over
 the JSON column (a private-key block with no END line runs to the end of the
 text and would cut the closing quote and brace). Open PR #232 (ask-button
 actor gate + mute/rate) and #233 (SAFE-3 clamp, busy-lock test timeouts) do

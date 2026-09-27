@@ -6,7 +6,8 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { toPendingAsk, type PendingAsk } from "../src/discord/ask-buttons.ts";
+import { askFromToolArguments } from "../src/agent/ask.ts";
+import { buttonAskFor, toPendingAsk, type PendingAsk } from "../src/discord/ask-buttons.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 import { MemoryStore } from "../src/memory/store.ts";
@@ -379,6 +380,94 @@ describe("open Discord asks persist scrubbed and are re-scrubbed as JSON (SAFE-6
       expect(store.get("s1")!.pendingAsk!.options?.map((o) => o.id)).toEqual(["yes", "no"]);
       expect(store.findPendingAsk("ask2")).toMatchObject({ session: { id: "s2" }, ask: { stubMessageId: "2222" } });
       expect(store.findPendingAsk("ask3")?.ask.question).toBe("401 with [redacted:github-token]");
+      db2.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a secret-looking option id is swapped for its position when the ask is made, and scrubbed on write and on re-scrub", () => {
+    // Model-chosen ids keep 32 chars of [A-Za-z0-9_-]: an AWS key id fits
+    // whole and a GitHub token keeps 28 of its 36 characters.
+    const made = askFromToolArguments(
+      JSON.stringify({
+        question: "Which key?",
+        options: [
+          { id: FAKE.github, label: "first" },
+          { id: FAKE.aws, label: "second" },
+          { id: "keep", label: "third" },
+        ],
+      }),
+    );
+    if (!made.ok) throw new Error("ask-human refused the ask");
+    expect(made.ask.options!.map((o) => o.id)).toEqual(["1", "2", "keep"]);
+
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-scrub-ask-ids-"));
+    try {
+      const path = join(dir, "corvidinho.db");
+      const db1 = openCorvidinhoDb({ path });
+      const store = new SessionStore({ db: db1 });
+      const s = store.create({ channelId: "c", userId: "u" });
+      const button = buttonAskFor({ ask: made.ask })!.pending;
+      store.setPendingAsk(s, button);
+      const row = pendingRow(db1, s.id)!;
+      expect(row).not.toContain("gh" + "p_");
+      expect(row).not.toContain(FAKE.aws);
+      expect(JSON.parse(row).options.map((o: { id: string }) => o.id)).toEqual(["1", "2", "keep"]);
+
+      // An ask built without normalizeAskOptions is still scrubbed on write.
+      const direct = toPendingAsk(
+        {
+          reason: "clarify",
+          question: "Pick",
+          options: [
+            { id: FAKE.aws, label: "a" },
+            { id: "b", label: "b" },
+          ],
+        },
+        { askId: "askd" },
+      );
+      const s2 = store.create({ channelId: "c", userId: "u2" });
+      store.setPendingAsk(s2, direct);
+      expect(JSON.parse(pendingRow(db1, s2.id)!).options).toEqual([
+        { id: "[redacted:aws-key]", label: "a" },
+        { id: "b", label: "b" },
+      ]);
+
+      // An older build stored the id raw: the re-scrub redacts it too, and the
+      // row's other ids stay byte-identical.
+      const now = Date.now();
+      const older = {
+        reason: "clarify",
+        question: "Which?",
+        askId: "ask9",
+        expiresAt: now + 60_000,
+        options: [
+          { id: FAKE.aws, label: "x" },
+          { id: "y", label: "y" },
+        ],
+        stubMessageId: "9999",
+      };
+      db1.run(
+        "INSERT INTO discord_sessions (id, channel_id, user_id, pending_ask, created_at, last_activity_at) VALUES ('s9', 'c', 'u9', ?, ?, ?)",
+        [JSON.stringify(older), now, now],
+      );
+      db1.run("UPDATE schema_meta SET value = '2' WHERE key = 'scrub_rules_version'");
+      db1.close();
+
+      const db2 = openCorvidinhoDb({ path });
+      const rewritten = pendingRow(db2, "s9")!;
+      expect(rewritten).not.toContain(FAKE.aws);
+      expect(JSON.parse(rewritten)).toEqual({
+        ...older,
+        options: [
+          { id: "[redacted:aws-key]", label: "x" },
+          { id: "y", label: "y" },
+        ],
+      });
+      expect(rewritten).toContain(`"askId":"ask9","expiresAt":${older.expiresAt}`);
+      expect(rewritten).toContain(`"stubMessageId":"9999"`);
+      expect(pendingRow(db2, s.id)).toBe(row);
       db2.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -590,10 +590,14 @@ rule. Version 3 adds the open asks: a stored `pending_ask` (one JSON object,
 or an array when several asks are open) SHALL be parsed, its text values
 scrubbed and the document re-serialized, so the row stays valid JSON (a text
 scrub could cut it: a private-key block with no END line runs to the end of
-the text). Its askId, expiresAt, option ids and stubMessageId SHALL stay
-byte-identical, on write and on re-scrub, so open buttons keep working. A
-stored value that does not parse SHALL be scrubbed as text and counted; the
-log line SHALL name the column and the count, never the stored text. No CLI
+the text). Every string value is scrubbed, ids included. A model-chosen option
+id that looks like a secret SHALL be replaced by its position when the ask is
+made, so the ids an ask carries (askId, option ids, stubMessageId) never look
+like a secret and, with expiresAt, stay byte-identical on write and on
+re-scrub, so open buttons keep working; an older row's secret-looking id is
+redacted like any stored text. A stored value that does not parse SHALL be
+scrubbed as text and counted; the log line SHALL name the column and the
+count, never the stored text. No CLI
 or slash surface is added. Outbound reply scrubbing beyond the
 spawned-run summary text (REQ-agent-232) and a Discord-admin re-scrub command
 are draft SAFE-10 and out of scope until captured.
@@ -607,6 +611,7 @@ Acceptance Criteria
 - A button ask and a free-text ask whose question or option label holds a fake vendor key are stored in `discord_sessions.pending_ask` as `[redacted:<kind>]`, in the one-object and the array row; the session reloads with the same askId, option ids, expiresAt and stubMessageId.
 - A raw `pending_ask` row (one object or an array) from an older build is rewritten on the next open after `SCRUB_RULES_VERSION` rises, stays valid JSON with its ids byte-identical even when a question holds a private-key block with no END line, and still loads as the session's open asks; a second open is a no-op.
 - A `pending_ask` value that is not JSON is scrubbed as text and counted (`jsonUnparsed`); the warning names the column and count, never the stored text.
+- A model-chosen option id that looks like a secret is replaced by its position when the ask is made, so neither the button nor the stored row carries it; an id that reaches the row another way is stored redacted, and an older row's secret-looking option id is redacted by the re-scrub while its other ids stay byte-identical.
 - Fixture tests use runtime-built fake secrets only.
 
 ### REQ-discord-024

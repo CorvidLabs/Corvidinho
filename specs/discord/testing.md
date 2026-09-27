@@ -322,3 +322,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   line) are rewritten on the next open as valid JSON with ids byte-identical,
   still load as open asks, and a second open is a no-op; a value that is not
   JSON is scrubbed as text and counted, and the warning carries no stored text.
+- Same file › "a secret-looking option id is swapped for its position when the
+  ask is made, and scrubbed on write and on re-scrub": ask-human options whose
+  ids are a GitHub token and an AWS key id get ids `1` and `2` (a clean id is
+  kept); the saved row carries neither; an ask built without
+  `normalizeAskOptions` stores the id redacted; an older row's secret-looking
+  option id is redacted on the next open with askId, expiresAt and
+  stubMessageId byte-identical.

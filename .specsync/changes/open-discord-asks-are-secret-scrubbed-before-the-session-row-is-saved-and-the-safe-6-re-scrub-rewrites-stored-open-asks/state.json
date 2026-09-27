@@ -11,11 +11,12 @@
   "canonical_applied": true,
   "base_commit": "606b993d7175c2f32759e3f02865492e5e884389",
   "created_at": 1790544330,
-  "updated_at": 1790544773,
+  "updated_at": 1790546362,
   "affected_specs": [
     "discord"
   ],
   "affected_paths": [
+    "src/agent/ask-options.ts",
     "src/discord/session-store.ts",
     "src/store/scrub.ts",
     "tests/store.scrub.test.ts",
