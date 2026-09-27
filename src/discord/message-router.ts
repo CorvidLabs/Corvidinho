@@ -3,6 +3,10 @@
  * Entry after gateway; no ProcessManager.
  * DISCORD-DENY-1..3: outside allowlist → refuse without public reply.
  * REQ-discord-201: every start/continue also gates the actor (gateActor).
+ * REQ-discord-212: the message's own channel (thread parent or the thread
+ * itself) must be allowlisted before any path — a reply/forward that
+ * references a tracked bot message never pulls the session into another
+ * channel.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -19,10 +23,36 @@ import type { SessionStore } from "./session-store.ts";
 import {
   type InboundMessage,
   type RouteAction,
+  type SessionStub,
 } from "./types.ts";
 
-function stripMentions(content: string): string {
-  return content.replace(/<@!?\d+>/g, "").trim();
+/**
+ * Strip Discord <@id> tokens from the chat body and append a lookup-friendly
+ * `[mentioned: Discord user id …]` trailer (IDENTITY-5). The body stays usable
+ * for thin-ack detection (AUTONOMY-5: "<@bot> ok" → "ok"); the trailer keeps
+ * snowflakes available for discord-user-lookup.
+ */
+export function stripMentions(content: string): string {
+  const ids: string[] = [];
+  const without = content.replace(/<@!?(\d+)>/g, (_m, id: string) => {
+    ids.push(id);
+    return " ";
+  });
+  const body = without.replace(/\s+/g, " ").trim();
+  if (ids.length === 0) return body;
+  const note = [...new Set(ids)]
+    .map((id) => `Discord user id ${id}`)
+    .join(", ");
+  return body ? `${body}\n[mentioned: ${note}]` : `[mentioned: ${note}]`;
+}
+
+/** Drop the IDENTITY-5 mention trailer so thin-ack / cancel see the body only. */
+export function promptBodyForAskGate(prompt: string): string {
+  return prompt
+    .replace(/\n?\[mentioned:[^\]]*\]\s*$/i, "")
+    .replace(/\bDiscord user id \d+\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export type RouterDeps = {
@@ -65,6 +95,42 @@ function silentChannelDeny(): RouteAction {
 }
 
 /**
+ * DISCORD-5 / REQ-discord-212 — the channel the message was sent in: the
+ * thread's parent (DISCORD-2.a resolution) or the thread itself. The session's
+ * recorded channel never stands in for it.
+ */
+function ownChannelAllowlisted(msg: InboundMessage, deps: RouterDeps): boolean {
+  if (isMonitoredChannel(msg.channelId, deps.allowlist)) return true;
+  return msg.threadId !== undefined && isMonitoredChannel(msg.threadId, deps.allowlist);
+}
+
+/**
+ * DISCORD-5 / REQ-discord-212 — may an ask button press in `channelId` resume
+ * `session`? The press channel must be allowlisted, or be the session's thread
+ * under an allowlisted parent (DISCORD-2.a); and the session's own channel
+ * (parent or thread), where the resumed run posts, must still be allowlisted.
+ * With no session only the press channel is checked.
+ */
+export function componentChannelAllowlisted(
+  channelId: string,
+  session: Pick<SessionStub, "channelId" | "threadId"> | undefined,
+  allowlist: AllowlistConfig,
+): boolean {
+  if (session) {
+    const sessionOk =
+      isMonitoredChannel(session.channelId, allowlist) ||
+      (session.threadId !== undefined && isMonitoredChannel(session.threadId, allowlist));
+    if (!sessionOk) return false;
+  }
+  if (isMonitoredChannel(channelId, allowlist)) return true;
+  return (
+    session?.threadId !== undefined &&
+    session.threadId === channelId &&
+    isMonitoredChannel(session.channelId, allowlist)
+  );
+}
+
+/**
  * REQ-discord-201 / DISCORD-DENY-1 — deny-listed or unlisted actor: silent
  * refuse (no public reply). Null when the actor may proceed.
  */
@@ -92,6 +158,16 @@ export function routeMessage(
 
   const channelOnly = deps.channelOnlyGate !== false;
 
+  // DISCORD-5 / DISCORD-DENY-1 / REQ-discord-212 — nothing is processed
+  // outside an allowlisted channel, even a reply/forward that references a
+  // tracked bot message from an allowlisted one. Silent: MessageCreate has no
+  // ephemeral, so never a public reply.
+  if (!ownChannelAllowlisted(msg, deps)) {
+    return msg.mentionedBot
+      ? silentChannelDeny()
+      : { kind: "ignore", reason: "channel_not_allowlisted" };
+  }
+
   // Thread path (DISCORD-2.a + SESSION-MULTI-1): continue only the same user's
   // thread session. Other users fall through so they get their own session.
   if (msg.threadId) {
@@ -102,13 +178,7 @@ export function routeMessage(
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
       if (existing.userId === msg.authorId) {
-        // Still require parent/thread channel allowlist.
-        if (!isMonitoredChannel(msg.channelId, deps.allowlist) &&
-            !isMonitoredChannel(msg.threadId, deps.allowlist)) {
-          if (!isMonitoredChannel(existing.channelId, deps.allowlist)) {
-            return silentChannelDeny();
-          }
-        }
+        // Parent/thread channel allowlist already checked above.
         const blocked = refuseRateOrMute(msg, deps);
         if (blocked) return blocked;
         deps.store.touch(existing);
@@ -130,10 +200,8 @@ export function routeMessage(
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
       if (existing.userId === msg.authorId) {
-        if (!isMonitoredChannel(existing.channelId, deps.allowlist) &&
-            !isMonitoredChannel(msg.channelId, deps.allowlist)) {
-          return silentChannelDeny();
-        }
+        // Own channel already checked above; the session's channel never
+        // stands in for it (REQ-discord-212).
         const blocked = refuseRateOrMute(msg, deps);
         if (blocked) return blocked;
         deps.store.touch(existing);

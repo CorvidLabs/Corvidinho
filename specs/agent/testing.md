@@ -9,3 +9,7 @@
   voices, < 2 proposals, failed chair, scrub + caps, per-voice and council time
   caps, lead abort) and the tool loop offering / running `council` against a
   `.ts` fake bin (REQ-agent-118).
+
+## Soft-land tool rounds (REQ-agent-312)
+
+`tests/agent.soft-land.test.ts` covers exhaustion soft-land, chatBody scrub, and mention rewrite.
