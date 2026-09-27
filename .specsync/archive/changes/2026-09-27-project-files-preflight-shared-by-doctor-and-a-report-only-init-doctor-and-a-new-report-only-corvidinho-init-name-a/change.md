@@ -1,6 +1,6 @@
 ---
 id: project-files-preflight-shared-by-doctor-and-a-report-only-init-doctor-and-a-new-report-only-corvidinho-init-name-a
-state: verifying
+state: archived
 type: feature
 base_commit: b89018f12d3fa6607edfd1acce69186267038302
 ---
