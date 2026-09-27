@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 28
+version: 29
 status: draft
 files:
   - src/agent/types.ts
@@ -261,6 +261,21 @@ pipes); an abort while verify runs is a cancel (no
 `VerifyResult`, no retry, no `stuck` ask); each LLM request is bounded by a
 timeout, and a caller abort is never reported as a timeout.
 
+Images reach the model as pixels (DISCORD-9 / REQ-agent-428, extends
+REQ-agent-008): a tool result carrying `PluginHandlerResult.image` (`files-read`
+of an image, REQ-plugins-427) keeps only its metadata in the tool message and
+the `ToolResult` detail; once the round's tool messages are all pushed (they
+must directly follow the assistant `tool_calls`), the loop adds one user
+message `[{type:"text", text:"Image(s) opened with files-read: <paths>"},
+{type:"image_url", image_url:{url:"data:<mime>;base64,<b64>"}}, …]`. The
+base64 never reaches tool text, events or ndjson. If a request carrying image
+parts gets HTTP 400, 404, 413, 415 or 422, the image user messages are
+removed, each opened image's tool message says `[image <path> could not be
+shown to this model]`, an `[operator]` Text note is emitted, and that request
+is retried once (no user message after tool messages, so strict role-order
+providers accept it); later images in the run get the same note in their tool
+message. No new env var, flag or protocol field.
+
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
 is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
@@ -293,6 +308,18 @@ model.
 - **When** the model calls `council` with `--question ...` (3 voices by default)
 - **Then** 3 read-tier voices propose, each critiques the proposals, a chair decides, and the tool result carries the decision and a bounded transcript
 
+### Scenario: the model looks at an attached image
+
+- **Given** a tool-tier run whose model calls `files-read` on a PNG under the session cwd
+- **When** the next chat/completions request is sent
+- **Then** it carries the small tool message and, right after it, one user message with an `image_url` part holding `data:image/png;base64,…` of the file
+
+### Scenario: a model without vision refuses the image
+
+- **Given** the request carrying an image part gets HTTP 400
+- **When** the loop handles it
+- **Then** it drops the image message, puts `[image <path> could not be shown to this model]` in that image's tool message, retries once, and the run completes with the model's reply
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -305,6 +332,8 @@ model.
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
+| HTTP 400 / 404 / 413 / 415 / 422 on a request carrying image parts (model or gateway without vision, image too large) | image user messages removed, each image's tool message says `[image <path> could not be shown to this model]`, `[operator]` Text note, request retried once; later images get that note in their tool message (REQ-agent-428) |
+| Any error on that retry, any other status (401 / 429 / 5xx) with images, or an error on a request with no image parts | provider error as today (`LLM HTTP <status>`, `ExecuteResult.error`; REQ-agent-242) |
 | LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
@@ -367,3 +396,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13: Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring |
 | 2026-09-27 | tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points: Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6) |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
+| 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |

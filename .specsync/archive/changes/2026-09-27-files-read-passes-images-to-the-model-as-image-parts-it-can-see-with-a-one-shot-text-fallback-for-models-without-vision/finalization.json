@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision",
+  "implementation_commit": "6a2d02681b3863ac0b79512a6bdcf26947bc9cdc",
+  "implementation_tree": "5f99c6f590377f3979f644309a104a2b7fddfe6d",
+  "contract_digest": "d3a178f7321ef6518140b39f70efa3dffc7e2f79659e24d32a31c147fdfc1fcb",
+  "workspace_digest": "3c726820e9b0f72aa54328346da1939ed4b8e3ddf15cb057183350699ef771d8",
+  "closing_digest": "f700f1b65713a0e78df0874a4e39adfbc6e6dfdc96c369c4258b1ad1a2329967",
+  "review_digest": "438b710b407416c35bd7ad5217ddbc43a2b69b8a373c9987301c3cba0b8fe408",
+  "finalization_digest": "3aa0ddda4c8e4ec3df177f7a5d971116e57487965cf1011f772a552b5cd05fd8",
+  "timestamp": 1790522856
+}
