@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "schedule-ask-outbox-delivery-re-checks-the-creator-and-channel-against-the-live-discord-schedule-3-gate",
+  "implementation_commit": "a0cb52cde300feebabd3946b9aa6d1f34ba402ca",
+  "implementation_tree": "1b5e6af82498e280fe314b82870e9c9539490aa9",
+  "contract_digest": "e7beb7e6d0c4e5671b34ab21a7779e1f5b4e288fdc66ad0cfd331e713dc3199c",
+  "workspace_digest": "1fcb8548fd145e3599ba1420bdc78538d17945651a3c78f70759a6f43b8beaa4",
+  "closing_digest": "ff56fa025d003831bd10bfa8ccd693b67425795707c7a3567725aab94bf99e93",
+  "review_digest": "0f05a71aa00bfd0cfc19710919bd31a6860826ea73c199412f54d5f829c555d8",
+  "finalization_digest": "00b3e95a9dbbdead5f6d9e8bf6b53998e5b920ca9e68ed9762a53095b17e9348",
+  "timestamp": 1790524826
+}

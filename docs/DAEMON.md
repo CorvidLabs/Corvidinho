@@ -42,8 +42,17 @@ on the same data dir:
 - Updates write only the columns they own. A run that ends in the daemon
   never undoes a `/schedule pause` made in the bridge.
 - A run the bridge claims is posted to the schedule's channel. A run the
-  daemon claims is only recorded in the run history, because the daemon has
-  no Discord connection.
+  daemon claims is recorded in the run history and not posted, because the
+  daemon has no Discord connection. The exception is a run that needs a
+  human (next point).
+- A daemon run that stops to ask a human (stuck, a clarify question, or the
+  daily spend cap) records its question on the run row and logs
+  `run.needs_human`. The bridge's next scheduler tick (within about 60 s)
+  posts that question to the schedule's channel once, with the same pings
+  as a run the bridge claimed: the owner for stuck and spend-cap, the
+  schedule's creator for clarify. Only the newest ask of a schedule is
+  posted, and not at all once a later run of that schedule has finished.
+  With only the daemon running, the question waits until a bridge starts.
 
 ## Configuration
 
@@ -108,6 +117,7 @@ scrubbed for secrets (SAFE-6).
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first. |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
+| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Its question stays on the run row until a bridge posts it. |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
 | `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (nothing ran; due schedules stay due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |

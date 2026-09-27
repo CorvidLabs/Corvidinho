@@ -1434,6 +1434,10 @@ export async function startBridge(
           );
           await scheduler.settleAbandoned(ABANDONED_SETTLE_MS);
         }
+        // REQ-discord-347: a pending-ask post in flight gets the same short
+        // grace while the gateway is still up, so its ask is either posted
+        // or handed back for the next start, not left taken and unposted.
+        await scheduler.settleAskDelivery(ABANDONED_SETTLE_MS);
       }
       await gateway.stop();
     },

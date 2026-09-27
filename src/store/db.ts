@@ -205,7 +205,24 @@ CREATE TABLE IF NOT EXISTS discord_inflight_replies (
  */
 const SCHEMA_V10_RUN_COLUMNS = ["runner"] as const;
 
-export const SCHEMA_VERSION = 10;
+/**
+ * v11 — needs-human outbox for schedule runs (AUTONOMY-2 / AUTONOMOUS-7,
+ * REQ-discord-347): the ask a run stopped with (reason + SAFE-6 scrubbed
+ * question) and when a bridge took it to post. A run `corvidinho daemon`
+ * claimed (no Discord) keeps its ask pending until a bridge tick posts it.
+ */
+const SCHEMA_V11_RUN_COLUMNS = [
+  ["ask_reason", "TEXT"],
+  ["ask_question", "TEXT"],
+  ["ask_posted_at", "INTEGER"],
+] as const;
+const SCHEMA_V11_SQL = `
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_pending_ask
+  ON schedule_runs(schedule_id)
+  WHERE ask_reason IS NOT NULL AND ask_posted_at IS NULL;
+`;
+
+export const SCHEMA_VERSION = 11;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -301,6 +318,18 @@ export function migrateCorvidinhoDb(db: Database): void {
     }
     db.run("UPDATE schema_meta SET value = '10' WHERE key = 'version'");
     version = 10;
+  }
+  if (version < 11) {
+    for (const [col, type] of SCHEMA_V11_RUN_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedule_runs ADD COLUMN ${col} ${type}`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.exec(SCHEMA_V11_SQL);
+    db.run("UPDATE schema_meta SET value = '11' WHERE key = 'version'");
+    version = 11;
   }
 }
 
