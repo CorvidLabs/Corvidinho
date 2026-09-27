@@ -6,7 +6,8 @@
  * A deferred BEGIN + SELECT + write that meets another writer's RESERVED lock
  * gets SQLITE_BUSY without the busy handler ("database is locked" at once), so
  * the SAFE-5 row was lost. A child process holds the write lock for a moment
- * and then commits; the parent's write must wait for it and succeed.
+ * and then commits; the parent's write must wait for it and succeed. Several
+ * processes appending at once (as concurrent plugin runs do) lose no rows.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -17,7 +18,10 @@ import { openCorvidinhoDb } from "../src/store/db.ts";
 import { rescrubDatabase } from "../src/store/scrub.ts";
 
 const LOG_TS = join(import.meta.dir, "..", "src", "audit", "log.ts");
+const DB_TS = join(import.meta.dir, "..", "src", "store", "db.ts");
 const HOLD_MS = 750;
+const APPENDERS = 4;
+const APPENDS_EACH = 40;
 
 // Child: open the same file, take the write lock, append one audit row inside
 // it, report "locked", hold the lock, then commit.
@@ -33,6 +37,31 @@ writeSync(1, "locked\\n");
 Bun.sleepSync(Number(process.env.HOLD_MS));
 db.exec("COMMIT");
 db.close();
+`;
+
+// Child: like a dangerous plugin run's audit write (src/plugins/run.ts), open
+// the shared file DB, append one row and close it, APPENDS_EACH times. All
+// children start at START_AT so their appends overlap.
+const APPENDER = `
+import { appendAudit } from ${JSON.stringify(LOG_TS)};
+import { openCorvidinhoDb } from ${JSON.stringify(DB_TS)};
+const wait = Number(process.env.START_AT) - Date.now();
+if (wait > 0) Bun.sleepSync(wait);
+let ok = 0;
+const errors = [];
+for (let i = 0; i < Number(process.env.APPENDS_EACH); i++) {
+  let db;
+  try {
+    db = openCorvidinhoDb({ path: process.env.HOLD_DB });
+    appendAudit(db, { action: "shell-exec", actor: "u-" + process.pid, surface: "cli", argsDigest: "0".repeat(64), outcome: "ok", exitCode: 0 });
+    ok += 1;
+  } catch (err) {
+    errors.push(String(err));
+  } finally {
+    db?.close();
+  }
+}
+console.log(JSON.stringify({ ok, errors: errors.slice(0, 3) }));
 `;
 
 const dirs: string[] = [];
@@ -134,4 +163,44 @@ describe("shared DB writers wait for another process's write lock", () => {
       db.close();
     }
   });
+
+  test(
+    "concurrent appenders in several processes lose no rows and keep one chain (SAFE-5)",
+    async () => {
+      const path = tempDbPath();
+      openCorvidinhoDb({ path }).close();
+      const startAt = Date.now() + 400;
+      const procs = Array.from({ length: APPENDERS }, () =>
+        Bun.spawn(["bun", "-e", APPENDER], {
+          env: {
+            ...process.env,
+            HOLD_DB: path,
+            APPENDS_EACH: String(APPENDS_EACH),
+            START_AT: String(startAt),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        }),
+      );
+      const results = await Promise.all(
+        procs.map(async (p) => {
+          const [out, err, code] = await Promise.all([
+            new Response(p.stdout).text(),
+            new Response(p.stderr).text(),
+            p.exited,
+          ]);
+          if (code !== 0) throw new Error(`appender exited ${code}: ${err}`);
+          return JSON.parse(out) as { ok: number; errors: string[] };
+        }),
+      );
+      for (const r of results) expect(r).toEqual({ ok: APPENDS_EACH, errors: [] });
+      const db = openCorvidinhoDb({ path });
+      try {
+        expect(verifyAudit(db)).toMatchObject({ ok: true, count: APPENDERS * APPENDS_EACH });
+      } finally {
+        db.close();
+      }
+    },
+    30_000,
+  );
 });

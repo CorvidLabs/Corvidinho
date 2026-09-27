@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process",
+  "slug": "concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process",
+  "title": "Concurrent audit appends from several processes lose no SAFE-5 rows: regression test for REQ-plugins-287 multi-process acceptance (review follow-up for PR 211)",
+  "description": "Concurrent audit appends from several processes lose no SAFE-5 rows: regression test for REQ-plugins-287 multi-process acceptance (review follow-up for PR 211)",
+  "kind": "bug_fix",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "9cab0ec853d8b4b55acda7f1ff708a6b68a1a130",
+  "created_at": 1790469311,
+  "updated_at": 1790469414,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "tests/store.busy-lock.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Four bun processes each open the shared file DB, append one SAFE-5 audit row and close it, 40 times each, at the same time; every append succeeds, the audit_log holds all 160 rows and verifyAudit reports the chain ok. The same test loses rows (database is locked) on the pre-fix deferred transaction."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
