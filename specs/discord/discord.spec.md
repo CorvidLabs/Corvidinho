@@ -36,7 +36,6 @@ files:
   - tests/memory.spawn-env.test.ts
   - src/discord/work-store.ts
   - src/discord/message-router.ts
-  - tests/discord.user-lookup.test.ts
   - tests/discord.actor-gate.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
