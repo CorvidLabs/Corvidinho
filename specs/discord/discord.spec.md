@@ -48,6 +48,8 @@ files:
   - src/discord/slash-types.ts
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
+  - src/discord/list-scope.ts
+  - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
@@ -224,6 +226,14 @@ user id + resolved display (owner map wins for owner). Gateway fills
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
 Final chat reply content remains human text only (DISCORD-3.a).
+
+Listing scope (REQ-discord-418, SESSION-MULTI-1 / IDENTITY-2/3):
+`src/discord/list-scope.ts` exports `actorIsAdmin` (the acting user resolves
+to ADMIN, the configured owner) and `projectLabel` (an absolute project path
+becomes its last segment; a relative name is kept). `/session list` shows
+ADMIN every session with its full project path and anyone else only their own
+sessions with the project name; `/schedule list` shows a non-ADMIN member the
+project name, never an absolute host path. `/status` stays counts-only.
 
 `src/discord/permissions.ts` exports `gateActor` (the chat + slash actor gate:
 deny lists win, non-empty user/role allowlist must match or be the owner);

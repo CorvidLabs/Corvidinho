@@ -9,6 +9,7 @@ import {
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
+import { actorIsAdmin, projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
@@ -21,25 +22,38 @@ import {
   slashOwnerNotice,
 } from "../spend-post.ts";
 
-function formatSessionLine(s: {
-  id: string;
-  channelId: string;
-  userId: string;
-  topic?: string;
-  project?: string;
-  lastActivityAt: number;
-}): string {
+function formatSessionLine(
+  s: {
+    id: string;
+    channelId: string;
+    userId: string;
+    topic?: string;
+    project?: string;
+    lastActivityAt: number;
+  },
+  opts: { fullProjectPath: boolean },
+): string {
   const ageSec = Math.max(0, Math.floor((Date.now() - s.lastActivityAt) / 1000));
   const topic = s.topic ? ` — ${s.topic.slice(0, 60)}` : "";
-  const project = s.project ? ` · \`${s.project}\`` : "";
+  // REQ-discord-418: only ADMIN sees the absolute host path.
+  const shown = opts.fullProjectPath ? s.project : projectLabel(s.project);
+  const project = shown ? ` · \`${shown}\`` : "";
   return `• \`${s.id}\` <#${s.channelId}> <@${s.userId}>${topic}${project} (${ageSec}s ago)`;
 }
 
+/**
+ * REQ-discord-418 (SESSION-MULTI-1, IDENTITY-2/3): ADMIN (owner) lists every
+ * session; anyone else lists only sessions they own, without host paths.
+ */
 export async function handleSessionList(
   ctx: SlashContext,
   interaction: SlashInteraction,
 ): Promise<void> {
-  const sessions = ctx.store.list();
+  const isAdmin = actorIsAdmin(ctx, interaction);
+  const all = ctx.store.list();
+  const sessions = isAdmin
+    ? all
+    : all.filter((s) => s.userId === interaction.userId);
   if (sessions.length === 0) {
     await interaction.reply({
       content: "No active sessions.",
@@ -47,7 +61,9 @@ export async function handleSessionList(
     });
     return;
   }
-  const lines = sessions.slice(0, 20).map(formatSessionLine);
+  const lines = sessions
+    .slice(0, 20)
+    .map((s) => formatSessionLine(s, { fullProjectPath: isAdmin }));
   const more =
     sessions.length > 20 ? `\n…and ${sessions.length - 20} more` : "";
   await interaction.reply({

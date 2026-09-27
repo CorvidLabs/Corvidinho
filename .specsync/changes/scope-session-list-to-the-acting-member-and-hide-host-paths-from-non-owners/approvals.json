@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790469903,
+      "digest": "a61c56d708e319de61c7becc185c1f6f1b90301f408d5092040b05691d7f5920",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners",
+        "title": "Scope /session list to the acting member and hide host paths from non-owners",
+        "description": "Scope /session list to the acting member and hide host paths from non-owners",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/discord/discord.spec.md",
+          "src/discord/command-handlers/schedule.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/list-scope.ts",
+          "tests/discord.session-list-scope.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A non-ADMIN member's /session list shows only sessions whose owner user id matches the acting user (SESSION-MULTI-1); no other user's session id, mention or topic; project shown as name, never an absolute host path. The owner (ADMIN, IDENTITY-2) keeps the full list with every session and its full project path. No owner configured means nobody is ADMIN, so everyone sees only their own (IDENTITY-3). /schedule list shows a member the project name only; /status stays counts-only. Regression tests fail on main and pass after."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "ddfdf0d486347e9d79d6dd529609de90111dd4b487eaf07b306fe6a9c871b855"
+      }
+    }
+  ],
+  "reopenings": []
+}
