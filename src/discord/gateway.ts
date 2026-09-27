@@ -57,6 +57,13 @@ export type GatewayHandlers = {
    * Bridge wires `config.channelIds` (mutated in place by /admin).
    */
   getAllowlistedChannelIds?: () => readonly string[];
+  /**
+   * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431 — may this invoker see channel
+   * autocomplete choices? Asked on every autocomplete request; unset or false
+   * ⇒ empty choices (fail closed). The bridge wires the slash gate order:
+   * channel allowlist → actor gate → ADMIN (owner, not muted).
+   */
+  mayAutocompleteChannels?: (actor: AutocompleteActor) => boolean;
   onReady?: (botUserId: string) => void;
   /** Optional outbound helper used by bridge after agent reply. */
   reply?: (opts: {
@@ -96,6 +103,17 @@ export type GatewayHandlers = {
     messageId: string;
   }) => Promise<boolean>;
 };
+
+/** Who asked for channel autocomplete, and where (REQ-discord-431). */
+export type AutocompleteActor = {
+  commandName: string;
+  channelId: string;
+  userId: string;
+  roleIds: string[];
+};
+
+/** Fixture-friendly subset of a discord.js interaction member (roles via `interactionRoleIds`). */
+type RawInteractionMember = { roles?: RawMemberRoles } | null;
 
 export type DiscordGateway = {
   start(): Promise<void>;
@@ -730,11 +748,20 @@ type ChannelTypeEnum = { GuildText: number };
  * Live autocomplete for STRING channel options on /admin channels add|remove
  * and /announce channel. Lists guild text channels from cache (Guilds intent);
  * remove scopes to the live allowlist when provided.
+ *
+ * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431: Discord shows these options to
+ * every guild member, so each request is re-checked here. Unless
+ * `handlers.mayAutocompleteChannels` says this invoker is ADMIN in an
+ * allowlisted channel, the answer is an empty choice list: no channel names,
+ * ids or allowlist entries leak.
  */
-async function respondChannelAutocomplete(
+export async function respondChannelAutocomplete(
   interaction: {
     commandName: string;
     createdTimestamp: number;
+    channelId: string;
+    user: { id: string };
+    member?: RawInteractionMember;
     guild: {
       channels: {
         cache: { values: () => IterableIterator<{ id: string; name: string; type: number }> };
@@ -751,6 +778,27 @@ async function respondChannelAutocomplete(
   ChannelType: ChannelTypeEnum,
 ): Promise<void> {
   const started = interaction.createdTimestamp;
+  // Fail closed: no gate wired, a refusal or a throwing gate ⇒ no choices.
+  let allowed = false;
+  try {
+    allowed =
+      handlers.mayAutocompleteChannels?.({
+        commandName: interaction.commandName,
+        channelId: interaction.channelId,
+        userId: interaction.user.id,
+        roleIds: interactionRoleIds(interaction.member),
+      }) === true;
+  } catch (err) {
+    console.error("[discord] autocomplete gate failed:", err);
+  }
+  if (!allowed) {
+    try {
+      await interaction.respond([]);
+    } catch (err) {
+      console.error("[discord] autocomplete respond failed:", err);
+    }
+    return;
+  }
   let choices: { name: string; value: string }[] = [];
   try {
     const focusedRaw = interaction.options.getFocused(true);

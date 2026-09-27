@@ -79,6 +79,7 @@ import {
 import {
   defaultRateLimitConfig,
   gateActor,
+  gateChannel,
   gateRateOrMute,
   isMonitoredChannel,
   muteUser as muteUserImpl,
@@ -1339,6 +1340,27 @@ export async function startBridge(
       await handleSlashInteraction(buildSlashCtx(), interaction);
     },
     getAllowlistedChannelIds: () => config.channelIds,
+    // DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431 — channel autocomplete only
+    // lists channels for ADMIN in an allowlisted channel, checked in the slash
+    // gate order (channel → actor → ADMIN with the live mute set). No rate
+    // hit: autocomplete fires per keystroke and never runs anything.
+    mayAutocompleteChannels: ({ channelId, userId, roleIds }) =>
+      gateChannel(channelId, config.allowlist).ok &&
+      gateActor({
+        userId,
+        roleIds,
+        allowlist: config.allowlist,
+        owner: config.owner ?? null,
+      }).ok &&
+      resolvePermissionLevel({
+        userId,
+        roleIds,
+        allowlist: config.allowlist,
+        adminUserIds: config.adminUserIds,
+        adminRoleIds: config.adminRoleIds,
+        owner: config.owner ?? null,
+        mutedUsers,
+      }) >= PermissionLevel.ADMIN,
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
       // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel.
