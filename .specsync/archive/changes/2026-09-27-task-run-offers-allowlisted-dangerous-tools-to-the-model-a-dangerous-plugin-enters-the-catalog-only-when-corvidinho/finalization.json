@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "task-run-offers-allowlisted-dangerous-tools-to-the-model-a-dangerous-plugin-enters-the-catalog-only-when-corvidinho",
+  "implementation_commit": "6438e6fa85a070d699903f5d58cf08bbac3b3a26",
+  "implementation_tree": "968c460368bc35a13184db0ee4cbf52d4ab434ce",
+  "contract_digest": "7090f90801f460d203d1a8940f0153ea1837527f148dfac8f91e490fa19ee2ee",
+  "workspace_digest": "d24631c8f7997592d5a21dcf853c8670bae327804375df1bb2b5f5dbd5826696",
+  "closing_digest": "6543ae1a1ec1f6be50e2f2dcf1ea4a32556807c3da818732889cdcc37155b7f2",
+  "review_digest": "da659f36e751f7485e31c3efda410b6562b6d1f4e8b56fe1fcc7ab26da4d02f7",
+  "finalization_digest": "a5b21a7f7ac13f20af470baaddb279bafba37f7d13cb7274cba9969ae7f6136f",
+  "timestamp": 1790538263
+}

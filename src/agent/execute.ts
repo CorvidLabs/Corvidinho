@@ -6,6 +6,8 @@
  */
 
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
+import { DELEGATE_COMMAND_NAME } from "../../plugins/autonomous/commands.ts";
+import { FLEDGE_COMMAND_PREFIX } from "../../plugins/fledge/commands.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
@@ -52,8 +54,10 @@ import {
   type CapabilityTier,
 } from "./tier.ts";
 import {
+  allowlistOffers,
   argvFromToolArguments,
   buildOpenAiTools,
+  editsFilesUnreported,
   filesChangedFromToolData,
   type OpenAiToolDef,
 } from "./tools.ts";
@@ -209,7 +213,11 @@ export type CreateTaskExecuteOpts = {
   maxToolRounds?: number;
   /** Per-request LLM timeout (default {@link LLM_REQUEST_TIMEOUT_MS}). */
   llmTimeoutMs?: number;
-  /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
+  /**
+   * When true, expose every dangerous plugin in the catalog (still SAFE-1
+   * gated). Test seam: without it the catalog offers only the dangerous
+   * plugins `allowlist` names, never the SAFE-3-pending ones (CLI-3).
+   */
   includeDangerous?: boolean;
   /**
    * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
@@ -331,6 +339,16 @@ function toAllowSet(
   return new Set(allowlist);
 }
 
+/** The allowlist offers at least one Fledge command (FLEDGE-4 / PLUGIN-3). */
+function allowsFledge(allowlist: ReadonlySet<string>): boolean {
+  for (const name of allowlist) {
+    if (name.startsWith(FLEDGE_COMMAND_PREFIX) && allowlistOffers(allowlist, name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Build the execute fn used by `corvidinho task run`.
  * No key → demo. Key + read tier → single chat (no tools).
@@ -411,14 +429,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    if (includeDangerous && opts.loadPlugins !== false) {
-      // FLEDGE-4: Fledge commands are all dangerous, so only discover them
-      // when this run's catalog may offer dangerous tools.
-      await loadFledgePlugins({ cwd, env });
-    }
     let actingIsAdmin = true;
     if (roleSessionActive(env)) {
       actingIsAdmin = await resolveActingIsAdmin(env);
+    }
+    if (
+      opts.loadPlugins !== false &&
+      (includeDangerous || (actingIsAdmin && allowsFledge(allowlist)))
+    ) {
+      // FLEDGE-4: Fledge commands are all dangerous (so mutating), so only
+      // discover them when this run's catalog may offer one: the allowlist
+      // names one and the session is not a non-ADMIN one (ROLES-CHAT-2).
+      await loadFledgePlugins({ cwd, env });
     }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
@@ -427,6 +449,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       buildOpenAiTools({
         tier,
         includeDangerous,
+        // SAFE-1 / CLI-3: the allowlist is the consent that offers a
+        // dangerous tool; role (ROLES-CHAT-2) and tier filters still apply.
+        allowlist,
         actingIsAdmin,
         autonomous,
       }),
@@ -452,6 +477,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       onRoleRefusal: () => {
         roleRefused = true;
       },
+      // AGENT-4 (REQ-agent-502): a delegate worker gets this run's allowlist
+      // and, outside a role session, may run an allowlisted Fledge command
+      // whose edits no result reports (a role-session worker is non-ADMIN).
+      workerEditsUnreported: !roleSessionActive(env) && allowsFledge(allowlist),
     });
   };
   // SAFE-8: an attempt stopped at the cap ends with its spend-cap ask (blocked).
@@ -486,6 +515,8 @@ type LoopArgs = {
   roleEnv: NodeJS.ProcessEnv;
   /** Called for each tool call refused for the caller's role (ROLES-CHAT-3). */
   onRoleRefusal: () => void;
+  /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
+  workerEditsUnreported?: boolean;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -508,9 +539,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     specBriefing,
     roleEnv,
     onRoleRefusal,
+    workerEditsUnreported = false,
   } = args;
 
   const filesChanged = new Set<string>();
+  // AGENT-4: tools run this attempt whose file edits no result reports.
+  const unreportedEditTools = new Set<string>();
   const toolNamesUsed: string[] = [];
   // SAFE-1 / AGENT-5: the model may only call tools offered in this run's
   // catalog (tier + danger filtered) — never an arbitrary registered name.
@@ -621,6 +655,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
             ? `Completed after tools: ${toolNamesUsed.join(", ")}`
             : "(empty LLM reply)"),
         filesChanged: [...filesChanged],
+        ...unreportedEdits(unreportedEditTools),
       };
     }
 
@@ -692,6 +727,15 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       for (const f of filesChangedFromToolData(result.data)) {
         filesChanged.add(f);
       }
+      if (
+        offered.has(name) &&
+        (editsFilesUnreported(name) ||
+          // A worker ran (a refusal carries no data) and may have run an
+          // allowlisted Fledge command (REQ-agent-502).
+          (name === DELEGATE_COMMAND_NAME && workerEditsUnreported && result.data !== undefined))
+      ) {
+        unreportedEditTools.add(name);
+      }
 
       const detail = result.ok
         ? truncate(stringifyToolPayload(result), 2000)
@@ -735,7 +779,13 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   return {
     summary: landed.summary,
     filesChanged: [...filesChanged],
+    ...unreportedEdits(unreportedEditTools),
   };
+}
+
+/** `unreportedEditTools` for an execute result, only when a tool ran. */
+function unreportedEdits(tools: Set<string>): Pick<ExecuteResult, "unreportedEditTools"> {
+  return tools.size > 0 ? { unreportedEditTools: [...tools] } : {};
 }
 
 async function singleChatCompletion(opts: {
