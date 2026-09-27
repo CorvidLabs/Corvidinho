@@ -27,6 +27,14 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   minPermission re-check (no live token).
 - `tests/discord.requester-perms.test.ts` — evaluateRequesterCanSend + post
   plugin requester/strict gates (no live token).
+- Same file: in a bridge-started run (`CORVIDINHO_ACTING_DISCORD_USER_ID`
+  set) the post checks the acting user without `--requesting-user-id`, refuses
+  a requesting id naming another user, meets strict mode with the acting
+  user's check, and refuses with one scrubbed line when the check cannot run
+  (a throwing checker; the real discord.js `login` stubbed to fail as with
+  Server Members Intent off); a `fetch` spy proves nothing is posted. With the
+  acting env empty or unset the flag / strict behaviour is unchanged
+  (REQ-discord-012, no token, no network).
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 
