@@ -7,10 +7,11 @@
   "title": "A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending",
   "description": "A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "dc65cf70d4a46d59c35f80acd91822df3eddf3f1",
   "created_at": 1790469397,
-  "updated_at": 1790469510,
+  "updated_at": 1790469523,
   "affected_specs": [
     "discord"
   ],

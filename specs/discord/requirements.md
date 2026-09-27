@@ -904,12 +904,29 @@ continue the conversation WITHOUT clearing pending; only button pick, cancel,
 or expiry SHALL clear it. Clarify asks SHALL mention the requester; stuck
 asks SHALL mention the configured owner.
 
+A `/work` or `/session start` run that stopped with a clarify or stuck ask
+SHALL store that ask as its session's free-text pending ask (the slash answer
+shows it as free text, with no Choose buttons), and `/work` SHALL record the
+task `blocked` (a stuck ask stays `failed`), never `completed`
+(AUTONOMY-1). The slash answer message SHALL be bound to its session like a
+chat reply (DISCORD-2), so a reply to it by the requester continues that
+session and the rules above apply (AUTONOMY-5/6). A SAFE-8 spend-cap stop
+SHALL NOT be stored as the pending ask.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
 - Cancel clears pendingAsk.
 - Free-text substantive continue clears pending and runs agent.
 - Button pending survives unrelated chat turns until pick/cancel/expiry.
+- `/work` with a clarify ask (even one with structured options): the task is `blocked`, the session's pending ask is the free-text clarify ask, and the collapsed answer message maps to that session.
+- A thin reply (`ok`) to the `/work` answer restates the question (requester mention, reply hint) and does not run the agent; the pending ask remains.
+- `cancel` in reply to the `/work` answer clears the pending ask with the short ack and does not run the agent.
+- A substantive reply to the `/work` answer resumes the same session (`resume: true`) with the prior question and the human answer in the prompt, and clears the pending ask.
+- `/work` or `/session start` stopped at the spend cap stores no pending ask; a later `ok` to the `/work` answer runs the agent with no prior-question or cap text.
+- `/session start` with a clarify ask: the pending ask is stored; a thin reply restates, a substantive reply resumes with the question.
+- A finished `/work` run (`completed`) stores no pending ask and its answer still continues the session.
+- Without an editable thinking message the pending ask is still stored, and an @mention `ok` from the requester restates it without running the agent.
 
 ### REQ-discord-045
 
