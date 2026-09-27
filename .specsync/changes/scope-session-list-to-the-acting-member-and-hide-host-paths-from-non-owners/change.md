@@ -1,6 +1,6 @@
 ---
 id: scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd
 ---

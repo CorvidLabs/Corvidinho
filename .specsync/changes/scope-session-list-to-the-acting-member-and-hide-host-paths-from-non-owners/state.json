@@ -7,10 +7,11 @@
   "title": "Scope /session list to the acting member and hide host paths from non-owners",
   "description": "Scope /session list to the acting member and hide host paths from non-owners",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd",
   "created_at": 1790469808,
-  "updated_at": 1790469903,
+  "updated_at": 1790469918,
   "affected_specs": [
     "discord"
   ],
