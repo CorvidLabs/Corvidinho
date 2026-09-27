@@ -104,6 +104,7 @@ import {
   type InflightReply,
 } from "./inflight-replies.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { formatErrorLine } from "../store/scrub.ts";
 import {
   appendAudit,
   auditKeyFromEnv,
@@ -257,6 +258,27 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
       return true;
     },
   };
+}
+
+/**
+ * REQ-discord-417: one scrubbed line for a failed gateway login. discord.js
+ * turns a 401 into `TokenInvalid` (no status); REST errors carry `status`.
+ */
+export function formatDiscordLoginFailure(
+  err: unknown,
+  opts: { env?: NodeJS.ProcessEnv } = {},
+): string {
+  const e = (err && typeof err === "object" ? err : {}) as {
+    code?: unknown;
+    status?: unknown;
+  };
+  const status =
+    e.code === "TokenInvalid" ? 401 : typeof e.status === "number" ? e.status : undefined;
+  const detail = formatErrorLine(err, { env: opts.env });
+  if (status === 401 || status === 403) {
+    return `discord login failed (${status}): check DISCORD_TOKEN (${detail})`;
+  }
+  return `discord login failed${status ? ` (${status})` : ""}: ${detail} — check DISCORD_TOKEN and that discord.com is reachable`;
 }
 
 /**
@@ -1316,7 +1338,17 @@ export async function startBridge(
   if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
   if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
 
-  await gateway.start();
+  try {
+    await gateway.start();
+  } catch (err) {
+    // REQ-discord-417: a rejected login is a clean non-zero exit, not a
+    // DiscordAPIError dump and Bun crash footer. The scheduler is not
+    // started yet; tear down the half-started client so the process can end.
+    await Promise.resolve()
+      .then(() => gateway.stop())
+      .catch(() => undefined);
+    return { ok: false, exitCode: 1, message: formatDiscordLoginFailure(err, { env }) };
+  }
   if (inflightReplies && interruptedReplies.length > 0) {
     // After login: the REST calls need the token. Sequential, never throws.
     // Only rows still present are unfinished: a reply whose thinking message

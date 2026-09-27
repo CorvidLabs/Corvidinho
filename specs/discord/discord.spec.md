@@ -42,6 +42,7 @@ files:
   - src/discord/gateway.ts
   - src/discord/presence.ts
   - src/discord/bridge.ts
+  - tests/discord.login-failure.test.ts
   - src/discord/thinking-status.ts
   - src/discord/slash-finish.ts
   - src/discord/slash-commands.ts
@@ -117,6 +118,12 @@ allowlists at runtime (ADMIN-1..4 / REQ-discord-043); channel options use
 STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
+
+Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
+(`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
+`formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
+`formatRegisterCommandsFailure` (`register-commands.ts`) words a failed slash
+registration (CLI `register-commands` and the bridge's registration on ready).
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
@@ -391,6 +398,7 @@ by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 | Leftover in-flight reply in a channel no longer allowlisted | Nothing edited or posted; logged as skipped; row deleted |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
+| Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
 ## Dependencies
 
@@ -473,4 +481,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved: DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window |
 | 2026-09-27 | scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners: Scope /session list to the acting member and hide host paths from non-owners |
 | 2026-09-27 | discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted: Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1) |
+| 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |
 | 2026-09-27 | replying-to-a-session-start-or-work-answer-continues-that-session-discord-2: Replying to a /session start or /work answer continues that session (DISCORD-2) |
