@@ -773,3 +773,13 @@ Acceptance Criteria
 - `bun --no-env-file` CLI `--project P doctor` from A prints exactly what `bun --no-env-file` CLI `doctor` prints when started in P (no cap from P's `.env`); `envFileFlags` keeps only Bun's `.env` flags, in order.
 - A spend cap set in the environment still wins over P's `.env`.
 - A missing path, a file and a `--project` with no path each exit 1 with exactly `corvidinho: --project …` and the hint on stderr and run no command; with `--json` stdout is `{ ok: false, error }`; `enterProject` on such a path leaves the cwd unchanged.
+
+### REQ-cli-423
+
+The project SHALL ship package version `0.0.32` (allowlisted tools reach the model, Fledge core builtins, Choose asks on work and session start, open asks kept per askId, role-refusal note, --project, doctor and init name project files). CLI `version` and Discord presence (DISCORD-12) report `0.0.32` after a restart. CHANGELOG SHALL include verbose 0.0.32 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.32`.
+- CLI `version` prints `0.0.32`.
+- CHANGELOG has a 0.0.32 section that the updater's changelog helper extracts exactly.
+
