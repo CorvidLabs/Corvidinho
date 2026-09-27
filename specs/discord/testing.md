@@ -49,3 +49,4 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 ## MEMORY Discord auto-recall inject (REQ-discord-023)
 
 - `tests/discord.memory-inject.test.ts` — format/enrich empty+seeded scope, system prompt rules, richer memory tool argv (no live Discord).
+- DISCORD-ASK-6/7: collapse thinking→stub→answer (ask-ephemeral + thinking-bridge + finalizeContent unit tests).

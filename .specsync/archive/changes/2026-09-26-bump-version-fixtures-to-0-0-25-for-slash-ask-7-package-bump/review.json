@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "bump-version-fixtures-to-0-0-25-for-slash-ask-7-package-bump",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "169d015553cf75c2e669b2d1a11175da60c7c411",
+  "contract_digest": "0156d668eab44cd8537901de457b6e6ac4fd1cf475956ebf72d65dfa191551ce",
+  "execution_digest": "571d6d1e35ae4c10f4bbfe34ccafb0a9cdca4bfe3e85285561d54f562b06435b",
+  "workspace_digest": "3cb2a8743d059dd8754a4eda545a1d366ca87f125f26db65a7e7afe892ac414b",
+  "timestamp": 1790466605
+}

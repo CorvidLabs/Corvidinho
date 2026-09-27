@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "align-session-start-and-work-with-discord-ask-7-collapse-thinking-into-one-final-message-instead-of-done-embed-plus",
+  "implementation_commit": "1e9aed72769661a8c0e80f483ed4cb7d633cbb61",
+  "implementation_tree": "7697b2c593cd69aa7c7635f92ceebdf2ace6b1a9",
+  "contract_digest": "89d68d5563e9f25576f608372cd3ffb6c2da00965357436ad4ef07491d1d0c15",
+  "workspace_digest": "3cb2a8743d059dd8754a4eda545a1d366ca87f125f26db65a7e7afe892ac414b",
+  "closing_digest": "4eee379ae79f7a299f9ae8794a129c63fb47aff02f81bfbc893504af05c763de",
+  "review_digest": "70418a9888369c0744aa7d6ddc8882861f356b64d1483b74b2b2c55bec524b13",
+  "finalization_digest": "925805a52f1cafb254b36dd180e2e24f18a0e4db0fc11ee693bfeab3e7f8f9f7",
+  "timestamp": 1790466540
+}

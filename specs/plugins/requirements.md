@@ -66,9 +66,38 @@ Acceptance Criteria
 
 Allowlists SHALL load from bot-VM config file (`CORVIDINHO_ALLOWLIST_FILE` or `~/.config/corvidinho/allowlist.toml|json`) with env overlays (ALLOW-4). Secrets stay in env.
 
+The TOML file SHALL be read as a minimal subset: `[section]` headers and
+`key = value`, where a value is an array of quoted strings or bare words that
+MAY span lines, with a trailing comma and `#` comments between items, or a
+one-line `"a,b"` / `a b` list. Any Unicode whitespace (a pasted U+00A0
+included) SHALL separate tokens. Single-line allow/deny lists SHALL read as
+before. In `[github]`, `[discord]` and the top level, any line or value
+outside that subset (unterminated or malformed array or string, unsupported
+key or escape) SHALL be a load error that names the line and key but no
+values. So SHALL a header that names github or discord in a form the reader
+does not support (`[[github]]`, `["discord"]`, `[github`), any other
+malformed header (unbalanced brackets, a stray array line), and a `deny…`
+key anywhere outside `[github]` / `[discord]`, where the loader would ignore
+it. Other sections — `[owner]`, and loosely written headers such as
+`[my notes]` or `[[rules]]` — SHALL stay lenient and SHALL NOT stop a load.
+A file that exists but cannot be read or parsed (TOML or JSON) SHALL make
+`loadAllowlist` throw instead of falling back to env overlays alone, so a
+deny list in the file can never be dropped while an env allow admits the
+target (fail closed; GITHUB-6, ALLOW-1..6). Action gates (`git-push`,
+`discord-post-message`, the GitHub repo gate) SHALL turn that into a normal
+refusal with exit 3 naming the file problem (path, line and key, never list
+values), never a thrown error, and `corvidinho doctor` SHALL report it as a
+failing `allowlist-file` check with the same error. A missing file SHALL
+still mean env overlays only.
+
 Acceptance Criteria
 - File path env and default home config paths are consulted.
 - Env overlays (e.g. `CORVIDINHO_GITHUB_ALLOW_REPOS`) merge over file.
+- `orgs` / `repos` / `deny_repos` / `deny_orgs` arrays spanning lines (trailing comma, `#` comments) load every item; a multi-line file `deny_repos` refuses the repo at the gate and in `git-push` (exit 3) while an env allow admits its org.
+- Single-line files parse to the same result as the previous reader (corpus includes `allowlist.example.toml`).
+- An unterminated or malformed array or string, a bad key or a bad header in an allow/deny section throws; `loadAllowlist` rejects for a malformed TOML or JSON file.
+- A pasted U+00A0 between tokens parses; `[my notes]`, `[[rules]]` and `['x']` sections do not stop a load; a `deny_*` key at the top level or in another section, `[[discord]]`, `["github"]`, a stray `["a", "b"]` line and unbalanced brackets throw.
+- With a malformed file, `git-push` (nothing pushed) and `discord-post-message` refuse with exit 3 and the line/key error, without the list values; `corvidinho doctor` shows `[fail] allowlist-file` with the parse error, `[ok]` for a file that loads and `[info]` when there is none.
 
 ### REQ-plugins-007
 
@@ -366,11 +395,42 @@ Acceptance Criteria
 whose lexically-resolved `cd` or `pushd` target would land outside that root
 (SAFE-3). Refusals include absolute paths outside the root, `..` chains that
 escape, `~` / `~user`, `$VAR` references, and bare `cd` (home). Relative `cd`
-that stays under root and absolute `cd` under root SHALL be allowed.
+that stays under root and absolute `cd` under root SHALL be allowed. The clamp
+SHALL be fail-closed: any command it cannot resolve to an in-root target
+refuses.
+
+The clamp SHALL join backslash-newline continuations before tokenizing and
+SHALL tokenize with quote awareness — a separator (`;`, `&`, `|`, newline,
+`(`, `)`) inside single or double quotes is not a separator, and quotes and
+backslash escapes are removed from a word before it is checked. It SHALL find
+a `cd` or `pushd` behind prefix words (`{`, `}`, `!`, `if`, `then`, `else`,
+`elif`, `do`, `while`, `until`, `time`, `builtin`, `command`, `function NAME`)
+and `NAME=value` / `NAME+=value` assignments. It SHALL drop redirections
+(`>`, `>>`, `>&`, `>|`, `<`, `<>`, `<&`, `&>`, an `fd` prefix such as `2>&1`)
+together with their targets wherever they appear in the command, SHALL NOT
+treat the `&` of a redirection as a command separator, and SHALL skip
+`cd` / `pushd` options (`-P`, `-L`, `-e`, `-@`, `-n`, `--`) to reach the real
+target.
+
+It SHALL refuse `-` (OLDPWD); a target containing `$`, a backtick, a glob or a
+brace; a command word that the shell would expand (a command word containing
+`$`, `$(…)` or a backtick); an `eval` whose argument would expand; and a write
+to `DIRSTACK`. It SHALL re-parse the literal argument of `eval` as a command,
+and SHALL analyse the body of each command substitution (`$(…)` and backticks)
+as a command, refusing an escaping `cd`/`pushd` found inside. The spawned shell
+SHALL run `CDPATH=; readonly CDPATH` before the command and SHALL NOT inherit
+`CDPATH` or `OLDPWD` from the bot's environment, so a `CDPATH` set anywhere in
+the command (including one built dynamically) cannot redirect a relative `cd`
+outside the root; `CDPATH` is therefore NOT refused lexically.
 
 Acceptance Criteria
 - Unit fixtures cover allow/refuse cases above.
 - Integration: `cd /tmp && …` and `cd ..` from root refuse with exit 2 and SAFE-3 message; `cd sub && …` inside project succeeds when allowlisted.
+- Redirection-hidden targets refuse: `>/dev/null cd /etc`, `cd >/dev/null /etc`, `cd</dev/null /etc`, `cd 2>&1 /etc`, `cd -P >/dev/null /etc`; an in-root `cd sub >/dev/null` and `cd 2>&1 sub` stay allowed.
+- Quote-aware forms refuse: `X="a b" cd /etc`, `X=';' cd /etc`, `cd "x /../.."`, `cd 'sub dir/../..'`; a backslash-newline `cd` (`c\`+newline+`d /etc`, `cd sub/\`+newline+`../..`) refuses; `cd "sub dir"` and `X=';' cd sub` stay allowed.
+- Expansion forms refuse: `$(echo cd) /etc`, `` `echo cd` /etc ``, `x=cd; $x /etc`, `cd${IFS}/etc`, `eval $(printf 'cd /etc')`, `echo` `` `cd /etc` `` and `echo $(cd /etc && cat x)`; `echo $(cd sub && ls)` and `eval 'cd sub'` stay allowed.
+- Bash `X+=1 cd /etc` refuses; a `DIRSTACK[...]=` write refuses.
+- With `OLDPWD` set outside the root in the bot's environment, `cd -` is refused before spawn; with `CDPATH` set outside the root, `cd sub && pwd` prints the in-root `sub`; a command that sets `CDPATH` to an outside dir and then runs a relative `cd sub` does not print the outside path.
 
 ### REQ-plugins-088
 
@@ -733,6 +793,35 @@ Acceptance Criteria
 - `files-edit --old / --new` accept values that start with `--`.
 - `shell-exec echo git push --dry-run origin main` runs with `--dry-run` intact; a trailing `--json` stays in the command; leading `--json`/`--command`/`--command=` still work; `--command X --dry-run` is refused before spawn.
 - `search-grep --no-verify src` searches for `--no-verify` under `src`; `--pattern` takes a `--` value, `--path=` works, and with `--pattern` the first positional is the path.
+
+### REQ-plugins-253
+
+The GITHUB-6 repo gate used by every GitHub plugin (plugins/github commands
+and review reads) SHALL build its allowlist with the ALLOW-4 loader
+(`loadAllowlist`: the allowlist file — `CORVIDINHO_ALLOWLIST_FILE` or
+~/.config/corvidinho/allowlist.toml|json — plus env overlays), the same
+loader WATCH ingress uses, and SHALL NOT fall back to env overlays alone.
+`deny_repos` / `deny_orgs` from the file SHALL win over an allow list from env
+(and over the community public-repo path), and an allow list only in the file
+SHALL admit matching repos. A missing allowlist file SHALL contribute nothing
+while env overlays still apply, so with no env allow list the gate refuses
+(default-deny). A malformed or unreadable allowlist file SHALL make the gate
+refuse every repo — even one an env allow list admits, since the file's deny
+lists are unknown — with exit 3 and a GITHUB-6 error naming the file problem
+(path, line and key, never list values), not a thrown error
+(REQ-plugins-006). `checkRepoGateAsync` SHALL expose the same file + env gate
+to other callers. The test suite SHALL NOT read the operator's allowlist file:
+the bun test preload points `CORVIDINHO_ALLOWLIST_FILE` at a missing file,
+and tests that hand a custom env object to a loader pass a missing file too.
+No new env var, config key, slash command or plugin.
+
+Acceptance Criteria
+- With deny lists only in the file and the allow list only in env, github-issue-create, github-issue-comment, github-pr-create, github-pr-review and the review reads refuse the denied repo or org with exit 3 and a GITHUB-6 error; nothing is posted.
+- With the allow list only in the file, allowed repos pass and unlisted repos are still refused.
+- A non-admin role session is refused for a file-denied repo even when it is public.
+- `corvidinho plugins run` with ~/.config/corvidinho/allowlist.toml honors its deny lists.
+- With a malformed (truncated JSON, or a TOML deny list missing its `]`) or unreadable (a directory) allowlist file, the gate and github-issue-create refuse every repo with exit 3 and a `GITHUB-6: refused — allowlist file unreadable or malformed` error, with or without env `CORVIDINHO_GITHUB_ALLOW_ORGS`; the TOML error names the line and key, not the values.
+- With an operator allowlist file admitting corvidlabs (via `CORVIDINHO_ALLOWLIST_FILE` or ~/.config/corvidinho/allowlist.toml), `bun test` has no failures and no test sends a request to api.github.com while a GitHub token is set.
 
 ### REQ-plugins-237
 

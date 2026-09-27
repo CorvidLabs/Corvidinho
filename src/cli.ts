@@ -5,6 +5,7 @@
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
+import { existsSync } from "node:fs";
 import {
   createNdjsonWriter,
   createTaskExecute,
@@ -29,6 +30,7 @@ import {
   startWatchPoller,
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
+import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
@@ -263,6 +265,31 @@ async function doctor(): Promise<number> {
     ok: pluginCount > 0,
     detail: `${pluginCount} command(s) loaded`,
   });
+
+  // ALLOW-4 — an allowlist file that exists but cannot be read or parsed stops
+  // the bridge, watch and daemon (fail closed); say so here, with the loader's
+  // error (path, line and key — never list values).
+  const allowPath = resolveAllowlistPath(process.env);
+  if (allowPath && existsSync(allowPath)) {
+    const loaded = await loadAllowlistFile(allowPath);
+    checks.push({
+      name: "allowlist-file",
+      ok: loaded.ok,
+      mark: loaded.ok ? "ok" : "fail",
+      detail: loaded.ok
+        ? `${allowPath} loads (values not shown)`
+        : `${loaded.error} — bridge, watch and daemon refuse to start and gates refuse until it is fixed`,
+    });
+  } else {
+    checks.push({
+      name: "allowlist-file",
+      ok: true,
+      mark: "info",
+      detail: allowPath
+        ? `${allowPath} not found — env overlays only`
+        : "no allowlist file — env overlays only (CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml|json)",
+    });
+  }
 
   // IDENTITY-1 — owner yes/no + display only (never ids/logins/tokens).
   // Optional: a missing owner is informational and never fails doctor.

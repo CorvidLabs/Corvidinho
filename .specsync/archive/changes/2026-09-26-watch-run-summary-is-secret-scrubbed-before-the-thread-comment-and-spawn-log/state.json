@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log",
+  "slug": "watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log",
+  "title": "WATCH run summary is secret-scrubbed before the thread comment and spawn log",
+  "description": "WATCH run summary is secret-scrubbed before the thread comment and spawn log",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "3af288a04306b7463f1275d4db93001ca51bede2",
+  "created_at": 1790462483,
+  "updated_at": 1790462859,
+  "affected_specs": [
+    "watch"
+  ],
+  "affected_paths": [
+    "src/watch/summary.ts",
+    "src/watch/poller.ts",
+    "tests/watch.summary-scrub.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "a WATCH run whose agent summary, stderr fallback or spawn error contains a vendor token (e.g. ghp_) posts a summary comment on the GitHub thread and appends a spawn-log JSONL line that hold [redacted:<kind>] and never the raw token or a clipped token prefix; token-free summaries are posted and logged unchanged"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}

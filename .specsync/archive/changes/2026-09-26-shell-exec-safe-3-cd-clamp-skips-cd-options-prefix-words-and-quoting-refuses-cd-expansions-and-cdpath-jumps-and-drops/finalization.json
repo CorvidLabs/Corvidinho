@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops",
+  "implementation_commit": "950cebf97a43545b1e4538bcf2d277ae94d68e58",
+  "implementation_tree": "5d2554e759e3b5954f81ebc2180904eac2bb0ee2",
+  "contract_digest": "acabd524a506f9a4a00e21ef92d915c0dd21e5b3866901aa1b8a708444f79ddd",
+  "workspace_digest": "847df2d2c1e21753b67f2b54bbac56f8db591702bbb5e2e0c3261e9a451b3bb2",
+  "closing_digest": "817773be247ce1704d7b11675cbc0d0543eafceec974c5388479cb0f4d2b4394",
+  "review_digest": "2ae6f521abd5ad4f0ce6426446005579d3f21facb7f3740b61910cdc18de7190",
+  "finalization_digest": "082e4ccab10e1d204f43a44cb7e31a43ee0d868f360dab64b898f926b8354899",
+  "timestamp": 1790462183
+}

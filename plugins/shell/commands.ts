@@ -95,18 +95,35 @@ export const shellCommands: PluginCommand[] = [
         };
       }
 
-      // Merlin pattern: eval "$1" 2>&1 so trailing comments/quotes don't break redirect.
+      // SAFE-3: an inherited CDPATH would send a relative `cd sub` outside the
+      // root, and an inherited OLDPWD is where `cd -` lands. Drop both.
+      const env: Record<string, string | undefined> = {
+        ...process.env,
+        // Defence-in-depth hint for nested tools (optional consumers).
+        CORVIDINHO_PROJECT_ROOT: root,
+      };
+      delete env.CDPATH;
+      delete env.OLDPWD;
+
+      // Merlin pattern: eval "$1" 2>&1 so trailing comments/quotes don't break
+      // redirect. `CDPATH=; readonly CDPATH` runs first so a dynamically built
+      // `CDPATH=…` inside the command cannot re-point a relative `cd sub`
+      // outside the root; both no-ops leave the command's exit code / output
+      // untouched. This is the runtime half of SAFE-3 — the lexer no longer
+      // second-guesses CDPATH.
       const proc = Bun.spawn(
-        ["sh", "-c", 'eval "$1" 2>&1', "corvidinho-shell-exec", cmdStr],
+        [
+          "sh",
+          "-c",
+          'CDPATH=; readonly CDPATH 2>/dev/null; eval "$1" 2>&1',
+          "corvidinho-shell-exec",
+          cmdStr,
+        ],
         {
           cwd: root,
           stdout: "pipe",
           stderr: "pipe",
-          env: {
-            ...process.env,
-            // Defence-in-depth hint for nested tools (optional consumers).
-            CORVIDINHO_PROJECT_ROOT: root,
-          },
+          env,
         },
       );
 

@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.0.25
+
+### Discord ask UX — slash ASK-7 + ephemeral pick cleanup (ASK-8)
+
+- **DISCORD-ASK-7** — `/session start` and `/work` collapse the thinking progress message into the final answer (same as mention/button pick) and delete the deferred slash reply when `editMessage` is available — no extra ✅ Done embed + full interaction reply.
+- **DISCORD-ASK-8** — After an ephemeral choice pick: clear option buttons immediately (`components: []`), keep `pendingAsk` cleared so a re-press is expired/no-op, and delete the ephemeral "Got it — Working on it…" once resume finishes.
+- `finalizeContent` only closes the thinking controller on a successful edit so Done/fail fallback still works when `editMessage` is missing.
+- HI + REQ-discord-048/049.
+
+### Ops
+
+- Package version **0.0.25** — restart the Discord bridge after update. No schema bump.
+
+## 0.0.24
+
+### Discord ask UX tighten (less duplicate noise)
+
+- **DISCORD-ASK-6** — Button asks collapse the thinking embed into one public **Choose** stub (no separate "Needs your input" + stub).
+- **DISCORD-ASK-7** — On success (mention done or after a button pick), edit the existing stub/thinking message into the final answer when practical — no extra ✅ Done + new reply.
+- Ephemeral Choose → options flow unchanged (DISCORD-ASK-1..5).
+- Live gateway: `editMessage` / `deleteMessage`; interaction replies use `MessageFlags.Ephemeral` (drops deprecated `ephemeral: true` warning).
+
+### Ops
+
+- Package version **0.0.24** — restart the Discord bridge after update. No schema bump.
+
+## 0.0.23
+
+### Stop means stop — child process trees (AGENT-3)
+
+- **Process-tree kill + Fledge scoping** — [#185](https://github.com/CorvidLabs/Corvidinho/pull/185) (#112): Fledge runs, delegate workers and spawned chat/schedule agents get their own process group; a timeout, abort, parent exit or unhandled SIGINT/SIGTERM/SIGHUP kills the whole tree (including `setsid` grandchildren found via `/proc`), and signals the process started with ignored (SIGHUP under `nohup`) stay ignored. Daemon shutdown now kills runs abandoned after the grace period (CLI-8 / AUTONOMOUS-4). Model argv goes after `--` in `fledge plugins run`, and Fledge commands are bound to the project root they were discovered for (FLEDGE-4, PLUGIN-2/3).
+
+### Security fixes
+
+- **SAFE-3 `cd` clamp** — [#187](https://github.com/CorvidLabs/Corvidinho/pull/187): `shell-exec` refuses `cd -`, `cd -P /`, `cd -- /etc`, `{ cd /; }`, keyword forms, `pushd`, `builtin`/`command cd`, `eval "cd …"` and `CDPATH` tricks that escaped the project root.
+- **`files-edit` literal `--new`** — [#188](https://github.com/CorvidLabs/Corvidinho/pull/188): `$&`, `$1`, `` $` ``, `$'` and `$$` in the replacement are written literally instead of being expanded.
+- **Scrub before clip** — [#190](https://github.com/CorvidLabs/Corvidinho/pull/190) (SAFE-6): run summaries are secret-scrubbed before every length cap (500/1800/4000), so WATCH GitHub comments, spawn JSONL and Discord replies cannot leak a token or private key cut in half; a `BEGIN … PRIVATE KEY` block with no END line is now redacted (scrub rules version 2 re-scrubs stored rows once).
+- **GitHub gate reads the allowlist file** — [#191](https://github.com/CorvidLabs/Corvidinho/pull/191) (GITHUB-6): `deny_repos` / `deny_orgs` in the allowlist file now apply to every GitHub plugin command and `/work` PRs, not only env overlays; the test suite never reads the operator's real allowlist file.
+
+### Ops
+
+- Package version **0.0.23** — restart the Discord bridge, `corvidinho daemon` and watch after update. No schema bump (still v8). Bridge chat agents now run in their own process group and are killed when the bridge exits.
+
+
+## 0.0.22
+
+### Ephemeral Discord button asks + multi-user sessions
+
+- **DISCORD-ASK-1..5** — Clarify/stuck choices that fit a short list use Discord **buttons** (ephemeral choice UI). Public channel gets a short Choose stub (no MCQ spam); the requester presses Choose to see options privately. Button prompts expire after ~30 minutes; late press → `that choice expired`. Free-text ask-ping remains when options cannot be listed.
+- **SESSION-MULTI-1..4** — Concurrent users in one channel each keep their own session (user id + channel). Reply/thread continue only for the session owner. Chat while buttons are open continues the conversation without clearing the pending ask; memory stays scoped to the acting Discord user.
+- **ask-human** — Optional `options` array (or numbered choices in the question) drives the button UI.
+
+### Ops
+
+- Package version **0.0.22** — restart the Discord bridge after update. No schema bump (pending_ask JSON gains askId/expiresAt/options; still schema v8).
+
+
 ## 0.0.21
 
 ### Security and correctness sweep (bug-fix PRs from an adversarial bug hunt)

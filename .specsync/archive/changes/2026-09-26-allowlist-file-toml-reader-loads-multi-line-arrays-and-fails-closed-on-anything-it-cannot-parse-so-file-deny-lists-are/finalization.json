@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are",
+  "implementation_commit": "c7191d5c588af57a410840e8efb6f670f8f2a97f",
+  "implementation_tree": "d1b97eed7431a4ad19a6cae72eba81ee938ce663",
+  "contract_digest": "094f8c3995402f457796fbeb243b1ebd964ac963607424584bc32c43bb7156c3",
+  "workspace_digest": "735d3621febc81c29ca5eece203b61f525c239924c0e71a60974ac033dbaaffc",
+  "closing_digest": "11f1cac2872ab670d6dd8211cf590990431f595030562a16239c14e654356f00",
+  "review_digest": "75c1a2eae02bad33fedcfbc7e0913b20c16c37f68bcd4cf6c903c6a8964de122",
+  "finalization_digest": "9af1be3728fa4bbb8d976041675efd3649bd6866071e495eb66192ee46efb792",
+  "timestamp": 1790466649
+}
