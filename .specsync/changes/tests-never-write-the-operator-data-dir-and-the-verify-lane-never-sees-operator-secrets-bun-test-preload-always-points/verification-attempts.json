@@ -133,6 +133,25 @@
         "REQ-agent-002",
         "REQ-cli-262"
       ]
+    },
+    {
+      "timestamp": 1790471562,
+      "commit": "5fb3dcc610adfe91cf3e883626bf0f142109f961",
+      "contract_digest": "9cb7ba25f998ca504152ed6d6f7564a8dfac30477eceff46fd17d780f3c3648d",
+      "execution_digest": "bec86d93ca3adc83ffd2e1da5e1195cd104150e4157ff085875baa86d50556e6",
+      "workspace_digest": "00b3c693411ca631a2a6e29fd58041a747a2d3e6f3d2ebe2d5754bd266ae3e80",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-002",
+        "REQ-cli-262"
+      ]
     }
   ]
 }
