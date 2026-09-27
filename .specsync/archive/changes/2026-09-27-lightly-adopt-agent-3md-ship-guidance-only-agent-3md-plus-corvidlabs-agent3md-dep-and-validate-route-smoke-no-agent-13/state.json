@@ -7,11 +7,11 @@
   "title": "Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring",
   "description": "Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "9973a2753d922d3b9871c381d650e0374f0ee8d9",
   "created_at": 1790470786,
-  "updated_at": 1790471174,
+  "updated_at": 1790471243,
   "affected_specs": [
     "agent"
   ],

@@ -1,6 +1,6 @@
 ---
 id: lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13
-state: implementing
+state: archived
 type: feature
 base_commit: 9973a2753d922d3b9871c381d650e0374f0ee8d9
 ---
