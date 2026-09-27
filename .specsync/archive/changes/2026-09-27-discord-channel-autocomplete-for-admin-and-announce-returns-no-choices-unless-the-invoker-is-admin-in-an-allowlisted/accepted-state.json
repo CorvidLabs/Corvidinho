@@ -7,11 +7,11 @@
   "title": "Discord channel autocomplete for /admin and /announce returns no choices unless the invoker is ADMIN in an allowlisted channel",
   "description": "Discord channel autocomplete for /admin and /announce returns no choices unless the invoker is ADMIN in an allowlisted channel",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
   "created_at": 1790529735,
-  "updated_at": 1790532180,
+  "updated_at": 1790532428,
   "affected_specs": [
     "discord"
   ],
