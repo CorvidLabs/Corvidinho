@@ -1,4 +1,59 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790520824,
+      "digest": "d3a178f7321ef6518140b39f70efa3dffc7e2f79659e24d32a31c147fdfc1fcb",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision",
+        "title": "Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9)",
+        "description": "files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "plugins/files/commands.ts",
+          "plugins/files/image.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "src/agent/execute.ts",
+          "src/plugins/types.ts",
+          "tests/agent.tool-loop.test.ts",
+          "tests/discord.image-attachments.test.ts",
+          "tests/files.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-read on a PNG/JPEG/GIF/WebP file (sniffed by magic bytes, after the path clamp and the ROLES-CHAT-8 secret gate) returns image metadata (path, bytes, mediaType, image:true) and no UTF-8 content, and refuses an image over 20MB; text files read exactly as before; in the tool loop, the round after a files-read of an image sends one user message holding an image_url data-URL part with the file's bytes, after that round's tool messages, while the tool message, ToolResult events and ndjson never carry the base64; if that request gets HTTP 400 the loop swaps the image parts for a text note and retries once, so a model without vision still completes; tests in tests/files.plugins.test.ts, tests/agent.tool-loop.test.ts and tests/discord.image-attachments.test.ts fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "36a7c2af53deca7db6bd58ca7505aa59a166b1ad7f8da434f748017f16a99e32",
+        "discord": "348ddaed4ed57d73735b322f3461e6696e1dad94191a52e3b5b8ed6ed4f33da8",
+        "plugins": "2acad2fe463913fca5a4bbcb849f52704b70107ccf5837f4ae475c0ff626ab72"
+      }
+    }
+  ],
   "reopenings": []
 }
