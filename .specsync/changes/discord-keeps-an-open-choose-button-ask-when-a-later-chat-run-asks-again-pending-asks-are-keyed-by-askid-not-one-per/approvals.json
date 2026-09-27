@@ -37,6 +37,44 @@
       "approved_delta_digests": {
         "discord": "20b895a21b80fa6079c16d90cdfecda5e452d92ba79aac7be7fe2d10b1d735fd"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790535673,
+      "digest": "fbde3ed8c2c8989dc06efa19399a93d6f7553fd67185cc016e77aa534256355b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per",
+        "title": "Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3)",
+        "description": "Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/bridge.ts",
+          "src/discord/session-store.ts",
+          "src/discord/types.ts",
+          "tests/discord.ask-ephemeral.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "While a user's Choose button ask is open, a later chat message whose run asks again (buttons or free text) stores the new ask as the session's pendingAsk without replacing the earlier button ask: the earlier Choose/pick buttons still open the ephemeral choices and resume the session with that ask's question and label until pressed or expired (SESSION-MULTI-3 / DISCORD-ASK-3/5); a press is matched by askId across every open ask of the session; a pick, a late press (ASK_CHOICE_EXPIRED) or a free-text answer clears only that ask and the newest remaining open ask becomes pendingAsk (thin reply restates it); an explicit cancel still clears the session's open asks; an earlier free-text ask is still replaced by a new ask; open asks persist in discord_sessions.pending_ask (one object as today when one ask is open, a JSON array when several are) and survive a store reopen; no schema version bump, no new flags, env vars, config keys or slash commands; regression tests fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "7307d5f697dcf50c7ba5f239e05a56361788c1fa51ca5e30c102b56f63330d8a"
+      }
     }
   ],
   "reopenings": []
