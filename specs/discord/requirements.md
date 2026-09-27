@@ -1520,13 +1520,17 @@ Discord token (REQ-cli-108): it records the ask, and the bridge posts it.
   `SCRUB_TARGETS`. A run without an ask stores none.
 - In-process post. A ticker that can post (the bridge) SHALL take the ask it
   is about to post with a compare-and-set on `ask_posted_at IS NULL` before
-  posting it, as today, so no other ticker posts it too. A run whose channel
-  the allowlist refuses posts nothing and its ask stays pending.
+  posting it, as today, so no other ticker posts it too. A run whose creator
+  or channel the live DISCORD-SCHEDULE-3 gate (REQ-discord-020) refuses posts
+  nothing and its ask stays pending.
 - Delivery. On each scheduler tick a ticker that can post SHALL, without
   awaiting it (DISCORD-SCHEDULE-4), deliver pending asks: for each schedule
   whose newest finished run (by completion time) has an ask no ticker took,
-  when the schedule has a channel that the bridge's channel allowlist allows,
-  it SHALL take the ask with the same compare-and-set, which also re-checks
+  when the schedule has a channel and its creator and channel pass the same
+  live DISCORD-SCHEDULE-3 gate as a run's post (REQ-discord-020: the creator
+  through `gateActor`, deny wins, a non-empty user/role list must list the
+  creator unless they are the configured owner; the channel through
+  `checkChannel`), it SHALL take the ask with the same compare-and-set, which also re-checks
   that the run is still its schedule's newest finished run, and post it
   through the schedule ask post: the schedule prefix and the question, the owner
   pinged for `stuck` and `spend-cap` and the schedule creator for `clarify`
@@ -1561,10 +1565,12 @@ Acceptance Criteria
 - A later run that finishes while a delivery pass is posting another schedule's ask makes that schedule's pending ask moot: it is not posted.
 - After `stop()` a delivery pass finishes the post in flight and takes no other ask (it stays pending for the next start); `settleAskDelivery(ms)` resolves false while that post is still going; the bridge's stop closes the gateway only after a pending-ask post in flight resolved.
 - A channel the bridge's allowlist refuses gets no post and the ask stays pending.
+- A creator the bridge's live allowlist no longer lists, or deny-lists, gets no post and the ask stays pending; once `/admin` puts them back (the shared allowlist edited in place) the next tick posts it with its ping.
 - A post that resolves `false` or throws leaves the ask pending with no ping key (the throw is logged); the next tick posts it with the ping.
 - A run the bridge claimed and posted is not posted again by its ticks; two bridge tickers on one DB post a pending ask once.
 - A v10 DB migrates to v11 keeping its runs, none of which is pending; a secret in the question is redacted at rest and in the post; `rescrubDatabase` re-scrubs `ask_question`.
 - `corvidinho daemon` logs `run.needs_human` for a stuck run and a Discord bridge started on the same data dir posts the ask to the owner once.
+
 ### REQ-discord-072
 
 A Discord session SHALL keep its thread (AGENT-6, with DISCORD-2 /

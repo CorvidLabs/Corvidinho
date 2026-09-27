@@ -7,7 +7,7 @@ change: schedule-ask-outbox-delivery-re-checks-the-creator-and-channel-against-t
 
 ## Modified
 
-### REQ-discord-347
+### REQUIREMENT REQ-discord-347
 
 A schedule run that stops to ask a human SHALL reach Discord even when the
 ticker that claimed it has no Discord connection (AUTONOMY-2, AUTONOMOUS-7;
