@@ -7,10 +7,11 @@
   "title": "A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3)",
   "description": "A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "606b993d7175c2f32759e3f02865492e5e884389",
   "created_at": 1790545236,
-  "updated_at": 1790545345,
+  "updated_at": 1790545363,
   "affected_specs": [
     "watch"
   ],
