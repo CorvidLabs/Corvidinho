@@ -112,13 +112,20 @@ Acceptance Criteria
 
 Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
 
+The tools SHALL stay inside the project: they read this repo's `specs/` and the companions next to a spec, using project files only (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6), as typed plugin commands (PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
+
 Acceptance Criteria
 - `plugins list` includes the SpecSync command names.
 - `specsync-list` returns registered module names from `.specsync/registry.toml`.
 - `specsync-read <module>` returns `specs/<module>/<module>.spec.md` contents.
 - `specsync-check` runs project `spec-check` (fledge task or `specsync check` fallback) and fails non-zero on drift.
 - `specsync-brief <module>` returns companion files when present.
-
+- `specsync-read` / `specsync-brief` with a name that is not a plain module name — a relative traversal (`../../<outside>/outside`, `../../../..<abs>`), an absolute path, `.` / `..`, a path separator (`/` or `\`), a NUL byte or any other character — fail with exit 1 and a one-line `invalid spec module name` error (the name JSON-escaped, never a raw NUL) and read nothing.
+- A module spec, legacy flat spec, module dir or companion that is a symlink resolving outside the project's `specs/` dir, or a `specs/` dir that resolves outside the project root, is refused with exit 1 and a `resolves outside` error naming only the in-project path; a refused companion fails the whole brief; no outside content is returned.
+- Symlinks that stay inside `specs/` still read, and a missing module still reports `spec '<name>' not found`.
+- `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` given `--root <dir>` or `--root=<dir>` fail with exit 1 (`refused: --root is not allowed; SpecSync tools run on this project only`) and `specsync` is not spawned.
+- A tool-loop `specsync-read` call with a traversal name returns the refusal to the model, not the outside file.
+- The Planning spec briefing (`loadRelevantSpecs`), which reads through the same helpers, leaves out a registered module whose spec or module dir resolves outside `specs/` and never includes a companion that does.
 
 ### REQ-plugins-009
 
@@ -844,6 +851,33 @@ Acceptance Criteria
 - A single-occurrence edit whose `--new` contains `$$`, `$'`, `$&`, `` $` ``, `$1` and `$<n>` leaves exactly that text in the file.
 - A `--replace-all` edit with the same `--new` writes the same literal text at every match.
 
+### REQ-plugins-267
+
+In a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN` set and the acting
+user is not ADMIN), the read-ish file and git tools SHALL apply the
+ROLES-CHAT-8 secret-path gate `files-read` applies (`isSecretPath`: `.env*`,
+`.ssh`, key files, keystores, credentials). `search-grep`, `files-list` and
+`git-diff` SHALL refuse an explicit secret path, given positionally, with
+`--path`, as `./`, `..` or absolute spellings, or through a symlink that
+resolves to one, with exit 2 and the ROLES-CHAT-8 refusal message, before
+reading anything. A recursive `search-grep` SHALL NOT return a line from a
+secret file whatever `--include` is passed, `git-diff` (worktree or
+`--staged`) SHALL NOT list or print a tracked secret file, and `files-glob`
+and `files-list` SHALL leave secret paths out of their results, also when a
+glob walks a symlink into a secret directory. ADMIN sessions and the local
+CLI (no role session) SHALL keep the access `files-read` gives them. The
+gate SHALL be re-checked on each call (ROLES-CHAT-6). No new plugin, flag,
+env var or config key.
+
+Acceptance Criteria
+- Non-ADMIN `search-grep` over the project returns no line from `.env`, `.env.local`, `.ssh/*`, `*.pem`, `*keystore*`, `credentials.json` or a case variant such as `sub/.ENV`, and still returns lines from ordinary files.
+- Non-ADMIN `search-grep <pattern> .env` (also `./.env`, `src/../.env`, the absolute path, `--path .env`, `--path=.env`, `--pattern X .env`) and `search-grep` of `.ssh`, a `.pem`, a keystore or a credentials file is refused with exit 2 and a ROLES-CHAT-8 error, like `files-read .env`.
+- Non-ADMIN `search-grep` with `--include=.env`, `--include env`, `--include=*.pem`, `--include pem,ts` or `--include *` returns no secret line.
+- Non-ADMIN `search-grep` or `files-list` of a symlink to `.env` or `.ssh` is refused with exit 2; a recursive search does not follow such a symlink.
+- Non-ADMIN `files-glob` (`**/*`, `.env*`, `**/*.pem`, `.ssh/*`, and `notes/*` where `notes` links to `.ssh`) and `files-list --show-hidden` return no secret path; `files-list .ssh` is refused with exit 2.
+- Non-ADMIN `git-diff`, `git-diff .` and `git-diff --staged` list and print no tracked secret file (`.env*`, `.ssh/*`, `*.pem`, keystores, credentials, key files, case variants such as `sub/.ENV`) and still show ordinary files; `git-diff .env` (also `./.env`, `src/../.env`, the absolute path, `.ssh`, a `.pem`, a keystore dir or a symlink to a secret) is refused with exit 2; user paths stay literal pathspecs.
+- ADMIN and the local CLI still read `.env` with `files-read`, grep it explicitly and recursively, see secret paths in `files-glob` / `files-list`, and see tracked secret files in `git-diff`.
+
 ### REQ-plugins-287
 
 `appendAudit` SHALL take the shared DB write lock before it reads the
@@ -860,4 +894,15 @@ Acceptance Criteria
 - While another process holds the write lock and then commits, `appendAudit` waits and succeeds; its `prev_hash` is the other writer's row hash and the chain verifies.
 - Concurrent appenders in several processes lose no rows.
 - Several processes that each open the shared DB file, append one row and close it (as dangerous plugin runs do), all at once, get every append in and the chain verifies.
+
+### REQ-plugins-312
+
+The system SHALL register a read-only plugin `discord-user-lookup` (not dangerous, not mutating) that resolves a Discord guild member by snowflake user id (`--user-id`) or name query (`--query`) via the Discord REST API, scoped to the configured `DISCORD_GUILD_ID` only (IDENTITY-5 / DISCORD-13). A `--guild` that does not match the configured guild SHALL be refused. Empty `DISCORD_GUILD_ID` SHALL refuse. Arbitrary other guilds SHALL NOT be looked up. Dry-run (`CORVIDINHO_DISCORD_DRY_RUN=1`) SHALL succeed without a live call.
+
+Acceptance Criteria
+- `plugins list` shows `discord-user-lookup` with dangerous=false.
+- Missing guild / wrong `--guild` → refuse exit 3 without REST.
+- Dry-run by id or query succeeds with `dryRun: true`.
+- Mocked REST returns display name / username / id; 404 → clean not-a-member error.
+- Fixture: `tests/discord.user-lookup.test.ts`.
 

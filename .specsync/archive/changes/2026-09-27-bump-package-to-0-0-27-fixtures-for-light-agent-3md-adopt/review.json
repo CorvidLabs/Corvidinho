@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "bump-package-to-0-0-27-fixtures-for-light-agent-3md-adopt",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "00becaf4646b01126eea62aba2280d050664ac6e",
+  "contract_digest": "2b487457ef6941571ae0c526a8135d53d2bd30de34188567f97d3bb69da50701",
+  "execution_digest": "141f460009ba0fa62a08db2eb8f71a8727a33a836c51ad1a87b8b9cfafa39cc1",
+  "workspace_digest": "31b4739b4fe36fbba34bbea7d3eb4fa6791f013292b5aa17735a6b49002abb82",
+  "timestamp": 1790471321
+}

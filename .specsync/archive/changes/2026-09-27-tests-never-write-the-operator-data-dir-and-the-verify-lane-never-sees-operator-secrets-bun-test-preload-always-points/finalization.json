@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points",
+  "implementation_commit": "6ef5aeb8cb7f02d31e46d70b47881e903832c361",
+  "implementation_tree": "6fe4f80795e5e6190b62338441c8d556bc224f03",
+  "contract_digest": "9cb7ba25f998ca504152ed6d6f7564a8dfac30477eceff46fd17d780f3c3648d",
+  "workspace_digest": "00b3c693411ca631a2a6e29fd58041a747a2d3e6f3d2ebe2d5754bd266ae3e80",
+  "closing_digest": "4fb00f573b90fc54113db05369c6de32d8b8692fc93c6f508dcce5dfc50a9e12",
+  "review_digest": "7351ec46c155c67f1efdaf1a76c918250f10eaffee3a9a5f168d1d10cce16612",
+  "finalization_digest": "bc8f1474db5ed18519cc9320562d33c06c588616d40dbcfabacc13fdaa76bb96",
+  "timestamp": 1790472334
+}
