@@ -7,11 +7,11 @@
   "title": "Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land)",
   "description": "Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "c200ca2e34d7e2dc4a2599f7e04d5417e7606fa2",
   "created_at": 1790472086,
-  "updated_at": 1790472102,
+  "updated_at": 1790472167,
   "affected_specs": [
     "discord"
   ],
