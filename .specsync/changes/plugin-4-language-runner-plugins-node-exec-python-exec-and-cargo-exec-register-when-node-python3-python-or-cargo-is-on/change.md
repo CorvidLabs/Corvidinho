@@ -1,6 +1,6 @@
 ---
 id: plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on
-state: draft
+state: implementing
 type: feature
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---

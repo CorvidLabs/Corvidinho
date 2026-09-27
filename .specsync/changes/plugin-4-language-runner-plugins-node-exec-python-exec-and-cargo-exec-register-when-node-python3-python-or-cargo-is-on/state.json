@@ -7,10 +7,11 @@
   "title": "PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root)",
   "description": "PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
   "created_at": 1790520757,
-  "updated_at": 1790520759,
+  "updated_at": 1790520806,
   "affected_specs": [
     "plugins",
     "cli"
