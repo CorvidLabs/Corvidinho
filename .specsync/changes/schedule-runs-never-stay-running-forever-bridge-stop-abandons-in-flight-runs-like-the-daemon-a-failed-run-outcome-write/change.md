@@ -1,6 +1,6 @@
 ---
 id: schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write
-state: draft
+state: implementing
 type: bug_fix
 base_commit: bf9a5b20b2a13f77eb503567428ff5551321bc9c
 ---

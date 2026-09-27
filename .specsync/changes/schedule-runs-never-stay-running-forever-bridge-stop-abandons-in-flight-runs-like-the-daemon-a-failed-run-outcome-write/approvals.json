@@ -1,4 +1,56 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790470372,
+      "digest": "9b5a67d64988120476985bd123b020373ec4cd7218e9b834a5bdb80f7534cf35",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write",
+        "title": "Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree",
+        "description": "Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DAEMON.md",
+          "docs/discord.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/daemon/daemon.ts",
+          "src/discord/bridge.ts",
+          "src/scheduler/index.ts",
+          "src/scheduler/service.ts",
+          "src/scheduler/store.ts",
+          "src/store/db.ts",
+          "tests/daemon.restart-recovery.test.ts",
+          "tests/discord.inflight-replies.test.ts",
+          "tests/scheduler.never-stuck.test.ts",
+          "tests/watch.session-store.durable.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Bridge stop records an in-flight schedule run failed ('interrupted: bridge shutdown'), kills its agent tree and removes its worktree and empty talk/schedule_* branch; a run-outcome write that throws once is retried and recorded, and one that throws twice is logged '[scheduler] run failed: could not record run ...' and reported as failed; bridge and daemon start mark runs a dead process (kill -9) left running as failed 'interrupted: process restarted' and remove leftover schedule-run worktrees (a branch with commits is kept), while a run another live process owns and its worktree are untouched; daemon stop waits a bounded grace so an abandoned run's worktree is gone before it exits; tests/scheduler.never-stuck.test.ts and tests/daemon.restart-recovery.test.ts cover each and fail on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "f3e03c4f00fe5876b554958006d9d73a446aca2d419bf6ea6a6ae26a7efdbab5",
+        "discord": "f575046f02b1c51b91a4f31989dfdf5ac9e475810a7609742e28f3b8a756cf5f"
+      }
+    }
+  ],
   "reopenings": []
 }
