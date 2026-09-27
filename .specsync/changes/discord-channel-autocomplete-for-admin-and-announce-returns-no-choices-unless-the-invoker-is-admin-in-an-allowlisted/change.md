@@ -1,6 +1,6 @@
 ---
 id: discord-channel-autocomplete-for-admin-and-announce-returns-no-choices-unless-the-invoker-is-admin-in-an-allowlisted
-state: draft
+state: implementing
 type: bug_fix
 base_commit: fbaa84b7cda1bf2b462baea44cad20ef93e0df4f
 ---
