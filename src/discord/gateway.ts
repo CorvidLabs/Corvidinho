@@ -34,6 +34,11 @@ export type ComponentInteraction = {
     components?: unknown[];
     update?: boolean;
   }) => Promise<void>;
+  /**
+   * DISCORD-ASK-8 — drop the ephemeral choice / "Got it" message after pick
+   * or when resume finishes (discord.js deleteReply after update/reply).
+   */
+  deleteReply?: () => Promise<void>;
 };
 
 export type GatewayHandlers = {
@@ -234,6 +239,7 @@ export async function createLiveGateway(
     reply: (opts: unknown) => Promise<unknown>;
     deferReply: (opts?: unknown) => Promise<unknown>;
     editReply: (opts: unknown) => Promise<unknown>;
+    deleteReply?: () => Promise<unknown>;
     deferred: boolean;
     replied: boolean;
   }): SlashInteraction {
@@ -322,6 +328,11 @@ export async function createLiveGateway(
       },
       editReply: async (opts) => {
         await send(opts, "edit");
+      },
+      deleteReply: async () => {
+        if (typeof interaction.deleteReply === "function") {
+          await interaction.deleteReply();
+        }
       },
     };
   }
@@ -607,6 +618,7 @@ function adaptComponent(interaction: {
   replied: boolean;
   reply: (opts: unknown) => Promise<unknown>;
   update: (opts: unknown) => Promise<unknown>;
+  deleteReply?: () => Promise<unknown>;
 }): ComponentInteraction {
   return {
     id: interaction.id,
@@ -618,7 +630,10 @@ function adaptComponent(interaction: {
     reply: async (opts) => {
       const payload: Record<string, unknown> = {};
       if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
-      if (opts.components) payload.components = opts.components as never;
+      // Explicit empty array clears buttons (DISCORD-ASK-8); do not use truthiness.
+      if (opts.components !== undefined) {
+        payload.components = opts.components as never;
+      }
       if (opts.update) {
         await interaction.update(payload);
         return;
@@ -632,6 +647,11 @@ function adaptComponent(interaction: {
         await interaction.reply(payload);
       } else {
         await interaction.reply(payload);
+      }
+    },
+    deleteReply: async () => {
+      if (typeof interaction.deleteReply === "function") {
+        await interaction.deleteReply();
       }
     },
   };

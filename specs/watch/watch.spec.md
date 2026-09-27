@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 13
+version: 14
 status: draft
 files:
   - src/watch/types.ts
@@ -46,7 +46,8 @@ loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
 SessionStore options (`db`, `ttlMs`, `now`; `durable`), startWatchPoller
 `db` / `sessionStore` / `sessionTtlMs` injection,
-agent helpers, createFixtureSearchClient / createOctokitSearchClient,
+ProcessedIdStore / AckedIdStore / SummarizedIdStore options (`db`, `maxSize`;
+`durable`), agent helpers, createFixtureSearchClient / createOctokitSearchClient,
 ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),
 summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
 SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
@@ -57,7 +58,10 @@ computeRateLimitBackoffMs).
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
 allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
-dedup; no ProcessManager; no auto-merge; secrets out of repo; fixture tests
+dedup; with a DB, processed / acked / summarized ids persist per kind in
+`watch_event_ids` so a restart never replays a handled event id, and denied
+ids are kept apart in memory so they never evict a handled id (REQ-watch-247);
+no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 run summary at most once per event id and only after successful auto-ack;
@@ -111,3 +115,7 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-26 | watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared: WATCH durable SessionStore (issue #37 slice 1, SESSION-1..3): WATCH sessions keyed by owner/repo#number persist in the shared SQLite DB (schema v6 watch_sessions) with the same soft TTL as Discord; activity keeps the session, idle past TTL starts fresh, sessions reload on restart; github watch opens the shared DB (in-memory for dry-run without a data dir and tests); topic scrubbed per SAFE-6; turn persistence/replay and summaries stay follow-ups |
 | 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
 | 2026-09-26 | watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log: WATCH run summary is secret-scrubbed before the thread comment and spawn log |
+| 2026-09-26 | watch-handles-each-event-id-at-most-once-across-restarts-processed-acked-and-summarized-ids-persist-in-the-shared-db: WATCH handles each event id at most once across restarts: processed, acked and summarized ids persist in the shared DB and denied ids no longer evict handled ids |
+| 2026-09-26 | watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails: WATCH never drops or skips a trusted request when an event-id write fails |
+| 2026-09-26 | watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is: WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected |
+| 2026-09-26 | watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide: WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention |

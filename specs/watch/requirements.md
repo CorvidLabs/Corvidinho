@@ -186,3 +186,56 @@ Acceptance Criteria
 - A token that starts just before the 1200-char comment cap or the 240-char preview cap leaves no `ghp_` prefix in either sink.
 - Fixture tests need no live GitHub token or network.
 
+### REQ-watch-247
+
+When `startWatchPoller` has a database (the shared Corvidinho DB it opens, or an
+injected `db`), the processed, acked and summarized event-id sets SHALL persist
+in that DB (table `watch_event_ids`, one namespace per kind), so a watcher
+restarted on the same data dir SHALL NOT route, ack, spawn or summarize an
+event id it already handled (REQ-watch-005 / REQ-watch-007 / REQ-watch-009 "at
+most once per event id", WATCH-RELIABILITY-1). The durable sets SHALL NOT evict
+by count. Ids of events refused by the allowlist gate (ALLOW-1 / ALLOW-5) SHALL
+be kept in a separate in-memory set that never shares or evicts the handled
+ids, so a flood of non-allowlisted mentions cannot make a handled trusted
+request run again. Ids are marked before any ack or spawn; if that write fails,
+the event SHALL be logged and left for the next cycle without aborting the
+cycle (REQ-watch-037), and SHALL NOT be marked by a retry later in the same
+cycle, since nothing ran for it. Only a failure before the id write (routing)
+is marked processed, as REQ-watch-037 already requires. The acked and
+summarized id writes that follow a posted comment SHALL be best-effort: a
+failure is logged and SHALL NOT skip the agent run or the summary for an event
+that was already acknowledged. Without a database the stores stay in-memory
+with the existing FIFO cap. Rows hold event ids only, never free text.
+
+Acceptance Criteria
+- A second poller started on the same data dir with the same fetched comment reports `new=0`, spawns no agent, and posts no second ack or summary.
+- After a handled trusted comment, a cycle with 2000 non-allowlisted mentions refuses all 2000, and the next cycle neither starts nor continues the trusted request.
+- Processed, acked and summarized ids written through one DB handle are found (case-insensitively) through a new handle on the same file, and kinds do not leak into each other; a durable store is not FIFO-capped.
+- If marking an id fails, the cycle completes, nothing runs for that event, and the next cycle handles it once, even when an immediate retry of the write would have succeeded.
+- If the acked or summarized id write fails after the comment is posted, the failure is logged, the agent still runs once and the summary is still posted once.
+- Fixture tests need no live GitHub token or network.
+### REQ-watch-234
+
+For each search hit, the live WATCH search client SHALL fetch the issue or PR
+comments updated inside the same poll window that `fetchWatchEvents` uses
+for search, by passing `since` to `issues.listComments` with
+`per_page=100`, so an @mention from an allowlisted user is seen even when the
+thread has more than 50 comments (REQ-watch-002 / ALLOW-1). Requests per
+thread SHALL be capped at 10 pages. Because GitHub lists an issue's comments
+oldest-first, when the window holds more pages than the cap the client SHALL
+read page 1 plus the newest pages (located via the `Link` `rel="last"` page
+number), so a flood of older comments inside the window cannot hide the newest
+@mention; without `rel="last"` it MAY follow `rel="next"` up to the cap.
+Comments last updated before the window SHALL NOT be fetched.
+`SearchClient.listComments` SHALL take the window as an optional `since`; the
+fixture client MAY ignore it. Allowlist, dedup, own-username skip and event
+shapes are unchanged.
+
+Acceptance Criteria
+- On an issue with 60 comments where only #60 is new and mentions the watch username, `fetchWatchEvents` with `createOctokitSearchClient` returns an `issue_comment` event for #60; every comments request carries `since`.
+- On a thread with 150 comments inside the window and the mention at #150, the client follows the second page and the mention is detected.
+- On a thread with 1100 comments inside the window and the mention at #1100, the mention is detected with exactly 10 comments requests (page 1 and pages 3-11).
+- Without `rel="last"`, the client follows `rel="next"` and stops at 10 requests.
+- A mention in a comment last updated before the window produces no event.
+- No new env vars or commands; fixture tests need no live token.
+

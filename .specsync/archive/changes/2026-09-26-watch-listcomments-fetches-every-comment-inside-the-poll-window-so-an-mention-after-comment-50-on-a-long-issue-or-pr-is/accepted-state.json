@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is",
+  "slug": "watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is",
+  "title": "WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected",
+  "description": "WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "aef2cde685e9e9be6f0dc1c4311a916e33981afc",
+  "created_at": 1790463391,
+  "updated_at": 1790463790,
+  "affected_specs": [
+    "watch"
+  ],
+  "affected_paths": [
+    "src/watch/searcher.ts",
+    "tests/watch.comments-pagination.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "createOctokitSearchClient listComments passes since (the same window fetchWatchEvents uses for search) to issues.listComments and follows pages up to a cap, so on an issue or PR with more than 50 comments an @mention from an allowlisted user posted after comment 50 becomes an issue_comment event; comments updated before the window are not fetched; fixture client and the rest of the event mapping are unchanged"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

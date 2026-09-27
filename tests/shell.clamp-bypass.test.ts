@@ -20,7 +20,9 @@ describe("shell-exec SAFE-3 clamp bypasses (REQ-plugins-087)", () => {
     expect(firstDisallowedCd("cd -P / && ls", root)).toBe("/");
     expect(firstDisallowedCd("{ cd /; rm x; }", root)).toBe("/");
     expect(firstDisallowedCd("if true; then cd /; ls; fi", root)).toBe("/");
-    expect(firstDisallowedCd("CDPATH=/ && cd tmp", root)).toBe("$CDPATH/tmp");
+    // CDPATH is no longer refused lexically — runtime `readonly CDPATH` plus a
+    // dropped `CDPATH` env cover it (see the end-to-end block below).
+    expect(firstDisallowedCd("CDPATH=/ && cd tmp", root)).toBeNull();
   });
 
   test("unit: option, wrapper, keyword and quoting variants are refused", () => {
@@ -43,9 +45,8 @@ describe("shell-exec SAFE-3 clamp bypasses (REQ-plugins-087)", () => {
     expect(firstDisallowedCd("cd `pwd`/..", root)).toBe("`pwd`/..");
     expect(firstDisallowedCd("cd .[.]", root)).toBe(".[.]");
     expect(firstDisallowedCd("cd .?", root)).toBe(".?");
-    expect(firstDisallowedCd("export CDPATH=/; cd tmp", root)).toBe(
-      "$CDPATH/tmp",
-    );
+    // See above: CDPATH is handled at runtime, not by the lexer.
+    expect(firstDisallowedCd("export CDPATH=/; cd tmp", root)).toBeNull();
   });
 
   test("unit: in-root cd forms stay allowed", () => {

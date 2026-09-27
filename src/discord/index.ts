@@ -134,6 +134,7 @@ export {
   type ThinkingOutbound,
   type ThinkingStatusOpts,
 } from "./thinking-status.ts";
+export { finishSlashWithThinking } from "./slash-finish.ts";
 export {
   buildSlashCommandBodies,
   SLASH_COMMAND_NAMES,
