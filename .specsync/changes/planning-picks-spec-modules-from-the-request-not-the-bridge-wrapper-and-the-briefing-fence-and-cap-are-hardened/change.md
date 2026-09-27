@@ -1,6 +1,6 @@
 ---
 id: planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 984332fba8490435d9d3da4fcdb29a10e42d857e
 ---
