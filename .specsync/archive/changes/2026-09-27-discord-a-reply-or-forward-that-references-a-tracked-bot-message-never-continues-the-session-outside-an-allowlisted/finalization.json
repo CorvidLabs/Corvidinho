@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted",
+  "implementation_commit": "ac6ae95219784cfd2c4c861a64b8e8befe07f889",
+  "implementation_tree": "9e1d37910f7617b075ac5ce5e7fca9934fc8a81b",
+  "contract_digest": "5425185c51aacc381046e4de69fbd74b0979ac0b56eb1e5b8dcec83d9ce07898",
+  "workspace_digest": "73bf80a2ad1e3dad1e5909e99ba75ca4f24edcf9f9a8398e22adf00fa34e9328",
+  "closing_digest": "4fbe4b2dabe1539d4a605bc44970efcce8e99f44c989c2677555a680daded876",
+  "review_digest": "d90ce8f3143a726fe771a01017d6e1fae42ecad8195183b151edb5c6517f0c54",
+  "finalization_digest": "50c54544806381f8bd5a3b09367c035e2e21c59cd271c5ca1033a60bdc807094",
+  "timestamp": 1790472970
+}

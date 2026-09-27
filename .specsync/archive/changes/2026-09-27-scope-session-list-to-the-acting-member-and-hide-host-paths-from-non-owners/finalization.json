@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners",
+  "implementation_commit": "e3bc7a78c82f3d3b3e6b43d6733a35d42e2f0408",
+  "implementation_tree": "3d610d839a28c7ea758fa816c21826aee4abf115",
+  "contract_digest": "a61c56d708e319de61c7becc185c1f6f1b90301f408d5092040b05691d7f5920",
+  "workspace_digest": "731aaeeacc9b0bbb92c9bfea981ffe30bbaf17a2a36e2c9b1eec1e79d2fc99c0",
+  "closing_digest": "0add38f6dfbc6e9724e1cced58917bb2d84c77861f15175f6bc3dff0a43f6db5",
+  "review_digest": "3f04dc96f1026c9eff83627d616a8fc378f1cde29097e0ef1348c164fde5b1fb",
+  "finalization_digest": "2c26860193bef7d7353898d57641246254c2f669d5804c10c0415d274f095a0d",
+  "timestamp": 1790473061
+}

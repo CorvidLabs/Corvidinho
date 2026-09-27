@@ -37,6 +37,7 @@ files:
   - src/discord/work-store.ts
   - src/discord/message-router.ts
   - tests/discord.actor-gate.test.ts
+  - tests/discord.forward-channel.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
   - src/discord/presence.ts
@@ -48,6 +49,8 @@ files:
   - src/discord/slash-types.ts
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
+  - src/discord/list-scope.ts
+  - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
@@ -250,10 +253,24 @@ user id + resolved display (owner map wins for owner). Gateway fills
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
 Final chat reply content remains human text only (DISCORD-3.a).
 
+Listing scope (REQ-discord-418, SESSION-MULTI-1 / IDENTITY-2/3):
+`src/discord/list-scope.ts` exports `actorIsAdmin` (the acting user resolves
+to ADMIN, the configured owner) and `projectLabel` (an absolute project path
+becomes its last segment; a relative name is kept). `/session list` shows
+ADMIN every session with its full project path and anyone else only their own
+sessions with the project name; `/schedule list` shows a non-ADMIN member the
+project name, never an absolute host path. `/status` stays counts-only.
+
 `src/discord/permissions.ts` exports `gateActor` (the chat + slash actor gate:
 deny lists win, non-empty user/role allowlist must match or be the owner);
 `RouterDeps.owner` passes the configured owner to `routeMessage`
 (REQ-discord-201).
+`replyReferenceMessageId`, `REFERENCE_TYPE_FORWARD` and
+`RawMessageReference` (`gateway.ts`) turn a MessageCreate `reference` into
+`InboundMessage.referencedMessageId` only for a same-channel reply
+(REQ-discord-212). `componentChannelAllowlisted` (`message-router.ts`) gates
+an ask button press on the press channel and the session's own channel
+(REQ-discord-212).
 
 DISCORD-6 (REQ-discord-010): `rateLimitByLevel` keys on the actor's
 `resolvePermissionLevel` on chat and slash unless `RouterDeps.rateLimit.permLevel`
@@ -280,6 +297,7 @@ Discord replies prefer parsed `task run --json` summaries;
 slash registration with guild id PUTs guild commands then clears globals;
 ClientReady sets short Custom Status from shared package version (DISCORD-12);
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
+every MessageCreate is processed only when its own channel (thread parent or the thread itself) is allowlisted — a reply or forward that references a tracked bot message never continues the session in another channel, and the gateway keeps a reference only for a same-channel reply (never a forward); an ask button press resumes only in an allowlisted channel (or the session's thread under an allowlisted parent) while the session's own channel is still allowlisted, else an ephemeral tip (admin) or zero-width ack with no resume (DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-212);
 every @mention/reply/thread message and every slash command also passes `gateActor` after the channel gate: deny-listed users/roles are refused, and when the user or role allowlist is non-empty only listed users, allowed roles or the owner pass; empty user+role lists keep the channel-only path; refusal is silent on MessageCreate and a zero-width ephemeral ack on slash (ALLOW-3/5 / DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-201);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
@@ -452,3 +470,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup: Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land) |
 | 2026-09-27 | discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved: DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window |
+| 2026-09-27 | scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners: Scope /session list to the acting member and hide host paths from non-owners |
+| 2026-09-27 | discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted: Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1) |

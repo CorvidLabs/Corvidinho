@@ -1229,6 +1229,41 @@ Acceptance Criteria
 - With no rows, bridge start sends, edits and replies nothing.
 - A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
 
+### REQ-discord-212
+
+The bridge SHALL process a MessageCreate only when the message's own channel
+is allowlisted (DISCORD-5): the thread's parent channel (the DISCORD-2.a
+resolution) or the thread itself. This gate SHALL run before the thread,
+reply-to-bot and mention paths, and the channel recorded on a session SHALL
+NOT stand in for it, so a message that references a tracked bot message
+from an allowlisted channel never continues that session, spawns the agent,
+or posts or edits anything in a channel that is not allowlisted. Refusal
+SHALL be silent (DISCORD-DENY-1): no public reply, no DM, no reaction.
+
+The gateway SHALL set `InboundMessage.referencedMessageId` only for a reply
+in the message's own channel: a reference of type
+`MessageReferenceType.Forward` SHALL be dropped, and so SHALL a reference
+whose channel is neither the message's channel nor, inside a thread, the
+thread's parent channel. A reply in the same allowlisted channel SHALL still
+continue its session (DISCORD-2), and a thread under an allowlisted parent
+SHALL still continue its session (DISCORD-2.a).
+
+An ask button press (DISCORD-ASK) SHALL resume a session only when the press
+channel is allowlisted, or is the session's thread under an allowlisted
+parent (DISCORD-2.a), and the session's own channel, where the resumed run
+posts, is still allowlisted. Otherwise the bridge SHALL answer with an
+ephemeral ack only — the allowlist tip for an admin, the zero-width ack for
+anyone else (DISCORD-DENY-2/3) — and SHALL NOT resume the session, run the
+agent, or send or edit anything. No slash command, env var, table or column
+is added.
+
+Acceptance Criteria
+- The owner forwards a tracked bot message from an allowlisted channel into a non-allowlisted channel (with or without an @mention): `routeMessage` returns a silent `ignore` / `refuse` with no reply, the agent is not spawned, and nothing is sent, edited or deleted in that channel.
+- A thread message under a non-allowlisted parent does not continue a session whose recorded channel is allowlisted.
+- `replyReferenceMessageId` returns undefined for a forward-type reference and for a reference to another channel; it returns the message id for a same-channel reply (default or missing type) and, inside a thread, for a reference to the thread or its parent.
+- A reply to a tracked bot message in the same allowlisted channel still continues the same session; a thread under an allowlisted parent still continues its session.
+- An ask button pressed in a non-allowlisted channel, or after the session's channel left the allowlist, gets only the ephemeral zero-width ack (the allowlist tip for an admin): the ask stays pending, the agent is not run, and nothing is sent or edited; a press in the allowlisted channel, or in the session's thread under an allowlisted parent, still resumes (DISCORD-ASK-3).
+
 ### REQ-discord-215
 
 Discord does not notify a mention added by a message edit. Whenever the
@@ -1293,4 +1328,36 @@ When inbound content is rewritten for IDENTITY-5 mention preservation, the chat 
 Acceptance Criteria
 - `stripMentions("<@999> ok")` body line is `ok` and includes a mentioned trailer with the snowflake.
 - Bridge pending-ask path: `@mention ok` restates without a second agent run (`tests/discord.slash-pending-ask.test.ts`).
+
+### REQ-discord-418
+
+Slash list surfaces SHALL NOT show one user's sessions to another, and SHALL
+NOT show an absolute host path to anyone but ADMIN (SESSION-MULTI-1,
+ROLES-CHAT-1..4, IDENTITY-2/3). ADMIN is resolved at handler time with
+`resolvePermissionLevel` (the configured owner; empty owner means nobody).
+
+- `/session list` by ADMIN SHALL list every active session as before,
+  including each session's full project path.
+- `/session list` by anyone else SHALL list only sessions whose owner user id
+  equals the acting user id. Another user's session id, mention and topic
+  SHALL NOT appear. The project SHALL be shown as its name (the last segment
+  of an absolute path; a relative name as given), never as an absolute host
+  path. A member with no own sessions SHALL get "No active sessions.".
+- `/schedule list` by anyone but ADMIN SHALL show each schedule's project as
+  its name, never an absolute host path; ADMIN sees the stored project.
+- `/status` SHALL stay counts-only (no session ids, mentions, topics or
+  paths).
+
+No new slash command, option, env var, table or column. The session store and
+its `list()` are unchanged.
+
+Acceptance Criteria
+- A member's `/session list` shows only their own sessions and none of another user's id, mention or topic.
+- A member's `/session list` never contains an absolute host path; the project name is shown instead.
+- A member with no own sessions gets "No active sessions." even when other users have sessions.
+- The owner's `/session list` shows every user's sessions with full project paths.
+- With no owner configured, nobody is ADMIN and every user sees only their own sessions.
+- A member's `/status` has counts only, with no session id, mention, topic or project path.
+- A member's `/schedule list` shows the project name, not the absolute path; the owner's shows the full path.
+- Regression tests in `tests/discord.session-list-scope.test.ts` fail on `main` and pass after the fix.
 
