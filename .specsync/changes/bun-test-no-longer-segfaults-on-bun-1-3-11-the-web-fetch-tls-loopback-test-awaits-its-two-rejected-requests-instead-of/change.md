@@ -1,6 +1,6 @@
 ---
 id: bun-test-no-longer-segfaults-on-bun-1-3-11-the-web-fetch-tls-loopback-test-awaits-its-two-rejected-requests-instead-of
-state: approved
+state: implementing
 type: bug_fix
 base_commit: dbe37ce53abf815e39aa7a614b0361d9332bc0d4
 ---

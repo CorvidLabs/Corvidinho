@@ -7,10 +7,11 @@
   "title": "Bun test no longer segfaults on Bun 1.3.11: the web-fetch TLS loopback test awaits its two rejected requests instead of expect().rejects, which ran the event loop inside a TLS socket callback (Bun 1.3.11 use-after-free, fixed in 1.4.2)",
   "description": "bun test no longer segfaults on Bun 1.3.11: the web-fetch TLS loopback test awaits its two rejected requests instead of expect().rejects, which ran the event loop inside a TLS socket callback (Bun 1.3.11 use-after-free, fixed in 1.4.2)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "dbe37ce53abf815e39aa7a614b0361d9332bc0d4",
   "created_at": 1790473954,
-  "updated_at": 1790474015,
+  "updated_at": 1790474358,
   "affected_specs": [],
   "affected_paths": [
     "tests/web.transport.test.ts"
