@@ -91,7 +91,7 @@ process spawns `task run` from the updated checkout, and the wire protocol must 
 
 ## After update
 
-- Sessions/work stubs **and memories** persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. Sessions, schedules, memories, WATCH sessions and the audit chain share `corvidinho.db` (schema v10); the DB migrates on first open after an update. Forget/override of memories (own or other) requires ADMIN — the configured owner — at handler time; no owner = nobody (IDENTITY-3). Bridge restart picks up package presence version after update.
+- Sessions/work stubs **and memories** persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. Sessions, schedules, memories, WATCH sessions and the audit chain share `corvidinho.db` (schema v11); the DB migrates on first open after an update. Forget/override of memories (own or other) requires ADMIN — the configured owner — at handler time; no owner = nobody (IDENTITY-3). Bridge restart picks up package presence version after update.
 - Confirm with Discord `/status` (ephemeral): version, uptime, protocol, channels, sessions, work, LLM line, slash names, announce channel, owner configured, audit chain, 24 h spend vs cap, git tip.
 - Operator knobs (owner, `CORVIDINHO_ALLOWLIST`, autonomous gate, logs): [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) section E.
 
