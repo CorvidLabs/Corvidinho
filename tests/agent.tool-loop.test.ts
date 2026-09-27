@@ -4,8 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createTaskExecute,
+  DEFAULT_LLM_MODEL,
   loadLlmEnv,
+  modelForTier,
   parseCapabilityTier,
+  TIER_MODEL_ENV,
+  type CapabilityTier,
   tierAllowsPlugin,
   buildOpenAiTools,
   argvFromToolArguments,
@@ -17,6 +21,10 @@ import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { register } from "../src/plugins/registry.ts";
 import { runTask } from "../src/agent/loop.ts";
 import { createNdjsonWriter } from "../src/agent/events-ndjson.ts";
+import { readSpendSnapshot, spendDoctorCheck } from "../src/agent/spend.ts";
+import { formatSpendStatusLine } from "../src/agent/spend-notice.ts";
+import { modelKeyForTier, perTierModels } from "../src/agent/tier.ts";
+import { openCorvidinhoDb } from "../src/store/db.ts";
 
 describe("capability tier (AGENT-5)", () => {
   test("parseCapabilityTier", () => {
@@ -963,5 +971,197 @@ describe("files-read images reach the model as image parts (DISCORD-9 / REQ-agen
     const b = await noImage.result;
     expect(b.error).toBe(true);
     expect(noImage.bodies).toHaveLength(1);
+  });
+});
+
+describe("per-tier model (AGENT-5, REQ-agent-079)", () => {
+  const base = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "big",
+  };
+
+  /** body.model of every chat request one attempt sends. */
+  async function modelsSent(
+    env: Record<string, string>,
+    tier?: CapabilityTier,
+  ): Promise<string[]> {
+    const models: string[] = [];
+    const fetchImpl = async (_i: string | URL | Request, init?: RequestInit) => {
+      models.push(String(JSON.parse(String(init?.body ?? "{}")).model));
+      return new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    const exec = createTaskExecute({
+      taskText: "summarize",
+      env,
+      fetchImpl,
+      ...(tier ? { tier } : {}),
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    return models;
+  }
+
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("loadLlmEnv: the tier's key wins, else CORVIDINHO_LLM_MODEL, else the default", () => {
+    const env = { ...base, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL_READ: " cheap " };
+    expect(loadLlmEnv(env)).toMatchObject({ tier: "read", model: "cheap" });
+    // An explicit tier (e.g. --tier) overrides CORVIDINHO_LLM_TIER and picks its model.
+    expect(loadLlmEnv(env, "code")).toMatchObject({ tier: "code", model: "big" });
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_CODE: "big2" }, "code").model).toBe("big2");
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "tool").model).toBe("mid");
+    // Blank per-tier key falls back; no model at all keeps today's default.
+    expect(loadLlmEnv({ ...base, CORVIDINHO_LLM_MODEL_READ: "  " }, "read").model).toBe("big");
+    expect(loadLlmEnv({ CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "read").model).toBe(DEFAULT_LLM_MODEL);
+    expect(DEFAULT_LLM_MODEL).toBe("gpt-4o-mini");
+    expect(TIER_MODEL_ENV).toEqual({
+      read: "CORVIDINHO_LLM_MODEL_READ",
+      tool: "CORVIDINHO_LLM_MODEL_TOOL",
+      code: "CORVIDINHO_LLM_MODEL_CODE",
+    });
+    // Endpoint and key stay shared.
+    expect(loadLlmEnv(env, "code")).toMatchObject({ apiKey: "secret", baseUrl: "https://llm.test/v1" });
+    expect(modelForTier(env, "read")).toBe("cheap");
+  });
+
+  test("a read-tier run calls the read model; a code-tier run calls the code (else shared) model", async () => {
+    const env = { ...base, CORVIDINHO_LLM_MODEL_READ: "cheap" };
+    expect(await modelsSent(env, "read")).toEqual(["cheap"]);
+    expect(await modelsSent(env, "code")).toEqual(["big"]);
+    expect(await modelsSent(env, "tool")).toEqual(["big"]);
+    const withCode = { ...env, CORVIDINHO_LLM_MODEL_CODE: "big2", CORVIDINHO_LLM_MODEL_TOOL: "mid" };
+    expect(await modelsSent(withCode, "code")).toEqual(["big2"]);
+    expect(await modelsSent(withCode, "tool")).toEqual(["mid"]);
+    expect(await modelsSent(withCode, "read")).toEqual(["cheap"]);
+  });
+
+  test("the --tier override (opts.tier) picks the model, not CORVIDINHO_LLM_TIER", async () => {
+    const env = {
+      ...base,
+      CORVIDINHO_LLM_MODEL_READ: "cheap",
+      CORVIDINHO_LLM_MODEL_CODE: "big2",
+    };
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "code" }, "read")).toEqual(["cheap"]);
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "read" }, "code")).toEqual(["big2"]);
+    // No override: the env tier picks it.
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "read" })).toEqual(["cheap"]);
+  });
+
+  test("no per-tier keys: every tier sends CORVIDINHO_LLM_MODEL, as before", async () => {
+    for (const tier of ["read", "tool", "code"] as const) {
+      expect(await modelsSent(base, tier)).toEqual(["big"]);
+    }
+  });
+
+  test("SAFE-8 pricing follows the tier's model: an unpriced read model stops before the call", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-tier-model-spend-"));
+    try {
+      const env = {
+        ...base,
+        CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+        CORVIDINHO_LLM_MODEL_READ: "local-unpriced-cheap",
+        CORVIDINHO_DATA_DIR: dir,
+        CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
+      };
+      let calls = 0;
+      const exec = createTaskExecute({
+        taskText: "summarize",
+        env,
+        tier: "read",
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
+        },
+        loadPlugins: false,
+        projectInstructions: false,
+      });
+      const r = await exec({ attempt: 1, signal: new AbortController().signal });
+      expect(calls).toBe(0);
+      expect(r.ask?.reason).toBe("spend-cap");
+      expect(r.ask?.question).toContain('model "local-unpriced-cheap" has no known price');
+      // The ask names the key that set the read model, not CORVIDINHO_LLM_MODEL
+      // (already priced here, so switching it would not unblock the run).
+      expect(r.ask?.question).toContain("switches CORVIDINHO_LLM_MODEL_READ to a priced model");
+
+      // A tool-tier run on an unpriced shared model names CORVIDINHO_LLM_MODEL.
+      const tool = createTaskExecute({
+        taskText: "summarize",
+        env: { ...env, CORVIDINHO_LLM_MODEL: "local-unpriced-big" },
+        tier: "tool",
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response("{}");
+        },
+        loadPlugins: false,
+        projectInstructions: false,
+      });
+      const t = await tool({ attempt: 1, signal: new AbortController().signal });
+      expect(calls).toBe(0);
+      expect(t.ask?.question).toContain('model "local-unpriced-big" has no known price');
+      expect(t.ask?.question).toContain("switches CORVIDINHO_LLM_MODEL to a priced model");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("modelKeyForTier / perTierModels", () => {
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: "cheap" }, "read")).toBe("CORVIDINHO_LLM_MODEL_READ");
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: "cheap" }, "code")).toBe("CORVIDINHO_LLM_MODEL");
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: " " }, "read")).toBe("CORVIDINHO_LLM_MODEL");
+    expect(perTierModels(base)).toBeNull();
+    expect(perTierModels({ ...base, CORVIDINHO_LLM_MODEL_CODE: " " })).toBeNull();
+    expect(perTierModels({ ...base, CORVIDINHO_LLM_MODEL_READ: "cheap" })).toEqual({
+      read: "cheap",
+      tool: "big",
+      code: "big",
+    });
+  });
+
+  test("SAFE-8 doctor and /status flag an unpriced per-tier model with its tier; none set = as before", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const cap = { CORVIDINHO_DAILY_SPEND_CAP_USD: "5" };
+    const now = 1_800_000_000_000;
+    // No per-tier keys: a priced configured model reads [ok] exactly as before.
+    const plain = spendDoctorCheck({ env: { ...cap, CORVIDINHO_LLM_MODEL: "gpt-4o-mini" }, model: "gpt-4o-mini", db, now });
+    expect(plain.mark).toBe("ok");
+    expect(plain.detail).not.toContain("no known price");
+
+    // Priced env-tier model, unpriced read model: warn and name the read tier.
+    const env = { ...cap, CORVIDINHO_LLM_MODEL: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_READ: "local-llama" };
+    const line = spendDoctorCheck({ env, model: "gpt-4o-mini", db, now });
+    expect(line).toMatchObject({ ok: true, mark: "warn" });
+    expect(line.detail).toContain(
+      'model "local-llama" has no known price, so read-tier runs stop and ask before calling the provider',
+    );
+    const snap = readSpendSnapshot({ env, model: "gpt-4o-mini", db, now });
+    expect(snap).toMatchObject({ kind: "cap", model: "local-llama", priced: false, tier: "read" });
+    expect(formatSpendStatusLine(snap)).toContain(
+      "⚠️ read-tier model has no known price, read-tier runs stop and ask",
+    );
+
+    // A read-tier env whose tool tier falls back to an unpriced shared model.
+    const tool = spendDoctorCheck({
+      env: { ...cap, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL: "local-big", CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini" },
+      model: "gpt-4o-mini",
+      db,
+      now,
+    });
+    expect(tool.detail).toContain('model "local-big" has no known price, so tool-tier runs stop and ask');
+
+    // Every tier priced: [ok]. The env tier's own unpriced model reads as before (no tier).
+    const allPriced = { ...env, CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_CODE: "gpt-4o" };
+    expect(spendDoctorCheck({ env: allPriced, model: "gpt-4o-mini", db, now }).mark).toBe("ok");
+    const own = readSpendSnapshot({ env, model: "local-llama", db, now });
+    expect(own).toMatchObject({ kind: "cap", model: "local-llama", priced: false });
+    expect(own).not.toHaveProperty("tier");
+    db.close();
   });
 });

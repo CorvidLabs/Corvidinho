@@ -42,6 +42,8 @@ import {
 } from "./project-instructions.ts";
 import {
   loadTierFromEnv,
+  modelForTier,
+  modelKeyForTier,
   type CapabilityTier,
 } from "./tier.ts";
 import {
@@ -58,7 +60,15 @@ export type LlmEnv = {
   tier: CapabilityTier;
 };
 
-export function loadLlmEnv(env: NodeJS.ProcessEnv = process.env): LlmEnv {
+/**
+ * Provider settings for one run. `tier` (e.g. `--tier`) overrides
+ * `CORVIDINHO_LLM_TIER`, and the model is the one configured for the
+ * resulting tier (AGENT-5, {@link modelForTier}).
+ */
+export function loadLlmEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  tier?: CapabilityTier,
+): LlmEnv {
   const apiKey =
     env.CORVIDINHO_LLM_API_KEY?.trim() ||
     env.OPENAI_API_KEY?.trim() ||
@@ -66,9 +76,8 @@ export function loadLlmEnv(env: NodeJS.ProcessEnv = process.env): LlmEnv {
   const baseUrl = (
     env.CORVIDINHO_LLM_BASE_URL?.trim() || "https://api.openai.com/v1"
   ).replace(/\/$/, "");
-  const model = env.CORVIDINHO_LLM_MODEL?.trim() || "gpt-4o-mini";
-  const tier = loadTierFromEnv(env, "tool");
-  return { apiKey, baseUrl, model, tier };
+  const runTier = tier ?? loadTierFromEnv(env, "tool");
+  return { apiKey, baseUrl, model: modelForTier(env, runTier), tier: runTier };
 }
 
 /** Memory instructions embedded in the tool-loop system prompt (AGENT-7 / MEMORY-2/4). */
@@ -285,6 +294,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const spend = createSpendGuard(opts.fetchImpl ?? fetch, {
     env,
     readUsage: extractUsage,
+    // AGENT-5: an unpriced model's ask names the key that set this tier's model.
+    modelKey: modelKeyForTier(env, opts.tier ?? loadTierFromEnv(env, "tool")),
     onWarning: (w) => {
       emit(opts.onEvent, { type: "Text", text: formatSpendWarningLine(w) });
       opts.onSpendWarning?.(w);
@@ -326,8 +337,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       emit(onEvent, { type: "Text", text: projectNote });
       projectNote = null;
     }
-    const llm = loadLlmEnv(env);
-    const tier: CapabilityTier = opts.tier ?? llm.tier;
+    // AGENT-5: the effective tier (opts.tier / --tier over the env) picks the model.
+    const llm = loadLlmEnv(env, opts.tier);
+    const tier: CapabilityTier = llm.tier;
 
     if (!llm.apiKey) {
       return demoExecute(attempt);
@@ -335,7 +347,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
 
     if (tier === "read" || maxToolRounds <= 0) {
       return singleChatCompletion({
-        llm: { ...llm, tier },
+        llm,
         fetchImpl,
         taskText,
         attempt,
@@ -370,7 +382,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       }),
     );
     return runToolLoop({
-      llm: { ...llm, tier },
+      llm,
       fetchImpl,
       taskText,
       attempt,
