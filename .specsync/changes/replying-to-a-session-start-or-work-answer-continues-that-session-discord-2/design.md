@@ -8,7 +8,11 @@ artifact: design
 - `buildSlashCtx()` (`src/discord/bridge.ts`) sets `trackBotMessage`:
   resolve the session id with `store.get` and call
   `store.trackBotMessage(messageId, session)`, the same map (and DB rows) the
-  @mention path uses. An ended or expired session is skipped.
+  @mention path uses. An ended or expired session is skipped. (#216 on main
+  added the same closure; the merge keeps one.) The write is best effort: a
+  throw from the DB write is logged and swallowed, so the slash run still
+  resolves (deletes) its deferred reply; the in-memory map is set before the
+  write, so the running bridge still continues the session.
 - `SlashInteraction.editReply` may resolve with `{ messageId }`
   (`src/discord/slash-types.ts`; `void` stays valid, so existing fakes keep
   working). The live gateway adapter (`src/discord/gateway.ts`) returns the

@@ -6,7 +6,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import type {
   AgentClient,
@@ -30,6 +30,12 @@ const NO_ALLOWLIST = join(
 const CHAN = "chan-1";
 const OWNER = "100000000000000001";
 const OTHER = "100000000000000002";
+
+/** Bridges started by a test; stopped after it even when an expect fails. */
+const running: Array<{ stop: () => Promise<void> }> = [];
+afterEach(async () => {
+  for (const r of running.splice(0)) await r.stop();
+});
 
 type Call = Pick<AgentRunChatOpts, "sessionId" | "resume" | "actingUserId"> & {
   humanText?: string;
@@ -60,10 +66,12 @@ function slash(opts: {
   command: "session" | "work";
   userId: string;
   text: string;
-}): SlashInteraction & { edits: SlashReplyPayload[] } {
+}): SlashInteraction & { edits: SlashReplyPayload[]; deleted: number[] } {
   const edits: SlashReplyPayload[] = [];
+  const deleted: number[] = [];
   return {
     edits,
+    deleted,
     id: `ix-${opts.n}`,
     commandName: opts.command,
     ...(opts.command === "session" ? { subcommand: "start" } : {}),
@@ -79,7 +87,9 @@ function slash(opts: {
       edits.push(p);
       return { messageId: `slash-reply-${opts.n}` };
     },
-    deleteReply: async () => {},
+    deleteReply: async () => {
+      deleted.push(opts.n);
+    },
   };
 }
 
@@ -97,6 +107,7 @@ async function bridge(outbound: ThinkingOutbound) {
     // Temp non-git project: never create real worktrees/branches in this repo.
     projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-slash-reply-proj-")),
     skipProtocolCheck: true,
+    disableScheduler: true,
     thinkingOutbound: outbound,
     thinkingDebounceMs: 0,
     thinkingTickMs: 60_000,
@@ -114,6 +125,7 @@ async function bridge(outbound: ThinkingOutbound) {
   if (result.ok !== true || !box.handlers) {
     throw new Error("bridge did not start");
   }
+  running.push(result);
   return { result, handlers: box.handlers, calls };
 }
 
@@ -129,7 +141,7 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
     for (const ping of [true, false]) {
       test(`/${command === "session" ? "session start" : "work"} A, then B; owner replies to A (ping ${ping ? "on" : "off"}) → A continues`, async () => {
         const outbound = memoryThinkingOutbound();
-        const { result, handlers, calls } = await bridge(outbound);
+        const { handlers, calls } = await bridge(outbound);
         const onSlash = handlers.onSlash!;
 
         await onSlash(slash({ n: 1, command, userId: OWNER, text: "topic A" }));
@@ -162,7 +174,6 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
           actingUserId: OWNER,
           humanText: "follow up on A",
         });
-        await result.stop();
       });
     }
   }
@@ -203,7 +214,6 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
     expect(calls[1]).toMatchObject({ resume: false, actingUserId: OTHER });
     expect(result.store.get(calls[1]!.sessionId)?.userId).toBe(OTHER);
     expect(result.store.get(sessionA)?.userId).toBe(OWNER);
-    await result.stop();
   });
 
   test("fallback answer (no collapse) is tracked too: replying to it continues the session", async () => {
@@ -214,7 +224,7 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
       sendEmbed: base.sendEmbed,
       editEmbed: base.editEmbed,
     };
-    const { result, handlers, calls } = await bridge(outbound);
+    const { handlers, calls } = await bridge(outbound);
     const ixA = slash({ n: 1, command: "session", userId: OWNER, text: "topic A" });
     await handlers.onSlash!(ixA);
     await handlers.onSlash!(
@@ -234,6 +244,68 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
     });
     expect(calls).toHaveLength(3);
     expect(calls[2]).toMatchObject({ sessionId: sessionA, resume: true });
-    await result.stop();
+  });
+
+  test("a member's /work A then B: their reply continues A; the owner's reply never does", async () => {
+    const outbound = memoryThinkingOutbound();
+    const { result, handlers, calls } = await bridge(outbound);
+    await handlers.onSlash!(slash({ n: 1, command: "work", userId: OTHER, text: "topic A" }));
+    const answerA = outbound.sends[0]!.messageId;
+    await handlers.onSlash!(slash({ n: 2, command: "work", userId: OTHER, text: "topic B" }));
+    const sessionA = sessionOf(calls, 0);
+    expect(calls[0]!.actingUserId).toBe(OTHER);
+
+    // The member (not the owner) continues their own session A.
+    await handlers.onMessage({
+      id: "m-member",
+      channelId: CHAN,
+      authorId: OTHER,
+      authorBot: false,
+      content: "follow up on A",
+      mentionedBot: false,
+      referencedMessageId: answerA,
+    });
+    expect(calls).toHaveLength(3);
+    expect(calls[2]).toMatchObject({ sessionId: sessionA, resume: true, actingUserId: OTHER });
+
+    // SESSION-MULTI-1: being ADMIN does not let the owner continue it.
+    await handlers.onMessage({
+      id: "m-owner-1",
+      channelId: CHAN,
+      authorId: OWNER,
+      authorBot: false,
+      content: "owner reply",
+      mentionedBot: false,
+      referencedMessageId: answerA,
+    });
+    expect(calls).toHaveLength(3);
+    await handlers.onMessage({
+      id: "m-owner-2",
+      channelId: CHAN,
+      authorId: OWNER,
+      authorBot: false,
+      content: "<@999> owner reply",
+      mentionedBot: true,
+      referencedMessageId: answerA,
+    });
+    expect(calls).toHaveLength(4);
+    expect(calls[3]!.sessionId).not.toBe(sessionA);
+    expect(calls[3]).toMatchObject({ resume: false, actingUserId: OWNER });
+    expect(result.store.get(sessionA)?.userId).toBe(OTHER);
+  });
+
+  test("a failed tracking write does not stop the answer: the deferred reply is still resolved", async () => {
+    const outbound = memoryThinkingOutbound();
+    const { result, handlers } = await bridge(outbound);
+    result.store.trackBotMessage = () => {
+      throw new Error("database is locked");
+    };
+    const ix = slash({ n: 1, command: "session", userId: OWNER, text: "topic A" });
+    await handlers.onSlash!(ix);
+    // Collapsed into the thinking message, then the deferred reply dropped.
+    expect(
+      outbound.contentEdits.some((e) => e.content?.includes("topic A")),
+    ).toBe(true);
+    expect(ix.deleted).toEqual([1]);
   });
 });

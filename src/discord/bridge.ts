@@ -466,7 +466,15 @@ export async function startBridge(
       // the session's own user continues it.
       trackBotMessage: (messageId, sessionId) => {
         const session = store.get(sessionId);
-        if (session) store.trackBotMessage(messageId, session);
+        if (!session) return;
+        try {
+          store.trackBotMessage(messageId, session);
+        } catch (err) {
+          // Best effort: the answer is already out, so a failed bot-message
+          // DB write (e.g. "database is locked") must not stop the slash run
+          // from resolving its deferred reply. The in-memory map is set first.
+          console.warn(`[discord] slash answer tracking for ${sessionId} failed:`, err);
+        }
       },
       mutedUsers,
       rateLimitState,

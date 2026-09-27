@@ -90,4 +90,6 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   fake gateway: after `/session start` (or `/work`) A then B, the owner's reply
   to A's answer resumes session A with the reply ping on and off; a fallback
   answer (no collapse, deferred reply id from `editReply`) is tracked too;
-  another user's reply never resumes A (no live Discord).
+  a member's `/work` A/B works the same, and another user's reply (even the
+  configured owner's) never resumes A; a throwing tracking write still lets
+  the answer collapse and the deferred reply be deleted (no live Discord).

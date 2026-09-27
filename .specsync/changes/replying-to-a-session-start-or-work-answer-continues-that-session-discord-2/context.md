@@ -26,6 +26,17 @@ Re-verified after merging origin/main 3cdbb5c (SAFE-8 x DISCORD-ASK-7): the
 same 5 fail on its sources; the slash handlers still pass `trackBotMessage`
 through `finishSlashWithOwnerNotice` → `finishSlashWithThinking`.
 
+Review after merging origin/main dbe37ce: #216 (REQ-discord-044) wired the
+same `trackBotMessage` closure in `buildSlashCtx()`, so on dbe37ce sources
+the collapsed-answer tests pass and only the fallback test fails (the
+deferred reply id is still never tracked there); #216 also fixed defect 3
+(slash asks stay pending). The merge keeps one closure. The review adds a
+member's `/work` A/B test (the configured owner, ADMIN, cannot continue a
+member's session either) and makes the closure best effort: a failed
+bot-message DB write (e.g. "database is locked") is logged, and the slash run
+still resolves its deferred reply (that test fails on the merged tree without
+the guard).
+
 HI: DISCORD-2 / DISCORD-2.a (`hi/discord.md`), SESSION-MULTI-1..4
 (`hi/session.md`). The router's owner-only reply rule (REQ-discord-046) is
 unchanged; the new tests pin it for slash answers.
@@ -33,5 +44,5 @@ unchanged; the new tests pin it for slash answers.
 Constraints: no new slash command, env var, CLI flag or schema change. Bot
 message ids are persisted through the existing `SessionStore.trackBotMessage`.
 Out of scope (separate defects in the same report): `/work` / `/session
-start` not storing `pendingAsk` (defect 3), and the forwarded-message
-allowlist gap in the reply path (defect 2).
+start` not storing `pendingAsk` (defect 3, fixed on main by #216), and the
+forwarded-message allowlist gap in the reply path (defect 2, PR #218).
