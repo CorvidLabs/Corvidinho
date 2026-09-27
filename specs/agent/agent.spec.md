@@ -182,6 +182,13 @@ delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
 `OPENROUTER_API_KEY`): tests the agent wrote never see
 operator secrets (SAFE-6).
 
+The verify lane's `spec-check` task runs `specsync check` at the CI Spec Sync
+Action's strictness: `--require-coverage` equal to the Action's
+`require-coverage` input in `.github/workflows/spec-sync.yml`, and `--strict`
+only when the Action sets `strict`. A tree the CI Spec Sync check rejects, such
+as one with an unspecced source file, fails the lane and never reaches
+verified=true (SPECSYNC-2/7, REQ-agent-005).
+
 Tool-loop system prompt SHALL include trust-inject / memory-store /
 memory-recall-before-ignorance / never-invent rules. OpenAI tool argv
 descriptions for `memory-*` commands SHALL include concrete examples.
@@ -307,6 +314,7 @@ model.
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
 | LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
+| Source file with no spec coverage | verify lane `spec-check` (`--require-coverage 100`) fails; verified=false, retried like any verify failure |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |

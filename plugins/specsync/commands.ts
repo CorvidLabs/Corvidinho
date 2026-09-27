@@ -61,7 +61,7 @@ export const specsyncCommands: PluginCommand[] = [
   {
     name: "specsync-check",
     description:
-      "Run project spec-check (fledge run spec-check → specsync check). Failures block done (SPECSYNC-2/7).",
+      "Run the project spec check (its Fledge spec-check task if defined, else specsync check). Failures block done (SPECSYNC-2/7).",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -124,6 +124,22 @@ export const specsyncCommands: PluginCommand[] = [
       const result = await spawnSpecsync(ctx.cwd, ["coverage", ...ctx.args]);
       if (!result.success) {
         return fail(result.output || "specsync coverage failed", result.code || 1);
+      }
+      return ok(ctx, { output: result.output }, result.output);
+    },
+  },
+  {
+    name: "specsync-score",
+    description:
+      "Show SpecSync spec score report, 0-100 per spec (SPECSYNC-3). Optional args: module names, --explain. Local binary only.",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
+      const result = await spawnSpecsync(ctx.cwd, ["score", ...ctx.args]);
+      if (!result.success) {
+        return fail(result.output || "specsync score failed", result.code || 1);
       }
       return ok(ctx, { output: result.output }, result.output);
     },

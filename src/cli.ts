@@ -82,7 +82,7 @@ Usage:
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
-  corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
+  corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N]
                     [--output text|json|ndjson] [--json]
@@ -575,12 +575,13 @@ async function specsyncCli(
     check: "specsync-check",
     brief: "specsync-brief",
     coverage: "specsync-coverage",
+    score: "specsync-score",
     "change-list": "specsync-change-list",
     "ship-status": "specsync-ship-status",
   };
   if (!sub || !(sub in map)) {
     console.error(
-      "usage: corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]",
+      "usage: corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]",
     );
     return 1;
   }

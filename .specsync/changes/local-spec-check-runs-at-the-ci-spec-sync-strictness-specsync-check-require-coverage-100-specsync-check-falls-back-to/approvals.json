@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790519811,
+      "digest": "7889d2b61a6681e5b5396bc291ce9434964f2208ae92e6f07b74b25bbaf07408",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "local-spec-check-runs-at-the-ci-spec-sync-strictness-specsync-check-require-coverage-100-specsync-check-falls-back-to",
+        "title": "Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89)",
+        "description": "Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "README.md",
+          "STATUS.md",
+          "fledge.toml",
+          "plugins/specsync/api.ts",
+          "plugins/specsync/commands.ts",
+          "src/cli.ts",
+          "tests/specsync.check-parity.test.ts",
+          "tests/specsync.path-containment.test.ts",
+          "tests/specsync.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "The fledge.toml spec-check task (on the verify lane) runs specsync check with the same strictness as the CI Spec Sync Action in .github/workflows/spec-sync.yml: --require-coverage matching its require-coverage input (100) and --strict only when the Action sets strict (it does not), so a tree with an unspecced source file fails the local verify lane (verified=false) exactly as CI Spec Sync fails it; a parity test fails if fledge.toml and spec-sync.yml drift apart. specsync-check uses fledge run spec-check only when fledge is on PATH and the project fledge.toml defines a spec-check task (an unreadable or unparsable fledge.toml keeps the Fledge path, fail closed); otherwise it runs the local specsync check under the project's own .specsync config instead of failing with Unknown task spec-check. A new read-only specsync-score plugin (minTier 0, not dangerous, no API key) runs the local specsync score with the forwarded args (module filters, --explain, --format json) and returns its report; it refuses --root before spawning like specsync-coverage; corvidinho specsync score maps to it. No slash command, env var or config key is added. Regression tests fail on main and pass on the branch; tsc, bun test, specsync check --require-coverage 100 and the verify lane are green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "e11a56b776d8db1717cc6646390d32370cf2db93cee9c2d7b0a89dcda51f72f3",
+        "cli": "0cf8c3d53c334f11659237f54ff39e6b573c959bdbf6bc06b1a3143b9d9ce756",
+        "plugins": "5b3663821f89eeabe788e272c2d75713f35223ba887febb70f7d0043559ce3c0"
+      }
+    }
+  ],
+  "reopenings": []
+}

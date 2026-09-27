@@ -41,6 +41,7 @@ files:
   - plugins/specsync/commands.ts
   - plugins/specsync/index.ts
   - tests/specsync.path-containment.test.ts
+  - tests/specsync.check-parity.test.ts
   - plugins/memory/index.ts
   - plugins/memory/commands.ts
   - plugins/files/index.ts
@@ -142,8 +143,12 @@ name only while it is still that exact command). `plugins/fledge` exports
 root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
 `plugins/specsync/api.ts` exports `MODULE_NAME_RE` / `invalidModuleName` (the
 plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
-`refused: true` for an invalid name or an escaping path) and `readCompanions`
-(returns `error` and no files when it refuses).
+`refused: true` for an invalid name or an escaping path), `readCompanions`
+(returns `error` and no files when it refuses), `projectDefinesSpecCheckTask`
+(the project `fledge.toml` defines a `spec-check` task; true when that file
+cannot be read or parsed) and `runSpecCheck` (the Fledge `spec-check` task
+when fledge is on PATH and the project defines it, else local `specsync
+check`).
 
 ## Invariants
 
@@ -307,9 +312,18 @@ read (module spec, legacy flat spec, companions) must realpath inside the real
 specs dir, module dir, spec or companion that leaves it is refused (a refused
 companion fails the whole brief) and its content is never returned; the
 Planning spec briefing reads through the same helpers and skips it too.
-`specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
-forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
-`specsync-list` and `specsync-check` take no path input.
+`specsync-coverage`, `specsync-score`, `specsync-change-list` and
+`specsync-ship-status` refuse a forwarded `--root` / `--root=…` (exit 1) before
+spawning `specsync`. `specsync-list` and `specsync-check` take no path input.
+
+`specsync-check` runs `fledge run spec-check` only when fledge is on PATH and
+the project's own `fledge.toml` defines a `spec-check` task; with no
+`fledge.toml` or no such task it runs the local `specsync check` (the
+project's `.specsync` config decides its rules) instead of failing on an
+unknown Fledge task. A `fledge.toml` that cannot be parsed keeps the Fledge
+path (fail closed). `specsync-score` (SPECSYNC-3) is read-only (tier 0, not
+dangerous, no API key) and returns the local `specsync score` report with the
+forwarded args (module filters, `--explain`, `--format json`).
 
 ## Behavioral Examples
 
@@ -354,6 +368,18 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 - **Given** builtins are loaded and a file `outside.md` sits outside the project
 - **When** the agent runs `specsync-read ../../<outside>/outside` or `specsync-brief ../../<outside>`, or `specsync-read <module>` whose spec, module dir or companion is a symlink to a file outside the project
 - **Then** the run fails with exit 1 and a one-line refusal; no content from outside the project is returned
+
+### Scenario: specsync-check without a Fledge spec-check task
+
+- **Given** a project with `.specsync/` and `specs/` whose `fledge.toml` has no `spec-check` task (or no `fledge.toml`), and fledge on PATH
+- **When** the agent runs `specsync-check`
+- **Then** the local `specsync check` runs and its result is returned; there is no `Unknown task 'spec-check'` failure
+
+### Scenario: specsync-score answers "are we drifting?"
+
+- **Given** builtins are loaded and `specsync` is on PATH
+- **When** the agent runs `specsync-score` (or `corvidinho specsync score cli --explain`)
+- **Then** the local `specsync score` report (per-spec 0-100 and grade) is returned; `--root` is refused before spawning
 
 ### Scenario: web-fetch refuses cloud metadata
 
@@ -421,7 +447,9 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | specsync-read/brief name not a plain module name, or a spec/companion/specs dir whose real path leaves the project specs dir | Refuse (exit 1); nothing read |
-| specsync-coverage/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
+| specsync-coverage/score/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
+| specsync-check, fledge on PATH but the project defines no `spec-check` task | Run local `specsync check` (no `Unknown task` failure) |
+| specsync-check, project `fledge.toml` unparsable | Keep `fledge run spec-check` (fail closed; Fledge reports the error) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
