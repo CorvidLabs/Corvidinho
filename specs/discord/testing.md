@@ -103,8 +103,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
-  runs that stop to ask keep a free-text pending ask (options dropped; never a
-  spend-cap stop) and `/work` records the task `blocked`; the collapsed slash
+  runs that stop with an ask whose options cannot be listed (none, or a single
+  option) keep a free-text pending ask (never a spend-cap stop) and `/work`
+  records the task `blocked`; the collapsed slash
   answer maps to its session, so a reply `ok` restates without running the
   agent, `cancel` clears with the short ack, and a substantive reply resumes
   the same session with the question as context; a stuck `/work` ask pings
@@ -112,6 +113,23 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   only; another user's reply neither runs the agent nor touches the ask; a
   finished run keeps no pending ask; without `editMessage` an @mention `ok`
   still restates (no live Discord).
+- `tests/discord.slash-choose-ask.test.ts` (DISCORD-ASK-1/4) — `buttonAskFor`
+  lists structured options or a numbered list and returns null for free-form
+  questions and spend-cap stops; a `/work` clarify ask with options answers
+  with the collapsed Choose stub (no question, options or reply hint in it;
+  one Choose button; the requester's fresh ping) and keeps the ask with its
+  options and `stubMessageId`; the requester's Choose press opens the
+  ephemeral question with option buttons and a pick resumes the same session
+  (`resume: true`, chosen label) with the answer edited into the stub;
+  `/session start` with a numbered list does the same; a thin reply restates
+  the stub with its button and a substantive reply continues without clearing
+  the button ask; a stuck `/work` ask with options is `failed`, its stub pings
+  nobody and the owner notice is the one fresh post; when that notice post
+  fails the re-edited stub keeps its Choose button; without `editMessage` the
+  deferred reply carries the stub and button and its id is `stubMessageId`;
+  without listable options the answer stays free text with no button. The
+  bridge-level tests fail on the base sources (free-text answer, options
+  dropped).
 
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.

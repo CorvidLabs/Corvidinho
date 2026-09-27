@@ -56,6 +56,7 @@ files:
   - src/discord/list-scope.ts
   - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
+  - tests/discord.slash-choose-ask.test.ts
   - tests/discord.slash-reply-continuity.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
@@ -181,11 +182,19 @@ substantive continue. Message router keys sessions by Discord user id + channel
 (SESSION-MULTI-1); reply/thread continue only for the session owner.
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
 `/work` and `/session start` keep a clarify or stuck ask as their session's
-free-text `pendingAsk` (options dropped: the slash answer has no Choose
-buttons; never a `spend-cap` stop), and the bridge sets
+`pendingAsk` (never a `spend-cap` stop), and the bridge sets
 `SlashContext.trackBotMessage` so the slash answer message continues its
-session: a thin reply restates, cancel clears, a substantive reply resumes
-with the question (AUTONOMY-1/5/6 / REQ-discord-044).
+session (AUTONOMY-1/5/6 / REQ-discord-044). When the ask's choices fit a
+short list, `buttonAskFor` (`ask-buttons.ts`, over `resolveAskOptions`;
+returns a `ButtonAsk` or null) makes the answer the chat's Choose stub
+(DISCORD-ASK-1/4): the pending ask keeps its options, `finishSlashWithThinking` / `finishSlashWithOwnerNotice` carry
+the stub's `components` on the collapsed edit, the fallback reply
+(`SlashReplyPayload.components`) and the owner-notice re-edit, and
+`recordSlashStub` stores the answer message id as `stubMessageId` from
+`onDelivered(mode, messageId)`, so the chat `onComponent` open/pick path
+resumes the session in that message. Otherwise the answer is the free-text
+ask: a thin reply restates, cancel clears, a substantive reply resumes with
+the question.
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
 AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with

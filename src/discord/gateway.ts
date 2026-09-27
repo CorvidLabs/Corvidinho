@@ -352,6 +352,8 @@ export async function createLiveGateway(
           footer: e.footer,
         }));
       }
+      // DISCORD-ASK-1: a slash ask's Choose button rides the answer.
+      if (opts.components !== undefined) payload.components = opts.components;
       if (mode === "reply") {
         if (opts.ephemeral) payload.flags = MessageFlags.Ephemeral;
         if (interaction.deferred || interaction.replied) {

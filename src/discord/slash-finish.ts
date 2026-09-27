@@ -6,6 +6,9 @@
 
 import type { ThinkingStatus } from "./thinking-status.ts";
 import type { SlashInteraction } from "./slash-types.ts";
+import type { PendingAsk } from "./ask-buttons.ts";
+import type { SessionStore } from "./session-store.ts";
+import type { SessionStub } from "./types.ts";
 
 export type SlashFinishThinkingOpts = {
   thinking: ThinkingStatus | null;
@@ -26,11 +29,19 @@ export type SlashFinishThinkingOpts = {
   /** Users the collapsed answer may mention (allowed mentions). */
   mentionUserIds?: string[];
   /**
+   * Message components the answer carries: the Choose button of a button ask
+   * (DISCORD-ASK-1, REQ-discord-044). The collapsed edit and the fallback
+   * reply both carry them.
+   */
+  components?: unknown[];
+  /**
    * Called once the body is out (collapsed edit or fallback reply), before
    * the deferred reply is resolved — so a caller knows the answer went out
-   * even when resolving the deferred reply then throws.
+   * even when resolving the deferred reply then throws. `messageId` is the
+   * answer message when known (the collapsed message, or the fallback reply
+   * id the gateway resolved), e.g. to record a Choose stub's id.
    */
-  onDelivered?: (mode: "collapsed" | "fallback") => void;
+  onDelivered?: (mode: "collapsed" | "fallback", messageId?: string) => void;
 };
 
 /**
@@ -44,12 +55,13 @@ export async function finishSlashWithThinking(
   const collapsed = opts.thinking
     ? await opts.thinking.finalizeContent({
         content: opts.body,
+        ...(opts.components ? { components: opts.components } : {}),
         ...(opts.mentionUserIds ? { mentionUserIds: opts.mentionUserIds } : {}),
       })
     : null;
   if (collapsed) {
     opts.trackBotMessage?.(collapsed.messageId, opts.sessionId);
-    opts.onDelivered?.("collapsed");
+    opts.onDelivered?.("collapsed", collapsed.messageId);
     if (opts.interaction.deleteReply) {
       await opts.interaction.deleteReply();
     } else if (opts.interaction.editReply) {
@@ -73,13 +85,43 @@ export async function finishSlashWithThinking(
       );
     }
   }
+  const payload = {
+    content: opts.body,
+    ...(opts.components ? { components: opts.components } : {}),
+  };
+  let messageId: string | undefined;
   if (opts.interaction.editReply) {
-    const sent = await opts.interaction.editReply({ content: opts.body });
+    const sent = await opts.interaction.editReply(payload);
     // DISCORD-2: a reply to the fallback answer continues the session too.
-    if (sent?.messageId) opts.trackBotMessage?.(sent.messageId, opts.sessionId);
+    if (sent?.messageId) {
+      messageId = sent.messageId;
+      opts.trackBotMessage?.(sent.messageId, opts.sessionId);
+    }
   } else {
-    await opts.interaction.reply({ content: opts.body });
+    await opts.interaction.reply(payload);
   }
-  opts.onDelivered?.("fallback");
+  opts.onDelivered?.("fallback", messageId);
   return "fallback";
+}
+
+/**
+ * DISCORD-ASK-1 (REQ-discord-044): once a `/work` or `/session start` Choose
+ * stub is out, record its message id on the session's pending ask, so a pick
+ * resumes in that message (DISCORD-ASK-7), as on the chat path. Only while
+ * that ask is still the pending one. Best effort: a failed write is logged
+ * and never keeps the deferred reply from resolving.
+ */
+export function recordSlashStub(
+  store: Pick<SessionStore, "setPendingAsk">,
+  session: SessionStub,
+  pending: PendingAsk,
+  messageId: string | undefined,
+): void {
+  if (!messageId || session.pendingAsk?.askId !== pending.askId) return;
+  pending.stubMessageId = messageId;
+  try {
+    store.setPendingAsk(session, pending);
+  } catch (err) {
+    console.warn(`[discord] slash ask stub for ${session.id} not recorded:`, err);
+  }
 }
