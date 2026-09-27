@@ -7,11 +7,11 @@
   "title": "Schedule ask outbox delivery re-checks the creator and channel against the live DISCORD-SCHEDULE-3 gate",
   "description": "Schedule ask outbox delivery re-checks the creator and channel against the live DISCORD-SCHEDULE-3 gate",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "c8988b98e0d872847a16f711cde337277a027b66",
   "created_at": 1790524398,
-  "updated_at": 1790524609,
+  "updated_at": 1790524826,
   "affected_specs": [
     "discord"
   ],

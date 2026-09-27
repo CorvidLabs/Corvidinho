@@ -1,6 +1,6 @@
 ---
 id: schedule-ask-outbox-delivery-re-checks-the-creator-and-channel-against-the-live-discord-schedule-3-gate
-state: implementing
+state: archived
 type: bug_fix
 base_commit: c8988b98e0d872847a16f711cde337277a027b66
 ---
