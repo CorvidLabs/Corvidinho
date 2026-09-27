@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "cb80548c1708f062fa26ba61795e79bd9cebcbb7",
+      "contract_digest": "91be2ca7ab9fcb19ec45aa68e08f1a8dfc17331d7618ed8932698d328f765687",
+      "execution_digest": "3a5cc22055036db56de9d77ed91e10b80471a8369ccacb46039f93f258a946f4",
+      "workspace_digest": "95753f54bff0e521e07eb065580c63efb379cd78a69b14db117a823ca38e0418",
+      "timestamp": 1790466809
+    }
+  ]
+}

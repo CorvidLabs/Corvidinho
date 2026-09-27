@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "box-updater-a-set-corvidinho-bridge-unit-wins-over-a-leftover-pidfile-no-second-nohup-bridge-the-env-file-is-loaded",
+  "implementation_commit": "3bf0d9c8a9cbd4c9b8986a1b01042dc17d5202fc",
+  "implementation_tree": "12df2c0ee85907aa3509e3a31674a01fe55bf207",
+  "contract_digest": "78cf782f8020aa7d2fdc06c9041014a2d522c2d493ce9f8cb48212e7149f6376",
+  "workspace_digest": "8ee7b3873ed03bfb5b86bf91bee99019dbb5541b136d5a871c3461c7af551219",
+  "closing_digest": "b511577db16b3828db234b5c24cbd57b041d4b170bcd54bd26d210f6df70fa11",
+  "review_digest": "7a9f5653bff75115db0c3b5f05023ab9cd1d030cefa8930e5ca9f32277494507",
+  "finalization_digest": "bc7a038a1c394191b3261def42e0735da37a39df2f26d603150947a5de23354c",
+  "timestamp": 1790467109
+}
