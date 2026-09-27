@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "slash-pending-ask-tests-expect-the-req-discord-215-collapsed-ping-to-the-clarify-requester-after-a-work-or-session",
+  "implementation_commit": "7679caa0ebfb95a774c673abad1dddbf1c9e5e28",
+  "implementation_tree": "d153f8fcd4a341460edcce93a1041f18131bccf5",
+  "contract_digest": "48254fe476f15838993258c576470d185928ad9a0c5d2791b08a0dcc7fc9bf6b",
+  "workspace_digest": "79fb40319c9d48f97853dc6985a9febb08e36042e9822232dba836b418bb3464",
+  "closing_digest": "5d5258471c622d29658eec9995ed6c49665c1c1af7487caa2a363c6952590f82",
+  "review_digest": "025fa9529aaa19a82321c8c2e94d2e929b04c510f2f1616371285a7e55bfcd4d",
+  "finalization_digest": "920cb208f3ee918ebf4fe57de098ffff1e7eef611270c2f2449344cedcd9ed4b",
+  "timestamp": 1790471992
+}

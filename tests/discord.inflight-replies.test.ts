@@ -460,7 +460,9 @@ describe("DISCORD-ASK-6/7 collapsed replies clear the in-flight row (REQ-discord
     const edit = calls.messageEdits.at(-1)!;
     expect(edit.messageId).toBe("sent_1");
     expect(edit.components?.length).toBeGreaterThan(0);
-    expect(calls.replies).toHaveLength(0);
+    // Only the requester ping follows the collapsed stub (REQ-discord-215).
+    expect(calls.replies).toHaveLength(1);
+    expect(calls.replies[0]!.content).toBe("<@u1> ↑ question for you");
     expect(r.store.list()[0]!.pendingAsk?.stubMessageId).toBe("sent_1");
     expect(inflightRows(db)).toEqual([]);
   });
@@ -497,9 +499,11 @@ describe("DISCORD-ASK-6/7 collapsed replies clear the in-flight row (REQ-discord
     expect(seen[0]).toHaveLength(1);
     expect(seen[0]![0]!.request_message_id).toBe("sent_1");
     expect(seen[0]![0]!.progress_message_id).toBe("sent_1");
-    // One public message the whole way: no second embed, no reply.
+    // One public message the whole way: no second embed; the only reply is
+    // the requester ping after the stub was posted (REQ-discord-215).
     expect(calls.sends).toHaveLength(1);
-    expect(calls.replies).toHaveLength(0);
+    expect(calls.replies).toHaveLength(1);
+    expect(calls.replies[0]!.content).toBe("<@u1> ↑ question for you");
     const last = calls.messageEdits.at(-1)!;
     expect(last.messageId).toBe("sent_1");
     expect(last.content).toBe("Using Postgres");
