@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790530156,
+      "digest": "1a27100b6499fce94957af181b5ec5ad9ba4954fa7ccc5f561db00338052f133",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-channel-autocomplete-for-admin-and-announce-returns-no-choices-unless-the-invoker-is-admin-in-an-allowlisted",
+        "title": "Discord channel autocomplete for /admin and /announce returns no choices unless the invoker is ADMIN in an allowlisted channel",
+        "description": "Discord channel autocomplete for /admin and /announce returns no choices unless the invoker is ADMIN in an allowlisted channel",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "src/discord/bridge.ts",
+          "src/discord/gateway.ts",
+          "tests/discord.channel-autocomplete.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Every channel autocomplete request (/admin channels add|remove, /announce channel) responds with an empty choice list unless the invoker is ADMIN in an allowlisted channel: the channel passes the slash channel allowlist gate, the actor passes the actor gate (deny users/roles win, user/role allowlist applies), and resolvePermissionLevel with the live mute set is ADMIN (the configured owner). Non-owners, a muted or deny-role owner, any caller outside an allowlisted channel, a bridge with no owner, and a gateway with no gate wired all get []. The owner in an allowlisted channel keeps today's choices (guild text channels for add/announce; the live allowlist for remove). Regression tests in tests/discord.channel-autocomplete.test.ts fail on main and pass with the fix; tsc --noEmit and bun test green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "5d72f45a3bb5f83d61a38e3ee4d8a0c5857862c1ea217b845dd2988fa7f94f6d"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790532428,
+      "digest": "57cf258e19851d151d666281fcf546c8ce5a30d7cbde733430d30b6ee48d5f6e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

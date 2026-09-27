@@ -600,6 +600,69 @@ describe("git-commit", () => {
     expect(ignored.ok).toBe(false);
     expect(ignored.error).toContain("ignored");
   });
+
+  test("SAFE-2: .specsync/ state deletes are refused; an archived change's folder delete stages (SPECSYNC-4)", async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, ".specsync", "changes", "done"), { recursive: true });
+    writeFileSync(join(repo, ".specsync", "config.toml"), "enforcement = \"strict\"\n");
+    writeFileSync(join(repo, ".specsync", "changes", "done", "state.json"), "{}\n");
+    g(repo, "add", ".specsync");
+    g(repo, "commit", "-q", "-m", "sdd");
+
+    unlinkSync(join(repo, ".specsync", "config.toml"));
+    const cfg = await run("git-commit", ["-m", "drop sdd", ".specsync/config.toml"], repo);
+    expect(cfg.ok).toBe(false);
+    expect(cfg.exitCode).toBe(2);
+    expect(cfg.error).toContain("SAFE-2");
+    expect(g(repo, "ls-files", ".specsync/config.toml").trim()).toBe(".specsync/config.toml");
+
+    unlinkSync(join(repo, ".specsync", "changes", "done", "state.json"));
+    const moved = await run(
+      "git-commit",
+      ["-m", "chore: archive change", ".specsync/changes/done/state.json"],
+      repo,
+    );
+    expect(moved.error).toBeUndefined();
+    expect(moved.ok).toBe(true);
+    expect(g(repo, "ls-files", ".specsync/changes/done/state.json").trim()).toBe("");
+  });
+
+  test("keystore directories are never staged; a change id that mentions keystores archives (REQ-plugins-182, SPECSYNC-4)", async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, "keystore"));
+    mkdirSync(join(repo, "config", "Keystore"), { recursive: true });
+    writeFileSync(join(repo, "keystore", "UTC--2026-09-27--abc"), '{"crypto":"x"}\n');
+    writeFileSync(join(repo, "config", "Keystore", "wallet.json"), '{"crypto":"x"}\n');
+    for (const p of ["keystore/UTC--2026-09-27--abc", "config/Keystore/wallet.json"]) {
+      const r = await run("git-commit", ["-m", "add key", p], repo);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toContain("secret-bearing");
+    }
+    expect(g(repo, "ls-files", "keystore", "config").trim()).toBe("");
+    expect(g(repo, "diff", "--cached", "--name-only").trim()).toBe("");
+
+    // SpecSync change ids are slugs of the change title, not keystores.
+    const id = "safe-2-refuse-keystore-dirs";
+    mkdirSync(join(repo, ".specsync", "changes", id), { recursive: true });
+    writeFileSync(join(repo, ".specsync", "changes", id, "state.json"), "{}\n");
+    const add = await run("git-commit", ["-m", "sdd", `.specsync/changes/${id}/state.json`], repo);
+    expect(add.error).toBeUndefined();
+    expect(add.ok).toBe(true);
+
+    const archived = `.specsync/archive/changes/2026-09-27-${id}/state.json`;
+    mkdirSync(join(repo, ".specsync", "archive", "changes", `2026-09-27-${id}`), { recursive: true });
+    writeFileSync(join(repo, archived), "{}\n");
+    unlinkSync(join(repo, ".specsync", "changes", id, "state.json"));
+    const moved = await run(
+      "git-commit",
+      ["-m", "chore: archive change", `.specsync/changes/${id}/state.json`, archived],
+      repo,
+    );
+    expect(moved.error).toBeUndefined();
+    expect(moved.ok).toBe(true);
+    expect(g(repo, "ls-files", ".specsync").trim()).toBe(archived);
+  });
 });
 
 describe("git-push (GITHUB-6, never force)", () => {
