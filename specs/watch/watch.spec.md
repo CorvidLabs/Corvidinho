@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 14
+version: 15
 status: draft
 files:
   - src/watch/types.ts
@@ -16,6 +16,7 @@ files:
   - src/watch/spawn-log.ts
   - src/watch/rate-limit.ts
   - src/watch/index.ts
+  - tests/watch.auth-stop.test.ts
 
 db_tables: []
 depends_on:
@@ -52,7 +53,8 @@ ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),
 summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
 SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
 rate-limit helpers (parseGithubRateLimit, GithubRateLimitError,
-computeRateLimitBackoffMs).
+computeRateLimitBackoffMs), `StartWatchResult.fatal` / `WatchFatal`
+(REQ-watch-418).
 
 ## Invariants
 
@@ -77,6 +79,10 @@ and the next event on that issue starts fresh; one session per
 only after the in-flight cycle ends (REQ-watch-037). Poll cycles are
 single-flight; after stop no further event is routed, acked, or spawned; one
 failing event is logged and marked processed without aborting the cycle.
+A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
+`GITHUB_TOKEN / GH_TOKEN`, and settles `fatal` with exit code 1; the default
+error sink prints one SAFE-6 scrubbed line per error, never the error object
+(REQ-watch-418).
 
 ## Behavioral Examples
 
@@ -93,7 +99,8 @@ start_session with a new id.
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
-(user/repo); already processed; GitHub 403 rate-limit backoff.
+(user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
+(bad or revoked token) stops the loop with exit 1.
 
 ## Dependencies
 
@@ -119,3 +126,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-26 | watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails: WATCH never drops or skips a trusted request when an event-id write fails |
 | 2026-09-26 | watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is: WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected |
 | 2026-09-26 | watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide: WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention |
+| 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |

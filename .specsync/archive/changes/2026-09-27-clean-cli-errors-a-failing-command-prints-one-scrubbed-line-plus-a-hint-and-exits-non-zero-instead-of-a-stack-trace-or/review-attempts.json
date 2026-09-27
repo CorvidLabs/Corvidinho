@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "d389666cb5ca05cabb03c3a4792aafecf0126512",
+      "contract_digest": "e8f0e0239e7e4a9a952fdba55fab71e7dfcd3b3119ed1f3a297f078e5b2b72fb",
+      "execution_digest": "7750c8827230f5577443e59d4a145c5d7ce84a061be459e131d4079ee42fde16",
+      "workspace_digest": "17816d6ca1480a54e30d0504630f5aec6182f277c4ac64e793e93a8daf51ad9f",
+      "timestamp": 1790475829
+    }
+  ]
+}

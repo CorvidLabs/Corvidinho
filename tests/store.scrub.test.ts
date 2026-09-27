@@ -12,8 +12,10 @@ import { MemoryStore } from "../src/memory/store.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import {
+  ERROR_LINE_MAX,
   SCRUB_RULES_VERSION,
   ensureScrubbed,
+  formatErrorLine,
   rescrubDatabase,
   scrubSecrets,
 } from "../src/store/scrub.ts";
@@ -209,5 +211,53 @@ describe("automatic re-scrub when rules tighten", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("formatErrorLine (SAFE-6 / REQ-discord-417)", () => {
+  const noEnv = { env: {} };
+
+  test("first line of the message only: no stack, no code frame", () => {
+    const err = new Error("boom\n    at x (y.ts:1:1)\n12 | code");
+    expect(formatErrorLine(err, noEnv)).toBe("boom");
+  });
+
+  test("vendor-key shapes are scrubbed, including a key block spanning lines", () => {
+    expect(formatErrorLine(new Error(`token ${FAKE.github} rejected`), noEnv)).toBe(
+      "token [redacted:github-token] rejected",
+    );
+    expect(formatErrorLine(new Error(`key ${FAKE.pem} x`), noEnv)).toBe(
+      "key [redacted:private-key] x",
+    );
+  });
+
+  test("a secret env value is redacted even without a vendor shape; short ones are not", () => {
+    const env = { DISCORD_TOKEN: "garbage-token-1234", GH_TOKEN: "abc" };
+    expect(formatErrorLine(new Error("bad garbage-token-1234 and abc"), { env })).toBe(
+      "bad [redacted:env-secret] and abc",
+    );
+  });
+
+  test("programming errors keep their class name; library names are dropped", () => {
+    expect(formatErrorLine(new TypeError("x is not a function"), noEnv)).toBe(
+      "TypeError: x is not a function",
+    );
+    const lib = Object.assign(new Error("401: Unauthorized"), { name: "DiscordAPIError[0]" });
+    expect(formatErrorLine(lib, noEnv)).toBe("401: Unauthorized");
+  });
+
+  test("non-Error values and empty messages still give one line", () => {
+    expect(formatErrorLine("plain", noEnv)).toBe("plain");
+    expect(formatErrorLine({ message: "obj" }, noEnv)).toBe("obj");
+    expect(formatErrorLine(42, noEnv)).toBe("42");
+    expect(formatErrorLine(new Error(""), noEnv)).toBe("Error");
+    expect(formatErrorLine("  \n ", noEnv)).toBe("unknown error");
+    expect(formatErrorLine(Object.create(null), noEnv)).toBe("(unprintable error)");
+  });
+
+  test("capped at ERROR_LINE_MAX", () => {
+    const line = formatErrorLine(new Error("x".repeat(1000)), noEnv);
+    expect(line.length).toBe(ERROR_LINE_MAX);
+    expect(line.endsWith("…")).toBe(true);
   });
 });

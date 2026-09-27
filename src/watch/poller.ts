@@ -11,7 +11,7 @@
 import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
-import { scrubSecrets } from "../store/scrub.ts";
+import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
 import {
   createEchoAgentClient,
   createSpawnAgentClient,
@@ -92,9 +92,26 @@ export type StartWatchResult =
       pollOnce: () => Promise<PollCycleResult>;
       /** Earliest time the next poll may run (rate-limit backoff). */
       getBackoffUntilMs: () => number;
+      /**
+       * Settles once when the poll loop stops itself because polling cannot
+       * recover (GitHub 401: bad or revoked token). Never settles otherwise.
+       * The CLI then calls stop() and exits with `exitCode` (REQ-watch-418).
+       */
+      fatal: Promise<WatchFatal>;
       stop: () => Promise<void>;
     }
   | { ok: false; exitCode: number; message: string };
+
+/** Why the poll loop stopped itself (REQ-watch-418). */
+export type WatchFatal = { exitCode: number; message: string };
+
+/** HTTP status on a thrown Octokit error (`status` or `response.status`). */
+function githubStatusOf(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { status?: unknown; response?: { status?: unknown } };
+  const s = e.status ?? e.response?.status;
+  return typeof s === "number" ? s : undefined;
+}
 
 export type PollCycleResult = {
   fetched: number;
@@ -224,10 +241,12 @@ export async function startWatchPoller(
           path: defaultSpawnLogPath({ env: opts.env }),
         }));
   const log = opts.log ?? ((msg: string) => console.log(msg));
+  // REQ-watch-418: the default sink prints one scrubbed line per error,
+  // never the thrown object (an Octokit HttpError dump every poll).
   const logError =
     opts.logError ??
     ((msg: string, err?: unknown) => {
-      if (err !== undefined) console.error(msg, err);
+      if (err !== undefined) console.error(`${msg}: ${formatErrorLine(err, { env })}`);
       else console.error(msg);
     });
   const now = opts.now ?? (() => Date.now());
@@ -244,6 +263,25 @@ export async function startWatchPoller(
   let timer: ReturnType<typeof setTimeout> | null = null;
   let running = true;
   let backoffUntilMs = 0;
+  let resolveFatal: (f: WatchFatal) => void = () => {};
+  const fatal = new Promise<WatchFatal>((r) => {
+    resolveFatal = r;
+  });
+
+  // REQ-watch-418: GitHub 401 means the token is bad or revoked; every later
+  // poll would fail the same way, so stop the loop instead of polling forever.
+  const haltOnAuthFailure = (err: unknown): void => {
+    running = false;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const message =
+      `[watch] github auth failed (401): ${formatErrorLine(err, { env })} — ` +
+      "check GITHUB_TOKEN / GH_TOKEN; watch stopped";
+    logError(message);
+    resolveFatal({ exitCode: 1, message });
+  };
 
   const applyRateLimitBackoff = (err: unknown): number | null => {
     const parsed = parseGithubRateLimit(
@@ -502,6 +540,10 @@ export async function startWatchPoller(
           if (!running) return;
           await pollOnce();
         } catch (err) {
+          if (githubStatusOf(err) === 401) {
+            haltOnAuthFailure(err);
+            return;
+          }
           const waitMs = applyRateLimitBackoff(err);
           if (waitMs === null) {
             logError("[watch] pollOnce error", err);
@@ -535,6 +577,7 @@ export async function startWatchPoller(
     spawnOutcomes,
     pollOnce,
     getBackoffUntilMs: () => backoffUntilMs,
+    fatal,
     stop: async () => {
       running = false;
       if (timer) {

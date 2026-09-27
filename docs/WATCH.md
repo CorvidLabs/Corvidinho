@@ -58,6 +58,9 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
   and appends a JSONL record (default `<data dir>/watch-spawn.jsonl` — data dir = `CORVIDINHO_DATA_DIR` or `~/.local/share/corvidinho`; override `CORVIDINHO_WATCH_SPAWN_LOG`) so ops can read outcomes without Discord.
 - **GitHub 403 rate-limit backoff (WATCH-RELIABILITY-3):** on 403 rate-limit (or 429), WATCH backs off using `Retry-After` or `x-ratelimit-reset`, else a documented **60s** default; skips tight re-poll while backing off; logs  
   `[watch] github rate-limit backoff ms=… until=… reason=…`.
+- **GitHub 401 (bad or revoked token, REQ-watch-418):** WATCH stops polling instead of retrying forever, logs one line  
+  `[watch] github auth failed (401): … — check GITHUB_TOKEN / GH_TOKEN; watch stopped`  
+  and `corvidinho github watch` exits 1. Other poll errors print one scrubbed line each (`[watch] pollOnce error: …`, SAFE-6) and polling continues.
 - **Ignore own mentions:** comments and issue-body mentions authored by `CORVIDINHO_WATCH_USERNAME` are omitted from fetched events.
 - **Search pagination bury risk:** Octokit search uses `per_page=100` sorted by `updated` desc. An org-wide qualifier (`org:… involves:…`) can still return more than one page of Corvidinho (or other) noise and **bury** pings on quieter repos (e.g. arcsite) past the first page. Prefer an explicit `repos` allowlist for critical targets, or accept that deep pages are not scanned in this thin slice.
 
