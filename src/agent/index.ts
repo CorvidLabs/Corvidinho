@@ -9,6 +9,7 @@ export type {
   HumanAsk,
   HumanAskReason,
   RunTaskOptions,
+  SpendWarning,
   TaskResult,
   VerifyResult,
   VerifyRunner,
@@ -110,6 +111,56 @@ export type {
   TaskProgress,
   TaskRunStreamOutcome,
 } from "./events-ndjson.ts";
+
+export {
+  costMicroUsd,
+  ensureSpendLedger,
+  estimateCallMicroUsd,
+  formatUsd,
+  MODEL_PRICES_USD_PER_MTOK,
+  createSpendGuard,
+  parseSpendCap,
+  priceForModel,
+  readSpendSnapshot,
+  SPEND_CAP_ENV,
+  SPEND_WARN_PERCENT,
+  SPEND_WINDOW_MS,
+  SpendCapRefusal,
+  spendDoctorCheck,
+  SpendLedger,
+  withSpendCap,
+} from "./spend.ts";
+export type {
+  ModelPrice,
+  SpendCap,
+  SpendCapOptions,
+  SpendDoctorLine,
+  SpendGuard,
+  SpendSnapshot,
+  SpendWindow,
+} from "./spend.ts";
+export { createSpendAlertOutbox } from "./spend-outbox.ts";
+export type { SpendAlertOutbox, SpendCapPingClaim, TakenSpendWarning } from "./spend-outbox.ts";
+export {
+  claimSpendCapPing,
+  claimSpendWarnings,
+  ensureSpendAlerts,
+  releaseSpendCapPing,
+  releaseSpendWarnings,
+} from "./spend-alerts.ts";
+export {
+  formatSpendDoctorLine,
+  formatSpendStatusLine,
+  formatSpendWarningLine,
+  SPEND_CAP_SUMMARY,
+  SPEND_REARM_PERCENT,
+  spendCapInvalidAsk,
+  spendCapLedgerAsk,
+  spendCapReachedAsk,
+  spendCapUnpricedAsk,
+  spendPercent,
+  spendWarningFromUnknown,
+} from "./spend-notice.ts";
 
 export {
   describeProjectInstructions,

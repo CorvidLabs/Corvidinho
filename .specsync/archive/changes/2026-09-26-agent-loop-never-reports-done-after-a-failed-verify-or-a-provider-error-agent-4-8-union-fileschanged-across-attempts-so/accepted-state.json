@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "agent-loop-never-reports-done-after-a-failed-verify-or-a-provider-error-agent-4-8-union-fileschanged-across-attempts-so",
+  "slug": "agent-loop-never-reports-done-after-a-failed-verify-or-a-provider-error-agent-4-8-union-fileschanged-across-attempts-so",
+  "title": "Agent loop never reports done after a failed verify or a provider error (AGENT-4/8): union filesChanged across attempts so a retry that changes nothing is re-verified, and provider/HTTP failures return an execute error flag that ends the run failed",
+  "description": "Agent loop never reports done after a failed verify or a provider error (AGENT-4/8): union filesChanged across attempts so a retry that changes nothing is re-verified, and provider/HTTP failures return an execute error flag that ends the run failed",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "e8bbd215036e7dc8739ac9159afa19f17ae943c6",
+  "created_at": 1790464103,
+  "updated_at": 1790464469,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/loop.ts",
+    "src/agent/execute.ts",
+    "src/agent/types.ts",
+    "tests/agent.loop.test.ts",
+    "tests/agent.tool-loop.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A retry after a failed verify that changes no files is verified again and the run ends failed (non-zero exit) when retries run out, never done; filesChanged is the union across attempts; a provider or HTTP failure (bad key, 5xx, network error, malformed reply) sets ExecuteResult.error and runTask ends failed instead of done, with or without the verify gate"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

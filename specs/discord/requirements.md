@@ -41,8 +41,29 @@ Acceptance Criteria
 
 The bridge SHALL load allowlists from file and env. It SHALL require a non-empty channel allowlist and SHALL fail to start if the channel list is empty.
 
+When the allowlist file exists but cannot be read or parsed (REQ-plugins-006),
+`loadBridgeConfig` SHALL return `code: "allowlist"` and the bridge SHALL NOT
+start; it SHALL NOT fall back to env channels alone. Multi-line
+`[discord]` arrays (`channels`, `users`, `deny_*`) SHALL load in full.
+`/admin` (REQ-discord-043) SHALL read a multi-line `users` / `channels`
+array in full and SHALL refuse (not rewrite) a file it cannot parse. It SHALL
+find the lines to edit with the loader's own reader, so a `]` or `#` inside a
+quoted item neither ends an array nor starts a comment, and a key it adds goes
+after the closing `]` of any multi-line array. Before any write it SHALL
+re-read the new text exactly as the loader will after a restart and SHALL
+refuse, writing nothing, unless it loads, the edited list reads back as
+intended and every other list and key (`[owner]` included) is unchanged — so
+a file it rewrites always reloads with every existing entry and every other
+list intact.
+
 Acceptance Criteria
 - DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
+- A malformed allowlist file → `allowlist` error; the bridge does not start.
+- A multi-line `deny_channels` loads and refuses its channel.
+- `/admin users add` on a file with a multi-line `users` array keeps the existing entries, and the reloaded file keeps `deny_users` and `[github].deny_repos`.
+- `/admin users add` on a file whose `[discord]` has only a multi-line `channels` array (LF and CRLF), and `/admin channels add` after a multi-line `deny_users`, put the new key after the closing `]`; the file reloads with every list intact.
+- A `]` or `#` inside a quoted item survives an `/admin` rewrite; the comment on the edited key's first line is kept.
+- A rewrite that would not reload as intended (an entry the one-line writer cannot quote) is refused and the file is left byte-for-byte unchanged.
 
 ### REQ-discord-005
 
@@ -698,6 +719,81 @@ Acceptance Criteria
 - Package `0.0.11`; docs/STATUS/CHANGELOG updated.
 - Fixture tests + SpecSync + fledge verify green.
 
+### REQ-discord-098
+
+The shared SQLite store SHALL treat the module-owned `spend_ledger` and
+`spend_alerts` tables (created by `src/agent/spend.ts` and
+`src/agent/spend-alerts.ts` with CREATE TABLE IF NOT EXISTS, no schema
+version bump) like every other persisted table under SAFE-6: the free-text
+`provider` and `model` columns of `spend_ledger` SHALL be written through
+`scrubSecrets` and SHALL be listed in `SCRUB_TARGETS`, so a scrub-rules
+re-scrub also covers them; `spend_alerts` SHALL hold no free text.
+
+On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8), a run that stopped at
+the spend cap (`ask.reason` `spend-cap`) SHALL be posted through the
+AUTONOMY-1/2 ask path on every bridge surface — chat reply, `/work`,
+`/session start` and schedule post — with a paused, not failed, status and
+without the "reply to answer" hint (a reply cannot lift the cap). Like a
+stuck ask (AUTONOMY-2/4), a spend-cap ask SHALL ping the configured owner,
+once per cap episode across those surfaces (the bridge's spend alert outbox
+`claimCapPing`; a schedule also keeps its per-schedule ping key); later
+spend-cap asks in the same episode SHALL post without a ping. A spend-cap
+stop SHALL NOT be kept as the session's pending ask (AUTONOMY-5/6; a reply
+cannot lift the cap): a later thin reply runs the agent like any other
+message, a substantive reply carries no cap text into the prompt, and a
+spend-cap pending ask persisted by an earlier build SHALL load as none;
+clarify and stuck pending asks are unchanged. `/work` SHALL record a run
+that stopped to ask as `blocked` (not `completed`; a stuck run stays
+`failed`), SHALL say the PR was not opened because the run paused at the
+spend cap, and `/status` SHALL count blocked work as waiting for input.
+`/work` and `/session start` SHALL answer with the ask content in the one
+message DISCORD-ASK-7 leaves (the thinking message edited into the answer
+and the deferred reply deleted, else the status plus the reply), SHALL
+address the requester on a clarify ask (AUTONOMY-4) and ping the owner only
+for stuck and spend-cap asks; a run that stopped to ask SHALL never show "✅
+Done" (the fallback status is the ask's). That owner ping and the warning
+SHALL go out as a fresh channel post after the answer (allowed mentions
+limited to the owner; an edit does not notify a mention), or be appended to
+the answer that went out (the collapsed message edited again, or the reply)
+when that post cannot be sent; when the answer itself fails (e.g. an
+interaction token that expired during a long run) the notice SHALL still go
+out as the fresh channel post and the answer's error SHALL still be raised.
+
+The 80% warning SHALL reach the owner even when the run that crossed it had
+no Discord reply (WATCH, the headless daemon, a delegate worker, a schedule
+whose channel left the allowlist): every bridge post SHALL take the pending
+warning from the outbox over the bridge's shared DB (the run's own
+`spendWarning`, validated by `spendWarningFromUnknown`, only when the bridge
+has no DB) and append the warning line built from integer amounts, pinging
+the configured owner; a post that did not go out (a chat reply, a schedule
+post, or a slash run's owner notice that went out neither as a channel post
+nor in the reply) SHALL hand back both the warning and the cap episode's
+owner ping for the next post, and a schedule SHALL keep no ping key for a
+ping that was never posted. `/status` SHALL show the rolling 24-hour spend
+against the cap with the percent, or that no cap is set, from the bridge's
+shared DB, with no new slash command.
+
+Acceptance Criteria
+- A ledger row written with a vendor-key-looking provider or model persists redacted.
+- `SCRUB_TARGETS` contains `spend_ledger` with `provider` and `model`.
+- `rescrubDatabase` re-scrubs a raw `spend_ledger` row.
+- A `spend-cap` ask reply carries the spend-cap headline and the question, pings the owner, its thinking status is not an error, and it never carries the reply hint.
+- Two spend-cap asks with different amounts share one `askPingKey`.
+- Two chat messages at the cap: the first reply pings the owner, the second posts the ask with no mention; after spend is seen under 70% the next one pings again. A spend-cap stop leaves no pending ask: a later `ok` runs the agent (still at the cap: the ask again, no mention) and a substantive reply's prompt carries no prior-question or cap text; a stored spend-cap pending ask loads as none while a stored clarify ask loads unchanged.
+- `/work` with a clarify ask is `blocked`, mentions the requester in the reply and posts no owner notice.
+- `/work` at the cap: the task is `blocked`, the reply shows the ask and the spend-cap PR line (no ✅), and one fresh post pings the owner; a second `/work` in the same episode does not ping. `/session start` at the cap shows the ask and pings the owner.
+- A schedule spend-cap ask in an episode already pinged elsewhere posts without a mention.
+- A warning recorded by another process (a WATCH-style run on the same data dir) appears on the next bridge chat reply with the owner pinged, once; `/work` delivers a pending warning as a fresh post pinging the owner.
+- A result with `spendWarning` and no bridge DB gets the warning line and the owner in `mentionUserIds` (chat reply and schedule post); a malformed `spendWarning` in the result frame is dropped.
+- `/status` with a $5 cap and $4.10 spent shows `Spend (24h): $4.10 of $5.00 daily cap (82%)`.
+- `/work` whose final reply throws (expired interaction token) still posts the owner notice with the spend-cap ping and the pending warning, and the error is raised; `/session start` whose reply and notice both fail leaves the warning and the cap ping for the next chat reply, which pings the owner and carries the warning.
+- A chat spend-cap reply that failed to post leaves the episode's owner ping for the next reply.
+- A schedule spend-cap post that failed sets no ping key, and the next tick's post pings the owner.
+- `/work` at the cap with an editable thinking message: the thinking message becomes the answer (`(blocked)`, the spend-cap ask, no ✅, no mention), the deferred reply is deleted, and one fresh post pings the owner with the pending warning; a second `/work` in the episode posts no owner notice.
+- `/session start` with a stuck ask collapses to the ask (no ✅) and the owner gets a fresh post; with a clarify ask the collapsed answer mentions only the requester and no owner post goes out.
+- The fresh owner post fails: the notice is appended to the collapsed answer (same message edited again, owner in its allowed mentions).
+- Collapse, reply and owner post all fail (reply throws): the error is raised and the next chat answer carries the owner ping and the warning.
+
 ### REQ-discord-088
 
 After a `/work` run finishes, the handler SHALL try to ship the run's active
@@ -927,6 +1023,41 @@ Acceptance Criteria
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
 
+### REQ-discord-331
+
+A schedule tick that throws SHALL NOT take down the process that runs it
+(DISCORD-SCHEDULE-4 / CLI-8 / AUTONOMOUS-4). The store calls a tick makes
+(`refresh`, `listDue`, `claimRun`) can throw, for example `SQLITE_BUSY` after
+the 5 s busy timeout while the bridge, `corvidinho daemon`, watch and agents
+share one data dir. Bun exits the process on an unhandled rejection.
+
+- The scheduler's own interval (`SchedulerService.start()`, which the Discord
+  bridge uses) SHALL catch a rejected tick and log one stderr line,
+  `[scheduler] tick failed: <message>`. The message SHALL be passed through
+  `scrubSecrets` (SAFE-6) and capped. No stack is logged.
+- `tick()` SHALL still reject for direct callers, so the daemon keeps its own
+  `tick.failed` JSON log line. A tick that throws SHALL release its tick lock,
+  so the next tick runs. Runs it claimed before the throw SHALL keep running.
+- The fire-and-forget run promise that a tick starts SHALL never reject. An
+  error that escapes a run (for example, recording its failure also throws)
+  SHALL be logged the same way as `[scheduler] run failed: <message>`.
+- A run SHALL always free its running slot when it ends, even when parking its
+  worktree throws, so that schedule can run again and the concurrency cap is
+  not used up.
+- No global `unhandledRejection` handler SHALL be installed.
+
+Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
+no catch-up, auto-pause after 5 failures, the atomic claim (REQ-discord-108)
+and the non-blocking tick. No new env var, slash command, CLI flag, table or
+column.
+
+Acceptance Criteria
+- With the interval running, `listDue` or `claimRun` throwing once gives no unhandled rejection, one scrubbed `[scheduler] tick failed:` line with no raw token, and the next tick starts the due run.
+- A separate Bun process that runs the scheduler interval, with a store that throws once, stays up and exits 0. Before the fix it exited 1.
+- A manual `tick()` whose `claimRun` throws on the second due schedule rejects. The first run keeps going, and the next `tick()` starts the second.
+- A run whose agent throws and whose `markRunFinished` also throws logs `[scheduler] run failed:` and frees its slot, with no unhandled rejection.
+- A run whose `parkWorktree` throws frees its slot, and the same schedule starts again on a later tick.
+
 ### REQ-discord-253
 
 The GITHUB-6 repo gate the `/work` draft-PR step (REQ-discord-088) applies to
@@ -941,6 +1072,29 @@ Acceptance Criteria
 - File deny + env allow: the `/work` PR step says `not opened` with the GITHUB-6 denial, calls no plugin and pushes nothing.
 - File-only allow: the `/work` PR step opens the draft PR (dry run in tests).
 
+### REQ-discord-357
+
+Parking a Discord session's worktree SHALL persist `worktree_state = parked`
+on its session row before any removal side effect, and the final state once
+the removal is done, without re-inserting a row that was already deleted. A
+crash between the park and the row delete SHALL NOT leave a row that restarts
+as `active` at a removed directory (SESSION-WORKTREE-3). A park cut short
+(row `parked` with its path still recorded) SHALL be finished when the talk
+ends. Binding a session SHALL reuse a recorded `active` worktree only when its
+directory exists; otherwise it SHALL re-create the worktree for the same
+session and project through the existing worktree manager, never falling back
+to the repo root or another talk's directory, and a different project SHALL
+still be refused (SESSION-WORKTREE-4). The bridge SHALL bind on every turn
+(a chat continue and a button-ask pick alike) so a turn after a restart never
+spawns in a missing directory, a parked worktree, or the repo root.
+
+Acceptance Criteria
+- The row reads `parked` as soon as a park starts, before the worktree is removed.
+- After a restart, a talk whose park finished or was cut short is not `active`; its next turn runs in an existing worktree that is not the repo root.
+- A `parked` row whose directory is still there is removed when the talk ends.
+- An `active` row at a removed directory is re-bound to an existing worktree for the same project; a different project is refused.
+- A button-ask pick after a restart on a `parked` row runs in an existing worktree that is not the repo root.
+- No new env vars, slash commands, or schema changes.
 ### REQ-discord-047
 
 When the bridge posts a button ask (Choose stub + components), it SHALL NOT leave a
@@ -956,16 +1110,63 @@ Acceptance Criteria
 
 ### REQ-discord-048
 
-On successful completion after a button pick, or on a normal successful mention
-done, the bridge SHALL prefer editing the existing stub or thinking progress
-message into the final answer content instead of posting an extra "✅ Done"
-thinking status plus a new reply, when `editMessage` is available (DISCORD-ASK-7).
+On successful completion after a button pick, on a normal successful mention
+done, or on successful `/session start` / `/work` completion, the bridge SHALL
+prefer editing the existing stub or thinking progress message into the final
+answer content instead of posting an extra "✅ Done" thinking status plus a new
+reply, when `editMessage` is available (DISCORD-ASK-7). For slash, when collapse
+succeeds the deferred interaction reply SHALL be deleted (or thin-resolved).
 Ephemeral Choose → options remains unchanged (DISCORD-ASK-1..5).
 
 Acceptance Criteria
 - Mention success: progress message becomes the answer body when collapse succeeds.
 - Button pick success: stub (reused as thinking) becomes the answer when collapse succeeds.
+- Slash `/session start` / `/work` success: thinking becomes the answer body and the deferred reply is deleted (or thin) when collapse succeeds.
 - Fallback preserves Done embed + separate reply when editMessage is unavailable.
+
+### REQ-discord-049
+
+After the requester presses an ephemeral choice button, the bridge SHALL clear
+or disable those option buttons immediately, SHALL keep `pendingAsk` cleared so
+a re-press is expired or otherwise a no-op (not a second agent resume), and
+SHALL delete or thin-update the ephemeral "Got it — Working on it…" message once
+the resume finishes (or immediately after pick) so it does not linger as a
+dismissible half-done UI (DISCORD-ASK-8).
+
+Acceptance Criteria
+- Pick update includes empty components (buttons gone) and clears pendingAsk before resume.
+- Re-press after clear does not spawn a second resume.
+- Ephemeral ack is deleted (or thin-updated without buttons) after resume completes when deleteReply is available.
+
+### REQ-discord-311
+
+While the bridge works on a reply to a Discord message, or on the run a
+button pick (DISCORD-ASK) resumes, it SHALL keep one
+`discord_inflight_replies` row (schema v9: id, session id, channel id, the
+allowlisted parent channel id when the reply is in a thread, progress embed id
+once sent, request message id, start time; no message text) from before the
+progress embed is sent until the reply finishes, and SHALL delete it on every
+exit path (done, failed exit, ask, worktree refused, thrown error). On start,
+the bridge SHALL read the rows left by an earlier process before any new reply
+begins and, once the gateway is up, handle each one sequentially and best
+effort: when neither the row's channel nor its parent channel is allowlisted
+any more (DISCORD-5), post and edit nothing; otherwise edit the bot's own
+progress embed to the red failed status `interrupted: Corvidinho restarted
+before this reply finished — please send it again`, and when there is no embed
+id or the edit fails, reply to the recorded request message in the same
+channel with the same text; then delete the row. Recovery SHALL NOT throw out
+of bridge start and SHALL NOT touch any other channel or message. No slash
+command or env var is added.
+
+Acceptance Criteria
+- A running reply has exactly one row whose progress id is the sent embed; the row is gone after success, failed exit, ask, thrown error and worktree refusal; ignored or refused messages never add one.
+- A reply in a thread records the thread as its channel and the allowlisted parent channel; a button pick's resumed run records a row (request id = the ask stub message) and clears it after.
+- A bridge that died mid-reply leaves the row; the next start edits that embed (same channel, same message id) to the error color with the interrupted text, sends no new message, and deletes the row.
+- A failed edit, or a row with no embed id, falls back to a reply to the request message with the interrupted text; the row is deleted.
+- A row whose channel and parent channel are no longer allowlisted gets no edit and no reply; the row is deleted.
+- Edit and reply both failing still lets the bridge start; the row is deleted.
+- With no rows, bridge start sends, edits and replies nothing.
+- A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
 
 ### REQ-discord-287
 

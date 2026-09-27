@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a",
+  "slug": "agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a",
+  "title": "Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary",
+  "description": "Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "a5b699c326901e3556d6c233674e6be6698454a4",
+  "created_at": 1790467561,
+  "updated_at": 1790468356,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/loop.ts",
+    "tests/agent.loop.test.ts",
+    "tests/agent.tool-loop.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "When a verify has failed and a later attempt ends the run failed on a provider error, TaskResult.summary starts with the provider error and then says 'Verification failed on an earlier attempt and was not re-run:' followed by that verify output; a provider error before any verify ran adds no such note; state stays failed, verified=false"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

@@ -215,12 +215,21 @@ Because ADMIN is owner-only (IDENTITY-2), doctor SHALL print a
 `CORVIDINHO_DISCORD_ADMIN_ROLES` is set, saying they are ignored. The line
 SHALL NOT echo their values and SHALL NOT change the exit code.
 
+Doctor SHALL print an `allowlist-file` line for the file the loader resolves
+(ALLOW-4, REQ-plugins-006). A file that exists but cannot be read or parsed
+SHALL be a failing `[fail]` check that shows the loader's error (path, line
+and key, never list values), since the bridge, watch and daemon refuse to
+start on it. A file that loads SHALL show `[ok]`, and no file SHALL show
+`[info]` (env overlays only) without changing the exit code.
+
 Acceptance Criteria
 - Doctor prints an `owner` line with configured yes/no plus the display name only.
 - Doctor never prints the owner Discord id, GitHub login, or tokens.
 - A missing owner does not flip the doctor exit code.
 - Legacy admin lists produce a `[warn] admin-lists` line without their values and without changing the exit code.
 - Fixture test runs doctor with a temp allowlist file / env (no network).
+- A malformed allowlist file gives `[fail] allowlist-file` with the line and key and without the values; a file that loads gives `[ok]`; no file gives `[info]`.
+
 ### REQ-cli-015
 
 The project SHALL ship package version `0.0.9` with shell-exec + SAFE-3
@@ -283,6 +292,35 @@ Acceptance Criteria
 - CLI `version` prints `0.0.12`.
 - CHANGELOG has a 0.0.12 section that the updater's changelog helper extracts exactly.
 - STATUS records #145 and #142.
+
+### REQ-cli-098
+
+`corvidinho doctor` SHALL always print a `spend` line (AUTONOMOUS-8 /
+SAFE-8). Without `CORVIDINHO_DAILY_SPEND_CAP_USD` it SHALL be `info` and say
+no daily cap is set, without opening the database. With the variable set it
+SHALL show spend in the last 24 hours against the daily cap with the percent,
+the number of provider calls counted, and how many are still counted at their
+estimate, and SHALL be marked `warn` at or past the 80% warning, at the cap,
+when the cap value is not a plain USD amount, when the configured model has
+no known price, or when the ledger cannot be read (the last three stop and
+ask before every provider call). The line SHALL be informational and SHALL
+NOT change the doctor exit code. `task run` SHALL copy the run's 80% spend
+warning onto `TaskResult.spendWarning` in `--json` output and the NDJSON
+`result` frame, and a run stopped at the cap SHALL exit 0 with state
+`blocked`; in text output it SHALL print the generic summary and the ask
+question. `corvidinho daemon`, which has no Discord, SHALL log a `warn`
+`spend.warning` line for a schedule run that crossed 80% and a `warn`
+`run.needs_human` line with the ask reason for a run that stopped to ask,
+leaving the recorded warning pending for a bridge to deliver. `--help` and
+`.env.example` SHALL list the variable and say it warns at 80% and stops and
+asks at 100%.
+
+Acceptance Criteria
+- `bun src/cli.ts doctor` without the variable prints `[info] spend: no daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)`.
+- With `CORVIDINHO_DAILY_SPEND_CAP_USD=5` it prints `[ok] spend: $0.00 of $5.00 daily cap used in the last 24h (0%; 0 provider call(s)`.
+- Invalid cap, unpriced model, 80% and cap reached yield a `warn` line with `ok: true`.
+- `task run --json` against a localhost mock LLM carries `result.spendWarning` on the crossing run only, and at the cap returns `blocked` with a `spend-cap` ask, the generic summary and exit 0 without calling the mock; `--output text` at the cap prints the summary and the ask question.
+- The daemon logs `spend.warning` (amounts and percent) and `run.needs_human` (`reason` `spend-cap`) as `warn` lines for a schedule run that reports them.
 
 ### REQ-cli-085
 
@@ -397,4 +435,27 @@ Acceptance Criteria
 - `package.json` version is `0.0.23`.
 - CLI `version` prints `0.0.23`.
 - CHANGELOG has a 0.0.23 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-347
+
+The box updater `scripts/corvidinho-update.sh` SHALL restart exactly one bridge through the
+configured restart path. When `CORVIDINHO_BRIDGE_UNIT` is set and `CORVIDINHO_USE_PIDFILE` is
+not, the unit SHALL win over a leftover pidfile: the updater SHALL restart the unit and SHALL NOT
+`nohup`-start a bridge; a pidfile whose pid is gone SHALL be removed and a live pid named by it
+SHALL NOT be signalled. Without a unit, an existing pidfile SHALL still select pidfile mode. The
+updater SHALL source `CORVIDINHO_ENV_FILE` once, after `bun install` and before `doctor`, so
+`doctor`, every restart path (pidfile, unit, command) and every rollback restart see the same
+env. `CORVIDINHO_BRIDGE_CMD` SHALL run in `bash -lc` with its text passed through the
+environment rather than the shell's argv, so a `pkill -f` pattern in it cannot match that shell,
+and the documented `pkill -f` examples SHALL match the bridge process but not a shell whose
+command line holds the example.
+
+Acceptance Criteria
+- Unit set + leftover stale pidfile: `systemctl restart <unit>` runs, no `discord bridge` is started, the pidfile is removed.
+- Unit set + pidfile naming a live pid: the unit is restarted and that pid is not signalled.
+- No unit and no command + leftover pidfile: pidfile mode still starts the bridge.
+- `doctor` and the unit restart see variables from `CORVIDINHO_ENV_FILE`; `bun install` does not.
+- A rollback restart after a failed `bun install` or a failed `doctor` sees `CORVIDINHO_ENV_FILE`.
+- A `CORVIDINHO_BRIDGE_CMD` containing `pkill -f '<pattern>'` completes (exit 0, no rollback) instead of killing its own shell.
+- Each `pkill -f` pattern in `docs/BOX-UPDATE.md` matches `bun src/cli.ts discord bridge` and an absolute-path bridge command line, and does not match `bash -lc` holding the example.
 

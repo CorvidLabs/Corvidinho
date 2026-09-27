@@ -105,9 +105,20 @@ export const shellCommands: PluginCommand[] = [
       delete env.CDPATH;
       delete env.OLDPWD;
 
-      // Merlin pattern: eval "$1" 2>&1 so trailing comments/quotes don't break redirect.
+      // Merlin pattern: eval "$1" 2>&1 so trailing comments/quotes don't break
+      // redirect. `CDPATH=; readonly CDPATH` runs first so a dynamically built
+      // `CDPATH=…` inside the command cannot re-point a relative `cd sub`
+      // outside the root; both no-ops leave the command's exit code / output
+      // untouched. This is the runtime half of SAFE-3 — the lexer no longer
+      // second-guesses CDPATH.
       const proc = Bun.spawn(
-        ["sh", "-c", 'eval "$1" 2>&1', "corvidinho-shell-exec", cmdStr],
+        [
+          "sh",
+          "-c",
+          'CDPATH=; readonly CDPATH 2>/dev/null; eval "$1" 2>&1',
+          "corvidinho-shell-exec",
+          cmdStr,
+        ],
         {
           cwd: root,
           stdout: "pipe",

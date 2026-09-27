@@ -10,8 +10,16 @@ import {
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import {
+  askNeedsOwner,
+  askPingOwner,
+  finishSlashWithOwnerNotice,
+  slashOwnerNotice,
+} from "../spend-post.ts";
 
 function formatSessionLine(s: {
   id: string;
@@ -147,13 +155,18 @@ export async function handleSessionStart(
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
-    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Session \`${session.id}\` failed: ${msg}`;
-    if (interaction.editReply) {
-      await interaction.editReply({ content: body });
-    } else {
-      await interaction.reply({ content: body });
-    }
+    // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
+    await finishSlashWithThinking({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras: { model: llmModel },
+      ok: false,
+      failStatus: `❌ ${msg}`,
+    });
     return;
   }
 
@@ -167,25 +180,59 @@ export async function handleSessionStart(
       })
     : undefined;
   const thinkExtras = { plumbing, model: llmModel };
-  if (result.ok) {
-    await thinking?.done("✅ Done", thinkExtras);
-  } else {
-    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+  // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
+  // is not "Done"; the owner is pinged (once per cap episode).
+  const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
+  // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
+  // pinged in a separate post (below) for stuck and spend-cap.
+  const ask = result.ask
+    ? formatAskReply({
+        ask: result.ask,
+        owner: null,
+        requesterDiscordId: interaction.userId,
+        context: result.summary,
+      })
+    : null;
+  // The status (ask, not "✅ Done") is set when the answer goes out below.
+  if (ask && result.ask && askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
+    console.warn(ASK_NO_OWNER_WARNING);
   }
 
-  const summary = result.ok
-    ? result.summary.slice(0, 1500)
-    : `failed (exit ${result.exitCode})`;
+  const summary = ask
+    ? ask.content
+    : result.ok
+      ? result.summary.slice(0, 1500)
+      : `failed (exit ${result.exitCode})`;
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
   const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
 
-  if (interaction.editReply) {
-    await interaction.editReply({ content: body });
-  } else {
-    await interaction.reply({ content: body });
-  }
+  // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
+  // reply); the owner ping for the ask and the pending SAFE-8 80% warning go
+  // out as a fresh post (an edit does not notify), claims handed back when
+  // nothing carried them.
+  const notice = slashOwnerNotice({
+    owner: ctx.owner,
+    outbox: ctx.spendAlerts,
+    ask: result.ask,
+    askOwner,
+    spendWarning: result.spendWarning,
+    label: `/session \`${session.id}\``,
+  });
+  await finishSlashWithOwnerNotice({
+    thinking,
+    body,
+    interaction,
+    sessionId: session.id,
+    trackBotMessage: ctx.trackBotMessage,
+    thinkExtras,
+    ok: result.ok,
+    failStatus: `❌ exit ${result.exitCode}`,
+    ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+    notice,
+    post: ctx.post,
+  });
 }
 
 export async function handleSessionCommand(

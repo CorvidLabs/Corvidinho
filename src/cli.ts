@@ -5,6 +5,7 @@
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
+import { existsSync } from "node:fs";
 import {
   createNdjsonWriter,
   createTaskExecute,
@@ -14,9 +15,12 @@ import {
   TASK_OUTPUT_MODES,
   type AgentEvent,
   type CapabilityTier,
+  type SpendWarning,
   type TaskOutputMode,
   type TaskResult,
 } from "./agent/index.ts";
+import { loadLlmEnv } from "./agent/execute.ts";
+import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
@@ -29,6 +33,7 @@ import {
   startWatchPoller,
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
+import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
@@ -101,6 +106,7 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
   CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
+  CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -264,6 +270,31 @@ async function doctor(): Promise<number> {
     detail: `${pluginCount} command(s) loaded`,
   });
 
+  // ALLOW-4 — an allowlist file that exists but cannot be read or parsed stops
+  // the bridge, watch and daemon (fail closed); say so here, with the loader's
+  // error (path, line and key — never list values).
+  const allowPath = resolveAllowlistPath(process.env);
+  if (allowPath && existsSync(allowPath)) {
+    const loaded = await loadAllowlistFile(allowPath);
+    checks.push({
+      name: "allowlist-file",
+      ok: loaded.ok,
+      mark: loaded.ok ? "ok" : "fail",
+      detail: loaded.ok
+        ? `${allowPath} loads (values not shown)`
+        : `${loaded.error} — bridge, watch and daemon refuse to start and gates refuse until it is fixed`,
+    });
+  } else {
+    checks.push({
+      name: "allowlist-file",
+      ok: true,
+      mark: "info",
+      detail: allowPath
+        ? `${allowPath} not found — env overlays only`
+        : "no allowlist file — env overlays only (CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml|json)",
+    });
+  }
+
   // IDENTITY-1 — owner yes/no + display only (never ids/logins/tokens).
   // Optional: a missing owner is informational and never fails doctor.
   const ownerLoad = await loadOwnerConfig({ env: process.env });
@@ -286,6 +317,9 @@ async function doctor(): Promise<number> {
         "CORVIDINHO_DISCORD_ADMIN_USERS/_ROLES are ignored — ADMIN is owner-only (IDENTITY-2)",
     });
   }
+
+  // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
+  checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
 
   console.log("corvidinho doctor\n");
   let allOk = true;
@@ -474,7 +508,12 @@ async function taskRun(opts: {
     allowlist: allowlistFromEnv(),
     onEvent: handleEvent,
     onUsage: ndjson ? (u) => ndjson.usage(u) : undefined,
+    // SAFE-8: the 80% warning rides the result (--json / ndjson) for bridges.
+    onSpendWarning: (w) => {
+      spendWarning = w;
+    },
   });
+  let spendWarning: SpendWarning | undefined;
   const result: TaskResult = await runTask({
     cwd,
     task: opts.taskText,
@@ -489,6 +528,7 @@ async function taskRun(opts: {
       return execute(ctx);
     },
   });
+  if (spendWarning) result.spendWarning = spendWarning;
 
   if (ndjson) {
     ndjson.result(result);
@@ -499,6 +539,10 @@ async function taskRun(opts: {
       `state=${result.state} verified=${result.verified} verifySkipped=${result.verifySkipped} cancelled=${result.cancelled} attempts=${result.attempts}`,
     );
     console.log(result.summary);
+    // SAFE-8: a spend-cap summary is generic; the operator details are in the ask.
+    if (result.ask && !result.summary.includes(result.ask.question)) {
+      console.log(result.ask.question);
+    }
   }
 
   if (result.cancelled) return 130;

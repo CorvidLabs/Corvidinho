@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790463586,
+      "commit": "9dfb4c23400b28cc0a0779792d4e278e6e9b0f53",
+      "contract_digest": "d4da39aa845e83c61721d92ca44d7af52a487edf8e89f859516f95d2f36dc50b",
+      "execution_digest": "5be38c3918338271863fcb3b5ca44aa4f68d4784924f66be610be458f1d264d4",
+      "workspace_digest": "4048ce7c6f3194b55505a3a021504a8daebc6162d4eae5939ab40dd638605a15",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-watch-247"
+      ]
+    },
+    {
+      "timestamp": 1790463588,
+      "commit": "0ccdca7153c5ddb5c5e09e471063574528cd9f46",
+      "contract_digest": "d4da39aa845e83c61721d92ca44d7af52a487edf8e89f859516f95d2f36dc50b",
+      "execution_digest": "5be38c3918338271863fcb3b5ca44aa4f68d4784924f66be610be458f1d264d4",
+      "workspace_digest": "4048ce7c6f3194b55505a3a021504a8daebc6162d4eae5939ab40dd638605a15",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-watch-247"
+      ]
+    },
+    {
+      "timestamp": 1790463739,
+      "commit": "f4ff3a6ad988119340d1c9110a5d97d87a662110",
+      "contract_digest": "d4da39aa845e83c61721d92ca44d7af52a487edf8e89f859516f95d2f36dc50b",
+      "execution_digest": "5be38c3918338271863fcb3b5ca44aa4f68d4784924f66be610be458f1d264d4",
+      "workspace_digest": "068efe060334b6d511f48666ac0225dedee1ee39145bbd741dd90eb382a48a55",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-watch-247"
+      ]
+    },
+    {
+      "timestamp": 1790463740,
+      "commit": "85f1c7ef6d53449e8dda1916d71edb1c08622703",
+      "contract_digest": "d4da39aa845e83c61721d92ca44d7af52a487edf8e89f859516f95d2f36dc50b",
+      "execution_digest": "5be38c3918338271863fcb3b5ca44aa4f68d4784924f66be610be458f1d264d4",
+      "workspace_digest": "068efe060334b6d511f48666ac0225dedee1ee39145bbd741dd90eb382a48a55",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-watch-247"
+      ]
+    },
+    {
+      "timestamp": 1790463740,
+      "commit": "9fc9999354807699d2f13a510e1f22620f29d702",
+      "contract_digest": "d4da39aa845e83c61721d92ca44d7af52a487edf8e89f859516f95d2f36dc50b",
+      "execution_digest": "5be38c3918338271863fcb3b5ca44aa4f68d4784924f66be610be458f1d264d4",
+      "workspace_digest": "068efe060334b6d511f48666ac0225dedee1ee39145bbd741dd90eb382a48a55",
+      "acceptance_input_digest": "330b8625fd994c1cdc3c794250596786e5df3530803ea7b0e3b00def053d1252",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "docs/WATCH.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "15c75cd890ec3dcdef67e904b3638e20be0c270de6f0e2e517c4019e21cd2c64",
+            "entry_digest": "a81e53ddcf3c23865bc7c8376fa7cc5b3b188838740fa49f0f191b6806fe3b4d",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "specs/watch/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+            "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "specs/watch/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "68ac4c6e9ba1c1752e2b7fee569c49a1b773cf35c6e42b15f75ba9bbd654e350",
+            "entry_digest": "0b6e84ba11616244c48f47357dd26fa4022b8ff48145339eca71a6a3a2ac563b",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "specs/watch/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "16212d01b8757063fa74fe1f55645d5b8b9bc2c3e87a38518903e559cbe5a909",
+            "entry_digest": "c59ec320f62bd51b82ea8a4a802867dbfa86d720287f768253f83286519c2393",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "specs/watch/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7644c868b6be18ac11c35970d7bd3e9d75a87569c638879e0d6f46bcb09a06d4",
+            "entry_digest": "e1d74085e8a875dd68edd551f9dddc6649429b58d6a7d89e77311131231d45cf",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "specs/watch/watch.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "dfc7384aca931088db9e4f03335fb370fa8ea1fbda84f4a9897dc496b8fe2481",
+            "entry_digest": "e94c2e503c5f474f1b76a01dd0391a1ee5693cd11f9871e91929eaa1659e4654",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "src/watch/ack.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "e10baea29ef9da7897a6130b3a3b8ae2b25dcc6273e75efa843107fb1f906d47",
+            "entry_digest": "59d84fa4144ae876402d13f46eff7d61cf3100c14f873a0c5f4fa2968c51855b",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "src/watch/dedup.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "acd16a82f0b8a9212a2a669edfc86c665528cc7db399b742b6fe8d52e55a088a",
+            "entry_digest": "88c2443b4f70ae098c194eccd8f3be500a2bde7490aad3970ae6c344dc7dff1f",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "src/watch/poller.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7b02e88d62852da719fc0b9d837a38b8def895014075627d98029a55c40aa057",
+            "entry_digest": "d4c0330106a6bf94d91f39452a3ab2c3411aa8e89e94905c782f85a63f7d24cb",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "src/watch/summary.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "c294985c1aab7818100da720abd80003f3e5a6c2bca3196e7db89bc22960bbd5",
+            "entry_digest": "391ff63110b68f3e7b7caa902420a2d852dc66898428d03433a7f7d2e6ad30fd",
+            "owners": [
+              "watch"
+            ]
+          },
+          {
+            "path": "tests/watch.dedup-durable.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "cbeb94ecd4f1d0f0562d42babc1d2da1060d09804a526533dad85a5ff607cd8e",
+            "entry_digest": "26526947d52200fcba20edc80a96a3cd1355faca2a1fdd2add27c1bcaac688e9",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-watch-247"
+      ]
+    }
+  ]
+}

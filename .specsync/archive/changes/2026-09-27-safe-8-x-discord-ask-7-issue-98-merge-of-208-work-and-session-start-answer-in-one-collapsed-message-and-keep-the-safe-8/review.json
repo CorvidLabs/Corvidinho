@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-8-x-discord-ask-7-issue-98-merge-of-208-work-and-session-start-answer-in-one-collapsed-message-and-keep-the-safe-8",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "45e537537f6d5c8655d0401c5afd703036853aed",
+  "contract_digest": "342bb3ed63fabbbae6a96e63c7d2434287a0384bf92b9d6074ae8891098114cc",
+  "execution_digest": "cb7d6e0368e84e0e9b268c76b197d6bf6cbf30dd6850f5c217662f65aeab5836",
+  "workspace_digest": "9721c646c838acdcb96799ab4be0de20fb7f123fc4e50a6d00b3ea115fd74191",
+  "timestamp": 1790468025
+}

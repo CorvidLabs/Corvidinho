@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a",
+  "implementation_commit": "09490b0cac74c7292da3581adf57529101ddc50c",
+  "implementation_tree": "b214debe406fbbca1c7417c6af5ce185abb2f035",
+  "contract_digest": "c69983d19c1b0fcf134c122b97ece8b254ff951b29dc871d76d0db6c7a8747f6",
+  "workspace_digest": "50fe74e4ff67832c32f6c41b417cfb383b5e1864ca887f790d19389e4be19a1a",
+  "closing_digest": "7dfb29cb7f9a0781d0e2d878d550e2c45d26f5adf5dd3d7fe59e32c72f24b05c",
+  "review_digest": "ef63a54687a75888c345506feae4481c582be04f6ba588b7f7a0c446ad1a4b2e",
+  "finalization_digest": "aebb444c44fa84537173cfb0aaeaff21f0bf7c2450f58098f94e5e97670d8ac6",
+  "timestamp": 1790464202
+}
