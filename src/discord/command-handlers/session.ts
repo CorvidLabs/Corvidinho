@@ -15,6 +15,7 @@ import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import { toPendingAsk } from "../ask-buttons.ts";
 import {
   askNeedsOwner,
   askPingOwner,
@@ -212,6 +213,15 @@ export async function handleSessionStart(
   // The status (ask, not "✅ Done") is set when the answer goes out below.
   if (ask && result.ask && askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
     console.warn(ASK_NO_OWNER_WARNING);
+  }
+  // AUTONOMY-5/6 (REQ-discord-044): the session waits on this ask like a
+  // chat ask — free text, as the answer shows it. A SAFE-8 spend-cap stop is
+  // never pending: a reply cannot lift the cap.
+  if (result.ask && result.ask.reason !== "spend-cap") {
+    ctx.store.setPendingAsk(
+      session,
+      toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
+    );
   }
 
   const summary = ask

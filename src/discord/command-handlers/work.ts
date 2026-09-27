@@ -17,6 +17,7 @@ import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import { toPendingAsk } from "../ask-buttons.ts";
 import {
   askNeedsOwner,
   askPingOwner,
@@ -173,6 +174,15 @@ export async function handleWorkCommand(
   if (ask && result.ask) {
     // The status (ask, not "✅ Done") is set when the answer goes out below.
     ctx.workStore.setStatus(task, ask.failed ? "failed" : "blocked", result.summary.slice(0, 500));
+    // AUTONOMY-5/6 (REQ-discord-044): the session waits on this ask like a
+    // chat ask — free text, as the answer shows it. A SAFE-8 spend-cap stop
+    // is never pending: a reply cannot lift the cap.
+    if (result.ask.reason !== "spend-cap") {
+      ctx.store.setPendingAsk(
+        session,
+        toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
+      );
+    }
     if (askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
       console.warn(ASK_NO_OWNER_WARNING);
     }
