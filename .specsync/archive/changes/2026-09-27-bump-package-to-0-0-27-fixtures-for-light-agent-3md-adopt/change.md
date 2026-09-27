@@ -1,6 +1,6 @@
 ---
 id: bump-package-to-0-0-27-fixtures-for-light-agent-3md-adopt
-state: implementing
+state: archived
 type: operations
 base_commit: 54509c86472348332258e3bd61a7085a28f6c36a
 ---

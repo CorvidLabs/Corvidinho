@@ -7,11 +7,11 @@
   "title": "Bump package to 0.0.27 fixtures for light agent.3md adopt",
   "description": "Bump package to 0.0.27 fixtures for light agent.3md adopt",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "54509c86472348332258e3bd61a7085a28f6c36a",
   "created_at": 1790471065,
-  "updated_at": 1790471317,
+  "updated_at": 1790471330,
   "affected_specs": [],
   "affected_paths": [
     "tests/update-helpers.test.ts",
