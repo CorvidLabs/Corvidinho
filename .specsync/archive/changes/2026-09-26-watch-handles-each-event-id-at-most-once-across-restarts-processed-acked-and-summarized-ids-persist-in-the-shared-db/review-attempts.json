@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "watch-handles-each-event-id-at-most-once-across-restarts-processed-acked-and-summarized-ids-persist-in-the-shared-db",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9fc9999354807699d2f13a510e1f22620f29d702",
+      "contract_digest": "d4da39aa845e83c61721d92ca44d7af52a487edf8e89f859516f95d2f36dc50b",
+      "execution_digest": "5be38c3918338271863fcb3b5ca44aa4f68d4784924f66be610be458f1d264d4",
+      "workspace_digest": "068efe060334b6d511f48666ac0225dedee1ee39145bbd741dd90eb382a48a55",
+      "timestamp": 1790463818
+    }
+  ]
+}

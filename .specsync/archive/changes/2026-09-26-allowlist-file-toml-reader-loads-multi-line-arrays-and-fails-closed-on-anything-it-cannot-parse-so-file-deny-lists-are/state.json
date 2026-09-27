@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are",
+  "slug": "allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are",
+  "title": "Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped",
+  "description": "Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "e8bbd215036e7dc8739ac9159afa19f17ae943c6",
+  "created_at": 1790464578,
+  "updated_at": 1790466713,
+  "affected_specs": [
+    "plugins",
+    "discord",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/allowlist/load.ts",
+    "src/discord/config.ts",
+    "tests/allowlist.toml-multiline.test.ts",
+    "tests/git.plugins.test.ts",
+    "tests/discord.admin-slash.test.ts",
+    "allowlist.example.toml",
+    "specs/plugins/plugins.spec.md",
+    "src/allowlist/index.ts",
+    "src/cli.ts",
+    "src/discord/admin-allowlist.ts",
+    "src/plugins/githubDeny.ts",
+    "src/plugins/githubPublic.ts",
+    "plugins/discord/index.ts",
+    "plugins/git/commands.ts",
+    "tests/github.gate-allowlist-file.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A multi-line [github]/[discord] array in the allowlist TOML file (trailing comma and # comments allowed) loads every item, so a file deny_repos/deny_orgs spanning lines refuses the repo even when env allow admits its org (GITHUB-6); single-line files parse exactly as before; any line or value in [github]/[discord]/top level the parser cannot read (unterminated or malformed array/string, bad key or header) throws, loadAllowlist throws instead of falling back to env-only for any file that exists but cannot be read or parsed, and the bridge (code allowlist), watch, daemon, git-push and the repo gates refuse; /admin reads multi-line users/channels and its rewrite reloads with every entry and deny list intact"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

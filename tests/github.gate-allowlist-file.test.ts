@@ -153,44 +153,55 @@ describe("GITHUB-6 gate reads the allowlist file + env (REQ-plugins-253)", () =>
     expect(other.exitCode).toBe(3);
   });
 
-  test("malformed or unreadable allowlist file contributes nothing; env overlays still apply", async () => {
-    // Truncated JSON: neither its deny nor its allow entries load (same as before
-    // the file was read at all, and as WATCH ingress).
-    const bad = join(tmp, "allowlist.json");
-    writeFileSync(bad, `{"github": {"orgs": ["corvidlabs"], "deny_repos": ["corvidlabs/secret"]`, "utf8");
+  test("a malformed or unreadable allowlist file makes the gate refuse, even with an env allow list", async () => {
+    // Truncated JSON, a multi-line TOML deny list missing its "]", and a
+    // directory: the file's deny lists are unknown, so nothing is admitted —
+    // not even by env allow (fail closed; never env-only, never a throw).
+    const badJson = join(tmp, "allowlist.json");
+    writeFileSync(badJson, `{"github": {"orgs": ["corvidlabs"], "deny_repos": ["corvidlabs/secret"]`, "utf8");
+    const badToml = join(tmp, "broken.toml");
+    writeFileSync(badToml, `[github]\norgs = ["corvidlabs"]\ndeny_repos = [\n  "corvidlabs/secret",\n`, "utf8");
     const unreadable = join(tmp, "is-a-dir");
     mkdirSync(unreadable);
 
-    for (const path of [bad, unreadable]) {
+    for (const path of [badJson, badToml, unreadable]) {
       process.env.CORVIDINHO_ALLOWLIST_FILE = path;
+      for (const envAllow of [undefined, "corvidlabs"]) {
+        if (envAllow) process.env.CORVIDINHO_GITHUB_ALLOW_ORGS = envAllow;
+        else delete process.env.CORVIDINHO_GITHUB_ALLOW_ORGS;
 
-      // No env allow: nothing admits the repo → default-deny, nothing posted.
-      delete process.env.CORVIDINHO_GITHUB_ALLOW_ORGS;
-      const gate = await checkRepoGateForActingRole("corvidlabs/ok");
-      expect(gate.ok).toBe(false);
-      if (!gate.ok) expect(gate.error).toContain("allowlist empty");
-      expect((await checkRepoGateAsync("corvidlabs/ok")).ok).toBe(false);
-      const refused = await runPlugin({
-        name: "github-issue-create",
-        args: ["--repo", "corvidlabs/ok", "--title", "nope"],
-        nonInteractive: true,
-        allowlist: ["github-issue-create"],
-      });
-      expect({ path, ok: refused.ok, exitCode: refused.exitCode }).toEqual({ path, ok: false, exitCode: 3 });
+        for (const repo of ["corvidlabs/ok", "corvidlabs/secret"]) {
+          const gate = await checkRepoGateForActingRole(repo);
+          expect({ path, envAllow, repo, ok: gate.ok }).toEqual({ path, envAllow, repo, ok: false });
+          if (!gate.ok) {
+            expect(gate.error).toStartWith("GITHUB-6: refused — allowlist file unreadable or malformed");
+            expect(gate.error).toContain(path);
+          }
+          expect((await checkRepoGateAsync(repo)).ok).toBe(false);
+        }
+        const refused = await runPlugin({
+          name: "github-issue-create",
+          args: ["--repo", "corvidlabs/ok", "--title", "nope"],
+          nonInteractive: true,
+          allowlist: ["github-issue-create"],
+        });
+        expect({ path, envAllow, ok: refused.ok, exitCode: refused.exitCode }).toEqual({
+          path,
+          envAllow,
+          ok: false,
+          exitCode: 3,
+        });
+        expect(refused.error).toContain("allowlist file unreadable or malformed");
+      }
+    }
 
-      // Env allow still applies; the file's deny entry did not load either.
-      process.env.CORVIDINHO_GITHUB_ALLOW_ORGS = "corvidlabs";
-      expect((await checkRepoGateForActingRole("corvidlabs/secret")).ok).toBe(true);
-      expect((await checkRepoGateAsync("corvidlabs/secret")).ok).toBe(true);
-      const allowed = await runPlugin({
-        name: "github-issue-create",
-        args: ["--repo", "corvidlabs/ok", "--title", "fine"],
-        nonInteractive: true,
-        allowlist: ["github-issue-create"],
-      });
-      expect(allowed.ok).toBe(true);
-      expect(allowed.data).toMatchObject({ dryRun: true, owner: "corvidlabs", repo: "ok" });
-      expect((await checkRepoGateForActingRole("other/repo")).ok).toBe(false);
+    // The TOML error names the line and key, never the list values.
+    process.env.CORVIDINHO_ALLOWLIST_FILE = badToml;
+    const toml = await checkRepoGateAsync("corvidlabs/ok");
+    expect(toml.ok).toBe(false);
+    if (!toml.ok) {
+      expect(toml.error).toContain("line 3: [github].deny_repos");
+      expect(toml.error).not.toContain("corvidlabs/secret");
     }
   });
 

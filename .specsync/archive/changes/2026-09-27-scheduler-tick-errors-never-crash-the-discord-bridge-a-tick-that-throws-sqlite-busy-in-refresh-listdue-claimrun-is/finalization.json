@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "scheduler-tick-errors-never-crash-the-discord-bridge-a-tick-that-throws-sqlite-busy-in-refresh-listdue-claimrun-is",
+  "implementation_commit": "c10737776f315f341cf87061debf4345f7170ef3",
+  "implementation_tree": "9784e873f0969a3fa5bb26e154d4a1a5d3c08f48",
+  "contract_digest": "9fb4f01ed6b4615692f6a27983463626c69a4f98a8f1f8b72dfcf2a7c3110230",
+  "workspace_digest": "aee074bca80e8ed2f5c2e4cc3cdd066bfcac5244e6f5ccc5f3ef5aac9f1b2cdd",
+  "closing_digest": "093e692e33d55da08d1ff950934fe48d24d64eda0846e107ebbe961eb325adca",
+  "review_digest": "8ee23e0652fe3aa4eb62ea00cde65c2476eda9619b439a8359561ceec9cef912",
+  "finalization_digest": "2f9e530ca80189f23c9b194e0f9c2a8f75deac0b59b7184be03cabb639bde1c4",
+  "timestamp": 1790467344
+}

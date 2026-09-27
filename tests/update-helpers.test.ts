@@ -2,7 +2,16 @@
  * Exercises scripts/lib/update-helpers.sh predicates via bash -c.
  */
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
@@ -117,6 +126,26 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).toContain("ROLES-CHAT");
     expect(r.stdout).toContain("files-write");
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
+  });
+
+  test("extract_changelog_section finds 0.0.25", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.25`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ASK-7");
+    expect(r.stdout).toContain("/session");
+    expect(r.stdout).toContain("/work");
+  });
+
+  test("extract_changelog_section finds 0.0.24", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.24`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("DISCORD-ASK-6");
+    expect(r.stdout).toContain("DISCORD-ASK-7");
+    expect(r.stdout).toContain("collapse");
   });
 
   test("extract_changelog_section finds 0.0.23", () => {
@@ -250,6 +279,255 @@ describe("update-helpers.sh", () => {
   });
 });
 
+/**
+ * Fake box for scripts/corvidinho-update.sh: a local origin + checkout, and
+ * fake `bun` / `systemctl` on PATH that log each call together with the value
+ * of CORVIDINHO_FAKE_MARK (set only by the env file) so a test can see which
+ * steps ran with the env file loaded. Nothing real is restarted or killed.
+ */
+interface FakeBox {
+  dir: string;
+  calls: string;
+  pidfile: string;
+  envFile: string;
+  run(env: Record<string, string>): { exitCode: number; out: string };
+  lines(): string[];
+  cleanup(): void;
+}
+
+function makeFakeBox(): FakeBox {
+  const dir = mkdtempSync(join(tmpdir(), "corvidinho-update-test-"));
+  const bin = join(dir, "bin");
+  const box = join(dir, "box");
+  const origin = join(dir, "origin.git");
+  const calls = join(dir, "calls.log");
+  const pidfile = join(dir, "bridge.pid");
+  const envFile = join(dir, "env");
+  mkdirSync(bin);
+  mkdirSync(box);
+  writeFileSync(calls, "");
+  writeFileSync(envFile, "CORVIDINHO_FAKE_MARK=from-env-file\n");
+  const fakeBun = `#!/usr/bin/env bash
+echo "bun $* | mark=\${CORVIDINHO_FAKE_MARK:-unset}" >> "$FAKE_CALLS"
+case "$*" in
+  install*) [ "\${FAKE_INSTALL_FAIL:-0}" = "1" ] && exit 1; exit 0 ;;
+  *" doctor")
+    # Like the real doctor: fails when the box env (secrets) is missing.
+    [ "\${FAKE_DOCTOR_FAIL:-0}" = "1" ] && exit 1
+    [ -n "\${CORVIDINHO_FAKE_MARK:-}" ] || exit 1
+    exit 0 ;;
+  *" version") echo 0.0.0 ;;
+  *"discord bridge") echo "[discord] logged in as Fake#0001"; exec sleep 3 ;;
+esac
+exit 0
+`;
+  const fakeSystemctl = `#!/usr/bin/env bash
+echo "systemctl $* | mark=\${CORVIDINHO_FAKE_MARK:-unset}" >> "$FAKE_CALLS"
+exit 0
+`;
+  writeFileSync(join(bin, "bun"), fakeBun);
+  writeFileSync(join(bin, "systemctl"), fakeSystemctl);
+  chmodSync(join(bin, "bun"), 0o755);
+  chmodSync(join(bin, "systemctl"), 0o755);
+  const git = (args: string[], cwd: string) => {
+    const p = Bun.spawnSync(
+      ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args],
+      { cwd, stdout: "pipe", stderr: "pipe" },
+    );
+    if (p.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${new TextDecoder().decode(p.stderr)}`);
+  };
+  git(["init", "-q", "--bare", origin], dir);
+  git(["init", "-q", "-b", "main"], box);
+  writeFileSync(join(box, "package.json"), "{}\n");
+  git(["add", "package.json"], box);
+  git(["commit", "-q", "-m", "seed"], box);
+  git(["remote", "add", "origin", origin], box);
+  git(["push", "-q", "origin", "main"], box);
+
+  return {
+    dir,
+    calls,
+    pidfile,
+    envFile,
+    run(env) {
+      const proc = Bun.spawnSync(["bash", updateSh], {
+        cwd: box,
+        stdout: "pipe",
+        stderr: "pipe",
+        // Clean env: never inherit a real box's CORVIDINHO_* settings.
+        env: {
+          PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+          HOME: dir,
+          FAKE_CALLS: calls,
+          CORVIDINHO_ROOT: box,
+          CORVIDINHO_REF: "origin/main",
+          CORVIDINHO_PIDFILE: pidfile,
+          CORVIDINHO_BRIDGE_LOG: join(dir, "bridge.log"),
+          CORVIDINHO_ENV_FILE: envFile,
+          CORVIDINHO_READY_TIMEOUT: "15",
+          ...env,
+        },
+      });
+      const dec = new TextDecoder();
+      return { exitCode: proc.exitCode ?? 1, out: dec.decode(proc.stdout) + dec.decode(proc.stderr) };
+    },
+    lines() {
+      return readFileSync(calls, "utf8").split("\n").filter(Boolean);
+    },
+    cleanup() {
+      // Stop a fake bridge the pidfile path may have spawned.
+      if (existsSync(pidfile)) {
+        const pid = Number(readFileSync(pidfile, "utf8").trim());
+        if (Number.isInteger(pid) && pid > 0) {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/** A pid that is certainly not running (a child that already exited). */
+function deadPid(): number {
+  const p = Bun.spawnSync(["bash", "-c", "echo $$"], { stdout: "pipe" });
+  return Number(new TextDecoder().decode(p.stdout).trim());
+}
+
+describe("corvidinho-update.sh restart mode + env (fake box)", () => {
+  test("REQ-cli-347: explicit CORVIDINHO_BRIDGE_UNIT wins over a leftover stale pidfile", () => {
+    const box = makeFakeBox();
+    try {
+      writeFileSync(box.pidfile, `${deadPid()}\n`);
+      // Doctor skipped: isolate restart-mode selection from env loading.
+      const r = box.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge", CORVIDINHO_SKIP_DOCTOR: "1" });
+      expect(r.exitCode).toBe(0);
+      const lines = box.lines();
+      expect(lines.some((l) => l.startsWith("systemctl restart corvidinho-bridge"))).toBe(true);
+      // No second, nohup-started bridge next to the unit's bridge.
+      expect(lines.some((l) => l.includes("discord bridge"))).toBe(false);
+      // Stale pidfile is dropped so later updates stay in unit mode.
+      expect(existsSync(box.pidfile)).toBe(false);
+    } finally {
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: unit mode never signals a live pid named by a leftover pidfile", () => {
+    const box = makeFakeBox();
+    const live = Bun.spawn(["sleep", "30"]);
+    try {
+      writeFileSync(box.pidfile, `${live.pid}\n`);
+      const r = box.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge", CORVIDINHO_SKIP_DOCTOR: "1" });
+      expect(r.exitCode).toBe(0);
+      expect(box.lines().some((l) => l.startsWith("systemctl restart corvidinho-bridge"))).toBe(true);
+      expect(box.lines().some((l) => l.includes("discord bridge"))).toBe(false);
+      expect(r.out).toContain("ignoring");
+      expect(live.exitCode).toBeNull();
+      expect(() => process.kill(live.pid, 0)).not.toThrow();
+    } finally {
+      live.kill("SIGKILL");
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: leftover pidfile without a unit keeps pidfile mode", () => {
+    const box = makeFakeBox();
+    try {
+      writeFileSync(box.pidfile, `${deadPid()}\n`);
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1" });
+      expect(r.exitCode).toBe(0);
+      const lines = box.lines();
+      expect(lines.some((l) => l.includes("discord bridge") && l.endsWith("mark=from-env-file"))).toBe(true);
+      expect(lines.some((l) => l.startsWith("systemctl"))).toBe(false);
+    } finally {
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: env file is loaded before doctor and the unit restart", () => {
+    const box = makeFakeBox();
+    try {
+      const r = box.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge" });
+      expect(r.exitCode).toBe(0);
+      const lines = box.lines();
+      const doctor = lines.filter((l) => l.includes(" doctor |"));
+      expect(doctor.length).toBe(1);
+      expect(doctor[0]).toEndWith("mark=from-env-file");
+      const restart = lines.filter((l) => l.startsWith("systemctl restart"));
+      expect(restart).toEqual(["systemctl restart corvidinho-bridge | mark=from-env-file"]);
+      // Secrets stay out of the dependency install.
+      const install = lines.filter((l) => l.startsWith("bun install"));
+      expect(install.length).toBeGreaterThan(0);
+      for (const l of install) expect(l).toEndWith("mark=unset");
+      expect(r.out).not.toContain("ROLLBACK");
+    } finally {
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: rollback after a failed bun install restarts with the env file", () => {
+    const box = makeFakeBox();
+    try {
+      const r = box.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge", FAKE_INSTALL_FAIL: "1" });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).toContain("ROLLBACK: bun install failed");
+      const restart = box.lines().filter((l) => l.startsWith("systemctl restart"));
+      expect(restart).toEqual(["systemctl restart corvidinho-bridge | mark=from-env-file"]);
+    } finally {
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: rollback restart sees the env file", () => {
+    const box = makeFakeBox();
+    try {
+      const r = box.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge", FAKE_DOCTOR_FAIL: "1" });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).toContain("ROLLBACK: doctor failed after update");
+      const restart = box.lines().filter((l) => l.startsWith("systemctl restart"));
+      expect(restart).toEqual(["systemctl restart corvidinho-bridge | mark=from-env-file"]);
+    } finally {
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: CORVIDINHO_BRIDGE_CMD with pkill -f cannot kill its own shell", () => {
+    const box = makeFakeBox();
+    // Unique pattern: never matches a real process on the host running the tests.
+    const token = `zz-corvidinho-update-selfmatch-${process.pid}-${Date.now()}`;
+    try {
+      const r = box.run({
+        CORVIDINHO_SKIP_DOCTOR: "1",
+        CORVIDINHO_BRIDGE_CMD: `pkill -f '${token}' || true; echo "cmd-ran | mark=\${CORVIDINHO_FAKE_MARK:-unset}" >> "$FAKE_CALLS"`,
+      });
+      expect(r.exitCode).toBe(0);
+      expect(box.lines()).toContain("cmd-ran | mark=from-env-file");
+      expect(r.out).not.toContain("ROLLBACK");
+    } finally {
+      box.cleanup();
+    }
+  }, 30_000);
+
+  test("REQ-cli-347: documented pkill patterns match the bridge but not the shell running them", () => {
+    const doc = readFileSync(join(root, "docs/BOX-UPDATE.md"), "utf8");
+    const pats = [...doc.matchAll(/pkill -f '([^']+)'/g)].map((m) => m[1]!);
+    expect(pats.length).toBeGreaterThan(0);
+    for (const pat of pats) {
+      const shell = `bash -lc pkill -f '${pat}' || true; nohup bun src/cli.ts discord bridge &`;
+      // pgrep/pkill -f use POSIX ERE against the joined argv, like grep -E.
+      const matches = (s: string) =>
+        Bun.spawnSync(["grep", "-Eq", "--", pat], { stdin: new TextEncoder().encode(`${s}\n`) }).exitCode === 0;
+      expect(matches("bun src/cli.ts discord bridge")).toBe(true);
+      expect(matches("/home/corvid/.bun/bin/bun /opt/Corvidinho/src/cli.ts discord bridge")).toBe(true);
+      expect(matches(shell)).toBe(false);
+    }
+  });
+});
+
 describe("release workflow", () => {
   test("release.yml triggers on v* tags and is idempotent-aware", () => {
     expect(existsSync(releaseYml)).toBe(true);
@@ -263,10 +541,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.23", () => {
+  test("package.json is 0.0.25", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.23");
+    expect(pkg.version).toBe("0.0.25");
   });
 });

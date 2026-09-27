@@ -192,21 +192,18 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     });
     await handlers.onMessage(MENTION);
 
-    expect(replies).toHaveLength(1);
-    const r = replies[0]!;
-    expect(r.replyToMessageId).toBe("m1");
-    expect(r.content).toContain("> Postgres or SQLite?");
-    expect(r.content).toContain(`<@${MENTION.authorId}>`);
-    expect(r.content).not.toContain(`<@${OWNER_ID}>`);
-    expect(r.content).toContain(ASK_REPLY_HINT);
-    expect(r.mentionUserIds).toEqual([MENTION.authorId]);
+    // DISCORD-ASK-6/7 — collapsed into thinking message (no separate reply).
+    expect(replies).toHaveLength(0);
+    const edit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
+    );
+    expect(edit).toBeDefined();
+    expect(String(edit!.content)).toContain(`<@${MENTION.authorId}>`);
+    expect(String(edit!.content)).not.toContain(`<@${OWNER_ID}>`);
+    expect(String(edit!.content)).toContain(ASK_REPLY_HINT);
+    expect(edit!.embed).toBeNull();
 
-    const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
-    expect(last.description).toContain("Needs your input");
-    expect(last.description).not.toContain("✅ Done");
-
-    // DISCORD-2: replying to the question continues the same session.
-    const session = result.store.getByBotMessage("bot_1");
+    const session = result.store.getByBotMessage(edit!.messageId);
     expect(session).toBeDefined();
     expect(session!.pendingAsk).toMatchObject(CLARIFY);
     await result.stop();
@@ -218,23 +215,26 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
     );
     await handlers.onMessage(MENTION);
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain("I'm stuck");
-    expect(replies[0]!.content).toContain("Verification still fails after 2 retries");
-    expect(replies[0]!.content).not.toContain("failed (exit 1)");
-    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
-    expect(last.color).toBe(THINKING_COLORS.error);
+    expect(replies).toHaveLength(0);
+    const edit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("I'm stuck"),
+    );
+    expect(edit).toBeDefined();
+    expect(String(edit!.content)).toContain("Verification still fails after 2 retries");
+    expect(String(edit!.content)).not.toContain("failed (exit 1)");
+    expect(edit!.embed).toBeNull();
     await result.stop();
   });
 
   test("no owner configured → clarify still pings requester (AUTONOMY-4)", async () => {
-    const { result, handlers, replies } = await bridgeWith(askingAgent(CLARIFY), {});
+    const { result, handlers, outbound, replies } = await bridgeWith(askingAgent(CLARIFY), {});
     await handlers.onMessage(MENTION);
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain("> Postgres or SQLite?");
-    expect(replies[0]!.content).toContain(`<@${MENTION.authorId}>`);
-    expect(replies[0]!.mentionUserIds).toEqual([MENTION.authorId]);
+    expect(replies).toHaveLength(0);
+    const edit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
+    );
+    expect(edit).toBeDefined();
+    expect(String(edit!.content)).toContain(`<@${MENTION.authorId}>`);
     await result.stop();
   });
 
@@ -244,12 +244,15 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
         return { ok: true, sessionId, summary: "all good", exitCode: 0 };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(agent, {
+    const { result, handlers, outbound, replies } = await bridgeWith(agent, {
       CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
     });
     await handlers.onMessage(MENTION);
-    expect(replies[0]!.content).toBe("all good");
-    expect(replies[0]!.mentionUserIds).toBeUndefined();
+    expect(replies).toHaveLength(0);
+    const edit = outbound.contentEdits.find(
+      (e) => typeof e.content === "string" && e.content === "all good",
+    );
+    expect(edit).toBeDefined();
     await result.stop();
   });
 });
@@ -593,7 +596,8 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
   });
 
   test("schema v8 adds discord_sessions.pending_ask and migrates a v7 DB", () => {
-    expect(SCHEMA_VERSION).toBe(8);
+    // v9 (in-flight Discord replies, REQ-discord-311) builds on v8.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(8);
     const db = new SqliteDatabase(":memory:");
     migrateCorvidinhoDb(db);
     db.exec("ALTER TABLE discord_sessions DROP COLUMN pending_ask");
@@ -606,7 +610,7 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
-    expect(v.value).toBe("8");
+    expect(v.value).toBe(String(SCHEMA_VERSION));
     const row = db.query("SELECT pending_ask FROM discord_sessions WHERE id = 'sess_x'").get() as {
       pending_ask: string | null;
     };

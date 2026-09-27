@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "align-session-start-and-work-with-discord-ask-7-collapse-thinking-into-one-final-message-instead-of-done-embed-plus",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "1e9aed72769661a8c0e80f483ed4cb7d633cbb61",
+      "contract_digest": "89d68d5563e9f25576f608372cd3ffb6c2da00965357436ad4ef07491d1d0c15",
+      "execution_digest": "d6b804384344861630ea3a0f016b2fd07ba57064e685993b9d5c9b68cddf4c9a",
+      "workspace_digest": "3cb2a8743d059dd8754a4eda545a1d366ca87f125f26db65a7e7afe892ac414b",
+      "timestamp": 1790466504
+    }
+  ]
+}

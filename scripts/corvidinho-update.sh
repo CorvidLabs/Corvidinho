@@ -10,13 +10,18 @@
 # Env:
 #   CORVIDINHO_REF            git ref (tag/branch/sha); default origin/main
 #   CORVIDINHO_ROOT           repo root
-#   CORVIDINHO_ENV_FILE       secrets env to source before start (default ~/.config/corvidinho/env)
+#   CORVIDINHO_ENV_FILE       secrets env sourced once, after bun install and before doctor, so
+#                             doctor, every restart path and rollback see it
+#                             (default ~/.config/corvidinho/env)
 #   CORVIDINHO_PIDFILE        default /tmp/corvidinho-discord-bridge.pid
 #   CORVIDINHO_BRIDGE_LOG     default /tmp/corvidinho-discord-bridge.log
 #   CORVIDINHO_READY_TIMEOUT  seconds (default 60)
-#   CORVIDINHO_USE_PIDFILE=1  force pidfile stop/start (default: use pidfile if file exists or no UNIT/CMD)
-#   CORVIDINHO_BRIDGE_UNIT    systemd unit (optional)
-#   CORVIDINHO_BRIDGE_CMD     restart command when no unit (optional)
+#   CORVIDINHO_USE_PIDFILE=1  force pidfile stop/start (default: pidfile unless a UNIT is set;
+#                             with no UNIT, pidfile if the file exists or no CMD)
+#   CORVIDINHO_BRIDGE_UNIT    systemd unit (optional; wins over a leftover pidfile)
+#   CORVIDINHO_BRIDGE_CMD     restart command when no unit (optional). Runs via
+#                             `bash -lc 'eval "$CORVIDINHO_BRIDGE_CMD"'` so its text is not on the
+#                             shell's argv and `pkill -f <pattern>` cannot match that shell.
 #   CORVIDINHO_UPDATE_DRY_RUN=1
 #   CORVIDINHO_SKIP_DOCTOR=1
 #   CORVIDINHO_SKIP_RESTART=1
@@ -66,7 +71,11 @@ if [ "$DRY" = "1" ]; then
   exit 0
 fi
 
+ENV_LOADED=0
+# Idempotent: doctor, every restart path (pidfile, unit, command) and rollback share one env.
 load_env_file() {
+  [ "$ENV_LOADED" = "1" ] && return 0
+  ENV_LOADED=1
   if [ -f "$ENV_FILE" ]; then
     log "sourcing env file: $ENV_FILE (secrets not logged)"
     set -a
@@ -82,14 +91,33 @@ want_pidfile() {
   if [ "${USE_PIDFILE}" = "1" ] || [ "${USE_PIDFILE,,}" = "true" ]; then
     return 0
   fi
+  # An explicitly configured systemd unit wins over a leftover pidfile: starting a
+  # nohup bridge next to the unit's bridge would answer every mention twice.
+  if [ -n "$UNIT" ]; then
+    return 1
+  fi
   if [ -f "$PIDFILE" ]; then
     return 0
   fi
   # Prefer pidfile when neither systemd nor custom cmd configured
-  if [ -z "$UNIT" ] && [ -z "$BRIDGE_CMD" ]; then
+  if [ -z "$BRIDGE_CMD" ]; then
     return 0
   fi
   return 1
+}
+
+# Unit mode: a pidfile left from an earlier pidfile-mode run is not ours to act on.
+# Drop it when its pid is gone; never signal a live pid (it may be recycled).
+drop_leftover_pidfile() {
+  [ -f "$PIDFILE" ] || return 0
+  local pid
+  pid="$(tr -d '[:space:]' < "$PIDFILE" 2>/dev/null || true)"
+  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+    log "unit mode: ignoring leftover pidfile $PIDFILE (pid $pid is alive — stop it yourself if it is a stray bridge)"
+    return 0
+  fi
+  log "unit mode: removing stale pidfile $PIDFILE"
+  rm -f "$PIDFILE" 2>/dev/null || log "unit mode: could not remove $PIDFILE (ignored)"
 }
 
 stop_via_pidfile() {
@@ -125,7 +153,6 @@ stop_via_pidfile() {
 }
 
 start_via_pidfile() {
-  load_env_file
   mkdir -p "$(dirname "$BRIDGE_LOG")"
   : > "$BRIDGE_LOG"
   local bin="${CORVIDINHO_BIN:-${ROOT}/src/cli.ts}"
@@ -166,6 +193,7 @@ rollback() {
   if git checkout --force "$PREV_SHA" >/dev/null 2>&1; then
     bun install --frozen-lockfile >/dev/null 2>&1 || bun install >/dev/null 2>&1 || true
     log "ROLLBACK: checkout restored to $PREV_SHA"
+    [ "$SKIP_RESTART" = "1" ] || load_env_file
     if [ "$SKIP_RESTART" != "1" ] && want_pidfile; then
       stop_via_pidfile || true
       start_via_pidfile || true
@@ -195,6 +223,9 @@ if ! bun install --frozen-lockfile; then
   bun install || rollback "bun install failed"
 fi
 
+# After fetch/install (secrets stay out of those), before doctor and any restart.
+load_env_file
+
 if [ "$SKIP_DOCTOR" != "1" ]; then
   log "doctor…"
   if ! bun src/cli.ts doctor; then
@@ -221,6 +252,7 @@ if want_pidfile; then
     log "pidfile start ready-wait failed"
   fi
 elif [ -n "$UNIT" ]; then
+  drop_leftover_pidfile
   log "restarting systemd unit $UNIT…"
   if systemctl restart "$UNIT"; then
     sleep 2
@@ -231,7 +263,8 @@ elif [ -n "$UNIT" ]; then
   fi
 elif [ -n "$BRIDGE_CMD" ]; then
   log "running CORVIDINHO_BRIDGE_CMD…"
-  if bash -lc "$BRIDGE_CMD"; then
+  # Command text via env, not argv: `pkill -f` in it must not match this shell.
+  if CORVIDINHO_BRIDGE_CMD="$BRIDGE_CMD" bash -lc 'eval "$CORVIDINHO_BRIDGE_CMD"'; then
     restart_ok=1
   fi
 else
