@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "55c3a5b490e6f232a4034b3b677b1204604e0180",
+      "contract_digest": "3da28ede25112786faa99d4d64327599ad91e47a40e7f2a29b8268aa64e3d7fc",
+      "execution_digest": "b473da6c35d6fdf2b285356f15c01111f552ab981223856baaf701b16080e5e9",
+      "workspace_digest": "eec4281379307cb4b4336798381512cd9a7652183160a4620898834207c903a7",
+      "timestamp": 1790471248
+    }
+  ]
+}

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.28
+
+### Discord identity lookup + soft-land tool thrash (dogfood)
+
+- **IDENTITY-5 / DISCORD-13** — New read-only `discord-user-lookup` plugin resolves a guild member by snowflake (`--user-id`) or name (`--query`) inside the configured `DISCORD_GUILD_ID` only (refuse other guilds). Prefer this before SpecSync/git/github when chat mentions a Discord person. A bare `bug <snowflake>` in Discord is treated as a user id, not a GitHub issue.
+- **AGENT-9** — Tool-round budget exhaustion soft-lands: keep the best prose so far, or ask a brief clarifying question. Never dump `Stopped after N tool rounds` into the Discord channel body (operator note may appear on the thinking/NDJSON path). `chatBodyFromTaskResult` also strips leftover stop lines.
+- **ROLES-CHAT-9** — Community Discord chat prefers conversational prose for social/game banter; SpecSync/git/github/files only when the query clearly needs Corvidinho codebase or product data.
+- Mentions: `<@id>` in inbound chat is rewritten to `Discord user id <id>` so the snowflake stays available for lookup.
+
+### Ops
+
+- Package version **0.0.28** — restart the Discord bridge after update. No schema bump.
+
 ## 0.0.27
 
 ### Light agent.3md adopt (docs + dep + smoke)

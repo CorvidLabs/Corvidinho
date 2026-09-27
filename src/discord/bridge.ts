@@ -68,7 +68,7 @@ import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
-import { routeMessage } from "./message-router.ts";
+import { promptBodyForAskGate, routeMessage } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
   isMonitoredChannel,
@@ -509,9 +509,10 @@ export async function startBridge(
       if (
         action.kind === "continue_session" &&
         session.pendingAsk &&
-        (isThinAck(prompt) || isCancelAsk(prompt))
+        (isThinAck(promptBodyForAskGate(prompt)) ||
+          isCancelAsk(promptBodyForAskGate(prompt)))
       ) {
-        if (isCancelAsk(prompt)) {
+        if (isCancelAsk(promptBodyForAskGate(prompt))) {
           store.setPendingAsk(session, null);
           if (replyRef.fn) {
             const sent = await replyRef.fn({
