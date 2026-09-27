@@ -167,6 +167,7 @@ draft-PR step, an entry only affects `corvidinho plugins run` (see "What an entr
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
 | `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) in the project dir, and `plugins list` names any that are not loaded |
 | `memory-forget` | true | 1 | true | an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |

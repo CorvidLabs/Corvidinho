@@ -23,3 +23,14 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
 ## discord-user-lookup (REQ-plugins-312)
 
 `tests/discord.user-lookup.test.ts` — see also discord testing companion.
+
+## Language runners (REQ-plugins-313..314)
+
+`tests/runners.plugins.test.ts` — stub `node` / `python3` / `cargo` /bin/sh
+scripts in a mkdtemp PATH dir: registration and danger/tier markings, python3
+before python, relative PATH entries ignored, argv verbatim (no shell) and cwd
+= project root, non-zero exit, usage error, scrubbed child env, SAFE-1 deny,
+code-tier / dangerous / ADMIN-only catalog, abort and timeout kill the tree;
+an empty PATH registers nothing and `plugins list` (CLI spawn) exits 0 naming
+each missing runner; a deleted binary returns exit 127. Real `node`, `python3`
+and `cargo` smoke tests are skipped where the toolchain is not installed.

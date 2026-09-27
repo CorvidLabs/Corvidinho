@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 58
+version: 59
 status: draft
 files:
   - src/cli.ts
@@ -86,7 +86,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 ## Invariants
 
 task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
-plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
+plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count. The `plugins list` text view also prints which PLUGIN-4 language runners loaded (with their binary) and one `<name> not loaded: <tool> not found on PATH` line per missing toolchain, and still exits 0 (REQ-cli-112).
 doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `discord` and `github-watch` checks load allowlists through the bridge / WATCH loader (allowlist file + env overlays, `mergeChannelIds` / `expandWatchRepos`), drop deny-listed entries (deny wins) and entries the gate cannot use (a repo that is not OWNER/REPO; the line names deny wins only when every entry is deny-listed), count a token / watch login only when not blank (as the bridge / WATCH trim), and name the source (`file`, `env`, `file + env`) and count, never ids, repos or tokens; a file that does not load fails both. The `llm` line is `ok` with `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (value not shown) and `warn` (task run uses the demo stub) without, never changing the exit code. The `data-dir` line probes the shared data dir with a temp dir it removes: `ok` exists + writable, `info` missing but creatable (not created), `fail` otherwise, including a symlink to nothing (exit 1).
 Attribution output uses only the project name and repository link and contains no account handle.
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning stays pending for a bridge to deliver.
@@ -139,6 +139,7 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 
 ## Change Log
 
+| 2026-09-27 | plugin-4-language-runner-plugins: `plugins list` prints the language runner status lines (loaded runners with their binary, one line per missing toolchain) before the Fledge line (REQ-cli-112 / PLUGIN-4) |
 | 2026-09-26 | files-search-plugins-issue-81: package 0.0.6 with files/search + SAFE-2 (REQ-cli-013) |
 | 2026-09-26 | memory-discord-inject: package 0.0.7 with MEMORY Discord inject (REQ-cli-014) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
