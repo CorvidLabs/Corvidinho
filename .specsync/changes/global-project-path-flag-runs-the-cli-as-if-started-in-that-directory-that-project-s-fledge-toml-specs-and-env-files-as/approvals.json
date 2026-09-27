@@ -39,6 +39,46 @@
       "approved_delta_digests": {
         "cli": "a5b8139f22572fd0ca7dae2b67b63f0f1b840f45655d6fb9d6a97241edb960fb"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790536543,
+      "digest": "2b1005a0af7e599db47dd4338081b5190daaef8da48e68f2c8526e77cfe3f887",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "global-project-path-flag-runs-the-cli-as-if-started-in-that-directory-that-project-s-fledge-toml-specs-and-env-files-as",
+        "title": "Global --project <path> flag runs the CLI as if started in that directory: that project's fledge.toml, specs and .env files as Bun loads them there, never the start directory's (CLI-5)",
+        "description": "Global --project <path> flag runs the CLI as if started in that directory: that project's fledge.toml, specs and .env files as Bun loads them there, never the start directory's (CLI-5)",
+        "kind": "feature",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "README.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "src/cli.ts",
+          "tests/cli.project-path.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "From another directory, corvidinho --project <path> (before or after the command, before --) makes task run read <path>/fledge.toml and <path>/specs, and loads <path>'s .env files exactly as a process started in <path> gets them (doctor output identical to running there; .env.local and $VAR expansion as Bun; set variables win; the start directory's .env values do not carry over); a missing, non-directory or empty --project prints one corvidinho: line plus hint and exits 1 before any command runs; tests/cli.project-path.test.ts covers these and fails on main"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "4af7bd71b54b9b4cdb4c2f2ea18d5e3cf7d90678f0e464838e29cc8bed317737"
+      }
     }
   ],
   "reopenings": []
