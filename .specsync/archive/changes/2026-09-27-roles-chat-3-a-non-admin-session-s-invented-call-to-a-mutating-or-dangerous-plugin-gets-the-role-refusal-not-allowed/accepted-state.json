@@ -7,11 +7,11 @@
   "title": "ROLES-CHAT-3: a non-ADMIN session's invented call to a mutating or dangerous plugin gets the role refusal (not allowed for your role), not the catalog refusal, and the run summary ends with a short (not allowed for your role) note once a call was refused for the caller's role",
   "description": "ROLES-CHAT-3: a non-ADMIN session's invented call to a mutating or dangerous plugin gets the role refusal (not allowed for your role), not the catalog refusal, and the run summary ends with a short (not allowed for your role) note once a call was refused for the caller's role",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "0940db343de30fdb4d79d83cfa44b95c5a247681",
   "created_at": 1790534727,
-  "updated_at": 1790538650,
+  "updated_at": 1790538894,
   "affected_specs": [
     "agent"
   ],

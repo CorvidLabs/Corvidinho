@@ -1,6 +1,6 @@
 ---
 id: roles-chat-3-a-non-admin-session-s-invented-call-to-a-mutating-or-dangerous-plugin-gets-the-role-refusal-not-allowed
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 0940db343de30fdb4d79d83cfa44b95c5a247681
 ---
