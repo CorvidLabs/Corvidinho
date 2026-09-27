@@ -128,6 +128,16 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.27", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.27`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("discord-user-lookup");
+    expect(r.stdout).toContain("AGENT-9");
+    expect(r.stdout).toContain("Stopped after");
+  });
+
   test("extract_changelog_section finds 0.0.26", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.26`,

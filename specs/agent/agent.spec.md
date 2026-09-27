@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 27
+version: 28
 status: draft
 files:
   - src/agent/types.ts
@@ -23,6 +23,7 @@ files:
   - src/agent/ask.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
+  - tests/agent.soft-land.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
   - tests/agent.events-ndjson.test.ts
@@ -320,6 +321,7 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 ## Change Log
 
 Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-09-26 | discord-dogfood soft-land + Discord chat prompt (REQ-agent-312 / AGENT-9 / IDENTITY-5 / ROLES-CHAT-9) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: chat/plumbing split for Discord summaries; identity + public Q&A system instructions |
 | 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
 | 2026-09-26 | memory-discord-inject: MEMORY system prompt + tool argv (REQ-agent-010) |

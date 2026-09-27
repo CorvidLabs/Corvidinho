@@ -1,8 +1,10 @@
 ---
 module: plugins
-version: 46
+version: 47
 status: draft
 files:
+  - plugins/discord/user-lookup.ts
+  - tests/discord.user-lookup.test.ts
   - src/plugins/types.ts
   - src/plugins/registry.ts
   - src/plugins/run.ts
@@ -427,6 +429,7 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
+| 2026-09-26 | discord-user-lookup read-only guild member resolve (REQ-plugins-312 / IDENTITY-5) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
 | 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |

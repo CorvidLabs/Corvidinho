@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 68
+version: 69
 status: draft
 files:
   - src/discord/types.ts
@@ -36,6 +36,7 @@ files:
   - tests/memory.spawn-env.test.ts
   - src/discord/work-store.ts
   - src/discord/message-router.ts
+  - tests/discord.user-lookup.test.ts
   - tests/discord.actor-gate.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
@@ -337,6 +338,7 @@ by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 
 DISCORD-7 admin re-auth + DISCORD-8 confused-deputy (2026-09-26, corvid-agent + Merlin, #13).
 DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-agent image-attachments + Merlin protocol-version, #14).
+| 2026-09-26 | discord-dogfood user lookup + mention rewrite + soft-land UX (REQ-discord-312 / IDENTITY-5 / DISCORD-13) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: IDENTITY-4 inject; DISCORD-3.a model+plumbing in thinking footer; clean chat body |
 | 2026-09-26 | hear-image-attachments-protocol-lockstep-discord-9-10-steal-image-attachments-from-corvid-agent-merlin-protocol-version: HEAR image attachments + protocol lockstep (DISCORD-9,10) — steal image-attachments from corvid-agent + Merlin protocol-version; fixture tests; no ProcessManager; STATUS Done for #14 |
 | 2026-09-26 | fix-discord-watch-spawn-always-bun-invoke-ts-for-protocol-handshake-and-agent-client-parse-task-run-json-for-discord: bun-invoke .ts for protocol+spawn; parse task run --json for Discord summary |
