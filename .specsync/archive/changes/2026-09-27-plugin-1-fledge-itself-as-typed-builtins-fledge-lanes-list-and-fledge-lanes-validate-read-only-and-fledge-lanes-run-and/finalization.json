@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and",
+  "implementation_commit": "343a08b7e0a72e2e67cc6b1e401e174cda5d6b92",
+  "implementation_tree": "136cea59581d6d0745e3303ade56dde156f79153",
+  "contract_digest": "e85d98c4b3a55f62588e5a2aedcfe6c75b915d49c4644eb326110115d894ffdd",
+  "workspace_digest": "e370fffef375dc9dd5e14cf78c13f5a12607c239591cd7eb0867254e6f6fe893",
+  "closing_digest": "730978eca204eb2e5e4c90e9dea0a384eb01c8c10be76566647bad4419b1b66c",
+  "review_digest": "fd87c31536aaa292bcaf57896b4c415d81d460d49f5a2a9689a3886396fe784a",
+  "finalization_digest": "0abdb4b74dae5790882541fddf688a164edaa8a8505403a7880cee5c86bce814",
+  "timestamp": 1790538982
+}
