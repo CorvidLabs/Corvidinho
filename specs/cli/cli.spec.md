@@ -59,6 +59,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `githubWatchDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `github-watch` line (token + username + usable repos, source named) |
 | `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
+| `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
 
 ### Exported Constants
 
@@ -97,6 +98,8 @@ doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info`
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Before every tick it re-reads the allowlist (file, env overlays, `DISCORD_CHANNEL_IDS`) into the scheduler's gate in place, so `/admin` edits apply without a restart, and it passes the configured owner so the owner's schedules pass the creator gate (DISCORD-SCHEDULE-3 / REQ-cli-108); a file that does not load skips that tick (`tick.allowlist_failed`), and a tick still re-reading it when stop begins claims no run. Restarts are systemd's job (docs/DAEMON.md).
 No command ends in a stack trace, a library object dump or Bun's crash footer (REQ-cli-419, CLI-4 / CLI-7 / SAFE-6): `runCli` sends anything `main` throws, and `plugins run` sends an unknown name or a throwing handler, to `reportCliError`, which prints `corvidinho: <line>` and `hint: …` on stderr (`--json`: `{ "ok": false, "error": <line> }` on stdout, hint on stderr) and exits with the error's own `exitCode` or 1. `<line>` is `formatErrorLine` (first message line, SAFE-6 scrubbed, secret env values redacted, capped). `discord register-commands` failures and `github watch` 401 stops are one line too.
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
+doctor and the report-only `corvidinho init` check the project files in the current dir through `projectFilesDoctorChecks` (CLI-4, REQ-cli-430), one line each: `fledge.toml` (present and valid TOML), `verify-lane` (`[lanes.verify]` in fledge.toml or a `.fledge/lanes/*.toml` import runs spec-check: the defined `spec-check` task, or a step or task `deps` chain that runs `specsync check`), `.specsync` and `specs` (directories). A missing item is `[missing]` (exit 1), named in plain language with what fails without it and, where Fledge / SpecSync has one, the command that creates it (`fledge run --init`, `specsync init`, `specsync generate`); file contents and parser messages are never printed. `init` prints the `llm`, `fledge` and `specsync` lines plus the project-file lines, creates and changes nothing, and exits 1 only when an item is missing (the `llm` `warn` does not fail); Discord / GitHub keys and allowlists stay in doctor.
+
 `bun test` never writes the operator's state (REQ-cli-262, SAFE-5): the preload always points `CORVIDINHO_DATA_DIR` at its own temp dir, unsets `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR` plus the run settings that change test outcomes (`CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`), and makes `Bun.spawn` / `Bun.spawnSync` without an explicit `env` pass that env to children.
 
 ## Behavioral Examples
@@ -106,6 +109,12 @@ No command ends in a stack trace, a library object dump or Bun's crash footer (R
 - **Given** no GITHUB_TOKEN / GH_TOKEN
 - **When** the operator runs `corvidinho github watch`
 - **Then** exit non-zero naming the token env and go-live checklist
+
+### Scenario: Init in a dir without project files
+
+- **Given** a directory with no `fledge.toml`, `.specsync/` or `specs/`
+- **When** the operator runs `corvidinho init` there
+- **Then** it prints `[missing]` for `fledge.toml`, `verify-lane`, `.specsync` and `specs`, each in plain language with the command that creates it where one exists, creates nothing and exits 1
 
 ### Scenario: Second daemon on one data dir
 
@@ -130,6 +139,8 @@ No command ends in a stack trace, a library object dump or Bun's crash footer (R
 | Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
 | Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github-watch` (bridge / WATCH trim them); exit 1 |
+| Doctor / `init`: no `fledge.toml`, no verify lane or one without spec-check, no `.specsync/` or `specs/` in the current dir | `[missing]` line per item in plain language; exit 1; nothing is created |
+| Doctor / `init`: `fledge.toml` (or a `.fledge/lanes/*.toml` import) not valid TOML | `[missing] fledge.toml` / `[missing] verify-lane` naming the file, never its contents; exit 1 |
 | Task verify exhausted | Exit 1; JSON verified false |
 | Task run gets SIGINT / SIGTERM | Run aborted (verify lane and tool loop stopped); cancelled result printed (ndjson `result` frame); exit 130 |
 | Task run started with SIGINT ignored (background job) | SIGINT stays ignored; SIGTERM still cancels (exit 130) |

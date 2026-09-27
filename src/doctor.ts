@@ -6,10 +6,21 @@
  *   naming where the entries came from (file / env), never the entries.
  * - The LLM key `task run` uses (none ⇒ demo stub).
  * - The shared data dir (exists / can be created, writable).
+ * - The project files `task run`'s verify gate reads in the current dir
+ *   (`fledge.toml`, its verify lane with spec-check, `.specsync/`, `specs/`),
+ *   shared with the report-only `corvidinho init`.
  * Secret and list values are never printed (SAFE-6).
  */
 
-import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmdirSync,
+  statSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { loadLlmEnv } from "./agent/execute.ts";
 import { perTierModels } from "./agent/tier.ts";
@@ -332,4 +343,211 @@ export function dataDirDoctorCheck(
         mark: "info",
         detail: `${dir} does not exist yet — created on first use (${probeIn} is writable)`,
       };
+}
+
+// --- Project files (CLI-4) --------------------------------------------------
+
+type Table = Record<string, unknown>;
+
+function tableOf(v: unknown): Table {
+  return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Table) : {};
+}
+
+/** Adds `from`'s own keys that `into` does not have yet (first definition wins). */
+function mergeMissing(into: Map<string, unknown>, from: unknown): void {
+  for (const [k, v] of Object.entries(tableOf(from))) {
+    if (!into.has(k)) into.set(k, v);
+  }
+}
+
+function readTomlTable(path: string): Table | null {
+  try {
+    return tableOf(Bun.TOML.parse(readFileSync(path, "utf8")));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What `fledge lanes run` loads in `dir`: `fledge.toml`, then any
+ * `.fledge/lanes/*.toml` imports (fledge.toml's tasks and lanes win).
+ * `broken` names the first file that cannot be read or is not TOML; the
+ * parser's message is not kept (it may quote the file).
+ */
+type FledgeProject =
+  | { state: "absent" }
+  | { state: "broken"; file: string }
+  | { state: "ok"; tasks: Map<string, unknown>; lanes: Map<string, unknown> };
+
+function loadFledgeProject(dir: string): FledgeProject {
+  const path = join(dir, "fledge.toml");
+  if (!existsSync(path)) return { state: "absent" };
+  const main = readTomlTable(path);
+  if (!main) return { state: "broken", file: "fledge.toml" };
+  const tasks = new Map<string, unknown>();
+  const lanes = new Map<string, unknown>();
+  mergeMissing(tasks, main.tasks);
+  mergeMissing(lanes, main.lanes);
+  const importDir = join(dir, ".fledge", "lanes");
+  let imports: string[] = [];
+  try {
+    if (statSync(importDir).isDirectory()) {
+      imports = readdirSync(importDir).filter((f) => f.endsWith(".toml")).sort();
+    }
+  } catch {
+    // No imported lanes.
+  }
+  for (const f of imports) {
+    const imported = readTomlTable(join(importDir, f));
+    if (!imported) return { state: "broken", file: `.fledge/lanes/${f}` };
+    mergeMissing(tasks, imported.tasks);
+    mergeMissing(lanes, imported.lanes);
+  }
+  return { state: "ok", tasks, lanes };
+}
+
+/** The fledge task that runs SpecSync on the verify lane (Merlin pattern; SPECSYNC-2/7). */
+const SPEC_CHECK_TASK = "spec-check";
+
+/** A shell command line that runs `specsync check`. */
+function runsSpecsyncCheck(cmd: unknown): boolean {
+  return typeof cmd === "string" && /(?:^|[\s;&|(])specsync\s+check(?![\w-])/.test(cmd);
+}
+
+/**
+ * Task names and inline commands in fledge lane steps: `"task"`,
+ * `{ run = "cmd" }`, `{ task = "task" }` or `{ parallel = ["task" | { run }] }`.
+ */
+function laneStepParts(steps: unknown): { tasks: string[]; cmds: string[] } {
+  const out = { tasks: [] as string[], cmds: [] as string[] };
+  const one = (step: unknown, inParallel: boolean): void => {
+    if (typeof step === "string") {
+      out.tasks.push(step);
+      return;
+    }
+    const s = tableOf(step);
+    if (typeof s.run === "string") out.cmds.push(s.run);
+    else if (inParallel) return;
+    else if (typeof s.task === "string") out.tasks.push(s.task);
+    else if (Array.isArray(s.parallel)) for (const p of s.parallel) one(p, true);
+  };
+  if (Array.isArray(steps)) for (const s of steps) one(s, false);
+  return out;
+}
+
+/**
+ * True when running `name` (fledge runs a task's `deps` first) runs
+ * spec-check: the defined `spec-check` task, or a task whose `cmd` runs
+ * `specsync check`.
+ */
+function taskRunsSpecCheck(
+  name: string,
+  tasks: Map<string, unknown>,
+  seen = new Set<string>(),
+): boolean {
+  if (seen.has(name) || !tasks.has(name)) return false;
+  seen.add(name);
+  const task = tasks.get(name);
+  if (name === SPEC_CHECK_TASK) return true;
+  if (runsSpecsyncCheck(typeof task === "string" ? task : tableOf(task).cmd)) return true;
+  const deps = tableOf(task).deps;
+  return (
+    Array.isArray(deps) &&
+    deps.some((d) => typeof d === "string" && taskRunsSpecCheck(d, tasks, seen))
+  );
+}
+
+function fledgeTomlCheck(dir: string, project: FledgeProject): DoctorCheck {
+  const name = "fledge.toml";
+  if (project.state === "absent") {
+    return {
+      name,
+      ok: false,
+      detail: `not found in ${dir} — task run's verify gate (\`fledge lanes run verify\`) needs it; \`fledge run --init\` creates one`,
+    };
+  }
+  if (project.state === "broken" && project.file === "fledge.toml") {
+    return {
+      name,
+      ok: false,
+      detail: `${join(dir, "fledge.toml")} cannot be read or is not valid TOML — fledge cannot run its tasks or lanes`,
+    };
+  }
+  return { name, ok: true, detail: `found in ${dir}` };
+}
+
+function verifyLaneCheck(project: FledgeProject): DoctorCheck {
+  const name = "verify-lane";
+  const fail = (detail: string): DoctorCheck => ({ name, ok: false, detail });
+  if (project.state === "absent") {
+    return fail("no verify lane — there is no fledge.toml to hold [lanes.verify]");
+  }
+  if (project.state === "broken") {
+    return fail(`${project.file} cannot be read or is not valid TOML — fledge cannot load the verify lane`);
+  }
+  if (!project.lanes.has("verify")) {
+    return fail(
+      "fledge.toml has no [lanes.verify] — task run's verify gate (`fledge lanes run verify`) fails without it",
+    );
+  }
+  const { tasks, cmds } = laneStepParts(tableOf(project.lanes.get("verify")).steps);
+  if (cmds.some(runsSpecsyncCheck) || tasks.some((t) => taskRunsSpecCheck(t, project.tasks))) {
+    return { name, ok: true, detail: "[lanes.verify] runs spec-check" };
+  }
+  if (tasks.includes(SPEC_CHECK_TASK)) {
+    return fail(
+      "[lanes.verify] runs the spec-check task but fledge.toml defines no [tasks.spec-check] — the lane fails on it",
+    );
+  }
+  return fail(
+    "[lanes.verify] has no spec-check step — task run would call work done without checking specs (AGENT-4 / SPECSYNC-2); add a spec-check task that runs `specsync check` to its steps",
+  );
+}
+
+/**
+ * A project directory the SpecSync tools read (`.specsync/`, `specs/`); the
+ * check is named after it.
+ */
+function projectDirCheck(
+  dir: string,
+  check: { name: ".specsync" | "specs"; missing: string },
+): DoctorCheck {
+  const { name, missing } = check;
+  const path = join(dir, name);
+  const fail = (detail: string): DoctorCheck => ({ name, ok: false, detail });
+  try {
+    if (!statSync(path).isDirectory()) return fail(`${path} is not a directory — ${missing}`);
+  } catch (e) {
+    return fail(
+      isMissing(e) ? `not found in ${dir} — ${missing}` : `${path} cannot be read (${errCode(e)}) — ${missing}`,
+    );
+  }
+  return { name, ok: true, detail: `found in ${dir}` };
+}
+
+/**
+ * CLI-4 — the project files `task run`'s prove-before-done gate reads in
+ * `cwd` (AGENT-4 / SPECSYNC-2), one line each: `fledge.toml`, its verify
+ * lane with a spec-check step (`verify-lane`), `.specsync/` and `specs/`.
+ * A missing item fails (`[missing]`) and is named in plain language with
+ * what fails without it and, where Fledge / SpecSync has one, the command
+ * that creates it. Shared by `doctor` and the report-only `init`; reads
+ * only, creates nothing, never prints file contents.
+ */
+export function projectFilesDoctorChecks(cwd: string = process.cwd()): DoctorCheck[] {
+  const dir = resolve(cwd);
+  const fledge = loadFledgeProject(dir);
+  return [
+    fledgeTomlCheck(dir, fledge),
+    verifyLaneCheck(fledge),
+    projectDirCheck(dir, {
+      name: ".specsync",
+      missing:
+        "SpecSync has no project config (.specsync/config.toml) for spec-check; `specsync init` creates it",
+    }),
+    projectDirCheck(dir, {
+      name: "specs",
+      missing: "spec-check has no specs to hold the code to; `specsync generate` scaffolds them",
+    }),
+  ];
 }

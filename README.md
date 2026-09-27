@@ -16,6 +16,7 @@ Read the full story (honoring ancestors): [`docs/ORIGIN.md`](docs/ORIGIN.md).
 - Linux, `git` (session worktrees and the git tools)
 - [Bun](https://bun.sh) ≥ 1.2
 - `fledge` + `specsync` on `PATH` (`corvidinho doctor` fails without them; the verify lane needs both)
+- In the project dir: `fledge.toml` with a `verify` lane that runs spec-check, `.specsync/` and `specs/` (`corvidinho doctor` names each one that is missing; `corvidinho init` reports the same project checks plus the LLM key, Fledge and SpecSync, and creates nothing)
 - Optional: `hi` (`hi check`), `gh` (human convenience only; Corvidinho itself reads `GITHUB_TOKEN` / `GH_TOKEN`)
 
 ## Quick start
@@ -25,6 +26,7 @@ bun install
 bun src/cli.ts --help
 bun src/cli.ts version
 bun src/cli.ts doctor
+bun src/cli.ts init    # report only: what this project is missing (CLI-4)
 bun src/cli.ts --protocol-version
 bun test
 hi check

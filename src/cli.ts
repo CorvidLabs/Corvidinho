@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 /**
  * Corvidinho — Bun/TS CLI (Linux).
- * Surfaces: help, version, doctor, plugins list/run, specsync *, task run (prove-before-done).
+ * Surfaces: help, version, doctor, init (report only), plugins list/run, specsync *,
+ * task run (prove-before-done).
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
@@ -40,6 +41,7 @@ import {
   githubWatchDoctorCheck,
   llmDoctorCheck,
   loadDoctorAllowlist,
+  projectFilesDoctorChecks,
   type DoctorCheck,
 } from "./doctor.ts";
 import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
@@ -73,7 +75,11 @@ Usage:
   corvidinho version                Print version
   corvidinho attribution             Print the canonical attribution footer
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
-  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins / LLM key / data dir
+  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / project files / plugins /
+                                    LLM key / data dir
+  corvidinho init                   Report what this project is missing (LLM key, Fledge, SpecSync, project
+                                    files: fledge.toml, verify lane with spec-check, .specsync/, specs/);
+                                    report only, creates nothing (CLI-4)
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
   corvidinho discord register-commands
                                     Full-overwrite slash set (guild PUT + clear globals)
@@ -212,6 +218,27 @@ export function parseGlobalFlags(args: string[]): {
   return { rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier };
 }
 
+/** `fledge` / `specsync` on PATH (the verify lane needs both). */
+function toolOnPathCheck(bin: "fledge" | "specsync"): DoctorCheck {
+  const path = which(bin);
+  return {
+    name: bin,
+    ok: Boolean(path),
+    detail: path ? `found at ${path}` : `${bin} not on PATH`,
+  };
+}
+
+/** Prints `  [mark] name: detail` lines; true when no check failed. */
+function printChecks(checks: DoctorCheck[]): boolean {
+  let allOk = true;
+  for (const c of checks) {
+    const mark = c.mark ?? (c.ok ? "ok" : "missing");
+    console.log(`  [${mark}] ${c.name}: ${c.detail}`);
+    if (!c.ok) allOk = false;
+  }
+  return allOk;
+}
+
 async function doctor(): Promise<number> {
   loadBuiltins();
   const checks: DoctorCheck[] = [];
@@ -234,19 +261,12 @@ async function doctor(): Promise<number> {
   const watchCheck = githubWatchDoctorCheck(allow, process.env);
   checks.push(watchCheck);
 
-  const fledgePath = which("fledge");
-  checks.push({
-    name: "fledge",
-    ok: Boolean(fledgePath),
-    detail: fledgePath ? `found at ${fledgePath}` : "fledge not on PATH",
-  });
+  checks.push(toolOnPathCheck("fledge"));
+  checks.push(toolOnPathCheck("specsync"));
 
-  const specsyncPath = which("specsync");
-  checks.push({
-    name: "specsync",
-    ok: Boolean(specsyncPath),
-    detail: specsyncPath ? `found at ${specsyncPath}` : "specsync not on PATH",
-  });
+  // CLI-4 — the project files task run's verify gate reads in this dir
+  // (fledge.toml, verify lane with spec-check, .specsync/, specs/).
+  checks.push(...projectFilesDoctorChecks(process.cwd()));
 
   const pluginCount = size();
   checks.push({
@@ -312,12 +332,7 @@ async function doctor(): Promise<number> {
   checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
 
   console.log("corvidinho doctor\n");
-  let allOk = true;
-  for (const c of checks) {
-    const mark = c.mark ?? (c.ok ? "ok" : "missing");
-    console.log(`  [${mark}] ${c.name}: ${c.detail}`);
-    if (!c.ok) allOk = false;
-  }
+  const allOk = printChecks(checks);
   console.log("");
   if (allOk) {
     console.log("All checks passed.");
@@ -335,6 +350,32 @@ async function doctor(): Promise<number> {
     console.log(watchGoLiveChecklist());
   }
   return 1;
+}
+
+/**
+ * `corvidinho init` (CLI-4): report only. Says what this project (the current
+ * dir) is missing before `task run` fails on it mid-task — the LLM key task
+ * run uses, `fledge` / `specsync` on PATH and the project files (the same
+ * lines doctor prints). Creates and changes nothing; exit 1 when an item is
+ * missing (a `[warn]` line, such as no LLM key, does not fail).
+ */
+function init(): number {
+  const checks: DoctorCheck[] = [
+    llmDoctorCheck(process.env),
+    toolOnPathCheck("fledge"),
+    toolOnPathCheck("specsync"),
+    ...projectFilesDoctorChecks(process.cwd()),
+  ];
+  console.log("corvidinho init (report only — creates nothing)\n");
+  const allOk = printChecks(checks);
+  console.log("");
+  console.log(
+    allOk
+      ? "Nothing missing for task run in this project."
+      : "Missing items are listed above; init created nothing. Add them, then run init again.",
+  );
+  console.log("Discord / GitHub keys and allowlists: run `corvidinho doctor`.");
+  return allOk ? 0 : 1;
 }
 
 async function pluginsList(json: boolean): Promise<number> {
@@ -766,6 +807,9 @@ export async function main(argv: string[]): Promise<number> {
   }
   if (cmd === "doctor") {
     return doctor();
+  }
+  if (cmd === "init") {
+    return init();
   }
   if (cmd === "discord") {
     const sub = rest[1];
