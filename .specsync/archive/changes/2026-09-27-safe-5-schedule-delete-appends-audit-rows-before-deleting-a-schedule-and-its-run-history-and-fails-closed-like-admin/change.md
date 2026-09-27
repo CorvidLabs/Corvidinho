@@ -1,6 +1,6 @@
 ---
 id: safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin
-state: implementing
+state: archived
 type: bug_fix
 base_commit: fbaa84b7cda1bf2b462baea44cad20ef93e0df4f
 ---
