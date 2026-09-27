@@ -1,6 +1,6 @@
 ---
 id: files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision
-state: implementing
+state: verifying
 type: feature
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---
