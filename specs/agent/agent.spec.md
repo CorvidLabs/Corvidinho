@@ -30,6 +30,7 @@ files:
   - tests/agent.spend.test.ts
   - tests/agent.spend-ask.test.ts
   - tests/agent.ask.test.ts
+  - tests/agent.verify-env.test.ts
   - src/autonomous/enabled.ts
   - src/autonomous/delegate.ts
   - src/autonomous/council.ts
@@ -157,7 +158,17 @@ for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
 `blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
 carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 
+Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
+`isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
+with `buildVerifyEnv()`.
+
 ## Invariants
+
+The default verify runner spawns fledge with the parent's env minus the
+delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
+`CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_ACTING_*`) and the LLM API keys
+(`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`): tests the agent wrote never see
+operator secrets (SAFE-6).
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
 memory-recall-before-ignorance / never-invent rules. OpenAI tool argv

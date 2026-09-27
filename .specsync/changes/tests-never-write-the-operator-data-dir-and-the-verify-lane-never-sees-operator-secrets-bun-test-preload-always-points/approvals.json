@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790469039,
+      "digest": "9cb7ba25f998ca504152ed6d6f7564a8dfac30477eceff46fd17d780f3c3648d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points",
+        "title": "Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6)",
+        "description": "Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli"
+        ],
+        "affected_paths": [
+          "specs/agent/agent.spec.md",
+          "specs/cli/cli.spec.md",
+          "src/agent/verify.ts",
+          "tests/agent.verify-env.test.ts",
+          "tests/fixtures/preload-probe.ts",
+          "tests/preload.operator-data-dir.test.ts",
+          "tests/preload.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With the operator's CORVIDINHO_DATA_DIR, CORVIDINHO_AUDIT_HMAC_KEY, CORVIDINHO_WATCH_SPAWN_LOG and WORKTREE_BASE_DIR set, bun test (and the fledge verify lane that runs it) writes nothing to the operator data dir: 0 audit rows land there, an existing operator audit chain is unchanged, no test row is keyed with the operator key, and children spawned without an explicit env get the test data dir; the default verify runner spawns fledge without DISCORD_*, GITHUB_TOKEN, GH_TOKEN, CORVIDINHO_LLM_API_KEY, OPENAI_API_KEY, CORVIDINHO_AUDIT_HMAC_KEY or CORVIDINHO_ACTING_* while keeping the rest of the env (SAFE-5 / SAFE-6)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "3cee937a42edaac903741cf9949bb21d82f8550067da7ebf26a15cadee0923e9",
+        "cli": "2e5ff0b36f48e848a7280abd992e147dca54425a4077b1276c4495582422b0e5"
+      }
+    }
+  ],
+  "reopenings": []
+}
