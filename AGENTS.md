@@ -44,7 +44,7 @@ Secrets stay out of the repo and out of chat logs (`hi/safe.md`, SAFE-6). Use en
 ```
 bun install
 bun src/cli.ts --help
-bun src/cli.ts doctor           # exits 1 until the Discord, GitHub and WATCH env are set (those checks read env, not the allowlist file)
+bun src/cli.ts doctor           # exits 1 until the Discord, GitHub and WATCH checks pass (they read the allowlist file + env, like the bridge and watch)
 bun src/cli.ts version
 bun src/cli.ts --protocol-version
 bun src/cli.ts attribution
