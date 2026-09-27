@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-handles-each-event-id-at-most-once-across-restarts-processed-acked-and-summarized-ids-persist-in-the-shared-db",
+  "slug": "watch-handles-each-event-id-at-most-once-across-restarts-processed-acked-and-summarized-ids-persist-in-the-shared-db",
+  "title": "WATCH handles each event id at most once across restarts: processed, acked and summarized ids persist in the shared DB and denied ids no longer evict handled ids",
+  "description": "WATCH handles each event id at most once across restarts: processed, acked and summarized ids persist in the shared DB and denied ids no longer evict handled ids",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "7af2cec07739d7af3cf3ab6e77855707cdaa1e68",
+  "created_at": 1790463223,
+  "updated_at": 1790463888,
+  "affected_specs": [
+    "watch"
+  ],
+  "affected_paths": [
+    "src/watch/dedup.ts",
+    "src/watch/poller.ts",
+    "src/watch/ack.ts",
+    "src/watch/summary.ts",
+    "tests/watch.dedup-durable.test.ts",
+    "docs/WATCH.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A restarted watcher on the same data dir does not re-run, re-ack or re-summarize an event id it already handled; 2000 denied stranger mentions do not evict a handled trusted id, so the trusted request never runs twice; processed/acked/summarized ids persist per kind in the shared DB; without a DB the stores stay in-memory with the old FIFO cap."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

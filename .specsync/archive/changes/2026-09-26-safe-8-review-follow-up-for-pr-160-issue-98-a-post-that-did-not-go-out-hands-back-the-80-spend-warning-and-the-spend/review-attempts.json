@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "7d2ac505958ecdf98fc132da7339006d34f5b608",
+      "contract_digest": "9efe3d1e608aa187cad8220756e29dae72ba8ae6290e85edd4b6a2a10de3be6d",
+      "execution_digest": "e86d55dd0bcebbf86fd0107a0b25b07256a04b5e983e17121b3e250378c25b30",
+      "workspace_digest": "6595d608d7cce23736f627dc8a63f7095e2f56340794bb1fb332fc42811cb78b",
+      "timestamp": 1790467098
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "timestamp": 1790464359,
+  "commit": "d0b908b709f9b2ae7f07e80ba0d7fa50d7d14492",
+  "contract_digest": "c6981a479cb14f0c8f1a9b3f4cdbadab6da5f8649d4c433c2e4df24085ab9e13",
+  "execution_digest": "c87a72107c0a77dca786de03edb7226be04d47f894de3b8db2c4a08b40634c85",
+  "workspace_digest": "fb4e3a5822c6f8f6281e83483190ae9a03c99df753473b34203812f49be5f745",
+  "acceptance_input_digest": "5bf27676ebf850aac99e46a410b99450f6d46cee916ad8d1981e12d2bd428579",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "specs/agent/agent.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "22e6869d696d46aa5c769985395fd7f330404d2a3f804c7fa09c2194ad9bb7b6",
+        "entry_digest": "df1a0ffd9d8b1d8006a5b35b1cc5c58f4cc3b73ed91d089e2f608c031dd253b4",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+        "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "641a121e9107930b05975df8c9cea3d5ec949d4fed091e5747d713b65eb2e6a4",
+        "entry_digest": "951de4d1a049f2df5d863049051e3ca51670427bd4f139163bc93133cff00223",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+        "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4d4981ba8123040dfa19eac659b8f26e0323cea8111be76c5b3fb75535f2fd39",
+        "entry_digest": "e463de87b26964db29e78d017b1910025588055ef550401a5e55db3c6e762c91",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/agent/execute.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "65e1cd2a7495d866a1b80402a8cc8f02c0ca32910202c3fcd0f6e0b6d95e516b",
+        "entry_digest": "2dedcafa0f42ed4d0f40b2d92df503b4923ae07a8de8f79df3048b05aa4b3422",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/agent/loop.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "381b6fbcbbf432ffa0a682b8bdd324ac6b3b7046bc0376aef28dcb2deba42a8d",
+        "entry_digest": "374f723cd1acade9aba81ca058c474ba4838b99e74e07474e7cac005491236b1",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/agent/types.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f073f4975f974fb4bc1b6bcff0ac747777b8b88014ce38c7ade9df31e6c66e9d",
+        "entry_digest": "97a16a2c24db6911fb9feeccf759d6fb5924dc2197217658aaafb75e457ebd82",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "tests/agent.loop.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "17eb9fb5484f6b927372f3020396d52d5cd639edfd053f8487741c703019ff32",
+        "entry_digest": "98d2cbfe982f550b20931954a691c9b85d62cc2da30cb60fc7ce325061731044",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.tool-loop.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5d527cc1fffad07ce6d2ccb1e43f72595e179c904c400c41885eda355440e22c",
+        "entry_digest": "5d2a263700e1105f37ad566027d8de428ac2800cb0b8c9d1cbc48083b2585e4a",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-242"
+  ]
+}
