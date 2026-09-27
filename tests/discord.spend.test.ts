@@ -1178,6 +1178,17 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     expect(finals[1]!.content).toStartWith(finals[0]!.content!);
     expect(finals[1]!.content).toMatch(new RegExp(`💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
     expect(finals[1]!.mentionUserIds).toEqual([OWNER_ID]);
+    // DISCORD-3.a (REQ-discord-457): the re-edit keeps the answer's
+    // footer-only embed (model + plumbing, done color like the fallback's
+    // paused status); the plumbing never enters either body.
+    expect(finals[0]!.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: {
+        text: `${loadLlmEnv(process.env).model} | state=blocked verified=false verifySkipped attempts=1`,
+      },
+    });
+    expect(finals[1]!.embed).toStrictEqual(finals[0]!.embed);
+    expect(finals[1]!.content).not.toContain("state=");
     await result.stop();
   });
 
