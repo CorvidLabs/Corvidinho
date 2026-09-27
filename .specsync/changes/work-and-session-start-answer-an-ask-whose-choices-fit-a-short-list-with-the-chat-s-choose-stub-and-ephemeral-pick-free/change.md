@@ -1,6 +1,6 @@
 ---
 id: work-and-session-start-answer-an-ask-whose-choices-fit-a-short-list-with-the-chat-s-choose-stub-and-ephemeral-pick-free
-state: draft
+state: implementing
 type: feature
 base_commit: 1c7b6ced470e0ed87e4c854f2663111713af3fa7
 ---
