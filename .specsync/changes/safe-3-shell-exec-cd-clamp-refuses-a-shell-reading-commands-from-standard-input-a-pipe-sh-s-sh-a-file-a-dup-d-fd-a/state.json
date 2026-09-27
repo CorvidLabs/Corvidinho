@@ -7,10 +7,11 @@
   "title": "SAFE-3 shell-exec cd clamp refuses a shell reading commands from standard input (a pipe, sh -s, sh -, a file, a dup'd fd, a process substitution, xargs sh) unless that input is a here-string or here-doc that checks clean, and a -c string that comes from input (xargs sh -c, xargs -I{} sh -c)",
   "description": "SAFE-3 shell-exec cd clamp refuses a shell reading commands from standard input (a pipe, sh -s, sh -, a file, a dup'd fd, a process substitution, xargs sh) unless that input is a here-string or here-doc that checks clean, and a -c string that comes from input (xargs sh -c, xargs -I{} sh -c)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
   "created_at": 1790521104,
-  "updated_at": 1790521592,
+  "updated_at": 1790521610,
   "affected_specs": [
     "plugins"
   ],
