@@ -1,6 +1,6 @@
 ---
 id: specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 642a843e0dee50df6cb9376f9e772dd28688ca2f
 ---

@@ -180,6 +180,110 @@
       "requirement_ids": [
         "REQ-plugins-008"
       ]
+    },
+    {
+      "timestamp": 1790470848,
+      "commit": "cf3aead0b9a7d2b513d753d147430a4e1242c5e8",
+      "contract_digest": "82325661bd8dadc5181f204750b9e980e6bff2b8975640704faee479d33d5058",
+      "execution_digest": "a3c42dc19de39011ab924b75adf8f6d1bf61ae60c4563afe6aad66255bc3f4bd",
+      "workspace_digest": "b968bf030b86944c94f4e4db633823c0268f7d07fe5fc36925654cddb1c3a117",
+      "acceptance_input_digest": "fc6c8dfd059a7896aea5e4eecb967be8f9ae1a80382a3b11cad9202e19860ce8",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "plugins/specsync/api.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "161e3c794b8732fb92255ea2302aa4e1d8de71035a9c8acf7d1c840e7789f53a",
+            "entry_digest": "85becabd4a0fb15f8f400ea54c14f41e5174ab7ba4c48a7b8e1ea19e2506ae7b",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "plugins/specsync/commands.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "a5a759bb258a6b76f6da3cbcdbfd602a8849e68ff6d2603e22f8f353f7c5f967",
+            "entry_digest": "c23657a5c13338dc8967188313b19f4a6cbdebb8b8661f448a8fb2656534ca6e",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+            "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/plugins.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "758c82dfc8ccb90b03c903991dcdc416e83b154e0e0256eefcd790414f0de1d3",
+            "entry_digest": "d205b961483698a661b33985edf85ccf6461589b3dbacadfa6cc7c9713a5210d",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "ac9382ef8f3710e9d6b1f7b0fba909e8752ac26a9bb8267c66af63e033c9456c",
+            "entry_digest": "27b162f887740e0bd9f4a5937835bb588b0830da685ead5ac52808e89473ada3",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+            "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "520b92f0ebf710fac2a799c661ef60939f7b70d140385a44ba59c5f5f912af33",
+            "entry_digest": "d9ff8816da5bbcbce41b0a3fb07693809bc911fcd4e44e5cf216d608b0fc62c3",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "tests/specsync.path-containment.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "452a7c6c7ba16608f55165513f61966914ead166d6863ea8e0e524f83aa588a8",
+            "entry_digest": "caafc3f4a65273c9e1981ef1d620406a1cc9e3879f2962e1b165015021d8f76b",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-008"
+      ]
     }
   ]
 }
