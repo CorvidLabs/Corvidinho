@@ -58,6 +58,34 @@ export function modelForTier(
   );
 }
 
+/**
+ * The env key that sets a `tier` run's model (AGENT-5): the tier's key when
+ * set, else `CORVIDINHO_LLM_MODEL`. Named in the SAFE-8 unpriced-model ask.
+ */
+export function modelKeyForTier(
+  env: NodeJS.ProcessEnv,
+  tier: CapabilityTier,
+): string {
+  const key = TIER_MODEL_ENV[tier];
+  return env[key]?.trim() ? key : "CORVIDINHO_LLM_MODEL";
+}
+
+/**
+ * Each tier's model when any per-tier model key is set (AGENT-5), else null
+ * (every tier calls the one configured model).
+ */
+export function perTierModels(
+  env: NodeJS.ProcessEnv,
+): Readonly<Record<CapabilityTier, string>> | null {
+  const tiers = Object.keys(TIER_MODEL_ENV) as CapabilityTier[];
+  if (!tiers.some((t) => env[TIER_MODEL_ENV[t]]?.trim())) return null;
+  return {
+    read: modelForTier(env, "read"),
+    tool: modelForTier(env, "tool"),
+    code: modelForTier(env, "code"),
+  };
+}
+
 export function loadTierFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   fallback: CapabilityTier = "tool",

@@ -42,6 +42,7 @@ import {
 import {
   loadTierFromEnv,
   modelForTier,
+  modelKeyForTier,
   type CapabilityTier,
 } from "./tier.ts";
 import {
@@ -268,6 +269,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const spend = createSpendGuard(opts.fetchImpl ?? fetch, {
     env,
     readUsage: extractUsage,
+    // AGENT-5: an unpriced model's ask names the key that set this tier's model.
+    modelKey: modelKeyForTier(env, opts.tier ?? loadTierFromEnv(env, "tool")),
     onWarning: (w) => {
       emit(opts.onEvent, { type: "Text", text: formatSpendWarningLine(w) });
       opts.onSpendWarning?.(w);

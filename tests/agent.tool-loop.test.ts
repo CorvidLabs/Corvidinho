@@ -20,6 +20,10 @@ import { clearRegistry } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { register } from "../src/plugins/registry.ts";
 import { runTask } from "../src/agent/loop.ts";
+import { readSpendSnapshot, spendDoctorCheck } from "../src/agent/spend.ts";
+import { formatSpendStatusLine } from "../src/agent/spend-notice.ts";
+import { modelKeyForTier, perTierModels } from "../src/agent/tier.ts";
+import { openCorvidinhoDb } from "../src/store/db.ts";
 
 describe("capability tier (AGENT-5)", () => {
   test("parseCapabilityTier", () => {
@@ -698,8 +702,81 @@ describe("per-tier model (AGENT-5, REQ-agent-079)", () => {
       expect(calls).toBe(0);
       expect(r.ask?.reason).toBe("spend-cap");
       expect(r.ask?.question).toContain('model "local-unpriced-cheap" has no known price');
+      // The ask names the key that set the read model, not CORVIDINHO_LLM_MODEL
+      // (already priced here, so switching it would not unblock the run).
+      expect(r.ask?.question).toContain("switches CORVIDINHO_LLM_MODEL_READ to a priced model");
+
+      // A tool-tier run on an unpriced shared model names CORVIDINHO_LLM_MODEL.
+      const tool = createTaskExecute({
+        taskText: "summarize",
+        env: { ...env, CORVIDINHO_LLM_MODEL: "local-unpriced-big" },
+        tier: "tool",
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response("{}");
+        },
+        loadPlugins: false,
+        projectInstructions: false,
+      });
+      const t = await tool({ attempt: 1, signal: new AbortController().signal });
+      expect(calls).toBe(0);
+      expect(t.ask?.question).toContain('model "local-unpriced-big" has no known price');
+      expect(t.ask?.question).toContain("switches CORVIDINHO_LLM_MODEL to a priced model");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("modelKeyForTier / perTierModels", () => {
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: "cheap" }, "read")).toBe("CORVIDINHO_LLM_MODEL_READ");
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: "cheap" }, "code")).toBe("CORVIDINHO_LLM_MODEL");
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: " " }, "read")).toBe("CORVIDINHO_LLM_MODEL");
+    expect(perTierModels(base)).toBeNull();
+    expect(perTierModels({ ...base, CORVIDINHO_LLM_MODEL_CODE: " " })).toBeNull();
+    expect(perTierModels({ ...base, CORVIDINHO_LLM_MODEL_READ: "cheap" })).toEqual({
+      read: "cheap",
+      tool: "big",
+      code: "big",
+    });
+  });
+
+  test("SAFE-8 doctor and /status flag an unpriced per-tier model with its tier; none set = as before", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const cap = { CORVIDINHO_DAILY_SPEND_CAP_USD: "5" };
+    const now = 1_800_000_000_000;
+    // No per-tier keys: a priced configured model reads [ok] exactly as before.
+    const plain = spendDoctorCheck({ env: { ...cap, CORVIDINHO_LLM_MODEL: "gpt-4o-mini" }, model: "gpt-4o-mini", db, now });
+    expect(plain.mark).toBe("ok");
+    expect(plain.detail).not.toContain("no known price");
+
+    // Priced env-tier model, unpriced read model: warn and name the read tier.
+    const env = { ...cap, CORVIDINHO_LLM_MODEL: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_READ: "local-llama" };
+    const line = spendDoctorCheck({ env, model: "gpt-4o-mini", db, now });
+    expect(line).toMatchObject({ ok: true, mark: "warn" });
+    expect(line.detail).toContain(
+      'model "local-llama" has no known price, so read-tier runs stop and ask before calling the provider',
+    );
+    const snap = readSpendSnapshot({ env, model: "gpt-4o-mini", db, now });
+    expect(snap).toMatchObject({ kind: "cap", model: "local-llama", priced: false, tier: "read" });
+    expect(formatSpendStatusLine(snap)).toContain(
+      "⚠️ read-tier model has no known price, read-tier runs stop and ask",
+    );
+
+    // A read-tier env whose tool tier falls back to an unpriced shared model.
+    const tool = spendDoctorCheck({
+      env: { ...cap, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL: "local-big", CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini" },
+      model: "gpt-4o-mini",
+      db,
+      now,
+    });
+    expect(tool.detail).toContain('model "local-big" has no known price, so tool-tier runs stop and ask');
+
+    // Every tier priced: [ok]. The env tier's own unpriced model reads as before (no tier).
+    const allPriced = { ...env, CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_CODE: "gpt-4o" };
+    expect(spendDoctorCheck({ env: allPriced, model: "gpt-4o-mini", db, now }).mark).toBe("ok");
+    const own = readSpendSnapshot({ env, model: "local-llama", db, now });
+    expect(own).toMatchObject({ kind: "cap", model: "local-llama", priced: false });
+    expect(own).not.toHaveProperty("tier");
+    db.close();
   });
 });

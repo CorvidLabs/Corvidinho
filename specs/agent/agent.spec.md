@@ -76,7 +76,11 @@ Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
 else `CORVIDINHO_LLM_MODEL`, else the default). `loadLlmEnv(env, tier?)` takes
 an explicit tier over `CORVIDINHO_LLM_TIER` and returns that tier's model;
 `createTaskExecute` passes its `tier` so `--tier` picks the model. Endpoint and
-key stay shared.
+key stay shared. `modelKeyForTier(env, tier)` names the key that set a tier's
+model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
+and `perTierModels(env)` lists each tier's model when any per-tier key is set
+(doctor `[ok] llm`; `readSpendSnapshot` flags an unpriced tier model with its
+`tier` for doctor `spend` and `/status`).
 
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat

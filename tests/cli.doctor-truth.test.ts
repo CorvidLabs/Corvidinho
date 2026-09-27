@@ -288,7 +288,21 @@ describe("doctor checks the LLM key and the data dir (defect 8)", () => {
       "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big; per tier: read cheap, tool big, code big2",
     );
     expect(r.code).toBe(0);
-    expectNoValues(plain.out + r.out);
+    // CLI-4 / SAFE-8: under a cap, an unpriced read model warns now, not mid-run.
+    const capped = await runDoctor(
+      readyEnv({
+        ...allowEnv,
+        CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
+        CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+        CORVIDINHO_LLM_MODEL_READ: "local-llama",
+      }),
+    );
+    expect(capped.out).toContain("[warn] spend: $0.00 of $5.00 daily cap");
+    expect(capped.out).toContain(
+      'model "local-llama" has no known price, so read-tier runs stop and ask before calling the provider',
+    );
+    expect(capped.code).toBe(0);
+    expectNoValues(plain.out + r.out + capped.out);
   }, 30_000);
 
   test("a writable data dir is [ok]", async () => {

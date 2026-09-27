@@ -18,7 +18,9 @@
 
 `tests/agent.tool-loop.test.ts` "per-tier model (AGENT-5, REQ-agent-079)":
 fallback order, `--tier` override precedence, request `model` per tier, no
-per-tier keys = unchanged, SAFE-8 pricing of an unpriced read model.
+per-tier keys = unchanged, SAFE-8 pricing of an unpriced read model (the ask
+names the key that set it), `modelKeyForTier` / `perTierModels`, and doctor /
+`/status` spend lines that flag an unpriced per-tier model with its tier.
 `tests/autonomous.delegate.test.ts`: a read-tier worker env resolves the read
 model. `tests/cli.doctor-truth.test.ts` / `tests/agent.cli.test.ts`: doctor
 `[ok] llm` per-tier line and help (REQ-cli-009).

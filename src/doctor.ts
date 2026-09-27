@@ -12,7 +12,7 @@
 import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { loadLlmEnv } from "./agent/execute.ts";
-import { modelForTier, TIER_MODEL_ENV, type CapabilityTier } from "./agent/tier.ts";
+import { perTierModels } from "./agent/tier.ts";
 import { checkChannel } from "./allowlist/discord.ts";
 import { isRepoAllowed } from "./allowlist/github.ts";
 import {
@@ -225,9 +225,8 @@ export function githubWatchDoctorCheck(
  * (AGENT-5), else "" so the line reads as before. Model names only.
  */
 function perTierModelsDetail(env: NodeJS.ProcessEnv): string {
-  const tiers = Object.keys(TIER_MODEL_ENV) as CapabilityTier[];
-  if (!tiers.some((t) => env[TIER_MODEL_ENV[t]]?.trim())) return "";
-  return `; per tier: ${tiers.map((t) => `${t} ${modelForTier(env, t)}`).join(", ")}`;
+  const m = perTierModels(env);
+  return m ? `; per tier: read ${m.read}, tool ${m.tool}, code ${m.code}` : "";
 }
 
 /** `task run` without a key uses the demo stub: warn, never fail doctor. */
