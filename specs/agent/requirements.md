@@ -629,6 +629,7 @@ Acceptance Criteria
 - With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
 - With the gate off no snapshot is taken.
 - End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
+
 ### REQ-agent-428
 
 When a tool-loop round's tool results carry an image (`PluginHandlerResult.image`,
