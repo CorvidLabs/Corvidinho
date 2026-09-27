@@ -49,6 +49,8 @@ files:
   - src/discord/slash-types.ts
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
+  - src/discord/list-scope.ts
+  - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
   - tests/discord.slash-reply-continuity.test.ts
   - src/discord/command-handlers/status.ts
@@ -251,6 +253,14 @@ user id + resolved display (owner map wins for owner). Gateway fills
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
 Final chat reply content remains human text only (DISCORD-3.a).
 
+Listing scope (REQ-discord-418, SESSION-MULTI-1 / IDENTITY-2/3):
+`src/discord/list-scope.ts` exports `actorIsAdmin` (the acting user resolves
+to ADMIN, the configured owner) and `projectLabel` (an absolute project path
+becomes its last segment; a relative name is kept). `/session list` shows
+ADMIN every session with its full project path and anyone else only their own
+sessions with the project name; `/schedule list` shows a non-ADMIN member the
+project name, never an absolute host path. `/status` stays counts-only.
+
 `src/discord/permissions.ts` exports `gateActor` (the chat + slash actor gate:
 deny lists win, non-empty user/role allowlist must match or be the owner);
 `RouterDeps.owner` passes the configured owner to `routeMessage`
@@ -451,5 +461,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message: A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup: Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land) |
+| 2026-09-27 | scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners: Scope /session list to the acting member and hide host paths from non-owners |
 | 2026-09-27 | discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted: Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1) |
 | 2026-09-27 | replying-to-a-session-start-or-work-answer-continues-that-session-discord-2: Replying to a /session start or /work answer continues that session (DISCORD-2) |
