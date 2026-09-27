@@ -142,6 +142,12 @@ cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
 substantive continue. Message router keys sessions by Discord user id + channel
 (SESSION-MULTI-1); reply/thread continue only for the session owner.
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
+`/work` and `/session start` keep a clarify or stuck ask as their session's
+free-text `pendingAsk` (options dropped: the slash answer has no Choose
+buttons; never a `spend-cap` stop), and the bridge sets
+`SlashContext.trackBotMessage` so the slash answer message continues its
+session: a thin reply restates, cancel clears, a substantive reply resumes
+with the question (AUTONOMY-1/5/6 / REQ-discord-044).
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
 AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
@@ -277,6 +283,10 @@ never carries the "reply to answer" hint (a reply cannot lift the cap); it
 pings the owner once per cap episode across chat, slash commands and
 schedules. A slash run's owner ping is a fresh post (an edit of a deferred
 reply may not notify), with allowed mentions limited to the owner.
+A `/work` or `/session start` run that stopped to ask leaves its session
+waiting on that ask exactly like a chat ask (free text, never a spend-cap
+stop), and its answer message is tracked like a chat reply, so a reply to it
+by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 
 ## Behavioral Examples
 
