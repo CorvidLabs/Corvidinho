@@ -70,6 +70,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let filesChanged: string[] = [];
   let attempts = 0;
   let verifyFeedback: string | undefined;
+  // Output of the last failed verify, kept for the human-facing summary.
+  let lastVerifyFailure: string | undefined;
   let retries = 0;
 
   setState(onEvent, "planning");
@@ -137,8 +139,14 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     // AGENT-4/8: a provider / HTTP failure is a failed run, never done.
     if (exec.error) {
       setState(onEvent, "failed");
+      // AGENT-4: a verify that already failed is still said plainly, so the
+      // provider error does not hide failing files left on disk.
+      const verifyNote =
+        lastVerifyFailure === undefined
+          ? ""
+          : `\n\nVerification failed on an earlier attempt and was not re-run:\n${lastVerifyFailure}`;
       return {
-        summary,
+        summary: `${summary}${verifyNote}`,
         filesChanged,
         verified: false,
         verifySkipped: false,
@@ -206,6 +214,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       };
     }
 
+    lastVerifyFailure = result.output;
     retries += 1;
     if (retries > maxRetries) {
       emit(onEvent, {

@@ -218,6 +218,8 @@ describe("runTask prove-before-done", () => {
     expect(result.cancelled).toBe(false);
     expect(result.attempts).toBe(1);
     expect(result.summary).toContain("LLM HTTP 401");
+    // No verify ran, so none is claimed to have failed.
+    expect(result.summary).not.toContain("Verification failed");
     expect(verifyN).toBe(0);
     expect(c.states()).toEqual(["planning", "executing", "failed"]);
   });
@@ -247,6 +249,38 @@ describe("runTask prove-before-done", () => {
     expect(result.attempts).toBe(2);
     expect(result.summary).toContain("LLM HTTP 503");
     expect(verifyN).toBe(1);
+  });
+
+  test("execute error after a failed verify still says plainly that verification failed (AGENT-4, REQ-agent-242)", async () => {
+    const c = collect();
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 3,
+      verifyRunner: async () => ({ success: false, output: "app.ts:3 syntax error" }),
+      onEvent: c.onEvent,
+      execute: async ({ attempt }) =>
+        attempt === 1
+          ? { summary: "wrote app.ts", filesChanged: ["app.ts"] }
+          : {
+              summary: "LLM HTTP 503: upstream overloaded",
+              filesChanged: [],
+              error: true,
+            },
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.summary.startsWith("LLM HTTP 503: upstream overloaded")).toBe(true);
+    expect(result.summary).toContain(
+      "Verification failed on an earlier attempt and was not re-run:\napp.ts:3 syntax error",
+    );
+    expect(c.states()).toEqual([
+      "planning",
+      "executing",
+      "verifying",
+      "executing",
+      "failed",
+    ]);
   });
 
   test("execute error with the verify gate off is still failed (REQ-agent-242)", async () => {

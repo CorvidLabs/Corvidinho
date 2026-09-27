@@ -573,5 +573,7 @@ describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", ()
     expect(result.verified).toBe(false);
     expect(result.filesChanged).toEqual(["app.ts"]);
     expect(result.summary).toContain("LLM HTTP 503");
+    expect(result.summary).toContain("Verification failed on an earlier attempt");
+    expect(result.summary).toContain("app.ts: syntax error");
   });
 });
