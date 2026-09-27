@@ -129,6 +129,24 @@ export type AgentConfig = {
   maxRetries: number;
 };
 
+/**
+ * The run's real on-disk changes for the verify gate (AGENT-4,
+ * REQ-agent-085), measured from a git snapshot taken before the first attempt.
+ */
+export type WorkspaceDiffTracker = {
+  /**
+   * Paths (relative to the run cwd) that changed since the snapshot; null
+   * when git could not be read, so the gate verifies anyway (fail closed).
+   */
+  changed(): Promise<string[] | null>;
+};
+
+/**
+ * Snapshot `cwd`'s git project; null when it is not in a git work tree (the
+ * gate then uses tool-reported files only).
+ */
+export type WorkspaceDiffStart = (cwd: string) => Promise<WorkspaceDiffTracker | null>;
+
 export type RunTaskOptions = {
   cwd: string;
   /** Task description for Planning SpecSync briefing (Merlin spec_loader). */
@@ -138,6 +156,12 @@ export type RunTaskOptions = {
   verifyBeforeComplete?: boolean;
   maxRetries?: number;
   verifyRunner?: VerifyRunner;
+  /**
+   * Test seam (like `verifyRunner`, not a product surface): starts the real
+   * git working-tree diff the verify gate adds to `filesChanged`
+   * (REQ-agent-085). Default `startWorkspaceDiff`.
+   */
+  workspaceDiff?: WorkspaceDiffStart;
   onEvent?: (event: AgentEvent) => void;
   signal?: AbortSignal;
   /** Config loaded from fledge.toml; used as defaults when overrides omitted. */
