@@ -13,7 +13,7 @@
 | Trust / Augur / Attest | **Not** wired — do not re-add Trust thrash on this bootstrap |
 | Merge policy | Merge when verify + SpecSync change cycle are green (Leif/CoS standing order) |
 | Box update | `scripts/corvidinho-update.sh` + `docs/BOX-UPDATE.md` / `docs/UPDATE.md` — pidfile ready-wait + rollback; no Discord panic spam |
-| Releases | Pushing a tag `v*` → `.github/workflows/release.yml` creates a GitHub Release with verbose notes. Not every package version is tagged (as of 2026-09-27: no tag for 0.0.12, 0.0.13, 0.0.16, 0.0.18, 0.0.21, 0.0.23–0.0.29); an untagged cut has no Release — check `git ls-remote --tags origin` before pinning `CORVIDINHO_REF` |
+| Releases | Every package version gets a `v<version>` tag and a GitHub Release with verbose notes (its CHANGELOG section, the commits since the previous tag, the updater line). When a `package.json` version bump lands on main, `.github/workflows/release.yml` tags the commit that bumped it, so a release PR needs no hand-pushed tag; a missed version is caught up by the next push, a hand-pushed `vX.Y.Z` tag still gets its Release, and a manual run on main (`workflow_dispatch` with `versions`) tags and releases listed versions. Versions 0.0.2 onward are tagged (0.0.1 was the bootstrap); `git ls-remote --tags origin` lists them for `CORVIDINHO_REF` |
 
 ## Not inventing
 

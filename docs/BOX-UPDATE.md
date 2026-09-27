@@ -10,7 +10,7 @@ cd /path/to/Corvidinho
 # Update to latest main:
 ./scripts/corvidinho-update.sh
 
-# Pin a release tag (must be a pushed tag; not every version is tagged —
+# Pin a release tag (every package version from 0.0.2 has one —
 # list them with `git ls-remote --tags origin`):
 CORVIDINHO_REF=vX.Y.Z ./scripts/corvidinho-update.sh
 
@@ -97,9 +97,14 @@ process spawns `task run` from the updated checkout, and the wire protocol must 
 
 ## Releases
 
-Pushing a tag `v*` (annotated or lightweight) runs `.github/workflows/release.yml`, which opens a
-GitHub Release with verbose notes (commits since previous tag + upgrade pointer). A package
-version that was never tagged has no Release; its code ships in the next tag.
+`.github/workflows/release.yml` gives every package version a `v<version>` tag and a GitHub
+Release with verbose notes (the version's CHANGELOG section, commits since the previous tag,
+the updater line). When a `package.json` version bump lands on main it tags the commit that
+bumped it, catching up any earlier version that has no tag yet (oldest first); a hand-pushed
+`vX.Y.Z` tag (annotated or lightweight) still gets its Release; a manual run on main
+(`workflow_dispatch`, input `versions`) tags and releases the listed versions. Existing tags
+and Releases are never moved or edited. GitHub starts no run when more than three tags are
+pushed at once, so use the manual run for bulk tags.
 
 ## Discord slash ghosts / duplicates
 
