@@ -27,7 +27,14 @@ artifact: design
   refused, thrown). All row writes go through a best-effort wrapper: a DB
   error logs a warning and the reply still runs.
 - `bridge.ts` `onComponent` (DISCORD-ASK button pick): the resumed run is
-  recorded the same way (request message = the ask stub the pick answered).
+  recorded the same way (request message = the ask stub the pick answered;
+  with DISCORD-ASK-7 the stub is also the reused progress message).
+- DISCORD-ASK-6/7 collapse (main #204/#208): the row is ended (idempotent)
+  the moment `thinking.finalizeContent` succeeds, right after the fallback
+  reply is posted, and right after `thinking.dispose()` on the dry path; the
+  `finally` still ends it on every other exit. So a row still present at the
+  next start always means a reply that never landed, and recovery never
+  touches an answer that was already collapsed into its progress message.
 - `startBridge`: next to `workStore.recoverAbandoned()`, snapshot the
   leftover rows (before any new reply can add one); after `gateway.start()`
   (REST needs the login token) run the recovery with the gateway

@@ -10,7 +10,7 @@
 import {
   checkGithubRepo,
   configFromEnvOnly,
-  loadAllowlist,
+  tryLoadAllowlist,
   type AllowlistConfig,
 } from "../allowlist/index.ts";
 
@@ -51,12 +51,24 @@ export function checkRepoGate(
 }
 
 /**
+ * GITHUB-6 refusal for an allowlist file that exists but cannot be read or
+ * parsed: its deny lists are unknown, so nothing is admitted (not even by an
+ * env allow list). The loader's error names the path, line and key only.
+ */
+export function allowlistFileRefusal(repo: string | undefined, error: string): RepoGateResult {
+  return { ok: false, repo: repo ?? "", error: `GITHUB-6: refused — ${error}` };
+}
+
+/**
  * GITHUB-6 gate over the full allowlist (file + env overlays, ALLOW-4) — the
- * same loader WATCH ingress uses, so file deny lists are never skipped.
+ * same loader WATCH ingress uses, so file deny lists are never skipped. A
+ * malformed or unreadable file refuses (never a throw, never env-only).
  */
 export async function checkRepoGateAsync(
   repo: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<RepoGateResult> {
-  return checkRepoGate(repo, await loadAllowlist({ env }));
+  const loaded = await tryLoadAllowlist({ env });
+  if (!loaded.ok) return allowlistFileRefusal(repo, loaded.error);
+  return checkRepoGate(repo, loaded.config);
 }

@@ -215,12 +215,21 @@ Because ADMIN is owner-only (IDENTITY-2), doctor SHALL print a
 `CORVIDINHO_DISCORD_ADMIN_ROLES` is set, saying they are ignored. The line
 SHALL NOT echo their values and SHALL NOT change the exit code.
 
+Doctor SHALL print an `allowlist-file` line for the file the loader resolves
+(ALLOW-4, REQ-plugins-006). A file that exists but cannot be read or parsed
+SHALL be a failing `[fail]` check that shows the loader's error (path, line
+and key, never list values), since the bridge, watch and daemon refuse to
+start on it. A file that loads SHALL show `[ok]`, and no file SHALL show
+`[info]` (env overlays only) without changing the exit code.
+
 Acceptance Criteria
 - Doctor prints an `owner` line with configured yes/no plus the display name only.
 - Doctor never prints the owner Discord id, GitHub login, or tokens.
 - A missing owner does not flip the doctor exit code.
 - Legacy admin lists produce a `[warn] admin-lists` line without their values and without changing the exit code.
 - Fixture test runs doctor with a temp allowlist file / env (no network).
+- A malformed allowlist file gives `[fail] allowlist-file` with the line and key and without the values; a file that loads gives `[ok]`; no file gives `[info]`.
+
 ### REQ-cli-015
 
 The project SHALL ship package version `0.0.9` with shell-exec + SAFE-3
@@ -388,4 +397,13 @@ Acceptance Criteria
 - `package.json` version is `0.0.21`.
 - CLI `version` prints `0.0.21`.
 - CHANGELOG has a 0.0.21 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-023
+
+The project SHALL ship package version `0.0.23` (stop means stop (process trees), SAFE-3 cd clamp, scrub before clip, GitHub gate reads allowlist file). CLI `version` and Discord presence (DISCORD-12) report `0.0.23` after a restart. CHANGELOG SHALL include verbose 0.0.23 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.23`.
+- CLI `version` prints `0.0.23`.
+- CHANGELOG has a 0.0.23 section that the updater's changelog helper extracts exactly.
 

@@ -49,6 +49,7 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 ## MEMORY Discord auto-recall inject (REQ-discord-023)
 
 - `tests/discord.memory-inject.test.ts` — format/enrich empty+seeded scope, system prompt rules, richer memory tool argv (no live Discord).
+- DISCORD-ASK-6/7: collapse thinking→stub→answer (ask-ephemeral + thinking-bridge + finalizeContent unit tests).
 
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
@@ -61,4 +62,11 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   the next start; a failed edit or missing embed id falls back to a reply to
   the request message; a channel no longer allowlisted gets nothing; edit and
   reply both throwing still starts and deletes the row; no rows → nothing
-  posted; recovery is sequential (no live Discord).
+  posted; recovery is sequential (no live Discord). With `editMessage`
+  (DISCORD-ASK-6/7) the row is still present while the progress message is
+  edited into the answer / Choose stub and gone after (mention success, failed
+  exit, button ask, button pick reusing the stub); a refused collapse posts the
+  fallback reply with the row present, then deletes it; a throwing collapse
+  and the dry path (no reply surface) also delete it; a reply collapsed before
+  a restart leaves nothing to recover, and a crash mid button pick marks the
+  reused Choose stub interrupted.

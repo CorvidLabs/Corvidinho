@@ -1,7 +1,9 @@
 /**
  * In-flight replies + restart recovery (REQ-discord-311, DISCORD-3 / AGENT-3).
  * A bridge that dies mid-reply leaves its progress embed at "working…"; the
- * next start marks it interrupted (or replies) and forgets the row.
+ * next start marks it interrupted (or replies) and forgets the row. With
+ * DISCORD-ASK-6/7 the progress message is edited into the answer / Choose stub
+ * when `editMessage` exists; the row is deleted the moment that lands.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -26,6 +28,7 @@ import {
 import {
   THINKING_COLORS,
   type DiscordEmbedPayload,
+  type EditMessageOpts,
 } from "../src/discord/thinking-status.ts";
 import type { InboundMessage } from "../src/discord/types.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
@@ -71,15 +74,21 @@ function mention(id: string, content = "@bot do a thing"): InboundMessage {
   };
 }
 
-/** Fake live Discord surface: records every send/edit/reply. */
+/**
+ * Fake live Discord surface: records every send/edit/reply. `editMessage`
+ * (true or a handler) wires the DISCORD-ASK-6/7 in-place edit so the bridge
+ * collapses the progress message into the answer / Choose stub.
+ */
 function fakeDiscord(over: {
   editEmbed?: GatewayHandlers["editEmbed"];
   reply?: GatewayHandlers["reply"];
+  editMessage?: true | ((o: EditMessageOpts) => Promise<boolean>);
 } = {}) {
   const calls = {
     sends: [] as Array<{ channelId: string; embed: DiscordEmbedPayload }>,
     edits: [] as Array<{ channelId: string; messageId: string; embed: DiscordEmbedPayload }>,
     replies: [] as Array<{ channelId: string; content: string; replyToMessageId?: string }>,
+    messageEdits: [] as EditMessageOpts[],
   };
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const gatewayFactory = async (_cfg: unknown, handlers: GatewayHandlers) => {
@@ -96,6 +105,13 @@ function fakeDiscord(over: {
       calls.replies.push(o);
       return over.reply ? over.reply(o) : { messageId: `reply_${calls.replies.length}` };
     };
+    const editMessage = over.editMessage;
+    if (editMessage) {
+      handlers.editMessage = async (o) => {
+        calls.messageEdits.push(o);
+        return editMessage === true ? true : editMessage(o);
+      };
+    }
     return createNullGateway();
   };
   return { calls, box, gatewayFactory };
@@ -315,7 +331,7 @@ describe("bridge records in-flight replies and clears them on every exit", () =>
     expect(inflightRows(db)).toEqual([]);
   });
 
-  test("button pick (DISCORD-ASK): row kept while the resumed run works, cleared after", async () => {
+  test("button pick (DISCORD-ASK, no editMessage): row kept while the resumed run works, cleared after", async () => {
     const db = memDb();
     const ask: HumanAsk = {
       reason: "clarify",
@@ -358,7 +374,9 @@ describe("bridge records in-flight replies and clears them on every exit", () =>
     const row = seen[0]![0]!;
     expect(row.channel_id).toBe("chan-1");
     expect(row.request_message_id).toBe("reply_1");
-    expect(row.progress_message_id).toBe(`sent_${calls.sends.length}`);
+    // DISCORD-ASK-7: the Choose stub is reused as the progress surface.
+    expect(row.progress_message_id).toBe("reply_1");
+    expect(calls.sends).toHaveLength(1);
     expect(calls.replies.at(-1)?.content).toContain("Using Postgres");
     expect(inflightRows(db)).toEqual([]);
   });
@@ -371,6 +389,193 @@ describe("bridge records in-flight replies and clears them on every exit", () =>
     await box.handlers!.onMessage({ ...mention("m6"), authorBot: true });
     expect(inflightRows(db)).toEqual([]);
     expect(calls.sends).toHaveLength(0);
+  });
+});
+
+describe("DISCORD-ASK-6/7 collapsed replies clear the in-flight row (REQ-discord-311)", () => {
+  const buttonAsk: HumanAsk = {
+    reason: "clarify",
+    question: "Which DB?",
+    options: [
+      { id: "1", label: "Postgres" },
+      { id: "2", label: "SQLite" },
+    ],
+  };
+
+  test("mention answer collapsed into the progress message: row present during the edit, deleted once it lands, no extra reply", async () => {
+    const db = memDb();
+    const rowsAtCollapse: number[] = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        expect(inflightRows(db)).toHaveLength(1);
+        return { ok: true, sessionId, summary: "all done", exitCode: 0 };
+      },
+    };
+    const { box, calls, gatewayFactory } = fakeDiscord({
+      editMessage: async () => {
+        rowsAtCollapse.push(inflightRows(db).length);
+        return true;
+      },
+    });
+    const r = await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage(mention("c1"));
+
+    expect(calls.sends).toHaveLength(1);
+    expect(calls.messageEdits).toHaveLength(1);
+    const edit = calls.messageEdits[0]!;
+    expect(edit.messageId).toBe("sent_1");
+    expect(edit.content).toBe("all done");
+    expect(edit.embed).toBeNull();
+    expect(calls.replies).toHaveLength(0);
+    expect(rowsAtCollapse).toEqual([1]);
+    expect(inflightRows(db)).toEqual([]);
+    expect(r.store.list()[0]).toBeDefined();
+  });
+
+  test("failed run collapsed into the progress message: row deleted", async () => {
+    const db = memDb();
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: false, sessionId, summary: "boom", exitCode: 3 };
+      },
+    };
+    const { box, calls, gatewayFactory } = fakeDiscord({ editMessage: true });
+    await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage(mention("c2"));
+    expect(calls.messageEdits.at(-1)?.content).toContain("failed (exit 3)");
+    expect(calls.replies).toHaveLength(0);
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("button ask collapsed into the Choose stub: row deleted, stub id is the progress message", async () => {
+    const db = memDb();
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "need input", exitCode: 0, ask: buttonAsk };
+      },
+    };
+    const { box, calls, gatewayFactory } = fakeDiscord({ editMessage: true });
+    const r = await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage(mention("c3"));
+    const edit = calls.messageEdits.at(-1)!;
+    expect(edit.messageId).toBe("sent_1");
+    expect(edit.components?.length).toBeGreaterThan(0);
+    expect(calls.replies).toHaveLength(0);
+    expect(r.store.list()[0]!.pendingAsk?.stubMessageId).toBe("sent_1");
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("button pick: the stub is the progress message and is collapsed into the answer; row deleted", async () => {
+    const db = memDb();
+    let n = 0;
+    const seen: Array<Array<Record<string, unknown>>> = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        n += 1;
+        if (n === 1) {
+          return { ok: true, sessionId, summary: "need input", exitCode: 0, ask: buttonAsk };
+        }
+        seen.push(inflightRows(db));
+        return { ok: true, sessionId, summary: "Using Postgres", exitCode: 0 };
+      },
+    };
+    const { box, calls, gatewayFactory } = fakeDiscord({ editMessage: true });
+    const r = await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage(mention("c4"));
+    const pending = r.store.list()[0]!.pendingAsk!;
+    expect(pending.stubMessageId).toBe("sent_1");
+
+    await box.handlers!.onComponent!({
+      id: "ix-pick-c4",
+      customId: pickCustomId(pending.askId!, "1"),
+      channelId: "chan-1",
+      userId: "u1",
+      messageId: "sent_1",
+      reply: async () => {},
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toHaveLength(1);
+    expect(seen[0]![0]!.request_message_id).toBe("sent_1");
+    expect(seen[0]![0]!.progress_message_id).toBe("sent_1");
+    // One public message the whole way: no second embed, no reply.
+    expect(calls.sends).toHaveLength(1);
+    expect(calls.replies).toHaveLength(0);
+    const last = calls.messageEdits.at(-1)!;
+    expect(last.messageId).toBe("sent_1");
+    expect(last.content).toBe("Using Postgres");
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("collapse edit refused: fallback reply is posted while the row is still present, then the row is deleted", async () => {
+    const db = memDb();
+    const rowsAtReply: number[] = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "fallback answer", exitCode: 0 };
+      },
+    };
+    const { box, calls, gatewayFactory } = fakeDiscord({
+      editMessage: async () => false,
+      reply: async () => {
+        rowsAtReply.push(inflightRows(db).length);
+        return { messageId: "fallback_reply" };
+      },
+    });
+    await start(db, { agent, gatewayFactory });
+    await box.handlers!.onMessage(mention("c5"));
+    expect(calls.messageEdits).toHaveLength(1);
+    expect(calls.replies.map((x) => x.content)).toEqual(["fallback answer"]);
+    expect(rowsAtReply).toEqual([1]);
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("collapse edit throws: error propagates, row deleted", async () => {
+    const db = memDb();
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "x", exitCode: 0 };
+      },
+    };
+    const { box, gatewayFactory } = fakeDiscord({
+      editMessage: async () => {
+        throw new Error("edit exploded");
+      },
+    });
+    await start(db, { agent, gatewayFactory });
+    await expect(box.handlers!.onMessage(mention("c6"))).rejects.toThrow("edit exploded");
+    expect(inflightRows(db)).toEqual([]);
+  });
+
+  test("dry path (no editMessage, no reply surface): thinking disposed, row deleted", async () => {
+    const db = memDb();
+    const sends: string[] = [];
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        expect(inflightRows(db)).toHaveLength(1);
+        return { ok: true, sessionId, summary: "dry", exitCode: 0 };
+      },
+    };
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    await start(db, {
+      agent,
+      // Exposes the handlers but wires no reply/embed surface (dry bridge).
+      gatewayFactory: async (_cfg: unknown, handlers: GatewayHandlers) => {
+        box.handlers = handlers;
+        return createNullGateway();
+      },
+      thinkingOutbound: {
+        async sendEmbed() {
+          sends.push("s");
+          return { messageId: "dry_progress" };
+        },
+        async editEmbed() {
+          return true;
+        },
+      },
+    });
+    await box.handlers!.onMessage(mention("c7"));
+    expect(sends).toHaveLength(1);
+    expect(inflightRows(db)).toEqual([]);
   });
 });
 
@@ -414,6 +619,83 @@ describe("bridge start recovers replies a dead process left (REQ-discord-311)", 
 
     release();
     await pending;
+  });
+
+  test("a reply collapsed into its answer before the restart leaves nothing to recover", async () => {
+    const db = memDb();
+    const a = fakeDiscord({ editMessage: true });
+    await start(db, { gatewayFactory: a.gatewayFactory });
+    await a.box.handlers!.onMessage(mention("req-c"));
+    expect(a.calls.messageEdits.at(-1)?.messageId).toBe("sent_1");
+    expect(inflightRows(db)).toEqual([]);
+
+    const b = fakeDiscord({ editMessage: true });
+    await start(db, { gatewayFactory: b.gatewayFactory });
+    expect(b.calls.edits).toHaveLength(0);
+    expect(b.calls.messageEdits).toHaveLength(0);
+    expect(b.calls.replies).toHaveLength(0);
+    expect(b.calls.sends).toHaveLength(0);
+  });
+
+  test("crash during a button pick: the Choose stub reused as progress is marked interrupted", async () => {
+    const db = memDb();
+    let n = 0;
+    let release: () => void = () => {};
+    const agent: AgentClient = {
+      runChat: ({ sessionId }) => {
+        n += 1;
+        if (n === 1) {
+          return Promise.resolve({
+            ok: true,
+            sessionId,
+            summary: "need input",
+            exitCode: 0,
+            ask: {
+              reason: "clarify",
+              question: "Which DB?",
+              options: [
+                { id: "1", label: "Postgres" },
+                { id: "2", label: "SQLite" },
+              ],
+            },
+          });
+        }
+        return new Promise((resolve) => {
+          release = () => resolve({ ok: false, sessionId, summary: "", exitCode: 1 });
+        });
+      },
+    };
+    const a = fakeDiscord({ editMessage: true });
+    const ra = await start(db, { agent, gatewayFactory: a.gatewayFactory });
+    await a.box.handlers!.onMessage(mention("req-p"));
+    const pending = ra.store.list()[0]!.pendingAsk!;
+    expect(pending.stubMessageId).toBe("sent_1");
+    const pick = a.box.handlers!.onComponent!({
+      id: "ix-crash",
+      customId: pickCustomId(pending.askId!, "1"),
+      channelId: "chan-1",
+      userId: "u1",
+      messageId: "sent_1",
+      reply: async () => {},
+    });
+    for (let i = 0; i < 50 && inflightRows(db)[0]?.progress_message_id == null; i++) {
+      await Bun.sleep(5);
+    }
+    const [row] = inflightRows(db);
+    expect(row?.progress_message_id).toBe("sent_1");
+    expect(row?.request_message_id).toBe("sent_1");
+
+    const b = fakeDiscord({ editMessage: true });
+    await start(db, { gatewayFactory: b.gatewayFactory });
+    expect(b.calls.edits.map((e) => [e.messageId, e.embed.description])).toEqual([
+      ["sent_1", INTERRUPTED_REPLY_STATUS],
+    ]);
+    expect(b.calls.edits[0]!.embed.color).toBe(THINKING_COLORS.error);
+    expect(b.calls.replies).toHaveLength(0);
+    expect(inflightRows(db)).toEqual([]);
+
+    release();
+    await pick;
   });
 
   test("a failed edit falls back to a reply to the request message", async () => {
