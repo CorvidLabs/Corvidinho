@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles",
+  "slug": "search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles",
+  "title": "Search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8)",
+  "description": "search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "6e5370dd5174f006ec16ffc609116c016055a7b8",
+  "created_at": 1790469247,
+  "updated_at": 1790472351,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "plugins/search/commands.ts",
+    "plugins/files/commands.ts",
+    "plugins/files/protectedPaths.ts",
+    "plugins/files/resolvePath.ts",
+    "tests/search.secret-path.test.ts",
+    "specs/plugins",
+    "plugins/git/commands.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "In a non-ADMIN role session (CORVIDINHO_ACTING_IS_ADMIN set, not admin), search-grep and git-diff refuse an explicit secret path (.env*, .ssh, keys, keystores; also via ./, .., absolute path, --path, or a symlink) with exit 2 and the ROLES-CHAT-8 message like files-read, a recursive search never returns lines from secret files, whatever --include is passed, and git-diff (worktree or --staged) never lists or prints a tracked secret file; files-glob and files-list leave secret paths out (also through a symlinked directory) and files-list refuses a secret directory; ADMIN and the local CLI keep the same access as files-read"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

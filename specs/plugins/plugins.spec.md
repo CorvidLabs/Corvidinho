@@ -17,6 +17,7 @@ files:
   - tests/github.public.community.test.ts
   - tests/github.gate-allowlist-file.test.ts
   - tests/files.secret-path.test.ts
+  - tests/search.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
@@ -279,7 +280,12 @@ call GitHub read tools against any *public* repository after deny-list checks
 sessions keep the GITHUB-6 allowlist gate.
 
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
-files) for non-ADMIN role sessions via `isSecretPath`.
+files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
+`files-list` and `git-diff` refuse an explicit secret path the same way (also
+through a symlink), and `search-grep`, `git-diff`, `files-glob` and
+`files-list` leave secret paths out of their results, whatever `--include`,
+glob or `--staged` is passed (REQ-plugins-267). ADMIN and the local CLI keep
+the access `files-read` gives.
 
 SAFE-5 audit chain (REQ-plugins-095): once `audit_log` holds a keyed row it
 stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
@@ -391,6 +397,18 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 - **When** the agent runs `files-write` under non-interactive
 - **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
 
+### Scenario: non-ADMIN search-grep never returns secret lines (ROLES-CHAT-8)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a project with `.env` holding a key
+- **When** the agent runs `search-grep OPENAI_API_KEY .env`, or `search-grep <pattern>` over the project with any `--include`
+- **Then** the explicit path is refused with exit 2 like `files-read`, and the recursive search returns no line from `.env*`, `.ssh`, key or keystore files
+
+### Scenario: non-ADMIN git-diff never shows a tracked secret file (ROLES-CHAT-8)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a repo with a tracked, modified `certs/server.pem` and `src/a.ts`
+- **When** the agent runs `git-diff`, `git-diff --staged` or `git-diff certs/server.pem`
+- **Then** the diff shows `src/a.ts` only, and the explicit secret path is refused with exit 2 like `files-read`
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -490,5 +508,6 @@ and current rows for plugins host evolution.
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
 | 2026-09-27 | safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a: SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain |
 | 2026-09-27 | specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real: Specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root |
+| 2026-09-27 | search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles: Search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8) |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-reads-quoting-the-way-the-shell-does-escaped-backslash-before-a-newline-comments-and-here: SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused |
