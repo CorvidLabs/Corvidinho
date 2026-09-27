@@ -1,0 +1,24 @@
+---
+id: safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or
+state: approved
+type: bug_fix
+base_commit: cfbcd0c705ff32a4c88d65978bdfbab7a76583ed
+---
+
+# SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail
+
+## Intent
+
+SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail
+
+## Affected Canonical Specs
+
+- `plugins`
+
+## Acceptance Criteria
+
+- shell-exec refuses before spawn (exit 2, SAFE-3) a command whose scripts would cd out of the root: a file sourced with . / source, named by BASH_ENV= or a shell's --rcfile, run by a shell as its operand or its < / <> input, or run by path (a #!-shell script or a #!-less text file, also behind env/exec/timeout/xargs/find -exec) whose text holds an escaping cd refuses as 'TARGET (in SCRIPT)', nested scripts included and relative to earlier in-root cds; a here-doc (unquoted body as the shell expands it) or here-string fed to a shell is checked the same way and refuses if it would expand; a shell reading commands from a pipe, inherited stdin or a process substitution, a missing sourced or shell-run script, a script path that would expand, a script over 1 MiB, and a script the command itself writes (redirection target or argument of a non-read-only command, in any order) refuse; trap actions are checked like eval arguments, alias definitions refuse, and sh -c - 'cd /etc' and bash -co pipefail 'cd /etc' refuse; in-root scripts (sh ok.sh, ./ok.sh, . ./ok.sh, bash scripts/build.sh, cd sub && sh ../ok.sh), binaries and #! scripts for other interpreters run by path, and programs the command builds first stay allowed; every existing clamp assertion keeps its result except that bash scripts/build.sh is now checked against a real file; interpreters (python3 -c, node -e, ...) and writers that do not name the script stay documented residual risk; no new flag, env var or command
+
+## No-spec Rationale
+
+Not applicable
