@@ -12,3 +12,4 @@ artifact: tasks
 - [x] Daemon test fixture blanks operator Discord user/role/deny lists and owner env.
 - [x] Docs: `docs/DAEMON.md` (gates + log event), `docs/discord.md` (schedule tick gates row).
 - [x] Specs: deltas Modified REQ-discord-020 and REQ-cli-108; discord/cli spec invariants, cli error case, discord files list, module testing notes.
+- [x] Review fix: a daemon tick still re-reading the allowlist when stop begins claims no run (stop only drains runs already claimed); docs say a tick knows no member roles, the owner is read at start, and a post-time refusal only skips the post.

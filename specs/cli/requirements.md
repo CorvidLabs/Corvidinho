@@ -382,8 +382,10 @@ overlays and `DISCORD_CHANNEL_IDS`) and SHALL gate that tick's runs against
 it, so an `/admin` edit the bridge writes to the file applies on the next
 tick without a restart. When the file exists but cannot be read or parsed the daemon SHALL
 skip that tick (fail closed, ALLOW-4): log `tick.allowlist_failed` with the
-loader's value-free error, start no run, and leave due schedules due. It
-SHALL add no new environment variables.
+loader's value-free error, start no run, and leave due schedules due. A
+tick still re-reading the allowlist when stop begins SHALL start no run (the
+stop only drains runs already claimed). It SHALL add no new environment
+variables.
 
 Only one daemon SHALL run per data dir. The daemon SHALL create
 `<data dir>/daemon.lock` exclusively, recording its pid and Linux process
@@ -428,6 +430,7 @@ Acceptance Criteria
 - A channel removed from the allowlist file after start, or a creator added to its `deny_users`, is refused on the next tick without running the agent (`run.finished` with `channel not allowlisted: …` / `creator not allowlisted: …`).
 - A malformed allowlist file makes the next tick log `tick.allowlist_failed` and run nothing; once the file is fixed, the still-due schedule runs on the following tick.
 - With a non-empty user list that omits the owner, the configured owner's schedule still runs; an unlisted non-owner creator's schedule is refused.
+- A tick still re-reading the allowlist when SIGTERM stops the daemon claims no run: the due schedule gets no run row and the stop drains without abandoning anything.
 - Stop after the grace records stragglers as failed and frees the lock; a forced stop skips the grace.
 - A straggler spawned through the real spawn client (fake `sh` bin with a same-group and a `setsid` grandchild) has its whole tree killed at shutdown.
 - Log lines parse as JSON, and secrets in fields are redacted.

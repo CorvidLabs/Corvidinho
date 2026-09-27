@@ -570,6 +570,46 @@ describe("startDaemon", () => {
       db.close();
     });
 
+    test("a tick still re-reading the allowlist when stop begins claims no run", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"] }));
+      const { projectRoot, env } = fixture();
+      const liveEnv = { ...env, CORVIDINHO_ALLOWLIST_FILE: file };
+      const db = openCorvidinhoDb({ env: liveEnv });
+      const { log, lines } = memoryLogger();
+      const calls: string[] = [];
+      const d = await startDaemon({
+        env: liveEnv,
+        projectRoot,
+        logger: log,
+        agent: {
+          async runChat({ sessionId, actingUserId }) {
+            calls.push(actingUserId ?? "");
+            await Bun.sleep(100);
+            return { ok: true, sessionId, summary: "done", exitCode: 0 };
+          },
+        },
+        useWorktrees: false,
+        shutdownGraceMs: 2_000,
+      });
+      if (!d.ok) throw new Error(d.message);
+      const first = seedDueFor(db, { creator: "first", channelId: "chan-a" });
+      expect((await d.tick()).started).toEqual([first]);
+      const second = seedDueFor(db, { creator: "second", channelId: "chan-a", name: "second" });
+      // SIGTERM lands while the next tick is still reading the allowlist file.
+      const pending = d.tick();
+      const stopped = d.stop("SIGTERM");
+      expect(await pending).toEqual({ started: [], skipped: [] });
+      expect(await stopped).toEqual({ drained: true, abandoned: [] });
+      expect(calls).toEqual(["first"]);
+      expect(lines.some((l) => l.event === "daemon.abandoned" || l.event === "tick.failed")).toBe(false);
+      const runs = db
+        .query("SELECT status FROM schedule_runs WHERE schedule_id = ?")
+        .all(second);
+      expect(runs).toEqual([]);
+      db.close();
+    });
+
     test("a creator missing from a non-empty user list (not the owner) is refused", async () => {
       const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
       writeFileSync(

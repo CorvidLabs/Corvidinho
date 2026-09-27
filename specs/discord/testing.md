@@ -133,6 +133,7 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   run is in flight gets no post; refused ticks auto-pause the schedule after
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a

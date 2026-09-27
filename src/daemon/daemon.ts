@@ -205,6 +205,10 @@ export async function startDaemon(
     },
   });
 
+  // Set when stop begins. A tick still reading the allowlist then claims no
+  // run: stop's drain only waits for runs already claimed.
+  let stopRequested = false;
+
   const tick = async () => {
     try {
       // DISCORD-SCHEDULE-3: tick against the allowlist as it is now (the
@@ -212,6 +216,7 @@ export async function startDaemon(
       // runs re-check it too. A file that cannot be loaded skips the tick
       // (fail closed); due schedules stay due.
       const loaded = await tryLoadAllowlist({ env });
+      if (stopRequested) return { started: [], skipped: [] };
       if (!loaded.ok) {
         log("error", "tick.allowlist_failed", { error: loaded.error });
         return { started: [], skipped: [] };
@@ -274,6 +279,7 @@ export async function startDaemon(
 
   const stop = (reason = "stop"): Promise<DaemonStopSummary> => {
     if (stopping) return stopping;
+    stopRequested = true;
     stopping = (async () => {
       clearInterval(timer);
       scheduler.stop();

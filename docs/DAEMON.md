@@ -8,10 +8,11 @@ a row. Each run gets its own worktree (SESSION-WORKTREE). Before each tick
 the daemon re-reads the allowlist (file and env), so `/admin` edits made in the
 bridge apply without a restart; while the file cannot be loaded, ticks are
 skipped (`tick.allowlist_failed`). A run whose channel is not on the allowlist,
-or whose creator would be refused in live chat (deny-listed, or missing from a
-non-empty user/role list and not the configured owner), is refused
-(DISCORD-SCHEDULE-3). Agents it spawns run non-interactive, so dangerous tools
-stay denied unless allowlisted (SAFE-1).
+or whose creator fails the live-chat actor gate (deny-listed, or, when the user
+or role list is non-empty, not listed by user id and not the configured owner;
+a tick knows no member roles), is refused (DISCORD-SCHEDULE-3). The owner is
+read at start: restart the daemon after changing it. Agents it spawns run
+non-interactive, so dangerous tools stay denied unless allowlisted (SAFE-1).
 
 ```bash
 cd /path/to/Corvidinho          # default project root for relative schedule projects
@@ -69,7 +70,7 @@ over, so a crash never blocks a restart.
 
 On SIGTERM or SIGINT the daemon:
 
-1. stops ticking;
+1. stops ticking (a tick still re-reading the allowlist starts no run);
 2. waits up to 30 s for in-flight runs;
 3. records any runs still going as failed (`interrupted: daemon shutdown`), so
    history never shows a run stuck at "running", and kills their whole process
