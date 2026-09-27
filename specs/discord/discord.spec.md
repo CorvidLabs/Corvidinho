@@ -138,6 +138,16 @@ labelled replay block, `SESSION_THREAD_HEADER` / `SESSION_THREAD_FOOTER`,
 human's words as a run starts, the posted answer or failure line when it
 ends) and `SessionStore.threadFor(session)` returns them oldest first.
 
+Scrub at rest (REQ-discord-066, SAFE-6): `src/store/scrub.ts` exports
+`scrubSecrets` / `scrubOpt`, `scrubJsonText(raw)` (scrubs every string value
+of one stored JSON document, key names unchanged, re-serialized only when a
+value changed; text that does not parse is scrubbed as text, `parsed: false`),
+`SCRUB_TARGETS` (text `columns` per table plus `json` columns:
+`discord_sessions.pending_ask`), `rescrubDatabase` (returns
+`rowsUpdated`, `byTable` and `jsonUnparsed`, and logs one
+`[scrub] <table>.<column>: N stored value(s) were not valid JSON` line per
+column, never the text) and `ensureScrubbed`; `SCRUB_RULES_VERSION` is 3.
+
 Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 (`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
 `formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
@@ -182,7 +192,12 @@ custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
 restates and a free-text reply answers, and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
-array (oldest first, newest last) when several are. `SessionStore.setPendingAsk(session, ask)`
+array (oldest first, newest last) when several are. The stored question,
+option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
+and the SAFE-6 re-scrub rewrites the column value by value as JSON
+(`scrubJsonText`). `normalizeAskOptions` replaces a model-chosen option id
+that looks like a secret with its position, so askId, expiresAt, option ids
+and stubMessageId are stored byte-identical. `SessionStore.setPendingAsk(session, ask)`
 stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
@@ -443,6 +458,22 @@ REQ-discord-044).
   chosen label while B stays open; a late press on A gets `that choice expired`
   and clears only A; `cancel` clears both
 
+### Scenario: An open ask never keeps a secret at rest (SAFE-6)
+
+- **Given** a run asks "Which token? ghp_…" with the choices "keep sk-ant-…" and "drop it"
+- **When** the session saves the open ask, or an older build's raw row is re-scrubbed on the next DB open after `SCRUB_RULES_VERSION` rises
+- **Then** `discord_sessions.pending_ask` holds `[redacted:github-token]` and
+  `[redacted:anthropic-key]` in valid JSON, with the same askId, option ids,
+  expiresAt and stubMessageId, so the Choose button still opens the choices
+
+### Scenario: A secret-looking option id never reaches a button or the row (SAFE-6)
+
+- **Given** a run asks with an option whose id is an AWS key id
+- **When** the ask is made and its session saved
+- **Then** that option's id is its position (`2`), so neither the button
+  custom id nor `discord_sessions.pending_ask` carries the key; an older
+  build's row that stored it is redacted by the re-scrub, other ids unchanged
+
 ### Scenario: Empty owner scope
 
 - **Given** no memories for user U
@@ -599,4 +630,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per: Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3) |
 | 2026-09-27 | discord-button-pick-resume-injects-the-presser-s-display-name-and-username-like-a-chat-message-identity-4: Discord button-pick resume injects the presser's display name and username like a chat message (IDENTITY-4) |
 | 2026-09-27 | the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the: The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a) |
+| 2026-09-27 | open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks: Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6) |
 | 2026-09-27 | discord-post-message-checks-the-acting-discord-user-the-bridge-set-not-only-a-model-supplied-id-discord-8: Discord-post-message checks the acting Discord user the bridge set, not only a model-supplied id (DISCORD-8) |

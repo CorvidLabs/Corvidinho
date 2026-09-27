@@ -319,3 +319,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `image/png` and `result.image` base64 equal to the downloaded bytes (not a
   UTF-8 decode). The tool-loop half is in `tests/agent.tool-loop.test.ts`
   (REQ-agent-428).
+
+## Open asks scrubbed at rest (REQ-discord-066 modified, SAFE-6)
+
+- `tests/store.scrub.test.ts` › "open Discord asks persist scrubbed and are
+  re-scrubbed as JSON (SAFE-6)": a button ask and a free-text ask with fake
+  vendor keys in the question and an option label are stored redacted in the
+  one-object and the array `pending_ask` row and reload with the same askId,
+  option ids, expiresAt and stubMessageId; raw object and array rows saved
+  under scrub rules version 2 (one with a private-key block that has no END
+  line) are rewritten on the next open as valid JSON with ids byte-identical,
+  still load as open asks, and a second open is a no-op; a value that is not
+  JSON is scrubbed as text and counted, and the warning carries no stored text.
+- Same file › "a secret-looking option id is swapped for its position when the
+  ask is made, and scrubbed on write and on re-scrub": ask-human options whose
+  ids are a GitHub token and an AWS key id get ids `1` and `2` (a clean id is
+  kept); the saved row carries neither; an ask built without
+  `normalizeAskOptions` stores the id redacted; an older row's secret-looking
+  option id is redacted on the next open with askId, expiresAt and
+  stubMessageId byte-identical.
