@@ -144,6 +144,159 @@ describe("runTask prove-before-done", () => {
     expect(result.state).toBe("done");
   });
 
+  test("failed verify then a retry that changes no files is never done (AGENT-4, REQ-agent-242)", async () => {
+    const c = collect();
+    let verifyN = 0;
+    const verify: VerifyRunner = async () => {
+      verifyN += 1;
+      return { success: false, output: "app.ts: syntax error" };
+    };
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 2,
+      verifyRunner: verify,
+      onEvent: c.onEvent,
+      // Attempt 1 writes broken code; retries only answer in text.
+      execute: async ({ attempt }) => ({
+        summary: attempt === 1 ? "wrote app.ts" : "I couldn't fix it",
+        filesChanged: attempt === 1 ? ["app.ts"] : [],
+      }),
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.attempts).toBe(3);
+    expect(verifyN).toBe(3);
+    expect(c.states()).not.toContain("done");
+  });
+
+  test("files changed across attempts are reported as a union (REQ-agent-242)", async () => {
+    let verifyN = 0;
+    const verify: VerifyRunner = async () => {
+      verifyN += 1;
+      return verifyN === 1
+        ? { success: false, output: "boom" }
+        : { success: true, output: "ok" };
+    };
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 3,
+      verifyRunner: verify,
+      execute: async ({ attempt }) => ({
+        summary: `attempt ${attempt}`,
+        filesChanged: attempt === 1 ? ["a.ts", "b.ts"] : ["b.ts", "c.ts"],
+      }),
+    });
+    expect(result.state).toBe("done");
+    expect(result.verified).toBe(true);
+    expect(result.filesChanged).toEqual(["a.ts", "b.ts", "c.ts"]);
+  });
+
+  test("execute error (provider failure) → failed, not done (AGENT-4/8, REQ-agent-242)", async () => {
+    const c = collect();
+    let verifyN = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 3,
+      verifyRunner: async () => {
+        verifyN += 1;
+        return { success: true, output: "ok" };
+      },
+      onEvent: c.onEvent,
+      execute: async () => ({
+        summary: "LLM HTTP 401: bad key",
+        filesChanged: [],
+        error: true,
+      }),
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.cancelled).toBe(false);
+    expect(result.attempts).toBe(1);
+    expect(result.summary).toContain("LLM HTTP 401");
+    // No verify ran, so none is claimed to have failed.
+    expect(result.summary).not.toContain("Verification failed");
+    expect(verifyN).toBe(0);
+    expect(c.states()).toEqual(["planning", "executing", "failed"]);
+  });
+
+  test("execute error on a retry after a failed verify → failed (REQ-agent-242)", async () => {
+    let verifyN = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 3,
+      verifyRunner: async () => {
+        verifyN += 1;
+        return { success: false, output: "broken" };
+      },
+      execute: async ({ attempt }) =>
+        attempt === 1
+          ? { summary: "wrote app.ts", filesChanged: ["app.ts"] }
+          : {
+              summary: "LLM HTTP 503: upstream overloaded",
+              filesChanged: [],
+              error: true,
+            },
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.attempts).toBe(2);
+    expect(result.summary).toContain("LLM HTTP 503");
+    expect(verifyN).toBe(1);
+  });
+
+  test("execute error after a failed verify still says plainly that verification failed (AGENT-4, REQ-agent-242)", async () => {
+    const c = collect();
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 3,
+      verifyRunner: async () => ({ success: false, output: "app.ts:3 syntax error" }),
+      onEvent: c.onEvent,
+      execute: async ({ attempt }) =>
+        attempt === 1
+          ? { summary: "wrote app.ts", filesChanged: ["app.ts"] }
+          : {
+              summary: "LLM HTTP 503: upstream overloaded",
+              filesChanged: [],
+              error: true,
+            },
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.summary.startsWith("LLM HTTP 503: upstream overloaded")).toBe(true);
+    expect(result.summary).toContain(
+      "Verification failed on an earlier attempt and was not re-run:\napp.ts:3 syntax error",
+    );
+    expect(c.states()).toEqual([
+      "planning",
+      "executing",
+      "verifying",
+      "executing",
+      "failed",
+    ]);
+  });
+
+  test("execute error with the verify gate off is still failed (REQ-agent-242)", async () => {
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: false,
+      execute: async () => ({
+        summary: "LLM request failed: network down",
+        filesChanged: [],
+        error: true,
+      }),
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+  });
+
   test("AbortSignal cancels promptly (AGENT-3)", async () => {
     const ac = new AbortController();
     ac.abort();
@@ -160,6 +313,34 @@ describe("runTask prove-before-done", () => {
     expect(result.cancelled).toBe(true);
     expect(result.verified).toBe(false);
     expect(result.state).toBe("failed");
+  });
+
+  test("abort while verify runs → cancelled, not a failed verify or stuck ask (AGENT-3)", async () => {
+    // The runner returns (a killed lane exits non-zero) rather than throwing.
+    const ac = new AbortController();
+    const c = collect();
+    let executeCalls = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 0,
+      signal: ac.signal,
+      onEvent: c.onEvent,
+      verifyRunner: async () => {
+        ac.abort();
+        return { success: false, output: "killed by SIGTERM" };
+      },
+      execute: async () => {
+        executeCalls += 1;
+        return { summary: "wrote", filesChanged: ["x.ts"] };
+      },
+    });
+    expect(result.cancelled).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(result.state).toBe("failed");
+    expect(result.ask).toBeUndefined();
+    expect(executeCalls).toBe(1);
+    expect(c.events.some((e) => e.type === "VerifyResult")).toBe(false);
   });
 
   test("defaultVerifyRunner argv shape (FLEDGE-2/3 agree)", async () => {

@@ -5,6 +5,7 @@
 
 import { Octokit } from "@octokit/rest";
 import { attribution } from "../attribution.ts";
+import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
 import type { DetectedEvent } from "./types.ts";
 
 export const ACK_START =
@@ -111,26 +112,18 @@ export function createOctokitAckClient(token: string): AckClient {
   };
 }
 
-/** Dedup store for event ids that already received an ack. */
-export class AckedIdStore {
-  private ids = new Set<string>();
-  private readonly maxSize: number;
-
-  constructor(maxSize = 2000) {
-    this.maxSize = maxSize;
+/**
+ * Dedup store for event ids that already received an ack. With a db the ids
+ * persist across restarts (REQ-watch-247).
+ */
+export class AckedIdStore extends ProcessedIdStore {
+  constructor(opts: number | IdStoreOptions = {}) {
+    super(opts, "acked");
   }
+}
 
-  has(id: string): boolean {
-    return this.ids.has(id.toLowerCase());
-  }
-
-  add(id: string): void {
-    this.ids.add(id.toLowerCase());
-    if (this.ids.size > this.maxSize) {
-      const first = this.ids.values().next().value;
-      if (first !== undefined) this.ids.delete(first);
-    }
-  }
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function splitRepo(repo: string): { owner: string; name: string } | null {
@@ -179,7 +172,13 @@ export async function maybePostWatchAck(opts: {
     body,
   });
   // Mark acked even on failure to avoid tight retry spam; operator sees log.
-  acked.add(event.id);
+  // The comment is already posted and the event is already marked processed
+  // (REQ-watch-247), so a failed id write must not skip the agent run.
+  try {
+    acked.add(event.id);
+  } catch (err) {
+    log?.(`[watch] ack id write failed id=${event.id}: ${errorMessage(err)}`);
+  }
   if (res.ok) {
     log?.(
       `[watch] ack ${res.dryRun ? "dry-run" : "posted"} ${event.repo}#${event.number} id=${event.id}` +

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "913c584e889f5785c854d29ae62e8af169ab84e2",
+      "contract_digest": "7fa7c4784392fa82b08cfbaa5bcd6959c9dac74ec3c71e7d8c8a0799ac1eb0bf",
+      "execution_digest": "f77fe4b482ca2c63d878c97a519537ba80629bf82a36e78e2def213de7dd2442",
+      "workspace_digest": "6b3edcb8216c97cd200afeb9c44bd8f3d4878d5f6d10ad5161aee571dcf23a57",
+      "timestamp": 1790465440
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "09490b0cac74c7292da3581adf57529101ddc50c",
+  "contract_digest": "578a389b51654629e42d94b0a96f3acacf32c336b6ce7a39248eebc0856fbf44",
+  "execution_digest": "56b0018569a31e9d4f795f2eecd76a7ddb1f2f062448d0360f8742dfc9a13fe8",
+  "workspace_digest": "50fe74e4ff67832c32f6c41b417cfb383b5e1864ca887f790d19389e4be19a1a",
+  "timestamp": 1790464280
+}

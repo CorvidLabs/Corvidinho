@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790468170,
+      "digest": "d220009d2a11393810e00643841afbbe9206e18a37d5c5853cec87be911e18a1",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-talk-stored-with-a-prefix-only-worktree-name-before-the-digest-change-keeps-it-after-upgrade-and-a-new-talk-whose-id",
+        "title": "A talk stored with a prefix-only worktree name before the digest change keeps it after upgrade, and a new talk whose id shares that prefix gets its own worktree",
+        "description": "A talk stored with a prefix-only worktree name before the digest change keeps it after upgrade, and a new talk whose id shares that prefix gets its own worktree",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "tests/discord.session-worktree.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A session row stored before the digest change (prefix-only worktree path talk-<16-char prefix> and branch talk/<16-char prefix>, state active) re-binds after restart to that stored path and branch; a new session whose id shares that 16-char prefix gets a different worktree dir and talk/ branch, and the stored talk's worktree, branch and uncommitted files survive the new talk's setup; docs/discord.md shows the talk/{sessionPrefix}-{digest} branch shape"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "1b5c51a362f668bf46ccd8a0643673b1069fe0cf5659a6b97f8110cf2f6c0a78"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790469932,
+      "digest": "506d04226dd0d3f5448c9d577af0fb08312373710e582ae4debee02521315ad5",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

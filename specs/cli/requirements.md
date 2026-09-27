@@ -293,6 +293,35 @@ Acceptance Criteria
 - CHANGELOG has a 0.0.12 section that the updater's changelog helper extracts exactly.
 - STATUS records #145 and #142.
 
+### REQ-cli-098
+
+`corvidinho doctor` SHALL always print a `spend` line (AUTONOMOUS-8 /
+SAFE-8). Without `CORVIDINHO_DAILY_SPEND_CAP_USD` it SHALL be `info` and say
+no daily cap is set, without opening the database. With the variable set it
+SHALL show spend in the last 24 hours against the daily cap with the percent,
+the number of provider calls counted, and how many are still counted at their
+estimate, and SHALL be marked `warn` at or past the 80% warning, at the cap,
+when the cap value is not a plain USD amount, when the configured model has
+no known price, or when the ledger cannot be read (the last three stop and
+ask before every provider call). The line SHALL be informational and SHALL
+NOT change the doctor exit code. `task run` SHALL copy the run's 80% spend
+warning onto `TaskResult.spendWarning` in `--json` output and the NDJSON
+`result` frame, and a run stopped at the cap SHALL exit 0 with state
+`blocked`; in text output it SHALL print the generic summary and the ask
+question. `corvidinho daemon`, which has no Discord, SHALL log a `warn`
+`spend.warning` line for a schedule run that crossed 80% and a `warn`
+`run.needs_human` line with the ask reason for a run that stopped to ask,
+leaving the recorded warning pending for a bridge to deliver. `--help` and
+`.env.example` SHALL list the variable and say it warns at 80% and stops and
+asks at 100%.
+
+Acceptance Criteria
+- `bun src/cli.ts doctor` without the variable prints `[info] spend: no daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)`.
+- With `CORVIDINHO_DAILY_SPEND_CAP_USD=5` it prints `[ok] spend: $0.00 of $5.00 daily cap used in the last 24h (0%; 0 provider call(s)`.
+- Invalid cap, unpriced model, 80% and cap reached yield a `warn` line with `ok: true`.
+- `task run --json` against a localhost mock LLM carries `result.spendWarning` on the crossing run only, and at the cap returns `blocked` with a `spend-cap` ask, the generic summary and exit 0 without calling the mock; `--output text` at the cap prints the summary and the ask question.
+- The daemon logs `spend.warning` (amounts and percent) and `run.needs_human` (`reason` `spend-cap`) as `warn` lines for a schedule run that reports them.
+
 ### REQ-cli-085
 
 The CLI SHALL keep `--no-verify` as an explicit local skip of prove-before-done
@@ -398,6 +427,23 @@ Acceptance Criteria
 - CLI `version` prints `0.0.21`.
 - CHANGELOG has a 0.0.21 section that the updater's changelog helper extracts exactly.
 
+### REQ-cli-244
+
+`corvidinho task run` SHALL pass an AbortSignal to `runTask` and SHALL abort
+it on the first SIGINT or SIGTERM (AGENT-3). The run's verify lane and tool
+loop SHALL stop (REQ-agent-244), the structured cancelled result SHALL still
+be printed in the selected output mode (text line, `--json` document, or a
+final ndjson `result` frame with `cancelled: true`), and the process SHALL
+exit 130 instead of dying by the signal. The handlers SHALL be removed when
+the run ends; a second signal SHALL take its default action. A SIGINT or
+SIGTERM this process started with ignored (a background job's SIGINT) SHALL
+NOT be hooked and SHALL stay ignored, as for the process-tree hook
+(REQ-plugins-154). No flag or environment variable is added.
+
+Acceptance Criteria
+- `task run --task demo --output ndjson` with a fake `fledge` on PATH (it starts a lane task and blocks), sent SIGINT or SIGTERM while verify runs, exits 130 (not by the signal), its last stdout line is a `result` frame with `cancelled: true`, `verified: false`, `state: "failed"`, and both the fake `fledge` and its lane task are gone.
+- The same run started with SIGINT ignored (`sh -c 'trap "" INT; exec …'`) is still running, with its lane, 1 s after a SIGINT; a SIGTERM then exits 130 with a cancelled `result` frame and stops the lane.
+
 ### REQ-cli-023
 
 The project SHALL ship package version `0.0.23` (stop means stop (process trees), SAFE-3 cd clamp, scrub before clip, GitHub gate reads allowlist file). CLI `version` and Discord presence (DISCORD-12) report `0.0.23` after a restart. CHANGELOG SHALL include verbose 0.0.23 notes.
@@ -429,4 +475,13 @@ Acceptance Criteria
 - A rollback restart after a failed `bun install` or a failed `doctor` sees `CORVIDINHO_ENV_FILE`.
 - A `CORVIDINHO_BRIDGE_CMD` containing `pkill -f '<pattern>'` completes (exit 0, no rollback) instead of killing its own shell.
 - Each `pkill -f` pattern in `docs/BOX-UPDATE.md` matches `bun src/cli.ts discord bridge` and an absolute-path bridge command line, and does not match `bash -lc` holding the example.
+
+### REQ-cli-026
+
+The project SHALL ship package version `0.0.26` (spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup). CLI `version` and Discord presence (DISCORD-12) report `0.0.26` after a restart. CHANGELOG SHALL include verbose 0.0.26 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.26`.
+- CLI `version` prints `0.0.26`.
+- CHANGELOG has a 0.0.26 section that the updater's changelog helper extracts exactly.
 
