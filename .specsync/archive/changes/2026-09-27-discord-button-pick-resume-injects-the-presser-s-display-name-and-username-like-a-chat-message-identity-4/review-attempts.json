@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-button-pick-resume-injects-the-presser-s-display-name-and-username-like-a-chat-message-identity-4",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "af257c71d8652e87ae491a23e0e24ce66f7a3fa9",
+      "contract_digest": "dbe6c27e92f46f9b0aabacebf3e6936453ab31a88224f1c1a41b08f87d37f5de",
+      "execution_digest": "1b962281ef1b70cac5c8afe41116756d28d3182a02cc5b30f657413280030d12",
+      "workspace_digest": "b133f2f225bccba7f7cfaaffdc2abd079c9ecd0e6d26a58eaf140d6c07b245a7",
+      "timestamp": 1790537676
+    }
+  ]
+}
