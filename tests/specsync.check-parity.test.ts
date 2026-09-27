@@ -68,16 +68,18 @@ describe("spec-check runs at CI Spec Sync strictness (SPECSYNC-2/7, REQ-agent-00
     const argv = cmd.trim().split(/\s+/);
     expect(argv.slice(0, 2)).toEqual(["specsync", "check"]);
 
-    const coverage = inputs["require-coverage"];
+    // The Action passes `--require-coverage N` only when N is not "0" (its
+    // default when the input is left out).
+    const coverage = String(inputs["require-coverage"] ?? "0").trim();
     const i = argv.indexOf("--require-coverage");
     const got =
       i >= 0
         ? argv[i + 1]
         : argv.find((a) => a.startsWith("--require-coverage="))?.split("=")[1];
-    if (coverage === undefined || coverage === "" || coverage === null) {
+    if (coverage === "0" || coverage === "") {
       expect(got).toBeUndefined();
     } else {
-      expect(got).toBe(String(coverage));
+      expect(got).toBe(coverage);
     }
 
     expect(argv.includes("--strict")).toBe(truthy(inputs.strict));
@@ -243,6 +245,42 @@ describe("specsync-score reports SpecSync's numbers (SPECSYNC-3, REQ-plugins-008
     expect(tool).toBeDefined();
     expect(tool!.function.description).toContain("SPECSYNC-3");
   });
+
+  // A stopped run (AGENT-3 abort signal) must not wait on the spawned
+  // specsync. Runs in a child Bun, whose `Bun.which` sees the stub PATH.
+  for (const name of ["specsync-score", "specsync-check"]) {
+    test(`${name} stops its specsync when the run is aborted`, async () => {
+      writeFileSync(join(bin, "specsync"), `#!/bin/sh\necho "specsync $*" >> "${log}"\nexec sleep 10\n`);
+      chmodSync(join(bin, "specsync"), 0o755);
+      const script = join(proj, "..", `${proj.split("/").pop()}.abort.ts`);
+      writeFileSync(
+        script,
+        [
+          `import { loadBuiltins } from ${JSON.stringify(join(REPO, "src", "plugins", "builtins.ts"))};`,
+          `import { runPlugin } from ${JSON.stringify(join(REPO, "src", "plugins", "run.ts"))};`,
+          "loadBuiltins();",
+          "const ac = new AbortController();",
+          "setTimeout(() => ac.abort(), 300);",
+          "const t0 = Date.now();",
+          `const r = await runPlugin({ name: ${JSON.stringify(name)}, args: [], cwd: process.cwd(), nonInteractive: true, signal: ac.signal });`,
+          "console.log(JSON.stringify({ ok: r.ok, ms: Date.now() - t0 }));",
+        ].join("\n"),
+      );
+      const proc = Bun.spawn([process.execPath, script], {
+        cwd: proj,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const code = await proc.exited;
+      const out = await new Response(proc.stdout).text();
+      expect(code).toBe(0);
+      const r = JSON.parse(out.trim().split("\n").pop()!) as { ok: boolean; ms: number };
+      expect(r.ok).toBe(false);
+      expect(r.ms).toBeLessThan(6_000);
+      expect(calls()[0]).toStartWith(name === "specsync-score" ? "specsync score" : "specsync check");
+    }, 20_000);
+  }
 });
 
 // ── real binaries (optional) ───────────────────────────────────────────────

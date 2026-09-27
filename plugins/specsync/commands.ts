@@ -65,7 +65,7 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const result = await runSpecCheck(ctx.cwd);
+      const result = await runSpecCheck(ctx.cwd, ctx.signal);
       if (!result.success) {
         return {
           ok: false,
@@ -137,7 +137,7 @@ export const specsyncCommands: PluginCommand[] = [
     async handler(ctx) {
       const rootRefused = refuseRootArg(ctx.args);
       if (rootRefused) return fail(rootRefused);
-      const result = await spawnSpecsync(ctx.cwd, ["score", ...ctx.args]);
+      const result = await spawnSpecsync(ctx.cwd, ["score", ...ctx.args], ctx.signal);
       if (!result.success) {
         return fail(result.output || "specsync score failed", result.code || 1);
       }
