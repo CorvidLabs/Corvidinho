@@ -29,7 +29,9 @@ Repro on main: a fake provider asks for `files-write` in a session with
 Nothing is written either way; the gap is the refusal and the note, not the
 gate.
 
-Scope: `src/agent/execute.ts` only (plus tests, spec and one docs bullet).
+Scope: `src/agent/execute.ts`, plus the note-keeping caps in
+`src/agent/task-summary.ts` and `src/agent/events-ndjson.ts` (plus tests,
+spec and one docs bullet).
 The role gate in `runPlugin`, the catalog filter and the live status labels
 stay as they are. Open PRs #232 (ask-button actor gate, mute/rate for button
 presses) and #233 (SAFE-3 clamp, busy-lock test timeouts) are not touched.

@@ -78,6 +78,9 @@ invented call to every registered mutating plugin gets exactly `runPlugin`'s
 role refusal, runs nothing, keeps the live progress lines free of the refusal
 and the names, and the summary ends with `(not allowed for your role)` (kept on
 a later attempt); an offered `files-write` refused by `runPlugin` after the
-owner is muted mid-run also adds the note; an unregistered name, ADMIN and the
-local CLI keep the "not offered" refusal with no note; a summary that already
-says it gets no second note.
+owner is muted mid-run also adds the note, and so does an invented
+`files-write` after an ADMIN caller is muted mid-run (ADMIN re-checked at the
+call); an offered tool whose own error only quotes the phrase adds no note; a
+long reply keeps the note through the `resultFrame` and `chatBodyFromTaskResult`
+caps; an unregistered name, ADMIN and the local CLI keep the "not offered"
+refusal with no note; a summary that already says it gets no second note.

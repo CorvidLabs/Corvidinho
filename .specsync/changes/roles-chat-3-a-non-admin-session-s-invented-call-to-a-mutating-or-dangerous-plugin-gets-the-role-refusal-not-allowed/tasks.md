@@ -11,4 +11,5 @@ artifact: tasks
 - [x] Tests in `tests/roles.chat.gates.test.ts`: every mutating plugin invented, mid-run ADMIN loss, unregistered name, ADMIN and CLI unchanged, no double note
 - [x] Prove the two behavior tests fail with main's `execute.ts` and pass on the branch, then restore
 - [x] Update `docs/DISCORD-GO-LIVE.md`, the agent spec, requirements and testing
+- [x] Review: re-check ADMIN at the call for invented mutating calls (ROLES-CHAT-6); count only the exact role refusal; keep the closing note through the `resultFrame` and `chatBodyFromTaskResult` caps; tests for each
 - [x] `specsync check --require-coverage 100`, `specsync change audit`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive` green

@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "0940db343de30fdb4d79d83cfa44b95c5a247681",
   "created_at": 1790534727,
-  "updated_at": 1790534979,
+  "updated_at": 1790536261,
   "affected_specs": [
     "agent"
   ],
@@ -21,7 +21,9 @@
     "specs/agent/requirements.md",
     "specs/agent/agent.spec.md",
     "specs/agent/testing.md",
-    "docs/DISCORD-GO-LIVE.md"
+    "docs/DISCORD-GO-LIVE.md",
+    "src/agent/events-ndjson.ts",
+    "src/agent/task-summary.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,

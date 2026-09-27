@@ -3,20 +3,27 @@
  * (files-write, shell-exec, github-pr-create + GITHUB-6); channel allowlist
  * still required. GitHub runs are dry-run only (no network, no token).
  * ROLES-CHAT-3: a mutating call the model invents in a non-ADMIN session gets
- * the role refusal, and the run summary ends with the short role note.
+ * the role refusal, and the run summary ends with the short role note, which
+ * the result frame and chat body caps keep.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { frameFromEvent, progressFromFrame } from "../src/agent/events-ndjson.ts";
+import {
+  frameFromEvent,
+  NDJSON_LIMITS,
+  progressFromFrame,
+  resultFrame,
+} from "../src/agent/events-ndjson.ts";
 import { createTaskExecute, UNKNOWN_TOOL_LABEL } from "../src/agent/execute.ts";
+import { chatBodyFromTaskResult } from "../src/agent/task-summary.ts";
 import { buildOpenAiTools } from "../src/agent/tools.ts";
-import type { AgentEvent } from "../src/agent/types.ts";
+import type { AgentEvent, TaskResult } from "../src/agent/types.ts";
 import { checkChannel } from "../src/allowlist/index.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
-import { clearRegistry, list } from "../src/plugins/registry.ts";
+import { clearRegistry, list, register } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import {
   ROLE_REFUSED_MESSAGE,
@@ -474,6 +481,132 @@ describe("ROLES-CHAT-3 invented mutating calls in the tool loop", () => {
     expect(result!.detail).toContain(ROLE_REFUSED_MESSAGE);
     expect(readdirSync(tmpRoot)).toEqual(["allowlist.toml"]);
     expect(r.summary).toBe(`Stopped.\n\n${ROLE_NOTE}`);
+  });
+
+  test("a caller who loses ADMIN mid-run gets the role refusal for a mutating tool the model invents (ROLES-CHAT-6)", async () => {
+    asAdmin();
+    const env = llmEnv(adminSession());
+    const bodies: unknown[] = [];
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "write a note",
+      cwd: tmpRoot,
+      env,
+      // Tool tier: files-write (min tier code) is not offered, even to ADMIN.
+      tier: "tool",
+      fetchImpl: scriptedLlm(
+        [toolCalls([["files-write", ["late.txt", "x"]]]), say("Stopped.")],
+        {
+          bodies,
+          // The owner is muted after the catalog was built.
+          onCall: (n) => {
+            if (n === 1) {
+              env.DISCORD_MUTED_USER_IDS = OWNER;
+              process.env.DISCORD_MUTED_USER_IDS = OWNER;
+            }
+          },
+        },
+      ),
+      onEvent: (e) => events.push(e),
+      projectInstructions: false,
+      maxToolRounds: 3,
+    });
+    const r = await exec(attempt(1));
+
+    expect(offeredNames(bodies[0])).not.toContain("files-write");
+    const direct = await runPlugin({
+      name: "files-write",
+      args: [],
+      nonInteractive: true,
+      allowlist: [],
+      cwd: tmpRoot,
+    });
+    expect(direct.error ?? "").toContain(ROLE_REFUSED_MESSAGE);
+    const [result] = toolResults(events);
+    expect(result).toMatchObject({
+      name: UNKNOWN_TOOL_LABEL,
+      success: false,
+      detail: direct.error,
+    });
+    expect(readdirSync(tmpRoot)).toEqual(["allowlist.toml"]);
+    expect(r.summary).toBe(`Stopped.\n\n${ROLE_NOTE}`);
+  });
+
+  test("a tool's own error that only quotes the role phrase adds no role note", async () => {
+    asNonAdmin();
+    // An offered, non-mutating tool failing with exit 2 and text that quotes
+    // the note (as a failed delegate worker's summary would).
+    register({
+      name: "quote-role-note",
+      description: "test tool: fails quoting the role note",
+      handler: async () => ({
+        ok: false,
+        exitCode: 2,
+        error: `worker did not finish:\nSorry.\n\n${ROLE_NOTE}`,
+      }),
+    });
+    const bodies: unknown[] = [];
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: tmpRoot,
+      env: llmEnv(NON_ADMIN_SESSION),
+      tier: "code",
+      fetchImpl: scriptedLlm([toolCalls([["quote-role-note", []]]), say("done")], {
+        bodies,
+      }),
+      onEvent: (e) => events.push(e),
+      projectInstructions: false,
+      maxToolRounds: 3,
+    });
+    const r = await exec(attempt(1));
+    expect(offeredNames(bodies[0])).toContain("quote-role-note");
+    expect(toolResults(events)[0]).toMatchObject({
+      name: "quote-role-note",
+      success: false,
+    });
+    expect(r.summary).toBe("done");
+  });
+
+  test("a long reply keeps the role note through the result frame cap and the chat body cap", async () => {
+    asNonAdmin();
+    const reply = `${"word ".repeat(1200)}end`;
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: tmpRoot,
+      env: llmEnv(NON_ADMIN_SESSION),
+      tier: "code",
+      fetchImpl: scriptedLlm([toolCalls([["files-write", ["x.txt", "x"]]]), say(reply)]),
+      projectInstructions: false,
+      maxToolRounds: 3,
+    });
+    const r = await exec(attempt(1));
+    expect(r.summary).toBe(`${reply}\n\n${ROLE_NOTE}`);
+
+    const task: TaskResult = {
+      summary: r.summary,
+      filesChanged: [],
+      verified: false,
+      verifySkipped: true,
+      cancelled: false,
+      state: "done",
+      attempts: 1,
+    };
+    // Over the 4000-char result frame cap: the head is cut, the note is kept.
+    const frame = resultFrame(task);
+    expect(frame.truncated).toBe(true);
+    expect(frame.result.summary.startsWith("word word")).toBe(true);
+    expect(frame.result.summary.endsWith(`…\n\n${ROLE_NOTE}`)).toBe(true);
+    expect(frame.result.summary.length).toBe(NDJSON_LIMITS.resultSummary + 1);
+    // The 1800-char Discord chat body keeps it too, from either input.
+    for (const input of [task, frame.result]) {
+      const body = chatBodyFromTaskResult(input);
+      expect(body.length).toBeLessThanOrEqual(1800);
+      expect(body.startsWith("word word")).toBe(true);
+      expect(body.endsWith(`\n\n${ROLE_NOTE}`)).toBe(true);
+    }
+    // A long summary with no note is clipped exactly as before.
+    expect(chatBodyFromTaskResult({ summary: reply })).toBe(reply.slice(0, 1800));
   });
 
   test("a non-ADMIN session naming an unregistered tool keeps the catalog refusal and gets no role note", async () => {

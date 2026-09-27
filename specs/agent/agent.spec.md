@@ -175,7 +175,8 @@ git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
-`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`. Discord/NDJSON
+`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
+`ROLE_REFUSED_SUMMARY_NOTE` and `clipKeepingRoleNote` (REQ-agent-333). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
 appears in the final chat reply (DISCORD-3.a).
 
@@ -316,14 +317,18 @@ pick a module the request never names.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
-In a non-ADMIN role session the tool loop answers a not-offered registered
+When the caller is not ADMIN at the call (a role session, re-checked per call
+like `runPlugin`, ROLES-CHAT-6), the tool loop answers a not-offered registered
 mutating / dangerous plugin with the role refusal `runPlugin` gives (`Denied:
 plugin "<name>" is not allowed for your role (ROLES-CHAT-3).`, exit 2) instead
 of the catalog refusal, and never runs it; an unregistered name keeps the
-catalog refusal. Once any call in a task run is refused for the role, every
-summary of that run ends with `(not allowed for your role)` once, exported as
-`ROLE_REFUSED_SUMMARY_NOTE` / `withRoleRefusalNote` from `src/agent/execute.ts`
-(REQ-agent-333). Event names and progress lines stay as they are.
+catalog refusal. Once any call in a task run gets exactly that role refusal,
+every summary of that run ends with `(not allowed for your role)` once,
+exported as `ROLE_REFUSED_SUMMARY_NOTE` / `withRoleRefusalNote` from
+`src/agent/execute.ts` (the note is defined in `src/agent/task-summary.ts`);
+`resultFrame` and `chatBodyFromTaskResult` keep that closing note when they cap
+a long summary (`clipKeepingRoleNote`, REQ-agent-333). Event names and progress
+lines stay as they are.
 
 An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
 the default verify runner runs fledge in its own process group and an abort
@@ -426,7 +431,8 @@ model.
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
-| Non-ADMIN role session names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once (ROLES-CHAT-3, REQ-agent-333) |
+| Non-ADMIN caller (checked at the call) names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once, and the result frame / chat body caps keep it (ROLES-CHAT-3, REQ-agent-333) |
+| A tool's own error only quotes "not allowed for your role" | No role note (only the exact role refusal counts, REQ-agent-333) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
 | Council: fewer than 2 voices propose | No critique or decide; ok=false with the transcript |

@@ -21,6 +21,7 @@ import type { PluginHandlerResult, PluginImage } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { createSpendGuard } from "./spend.ts";
 import { formatSpendWarningLine } from "./spend-notice.ts";
+import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
   ASK_AGENT_SYSTEM_INSTRUCTIONS,
@@ -274,9 +275,9 @@ export const UNKNOWN_TOOL_LABEL = "(unknown tool)";
 /**
  * ROLES-CHAT-3: the short in-session note a run's summary ends with once a
  * tool call was refused for the caller's role. Nothing else about the refusal
- * goes to the channel.
+ * goes to the channel. Defined with the chat-body clip, which keeps it.
  */
-export const ROLE_REFUSED_SUMMARY_NOTE = `(${ROLE_REFUSED_MESSAGE})`;
+export { ROLE_REFUSED_SUMMARY_NOTE };
 
 /** ROLES-CHAT-3: the summary with the role note, added once (never twice). */
 export function withRoleRefusalNote(summary: string): string {
@@ -285,25 +286,34 @@ export function withRoleRefusalNote(summary: string): string {
   return body ? `${body}\n\n${ROLE_REFUSED_SUMMARY_NOTE}` : ROLE_REFUSED_SUMMARY_NOTE;
 }
 
+/** ROLES-CHAT-3: the error `runPlugin` gives a non-ADMIN caller for `name`. */
+function roleRefusalError(name: string): string {
+  return `Denied: plugin "${name}" is ${ROLE_REFUSED_MESSAGE} (ROLES-CHAT-3).`;
+}
+
 /**
  * ROLES-CHAT-3: the role refusal `runPlugin` gives a non-ADMIN caller, for a
  * mutating / dangerous plugin the model named without it being offered.
  */
 function roleRefusal(name: string): PluginHandlerResult {
-  return {
-    ok: false,
-    error: `Denied: plugin "${name}" is ${ROLE_REFUSED_MESSAGE} (ROLES-CHAT-3).`,
-    exitCode: 2,
-  };
+  return { ok: false, error: roleRefusalError(name), exitCode: 2 };
 }
 
-/** A tool result that is the role refusal (from `runPlugin` or {@link roleRefusal}). */
-function isRoleRefusal(result: PluginHandlerResult): boolean {
-  return (
-    !result.ok &&
-    result.exitCode === 2 &&
-    (result.error ?? "").includes(ROLE_REFUSED_MESSAGE)
-  );
+/**
+ * A tool result that is exactly the role refusal for `name` (from `runPlugin`
+ * or {@link roleRefusal}). A tool's own error that only quotes the phrase (a
+ * delegate worker's summary, a path) is not one.
+ */
+function isRoleRefusal(name: string, result: PluginHandlerResult): boolean {
+  return !result.ok && result.exitCode === 2 && result.error === roleRefusalError(name);
+}
+
+/**
+ * ROLES-CHAT-3/6: a role session whose caller is not ADMIN at this call,
+ * re-checked against the live owner config the way `runPlugin` does.
+ */
+async function refusedForRole(env: NodeJS.ProcessEnv): Promise<boolean> {
+  return roleSessionActive(env) && !(await resolveActingIsAdmin(env));
 }
 
 function emit(
@@ -438,7 +448,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       maxToolRounds,
       projectBlock,
       specBriefing,
-      actingIsAdmin,
+      roleEnv: env,
       onRoleRefusal: () => {
         roleRefused = true;
       },
@@ -472,8 +482,8 @@ type LoopArgs = {
   maxToolRounds: number;
   projectBlock: string;
   specBriefing?: string;
-  /** False only in a non-ADMIN role session (ROLES-CHAT-2/3). */
-  actingIsAdmin: boolean;
+  /** Env the role session and ADMIN bit are read from (ROLES-CHAT-3/6). */
+  roleEnv: NodeJS.ProcessEnv;
   /** Called for each tool call refused for the caller's role (ROLES-CHAT-3). */
   onRoleRefusal: () => void;
 };
@@ -496,7 +506,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     maxToolRounds,
     projectBlock,
     specBriefing,
-    actingIsAdmin,
+    roleEnv,
     onRoleRefusal,
   } = args;
 
@@ -646,9 +656,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         return askExecuteResult(asked.ask, filesChanged);
       }
 
-      // ROLES-CHAT-3: a mutating / dangerous plugin a non-ADMIN session names
-      // without it being offered gets the role refusal, not the catalog one.
-      // Either way it is never run.
+      // ROLES-CHAT-3: a mutating / dangerous plugin a non-ADMIN caller names
+      // without it being offered gets the role refusal, not the catalog one
+      // (ADMIN re-checked at this call, ROLES-CHAT-6). Either way it never runs.
       const invented = offered.has(name) ? undefined : getPlugin(name);
       let result: PluginHandlerResult;
       try {
@@ -665,7 +675,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               tier: llm.tier,
               signal,
             })
-          : !actingIsAdmin && invented && isMutatingPlugin(invented)
+          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv))
           ? roleRefusal(name)
           : {
               ok: false,
@@ -676,7 +686,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         const errMsg = err instanceof Error ? err.message : String(err);
         result = { ok: false, error: errMsg, exitCode: 1 };
       }
-      if (isRoleRefusal(result)) onRoleRefusal();
+      if (isRoleRefusal(name, result)) onRoleRefusal();
 
       toolNamesUsed.push(name);
       for (const f of filesChangedFromToolData(result.data)) {
