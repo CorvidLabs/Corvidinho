@@ -36,7 +36,7 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
-Gate order for every slash: **channel allowlist → mute/rate → minPermission → handler**.
+Gate order for every slash: **channel allowlist → actor (`gateActor`) → mute/rate → minPermission → handler**. An ask button press (open or pick) runs the same **channel → actor → mute/rate** gates before it shows choices or resumes the session.
 
 
 ### Announcements (DISCORD-ANNOUNCE-1..6)
@@ -110,7 +110,7 @@ After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced
 
 ### Questions and owner ping (AUTONOMY-1/2)
 
-When choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..7). The public Choose stub is the single ask surface (thinking "Needs your input" is collapsed into it — DISCORD-ASK-6). On done (mention or after a button pick), the stub/thinking message is edited into the final answer when practical instead of ✅ Done + a second reply (DISCORD-ASK-7). Buttons expire after ~30 minutes. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
+When choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..7). The public Choose stub is the single ask surface (thinking "Needs your input" is collapsed into it — DISCORD-ASK-6). On done (mention or after a button pick), the stub/thinking message is edited into the final answer when practical instead of ✅ Done + a second reply (DISCORD-ASK-7). Buttons expire after ~30 minutes. A press passes the same actor gate and mute/rate limit as chat and slash (REQ-discord-201 / REQ-discord-010): a deny-listed or unlisted presser gets the ephemeral zero-width ack, a muted or rate-limited one the ephemeral `MUTED` / `RATE_LIMITED` reply, and the ask stays pending. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
 
 When a run needs a human, the reply is a question instead of a summary. Two cases:
 

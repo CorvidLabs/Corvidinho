@@ -26,6 +26,8 @@ export type ComponentInteraction = {
   channelId: string;
   guildId?: string;
   userId: string;
+  /** Member role snowflakes, for the actor gate (REQ-discord-201). */
+  roleIds?: string[];
   messageId?: string;
   /** Reply (or update) — supports ephemeral choice UI. */
   reply: (opts: {
@@ -150,6 +152,27 @@ export function flattenSlashOptions(data: readonly RawSlashOption[]): {
   return { subcommandGroup, subcommand, options };
 }
 
+/** discord.js interaction `member.roles`: a cached manager or raw API ids. */
+export type RawMemberRoles =
+  | { cache?: { keys: () => IterableIterator<string> } }
+  | string[];
+
+/**
+ * Role snowflakes of an interaction's member (slash and components), for
+ * `gateActor` role allow/deny (REQ-discord-201). Empty outside a guild.
+ */
+export function interactionRoleIds(
+  member: { roles?: RawMemberRoles } | null | undefined,
+): string[] {
+  const roles = member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return [...roles];
+  if (roles.cache && typeof roles.cache.keys === "function") {
+    return [...roles.cache.keys()];
+  }
+  return [];
+}
+
 /**
  * Discord `MessageReferenceType.Forward` (discord-api-types v10). Kept as a
  * plain number so this module does not load discord.js eagerly.
@@ -261,7 +284,7 @@ export async function createLiveGateway(
     member?: {
       displayName?: string | null;
       nickname?: string | null;
-      roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+      roles?: RawMemberRoles;
     } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
@@ -318,16 +341,7 @@ export async function createLiveGateway(
       }
     };
 
-    const roleIds: string[] = [];
-    const member = interaction.member;
-    if (member?.roles) {
-      const roles = member.roles;
-      if (Array.isArray(roles)) {
-        roleIds.push(...roles);
-      } else if (roles.cache && typeof roles.cache.keys === "function") {
-        roleIds.push(...roles.cache.keys());
-      }
-    }
+    const roleIds = interactionRoleIds(interaction.member);
 
     return {
       id: interaction.id,
@@ -648,6 +662,7 @@ function adaptComponent(interaction: {
   channelId: string;
   guildId: string | null;
   user: { id: string };
+  member?: { roles?: RawMemberRoles } | null;
   message?: { id?: string };
   deferred: boolean;
   replied: boolean;
@@ -661,6 +676,7 @@ function adaptComponent(interaction: {
     channelId: interaction.channelId,
     guildId: interaction.guildId ?? undefined,
     userId: interaction.user.id,
+    roleIds: interactionRoleIds(interaction.member),
     messageId: interaction.message?.id,
     reply: async (opts) => {
       const payload: Record<string, unknown> = {};
