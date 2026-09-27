@@ -1,6 +1,6 @@
 ---
 id: discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd
 ---
