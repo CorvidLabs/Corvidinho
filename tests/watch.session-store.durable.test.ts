@@ -60,8 +60,9 @@ function rowCount(db: Database): number {
 describe("schema v6 watch_sessions (REQ-discord-037)", () => {
   test("fresh DB reaches schema 6+ with watch_sessions", () => {
     const db = openCorvidinhoDb({ memory: true });
-    // v7 (AUTONOMY-2 schedule ping dedupe) builds on v6.
-    expect(SCHEMA_VERSION).toBe(8);
+    // v7 (AUTONOMY-2 schedule ping dedupe), v8 (pending ask) and v9
+    // (in-flight Discord replies, REQ-discord-311) build on v6.
+    expect(SCHEMA_VERSION).toBe(9);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };

@@ -948,6 +948,41 @@ Acceptance Criteria
 - `/schedule create` refuses such a project and stores nothing; a stored schedule with such a project fails its tick without running the agent.
 - Empty project, the bridge root and directories inside it behave as before.
 
+### REQ-discord-331
+
+A schedule tick that throws SHALL NOT take down the process that runs it
+(DISCORD-SCHEDULE-4 / CLI-8 / AUTONOMOUS-4). The store calls a tick makes
+(`refresh`, `listDue`, `claimRun`) can throw, for example `SQLITE_BUSY` after
+the 5 s busy timeout while the bridge, `corvidinho daemon`, watch and agents
+share one data dir. Bun exits the process on an unhandled rejection.
+
+- The scheduler's own interval (`SchedulerService.start()`, which the Discord
+  bridge uses) SHALL catch a rejected tick and log one stderr line,
+  `[scheduler] tick failed: <message>`. The message SHALL be passed through
+  `scrubSecrets` (SAFE-6) and capped. No stack is logged.
+- `tick()` SHALL still reject for direct callers, so the daemon keeps its own
+  `tick.failed` JSON log line. A tick that throws SHALL release its tick lock,
+  so the next tick runs. Runs it claimed before the throw SHALL keep running.
+- The fire-and-forget run promise that a tick starts SHALL never reject. An
+  error that escapes a run (for example, recording its failure also throws)
+  SHALL be logged the same way as `[scheduler] run failed: <message>`.
+- A run SHALL always free its running slot when it ends, even when parking its
+  worktree throws, so that schedule can run again and the concurrency cap is
+  not used up.
+- No global `unhandledRejection` handler SHALL be installed.
+
+Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
+no catch-up, auto-pause after 5 failures, the atomic claim (REQ-discord-108)
+and the non-blocking tick. No new env var, slash command, CLI flag, table or
+column.
+
+Acceptance Criteria
+- With the interval running, `listDue` or `claimRun` throwing once gives no unhandled rejection, one scrubbed `[scheduler] tick failed:` line with no raw token, and the next tick starts the due run.
+- A separate Bun process that runs the scheduler interval, with a store that throws once, stays up and exits 0. Before the fix it exited 1.
+- A manual `tick()` whose `claimRun` throws on the second due schedule rejects. The first run keeps going, and the next `tick()` starts the second.
+- A run whose agent throws and whose `markRunFinished` also throws logs `[scheduler] run failed:` and frees its slot, with no unhandled rejection.
+- A run whose `parkWorktree` throws frees its slot, and the same schedule starts again on a later tick.
+
 ### REQ-discord-253
 
 The GITHUB-6 repo gate the `/work` draft-PR step (REQ-discord-088) applies to
@@ -1027,4 +1062,34 @@ Acceptance Criteria
 - Pick update includes empty components (buttons gone) and clears pendingAsk before resume.
 - Re-press after clear does not spawn a second resume.
 - Ephemeral ack is deleted (or thin-updated without buttons) after resume completes when deleteReply is available.
+
+### REQ-discord-311
+
+While the bridge works on a reply to a Discord message, or on the run a
+button pick (DISCORD-ASK) resumes, it SHALL keep one
+`discord_inflight_replies` row (schema v9: id, session id, channel id, the
+allowlisted parent channel id when the reply is in a thread, progress embed id
+once sent, request message id, start time; no message text) from before the
+progress embed is sent until the reply finishes, and SHALL delete it on every
+exit path (done, failed exit, ask, worktree refused, thrown error). On start,
+the bridge SHALL read the rows left by an earlier process before any new reply
+begins and, once the gateway is up, handle each one sequentially and best
+effort: when neither the row's channel nor its parent channel is allowlisted
+any more (DISCORD-5), post and edit nothing; otherwise edit the bot's own
+progress embed to the red failed status `interrupted: Corvidinho restarted
+before this reply finished — please send it again`, and when there is no embed
+id or the edit fails, reply to the recorded request message in the same
+channel with the same text; then delete the row. Recovery SHALL NOT throw out
+of bridge start and SHALL NOT touch any other channel or message. No slash
+command or env var is added.
+
+Acceptance Criteria
+- A running reply has exactly one row whose progress id is the sent embed; the row is gone after success, failed exit, ask, thrown error and worktree refusal; ignored or refused messages never add one.
+- A reply in a thread records the thread as its channel and the allowlisted parent channel; a button pick's resumed run records a row (request id = the ask stub message) and clears it after.
+- A bridge that died mid-reply leaves the row; the next start edits that embed (same channel, same message id) to the error color with the interrupted text, sends no new message, and deletes the row.
+- A failed edit, or a row with no embed id, falls back to a reply to the request message with the interrupted text; the row is deleted.
+- A row whose channel and parent channel are no longer allowlisted gets no edit and no reply; the row is deleted.
+- Edit and reply both failing still lets the bridge start; the row is deleted.
+- With no rows, bridge start sends, edits and replies nothing.
+- A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
 
