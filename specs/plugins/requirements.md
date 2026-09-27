@@ -849,4 +849,5 @@ config key, pragma, slash command or plugin.
 Acceptance Criteria
 - While another process holds the write lock and then commits, `appendAudit` waits and succeeds; its `prev_hash` is the other writer's row hash and the chain verifies.
 - Concurrent appenders in several processes lose no rows.
+- Several processes that each open the shared DB file, append one row and close it (as dangerous plugin runs do), all at once, get every append in and the chain verifies.
 
