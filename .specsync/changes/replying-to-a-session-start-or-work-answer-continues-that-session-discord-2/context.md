@@ -22,6 +22,9 @@ all: `SlashInteraction.editReply` resolved with nothing.
 
 Re-verified on origin/main 6e5370d before the fix: 5 of the 6 new tests fail
 (ping on → session B; ping off → no run; fallback reply → no run).
+Re-verified after merging origin/main 3cdbb5c (SAFE-8 x DISCORD-ASK-7): the
+same 5 fail on its sources; the slash handlers still pass `trackBotMessage`
+through `finishSlashWithOwnerNotice` → `finishSlashWithThinking`.
 
 HI: DISCORD-2 / DISCORD-2.a (`hi/discord.md`), SESSION-MULTI-1..4
 (`hi/session.md`). The router's owner-only reply rule (REQ-discord-046) is
