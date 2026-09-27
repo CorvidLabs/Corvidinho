@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "bridge-marks-a-reply-interrupted-after-a-restart-in-flight-replies-are-recorded-in-the-shared-db-and-the-next-bridge",
+  "implementation_commit": "eb6fea0760cdacd9734a792190dec1d679b174b3",
+  "implementation_tree": "19db1a1fa61a2a97c489d8db49b41f2c3148b900",
+  "contract_digest": "563518a720a7b1e58b89fb09a96c0292b6c6172fe3370422a8812fb10e85b187",
+  "workspace_digest": "0a860f1ba642ce17e56caa577c08bd39f90194860a05c9225a22de73b342d506",
+  "closing_digest": "218bd9a75ac8136644db1023419abf7a2e9d6261976c6439f5f3684b0863bfc4",
+  "review_digest": "7ccf464d7dd6b0714f3136e32f43cc7f95836745bda560d417ade89bd40bd465",
+  "finalization_digest": "8b36f5411d0570883dd2c211521808bae925e4508d58fdaa15ac59b986848937",
+  "timestamp": 1790467693
+}

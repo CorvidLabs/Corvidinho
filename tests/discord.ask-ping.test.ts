@@ -596,7 +596,8 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
   });
 
   test("schema v8 adds discord_sessions.pending_ask and migrates a v7 DB", () => {
-    expect(SCHEMA_VERSION).toBe(8);
+    // v9 (in-flight Discord replies, REQ-discord-311) builds on v8.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(8);
     const db = new SqliteDatabase(":memory:");
     migrateCorvidinhoDb(db);
     db.exec("ALTER TABLE discord_sessions DROP COLUMN pending_ask");
@@ -609,7 +610,7 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
-    expect(v.value).toBe("8");
+    expect(v.value).toBe(String(SCHEMA_VERSION));
     const row = db.query("SELECT pending_ask FROM discord_sessions WHERE id = 'sess_x'").get() as {
       pending_ask: string | null;
     };

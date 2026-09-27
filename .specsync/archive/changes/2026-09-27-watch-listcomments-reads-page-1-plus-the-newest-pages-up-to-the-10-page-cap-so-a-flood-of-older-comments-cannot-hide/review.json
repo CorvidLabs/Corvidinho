@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "7a966cde36233876092c442786526694c90ecf27",
+  "contract_digest": "2a154cfb7b4999ded58debba712b6c90da4cfba26177206234f9eb3e8badc9da",
+  "execution_digest": "178795badf930c255be9db3dfde5643caa43a17fda5cd792930acf1356514957",
+  "workspace_digest": "aace2e305eb0c1dbd2feb007c79aeb9a82fab4402d7ce31c7f0372a9785365fa",
+  "timestamp": 1790467753
+}
