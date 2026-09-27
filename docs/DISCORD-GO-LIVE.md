@@ -158,12 +158,14 @@ in the owner's tool catalog, see below). The allowlist file
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
 `corvidinho plugins run` run the tool and offers it to the model in the owner's runs, except
-`shell-exec` and the runners (see "What an entry unlocks" below):
+`shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` (see
+"What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
-| `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` |
+| `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do; never offered to the model from the allowlist until the SAFE-3 decision |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
@@ -199,14 +201,16 @@ What an entry unlocks **today**:
   voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
-- Never from the allowlist: `shell-exec`, `node-exec`, `python-exec` and `cargo-exec` stay out
-  of the model's catalog even when listed, until the SAFE-3 question (can the shell and the
-  runners be kept from leaving the project root) is decided. They still run through
-  `corvidinho plugins run`.
+- Never from the allowlist: `shell-exec`, `node-exec`, `python-exec`, `cargo-exec` and the
+  Fledge core runs `fledge-lanes-run` and `fledge-run` stay out of the model's catalog even
+  when listed, until the SAFE-3 question (can the shell and the runners be kept from leaving
+  the project root) is decided. They still run through `corvidinho plugins run`.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
-  one and the run is not a non-ADMIN session. They can change files without reporting them, so
-  in a project that is not a git work tree a run that called one, or a local run's `delegate`
-  worker (which could have), runs the verify lane anyway (AGENT-4).
+  one and the run is not a non-ADMIN session. Naming a Fledge core builtin (`fledge-lanes-list`,
+  `fledge-lanes-validate`, `fledge-lanes-run`, `fledge-run`) starts no discovery. Fledge
+  commands can change files without reporting them, so in a project that is not a git work
+  tree a run that called one, or a local run's `delegate` worker (which could have), runs the
+  verify lane anyway (AGENT-4).
 - Allowlisting `git-commit`, `git-push` and `github-pr-create` for the `/work` PR step also
   offers them to the owner's runs, so the model can commit, push or open a PR itself before the
   run's verify.
@@ -280,6 +284,7 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
   forget/override, no `delegate`/`council`, no `web-fetch` (dangerous counts as mutating).
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
+  `fledge-lanes-list`/`-validate`,
   `memory-store`/`-recall` (scoped to the acting user), `discord-user-lookup` (members of
   the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never

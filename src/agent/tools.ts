@@ -2,7 +2,7 @@
  * Map registered plugins → OpenAI-compatible tool definitions (AGENT-3 flesh).
  * Runtime still enforces SAFE-1 dangerous deny via runPlugin.
  * A dangerous plugin is offered only when the run's allowlist names it
- * (SAFE-1 / CLI-3), never the SAFE-3-pending shell and runners.
+ * (SAFE-1 / CLI-3), never the SAFE-3-pending shell, runners and Fledge core runs.
  */
 
 import { isMutatingPlugin } from "../plugins/mutating.ts";
@@ -29,15 +29,18 @@ export type OpenAiToolDef = {
 };
 
 /**
- * Dangerous tools a task run never offers from the allowlist: the shell and
- * the language runners (their cwd is a start dir, not a clamp) wait on Leif's
- * SAFE-3 decision. `includeDangerous` (a test seam) still offers them.
+ * Dangerous tools a task run never offers from the allowlist: the shell, the
+ * language runners and the Fledge core runs (their cwd is a start dir, not a
+ * clamp: a lane or task runs whatever commands the project gives it) wait on
+ * Leif's SAFE-3 decision. `includeDangerous` (a test seam) still offers them.
  */
 export const SAFE3_PENDING_TOOLS: ReadonlySet<string> = new Set([
   "shell-exec",
   "node-exec",
   "python-exec",
   "cargo-exec",
+  "fledge-lanes-run",
+  "fledge-run",
 ]);
 
 /**
@@ -53,7 +56,8 @@ export function allowlistOffers(
 
 /**
  * AGENT-4: a tool whose file edits no tool result reports (a Fledge command
- * runs arbitrary project code; the shell and runners run commands). Without a
+ * runs arbitrary project code; the shell, runners and Fledge core runs run
+ * commands). Without a
  * git snapshot to diff, a run that called one verifies anyway.
  */
 export function editsFilesUnreported(name: string): boolean {

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "343a08b7e0a72e2e67cc6b1e401e174cda5d6b92",
+      "contract_digest": "e85d98c4b3a55f62588e5a2aedcfe6c75b915d49c4644eb326110115d894ffdd",
+      "execution_digest": "1d71167abb11a44ebb38eebc9e52b920d0b7b587dd6071a6203a973ab4e308d8",
+      "workspace_digest": "e370fffef375dc9dd5e14cf78c13f5a12607c239591cd7eb0867254e6f6fe893",
+      "timestamp": 1790538971
+    }
+  ]
+}

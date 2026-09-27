@@ -8,7 +8,7 @@
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { DELEGATE_COMMAND_NAME } from "../../plugins/autonomous/commands.ts";
 import { FLEDGE_COMMAND_PREFIX } from "../../plugins/fledge/commands.ts";
-import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
+import { FLEDGE_CORE_COMMAND_NAMES, loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { isMutatingPlugin } from "../plugins/mutating.ts";
@@ -339,10 +339,20 @@ function toAllowSet(
   return new Set(allowlist);
 }
 
-/** The allowlist offers at least one Fledge command (FLEDGE-4 / PLUGIN-3). */
+const FLEDGE_CORE_NAMES: ReadonlySet<string> = new Set(FLEDGE_CORE_COMMAND_NAMES);
+
+/**
+ * The allowlist offers at least one Fledge plugin command (FLEDGE-4 /
+ * PLUGIN-3). The Fledge core builtins (PLUGIN-1) are registered with the other
+ * builtins, so naming one never needs discovery.
+ */
 function allowsFledge(allowlist: ReadonlySet<string>): boolean {
   for (const name of allowlist) {
-    if (name.startsWith(FLEDGE_COMMAND_PREFIX) && allowlistOffers(allowlist, name)) {
+    if (
+      name.startsWith(FLEDGE_COMMAND_PREFIX) &&
+      !FLEDGE_CORE_NAMES.has(name) &&
+      allowlistOffers(allowlist, name)
+    ) {
       return true;
     }
   }

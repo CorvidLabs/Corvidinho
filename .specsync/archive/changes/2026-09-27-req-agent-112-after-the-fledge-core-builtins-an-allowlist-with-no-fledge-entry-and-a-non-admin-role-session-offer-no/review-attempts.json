@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "105a7bdf4045974dacefabb95a45a9fc192c7c1b",
+      "contract_digest": "d138a01d3ea88ad4bc4b445f94d71b36298572127671029143b087c0942b7e0b",
+      "execution_digest": "7c1a3a20042878f853407d542dbf8ee758a2407273ac4afe11d92b3532caed0a",
+      "workspace_digest": "4e836ebb9572218a90831f8ca880e9b047d7647be9b54b4d7b06eeabe1c8eaf4",
+      "timestamp": 1790540017
+    }
+  ]
+}
