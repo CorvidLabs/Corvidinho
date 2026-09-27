@@ -13,3 +13,4 @@ artifact: tasks
 - [x] Watch: GitHub 401 halts the loop and settles `fatal` (exit 1); default error sink prints one scrubbed line; 403 rate-limit backoff unchanged; `github watch` exits with `fatal.exitCode`.
 - [x] Regression tests fail before the fix and pass after.
 - [x] Deltas and spec files updated.
+- [x] Review follow-up: SQLite DB-open errors get the data-dir hint; slash registration on bridge ready is one line via `formatRegisterCommandsFailure` (shared with `register-commands`); login failure redacts with the bridge env; `github watch` exits with the fatal code even if `stop()` rejects; `docs/WATCH.md` documents the 401 stop.

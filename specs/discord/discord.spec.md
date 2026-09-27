@@ -119,7 +119,9 @@ STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 (`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
-`formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login.
+`formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
+`formatRegisterCommandsFailure` (`register-commands.ts`) words a failed slash
+registration (CLI `register-commands` and the bridge's registration on ready).
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via

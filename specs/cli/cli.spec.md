@@ -39,7 +39,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `main` | `argv: string[]` | `Promise<number>` | CLI entry; exit code |
 | `runCli` | `argv: string[], run?: (argv) => Promise<number>` | `Promise<number>` | Top-level error boundary around `main` (REQ-cli-419) |
 | `reportCliError` | `err: unknown, opts?: { json?: boolean }` | `number` | One scrubbed error line + hint; returns the exit code (REQ-cli-419) |
-| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind |
+| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error) |
 | `attribution` | `format?: "markdown" or "plain"` | `string` | Return the canonical footer in the requested format |
 | `startDaemon` | `opts?: StartDaemonOptions` | `Promise<StartDaemonResult>` | Take the data-dir lock and arm the headless schedule ticker (CLI-8 / AUTONOMOUS-4) |
 | `runDaemon` | `opts?: StartDaemonOptions` | `Promise<number>` | `corvidinho daemon`: start, then stop cleanly on SIGTERM/SIGINT |

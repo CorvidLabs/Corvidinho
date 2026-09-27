@@ -5,11 +5,12 @@
  * CLI end-to-end check; the Discord/GitHub ones preload a fetch that answers
  * 401 like a bad token, so no network or real token is used.
  */
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { reportCliError, runCli } from "../src/cli.ts";
+import { Database } from "bun:sqlite";
+import { cliErrorHint, reportCliError, runCli } from "../src/cli.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CLI = join(ROOT, "src", "cli.ts");
@@ -123,6 +124,22 @@ describe("CLI error boundary (REQ-cli-419)", () => {
     const parsed = JSON.parse(r.out) as { ok: boolean; error: string };
     expect(parsed.ok).toBe(false);
     expect(parsed.error).toContain("/proc/nope");
+    expectClean(r.err + r.out);
+  }, T);
+
+  test("a data dir whose DB cannot be opened names CORVIDINHO_DATA_DIR in the hint", async () => {
+    // The dir exists but corvidinho.db in it is a directory: SQLITE_CANTOPEN.
+    const dataDir = mkdtempSync(join(tmpdir(), "corvidinho-cantopen-"));
+    mkdirSync(join(dataDir, "corvidinho.db"));
+    const r = await cli(["plugins", "run", "memory-recall"], {
+      CORVIDINHO_DATA_DIR: dataDir,
+      CORVIDINHO_ACTING_DISCORD_USER_ID: "1",
+    });
+    expect(r.code).toBe(1);
+    expect(r.err.trim().split("\n")).toHaveLength(2);
+    expect(r.err).toContain("corvidinho: unable to open database file");
+    expect(r.err).toContain("hint: check that the path exists and is writable");
+    expect(r.err).toContain("CORVIDINHO_DATA_DIR");
     expectClean(r.err + r.out);
   }, T);
 
@@ -266,6 +283,29 @@ describe("reportCliError / runCli (REQ-cli-419)", () => {
       error: "mkdir failed for [redacted:github-token]",
     });
     expectClean(out.join("\n") + err.join("\n"), [GITHUB_TOKEN]);
+  });
+
+  test("cliErrorHint matches the error kind", () => {
+    let sqliteErr: unknown;
+    try {
+      new Database(mkdtempSync(join(tmpdir(), "corvidinho-hint-")), { create: true });
+    } catch (e) {
+      sqliteErr = e;
+    }
+    expect((sqliteErr as { code?: string }).code).toBe("SQLITE_CANTOPEN");
+    expect(cliErrorHint(sqliteErr)).toContain("CORVIDINHO_DATA_DIR");
+    expect(
+      cliErrorHint(Object.assign(new Error("x"), { code: "EACCES", path: "/nope" })),
+    ).toContain("CORVIDINHO_DATA_DIR");
+    // A busy DB or an error with no path is not a data-dir problem.
+    expect(cliErrorHint(Object.assign(new Error("locked"), { code: "SQLITE_BUSY" }))).toContain(
+      "corvidinho doctor",
+    );
+    expect(cliErrorHint(Object.assign(new Error("x"), { code: "ENOENT" }))).toContain(
+      "corvidinho doctor",
+    );
+    expect(cliErrorHint(new Error("x"))).toContain("corvidinho doctor");
+    expect(cliErrorHint(null)).toContain("corvidinho doctor");
   });
 
   test("a clean command's exit code passes through runCli unchanged", async () => {

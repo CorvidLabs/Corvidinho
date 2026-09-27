@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { DiscordAPIError, DiscordjsError, DiscordjsErrorCodes } from "discord.js";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { formatDiscordLoginFailure, startBridge } from "../src/discord/bridge.ts";
+import { formatRegisterCommandsFailure } from "../src/discord/register-commands.ts";
 import type { DiscordGateway } from "../src/discord/gateway.ts";
 
 // Fake secrets are assembled at runtime — never realistic literals in the repo.
@@ -103,5 +104,62 @@ describe("discord login failure (REQ-discord-417)", () => {
       if (prev === undefined) delete process.env.DISCORD_TOKEN;
       else process.env.DISCORD_TOKEN = prev;
     }
+  });
+});
+
+describe("slash registration failure is one line (REQ-discord-417)", () => {
+  const apiError = (status: number, message: string) =>
+    new DiscordAPIError(
+      { message, code: 50001 },
+      50001,
+      status,
+      "PUT",
+      "https://discord.com/api/v10/applications/1/guilds/2/commands",
+      { body: [{ name: "work" }] } as never,
+    );
+
+  test("bridge registration on ready: status, DISCORD_GUILD_ID hint, no dump", () => {
+    const line = formatRegisterCommandsFailure(apiError(403, "Missing Access"), {
+      what: "slash command registration failed",
+      guildHint: "DISCORD_GUILD_ID",
+      env: {},
+    });
+    expect(line).toBe(
+      "[discord] slash command registration failed (403): Missing Access — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and DISCORD_GUILD_ID",
+    );
+    expect(line).not.toContain("requestBody");
+    expect(line).not.toContain("\n");
+  });
+
+  test("CLI default: register-commands failed, --guild-id hint on 401/403 only", () => {
+    expect(formatRegisterCommandsFailure(apiError(401, "401: Unauthorized"), { env: {} })).toBe(
+      "[discord] register-commands failed (401): 401: Unauthorized — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and --guild-id",
+    );
+    expect(
+      formatRegisterCommandsFailure(new Error("Unable to connect\n    at x (y.js:1:1)"), {
+        env: {},
+      }),
+    ).toBe("[discord] register-commands failed: Unable to connect");
+  });
+
+  test("a token value in the error text is never echoed (SAFE-6)", () => {
+    const line = formatRegisterCommandsFailure(
+      Object.assign(new Error(`bad ${TOKEN}`), { status: 401 }),
+      { env: { DISCORD_TOKEN: TOKEN } },
+    );
+    expect(line).not.toContain(TOKEN);
+    expect(line).toContain("[redacted:env-secret]");
+  });
+});
+
+describe("login failure uses the bridge env for SAFE-6 redaction", () => {
+  test("a token only in the startBridge env is still redacted", async () => {
+    const { result } = await startWith(
+      Object.assign(new Error(`rejected ${TOKEN}`), { status: 401 }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toStartWith("discord login failed (401): check DISCORD_TOKEN");
+    expect(result.message).not.toContain(TOKEN);
   });
 });

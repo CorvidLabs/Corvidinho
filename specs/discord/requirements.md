@@ -1357,11 +1357,22 @@ login SHALL end the bridge start cleanly (CLI-4, SAFE-6).
 - `startBridge` SHALL catch a rejected `gateway.start()`, stop the
   half-started gateway (the schedule ticker is not started yet) and return
   `{ ok: false, exitCode: 1, message }` with
-  `message = formatDiscordLoginFailure(err)`: discord.js `TokenInvalid`
+  `message = formatDiscordLoginFailure(err, { env })` (the bridge's env, so a
+  token passed only in `startBridge({ env })` is redacted too): discord.js
+  `TokenInvalid`
   counts as 401; on 401/403 it is
   `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; otherwise
   `discord login failed: <line> — check DISCORD_TOKEN and that discord.com is
   reachable`.
+- `formatRegisterCommandsFailure(err, { what?, guildHint?, env? })` in
+  `src/discord/register-commands.ts` SHALL return one line
+  `[discord] <what> (<status>): <line>` (`what` defaults to
+  `register-commands failed`; no status part when the error has none), adding
+  `— check DISCORD_TOKEN / DISCORD_BOT_TOKEN and <guildHint>` (default
+  `--guild-id`) on 401/403. The bridge's slash registration on gateway ready
+  SHALL log it with `what: "slash command registration failed"` and
+  `guildHint: "DISCORD_GUILD_ID"`, never the DiscordAPIError object (stack,
+  `rawError`, `requestBody`).
 
 Existing start refusals (missing token, empty channel allowlist) are
 unchanged. No new env var, slash command, CLI flag, table or column.
@@ -1371,4 +1382,6 @@ Acceptance Criteria
 - A `DiscordAPIError` with status 403 gives `discord login failed (403): check DISCORD_TOKEN …` on one line with no `rawError`.
 - `corvidinho discord bridge` with a token Discord rejects exits 1 with that line and no stack, crash footer or token value.
 - `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters, keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
+- A token that is only in the `startBridge` env and appears in the login error text is redacted in the returned message.
+- `formatRegisterCommandsFailure` on a `DiscordAPIError` 403 `Missing Access` with the bridge options gives `[discord] slash command registration failed (403): Missing Access — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and DISCORD_GUILD_ID` with no `requestBody` and no newline; with defaults a 401 names `--guild-id`, a status-less error gets no hint, and a secret env value is redacted.
 

@@ -264,14 +264,17 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
  * REQ-discord-417: one scrubbed line for a failed gateway login. discord.js
  * turns a 401 into `TokenInvalid` (no status); REST errors carry `status`.
  */
-export function formatDiscordLoginFailure(err: unknown): string {
+export function formatDiscordLoginFailure(
+  err: unknown,
+  opts: { env?: NodeJS.ProcessEnv } = {},
+): string {
   const e = (err && typeof err === "object" ? err : {}) as {
     code?: unknown;
     status?: unknown;
   };
   const status =
     e.code === "TokenInvalid" ? 401 : typeof e.status === "number" ? e.status : undefined;
-  const detail = formatErrorLine(err);
+  const detail = formatErrorLine(err, { env: opts.env });
   if (status === 401 || status === 403) {
     return `discord login failed (${status}): check DISCORD_TOKEN (${detail})`;
   }
@@ -1334,7 +1337,7 @@ export async function startBridge(
     await Promise.resolve()
       .then(() => gateway.stop())
       .catch(() => undefined);
-    return { ok: false, exitCode: 1, message: formatDiscordLoginFailure(err) };
+    return { ok: false, exitCode: 1, message: formatDiscordLoginFailure(err, { env }) };
   }
   if (inflightReplies && interruptedReplies.length > 0) {
     // After login: the REST calls need the token. Sequential, never throws.

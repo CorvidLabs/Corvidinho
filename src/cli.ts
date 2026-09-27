@@ -24,6 +24,7 @@ import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
+  formatRegisterCommandsFailure,
   goLiveChecklist,
   registerSlashCommandsLive,
   startBridge,
@@ -671,14 +672,7 @@ async function discordRegisterCommands(argv: string[]): Promise<number> {
     return 0;
   } catch (err) {
     // REQ-cli-419: one scrubbed line, never the raw DiscordAPIError dump.
-    const status = httpStatusOf(err);
-    const hint =
-      status === 401 || status === 403
-        ? " — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and --guild-id"
-        : "";
-    console.error(
-      `[discord] register-commands failed${status ? ` (${status})` : ""}: ${formatErrorLine(err)}${hint}`,
-    );
+    console.error(formatRegisterCommandsFailure(err));
     return 1;
   }
 }
@@ -730,8 +724,14 @@ async function githubWatch(): Promise<number> {
     });
     // REQ-cli-419: a rejected token (401) stops the poller; exit non-zero.
     void result.fatal.then(async (f) => {
-      await result.stop();
-      resolve(f.exitCode);
+      try {
+        await result.stop();
+      } catch {
+        // The poll loop already stopped; a failed DB close must not hang or
+        // crash the exit (the fatal line was printed by the poller).
+      } finally {
+        resolve(f.exitCode);
+      }
     });
   });
 }
@@ -854,26 +854,17 @@ export async function main(argv: string[]): Promise<number> {
   return 1;
 }
 
-/** HTTP status on a library error (DiscordAPIError, Octokit RequestError). */
-function httpStatusOf(err: unknown): number | undefined {
-  if (!err || typeof err !== "object") return undefined;
-  const e = err as { status?: unknown; response?: { status?: unknown } };
-  const s = e.status ?? e.response?.status;
-  return typeof s === "number" && s >= 100 && s <= 599 ? s : undefined;
-}
-
 /** One next step for the operator, matched to the error kind (CLI-4). */
 export function cliErrorHint(err: unknown): string {
   if (err instanceof PluginNotFoundError) {
     return "run `corvidinho plugins list` for the available commands";
   }
   const e = err as { code?: unknown; path?: unknown } | null;
+  const code = e && typeof e === "object" && typeof e.code === "string" ? e.code : "";
   if (
-    e &&
-    typeof e === "object" &&
-    typeof e.code === "string" &&
-    /^E[A-Z]+$/.test(e.code) &&
-    typeof e.path === "string"
+    (/^E[A-Z]+$/.test(code) && typeof e?.path === "string") ||
+    // The data dir exists but the DB in it cannot be opened (bun:sqlite).
+    /^SQLITE_(CANTOPEN|READONLY|PERM|NOTADB)$/.test(code)
   ) {
     return `check that the path exists and is writable; the data dir is CORVIDINHO_DATA_DIR (default ~/${DEFAULT_DATA_DIR_REL})`;
   }
