@@ -1,0 +1,32 @@
+{
+  "timestamp": 1790475191,
+  "commit": "207d3f51f209ac22f973c24ec8837e9c67aa36fa",
+  "contract_digest": "34ddb6880b28912388f2685ba667a338bf33257a19f9938969f5ab7b2a92d812",
+  "execution_digest": "683c583ba1880d501cc537274e25d872b1a574390b971f8ddb977f881ce087ba",
+  "workspace_digest": "b6c6bb32f29505d96bb055f16fe0dbabc6fcfa9dd2e392d726c81e7d136ac046",
+  "acceptance_input_digest": "89e2521a8cab9ec9b12560d0fc1c6bdfd6a6d8d0f4f0783816936c3892ea266c",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "tests/web.transport.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2bd9d4ac8857c6cabafbfaa1eecc71acf5e6011853ac68fbb2f1fb0fdb4908ea",
+        "entry_digest": "fa3651f9b607e05a0cb4b6cced23493a9712d1337ee59c696602a47723a7e199",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}
