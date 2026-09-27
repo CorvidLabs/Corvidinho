@@ -7,11 +7,11 @@
   "title": "DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window",
   "description": "DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd",
   "created_at": 1790469841,
-  "updated_at": 1790475359,
+  "updated_at": 1790475595,
   "affected_specs": [
     "discord"
   ],
