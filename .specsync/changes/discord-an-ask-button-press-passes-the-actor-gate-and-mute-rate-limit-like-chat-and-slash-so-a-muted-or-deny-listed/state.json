@@ -7,10 +7,11 @@
   "title": "Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5)",
   "description": "Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "cf8c6768df9330074f41c2ceba29d70208e9518e",
   "created_at": 1790474326,
-  "updated_at": 1790474503,
+  "updated_at": 1790474651,
   "affected_specs": [
     "discord"
   ],

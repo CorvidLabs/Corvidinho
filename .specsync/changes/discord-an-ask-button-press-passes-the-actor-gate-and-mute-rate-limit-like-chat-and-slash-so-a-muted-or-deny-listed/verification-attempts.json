@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790474650,
+      "commit": "abf61ca779fae3cb2450388828451421c36641b4",
+      "contract_digest": "252bd4f26d12aefa856abe5538447f21fe7069f70c15869d8218bd920cc72628",
+      "execution_digest": "d0e3ddb241decfcc4f1da17704df43af7e928cfe8a6ef609fc474777a36ad566",
+      "workspace_digest": "c490a181f40915796c4b8fd7a1a6936854445775e2272c117618ae968c8a48bd",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-010",
+        "REQ-discord-201"
+      ]
+    }
+  ]
+}
