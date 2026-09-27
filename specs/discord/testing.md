@@ -71,6 +71,25 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   a restart leaves nothing to recover, and a crash mid button pick marks the
   reused Choose stub interrupted.
 
+## Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 x DISCORD-ASK-6/7)
+
+- `tests/discord.collapsed-ping.test.ts` — `formatCollapsedPing` pointers,
+  dedupe and `alreadyPinged`; with an editable thinking message a clarify ask
+  (free text or Choose stub) is followed by one fresh requester-only ping
+  replying to the edited answer (a reply to it continues the session), a stuck
+  ask by one owner-only ping, a clarify ask with a pending 80% warning by one
+  post pinging both; a spend-cap stop pings the owner once per episode; an
+  answer with no mention, a fallback reply and a failed ping post add nothing;
+  a button pick that gets stuck pings the owner; `/work` clarify pings the
+  requester after the collapsed answer; the #160 owner notice is the only
+  owner ping (`/work` at the cap, owner-as-requester clarify); a notice that
+  had to ride the collapsed answer is followed by one owner ping; the slash
+  fallback adds no post. Allowed mentions equal exactly the mentioned users
+  (no mass or role mentions, no components, one line).
+- `tests/discord.spend.test.ts`, `tests/discord.ask-ping.test.ts`,
+  `tests/discord.ask-ephemeral.test.ts`, `tests/discord.thin-ack.test.ts`,
+  `tests/discord.inflight-replies.test.ts` — collapsed answers that mention
+  someone now expect the one ping post (was: no fresh post at all).
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
@@ -83,3 +102,5 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   only; another user's reply neither runs the agent nor touches the ask; a
   finished run keeps no pending ask; without `editMessage` an @mention `ok`
   still restates (no live Discord).
+## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
+`tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.

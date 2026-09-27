@@ -68,7 +68,11 @@ import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
-import { componentChannelAllowlisted, routeMessage } from "./message-router.ts";
+import {
+  componentChannelAllowlisted,
+  promptBodyForAskGate,
+  routeMessage,
+} from "./message-router.ts";
 import {
   defaultRateLimitConfig,
   isMonitoredChannel,
@@ -117,7 +121,7 @@ import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 import { readSpendSnapshot } from "../agent/spend.ts";
 import { formatSpendStatusLine } from "../agent/spend-notice.ts";
 import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
-import { askPingOwner } from "./spend-post.ts";
+import { askPingOwner, postCollapsedPing } from "./spend-post.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -514,9 +518,10 @@ export async function startBridge(
       if (
         action.kind === "continue_session" &&
         session.pendingAsk &&
-        (isThinAck(prompt) || isCancelAsk(prompt))
+        (isThinAck(promptBodyForAskGate(prompt)) ||
+          isCancelAsk(promptBodyForAskGate(prompt)))
       ) {
-        if (isCancelAsk(prompt)) {
+        if (isCancelAsk(promptBodyForAskGate(prompt))) {
           store.setPendingAsk(session, null);
           if (replyRef.fn) {
             const sent = await replyRef.fn({
@@ -832,6 +837,16 @@ export async function startBridge(
               pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+            // AUTONOMY-2/4, SAFE-8: an edit does not notify its mentions, so
+            // whoever the answer mentions gets one fresh ping post.
+            const ping = await postCollapsedPing({
+              post: replyRef.fn,
+              channelId,
+              replyToMessageId: collapsed.messageId,
+              mentionUserIds: out.mentionUserIds,
+              questionUserIds: askRaw?.reason === "clarify" ? askBody?.mentionUserIds : undefined,
+            });
+            if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             // Fallback when editMessage unavailable: status embed + separate reply.
             if (askBody) {
@@ -1169,6 +1184,15 @@ export async function startBridge(
               pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+            // As on a chat answer: the edit's mentions get one fresh ping post.
+            const ping = await postCollapsedPing({
+              post: replyRef.fn,
+              channelId,
+              replyToMessageId: collapsed.messageId,
+              mentionUserIds: out.mentionUserIds,
+              questionUserIds: askRaw?.reason === "clarify" ? askBody?.mentionUserIds : undefined,
+            });
+            if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             if (askBody) {
               await (askBody.failed

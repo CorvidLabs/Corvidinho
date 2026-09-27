@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "collapsed-ask-pings-notify-when-an-answer-is-delivered-by-editing-the-thinking-message-discord-ask-6-7-and-mentions-the",
+  "implementation_commit": "4a5cfd5743426e79123f184c64f4a078bd04c52d",
+  "implementation_tree": "dedbd51f8a272238df11b6c71c352603ec4dcd01",
+  "contract_digest": "cc506f2cdf8f7efa4c9e1c6ea8e7d85e22e64c091a3aa21ca1bd25c60033e5bd",
+  "workspace_digest": "6d99f45cbd8a30e7705bc631d3bb0e6661b5af65a39d8980fe8dd2b6322d6092",
+  "closing_digest": "6908dc64d371a5c5c6cf79b9ba01bd0369001cb6d14ab8c3e6cc0b1e3209f40c",
+  "review_digest": "77173a7f0da6f076d3c44fc60165dbdfeb4c981a6b717e689bcdf2a7145892a3",
+  "finalization_digest": "e693968147f17ff91970ba89f140df3d21b6f594bf50ea8b016161e3931727fe",
+  "timestamp": 1790471267
+}
