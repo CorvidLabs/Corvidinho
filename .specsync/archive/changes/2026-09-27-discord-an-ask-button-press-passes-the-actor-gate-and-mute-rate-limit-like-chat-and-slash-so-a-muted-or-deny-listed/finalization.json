@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed",
+  "implementation_commit": "0ba3447bc5415cd02d6f545a5139d3aa21ff8c32",
+  "implementation_tree": "b6a97e89ceb77c4908ecd061e6bc6ef562bb18bc",
+  "contract_digest": "252bd4f26d12aefa856abe5538447f21fe7069f70c15869d8218bd920cc72628",
+  "workspace_digest": "fbfabe258a58023eb29094fc3cb0afdd3b6db142bb21f53455f4076be8f0a36a",
+  "closing_digest": "1dbc580ee4ad2abec2ce413fa937bebf2989f90eaab2a193d806b3f72d25d42f",
+  "review_digest": "1df63e573c64bd9f10da9fe32dfb3290e4b2ed8b51c2b3650c728258adcf8e3a",
+  "finalization_digest": "2b07890a2207c7db5fedf8cef1bcc7c3587788695a3e041a568b21638a7e8258",
+  "timestamp": 1790518391
+}
