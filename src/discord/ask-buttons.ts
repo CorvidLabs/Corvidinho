@@ -11,6 +11,7 @@
  */
 
 import type { AskOption, HumanAsk } from "../agent/types.ts";
+import { resolveAskOptions } from "../agent/ask-options.ts";
 import { defangMassMentions } from "./ask-ping.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
@@ -158,6 +159,47 @@ export function formatAskStub(opts: {
     mentionUserIds,
     failed: stuck,
     status: stuck ? "⚠️ Stuck — asked for help" : "❓ Needs your input",
+  };
+}
+
+export type ButtonAsk = {
+  /** The ask with its listed options, to store as the session's pending ask. */
+  pending: PendingAsk;
+  /** Public Choose stub (no MCQ body, DISCORD-ASK-2). */
+  stub: ReturnType<typeof formatAskStub>;
+  /** The stub's single Choose button. */
+  components: DiscordActionRow[];
+};
+
+/**
+ * DISCORD-ASK-1/4 — the Choose-button form of a run's ask when its choices
+ * fit a short list (ask-human `options`, else a numbered list in the
+ * question: `resolveAskOptions`). Null when the options cannot be listed
+ * (the free-text ask stays) and for a SAFE-8 spend-cap stop, which no choice
+ * can lift. `/work` and `/session start` use it for their answer
+ * (REQ-discord-044); the pick path is the chat one (`onComponent`).
+ */
+export function buttonAskFor(opts: {
+  ask: HumanAsk;
+  ownerDiscordId?: string;
+  requesterDiscordId?: string;
+  nowMs?: number;
+}): ButtonAsk | null {
+  if (opts.ask.reason === "spend-cap") return null;
+  const options = resolveAskOptions({
+    options: opts.ask.options,
+    question: opts.ask.question,
+  });
+  if (!options?.length) return null;
+  const pending = toPendingAsk({ ...opts.ask, options }, { nowMs: opts.nowMs });
+  return {
+    pending,
+    stub: formatAskStub({
+      ask: pending,
+      ownerDiscordId: opts.ownerDiscordId,
+      requesterDiscordId: opts.requesterDiscordId,
+    }),
+    components: buildOpenStubComponents(pending.askId),
   };
 }
 

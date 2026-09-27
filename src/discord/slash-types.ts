@@ -24,6 +24,8 @@ export type SlashReplyPayload = {
   content?: string;
   ephemeral?: boolean;
   embeds?: DiscordEmbedPayload[];
+  /** ActionRow components (the Choose button of a slash ask, DISCORD-ASK-1). */
+  components?: unknown[];
 };
 
 export type SlashInteraction = {

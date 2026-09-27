@@ -1,0 +1,90 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790540631,
+      "digest": "995fb9d4fd13727e2f73f16ed85140f416705d12dc3f71911d95c706f513c984",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the",
+        "title": "Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending)",
+        "description": "Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "src/agent/execute.ts",
+          "src/agent/tools.ts",
+          "tests/agent.allowlisted-dangerous.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "tests/agent.allowlisted-dangerous.test.ts: SAFE3_PENDING_TOOLS is shell-exec, node-exec, python-exec, cargo-exec, fledge-lanes-run and fledge-run; an allowlist naming all six plus files-delete at code tier offers files-delete and none of the six, while includeDangerous still offers the two Fledge core runs and editsFilesUnreported names them. A code-tier task run whose allowlist names the four Fledge core builtins offers only fledge-lanes-list and fledge-lanes-validate as fledge- tools, refuses the model's fledge-run call as not offered, starts no fledge process (no discovery, no run) and reports no unreportedEditTools. Both tests fail with the branch's previous tools.ts and execute.ts; the discovery half fails with only execute.ts reverted."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "e11828149836935451cf1bed22854337f4ec90c3c81bb71d8f5b88ea19dc3c22"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790541222,
+      "digest": "995fb9d4fd13727e2f73f16ed85140f416705d12dc3f71911d95c706f513c984",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the",
+        "title": "Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending)",
+        "description": "Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "src/agent/execute.ts",
+          "src/agent/tools.ts",
+          "tests/agent.allowlisted-dangerous.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "tests/agent.allowlisted-dangerous.test.ts: SAFE3_PENDING_TOOLS is shell-exec, node-exec, python-exec, cargo-exec, fledge-lanes-run and fledge-run; an allowlist naming all six plus files-delete at code tier offers files-delete and none of the six, while includeDangerous still offers the two Fledge core runs and editsFilesUnreported names them. A code-tier task run whose allowlist names the four Fledge core builtins offers only fledge-lanes-list and fledge-lanes-validate as fledge- tools, refuses the model's fledge-run call as not offered, starts no fledge process (no discovery, no run) and reports no unreportedEditTools. Both tests fail with the branch's previous tools.ts and execute.ts; the discovery half fails with only execute.ts reverted."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "6d51b755f8cc640f8ec53438adcc0d525d8801f0b4186b7f13e29f328b707dd5"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790541362,
+      "digest": "c8ac9a110fc5277bf69019baf8223d9e377a025b22ad952d169bc9205dc23a8f",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

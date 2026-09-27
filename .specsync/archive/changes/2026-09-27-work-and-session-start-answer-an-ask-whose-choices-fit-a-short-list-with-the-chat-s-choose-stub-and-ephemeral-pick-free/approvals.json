@@ -1,0 +1,102 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790534958,
+      "digest": "d950da243f5d37491cb8971ff9d45c71cd1bfa595dacaf6de9533b3a47616180",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "work-and-session-start-answer-an-ask-whose-choices-fit-a-short-list-with-the-chat-s-choose-stub-and-ephemeral-pick-free",
+        "title": "/work and /session start answer an ask whose choices fit a short list with the chat's Choose stub and ephemeral pick, free text only when the options cannot be listed (DISCORD-ASK-1/4)",
+        "description": "/work and /session start answer an ask whose choices fit a short list with the chat's Choose stub and ephemeral pick, free text only when the options cannot be listed (DISCORD-ASK-1/4)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/discord/ask-buttons.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/gateway.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/spend-post.ts",
+          "tests/discord.slash-choose-ask.test.ts",
+          "tests/discord.slash-pending-ask.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A /work or /session start run that stops with a clarify or stuck ask whose choices fit a short list (ask-human options, or a numbered list in the question) answers in one message with the chat's public Choose stub (no question, options or reply hint in it; one Choose button), keeps the ask with its options and stub message id as the session's pending ask, and the requester's Choose press opens the ephemeral options whose pick resumes that same session in the stub; the Choose button stays on the fallback reply and on the owner-notice re-edit; an ask whose options cannot be listed stays the free-text ask and a spend-cap stop is never a button ask or pending; tests/discord.slash-choose-ask.test.ts covers each and its bridge tests fail on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "abea86af45630ad9e8cdf0a5af3179e6e9b2fa6843e4a70cf40b1eeaa445208d"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790537103,
+      "digest": "d950da243f5d37491cb8971ff9d45c71cd1bfa595dacaf6de9533b3a47616180",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "work-and-session-start-answer-an-ask-whose-choices-fit-a-short-list-with-the-chat-s-choose-stub-and-ephemeral-pick-free",
+        "title": "/work and /session start answer an ask whose choices fit a short list with the chat's Choose stub and ephemeral pick, free text only when the options cannot be listed (DISCORD-ASK-1/4)",
+        "description": "/work and /session start answer an ask whose choices fit a short list with the chat's Choose stub and ephemeral pick, free text only when the options cannot be listed (DISCORD-ASK-1/4)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/discord/ask-buttons.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/gateway.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/spend-post.ts",
+          "tests/discord.slash-choose-ask.test.ts",
+          "tests/discord.slash-pending-ask.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A /work or /session start run that stops with a clarify or stuck ask whose choices fit a short list (ask-human options, or a numbered list in the question) answers in one message with the chat's public Choose stub (no question, options or reply hint in it; one Choose button), keeps the ask with its options and stub message id as the session's pending ask, and the requester's Choose press opens the ephemeral options whose pick resumes that same session in the stub; the Choose button stays on the fallback reply and on the owner-notice re-edit; an ask whose options cannot be listed stays the free-text ask and a spend-cap stop is never a button ask or pending; tests/discord.slash-choose-ask.test.ts covers each and its bridge tests fail on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "d7f527cb462db19928f7e6eac1faea6ba68d36ceee937705ad21932d9e3d6b33"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790538267,
+      "digest": "31b2dbdbcead6f2d1336d24419fb6abb4153890fa7651e29e8fc66f3bb068d7f",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

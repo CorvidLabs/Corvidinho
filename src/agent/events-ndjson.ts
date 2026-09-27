@@ -26,6 +26,7 @@ import { scrubSecrets } from "../store/scrub.ts";
 import {
   chatBodyFromTaskResult,
   chatBodyFromTaskRunOutput,
+  clipKeepingRoleNote,
 } from "./task-summary.ts";
 import type {
   AgentEvent,
@@ -90,7 +91,8 @@ export type NdjsonResultFrame = Versioned & {
   type: "result";
   /**
    * Same object `task run --json` prints under `result`, except `summary` is
-   * capped at NDJSON_LIMITS.resultSummary (ending in `…`).
+   * capped at NDJSON_LIMITS.resultSummary (the head ends in `…`; a closing
+   * role note, REQ-agent-333, is kept after it).
    */
   result: TaskResult;
   /** Set when `result.summary` was capped. */
@@ -284,10 +286,12 @@ export function resultFrame(result: TaskResult): NdjsonResultFrame {
   if (typeof result.summary !== "string" || result.summary.length <= max) {
     return { protocol, type: "result", result };
   }
-  const { text, truncated } = capHead(result.summary, max);
-  if (!truncated) {
-    return { protocol, type: "result", result: { ...result, summary: text } };
+  const clean = scrubSecrets(result.summary);
+  if (clean.length <= max) {
+    return { protocol, type: "result", result: { ...result, summary: clean } };
   }
+  // ROLES-CHAT-3 (REQ-agent-333): the cap keeps a closing role note.
+  const text = clipKeepingRoleNote(clean, max, (head, n) => `${head.slice(0, n)}…`);
   return {
     protocol,
     type: "result",

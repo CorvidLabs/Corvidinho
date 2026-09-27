@@ -407,21 +407,31 @@ dispatch and SAFE-1 allowlist (FLEDGE-4). The default catalog (dangerous
 omitted) SHALL NOT spawn fledge. `buildOpenAiTools` SHALL build each tool with
 the exported `toolDefForEntry`, which is also what the schema-cost view
 measures (FLEDGE-5); the tool definitions sent are unchanged. The catalog
-may also include a Fledge command when the run's allowlist names one
+may also include a Fledge plugin command when the run's allowlist names one
 (`fledge-<command>`, REQ-agent-501): `createTaskExecute` SHALL then load the
-project's Fledge plugins the same way, and a run whose allowlist names no
-`fledge-*` command (and without `includeDangerous`) SHALL NOT spawn fledge
-(PLUGIN-3). Nor SHALL a non-ADMIN role session (without `includeDangerous`):
-its catalog can offer no Fledge command (ROLES-CHAT-2), so the ADMIN check
-runs before discovery.
+project's Fledge plugins the same way. A run whose allowlist names no Fledge
+plugin command (and without `includeDangerous`) SHALL NOT spawn fledge
+(PLUGIN-3); the four Fledge core builtins (`fledge-lanes-list`,
+`fledge-lanes-validate`, `fledge-lanes-run`, `fledge-run`, PLUGIN-1) are
+registered with the other builtins, so naming them starts no discovery. Nor
+SHALL a non-ADMIN role session (without `includeDangerous`) spawn fledge: its
+catalog can offer no Fledge plugin command (ROLES-CHAT-2), so the ADMIN check
+runs before discovery. A catalog built without Fledge discovery (the default
+catalog, an allowlist naming no Fledge plugin command, a non-ADMIN role
+session) SHALL offer no Fledge plugin command; the only `fledge-` tools in it
+SHALL be the read-only Fledge core builtins `fledge-lanes-list` and
+`fledge-lanes-validate` (PLUGIN-1, REQ-plugins-461), which spawn fledge only
+when the model calls them.
 
 Acceptance Criteria
 - includeDangerous + code tier + allowlist: the first request offers `fledge-hello`; the model's call runs the fake fledge and the ToolResult succeeds with the plugin output.
-- Default catalog: no `fledge-*` tool is offered and none is registered.
+- Default catalog: no Fledge plugin command (`fledge-<command>` from discovery, e.g. `fledge-hello`) is offered and none is registered; the only `fledge-` tools offered are the read-only Fledge core builtins `fledge-lanes-list` and `fledge-lanes-validate` (PLUGIN-1, REQ-plugins-461).
 - Existing tool-loop tests pass unchanged.
+- A default-catalog code-tier run with a fake fledge first on PATH offers `fledge-lanes-list` and `fledge-lanes-validate` and starts no fledge process (the fake records no call): the Fledge core builtins spawn fledge only when a tool call runs them.
 - Allowlist `["fledge-hello"]` at code tier without includeDangerous: the first request offers `fledge-hello` and the model's call runs the fake fledge successfully.
-- An allowlist naming only `github-pr-review`: fledge is never spawned, no `fledge-*` tool is offered or registered.
-- A non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN=0`) with `fledge-hello` allowlisted never spawns fledge and registers no `fledge-*` tool; the owner's ADMIN role session with the same allowlist discovers and offers it.
+- An allowlist naming only `github-pr-review`: fledge is never spawned; no Fledge plugin command (`fledge-hello`) is offered or registered, and the only `fledge-` tools offered are the read-only core builtins `fledge-lanes-list` and `fledge-lanes-validate`.
+- An allowlist naming only the four Fledge core builtins: fledge is never spawned and `fledge-hello` is neither offered nor registered.
+- A non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN=0`) with `fledge-hello` allowlisted never spawns fledge and offers or registers no Fledge plugin command; the only `fledge-` tools it offers are the read-only core builtins `fledge-lanes-list` and `fledge-lanes-validate` (read tools, ROLES-CHAT-2). The owner's ADMIN role session with the same allowlist discovers and offers `fledge-hello`.
 
 ### REQ-agent-roles-001
 
@@ -689,6 +699,53 @@ Acceptance Criteria
 - With `CORVIDINHO_GITHUB_ALLOW_REPOS=CorvidLabs/Corvidinho` added, it returns `ok: true`, exit 0 and data `{ dryRun: true, owner: "CorvidLabs", repo: "Corvidinho", title, head, base }` as given.
 - The test fails when SAFE-1 is skipped for ADMIN GitHub writes, when the GITHUB-6 repo gate is skipped for ADMIN, or when the role gate refuses ADMIN; the suite on main before this change passes under each of those three mutations.
 
+### REQ-agent-333
+
+ROLES-CHAT-3 in the LLM tool loop. A tool call the model makes to a
+registered plugin that is mutating or dangerous (`isMutatingPlugin`,
+ROLES-CHAT-5) and was not offered in the run's catalog SHALL, when the caller
+is not ADMIN at that call (a role session, `CORVIDINHO_ACTING_IS_ADMIN` set,
+with `resolveActingIsAdmin` false, re-checked at the call like `runPlugin`
+does, ROLES-CHAT-6), be answered with the role refusal `runPlugin` gives that
+caller: `ok: false`, exit 2, error `Denied: plugin "<name>" is not allowed for
+your role (ROLES-CHAT-3).`, in place of the "not offered in this run's
+catalog" refusal. A non-ADMIN catalog holds no mutating tool (ROLES-CHAT-2), so
+every such call in a non-ADMIN session is one the model invented. It SHALL
+still never run (REQ-agent-128). A not-offered name that is not a registered
+plugin, and every not-offered name while the caller is ADMIN or with no role
+session (local CLI), SHALL keep the catalog refusal.
+
+Once any tool call in a task run is refused for the caller's role (such an
+invented call, or an offered call `runPlugin` refuses because ADMIN was lost
+after the catalog was built, ROLES-CHAT-6), every summary that run's execute
+returns SHALL end with the line `(not allowed for your role)`, added once and
+not added when the summary already contains "not allowed for your role"
+(case-insensitive). Only a result that is exactly that role refusal for the
+called name counts: a tool's own error that quotes the phrase (a failed
+delegate worker's summary) SHALL NOT add the note. The refusal SHALL NOT
+otherwise reach the channel: the ToolCall / ToolResult event name for an
+invented call stays `(unknown tool)`, and the live progress line carries
+neither the refusal nor the invented name.
+
+The caps a long summary meets on its way to the chat SHALL keep that closing
+note: `resultFrame` (`NDJSON_LIMITS.resultSummary`, 4000 chars) and
+`chatBodyFromTaskResult` (1800 chars) cut the text before the note (the
+result frame's cut still ends in `…`, and is still scrubbed first, SAFE-6) and
+keep `\n\n(not allowed for your role)` after it. A summary that does not end
+with the note is capped exactly as before. No env var, config key, flag,
+slash command or schema is added.
+
+Acceptance Criteria
+- `tests/roles.chat.gates.test.ts` "a non-ADMIN session's invented call to every mutating plugin gets the role refusal, never runs, and the summary ends with the role note": with `CORVIDINHO_ACTING_IS_ADMIN=0` at code tier, a fake provider asks for every registered mutating plugin at once; none is in the offered catalog; each ToolResult is `(unknown tool)`, success false, with the exact error `runPlugin` gives that caller for the same name; every tool message to the model carries "not allowed for your role"; nothing is written; no progress line carries the refusal or a plugin name; the summary is the model's text plus `\n\n(not allowed for your role)`, and a second attempt of the same run keeps the note.
+- "an offered tool that runPlugin refuses for the role mid-run (owner muted, ROLES-CHAT-6) also ends the summary with the role note": the catalog is built as ADMIN and offers `files-write`; the owner is muted before the call; `runPlugin` refuses it with the role refusal, nothing is written, and the summary ends with the note.
+- "a caller who loses ADMIN mid-run gets the role refusal for a mutating tool the model invents (ROLES-CHAT-6)": an ADMIN session at tool tier (`files-write` not offered) is muted before the call; the invented `files-write` gets exactly `runPlugin`'s role refusal, nothing is written, and the summary ends with the note.
+- "a tool's own error that only quotes the role phrase adds no role note": an offered non-mutating tool failing with exit 2 and text ending in `(not allowed for your role)` leaves the summary as the model's text.
+- "a long reply keeps the role note through the result frame cap and the chat body cap": a reply of over 6000 chars plus the note comes out of `resultFrame` as 4001 chars ending in `…\n\n(not allowed for your role)`, and `chatBodyFromTaskResult` of the full or the capped summary is at most 1800 chars and ends with the note; a long summary with no note is clipped as before.
+- "a non-ADMIN session naming an unregistered tool keeps the catalog refusal and gets no role note".
+- "ADMIN and the local CLI keep the catalog refusal for a tool they were not offered, with no role note": `shell-exec` and `files-write` at tool tier are refused as not offered, and the summary is the model's text only.
+- "a summary that already says it is not allowed for your role gets no second note".
+- With main's `src/agent/execute.ts`, `src/agent/task-summary.ts` and `src/agent/events-ndjson.ts`, the two tool-loop behavior tests, the mid-run invented-call test and the long-reply test fail; they pass on the branch.
+
 ### REQ-agent-501
 
 Allowlisted dangerous tools in the task-run catalog (CLI-3 / SAFE-1,
@@ -701,10 +758,13 @@ for every `task run` (local CLI, Discord, `/session start`, `/work`,
 schedules, WATCH, delegate workers) a dangerous plugin enters the model's
 catalog only when the operator allowlisted it; an unlisted dangerous plugin
 stays out and a call to it is refused as not offered (REQ-agent-128).
-`shell-exec`, `node-exec`, `python-exec` and `cargo-exec`
+`shell-exec`, `node-exec`, `python-exec`, `cargo-exec` and the Fledge core
+runs `fledge-lanes-run` and `fledge-run` (PLUGIN-1, REQ-plugins-461)
 (`SAFE3_PENDING_TOOLS`) SHALL NOT be offered from the allowlist, even when
-named, until the SAFE-3 decision on the shell and runners is taken; they
-still run through `corvidinho plugins run`. The tier filter (`minTier`), the
+named, until the SAFE-3 decision on the shell and runners is taken: each
+starts in the project dir, which is not a clamp, and a Fledge lane or task
+runs whatever commands the project gives it. They still run through
+`corvidinho plugins run`. The tier filter (`minTier`), the
 ROLES-CHAT-2 role filter (a non-ADMIN role session gets no dangerous or
 mutating tool, whatever the allowlist), the SAFE-9 autonomous filter,
 catalog-only dispatch and the SAFE-1 / SAFE-4 / SAFE-5 / GITHUB-6 runtime
@@ -716,7 +776,8 @@ Acceptance Criteria
 - At tool tier, an allowlist naming `github-issue-create`, `github-issue-comment`, `github-pr-create`, `github-pr-review`, `memory-forget` and `memory-override` offers all six; `danger-ping`, `web-fetch` and `discord-post-message` (dangerous, not named) are not offered; with no allowlist no dangerous plugin is offered.
 - Every dangerous tool offered at tool or code tier is one the allowlist names.
 - `files-delete` allowlisted is offered at code tier and not at tool tier.
-- An allowlist naming `shell-exec`, `node-exec`, `python-exec`, `cargo-exec` and `files-delete` at code tier offers `files-delete` and none of the four.
+- An allowlist naming `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run`, `fledge-run` and `files-delete` at code tier offers `files-delete` and none of the six; `fledge-lanes-run` and `fledge-run` are registered, dangerous, offered by `includeDangerous` at code tier, and `editsFilesUnreported` names them.
+- A code-tier task run whose allowlist names the four Fledge core builtins offers only `fledge-lanes-list` and `fledge-lanes-validate` as `fledge-` tools; the model's call to `fledge-run` is refused as not offered, no fledge process starts and `unreportedEditTools` is absent.
 - `actingIsAdmin: false` with every dangerous plugin allowlisted offers no dangerous or mutating tool.
 - `task run` path (`createTaskExecute` without an `allowlist` option, non-interactive, GitHub dry run): with `CORVIDINHO_ALLOWLIST=github-pr-review` the model is offered `github-pr-review`, its call succeeds as a dry run, and its call to the unlisted `github-issue-create` is refused as not offered.
 - An ADMIN role session (owner) with that allowlist is offered and runs `github-pr-review`; a non-ADMIN role session with the same allowlist is not offered it and no call succeeds.
@@ -725,14 +786,16 @@ Acceptance Criteria
 
 Non-git verify gate after unreported edits (AGENT-4). A tool whose file edits
 no tool result reports (`editsFilesUnreported`: a Fledge command, whose
-`origin` starts with `fledge:`, and the `SAFE3_PENDING_TOOLS` shell and
-runners) that the tool loop dispatched from the offered catalog SHALL be named
-in the attempt's `ExecuteResult.unreportedEditTools` (absent when none ran).
+`origin` starts with `fledge:`, and every `SAFE3_PENDING_TOOLS` name: the
+shell, the runners and the Fledge core runs) that the tool loop dispatched
+from the offered catalog SHALL be named in the attempt's
+`ExecuteResult.unreportedEditTools` (absent when none ran).
 A `delegate` call that started a worker (its result carries data) SHALL be
-named too when the run has no role session and its allowlist names a
-`fledge-*` command: the worker gets that allowlist, so it may have run the
-Fledge command and its edits reach the lead's result as no file (a
-role-session worker is non-ADMIN and offered none).
+named too when the run has no role session and its allowlist names a Fledge
+plugin command (a `fledge-*` name other than the four Fledge core builtins):
+the worker gets that allowlist, so it may have run the Fledge command and its
+edits reach the lead's result as no file (a role-session worker is non-ADMIN
+and offered none).
 `runTask` SHALL union these names across attempts and, when the verify gate is
 on, no git snapshot is available (the cwd is not in a git work tree, or the
 start snapshot could not be read), no file was reported and a name was
@@ -751,4 +814,6 @@ Acceptance Criteria
 - Non-git project whose only tool call was an allowlisted `github-pr-review` (dry run, success): verify is skipped and the run ends `done`.
 - The verify gate off: the Fledge run ends `done` with verify skipped.
 - The execute result of an attempt that ran `fledge-hello` has `unreportedEditTools: ["fledge-hello"]`.
-- Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no `fledge-*` command the same run skips verify and ends `done`.
+- Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no Fledge plugin command the same run skips verify and ends `done`.
+- `editsFilesUnreported` names `fledge-lanes-run` and `fledge-run`.
+

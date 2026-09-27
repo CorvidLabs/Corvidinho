@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "project-files-preflight-shared-by-doctor-and-a-report-only-init-doctor-and-a-new-report-only-corvidinho-init-name-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "fa5ed30efc792179ef990c8e9ba47e04a774e480",
+  "contract_digest": "e98a4d939f65640b039d722e44482b94f7384d1a103f063736ac9d5f1f5c968b",
+  "execution_digest": "e33d235fb7061024594f5e936a09b434d9cf8c933b8b91933ab3f74cc24624dd",
+  "workspace_digest": "53e19081dafcdcb97a58a06693d49b48bdbaef43b790b03c57f2914154c42015",
+  "timestamp": 1790538940
+}

@@ -12,7 +12,32 @@
  * a shape the scrubber misses (a short `ghp_` prefix, a key without its END).
  */
 
+import { ROLE_REFUSED_MESSAGE } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+
+/**
+ * ROLES-CHAT-3 (REQ-agent-333): the short in-session note a run's summary
+ * ends with once a tool call was refused for the caller's role.
+ */
+export const ROLE_REFUSED_SUMMARY_NOTE = `(${ROLE_REFUSED_MESSAGE})`;
+
+const ROLE_NOTE_TAIL = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+
+/**
+ * Clip already-scrubbed `text` longer than `max` with `clip`, keeping a
+ * closing role note (REQ-agent-333): a long reply loses the end of its body,
+ * never the note. Text within `max` is returned as is.
+ */
+export function clipKeepingRoleNote(
+  text: string,
+  max: number,
+  clip: (head: string, max: number) => string,
+): string {
+  if (text.length <= max) return text;
+  if (!text.endsWith(ROLE_NOTE_TAIL)) return clip(text, max);
+  const head = text.slice(0, text.length - ROLE_NOTE_TAIL.length);
+  return `${clip(head, Math.max(0, max - ROLE_NOTE_TAIL.length)).trimEnd()}${ROLE_NOTE_TAIL}`;
+}
 
 /** Scrub, trim, then clip (SAFE-6: scrub before the clip). */
 function scrubClip(text: string, max: number): string {
@@ -58,11 +83,13 @@ export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
 
 /**
  * Human chat body only — no `state=` / `verified=` plumbing (DISCORD-3.a).
- * Caps at 1800 chars for Discord outbound.
+ * Caps at 1800 chars for Discord outbound; the cap keeps a closing role note
+ * (ROLES-CHAT-3, REQ-agent-333).
  */
 export function chatBodyFromTaskResult(r: TaskResultSummaryInput): string {
   if (typeof r.summary !== "string") return "";
-  return scrubClip(stripInternalStopReason(r.summary), 1800);
+  const text = scrubSecrets(stripInternalStopReason(r.summary)).trim();
+  return clipKeepingRoleNote(text, 1800, (head, max) => head.slice(0, max));
 }
 
 /**

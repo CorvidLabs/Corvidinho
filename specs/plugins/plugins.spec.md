@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 50
+version: 51
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -93,10 +93,12 @@ files:
   - plugins/fledge/discover.ts
   - plugins/fledge/commands.ts
   - plugins/fledge/spawn.ts
+  - plugins/fledge/core.ts
   - src/plugins/toolCost.ts
   - tests/fledge.plugins.test.ts
   - tests/fledge.cli.test.ts
   - tests/fledge.hardening.test.ts
+  - tests/fledge.core.test.ts
   - src/plugins/proc-group.ts
   - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
@@ -118,7 +120,12 @@ when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
 SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
 typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
-task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182).
+task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182), and
+Fledge itself as typed builtins (`fledge-lanes-list|lanes-validate` reads;
+`fledge-lanes-run` / `fledge-run` dangerous code-tier runs of the project's
+own lanes and tasks; PLUGIN-1/2 / REQ-plugins-461), next to the bridge that
+offers the project's Fledge plugins as `fledge-<command>` (PLUGIN-3 /
+REQ-plugins-112..113).
 Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 `delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117);
 `council` convenes worker voices that propose, critique and decide
@@ -154,6 +161,13 @@ spawned with `detached: true`. The registry exports `unregister(name, command)` 
 name only while it is still that exact command). `plugins/fledge` exports
 `fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
 root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
+`plugins/fledge/core.ts` (re-exported from `plugins/fledge/index.ts`) registers
+the Fledge core builtins via `loadFledgeCorePlugins(opts?)` (called by
+`loadBuiltins`; a name already registered is left as is) and exports
+`fledgeCoreCommands(opts?)` (test seams: `env`, `readTimeoutMs`,
+`runTimeoutMs`, `maxOutputBytes`), `FLEDGE_CORE_COMMAND_NAMES`,
+`FLEDGE_NAME_RE`, `resolveFledgeBin(env)`, `fledgeCoreChildEnv(base, root)`,
+`laneSourcesRefusal(cwd)`, `parseLanesList` and `parseLanesValidate`.
 `plugins/specsync/api.ts` exports `listRegisteredModules` (in a project that
 has a `.specsync/` dir, each `specs/<name>/<name>.spec.md` that
 `readModuleSpec` reads, plus the `[specs]` names of `.specsync/registry.toml`
@@ -417,6 +431,43 @@ not a sandbox: the code it runs can `process.chdir` / `os.chdir`, and
 (the runners add no shell). They are gated like `shell-exec` instead:
 dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 
+Fledge core builtins (PLUGIN-1, REQ-plugins-461) are always registered and run
+the fledge binary found, when the command runs, on the absolute PATH entries
+only (none → ok=false, exit 127 `<name>: fledge not on PATH`), as
+`[fledge, "--non-interactive", ...]` argv arrays (no shell) with cwd = the
+plugin cwd: `fledge-lanes-list` → `lanes list --json` (no args), typed
+`{count, lanes: [{name, description, steps, failFast, trustTier}]}`;
+`fledge-lanes-validate` → `lanes validate --json` plus `--strict` when that is
+the only arg (any other arg, a path included, is a usage error), typed
+`{valid, strict, laneCount, errors, warnings}` and ok=false when fledge
+reports an error (or a warning under `--strict`); both `dangerous: false`,
+minTier 0, 30 s timeout. `fledge-lanes-run` → `lanes run <lane>` (exactly one
+lane name) and `fledge-run` → `run <task>`, plus `-- <args…>` verbatim when
+args follow the task; both `dangerous: true`, minTier 2 (they run the
+project's own commands, like `shell-exec`), 10 minute timeout, ok only on
+exit 0, a failing lane / task returns fledge's exit code and output. A lane or
+task name must match `FLEDGE_NAME_RE` (`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`,
+no leading `-`), so model argv never becomes a fledge option (`--init`,
+`--list`, `--lang`, `--dry-run`, `--from`); a refused name spawns nothing
+(usage error, exit 1). The child env is the verify lane's scrub
+(`buildVerifyEnv`) minus `CDPATH` / `OLDPWD` plus `FLEDGE_NON_INTERACTIVE=1`
+and `CORVIDINHO_PROJECT_ROOT`; stdin closed, 64 KiB per-stream caps, process
+group killed on timeout (exit 124) or the calling run's abort (exit 130);
+output and parsed fields are secret-scrubbed, parsed fields control-char
+cleaned and capped. fledge prints the offending line of a lane source it
+cannot parse, so before either read starts fledge, `fledge.toml`, the
+`.fledge/lanes` dir and each `.fledge/lanes/*.toml` that exists must resolve
+(symlinks followed) inside the real project root, to a regular file (the dir
+to a directory), at a path that is not a secret path as named or as resolved
+(`isSecretPath`); otherwise `laneSourcesRefusal` names the project-relative
+path and the read is refused (exit 2, fledge not started; ROLES-CHAT-8, as
+`files-read`). The runs are not clamped (code tier, ADMIN only, allowlisted
+like `shell-exec`). Builtins load before the project's Fledge plugins, so a
+Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or
+`lanes-run` is skipped by that load with `name already registered by builtin`
+(REQ-plugins-112), as fledge's own `run` shadows such a plugin command on its
+command line.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -472,6 +523,12 @@ dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 - **Given** `cargo` is not on PATH
 - **When** builtins load and an operator runs `corvidinho plugins list`
 - **Then** `cargo-exec` is not registered or offered, the list prints `cargo-exec not loaded: cargo not found on PATH`, and exits 0 with every other builtin listed
+
+### Scenario: Fledge itself as typed commands
+
+- **Given** builtins are loaded, fledge is on PATH and the project's `fledge.toml` defines a `verify` lane
+- **When** a tool-tier run calls `fledge-lanes-list`, and a non-interactive run with `CORVIDINHO_ALLOWLIST` naming `fledge-lanes-run` calls it with `["verify"]`
+- **Then** the list comes back typed (lane names, step counts, descriptions) without an allowlist entry, and `fledge --non-interactive lanes run verify` runs in the project root; without the allowlist entry the lane run is denied (exit 2, SAFE-1) and fledge never starts
 
 ### Scenario: SpecSync tools refuse to read outside the project
 
@@ -607,6 +664,12 @@ dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 | council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
 | fledge-* called from a cwd other than its bound project root | Refuse (exit 2); fledge not started |
 | fledge-* times out / calling run aborts | exit 124 / 130; plugin process tree killed |
+| fledge-lanes-run / fledge-run non-interactive + not allowlisted | Deny (exit 2, SAFE-1); fledge not started |
+| fledge-lanes-run / fledge-run lane or task name not a plain name (leading `-`, space, `/`, empty), extra lanes-run args, or any fledge-lanes-list arg / non-`--strict` fledge-lanes-validate arg | Usage error (exit 1); fledge not started |
+| fledge core builtin with no fledge on an absolute PATH entry | ok=false, exit 127 `<name>: fledge not on PATH`; never throws |
+| fledge-lanes-validate on lanes with errors (or warnings under `--strict`) | ok=false with fledge's exit code (1), the errors and warnings |
+| fledge-lanes-list / fledge-lanes-validate with a lane source (`fledge.toml`, `.fledge/lanes`, `.fledge/lanes/*.toml`) resolving outside the project, to a secret path, or to the wrong entry type | Refuse (exit 2) naming the project-relative path; fledge not started; contents and link target not returned |
+| Fledge plugin command named `run` / `lanes-list` / `lanes-validate` / `lanes-run` | Skipped by the Fledge plugin load (`name already registered by builtin`); the builtin keeps the name |
 | node / python3+python / cargo not on PATH at builtin load | Runner not registered or offered; `plugins list` names it `not loaded` and exits 0 (PLUGIN-4) |
 | node-exec / python-exec / cargo-exec non-interactive + not allowlisted | Deny (exit 2, SAFE-1); nothing spawned |
 | runner called with no argv | Usage error (exit 1); nothing spawned |
@@ -623,7 +686,8 @@ dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 | node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
 | sh | shell-exec child via `sh -c` |
 | node / python3 / python / cargo (optional system binaries) | language runners via `Bun.spawn` argv arrays, only when on PATH |
-| src/agent/verify.ts | `buildVerifyEnv` scrub for the language runners' child env |
+| src/agent/verify.ts | `buildVerifyEnv` scrub for the language runners' and Fledge core builtins' child env |
+| fledge (optional system binary) | Fledge core builtins (`lanes list` / `lanes validate` / `lanes run`, `run`) and the Fledge plugin bridge, via `Bun.spawn` argv arrays |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
@@ -684,4 +748,5 @@ and current rows for plugins host evolution.
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
 | 2026-09-27 | specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync: SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5); a registry.toml that exists adds its names to the specs-dir modules instead of hiding modules scaffolded after it |
 | 2026-09-27 | safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and: SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable) |
+| 2026-09-27 | plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and: PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "7438bce5125332e7d8ea711a868681b696744557",
+      "contract_digest": "995fb9d4fd13727e2f73f16ed85140f416705d12dc3f71911d95c706f513c984",
+      "execution_digest": "5126c6c3837df82f64670868927280e95de637a10ffd8077c6194f4bc66c04bf",
+      "workspace_digest": "22ff165eab4d92ec52b7882dc4c4b7fb96555385941cc33c06bbc52e3fff15fb",
+      "timestamp": 1790541350
+    }
+  ]
+}
