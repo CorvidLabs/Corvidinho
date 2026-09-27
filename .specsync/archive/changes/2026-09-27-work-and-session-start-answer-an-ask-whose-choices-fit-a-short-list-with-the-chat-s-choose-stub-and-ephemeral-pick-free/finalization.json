@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "work-and-session-start-answer-an-ask-whose-choices-fit-a-short-list-with-the-chat-s-choose-stub-and-ephemeral-pick-free",
+  "implementation_commit": "c200ba3da2af0684f31e52f09fb444d552a18791",
+  "implementation_tree": "c64398d2f91dbb082c40e3e3f3bc870255998a67",
+  "contract_digest": "d950da243f5d37491cb8971ff9d45c71cd1bfa595dacaf6de9533b3a47616180",
+  "workspace_digest": "8e103de3f225cfb7fe5d260907a3083f97d7fe9183b44a0be68f1ea1f7f48432",
+  "closing_digest": "31b2dbdbcead6f2d1336d24419fb6abb4153890fa7651e29e8fc66f3bb068d7f",
+  "review_digest": "0bb9d7d228c071aed2e009901ba94a841e26c175b1793ecaff60e3f6ec01587b",
+  "finalization_digest": "e380881bdb8912ea349776957eb71261c48f193b39475efec899654ab5ad3201",
+  "timestamp": 1790538267
+}
