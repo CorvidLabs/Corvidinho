@@ -12,4 +12,5 @@ artifact: tasks
 - [x] REQ-agent-128 test updated: an unlisted interactive `danger-ping` and an allowlisted `shell-exec` are refused as not offered.
 - [x] Deltas (Added REQ-agent-501 / REQ-agent-502; Modified REQ-agent-009 / 112 / 128 / 085), canonical requirements, agent.spec.md, testing.md.
 - [x] Docs: docs/DISCORD-GO-LIVE.md E.3 and owner list, docs/discord.md (memory, /work PR), docs/WATCH.md, .env.example, STATUS.md.
+- [x] Review fix: the ADMIN check runs before Fledge discovery, so a non-ADMIN role session never spawns fledge; a local run's `delegate` call counts as an unreported edit when the allowlist names a `fledge-*` command (REQ-agent-112 / REQ-agent-502, two failing-first tests).
 - [x] Full suite, typecheck, SpecSync and the verify lane green.

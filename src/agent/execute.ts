@@ -6,6 +6,7 @@
  */
 
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
+import { DELEGATE_COMMAND_NAME } from "../../plugins/autonomous/commands.ts";
 import { FLEDGE_COMMAND_PREFIX } from "../../plugins/fledge/commands.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
@@ -379,14 +380,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    if (opts.loadPlugins !== false && (includeDangerous || allowsFledge(allowlist))) {
-      // FLEDGE-4: Fledge commands are all dangerous, so only discover them
-      // when this run's catalog may offer one (the allowlist names one).
-      await loadFledgePlugins({ cwd, env });
-    }
     let actingIsAdmin = true;
     if (roleSessionActive(env)) {
       actingIsAdmin = await resolveActingIsAdmin(env);
+    }
+    if (
+      opts.loadPlugins !== false &&
+      (includeDangerous || (actingIsAdmin && allowsFledge(allowlist)))
+    ) {
+      // FLEDGE-4: Fledge commands are all dangerous (so mutating), so only
+      // discover them when this run's catalog may offer one: the allowlist
+      // names one and the session is not a non-ADMIN one (ROLES-CHAT-2).
+      await loadFledgePlugins({ cwd, env });
     }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
@@ -419,6 +424,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       maxToolRounds,
       projectBlock,
       specBriefing,
+      // AGENT-4 (REQ-agent-502): a delegate worker gets this run's allowlist
+      // and, outside a role session, may run an allowlisted Fledge command
+      // whose edits no result reports (a role-session worker is non-ADMIN).
+      workerEditsUnreported: !roleSessionActive(env) && allowsFledge(allowlist),
     });
   };
   // SAFE-8: an attempt stopped at the cap ends with its spend-cap ask (blocked).
@@ -442,6 +451,8 @@ type LoopArgs = {
   maxToolRounds: number;
   projectBlock: string;
   specBriefing?: string;
+  /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
+  workerEditsUnreported?: boolean;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -462,6 +473,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     maxToolRounds,
     projectBlock,
     specBriefing,
+    workerEditsUnreported = false,
   } = args;
 
   const filesChanged = new Set<string>();
@@ -642,7 +654,13 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       for (const f of filesChangedFromToolData(result.data)) {
         filesChanged.add(f);
       }
-      if (offered.has(name) && editsFilesUnreported(name)) {
+      if (
+        offered.has(name) &&
+        (editsFilesUnreported(name) ||
+          // A worker ran (a refusal carries no data) and may have run an
+          // allowlisted Fledge command (REQ-agent-502).
+          (name === DELEGATE_COMMAND_NAME && workerEditsUnreported && result.data !== undefined))
+      ) {
         unreportedEditTools.add(name);
       }
 

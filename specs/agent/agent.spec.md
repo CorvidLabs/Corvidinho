@@ -212,9 +212,11 @@ pending) and `editsFilesUnreported(name)` (a Fledge command or a SAFE-3-pending
 tool, REQ-agent-502). `BuildToolsOpts` gains `allowlist?: ReadonlySet<string>`;
 `createTaskExecute` passes its effective allowlist (the `allowlist` option,
 else `CORVIDINHO_ALLOWLIST`) and loads Fledge plugins when `includeDangerous`
-is set or the allowlist names a `fledge-*` command. `ExecuteResult` gains
-optional `unreportedEditTools?: string[]`. No env var, config key, flag or
-slash command.
+is set or the allowlist names a `fledge-*` command and the session is not a
+non-ADMIN role session (the ADMIN check runs first). `ExecuteResult` gains
+optional `unreportedEditTools?: string[]`; outside a role session, with a
+`fledge-*` command allowlisted, a `delegate` call that started a worker is
+named there too. No env var, config key, flag or slash command.
 
 ## Invariants
 
@@ -228,8 +230,10 @@ cannot read after a good snapshot verifies anyway (fail closed). The diff is
 read-only git plus in-process hashing: it never writes the index or objects.
 With no git snapshot (a non-git cwd, or an unreadable start snapshot), a run
 that called a tool whose edits no result reports (a Fledge command, or the
-shell / a runner) verifies anyway, with one `Text` note per attempt naming
-the tools; other non-git runs keep tool-reported files only (REQ-agent-502).
+shell / a runner, or a local run's `delegate` whose worker could have run an
+allowlisted Fledge command) verifies anyway, with one `Text` note per attempt
+naming the tools; other non-git runs keep tool-reported files only
+(REQ-agent-502).
 
 A task run offers the model a dangerous tool only when the run's allowlist
 names it (SAFE-1 consent, CLI-3), never `shell-exec` or the language runners
@@ -421,7 +425,7 @@ model.
 | Verify lane log over 4000 chars (passing steps such as the `--help` smoke fill its head) | the retry gets the failing step's name, its output (or its error lines and the end of the log) within 4000 chars, never the start of the log (REQ-agent-002, AGENT-4.a) |
 | Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
 | Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
-| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
+| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a `fledge-*` command allowlisted), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
 | `shell-exec`, `node-exec`, `python-exec` or `cargo-exec` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |

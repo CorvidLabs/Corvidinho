@@ -243,8 +243,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     }
 
     // AGENT-4 (REQ-agent-502): no git snapshot to diff, and a tool ran that
-    // can change files without reporting them (a Fledge command): fail
-    // closed, verify runs.
+    // can change files without reporting them (a Fledge command, or a
+    // delegate worker that may have run one): fail closed, verify runs.
     let noDiffForUnreported = false;
     if (
       verifyBeforeComplete &&

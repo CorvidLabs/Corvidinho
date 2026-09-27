@@ -44,7 +44,9 @@ may also include a Fledge command when the run's allowlist names one
 (`fledge-<command>`, REQ-agent-501): `createTaskExecute` SHALL then load the
 project's Fledge plugins the same way, and a run whose allowlist names no
 `fledge-*` command (and without `includeDangerous`) SHALL NOT spawn fledge
-(PLUGIN-3).
+(PLUGIN-3). Nor SHALL a non-ADMIN role session (without `includeDangerous`):
+its catalog can offer no Fledge command (ROLES-CHAT-2), so the ADMIN check
+runs before discovery.
 
 Acceptance Criteria
 - includeDangerous + code tier + allowlist: the first request offers `fledge-hello`; the model's call runs the fake fledge and the ToolResult succeeds with the plugin output.
@@ -52,6 +54,7 @@ Acceptance Criteria
 - Existing tool-loop tests pass unchanged.
 - Allowlist `["fledge-hello"]` at code tier without includeDangerous: the first request offers `fledge-hello` and the model's call runs the fake fledge successfully.
 - An allowlist naming only `github-pr-review`: fledge is never spawned, no `fledge-*` tool is offered or registered.
+- A non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN=0`) with `fledge-hello` allowlisted never spawns fledge and registers no `fledge-*` tool; the owner's ADMIN role session with the same allowlist discovers and offers it.
 
 ### REQUIREMENT REQ-agent-085
 
@@ -152,6 +155,11 @@ no tool result reports (`editsFilesUnreported`: a Fledge command, whose
 `origin` starts with `fledge:`, and the `SAFE3_PENDING_TOOLS` shell and
 runners) that the tool loop dispatched from the offered catalog SHALL be named
 in the attempt's `ExecuteResult.unreportedEditTools` (absent when none ran).
+A `delegate` call that started a worker (its result carries data) SHALL be
+named too when the run has no role session and its allowlist names a
+`fledge-*` command: the worker gets that allowlist, so it may have run the
+Fledge command and its edits reach the lead's result as no file (a
+role-session worker is non-ADMIN and offered none).
 `runTask` SHALL union these names across attempts and, when the verify gate is
 on, no git snapshot is available (the cwd is not in a git work tree, or the
 start snapshot could not be read), no file was reported and a name was
@@ -170,3 +178,4 @@ Acceptance Criteria
 - Non-git project whose only tool call was an allowlisted `github-pr-review` (dry run, success): verify is skipped and the run ends `done`.
 - The verify gate off: the Fledge run ends `done` with verify skipped.
 - The execute result of an attempt that ran `fledge-hello` has `unreportedEditTools: ["fledge-hello"]`.
+- Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no `fledge-*` command the same run skips verify and ends `done`.

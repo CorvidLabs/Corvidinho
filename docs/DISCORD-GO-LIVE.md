@@ -204,8 +204,9 @@ What an entry unlocks **today**:
   runners be kept from leaving the project root) is decided. They still run through
   `corvidinho plugins run`.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
-  one. They can change files without reporting them, so in a project that is not a git work
-  tree a run that called one runs the verify lane anyway (AGENT-4).
+  one and the run is not a non-ADMIN session. They can change files without reporting them, so
+  in a project that is not a git work tree a run that called one, or a local run's `delegate`
+  worker (which could have), runs the verify lane anyway (AGENT-4).
 - Allowlisting `git-commit`, `git-push` and `github-pr-create` for the `/work` PR step also
   offers them to the owner's runs, so the model can commit, push or open a PR itself before the
   run's verify.

@@ -1,6 +1,6 @@
 ---
 id: task-run-offers-allowlisted-dangerous-tools-to-the-model-a-dangerous-plugin-enters-the-catalog-only-when-corvidinho
-state: implementing
+state: verifying
 type: feature
 base_commit: 0940db343de30fdb4d79d83cfa44b95c5a247681
 ---

@@ -13,7 +13,10 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskExecute, type AgentEvent } from "../src/agent/index.ts";
+import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
 import { runTask } from "../src/agent/loop.ts";
+import type { TaskResult } from "../src/agent/types.ts";
+import { DELEGATE_DEPTH_ENV } from "../src/autonomous/delegate.ts";
 import * as tools from "../src/agent/tools.ts";
 import { buildOpenAiTools } from "../src/agent/tools.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
@@ -48,6 +51,8 @@ const KEYS = [
   "CORVIDINHO_GITHUB_DENY_USERS",
   "GITHUB_TOKEN",
   "GH_TOKEN",
+  "CORVIDINHO_BIN",
+  DELEGATE_DEPTH_ENV,
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
@@ -247,6 +252,7 @@ describe("task run: the model calls an allowlisted GitHub write (GITHUB-1/3, CLI
 
 const FAKE_FLEDGE = `#!/bin/sh
 dir="$(dirname "$0")"
+echo "$*" >> "$dir/calls.log"
 [ "$1" = "--non-interactive" ] && shift
 if [ "$1 $2" = "plugins list" ]; then cat "$dir/list.json"; exit 0; fi
 if [ "$1 $2" = "plugins audit" ]; then cat "$dir/audit.json"; exit 0; fi
@@ -342,8 +348,45 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
     await exec({ attempt: 1, signal: new AbortController().signal });
     expect(seen.offered.some((n) => n.startsWith("fledge-"))).toBe(false);
     expect(get("fledge-hello")).toBeUndefined();
+    expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
     expect(existsSync(join(fake.bin, "other.log"))).toBe(false);
     expect(existsSync(join(fake.bin, "runs.log"))).toBe(false);
+  });
+
+  async function roleSessionRun(isAdmin: "0" | "1") {
+    const fake = makeFledge();
+    const { fetchImpl, seen } = fakeProvider([]);
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: fake.project,
+      env: {
+        ...fake.env,
+        CORVIDINHO_ALLOWLIST_FILE: process.env.CORVIDINHO_ALLOWLIST_FILE,
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
+        CORVIDINHO_ACTING_DISCORD_USER_ID: OWNER,
+        CORVIDINHO_ACTING_IS_ADMIN: isAdmin,
+      },
+      fetchImpl,
+      tier: "code",
+      allowlist: ["fledge-hello"],
+      autonomous: false,
+      projectInstructions: false,
+      maxToolRounds: 2,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    return { fake, seen };
+  }
+
+  test("a non-ADMIN role session with fledge-hello allowlisted never spawns fledge (ROLES-CHAT-2)", async () => {
+    const { fake, seen } = await roleSessionRun("0");
+    expect(seen.offered.some((n) => n.startsWith("fledge-"))).toBe(false);
+    expect(get("fledge-hello")).toBeUndefined();
+    expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
+  });
+
+  test("the owner's ADMIN role session with fledge-hello allowlisted discovers and offers it", async () => {
+    const { seen } = await roleSessionRun("1");
+    expect(seen.offered).toContain("fledge-hello");
   });
 });
 
@@ -426,6 +469,78 @@ describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502
 
   test("with the verify gate off, nothing changes: done, verify skipped", async () => {
     const { result, verifyCwds } = await runFledgeTask({ verify: false });
+    expect(verifyCwds).toEqual([]);
+    expect(result.state).toBe("done");
+    expect(result.verifySkipped).toBe(true);
+  });
+});
+
+describe("non-git verify gate after a delegate worker that may have run a Fledge command (REQ-agent-502, AGENT-4)", () => {
+  /** A worker that ran and failed its own verify, reporting no files. */
+  const WORKER_FAILED: TaskResult = {
+    summary: "Verification failed: app.ts: syntax error",
+    filesChanged: [],
+    verified: false,
+    verifySkipped: false,
+    cancelled: false,
+    state: "failed",
+    attempts: 1,
+  };
+
+  async function runDelegateTask(allowlist: string[]) {
+    const fake = makeFledge();
+    writeFileSync(join(fake.project, "fledge.toml"), "[corvidinho.autonomous]\nenabled = true\n");
+    const worker = join(fake.bin, "corvidinho");
+    writeFileSync(
+      worker,
+      `#!/bin/sh\necho spawned >> "$(dirname "$0")/worker.log"\ncat <<'EOF'\n${serializeFrame(resultFrame(WORKER_FAILED))}\nEOF\nexit 1\n`,
+    );
+    chmodSync(worker, 0o755);
+    process.env.CORVIDINHO_BIN = worker;
+    const { fetchImpl } = fakeProvider([{ name: "delegate", argv: ["--task", "run the hello plugin"] }]);
+    const events: AgentEvent[] = [];
+    const execute = createTaskExecute({
+      taskText: "run the hello plugin through a worker",
+      cwd: fake.project,
+      env: fake.env,
+      fetchImpl,
+      tier: "code",
+      nonInteractive: true,
+      allowlist,
+      autonomous: true,
+      projectInstructions: false,
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 3,
+    });
+    const verifyCwds: string[] = [];
+    const result = await runTask({
+      cwd: fake.project,
+      verifyBeforeComplete: true,
+      maxRetries: 0,
+      onEvent: (e) => events.push(e),
+      verifyRunner: async (cwd) => {
+        verifyCwds.push(cwd);
+        return { success: false, output: "app.ts: syntax error" };
+      },
+      execute,
+    });
+    expect(existsSync(join(fake.bin, "worker.log"))).toBe(true);
+    return { result, events, verifyCwds };
+  }
+
+  test("allowlist names fledge-hello: the lead verifies anyway after its worker, and never ends done on the failed lane", async () => {
+    const { result, events, verifyCwds } = await runDelegateTask(["fledge-hello"]);
+    expect(verifyCwds.length).toBe(1);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    const note = events.find(
+      (e) => e.type === "Text" && e.text.startsWith("Verify gate: no git working tree to diff"),
+    );
+    expect(note && "text" in note ? note.text : "").toContain("delegate");
+  });
+
+  test("allowlist names no fledge-* command: the worker cannot run one, so a non-git lead still skips verify", async () => {
+    const { result, verifyCwds } = await runDelegateTask(["github-pr-review"]);
     expect(verifyCwds).toEqual([]);
     expect(result.state).toBe("done");
     expect(result.verifySkipped).toBe(true);

@@ -12,8 +12,9 @@ artifact: requirements
   catalog. HI: CLI-3, SAFE-1, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3.
 - REQ-agent-502 (added): a non-git run (or unreadable start snapshot) that
   called a tool whose edits no result reports (a Fledge command, the shell or
-  a runner) runs verify anyway, with a Text note; other non-git runs are
-  unchanged. HI: AGENT-4.
+  a runner) runs verify anyway, with a Text note; so does a local run's
+  `delegate` call when the allowlist names a `fledge-*` command (its worker
+  could have run it); other non-git runs are unchanged. HI: AGENT-4.
 - REQ-agent-009 (modified): "the default catalog SHALL omit dangerous
   plugins" becomes "... the run's allowlist does not name"; new acceptance
   bullet for the empty allowlist and the tier filter.
@@ -21,7 +22,8 @@ artifact: requirements
   unlisted `danger-ping` (interactive) and an allowlisted `shell-exec` are
   refused as not offered.
 - REQ-agent-112 (modified): Fledge plugins also load when the allowlist names
-  a `fledge-*` command; no fledge spawn otherwise; two new bullets.
+  a `fledge-*` command and the session is not a non-ADMIN role session; no
+  fledge spawn otherwise; three new bullets.
 - REQ-agent-085 (modified): the non-git "tool-reported files only" sentence
   gains the REQ-agent-502 exception; one new bullet.
 

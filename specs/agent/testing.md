@@ -51,10 +51,13 @@ a non-ADMIN session gets no dangerous or mutating tool. Through
 `createTaskExecute` with `CORVIDINHO_ALLOWLIST=github-pr-review` the review
 runs (dry run) and an unlisted `github-issue-create` is refused; ADMIN gets
 it, non-ADMIN does not. An allowlisted `fledge-hello` is discovered, offered
-and run without `includeDangerous`; an allowlist with no `fledge-*` entry
-never spawns fledge. In a non-git project a Fledge edit no tool reported runs
-verify and fails (allowlisted, and with `includeDangerous`), a GitHub-only run
-still skips verify, and the gate off stays done.
+and run without `includeDangerous`; an allowlist with no `fledge-*` entry,
+or a non-ADMIN role session, never spawns fledge (the owner's ADMIN session
+does). In a non-git project a Fledge edit no tool reported runs verify and
+fails (allowlisted, and with `includeDangerous`), a GitHub-only run still
+skips verify, and the gate off stays done; a `delegate` call whose worker
+failed its own verify makes the lead verify and fail when the allowlist names
+`fledge-hello`, and skip verify when it names no `fledge-*` command.
 `tests/agent.tool-loop.test.ts` "tool loop dispatches only offered tools":
 an unlisted `danger-ping` in an interactive run and an allowlisted
 `shell-exec` at code tier are refused as not offered (REQ-agent-128).

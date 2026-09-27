@@ -19,13 +19,17 @@ artifact: testing
 | `REQ-agent-502`, `REQ-agent-085` | `tests/agent.allowlisted-dangerous.test.ts` | "allowlisted fledge-hello edits app.ts in a non-git project without reporting it: verify runs and the run fails, never done": one verify call in the project dir, `failed`, `verified=false`, `filesChanged: []`, Text note names `fledge-hello`. Fails on main. |
 | `REQ-agent-502` | `tests/agent.allowlisted-dangerous.test.ts` | "the same holds when every dangerous tool is included (includeDangerous seam)": proves the gate change on its own; on main the Fledge edit ran and the run ended done with verify skipped. |
 | `REQ-agent-502`, `REQ-agent-085` | `tests/agent.allowlisted-dangerous.test.ts` | "a non-git run whose only tool was an allowlisted GitHub write still skips verify" (review succeeds; no verify; done). Fails on main only because the review is not offered. Guard: "with the verify gate off, nothing changes: done, verify skipped". |
+| `REQ-agent-112` (ROLES-CHAT-2) | `tests/agent.allowlisted-dangerous.test.ts` | "a non-ADMIN role session with fledge-hello allowlisted never spawns fledge (ROLES-CHAT-2)": the fake `fledge` logs no call at all (not even discovery) and no `fledge-*` tool is registered. Fails before the review fix (discovery ran before the ADMIN check). Counterpart: "the owner's ADMIN role session with fledge-hello allowlisted discovers and offers it". |
+| `REQ-agent-502` | `tests/agent.allowlisted-dangerous.test.ts` | "allowlist names fledge-hello: the lead verifies anyway after its worker, and never ends done on the failed lane": non-git project, autonomous on, a fake worker (`CORVIDINHO_BIN`) that failed its own verify and reported no files; the lead runs verify once, ends `failed`, the note names `delegate`. Fails before the review fix (the lead ended done, verify skipped). Guard: "allowlist names no fledge-* command: the worker cannot run one, so a non-git lead still skips verify". |
 | `REQ-agent-128` | `tests/agent.tool-loop.test.ts` | "a registered but not-offered dangerous tool is refused, not run" (unlisted `danger-ping`, interactive) and "an allowlisted SAFE-3-pending tool (shell-exec) is not offered: refused, not run, even interactive" (no `ran.txt`). |
 | `REQ-agent-008`, `REQ-agent-117`, `REQ-agent-roles-001`, `REQ-agent-085` | `tests/agent.tool-loop.test.ts`, `tests/fledge.plugins.test.ts`, `tests/roles.chat.gates.test.ts`, `tests/runners.plugins.test.ts`, `tests/web.fetch.test.ts`, `tests/autonomous.*.test.ts`, `tests/agent.loop.test.ts` | Existing tests pass unchanged (the `includeDangerous` seam, the default catalog, non-ADMIN catalogs, runners, the real-diff gate). |
 
 Fail-on-main proof: with origin/main's `src/agent/tools.ts`, `execute.ts`,
 `types.ts` and `loop.ts` swapped in, tests/agent.allowlisted-dangerous.test.ts
-runs 4 pass / 9 fail (the 9 listed above as failing on main); restored, 13
-pass / 0 fail.
+runs 6 pass / 11 fail (the 9 listed above as failing on main, plus the
+owner's ADMIN Fledge discovery and the delegate fail-closed case); restored,
+17 pass / 0 fail. With only the pre-review `execute.ts` (21d3fbb) swapped
+in, the two review-fix tests fail (15 pass / 2 fail).
 
 Full suite: `bun test`, `bunx tsc --noEmit`, `specsync check
 --require-coverage 100` and `fledge lanes run verify --non-interactive`.
