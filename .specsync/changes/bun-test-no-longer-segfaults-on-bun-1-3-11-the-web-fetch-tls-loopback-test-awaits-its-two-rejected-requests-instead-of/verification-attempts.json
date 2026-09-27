@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790474358,
+      "commit": "e015554d2edbdd6e59fa3a5dc84164ade814a78a",
+      "contract_digest": "34ddb6880b28912388f2685ba667a338bf33257a19f9938969f5ab7b2a92d812",
+      "execution_digest": "683c583ba1880d501cc537274e25d872b1a574390b971f8ddb977f881ce087ba",
+      "workspace_digest": "33dd69c728b23b71050363feca3bb1796083b363b5c99658263e3447589a79ee",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1790474359,
+      "commit": "9ec5833627501c355cc25f690e18d301c307b369",
+      "contract_digest": "34ddb6880b28912388f2685ba667a338bf33257a19f9938969f5ab7b2a92d812",
+      "execution_digest": "683c583ba1880d501cc537274e25d872b1a574390b971f8ddb977f881ce087ba",
+      "workspace_digest": "33dd69c728b23b71050363feca3bb1796083b363b5c99658263e3447589a79ee",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    }
+  ]
+}
