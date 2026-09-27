@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails",
+  "slug": "watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails",
+  "title": "WATCH never drops or skips a trusted request when an event-id write fails",
+  "description": "WATCH never drops or skips a trusted request when an event-id write fails",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "f834cc942785d33825f5a13dfa687961925257fc",
+  "created_at": 1790467025,
+  "updated_at": 1790467859,
+  "affected_specs": [
+    "watch"
+  ],
+  "affected_paths": [
+    "src/watch/poller.ts",
+    "src/watch/ack.ts",
+    "src/watch/summary.ts",
+    "tests/watch.dedup-durable.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "An event whose id write fails is logged 'not marked, retried next cycle', runs nothing, and is handled exactly once by the next cycle even when an immediate retry of the write would have succeeded; a failed acked or summarized id write after the comment is posted is logged and the agent run and summary still happen once; tests/watch.dedup-durable.test.ts covers both and fails on the previous code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

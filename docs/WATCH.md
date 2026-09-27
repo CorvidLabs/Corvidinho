@@ -35,11 +35,15 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
   for the current run, then closes the DB.
 - One failing event (e.g. `SQLITE_BUSY`) is logged as
   `[watch] event owner/repo#N (id) failed; marked processed` and the cycle moves
-  on. If a second watcher on the same data dir replaced an issue's row, the
-  latest write wins instead of failing on the unique issue key.
-- Not yet: turn persistence/replay, stored conversation summaries, durable
-  processed-id/ack dedup (a restart can re-see recent events; they continue the
-  persisted session).
+  on (`not marked, retried next cycle` when the id write itself failed; nothing
+  ran for it). If a second watcher on the same data dir replaced an issue's row,
+  the latest write wins instead of failing on the unique issue key.
+- Handled event ids (processed, acked, summarized) persist in the same DB,
+  table `watch_event_ids` (REQ-watch-247), so a restart never re-runs, re-acks
+  or re-summarizes an event it already handled. Denied ids (non-allowlisted
+  senders) are kept apart, in memory only: a stranger's mention flood cannot
+  push a handled trusted id out, and after a restart it is just refused again.
+- Not yet: turn persistence/replay, stored conversation summaries.
 
 
 ## Reliability (REQ-watch-007 + WATCH-RELIABILITY-1..3)
