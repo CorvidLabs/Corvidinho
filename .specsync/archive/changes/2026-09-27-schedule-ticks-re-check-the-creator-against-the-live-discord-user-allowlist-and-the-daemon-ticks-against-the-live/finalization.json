@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "schedule-ticks-re-check-the-creator-against-the-live-discord-user-allowlist-and-the-daemon-ticks-against-the-live",
+  "implementation_commit": "f1682aabee789a5e32ffee43d81d51f0e4f27f07",
+  "implementation_tree": "dfda665f8b675a50d022c639c0c67444ebc02a9e",
+  "contract_digest": "6f775be1fd870ce8a21589c3e3cc65eac0e92d6c8a297c7270c6e9a8aac8df51",
+  "workspace_digest": "8280e5a29a946eedf79591864e499c9399be728a0558208c556417c2cce84a71",
+  "closing_digest": "2c09323a402ddf606a9c4ad303ec5a713c38f6dcd8eaa80075f862a6a2a80581",
+  "review_digest": "599303a0751233d690d085c0d1e3dc95853ca66150429d1351cb1a8f183518e0",
+  "finalization_digest": "a452fb8889ea20307e7393023abbd0279cd16302f23de544326e0960edbef91b",
+  "timestamp": 1790522870
+}

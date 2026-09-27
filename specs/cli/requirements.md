@@ -373,9 +373,19 @@ Acceptance Criteria
 The CLI SHALL expose `corvidinho daemon`. It ticks the shared SQLite schedules
 table on the existing 60 s poll with no Discord token and no REPL (CLI-8,
 AUTONOMOUS-4). It SHALL use the bridge's scheduler gates: the channel
-allowlist re-check (DISCORD-SCHEDULE-3), per-run worktrees
-(SESSION-WORKTREE), and non-interactive agent spawns (SAFE-1). It SHALL add no
-new environment variables.
+allowlist and schedule-creator re-check (DISCORD-SCHEDULE-3, REQ-discord-020),
+with the configured owner loaded at start (IDENTITY-1) so the owner's
+schedules pass the creator gate as they do in the bridge, per-run worktrees
+(SESSION-WORKTREE), and non-interactive agent spawns (SAFE-1). Before each
+tick the daemon SHALL re-read the allowlist the way start loads it (file, env
+overlays and `DISCORD_CHANNEL_IDS`) and SHALL gate that tick's runs against
+it, so an `/admin` edit the bridge writes to the file applies on the next
+tick without a restart. When the file exists but cannot be read or parsed the daemon SHALL
+skip that tick (fail closed, ALLOW-4): log `tick.allowlist_failed` with the
+loader's value-free error, start no run, and leave due schedules due. A
+tick still re-reading the allowlist when stop begins SHALL start no run (the
+stop only drains runs already claimed). It SHALL add no new environment
+variables.
 
 Only one daemon SHALL run per data dir. The daemon SHALL create
 `<data dir>/daemon.lock` exclusively, recording its pid and Linux process
@@ -417,6 +427,10 @@ Acceptance Criteria
 - A second daemon on the same data dir exits 1 with `daemon.lock_held` and the holder pid.
 - A lock from a dead or recycled pid is taken over; an unreadable lock younger than 5 s is not.
 - A due schedule is run headlessly and logged as `run.finished`; a non-allowlisted channel is refused without running the agent.
+- A channel removed from the allowlist file after start, or a creator added to its `deny_users`, is refused on the next tick without running the agent (`run.finished` with `channel not allowlisted: …` / `creator not allowlisted: …`).
+- A malformed allowlist file makes the next tick log `tick.allowlist_failed` and run nothing; once the file is fixed, the still-due schedule runs on the following tick.
+- With a non-empty user list that omits the owner, the configured owner's schedule still runs; an unlisted non-owner creator's schedule is refused.
+- A tick still re-reading the allowlist when SIGTERM stops the daemon claims no run: the due schedule gets no run row and the stop drains without abandoning anything.
 - Stop after the grace records stragglers as failed and frees the lock; a forced stop skips the grace.
 - A straggler spawned through the real spawn client (fake `sh` bin with a same-group and a `setsid` grandchild) has its whole tree killed at shutdown.
 - Log lines parse as JSON, and secrets in fields are redacted.
