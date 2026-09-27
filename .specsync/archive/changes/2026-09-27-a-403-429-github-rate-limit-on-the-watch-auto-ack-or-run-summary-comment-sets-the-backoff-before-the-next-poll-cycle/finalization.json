@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-403-429-github-rate-limit-on-the-watch-auto-ack-or-run-summary-comment-sets-the-backoff-before-the-next-poll-cycle",
+  "implementation_commit": "ab23a4358e9f9c4e04e3c454c4834f579b971cb9",
+  "implementation_tree": "25e4836d388a09a6a530c31962177449ee135c50",
+  "contract_digest": "da62257c3281ad99ae5429239bb3d3ce0559b1772b55249bcbf7e56328a5cc31",
+  "workspace_digest": "fc1556c22915b40935602a1324d3fbca322c4bab6bf1fdea326a28b33948a420",
+  "closing_digest": "5be726a6e119e1354bfa7a326e8e99f318f4ead107577a142804e2e398d65482",
+  "review_digest": "5b89589c23535294f43d8b3ce80968c94d086049b4043688ad76021b7e6a4983",
+  "finalization_digest": "a264b0bcb81196674dd9b6a48a19a26d6429150dfe2bd012f17f43fa51be9267",
+  "timestamp": 1790546857
+}
