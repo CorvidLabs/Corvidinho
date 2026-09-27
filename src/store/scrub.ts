@@ -150,7 +150,7 @@ export const SCRUB_TARGETS: ReadonlyArray<{ table: string; columns: readonly str
   { table: "discord_session_turns", columns: ["content"] },
   { table: "discord_work_tasks", columns: ["description", "summary"] },
   { table: "schedules", columns: ["name", "description", "prompt"] },
-  { table: "schedule_runs", columns: ["summary", "error"] },
+  { table: "schedule_runs", columns: ["summary", "error", "ask_question"] },
   { table: "memories", columns: ["key", "content"] },
   { table: "watch_sessions", columns: ["topic"] },
   { table: "spend_ledger", columns: ["provider", "model"] },

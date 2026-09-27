@@ -123,6 +123,29 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   its old `running` row recovered. Temp git repos and SQLite files, no live
   Discord.
 
+## Schedule asks reach Discord from daemon runs (REQ-discord-347, AUTONOMY-2 / AUTONOMOUS-7)
+
+- `tests/scheduler.ask-outbox.test.ts` — a daemon-wired scheduler (no owner,
+  no outbound) and a bridge-wired one on one in-memory DB: a daemon stuck run
+  stores `ask_reason`/`ask_question` with `ask_posted_at` null and posts
+  nothing; the bridge's next tick posts it once (prefix, stuck headline,
+  question, owner mention) and remembers the ping key; clarify mentions only
+  the schedule creator; spend-cap pings the owner once per episode with the
+  pending 80% warning and no reply hint; the same question pings once and
+  only the newest of two pending asks posts; a later finished run or a
+  deleted schedule leaves nothing; a refused channel posts nothing; a creator
+  the live allowlist no longer lists (or deny-lists) gets no post until the
+  shared allowlist lets them back, then one post with the ping; a post
+  that resolves `false` or throws is retried with its ping; a run the bridge
+  posted itself is never posted again and two bridge tickers post a pending
+  ask once; a v10 DB migrates to v11; the question is scrubbed at rest and
+  re-scrubbed by `rescrubDatabase`; a later run that finishes while a pass
+  is posting another schedule's ask makes that ask moot; after `stop()` a
+  pass finishes its post in flight and takes no other ask, and
+  `settleAskDelivery(ms)` is bounded; `startDaemon` logs `run.needs_human`
+  and a `startBridge` on the same data dir posts the ask to the owner once;
+  the bridge's stop closes the gateway only after a pending-ask post in
+  flight resolved. No live Discord.
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
 - `tests/scheduler.actor-gate.test.ts` — a deny-listed creator's due schedule

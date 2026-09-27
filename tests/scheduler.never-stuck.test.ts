@@ -452,7 +452,8 @@ describe("schema v10 schedule_runs.runner (REQ-discord-346)", () => {
       value: string;
     };
     expect(v.value).toBe(String(SCHEMA_VERSION));
-    expect(SCHEMA_VERSION).toBe(10);
+    // v11 (schedule run asks, REQ-discord-347) builds on v10.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(10);
     const recovered = new ScheduleStore({ db }).recoverAbandonedRuns();
     // Both rows have no runner now, so neither can be proven alive.
     expect(recovered.map((r) => r.id).sort()).toEqual([run!.id, "srun_legacy0001"].sort());

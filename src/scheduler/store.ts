@@ -11,6 +11,8 @@
 
 import type { Database } from "bun:sqlite";
 import { getNextCronDate } from "./cron.ts";
+import { ASK_QUESTION_MAX } from "../agent/ask.ts";
+import type { HumanAsk, HumanAskReason } from "../agent/types.ts";
 import { isHolderAlive, readProcStart } from "../daemon/lock.ts";
 import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
 
@@ -76,7 +78,41 @@ export type ScheduleRun = {
   error?: string;
   startedAt: number;
   completedAt?: number;
+  /**
+   * The ask the run stopped with (AUTONOMY-2 / AUTONOMOUS-7): reason and the
+   * SAFE-6 scrubbed question, capped at ASK_QUESTION_MAX.
+   */
+  ask?: HumanAsk;
+  /** When a bridge took the ask to post it; unset while it is pending. */
+  askPostedAt?: number;
 };
+
+/**
+ * A finished run's ask no bridge has posted yet (REQ-discord-347): the run
+ * was claimed by a ticker with no Discord (`corvidinho daemon`).
+ */
+export type PendingScheduleAsk = {
+  runId: string;
+  scheduleId: string;
+  ask: HumanAsk;
+  /** The run's recorded summary (context line for a stuck ask). */
+  summary?: string;
+};
+
+const ASK_REASONS: ReadonlySet<string> = new Set<HumanAskReason>([
+  "clarify",
+  "stuck",
+  "spend-cap",
+]);
+
+/** The ask as stored on a run row: reason + scrubbed, capped question. */
+function storedAsk(ask: HumanAsk): HumanAsk {
+  const q = scrubSecrets(ask.question).trim();
+  return {
+    reason: ask.reason,
+    question: q.length <= ASK_QUESTION_MAX ? q : `${q.slice(0, ASK_QUESTION_MAX - 1)}…`,
+  };
+}
 
 export type CreateScheduleInput = {
   name: string;
@@ -358,11 +394,13 @@ export class ScheduleStore {
   markRunFinished(
     schedule: Schedule,
     run: ScheduleRun,
-    result: { ok: boolean; summary?: string; error?: string },
+    result: { ok: boolean; summary?: string; error?: string; ask?: HumanAsk },
     now = Date.now(),
   ): void {
     const status: ScheduleRunStatus = result.ok ? "completed" : "failed";
     let failures = result.ok ? 0 : schedule.consecutiveFailures + 1;
+    // AUTONOMY-2 / AUTONOMOUS-7: the ask stays pending until a bridge posts it.
+    const ask = result.ask ? storedAsk(result.ask) : undefined;
     const db = this.db;
     if (db) {
       failures = db
@@ -379,9 +417,18 @@ export class ScheduleStore {
             .query("SELECT consecutive_failures FROM schedules WHERE id = ?")
             .get(schedule.id) as { consecutive_failures: number } | null;
           db.run(
-            `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?
+            `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?,
+               ask_reason = ?, ask_question = ?, ask_posted_at = NULL
              WHERE id = ?`,
-            [status, scrubOpt(result.summary), scrubOpt(result.error), now, run.id],
+            [
+              status,
+              scrubOpt(result.summary),
+              scrubOpt(result.error),
+              now,
+              ask?.reason ?? null,
+              ask?.question ?? null,
+              run.id,
+            ],
           );
           return row ? row.consecutive_failures : failures;
         })
@@ -391,8 +438,118 @@ export class ScheduleStore {
     run.summary = result.summary;
     run.error = result.error;
     run.completedAt = now;
+    run.ask = ask;
+    run.askPostedAt = undefined;
     schedule.consecutiveFailures = failures;
     schedule.updatedAt = now;
+  }
+
+  /**
+   * Needs-human outbox (REQ-discord-347, AUTONOMY-2 / AUTONOMOUS-7): for each
+   * schedule whose newest finished run stopped with an ask no bridge has
+   * posted, that ask. An older pending ask is moot once a later run of the
+   * schedule finished, and a deleted schedule's runs are gone, so a stale
+   * question is never returned. Oldest first.
+   */
+  pendingAsks(): PendingScheduleAsk[] {
+    if (!this.db) {
+      return [...this.newestFinishedRunsMemory().values()]
+        .filter((r) => r.ask && r.askPostedAt === undefined)
+        .sort((a, b) => a.completedAt! - b.completedAt!)
+        .map((r) => ({
+          runId: r.id,
+          scheduleId: r.scheduleId,
+          ask: { ...r.ask! },
+          ...(r.summary !== undefined ? { summary: r.summary } : {}),
+        }));
+    }
+    const rows = this.db
+      .query(
+        `SELECT r.id, r.schedule_id, r.summary, r.ask_reason, r.ask_question
+         FROM schedule_runs r
+         WHERE r.ask_reason IS NOT NULL AND r.ask_posted_at IS NULL
+           AND r.completed_at IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM schedule_runs l
+             WHERE l.schedule_id = r.schedule_id AND l.completed_at IS NOT NULL
+               AND (l.completed_at > r.completed_at
+                    OR (l.completed_at = r.completed_at AND l.rowid > r.rowid))
+           )
+         ORDER BY r.completed_at ASC, r.rowid ASC`,
+      )
+      .all() as Array<{
+      id: string;
+      schedule_id: string;
+      summary: string | null;
+      ask_reason: string;
+      ask_question: string | null;
+    }>;
+    const pending: PendingScheduleAsk[] = [];
+    for (const r of rows) {
+      if (!ASK_REASONS.has(r.ask_reason) || !r.ask_question) continue;
+      pending.push({
+        runId: r.id,
+        scheduleId: r.schedule_id,
+        ask: { reason: r.ask_reason as HumanAskReason, question: r.ask_question },
+        ...(r.summary !== null ? { summary: r.summary } : {}),
+      });
+    }
+    return pending;
+  }
+
+  /**
+   * Take a run's pending ask to post it: a compare-and-set on
+   * `ask_posted_at IS NULL`, so a bridge and another ticker on one data dir
+   * never both post it. The same write re-checks that the run is still its
+   * schedule's newest finished run, so an ask a later run made moot after
+   * `pendingAsks()` listed it is never taken (REQ-discord-347). False when
+   * the run has no ask, it was taken, or it is moot.
+   */
+  claimRunAsk(runId: string, now = Date.now()): boolean {
+    const run = this.runsMemory.get(runId);
+    if (this.db) {
+      const res = this.db.run(
+        `UPDATE schedule_runs SET ask_posted_at = ?
+         WHERE id = ? AND ask_reason IS NOT NULL AND ask_posted_at IS NULL
+           AND completed_at IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM schedule_runs l
+             WHERE l.schedule_id = schedule_runs.schedule_id
+               AND l.completed_at IS NOT NULL
+               AND (l.completed_at > schedule_runs.completed_at
+                    OR (l.completed_at = schedule_runs.completed_at
+                        AND l.rowid > schedule_runs.rowid))
+           )`,
+        [now, runId],
+      );
+      if (res.changes === 0) return false;
+    } else if (
+      !run?.ask ||
+      run.askPostedAt !== undefined ||
+      this.newestFinishedRunsMemory().get(run.scheduleId) !== run
+    ) {
+      return false;
+    }
+    if (run) run.askPostedAt = now;
+    return true;
+  }
+
+  /** Memory store: each schedule's newest finished run (ties: the later one). */
+  private newestFinishedRunsMemory(): Map<string, ScheduleRun> {
+    const newest = new Map<string, ScheduleRun>();
+    for (const r of this.runsMemory.values()) {
+      if (r.completedAt === undefined) continue;
+      const cur = newest.get(r.scheduleId);
+      if (!cur || r.completedAt >= cur.completedAt!) newest.set(r.scheduleId, r);
+    }
+    return newest;
+  }
+
+  /** Hand a claimed ask back (its post did not go out): the next tick retries. */
+  releaseRunAsk(runId: string): void {
+    this.db?.run("UPDATE schedule_runs SET ask_posted_at = NULL WHERE id = ?", [runId]);
+    const run = this.runsMemory.get(runId);
+    if (run) run.askPostedAt = undefined;
   }
 
   /**

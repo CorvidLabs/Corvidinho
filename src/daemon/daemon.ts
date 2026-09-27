@@ -182,8 +182,10 @@ export async function startDaemon(
         ...(e.error ? { error: e.error.slice(0, 500) } : {}),
         ...(e.autoPaused ? { autoPaused: true } : {}),
       });
-      // SAFE-8 / AUTONOMY-2: the daemon has no Discord, so the operator hears
-      // about the spend cap here; the warning row stays pending for a bridge.
+      // SAFE-8 / AUTONOMY-2 / AUTONOMOUS-7: the daemon has no Discord, so the
+      // operator hears about the spend cap and a run that needs a human here;
+      // the warning row and the ask recorded on the run row (REQ-discord-347)
+      // stay pending, and a bridge's next scheduler tick posts them.
       if (e.spendWarning) {
         log("warn", "spend.warning", {
           scheduleId: e.scheduleId,

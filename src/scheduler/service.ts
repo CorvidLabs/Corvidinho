@@ -11,6 +11,9 @@
  * REQ-discord-346: a run never stays "running" forever — an outcome write is
  * retried once, stops abandon in-flight runs and let them park their
  * worktree, and a start recovers runs and worktrees a dead process left.
+ * REQ-discord-347 (AUTONOMY-2 / AUTONOMOUS-7): a run's ask is recorded on its
+ * run row; a ticker with no Discord (the daemon) leaves it pending, and a
+ * bridge tick posts it once without waiting for the post.
  */
 
 import { basename } from "node:path";
@@ -26,7 +29,7 @@ import {
 } from "../discord/ask-ping.ts";
 import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
-import type { HumanAskReason, SpendWarning } from "../agent/types.ts";
+import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
@@ -55,6 +58,11 @@ function runWorktreeKey(scheduleId: string, runId: string): string {
   return `schedule_${scheduleId}_${runId}`.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
+/** Leading line of a schedule's Discord post. */
+function scheduleTitle(schedule: Schedule): string {
+  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
+}
+
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
 function errorLine(err: unknown): string {
   try {
@@ -71,7 +79,7 @@ function errorLine(err: unknown): string {
  * Never throws: it runs in the `.catch` that keeps these promises from
  * rejecting.
  */
-function logSchedulerError(where: "tick" | "run" | "recovery", err: unknown): void {
+function logSchedulerError(where: "tick" | "run" | "recovery" | "ask", err: unknown): void {
   console.error(`[scheduler] ${where} failed: ${errorLine(err)}`);
 }
 
@@ -201,6 +209,10 @@ export class SchedulerService {
   /** Abandoned runs still cleaning up (parking their worktree). */
   private readonly abandoned = new Set<Promise<void>>();
   private tickInFlight = false;
+  /** The pending-ask delivery pass in flight (REQ-discord-347), if any. */
+  private askDelivery: Promise<void> | null = null;
+  /** Set by `stop()`: no delivery pass takes another ask (REQ-discord-347). */
+  private stopped = false;
 
   constructor(opts: SchedulerServiceOpts) {
     this.store = opts.store;
@@ -221,6 +233,7 @@ export class SchedulerService {
   }
 
   start(): void {
+    this.stopped = false;
     if (this.timer) return;
     this.timer = setInterval(() => {
       // REQ-discord-331: a tick that throws (e.g. SQLITE_BUSY from another
@@ -234,7 +247,12 @@ export class SchedulerService {
     }
   }
 
+  /**
+   * Stop ticking. A pending-ask delivery pass in flight takes no further
+   * ask; `settleAskDelivery` waits for the post it is making.
+   */
   stop(): void {
+    this.stopped = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -293,10 +311,79 @@ export class SchedulerService {
           (err) => logSchedulerError("run", err),
         );
       }
+      // REQ-discord-347: post asks another ticker (the daemon) left pending.
+      // Fire-and-forget like the runs: a slow post never delays a tick.
+      this.deliverPendingAsks();
     } finally {
       this.tickInFlight = false;
     }
     return { started, skipped };
+  }
+
+  /**
+   * Wait for the pending-ask delivery pass in flight (if any), up to
+   * `timeoutMs` when given. Resolves true when none is left in flight. A
+   * stop waits on it so a post in flight either goes out or hands its ask
+   * back before the gateway closes (REQ-discord-347).
+   */
+  async settleAskDelivery(timeoutMs?: number): Promise<boolean> {
+    const pass = this.askDelivery;
+    if (!pass) return true;
+    if (timeoutMs === undefined) {
+      await pass;
+      return true;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, Math.max(0, timeoutMs));
+    });
+    try {
+      await Promise.race([pass, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    return this.askDelivery === null;
+  }
+
+  /**
+   * Needs-human outbox (REQ-discord-347, AUTONOMY-2 / AUTONOMOUS-7): only a
+   * ticker that can post (the bridge) delivers. For each schedule whose
+   * newest finished run stopped with an ask nobody posted — a run the
+   * daemon claimed — post it to the schedule's channel like an in-process
+   * run would (owner / creator ping, once-per-question and once-per-episode
+   * rules, pending 80% warning). A schedule whose creator or channel the
+   * live allowlist refuses (DISCORD-SCHEDULE-3) is skipped and its ask stays
+   * pending; the ask is claimed atomically first and handed back when its
+   * post does not go out, so the next tick retries it. The claim re-checks that the
+   * ask is still its schedule's newest, so one a later run made moot while
+   * this pass was posting is skipped; after `stop()` no further ask is
+   * taken. One pass at a time; never rejects.
+   */
+  private deliverPendingAsks(): void {
+    if (!this.outbound?.post || this.askDelivery || this.stopped) return;
+    const pass = (async () => {
+      for (const pending of this.store.pendingAsks()) {
+        if (this.stopped) break;
+        const schedule = this.store.get(pending.scheduleId);
+        if (!schedule?.channelId) continue;
+        // DISCORD-SCHEDULE-3: creator and channel re-checked live before posting.
+        if (!this.gateTick(schedule).ok) continue;
+        if (!this.store.claimRunAsk(pending.runId, this.nowFn())) continue;
+        let posted = false;
+        try {
+          posted = await this.postRunAsk(schedule, schedule.channelId, pending.ask, pending.summary);
+        } catch (err) {
+          logSchedulerError("ask", err);
+        } finally {
+          if (!posted) this.store.releaseRunAsk(pending.runId);
+        }
+      }
+    })();
+    this.askDelivery = pass
+      .catch((err) => logSchedulerError("ask", err))
+      .finally(() => {
+        this.askDelivery = null;
+      });
   }
 
   /**
@@ -515,7 +602,7 @@ export class SchedulerService {
         ok: result.ok,
         summary,
         error: result.ok ? undefined : summary,
-        ...(result.ask ? { askReason: result.ask.reason } : {}),
+        ...(result.ask ? { ask: result.ask } : {}),
         ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
       })) {
         return;
@@ -529,78 +616,43 @@ export class SchedulerService {
       if (schedule.channelId && this.outbound?.post) {
         // Re-checked at post time: the allowlist can change mid-run.
         const gate = this.gateTick(schedule);
-        const title = `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
-        // AUTONOMY-2: a tick that needs a human posts its question and pings
-        // the owner once per question — a repeat still posts, without a ping.
-        const pingKey = result.ask ? askPingKey(result.ask) : null;
-        const alreadyPinged =
-          pingKey !== null && schedule.askPingKey === pingKey;
-        // SAFE-8: a spend-cap ask also pings once per cap episode across
-        // every bridge surface (only consulted when this post would ping).
-        const askOwner =
-          result.ask && gate.ok && !alreadyPinged
-            ? askPingOwner(result.ask, this.owner, this.spendAlerts)
-            : { owner: null, deduped: alreadyPinged, release: () => {} };
-        const ask = result.ask
-          ? formatAskReply({
-              ask: result.ask,
-              // Stuck / spend-cap: owner (skip when already pinged). Clarify:
-              // schedule creator.
-              owner: askOwner.owner,
-              requesterDiscordId: alreadyPinged
-                ? undefined
-                : schedule.createdByUserId,
-              context: result.summary,
-              prefix: `${title}:`,
-            })
-          : null;
-        // SAFE-8: a pending 80% spend warning (this run's or one recorded by
-        // any other run on the data dir) rides the post and pings the owner.
-        const pending = gate.ok ? takeSpendWarning(this.spendAlerts, result.spendWarning) : null;
-        // `false` until a post resolves (a poster returning void counts as sent).
-        let posted: void | boolean = false;
-        try {
-          if (gate.ok && ask && result.ask) {
-            if (
-              (result.ask.reason === "stuck" || result.ask.reason === "spend-cap") &&
-              !ask.ownerPinged &&
-              !askOwner.deduped
-            ) {
-              console.warn(ASK_NO_OWNER_WARNING);
-            }
-            posted = await this.outbound.post(
-              withSpendWarningPost(
-                {
-                  channelId: schedule.channelId,
-                  content: ask.content,
-                  mentionUserIds: ask.mentionUserIds,
-                },
-                pending?.warning,
-                this.owner,
-              ),
+        if (result.ask) {
+          // REQ-discord-347: take the recorded ask first (no await since
+          // finish), so no other ticker's delivery pass posts it too. A
+          // refused channel leaves it pending, like a daemon run's. An
+          // outcome that could not be recorded has no row to claim. A post
+          // that does not go out here is not retried (the next run posts).
+          const recorded = run.ask !== undefined;
+          if (gate.ok && (!recorded || this.store.claimRunAsk(run.id, this.nowFn()))) {
+            await this.postRunAsk(
+              schedule,
+              schedule.channelId,
+              result.ask,
+              result.summary,
+              result.spendWarning,
             );
-            // A ping that never went out is not remembered (AUTONOMY-2).
-            if (posted !== false && ask.pinged && pingKey) {
-              this.store.setAskPingKey(schedule.id, pingKey);
-            }
-          } else if (gate.ok) {
+          }
+        } else if (gate.ok) {
+          // SAFE-8: a pending 80% spend warning (this run's or one recorded
+          // by any other run on the data dir) rides the post and pings the owner.
+          const pending = takeSpendWarning(this.spendAlerts, result.spendWarning);
+          // `false` until a post resolves (a poster returning void counts as sent).
+          let posted: void | boolean = false;
+          try {
             const status = result.ok ? "✅" : "❌";
             posted = await this.outbound.post(
               withSpendWarningPost(
                 {
                   channelId: schedule.channelId,
-                  content: `${status} ${title}:\n${summary.slice(0, 1500)}`,
+                  content: `${status} ${scheduleTitle(schedule)}:\n${summary.slice(0, 1500)}`,
                 },
                 pending?.warning,
                 this.owner,
               ),
             );
-          }
-        } finally {
-          // Not posted: the next post carries the warning and the cap ping.
-          if (posted === false) {
-            pending?.release();
-            askOwner.release();
+          } finally {
+            // Not posted: the next post carries the warning.
+            if (posted === false) pending?.release();
           }
         }
       }
@@ -627,6 +679,76 @@ export class SchedulerService {
         }
       }
     }
+  }
+
+  /**
+   * Post a schedule run's ask to its channel (AUTONOMY-1/2/4, SAFE-8): the
+   * question with the schedule prefix; stuck and spend-cap ping the owner,
+   * clarify pings the schedule creator. The owner is pinged once per
+   * question per schedule (`askPingKey`) and a spend-cap ask once per cap
+   * episode; a repeat still posts, without a ping. A pending 80% warning
+   * rides the post. Resolves true when the post went out (a poster
+   * returning void counts as sent); when it did not, the warning and the
+   * cap ping are handed back and no ping key is kept. The caller has
+   * already checked the channel against the allowlist.
+   */
+  private async postRunAsk(
+    schedule: Schedule,
+    channelId: string,
+    ask: HumanAsk,
+    context: string | undefined,
+    spendWarning?: SpendWarning,
+  ): Promise<boolean> {
+    const outbound = this.outbound;
+    if (!outbound?.post) return false;
+    const pingKey = askPingKey(ask);
+    const alreadyPinged = schedule.askPingKey === pingKey;
+    // SAFE-8: a spend-cap ask also pings once per cap episode across
+    // every bridge surface (only consulted when this post would ping).
+    const askOwner = !alreadyPinged
+      ? askPingOwner(ask, this.owner, this.spendAlerts)
+      : { owner: null, deduped: true, release: () => {} };
+    const reply = formatAskReply({
+      ask,
+      // Stuck / spend-cap: owner (skip when already pinged). Clarify:
+      // schedule creator.
+      owner: askOwner.owner,
+      requesterDiscordId: alreadyPinged ? undefined : schedule.createdByUserId,
+      context,
+      prefix: `${scheduleTitle(schedule)}:`,
+    });
+    // SAFE-8: a pending 80% spend warning (this run's or one recorded by
+    // any other run on the data dir) rides the post and pings the owner.
+    const pending = takeSpendWarning(this.spendAlerts, spendWarning);
+    // `false` until a post resolves (a poster returning void counts as sent).
+    let posted: void | boolean = false;
+    try {
+      if (
+        (ask.reason === "stuck" || ask.reason === "spend-cap") &&
+        !reply.ownerPinged &&
+        !askOwner.deduped
+      ) {
+        console.warn(ASK_NO_OWNER_WARNING);
+      }
+      posted = await outbound.post(
+        withSpendWarningPost(
+          { channelId, content: reply.content, mentionUserIds: reply.mentionUserIds },
+          pending?.warning,
+          this.owner,
+        ),
+      );
+      // A ping that never went out is not remembered (AUTONOMY-2).
+      if (posted !== false && reply.pinged) {
+        this.store.setAskPingKey(schedule.id, pingKey);
+      }
+    } finally {
+      // Not posted: the next post carries the warning and the cap ping.
+      if (posted === false) {
+        pending?.release();
+        askOwner.release();
+      }
+    }
+    return posted !== false;
   }
 
   /**
@@ -668,12 +790,18 @@ export class SchedulerService {
       ok: boolean;
       summary?: string;
       error?: string;
-      askReason?: HumanAskReason;
+      /** Recorded on the run row until a bridge posts it (REQ-discord-347). */
+      ask?: HumanAsk;
       spendWarning?: SpendWarning;
     },
   ): boolean {
     if (this.finishedRuns.has(run)) return false;
-    const record = { ok: result.ok, summary: result.summary, error: result.error };
+    const record = {
+      ok: result.ok,
+      summary: result.summary,
+      error: result.error,
+      ...(result.ask ? { ask: result.ask } : {}),
+    };
     let outcome: { ok: boolean; error?: string } = record;
     try {
       this.store.markRunFinished(schedule, run, record);
@@ -703,7 +831,7 @@ export class SchedulerService {
       ok: outcome.ok,
       error: outcome.error,
       autoPaused,
-      ...(result.askReason ? { askReason: result.askReason } : {}),
+      ...(result.ask ? { askReason: result.ask.reason } : {}),
       ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
     });
     return true;
