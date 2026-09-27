@@ -1,8 +1,10 @@
 ---
 module: plugins
-version: 43
+version: 47
 status: draft
 files:
+  - plugins/discord/user-lookup.ts
+  - tests/discord.user-lookup.test.ts
   - src/plugins/types.ts
   - src/plugins/registry.ts
   - src/plugins/run.ts
@@ -15,9 +17,12 @@ files:
   - tests/github.public.community.test.ts
   - tests/github.gate-allowlist-file.test.ts
   - tests/files.secret-path.test.ts
+  - tests/search.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
+  - tests/store.busy-lock.test.ts
+  - tests/audit.keyed-downgrade.test.ts
   - src/allowlist/types.ts
   - src/allowlist/load.ts
   - src/allowlist/github.ts
@@ -35,6 +40,7 @@ files:
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
   - plugins/specsync/index.ts
+  - tests/specsync.path-containment.test.ts
   - plugins/memory/index.ts
   - plugins/memory/commands.ts
   - plugins/files/index.ts
@@ -133,6 +139,10 @@ spawned with `detached: true`. The registry exports `unregister(name, command)` 
 name only while it is still that exact command). `plugins/fledge` exports
 `fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
 root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
+`plugins/specsync/api.ts` exports `MODULE_NAME_RE` / `invalidModuleName` (the
+plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
+`refused: true` for an invalid name or an escaping path) and `readCompanions`
+(returns `error` and no files when it refuses).
 
 ## Invariants
 
@@ -257,7 +267,36 @@ call GitHub read tools against any *public* repository after deny-list checks
 sessions keep the GITHUB-6 allowlist gate.
 
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
-files) for non-ADMIN role sessions via `isSecretPath`.
+files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
+`files-list` and `git-diff` refuse an explicit secret path the same way (also
+through a symlink), and `search-grep`, `git-diff`, `files-glob` and
+`files-list` leave secret paths out of their results, whatever `--include`,
+glob or `--staged` is passed (REQ-plugins-267). ADMIN and the local CLI keep
+the access `files-read` gives.
+
+SAFE-5 audit chain (REQ-plugins-095): once `audit_log` holds a keyed row it
+stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
+append after a keyed row (a dangerous run is then refused, fail closed), and
+`verifyAudit` with the key reports an unkeyed row after a keyed row as the
+break. An unkeyed prefix followed by keyed rows still verifies as mixed.
+Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
+the newest rows is not detectable from the DB alone; it needs an anchor kept
+outside the DB.
+
+SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
+PLUGIN-1, REQ-plugins-008).
+`specsync-read` / `specsync-brief` take only a plain module name
+(`[A-Za-z0-9_-]+`, the registry form; optional `name=` prefix): an absolute
+path, `.` / `..`, a path separator, NUL or any other character is refused
+(exit 1, nothing read, the name JSON-escaped in the error). Every file they
+read (module spec, legacy flat spec, companions) must realpath inside the real
+`specs/` dir, which must itself realpath inside the project root; a symlinked
+specs dir, module dir, spec or companion that leaves it is refused (a refused
+companion fails the whole brief) and its content is never returned; the
+Planning spec briefing reads through the same helpers and skips it too.
+`specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
+forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
+`specsync-list` and `specsync-check` take no path input.
 
 ## Behavioral Examples
 
@@ -290,6 +329,12 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **Given** `shell-exec` allowlisted
 - **When** the command sets `CDPATH` (literally or dynamically) to an outside dir and then runs `cd sub`
 - **Then** the child shell's `readonly CDPATH` and dropped `CDPATH`/`OLDPWD` env keep `cd sub` under the root; no outside path is reached
+
+### Scenario: SpecSync tools refuse to read outside the project
+
+- **Given** builtins are loaded and a file `outside.md` sits outside the project
+- **When** the agent runs `specsync-read ../../<outside>/outside` or `specsync-brief ../../<outside>`, or `specsync-read <module>` whose spec, module dir or companion is a symlink to a file outside the project
+- **Then** the run fails with exit 1 and a one-line refusal; no content from outside the project is returned
 
 ### Scenario: web-fetch refuses cloud metadata
 
@@ -333,6 +378,18 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **When** the agent runs `files-write` under non-interactive
 - **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
 
+### Scenario: non-ADMIN search-grep never returns secret lines (ROLES-CHAT-8)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a project with `.env` holding a key
+- **When** the agent runs `search-grep OPENAI_API_KEY .env`, or `search-grep <pattern>` over the project with any `--include`
+- **Then** the explicit path is refused with exit 2 like `files-read`, and the recursive search returns no line from `.env*`, `.ssh`, key or keystore files
+
+### Scenario: non-ADMIN git-diff never shows a tracked secret file (ROLES-CHAT-8)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a repo with a tracked, modified `certs/server.pem` and `src/a.ts`
+- **When** the agent runs `git-diff`, `git-diff --staged` or `git-diff certs/server.pem`
+- **Then** the diff shows `src/a.ts` only, and the explicit secret path is refused with exit 2 like `files-read`
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -344,9 +401,12 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
+| specsync-read/brief name not a plain module name, or a spec/companion/specs dir whose real path leaves the project specs dir | Refuse (exit 1); nothing read |
+| specsync-coverage/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
+| Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
@@ -387,6 +447,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
+| 2026-09-26 | discord-user-lookup read-only guild member resolve (REQ-plugins-312 / IDENTITY-5) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
 | 2026-09-26 | memory-sqlite-acl issues #41 #59: MEMORY SQLite + ACL; package 0.0.4 |
@@ -418,6 +479,14 @@ and current rows for plugins host evolution.
 | 2026-09-26 | test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a: Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file makes the GitHub plugin gate refuse (REQ-plugins-253) |
 | 2026-09-26 | shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops: Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root |
 | 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
-
+| 2026-09-26 | audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and: Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6) |
 | 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
+| 2026-09-27 | concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process: Concurrent audit appends from several processes lose no SAFE-5 rows: regression test for REQ-plugins-287 multi-process acceptance (review follow-up for PR 211) |
+| 2026-09-26 | safe-5-audit-verify-rejects-unkeyed-rows-after-a-keyed-row-and-appendaudit-refuses-unkeyed-appends-to-a-keyed-chain-so: SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256 |
+| 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
+| 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
+| 2026-09-27 | safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a: SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain |
+| 2026-09-27 | specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real: Specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root |
+| 2026-09-27 | search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles: Search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8) |
+| 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |

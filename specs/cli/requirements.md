@@ -441,6 +441,23 @@ Acceptance Criteria
 - CLI `version` prints `0.0.21`.
 - CHANGELOG has a 0.0.21 section that the updater's changelog helper extracts exactly.
 
+### REQ-cli-244
+
+`corvidinho task run` SHALL pass an AbortSignal to `runTask` and SHALL abort
+it on the first SIGINT or SIGTERM (AGENT-3). The run's verify lane and tool
+loop SHALL stop (REQ-agent-244), the structured cancelled result SHALL still
+be printed in the selected output mode (text line, `--json` document, or a
+final ndjson `result` frame with `cancelled: true`), and the process SHALL
+exit 130 instead of dying by the signal. The handlers SHALL be removed when
+the run ends; a second signal SHALL take its default action. A SIGINT or
+SIGTERM this process started with ignored (a background job's SIGINT) SHALL
+NOT be hooked and SHALL stay ignored, as for the process-tree hook
+(REQ-plugins-154). No flag or environment variable is added.
+
+Acceptance Criteria
+- `task run --task demo --output ndjson` with a fake `fledge` on PATH (it starts a lane task and blocks), sent SIGINT or SIGTERM while verify runs, exits 130 (not by the signal), its last stdout line is a `result` frame with `cancelled: true`, `verified: false`, `state: "failed"`, and both the fake `fledge` and its lane task are gone.
+- The same run started with SIGINT ignored (`sh -c 'trap "" INT; exec …'`) is still running, with its lane, 1 s after a SIGINT; a SIGTERM then exits 130 with a cancelled `result` frame and stops the lane.
+
 ### REQ-cli-023
 
 The project SHALL ship package version `0.0.23` (stop means stop (process trees), SAFE-3 cd clamp, scrub before clip, GitHub gate reads allowlist file). CLI `version` and Discord presence (DISCORD-12) report `0.0.23` after a restart. CHANGELOG SHALL include verbose 0.0.23 notes.
@@ -481,4 +498,31 @@ Acceptance Criteria
 - `package.json` version is `0.0.26`.
 - CLI `version` prints `0.0.26`.
 - CHANGELOG has a 0.0.26 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-262
+
+The test suite SHALL NOT write the operator's Corvidinho state (SAFE-5). The
+bun test preload (`tests/preload.ts`, loaded by `bunfig.toml`) SHALL always
+point `CORVIDINHO_DATA_DIR` at its own temporary directory, overriding an
+inherited value, and SHALL unset `CORVIDINHO_AUDIT_HMAC_KEY`,
+`CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR`, so a suite run with the
+operator's env (including the prove-before-done verify lane spawned from
+Discord, WATCH, the daemon or `task run`) never adds audit rows, sessions or
+memory to the operator's DB and never signs a test audit row with the
+operator's key. A process a test spawns with `Bun.spawn` / `Bun.spawnSync` and
+no explicit `env` SHALL get the preload's env, not the environment the test
+process started with. The preload SHALL also unset the run and operator
+settings that change test outcomes on the bot box, so the suite runs as it
+does on CI: `CORVIDINHO_NON_INTERACTIVE` and `FLEDGE_NON_INTERACTIVE` (every
+Discord, WATCH and daemon task run sets the first, and its verify lane runs
+the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, and the LLM API keys
+`CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (so `bun test` never sends a real
+model call). No new env var, config key or command.
+
+Acceptance Criteria
+- With the operator's `CORVIDINHO_DATA_DIR`, `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR` set, a child `bun test` writes 0 audit rows (and no file) to the operator data dir; its rows, including a CLI run it spawns, land in the preload's temp dir.
+- An operator DB that already holds an audit chain keeps the same row count and last hash after the child run, and no test row is keyed with the operator's key.
+- A CLI or shell a test spawns without an explicit `env` (`Bun.spawn(argv)`, `Bun.spawn({ cmd })`, `Bun.spawnSync(argv)`) resolves the preload's data dir and sees no audit key, WATCH spawn log or worktree base override.
+- Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
+- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY` and `OPENAI_API_KEY` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
 

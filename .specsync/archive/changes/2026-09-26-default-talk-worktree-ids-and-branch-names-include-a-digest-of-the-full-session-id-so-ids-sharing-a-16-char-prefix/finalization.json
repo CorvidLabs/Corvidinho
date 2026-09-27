@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix",
+  "implementation_commit": "913c584e889f5785c854d29ae62e8af169ab84e2",
+  "implementation_tree": "e3534b2d5cd583845780126bd990164ad4fbbe24",
+  "contract_digest": "7fa7c4784392fa82b08cfbaa5bcd6959c9dac74ec3c71e7d8c8a0799ac1eb0bf",
+  "workspace_digest": "6b3edcb8216c97cd200afeb9c44bd8f3d4878d5f6d10ad5161aee571dcf23a57",
+  "closing_digest": "f66b246b15f4441d6b6d830254a2cd03bb4f5bcf13283aba6c83cfff74889b67",
+  "review_digest": "18e1152785daceb19fcb0db7efc82398cf479f99968f400e53ecfc62379a80bc",
+  "finalization_digest": "2f637fe72c53d43c3d54d718be13a5a567c9275ec45fc587d2e279b7ca7dff0a",
+  "timestamp": 1790465450
+}

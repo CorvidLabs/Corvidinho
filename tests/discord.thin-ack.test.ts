@@ -138,7 +138,9 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       content: "@bot pick a DB",
       mentionedBot: true,
     });
-    expect(replies).toHaveLength(0);
+    // Collapsed ask; the only fresh post is the requester ping (REQ-discord-215).
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toBe("<@user-1> ↑ question for you");
     const askEdit = outbound.contentEdits.find(
       (e) => typeof e.content === "string" && e.content.includes("Postgres or SQLite?"),
     );
@@ -157,12 +159,12 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
       mentionedBot: false,
       referencedMessageId: stubId,
     });
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain("> Postgres or SQLite?");
-    expect(replies[0]!.content).toContain(ASK_REPLY_HINT);
-    expect(replies[0]!.content).toContain("<@user-1>");
-    expect(replies[0]!.content).not.toContain("SHOULD_NOT_RUN");
-    expect(replies[0]!.content).not.toContain("ready when you are");
+    expect(replies).toHaveLength(2);
+    expect(replies[1]!.content).toContain("> Postgres or SQLite?");
+    expect(replies[1]!.content).toContain(ASK_REPLY_HINT);
+    expect(replies[1]!.content).toContain("<@user-1>");
+    expect(replies[1]!.content).not.toContain("SHOULD_NOT_RUN");
+    expect(replies[1]!.content).not.toContain("ready when you are");
     expect(result.store.getByBotMessage(stubId)!.pendingAsk).toMatchObject(CLARIFY);
     expect(calls).toHaveLength(1); // agent not re-spawned
     expect(n).toBe(1);

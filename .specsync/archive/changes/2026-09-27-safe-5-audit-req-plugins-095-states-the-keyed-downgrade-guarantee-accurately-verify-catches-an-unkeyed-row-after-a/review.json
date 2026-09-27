@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "e96cd73aeb33485755d3244ae85f66b6463cb58c",
+  "contract_digest": "205e4604aff5790bd03c3596a623e986e52824226b48a03eb9e6bf2069593e8b",
+  "execution_digest": "c0d688b682a88a4447278988c8e3f4b6c91215430770764d6d70c3736f6efecf",
+  "workspace_digest": "bc7f2daee83cd669e31290629d94e2ab57d96386c72b6519a29bf951414c72f5",
+  "timestamp": 1790469966
+}

@@ -1,0 +1,54 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790465358,
+      "digest": "f72d235d3c24842375c0e1922338673cc076079d008bca0d16b992520930655d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out",
+        "title": "Task run stops on SIGINT/SIGTERM with a cancelled result and a stopped verify lane, and a stalled LLM request times out (agent-loop-4)",
+        "description": "task run stops on SIGINT/SIGTERM with a cancelled result and a stopped verify lane, and a stalled LLM request times out (agent-loop-4)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/loop.ts",
+          "src/agent/verify.ts",
+          "src/cli.ts",
+          "tests/agent.cli.test.ts",
+          "tests/agent.execute.test.ts",
+          "tests/agent.loop.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SIGINT or SIGTERM to a running task run aborts the run: the verify lane (fledge and its tasks, own process group) and the tool loop stop, the structured cancelled result is still printed (a final ndjson result frame with cancelled=true under --output ndjson) and the process exits 130 instead of dying by the signal; an abort while the verify lane runs yields cancelled=true even when no retries remain (no VerifyResult failure, no retry, no stuck ask); each OpenAI-compatible chat completions request (waiting for headers and reading the body) is bounded by a per-request timeout (default 10 minutes) so a stalled provider returns an LLM request timed out error instead of hanging task run and the Discord/watch runs that await it; a caller abort still stops the request and is not reported as a timeout; no new env vars, flags or slash commands; fixture tests prove each regression with no network"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "65b437a14f584861bed65c71e7fb223d0925b339bf55dfac6d0047590c629d6d",
+        "cli": "383d20427622a321999a95858428efdd908f17bb910e8a2efd89f46d2fd0da48"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790465626,
+      "digest": "64d33e2b1b7b22cb4f52c5f987b1e60c4a0b3b3365c585842dbf42ec3da38cf5",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

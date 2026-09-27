@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-audit-verify-rejects-unkeyed-rows-after-a-keyed-row-and-appendaudit-refuses-unkeyed-appends-to-a-keyed-chain-so",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "508bbc9d5aae40d4c7527eb6bd54c95730ee5307",
+  "contract_digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+  "execution_digest": "d31db5b437243d36ae9360e84770afcbaeb057b41c1cbe5dd189725d444f70dc",
+  "workspace_digest": "216354bb77e4bbcc1b4dc2545da77a70d71769776c2598480ed7f97f6e63ddba",
+  "timestamp": 1790466437
+}

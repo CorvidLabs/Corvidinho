@@ -14,12 +14,16 @@
  *    with allowed mentions limited to the owner.
  *  - A post that did not go out hands its claims back (the warning and the
  *    episode's cap ping), so the next post carries them instead.
+ *  - Any answer collapsed into the thinking message (chat, button pick or
+ *    slash) that mentions someone is followed by one short fresh ping post
+ *    for them (postCollapsedPing, REQ-discord-215), skipping whoever a fresh
+ *    post already pinged this turn.
  */
 
 import type { SpendAlertOutbox, TakenSpendWarning } from "../agent/spend-outbox.ts";
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
-import { appendPostLine, formatSpendWarningReply } from "./ask-ping.ts";
+import { appendPostLine, formatCollapsedPing, formatSpendWarningReply } from "./ask-ping.ts";
 import { finishSlashWithThinking, type SlashFinishThinkingOpts } from "./slash-finish.ts";
 
 export type AskPingOwner = {
@@ -69,8 +73,49 @@ export function takeSpendWarning(
 export type ChannelPost = (p: {
   channelId: string;
   content: string;
+  /** Reply to this message (e.g. the collapsed answer a ping points at). */
+  replyToMessageId?: string;
   mentionUserIds?: string[];
 }) => Promise<{ messageId: string } | null>;
+
+/**
+ * DISCORD-ASK-6/7 with AUTONOMY-2/4 and SAFE-8: after an answer was
+ * delivered by editing the thinking message (a collapsed edit), post one
+ * short fresh message that pings the users the answer mentions — an edit
+ * does not notify a mention. The post replies to the collapsed answer (the
+ * bot's own message, so replying pings no one else), holds only the
+ * mention(s) and a one-line pointer (formatCollapsedPing) and allows exactly
+ * those users (no @everyone / roles). Users in `alreadyPinged` (a fresh post
+ * already pinged them this turn) are skipped. Best effort: a failed or
+ * throwing post never fails the turn. Returns the sent ping, or null when
+ * nobody was left to ping or the post did not go out.
+ */
+export async function postCollapsedPing(opts: {
+  post: ChannelPost | null | undefined;
+  channelId: string;
+  /** The collapsed answer (the edited thinking message). */
+  replyToMessageId?: string | null;
+  /** The users the collapsed answer mentions. */
+  mentionUserIds: readonly string[] | undefined;
+  /** Of those, the users the answer asks a question (clarify requester). */
+  questionUserIds?: readonly string[];
+  alreadyPinged?: readonly string[];
+}): Promise<{ messageId: string; mentionUserIds: string[] } | null> {
+  if (!opts.post) return null;
+  const ping = formatCollapsedPing(opts);
+  if (!ping) return null;
+  try {
+    const sent = await opts.post({
+      channelId: opts.channelId,
+      content: ping.content,
+      ...(opts.replyToMessageId ? { replyToMessageId: opts.replyToMessageId } : {}),
+      mentionUserIds: ping.mentionUserIds,
+    });
+    return sent ? { messageId: sent.messageId, mentionUserIds: ping.mentionUserIds } : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * True when an ask pings the owner: stuck (AUTONOMY-2) and spend-cap
@@ -151,6 +196,12 @@ export function slashOwnerNotice(opts: {
  * run) does not stop the notice post. When nothing carried the notice its
  * claims are handed back for the next post, and the body's error is
  * re-thrown afterwards so the gateway still logs it.
+ *
+ * A collapsed answer that mentions someone (the clarify requester in
+ * `mentionUserIds`, AUTONOMY-4; the owner when the notice had to be appended
+ * to it) is followed by one short fresh ping post (postCollapsedPing) for
+ * everyone the notice post did not already ping; a fallback reply is fresh,
+ * so it gets none.
  */
 export async function finishSlashWithOwnerNotice(
   opts: SlashFinishThinkingOpts & {
@@ -159,14 +210,40 @@ export async function finishSlashWithOwnerNotice(
   },
 ): Promise<void> {
   const { notice, post, ...finish } = opts;
+  const body: { mode: "collapsed" | "fallback" | null } = { mode: null };
+  const onDelivered = (mode: "collapsed" | "fallback") => {
+    body.mode = mode;
+    opts.onDelivered?.(mode);
+  };
+  // Mentions in a collapsed (edited) answer do not notify: ping them fresh.
+  const pingCollapsed = async (
+    mentionUserIds: readonly string[] | undefined,
+    alreadyPinged: readonly string[],
+  ) => {
+    if (body.mode !== "collapsed") return;
+    const sent = await postCollapsedPing({
+      post,
+      channelId: opts.interaction.channelId,
+      replyToMessageId: opts.thinking?.progressMessageId,
+      mentionUserIds,
+      // The answer itself mentions only the requester its clarify ask
+      // addresses (AUTONOMY-4); the owner is told by the notice.
+      questionUserIds: opts.mentionUserIds,
+      alreadyPinged,
+    });
+    if (sent) opts.trackBotMessage?.(sent.messageId, opts.sessionId);
+  };
   if (!notice) {
-    await finishSlashWithThinking(finish);
+    try {
+      await finishSlashWithThinking({ ...finish, onDelivered });
+    } finally {
+      await pingCollapsed(opts.mentionUserIds, []);
+    }
     return;
   }
   const withNotice = appendPostLine(opts.body, notice.content);
   const mentions = [...new Set([...(opts.mentionUserIds ?? []), ...notice.mentionUserIds])];
   let delivered = false;
-  const body: { mode: "collapsed" | "fallback" | null } = { mode: null };
   const failure: { failed: boolean; err?: unknown } = { failed: false };
   const note = (err: unknown) => {
     if (!failure.failed) Object.assign(failure, { failed: true, err });
@@ -177,31 +254,31 @@ export async function finishSlashWithOwnerNotice(
         ...finish,
         body: withNotice,
         mentionUserIds: mentions,
-        onDelivered: () => {
+        onDelivered: (mode) => {
           delivered = true;
+          onDelivered(mode);
         },
       });
     } else {
       try {
-        await finishSlashWithThinking({
-          ...finish,
-          onDelivered: (mode) => {
-            body.mode = mode;
-          },
-        });
+        await finishSlashWithThinking({ ...finish, onDelivered });
       } catch (err) {
         note(err);
       }
+      let noticePosted = false;
       try {
-        delivered =
+        noticePosted =
           (await post({
             channelId: opts.interaction.channelId,
             content: notice.content,
             mentionUserIds: notice.mentionUserIds,
           })) !== null;
       } catch {
-        delivered = false;
+        noticePosted = false;
       }
+      delivered = noticePosted;
+      // Who the collapsed answer mentions (the owner too once the notice rides it).
+      let collapsedMentions = opts.mentionUserIds;
       if (!delivered && body.mode === "collapsed" && opts.thinking) {
         // Append to the collapsed answer (edits it again).
         try {
@@ -213,6 +290,7 @@ export async function finishSlashWithOwnerNotice(
         } catch {
           delivered = false;
         }
+        if (delivered) collapsedMentions = mentions;
       } else if (!delivered && body.mode === "fallback") {
         const { interaction } = opts;
         try {
@@ -224,6 +302,8 @@ export async function finishSlashWithOwnerNotice(
           note(err);
         }
       }
+      // No second ping for whoever the notice post already pinged (#160).
+      await pingCollapsed(collapsedMentions, noticePosted ? notice.mentionUserIds : []);
     }
   } catch (err) {
     note(err);

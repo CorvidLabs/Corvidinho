@@ -15,6 +15,7 @@ import {
   PermissionLevel,
   resolvePermissionLevel,
 } from "../permissions.ts";
+import { projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
 
@@ -51,7 +52,7 @@ function formatScheduleLine(s: {
   nextRunAt?: number;
   lastRunAt?: number;
   executionCount: number;
-}): string {
+}, opts: { fullProjectPath: boolean }): string {
   const status = s.status === "active" ? "🟢" : "🔴";
   const next = s.nextRunAt
     ? `<t:${Math.floor(s.nextRunAt / 1000)}:R>`
@@ -59,7 +60,11 @@ function formatScheduleLine(s: {
   const last = s.lastRunAt
     ? `<t:${Math.floor(s.lastRunAt / 1000)}:R>`
     : "never";
-  return `${status} **${s.name}** (\`${s.id.slice(0, 12)}\`)\n  Project: \`${s.project}\` · Cron: \`${s.cronExpression}\` · Next: ${next} · Last: ${last} · Runs: ${s.executionCount}`;
+  // REQ-discord-418: only ADMIN sees an absolute host path.
+  const project = opts.fullProjectPath
+    ? s.project
+    : (projectLabel(s.project) ?? "");
+  return `${status} **${s.name}** (\`${s.id.slice(0, 12)}\`)\n  Project: \`${project}\` · Cron: \`${s.cronExpression}\` · Next: ${next} · Last: ${last} · Runs: ${s.executionCount}`;
 }
 
 export async function handleScheduleCommand(
@@ -118,7 +123,10 @@ async function handleList(
     });
     return;
   }
-  const lines = schedules.slice(0, 15).map(formatScheduleLine);
+  const fullProjectPath = requireAdmin(ctx, interaction);
+  const lines = schedules
+    .slice(0, 15)
+    .map((s) => formatScheduleLine(s, { fullProjectPath }));
   const more =
     schedules.length > 15 ? `\n…and ${schedules.length - 15} more` : "";
   await interaction.reply({

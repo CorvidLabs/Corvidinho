@@ -695,3 +695,70 @@ describe("a crash between park and row delete never leaves a dead cwd (SESSION-W
     });
   });
 });
+
+describe("default talk names carry a digest of the full session id (REQ-discord-241)", () => {
+  test("after upgrade, a talk stored with a prefix-only name keeps it, and a new talk sharing that prefix never wipes it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "corvidinho-wt-upgrade-"));
+    const opened: Array<ReturnType<typeof openCorvidinhoDb>> = [];
+    try {
+      const project = join(root, "proj");
+      initGitRepo(project);
+      process.env.WORKTREE_BASE_DIR = join(root, "wts");
+      const dbPath = join(root, "corvidinho.db");
+      const reopen = () => {
+        const db = openCorvidinhoDb({ path: dbPath });
+        opened.push(db);
+        return { db, store: new SessionStore({ db, ttlMs: 45 * 60 * 1000, defaultProjectRoot: project }) };
+      };
+      // Discord-shaped ids (`sess_` + 16 hex) that share their first 16 chars.
+      const idA = "sess_0123456789a11111";
+      const idB = "sess_0123456789a22222";
+      // A live talk as the pre-digest bridge stored it: its default names
+      // were only the 16-char prefix of the id.
+      const oldPart = idA.slice(0, 16);
+      const oldA = await ensureTalkWorkspace({
+        projectWorkingDir: project,
+        sessionId: idA,
+        worktreeId: `talk-${oldPart}`,
+        branchName: `talk/${oldPart}`,
+      });
+      expect(oldA.ok).toBe(true);
+      if (!oldA.ok) return;
+      const wtA = oldA.workspace.workDir;
+      writeFileSync(join(wtA, "a-wip.txt"), "wip");
+      const first = reopen();
+      first.store.create({ id: idA, channelId: "c", userId: "u1", threadId: "t-a", ensureWorktree: false });
+      first.db.run(
+        `UPDATE discord_sessions SET project = ?, worktree_path = ?, worktree_branch = ?, worktree_state = 'active' WHERE id = ?`,
+        [project, wtA, `talk/${oldPart}`, idA],
+      );
+
+      // Restart onto the new code.
+      const { store } = reopen();
+      const a = store.get(idA)!;
+      const boundA = await store.bindWorktree(a);
+      expect(boundA.ok).toBe(true);
+      if (!boundA.ok) return;
+      // Stored names are used as given.
+      expect(boundA.workspace.workDir).toBe(wtA);
+      expect(boundA.workspace.branchName).toBe(`talk/${oldPart}`);
+
+      const b = await store.createWithWorktree({ id: idB, channelId: "c", userId: "u2", threadId: "t-b" });
+      expect(b.ok).toBe(true);
+      if (!b.ok) return;
+      expect(b.session.worktreePath).not.toBe(wtA);
+      expect(b.session.worktreeBranch).not.toBe(`talk/${oldPart}`);
+      // A's live worktree, branch and uncommitted edit survive B's setup.
+      expect(existsSync(join(wtA, "a-wip.txt"))).toBe(true);
+      const branchA = Bun.spawnSync(["git", "branch", "--show-current"], { cwd: wtA, stdout: "pipe" });
+      expect(new TextDecoder().decode(branchA.stdout).trim()).toBe(`talk/${oldPart}`);
+      expect(store.cwdFor(a)).toBe(wtA);
+      await store.endSession(b.session);
+      await store.endSession(a);
+    } finally {
+      for (const db of opened) db.close();
+      delete process.env.WORKTREE_BASE_DIR;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

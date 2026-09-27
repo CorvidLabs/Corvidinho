@@ -19,6 +19,19 @@ function scrubClip(text: string, max: number): string {
   return scrubSecrets(text).trim().slice(0, max);
 }
 
+/**
+ * AGENT-9 / DISCORD-3.a defense in depth: drop internal tool-round stop lines
+ * from outbound chat bodies even if an older execute path left them in summary.
+ */
+export function stripInternalStopReason(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^Stopped after \d+ tool rounds\b/i.test(line.trim()))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Fields of a TaskResult used for the summary (all optional when parsed). */
 export type TaskResultSummaryInput = {
   summary?: string;
@@ -48,7 +61,8 @@ export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
  * Caps at 1800 chars for Discord outbound.
  */
 export function chatBodyFromTaskResult(r: TaskResultSummaryInput): string {
-  return typeof r.summary === "string" ? scrubClip(r.summary, 1800) : "";
+  if (typeof r.summary !== "string") return "";
+  return scrubClip(stripInternalStopReason(r.summary), 1800);
 }
 
 /**

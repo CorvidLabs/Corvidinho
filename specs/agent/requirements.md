@@ -12,12 +12,13 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When `verify_before_complete` is enabled and the execute step reports files changed, completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2).
+When `verify_before_complete` is enabled and the execute step reports files changed, completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6).
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
 - Exhausted retries yield `verified=false` and failed state.
 - Default runner invokes fledge with `lanes run verify --non-interactive`.
+- A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner: the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
 
 ### REQ-agent-003
 
@@ -417,6 +418,42 @@ Acceptance Criteria
 - ASK_AGENT_SYSTEM_INSTRUCTIONS mentions AUTONOMY-7 / joke-impossible guidance.
 - Tool description no longer claims owner is always pinged on clarify.
 
+### REQ-agent-244
+
+An abort SHALL stop the run's work, not only its bookkeeping (AGENT-3):
+
+- The default verify runner SHALL run `fledge lanes run verify
+  --non-interactive` in its own process group and, when the run's
+  AbortSignal fires, SHALL stop the lane's whole process tree (fledge and
+  the lane tasks it started, REQ-plugins-154), so no verify step keeps
+  running in the background. An already-aborted signal SHALL NOT start the
+  lane. The lane SHALL also be stopped when this process exits or dies of a
+  SIGINT / SIGTERM / SIGHUP it does not handle. After an abort the runner
+  SHALL wait at most a short grace (250 ms) for the lane's output pipes, so
+  a lane process that escaped the kill (its own session, already
+  reparented) and still holds a pipe SHALL NOT keep the cancelled run from
+  returning.
+- `runTask` SHALL return the cancelled result (`cancelled=true`,
+  `verified=false`, state `failed`) when the signal aborted while the verify
+  lane ran, whatever exit the stopped lane reports and however many retries
+  remain: no `VerifyResult`, no retry and no `stuck` ask.
+- Each OpenAI-compatible chat completions request of `createTaskExecute`
+  (tool loop and read tier) SHALL be bounded by a per-request timeout,
+  covering both the wait for headers and the body read (default
+  `LLM_REQUEST_TIMEOUT_MS`, 10 minutes; `llmTimeoutMs` option). A request
+  that times out SHALL end the attempt with the summary `LLM request timed
+  out after <ms>ms` instead of waiting forever; a caller abort SHALL still
+  end the request at once and SHALL NOT be reported as a timeout. No
+  environment variable is added.
+
+Acceptance Criteria
+- A provider that sends headers and then trickles body bytes forever makes a read-tier execute return `LLM request timed out after 300ms` within seconds (`llmTimeoutMs: 300`).
+- A provider that never answers makes a tool-tier execute return `LLM request timed out after 200ms` after one request.
+- A caller abort during a stalled request returns promptly with an `LLM request failed:` summary, not a timeout.
+- A verify runner that sees the abort and returns a failed lane with `maxRetries: 0` yields `cancelled=true`, no `ask`, no `VerifyResult` event and one execute attempt.
+- An interrupted `task run` stops a fake `fledge` and the lane task it started (REQ-cli-244).
+- An interrupted `task run` whose lane left an escaped process (`setsid`, reparented) holding the lane's stdout exits 130 with a cancelled `result` frame within seconds, not when that process ends.
+
 ### REQ-agent-242
 
 `runTask` SHALL treat the files changed by a run as the union of every
@@ -477,4 +514,26 @@ Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
 - Numbered question lines parse into options when structured options absent.
 - Single or empty options do not set HumanAsk.options.
+
+### REQ-agent-260
+
+The repository SHALL ship a root `agent.3md` that validates with
+`@corvidlabs/agent3md` `validateAgent`, exposes guidance-only skill planes
+(no `tool=` bindings that duplicate the SAFE plugin registry), and is covered
+by a bun smoke that `route`s and `get`s at least one playbook. The agent loop
+SHALL NOT load this file for progressive disclosure until AGENT-13 is HI'd
+separately.
+Acceptance Criteria
+- `validateAgent(readFileSync("agent.3md")).ok` is true in CI/tests.
+- Every skill in `Agent.manifest().skills` has `tool: null`.
+- `Agent.route` + `Agent.get` resolve a named guidance playbook (e.g. `discord-ask`).
+- `package.json` lists `@corvidlabs/agent3md` as a dependency.
+### REQ-agent-312
+When the LLM tool loop exhausts `maxToolRounds` without a final no-tool reply, execute SHALL soft-land (AGENT-9): `ExecuteResult.summary` SHALL be the last assistant prose when present, otherwise a short clarifying ask (e.g. "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?"). The summary SHALL NOT contain the operator phrase `Stopped after N tool rounds`. An operator note with that phrase MAY be emitted as a `Text` event for thinking/NDJSON. `chatBodyFromTaskResult` SHALL strip any leftover `Stopped after N tool rounds` lines before Discord outbound (defense in depth).
+The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): prefer conversational prose for social/game banter; call `discord-user-lookup` for snowflakes/@mentions/named members before repo tools; only use SpecSync/git/github/files when the query clearly needs Corvidinho codebase or product data; treat bare `bug <snowflake>` in Discord as a user id, not a GitHub issue.
+- Exhausted rounds with no prose → clarify ask; no `Stopped after` in summary.
+- Exhausted rounds with prior prose → that prose is the summary.
+- Operator `Text` event may carry the stop note.
+- `chatBodyFromTaskResult` drops stop lines.
+- Fixture: `tests/agent.soft-land.test.ts`.
 

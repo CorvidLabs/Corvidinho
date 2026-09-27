@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out",
+  "implementation_commit": "345bfb8a57df5ac3b5112ef9b35713b6e95bfd05",
+  "implementation_tree": "8d1d385454d779ddbba1fe39020e66ddddaa6a97",
+  "contract_digest": "f72d235d3c24842375c0e1922338673cc076079d008bca0d16b992520930655d",
+  "workspace_digest": "304ec6b43e3a6f21457f082bdae40b90b09cea8c64780161759d7b829e076272",
+  "closing_digest": "64d33e2b1b7b22cb4f52c5f987b1e60c4a0b3b3365c585842dbf42ec3da38cf5",
+  "review_digest": "cb1a5318ac4393d7df621e4a9e311a5f6a464af31148266118424ed5d1af6214",
+  "finalization_digest": "1db37c70a69d0f5254b47280c6f23e09f76c0acf19e3828cdc9babdaebf5a22a",
+  "timestamp": 1790465626
+}
