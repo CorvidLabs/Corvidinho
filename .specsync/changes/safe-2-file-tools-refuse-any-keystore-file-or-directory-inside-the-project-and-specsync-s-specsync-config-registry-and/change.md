@@ -1,6 +1,6 @@
 ---
 id: safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and
-state: approved
+state: implementing
 type: bug_fix
 base_commit: fbaa84b7cda1bf2b462baea44cad20ef93e0df4f
 ---
