@@ -7,10 +7,11 @@
   "title": "Slash pending-ask tests expect the REQ-discord-215 collapsed ping to the clarify requester after a /work or /session start answer",
   "description": "slash pending-ask tests expect the REQ-discord-215 collapsed ping to the clarify requester after a /work or /session start answer",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "35c9ce1d560a96263f4c30189ba2d0acae3d502b",
   "created_at": 1790471816,
-  "updated_at": 1790471842,
+  "updated_at": 1790471844,
   "affected_specs": [
     "discord"
   ],

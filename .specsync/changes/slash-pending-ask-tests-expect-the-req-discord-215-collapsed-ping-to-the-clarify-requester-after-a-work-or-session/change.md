@@ -1,6 +1,6 @@
 ---
 id: slash-pending-ask-tests-expect-the-req-discord-215-collapsed-ping-to-the-clarify-requester-after-a-work-or-session
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 35c9ce1d560a96263f4c30189ba2d0acae3d502b
 ---
