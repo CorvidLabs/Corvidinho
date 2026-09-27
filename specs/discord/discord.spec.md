@@ -11,6 +11,7 @@ files:
   - tests/discord.memory-inject.test.ts
   - src/discord/identity-inject.ts
   - tests/discord.identity-inject.test.ts
+  - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
   - src/identity/index.ts
@@ -281,7 +282,9 @@ worktree first, then passes `attachmentCacheDir(store.cwdFor(session))` as the
 `identity-inject.ts` formats/enriches the spawn prompt with acting Discord
 user id + resolved display (owner map wins for owner). Gateway fills
 `authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
-`userUsername`). Bridge and slash handlers inject identity before memory.
+`userUsername`, and `ComponentInteraction.userDisplayName` / `userUsername`
+from `componentActorNames`). Bridge (chat and button-pick resume) and slash
+handlers inject identity before memory (IDENTITY-4 / REQ-discord-446).
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
