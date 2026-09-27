@@ -14,6 +14,10 @@
  * REQ-discord-347 (AUTONOMY-2 / AUTONOMOUS-7): a run's ask is recorded on its
  * run row; a ticker with no Discord (the daemon) leaves it pending, and a
  * bridge tick posts it once without waiting for the post.
+ * REQ-discord-353 (AUTONOMY-2): a run that cannot start (project resolve or
+ * worktree failure) and a run that auto-pauses its schedule record a stuck
+ * ask the same way, so the owner hears about it instead of the schedule
+ * dying silently.
  */
 
 import { basename } from "node:path";
@@ -49,6 +53,33 @@ export const FAILURE_AUTO_PAUSE = 5;
  * tree is already killed; what is left is `git worktree remove`.
  */
 export const ABANDONED_SETTLE_MS = 3_000;
+
+/**
+ * Stuck-ask questions for a run that could not start (REQ-discord-353,
+ * AUTONOMY-2). Fixed text: the resolve / worktree error names host paths,
+ * so it stays in the run row's `error` (and the daemon's `run.finished`
+ * log), never in a channel post (REQ-discord-418). Fixed text also lets
+ * `askPingKey` ping the owner once while the same failure repeats.
+ */
+export const PROJECT_RESOLVE_FAILED_QUESTION =
+  "Could not start this run: the schedule's project could not be resolved.";
+export const WORKTREE_FAILED_QUESTION =
+  "Could not start this run: its worktree could not be created.";
+
+/**
+ * The stuck ask a run records when its failure auto-pauses the schedule
+ * (REQ-discord-353, AUTONOMY-2): it says the schedule is paused and how to
+ * resume it (the existing ADMIN `/schedule resume`), plus the run's own
+ * question when it stopped with one.
+ */
+export function autoPauseAsk(last?: HumanAsk): HumanAsk {
+  const paused = `Paused after ${FAILURE_AUTO_PAUSE} failed runs in a row. Fix the cause, then resume it with /schedule resume.`;
+  const lastQuestion = last?.question.trim();
+  return {
+    reason: "stuck",
+    question: lastQuestion ? `${paused}\nLast failure: ${lastQuestion}` : paused,
+  };
+}
 
 /** Worktree dir of a schedule run: `talk-schedule_<schedule id>_<run id>`. */
 const RUN_WORKTREE_RE = /^talk-(schedule_[A-Za-z0-9_-]+_(srun_[A-Za-z0-9]+))$/;
@@ -134,7 +165,11 @@ export type ScheduleRunFinished = {
   error?: string;
   /** Schedule was auto-paused after this run (FAILURE_AUTO_PAUSE). */
   autoPaused: boolean;
-  /** The run stopped to ask a human (AUTONOMY-1/2; `spend-cap` = SAFE-8). */
+  /**
+   * The run stopped to ask a human (AUTONOMY-1/2; `spend-cap` = SAFE-8),
+   * including the stuck ask of a run that could not start or that
+   * auto-paused its schedule (REQ-discord-353).
+   */
   askReason?: HumanAskReason;
   /** This run crossed 80% of the daily spend cap (SAFE-8). */
   spendWarning?: SpendWarning;
@@ -542,10 +577,12 @@ export class SchedulerService {
           github: this.allowlist.github,
         });
         if (!resolved.ok) {
-          this.finish(schedule, run, {
-            ok: false,
-            error: `project resolve failed: ${resolved.error}`,
-          });
+          await this.failBeforeRun(
+            schedule,
+            run,
+            `project resolve failed: ${resolved.error}`,
+            PROJECT_RESOLVE_FAILED_QUESTION,
+          );
           return;
         }
         projectDir = resolved.dir;
@@ -560,10 +597,12 @@ export class SchedulerService {
           branchName: `talk/${runKey}`,
         });
         if (!ensured.ok) {
-          this.finish(schedule, run, {
-            ok: false,
-            error: `worktree failed: ${ensured.error}`,
-          });
+          await this.failBeforeRun(
+            schedule,
+            run,
+            `worktree failed: ${ensured.error}`,
+            WORKTREE_FAILED_QUESTION,
+          );
           return;
         }
         workDir = ensured.workspace.workDir;
@@ -597,42 +636,35 @@ export class SchedulerService {
         ? result.summary.slice(0, 1500)
         : `failed (exit ${result.exitCode})`;
 
-      // Abandoned at shutdown meanwhile: already recorded, post nothing.
-      if (!this.finish(schedule, run, {
+      const done = this.finish(schedule, run, {
         ok: result.ok,
         summary,
         error: result.ok ? undefined : summary,
         ...(result.ask ? { ask: result.ask } : {}),
         ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
-      })) {
-        return;
-      }
+      });
+      // Abandoned at shutdown meanwhile: already recorded, post nothing.
+      if (!done) return;
 
       // A clean run re-arms the owner ping for the next question (AUTONOMY-2).
       if (result.ok && !result.ask && schedule.askPingKey) {
         this.store.setAskPingKey(schedule.id, null);
       }
 
-      if (schedule.channelId && this.outbound?.post) {
+      if (done.ask) {
+        // The run's ask, or the stuck ask about the auto-pause this failure
+        // caused (REQ-discord-353), which replaces the plain ❌ post.
+        await this.postOwnRunAsk(
+          schedule,
+          run,
+          done.ask,
+          result.summary,
+          result.spendWarning,
+        );
+      } else if (schedule.channelId && this.outbound?.post) {
         // Re-checked at post time: the allowlist can change mid-run.
         const gate = this.gateTick(schedule);
-        if (result.ask) {
-          // REQ-discord-347: take the recorded ask first (no await since
-          // finish), so no other ticker's delivery pass posts it too. A
-          // refused channel leaves it pending, like a daemon run's. An
-          // outcome that could not be recorded has no row to claim. A post
-          // that does not go out here is not retried (the next run posts).
-          const recorded = run.ask !== undefined;
-          if (gate.ok && (!recorded || this.store.claimRunAsk(run.id, this.nowFn()))) {
-            await this.postRunAsk(
-              schedule,
-              schedule.channelId,
-              result.ask,
-              result.summary,
-              result.spendWarning,
-            );
-          }
-        } else if (gate.ok) {
+        if (gate.ok) {
           // SAFE-8: a pending 80% spend warning (this run's or one recorded
           // by any other run on the data dir) rides the post and pings the owner.
           const pending = takeSpendWarning(this.spendAlerts, result.spendWarning);
@@ -679,6 +711,49 @@ export class SchedulerService {
         }
       }
     }
+  }
+
+  /**
+   * A run that could not start (REQ-discord-353, AUTONOMY-2): recorded
+   * failed with the full error and a stuck ask carrying only `question`
+   * (no host path), then posted like any run's ask — or, when this failure
+   * auto-pauses the schedule, the ask about the pause.
+   */
+  private async failBeforeRun(
+    schedule: Schedule,
+    run: ScheduleRun,
+    error: string,
+    question: string,
+  ): Promise<void> {
+    const done = this.finish(schedule, run, {
+      ok: false,
+      error,
+      ask: { reason: "stuck", question },
+    });
+    if (done?.ask) await this.postOwnRunAsk(schedule, run, done.ask);
+  }
+
+  /**
+   * Post the ask this ticker's own run ended with (REQ-discord-347). The
+   * channel and creator are re-checked at post time (DISCORD-SCHEDULE-3:
+   * the allowlist can change mid-run); a refused one leaves the ask pending,
+   * like a daemon run's. The recorded ask is taken first (no await since
+   * `finish`), so no other ticker's delivery pass posts it too; an outcome
+   * that could not be recorded has no row to claim. A post that does not go
+   * out here is not retried (the next run posts).
+   */
+  private async postOwnRunAsk(
+    schedule: Schedule,
+    run: ScheduleRun,
+    ask: HumanAsk,
+    context?: string,
+    spendWarning?: SpendWarning,
+  ): Promise<void> {
+    if (!schedule.channelId || !this.outbound?.post) return;
+    if (!this.gateTick(schedule).ok) return;
+    const recorded = run.ask !== undefined;
+    if (recorded && !this.store.claimRunAsk(run.id, this.nowFn())) return;
+    await this.postRunAsk(schedule, schedule.channelId, ask, context, spendWarning);
   }
 
   /**
@@ -777,7 +852,10 @@ export class SchedulerService {
 
   /**
    * Record a run outcome once, then auto-pause after repeated failures.
-   * Returns false when the run was already recorded (e.g. abandoned).
+   * Returns null when the run was already recorded (e.g. abandoned), else
+   * the ask the run ended with: its own, or — when this failure auto-paused
+   * the schedule — the stuck `autoPauseAsk` (REQ-discord-353), which the
+   * store records in place of the run's own ask in the same write.
    * REQ-discord-346: the run counts as recorded only once the store write
    * succeeds. A write that throws (SQLITE_BUSY) is logged and retried once;
    * if that fails too it is logged as `[scheduler] run failed: …` and the
@@ -794,13 +872,16 @@ export class SchedulerService {
       ask?: HumanAsk;
       spendWarning?: SpendWarning;
     },
-  ): boolean {
-    if (this.finishedRuns.has(run)) return false;
+  ): { ask?: HumanAsk } | null {
+    if (this.finishedRuns.has(run)) return null;
+    // AUTONOMY-2: a failure that pauses the schedule asks about the pause.
+    const pauseAsk = result.ok ? undefined : autoPauseAsk(result.ask);
     const record = {
       ok: result.ok,
       summary: result.summary,
       error: result.error,
       ...(result.ask ? { ask: result.ask } : {}),
+      ...(pauseAsk ? { autoPause: { at: FAILURE_AUTO_PAUSE, ask: pauseAsk } } : {}),
     };
     let outcome: { ok: boolean; error?: string } = record;
     try {
@@ -825,16 +906,17 @@ export class SchedulerService {
     }
     this.finishedRuns.add(run);
     const autoPaused = this.maybeAutoPause(schedule);
+    const ask = autoPaused ? (pauseAsk ?? autoPauseAsk()) : result.ask;
     this.onRunFinished?.({
       scheduleId: schedule.id,
       runId: run.id,
       ok: outcome.ok,
       error: outcome.error,
       autoPaused,
-      ...(result.ask ? { askReason: result.ask.reason } : {}),
+      ...(ask ? { askReason: ask.reason } : {}),
       ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
     });
-    return true;
+    return ask ? { ask } : {};
   }
 
   private maybeAutoPause(schedule: Schedule): boolean {

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the",
+  "slug": "schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the",
+  "title": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
+  "description": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
+  "created_at": 1790530164,
+  "updated_at": 1790530485,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/scheduler/service.ts",
+    "src/scheduler/store.ts",
+    "tests/scheduler.ask-outbox.test.ts",
+    "tests/scheduler.service.test.ts",
+    "docs/discord.md",
+    "docs/DAEMON.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/requirements.md",
+    "specs/discord/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A schedule run whose failure makes FAILURE_AUTO_PAUSE (5) in a row records, in the same run-finish write, a stuck ask on its schedule_runs row saying the schedule is paused and to resume it with /schedule resume (plus the run's own question when it had one); a run that cannot start because its project cannot be resolved or its worktree cannot be created is recorded failed with the full error and a stuck ask with fixed text (no host path); the bridge posts either ask in-process at once, or its next scheduler tick posts one a daemon run left pending, once, to the schedule channel with the owner pinged once per question, and the pausing run's ask replaces its plain failure post; a run refused by the DISCORD-SCHEDULE-3 gate still posts nothing and its pause ask waits until the gate passes; tests/scheduler.ask-outbox.test.ts and tests/scheduler.service.test.ts cover each and fail on the previous code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

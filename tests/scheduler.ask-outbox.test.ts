@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database as SqliteDatabase, type Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatAskSummary, stuckAfterVerifyAsk } from "../src/agent/ask.ts";
@@ -24,7 +24,14 @@ import type { AgentClient } from "../src/discord/agent-client.ts";
 import { ASK_REPLY_HINT, askPingKey, SPEND_CAP_HEADLINE } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway } from "../src/discord/gateway.ts";
-import { SchedulerService, type ScheduleRunFinished } from "../src/scheduler/service.ts";
+import {
+  autoPauseAsk,
+  FAILURE_AUTO_PAUSE,
+  PROJECT_RESOLVE_FAILED_QUESTION,
+  SchedulerService,
+  WORKTREE_FAILED_QUESTION,
+  type ScheduleRunFinished,
+} from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
 import { rescrubDatabase, SCRUB_TARGETS } from "../src/store/scrub.ts";
@@ -42,7 +49,7 @@ const CAP_ASK: HumanAsk = spendCapReachedAsk({
   capMicroUsd: 5_000_000,
 });
 
-type Step = HumanAsk | "ok";
+type Step = HumanAsk | "ok" | "fail";
 type Post = { channelId: string; content: string; mentionUserIds?: string[] };
 
 const cleanups: Array<() => void> = [];
@@ -51,11 +58,13 @@ afterEach(() => {
 });
 
 /** Agent whose next run ends as `steps.next` (the task run's result shapes). */
-function stepAgent(steps: { next: Step }): AgentClient {
+function stepAgent(steps: { next: Step; calls?: number }): AgentClient {
   return {
     async runChat({ sessionId }) {
+      steps.calls = (steps.calls ?? 0) + 1;
       const step = steps.next;
       if (step === "ok") return { ok: true, sessionId, summary: "done", exitCode: 0 };
+      if (step === "fail") return { ok: false, sessionId, summary: "boom", exitCode: 1 };
       if (step.reason === "spend-cap") {
         return { ok: true, sessionId, summary: SPEND_CAP_SUMMARY, exitCode: 0, ask: step };
       }
@@ -85,6 +94,7 @@ async function runsSettled(svc: SchedulerService): Promise<void> {
 type RunRow = {
   status: string;
   summary: string | null;
+  error?: string | null;
   ask_reason: string | null;
   ask_question: string | null;
   ask_posted_at: number | null;
@@ -102,6 +112,9 @@ function pair(
     bridgeAllowlist?: ReturnType<typeof allow>;
     post?: (p: Post) => Promise<void | boolean>;
     spendAlerts?: SpendAlertOutbox;
+    /** Run in worktrees under this root (REQ-discord-353 pre-run failures). */
+    projectRoot?: string;
+    project?: string;
   } = {},
 ) {
   const db = opts.db ?? openCorvidinhoDb({ memory: true });
@@ -111,20 +124,23 @@ function pair(
   const schedule = setup.create({
     name: "Nightly",
     cronExpression: "0 * * * *",
-    project: "proj-a",
+    project: opts.project ?? "proj-a",
     prompt: "do thing",
     createdByUserId: CREATOR_ID,
     channelId: CHANNEL,
     now: clock.now,
   });
-  const steps: { next: Step } = { next: "ok" };
+  const steps: { next: Step; calls?: number } = { next: "ok" };
+  const workspace = opts.projectRoot
+    ? { useWorktrees: true, defaultProjectRoot: opts.projectRoot }
+    : { useWorktrees: false };
   const finished: ScheduleRunFinished[] = [];
   const daemon = new SchedulerService({
     store: new ScheduleStore({ db }),
     agent: stepAgent(steps),
     allowlist: allow([CHANNEL]),
     manual: true,
-    useWorktrees: false,
+    ...workspace,
     now: () => clock.now,
     onRunFinished: (e) => finished.push(e),
   });
@@ -135,7 +151,7 @@ function pair(
     agent: stepAgent(steps),
     allowlist: opts.bridgeAllowlist ?? allow(opts.bridgeChannels ?? [CHANNEL]),
     manual: true,
-    useWorktrees: false,
+    ...workspace,
     owner: OWNER,
     ...(opts.spendAlerts ? { spendAlerts: opts.spendAlerts } : {}),
     now: () => clock.now,
@@ -164,7 +180,7 @@ function pair(
   function lastRun(): RunRow {
     return db
       .query(
-        `SELECT status, summary, ask_reason, ask_question, ask_posted_at FROM schedule_runs
+        `SELECT status, summary, error, ask_reason, ask_question, ask_posted_at FROM schedule_runs
          WHERE schedule_id = ? ORDER BY rowid DESC LIMIT 1`,
       )
       .get(schedule.id) as RunRow;
@@ -176,11 +192,18 @@ function pair(
       }
     ).ask_ping_key;
   }
+  function status(): string {
+    return (
+      db.query("SELECT status FROM schedules WHERE id = ?").get(schedule.id) as { status: string }
+    ).status;
+  }
   return {
     db,
     clock,
     setup,
     schedule,
+    steps,
+    status,
     daemon,
     bridge,
     posts,
@@ -451,6 +474,184 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     await bridge.settleAskDelivery();
     expect(posts).toHaveLength(0);
     expect(store.pendingAsks().map((p) => p.scheduleId)).toEqual([s.id]);
+  });
+});
+
+describe("auto-pause and pre-run failures ask the owner instead of dying silently (REQ-discord-353, AUTONOMY-2)", () => {
+  const PAUSED_LINE = `> Paused after ${FAILURE_AUTO_PAUSE} failed runs in a row. Fix the cause, then resume it with /schedule resume.`;
+
+  function tempRoot(prefix: string): string {
+    const root = mkdtempSync(join(tmpdir(), prefix));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    return root;
+  }
+
+  test("a daemon run that auto-pauses its schedule records a stuck ask; the bridge's next tick pings the owner once", async () => {
+    const h = pair();
+    for (let i = 1; i < FAILURE_AUTO_PAUSE; i++) {
+      await h.daemonRun("fail");
+      expect(h.lastRun()).toMatchObject({ status: "failed", ask_reason: null });
+      expect(h.finished.at(-1)).toMatchObject({ ok: false, autoPaused: false });
+    }
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(0);
+
+    await h.daemonRun("fail");
+    expect(h.status()).toBe("paused");
+    expect(h.finished.at(-1)).toMatchObject({ ok: false, autoPaused: true, askReason: "stuck" });
+    expect(h.lastRun()).toMatchObject({
+      status: "failed",
+      summary: "failed (exit 1)",
+      ask_reason: "stuck",
+      ask_question: autoPauseAsk().question,
+      ask_posted_at: null,
+    });
+
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+    const post = h.posts[0]!;
+    expect(post.channelId).toBe(CHANNEL);
+    expect(post.content).toStartWith("Schedule **Nightly**");
+    expect(post.content).toContain(`⚠️ I'm stuck and need a human. <@${OWNER_ID}>`);
+    expect(post.content).toContain(PAUSED_LINE);
+    expect(post.content).toContain("failed (exit 1)");
+    expect(post.mentionUserIds).toEqual([OWNER_ID]);
+    expect(h.lastRun().ask_posted_at).not.toBeNull();
+
+    await h.bridgeTick();
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+  });
+
+  test("a stuck run that auto-pauses posts one ask naming the pause and its own question", async () => {
+    const h = pair();
+    for (let i = 1; i < FAILURE_AUTO_PAUSE; i++) await h.daemonRun("fail");
+    await h.daemonRun(STUCK);
+    expect(h.status()).toBe("paused");
+    expect(h.lastRun()).toMatchObject({
+      ask_reason: "stuck",
+      ask_question: autoPauseAsk(STUCK).question,
+    });
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+    expect(pinged(h.posts[0]!, OWNER_ID)).toBe(true);
+    expect(h.posts[0]!.content).toContain(`${PAUSED_LINE}\n> Last failure: ${STUCK.question}`);
+  });
+
+  test("a bridge run that auto-pauses posts the stuck ask with the owner ping instead of the ❌ line", async () => {
+    const h = pair();
+    for (let i = 1; i < FAILURE_AUTO_PAUSE; i++) await h.bridgeRun("fail");
+    expect(h.posts).toHaveLength(FAILURE_AUTO_PAUSE - 1);
+    for (const p of h.posts) {
+      expect(p.content).toStartWith("❌ Schedule **Nightly**");
+      expect(silent(p)).toBe(true);
+    }
+
+    await h.bridgeRun("fail");
+    expect(h.status()).toBe("paused");
+    expect(h.posts).toHaveLength(FAILURE_AUTO_PAUSE);
+    const last = h.posts.at(-1)!;
+    expect(last.content).toStartWith("Schedule **Nightly**");
+    expect(last.content).toContain(PAUSED_LINE);
+    expect(pinged(last, OWNER_ID)).toBe(true);
+    expect(h.lastRun().ask_posted_at).not.toBeNull();
+    expect(h.pingKeyRow()).toBe(askPingKey(autoPauseAsk()));
+
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(FAILURE_AUTO_PAUSE);
+  });
+
+  test("refused runs that auto-pause post nothing while refused; the pause ask posts once the creator is allowed again", async () => {
+    const live = allow([CHANNEL]);
+    live.discord.users = ["someone-else"];
+    const h = pair({ bridgeAllowlist: live });
+    for (let i = 0; i < FAILURE_AUTO_PAUSE; i++) await h.bridgeRun("ok");
+    expect(h.steps.calls ?? 0).toBe(0);
+    expect(h.status()).toBe("paused");
+    expect(h.posts).toHaveLength(0);
+    expect(h.lastRun()).toMatchObject({
+      status: "failed",
+      ask_reason: "stuck",
+      ask_question: autoPauseAsk().question,
+      ask_posted_at: null,
+    });
+    expect(h.lastRun().error).toStartWith("creator not allowlisted");
+
+    live.discord.users = [CREATOR_ID];
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+    expect(h.posts[0]!.content).toContain(PAUSED_LINE);
+    expect(pinged(h.posts[0]!, OWNER_ID)).toBe(true);
+  });
+
+  test("a daemon run whose project cannot be resolved records a stuck ask without the host path; the bridge pings the owner once per question", async () => {
+    const root = tempRoot("corvidinho-prerun-resolve-");
+    const h = pair({ projectRoot: root, project: "missing-proj" });
+    await h.daemonRun("ok");
+    expect(h.steps.calls ?? 0).toBe(0);
+    const row = h.lastRun();
+    expect(row).toMatchObject({
+      status: "failed",
+      summary: null,
+      ask_reason: "stuck",
+      ask_question: PROJECT_RESOLVE_FAILED_QUESTION,
+      ask_posted_at: null,
+    });
+    // The full error (with host paths) stays on the run row.
+    expect(row.error).toStartWith("project resolve failed: project path not found: missing-proj");
+    expect(row.error).toContain(root);
+    expect(h.finished.at(-1)).toMatchObject({ ok: false, autoPaused: false, askReason: "stuck" });
+
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+    const post = h.posts[0]!;
+    expect(post.content).toStartWith("Schedule **Nightly**");
+    expect(post.content).toContain(`⚠️ I'm stuck and need a human. <@${OWNER_ID}>`);
+    expect(post.content).toContain(`> ${PROJECT_RESOLVE_FAILED_QUESTION}`);
+    expect(post.content).not.toContain(root);
+    expect(post.mentionUserIds).toEqual([OWNER_ID]);
+
+    // The same failure again posts without a second ping (AUTONOMY-2 once).
+    await h.daemonRun("ok");
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(2);
+    expect(h.posts[1]!.content).toContain(`> ${PROJECT_RESOLVE_FAILED_QUESTION}`);
+    expect(silent(h.posts[1]!)).toBe(true);
+  });
+
+  test("a bridge run whose worktree cannot be created posts its stuck ask at once, once", async () => {
+    const root = tempRoot("corvidinho-prerun-worktree-");
+    const project = join(root, "proj");
+    mkdirSync(project);
+    const git = (args: string[]) => {
+      const p = Bun.spawnSync(["git", ...args], { cwd: project, stdout: "pipe", stderr: "pipe" });
+      expect(p.exitCode).toBe(0);
+    };
+    git(["init", "-q"]);
+    git(["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "init"]);
+    // A `talk` branch blocks every `talk/<run>` branch: `git worktree add` fails.
+    git(["branch", "talk"]);
+    const h = pair({ projectRoot: root, project: "proj" });
+
+    await h.bridgeRun("ok");
+    expect(h.steps.calls ?? 0).toBe(0);
+    const row = h.lastRun();
+    expect(row).toMatchObject({
+      status: "failed",
+      ask_reason: "stuck",
+      ask_question: WORKTREE_FAILED_QUESTION,
+    });
+    expect(row.error).toStartWith("worktree failed: Failed to create worktree:");
+    expect(row.ask_posted_at).not.toBeNull();
+    expect(h.posts).toHaveLength(1);
+    expect(h.posts[0]!.content).toContain(`⚠️ I'm stuck and need a human. <@${OWNER_ID}>`);
+    expect(h.posts[0]!.content).toContain(`> ${WORKTREE_FAILED_QUESTION}`);
+    expect(h.posts[0]!.content).not.toContain(root);
+    expect(h.posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
+
+    await h.bridgeTick();
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
   });
 });
 

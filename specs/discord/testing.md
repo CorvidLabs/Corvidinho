@@ -146,6 +146,26 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and a `startBridge` on the same data dir posts the ask to the owner once;
   the bridge's stop closes the gateway only after a pending-ask post in
   flight resolved. No live Discord.
+
+## Schedule auto-pause and pre-run failures ask the owner (REQ-discord-353, AUTONOMY-2)
+
+- `tests/scheduler.ask-outbox.test.ts` — daemon + bridge on one in-memory DB:
+  the run that makes 5 failures in a row pauses the schedule and stores the
+  stuck `autoPauseAsk` (earlier failures store none); the bridge's next tick
+  posts it once with the owner ping; a stuck 5th run posts the pause line
+  plus `Last failure: <question>`; a bridge-claimed 5th failure posts the
+  pause ask with the ping instead of the `❌` line; creator-refused runs
+  that auto-pause post nothing until the creator is allowed again. With
+  worktrees on: a daemon run whose project cannot be resolved stores the
+  fixed `PROJECT_RESOLVE_FAILED_QUESTION` (full error with the host path
+  on the row only) and the bridge pings the owner once per question; a
+  bridge run whose worktree cannot be created (a `talk` branch blocks
+  `talk/<run>`) posts `WORKTREE_FAILED_QUESTION` at once with the ping,
+  once, without the host path.
+- `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
+  when the SQL failure count reaches 5 even from a stale cache; a success
+  stores none.
+
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
 - `tests/scheduler.actor-gate.test.ts` — a deny-listed creator's due schedule
