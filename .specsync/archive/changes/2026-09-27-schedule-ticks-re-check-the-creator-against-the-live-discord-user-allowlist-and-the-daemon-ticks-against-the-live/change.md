@@ -1,6 +1,6 @@
 ---
 id: schedule-ticks-re-check-the-creator-against-the-live-discord-user-allowlist-and-the-daemon-ticks-against-the-live
-state: verifying
+state: archived
 type: bug_fix
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---
