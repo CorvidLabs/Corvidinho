@@ -3,8 +3,15 @@
  * Steal shape from Merlin fledge-plugin-specsync (no SpecSync reimplementation).
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { join, resolve } from "node:path";
+import { isInsideRoot } from "../files/resolvePath.ts";
 
 const COMPANIONS = [
   "context.md",
@@ -35,29 +42,129 @@ export function listRegisteredModules(cwd: string): string[] {
   return names;
 }
 
+/**
+ * A module name is one registry-form segment (same shape `listRegisteredModules`
+ * parses): letters, digits, `_`, `-`. No `.`/`..`, separators, absolute paths or
+ * NUL, so a model-chosen name cannot point a read outside `specs/` (tools stay
+ * inside the project: SPECSYNC-1/5/6 project specs + companions, PLUGIN-1).
+ */
+export const MODULE_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+/** Error text for a name that is not a plain module name, else null. */
+export function invalidModuleName(name: string): string | null {
+  if (MODULE_NAME_RE.test(name)) return null;
+  const shown = JSON.stringify(name.length > 80 ? `${name.slice(0, 80)}…` : name);
+  return (
+    `invalid spec module name ${shown}: use a registered module name ` +
+    `(letters, digits, "_" or "-"; see specsync-list)`
+  );
+}
+
+type SpecsDir = { ok: true; real: string } | { ok: false; error?: string };
+
+/**
+ * Real path of `<cwd>/specs`, which must itself resolve inside the real project
+ * root. `{ ok: false }` without an error means there is no specs dir.
+ */
+function realSpecsDir(cwd: string): SpecsDir {
+  let root: string;
+  try {
+    root = realpathSync(resolve(cwd));
+  } catch {
+    root = resolve(cwd);
+  }
+  const specs = join(root, "specs");
+  if (!existsSync(specs)) return { ok: false };
+  let real: string;
+  try {
+    real = realpathSync(specs);
+  } catch {
+    return { ok: false, error: "refused: specs dir cannot be resolved" };
+  }
+  if (!isInsideRoot(root, real)) {
+    return {
+      ok: false,
+      error: "refused: specs dir resolves outside the project directory",
+    };
+  }
+  return { ok: true, real };
+}
+
+type ContainedFile =
+  | { ok: true; real: string }
+  | { ok: false; missing: true }
+  | { ok: false; missing: false; error: string };
+
+/**
+ * Resolve `abs` (symlinks followed) and require the real path to be inside the
+ * real specs dir. Missing entries and non-files count as missing. `label` is the
+ * project-relative name shown in errors (never the outside target).
+ */
+function containedSpecFile(specsReal: string, abs: string, label: string): ContainedFile {
+  if (!existsSync(abs)) return { ok: false, missing: true };
+  let real: string;
+  try {
+    real = realpathSync(abs);
+  } catch {
+    return { ok: false, missing: false, error: `refused: ${label} cannot be resolved` };
+  }
+  if (!isInsideRoot(specsReal, real)) {
+    return {
+      ok: false,
+      missing: false,
+      error: `refused: ${label} resolves outside the project specs dir`,
+    };
+  }
+  try {
+    // A directory (or other non-file) named like a spec is not a spec: skip it.
+    if (!statSync(real).isFile()) return { ok: false, missing: true };
+  } catch {
+    return { ok: false, missing: false, error: `refused: ${label} cannot be read` };
+  }
+  return { ok: true, real };
+}
+
 /** Canonical module-dir layout, then legacy flat path (Merlin read fallback). */
 export function readModuleSpec(cwd: string, name: string): {
   ok: true;
   path: string;
   content: string;
   warning?: string;
-} | { ok: false; error: string } {
+} | { ok: false; error: string; refused?: true } {
+  const invalid = invalidModuleName(name);
+  if (invalid) return { ok: false, error: invalid, refused: true };
   const moduleDirPath = join(cwd, "specs", name, `${name}.spec.md`);
-  if (existsSync(moduleDirPath)) {
-    return {
-      ok: true,
-      path: moduleDirPath,
-      content: readFileSync(moduleDirPath, "utf8"),
-    };
-  }
   const flatPath = join(cwd, "specs", `${name}.md`);
-  if (existsSync(flatPath)) {
-    return {
-      ok: true,
-      path: flatPath,
-      content: readFileSync(flatPath, "utf8"),
-      warning: `WARNING: spec at flat path ${flatPath}. Move to ${moduleDirPath} for SpecSync compliance.`,
-    };
+  const specs = realSpecsDir(cwd);
+  if (!specs.ok && specs.error) return { ok: false, error: specs.error, refused: true };
+  if (specs.ok) {
+    const inDir = containedSpecFile(
+      specs.real,
+      join(specs.real, name, `${name}.spec.md`),
+      `specs/${name}/${name}.spec.md`,
+    );
+    if (inDir.ok) {
+      return {
+        ok: true,
+        path: moduleDirPath,
+        content: readFileSync(inDir.real, "utf8"),
+      };
+    }
+    if (!inDir.missing) return { ok: false, error: inDir.error, refused: true };
+    const flat = containedSpecFile(
+      specs.real,
+      join(specs.real, `${name}.md`),
+      `specs/${name}.md`,
+    );
+    if (flat.ok) {
+      return {
+        ok: true,
+        path: flatPath,
+        content: readFileSync(flat.real, "utf8"),
+        warning: `WARNING: spec at flat path ${flatPath}. Move to ${moduleDirPath} for SpecSync compliance.`,
+      };
+    }
+    if (!flat.missing) return { ok: false, error: flat.error, refused: true };
   }
   return {
     ok: false,
@@ -65,31 +172,82 @@ export function readModuleSpec(cwd: string, name: string): {
   };
 }
 
+/**
+ * Companion `.md` files under `specs/<name>/`. An invalid name, or a module dir
+ * or companion whose real path leaves the specs dir, returns `error` and no
+ * files (fail closed: nothing outside the project is returned).
+ */
 export function readCompanions(cwd: string, name: string): {
   files: { name: string; content: string }[];
+  error?: string;
 } {
-  const dir = join(cwd, "specs", name);
   const files: { name: string; content: string }[] = [];
-  if (!existsSync(dir)) return { files };
-  for (const filename of COMPANIONS) {
-    const p = join(dir, filename);
-    if (existsSync(p)) {
-      files.push({ name: filename, content: readFileSync(p, "utf8") });
+  const invalid = invalidModuleName(name);
+  if (invalid) return { files, error: invalid };
+  const specs = realSpecsDir(cwd);
+  if (!specs.ok) return specs.error ? { files, error: specs.error } : { files };
+  const linkDir = join(specs.real, name);
+  if (!existsSync(linkDir)) return { files };
+  let dir: string;
+  try {
+    dir = realpathSync(linkDir);
+  } catch {
+    return { files, error: `refused: specs/${name} cannot be resolved` };
+  }
+  if (!isInsideRoot(specs.real, dir)) {
+    return {
+      files,
+      error: `refused: specs/${name} resolves outside the project specs dir`,
+    };
+  }
+  const read = (filename: string): string | null | { error: string } => {
+    const got = containedSpecFile(specs.real, join(dir, filename), `specs/${name}/${filename}`);
+    if (got.ok) {
+      try {
+        return readFileSync(got.real, "utf8");
+      } catch {
+        return null; // unreadable companion: skip it, as before
+      }
     }
+    if (got.missing) return null;
+    return { error: got.error };
+  };
+  for (const filename of COMPANIONS) {
+    const content = read(filename);
+    if (content === null) continue;
+    if (typeof content !== "string") return { files: [], error: content.error };
+    files.push({ name: filename, content });
   }
   // Also pick up any other .md companions except the main spec
+  let entries: string[] = [];
   try {
-    for (const entry of readdirSync(dir)) {
-      if (!entry.endsWith(".md")) continue;
-      if (entry === `${name}.spec.md`) continue;
-      if ((COMPANIONS as readonly string[]).includes(entry)) continue;
-      const p = join(dir, entry);
-      files.push({ name: entry, content: readFileSync(p, "utf8") });
-    }
+    entries = readdirSync(dir);
   } catch {
     /* ignore */
   }
+  for (const entry of entries) {
+    if (!entry.endsWith(".md")) continue;
+    if (entry === `${name}.spec.md`) continue;
+    if ((COMPANIONS as readonly string[]).includes(entry)) continue;
+    const content = read(entry);
+    if (content === null) continue;
+    if (typeof content !== "string") return { files: [], error: content.error };
+    files.push({ name: entry, content });
+  }
   return { files };
+}
+
+/**
+ * `specsync --root` points the binary at another directory; the SpecSync
+ * tools run on this project only. Returns an error when args carry it.
+ */
+export function refuseRootArg(args: readonly string[]): string | null {
+  for (const arg of args) {
+    if (arg === "--root" || arg.startsWith("--root=")) {
+      return "refused: --root is not allowed; SpecSync tools run on this project only";
+    }
+  }
+  return null;
 }
 
 export type SpawnResult = { success: boolean; output: string; code: number };

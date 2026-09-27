@@ -21,3 +21,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 - **AGENT-6**  I can leave a session and come back to it later without losing the thread.
 - **AGENT-7**  It remembers the small durable facts I asked it to keep for this project, without needing a blockchain to do so.
 - **AGENT-8**  While it works I can see what state it is in — planning, calling a tool, verifying, or done — so bridges and the CLI are not guessing.
+
+## Notes (not numbered AC)
+
+- **Light agent.3md adopt (2026-09-26):** Leif — ship a root guidance-only `agent.3md` + `@corvidlabs/agent3md` dep and validate/route smoke. Does **not** replace hi/, SpecSync, MEMORY, sessions, or the SAFE plugin registry. **Do not invent AGENT-13** progressive-disclosure runtime HI from this packaging spike; wire into the agent loop only after separate confirm.

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "bump-package-to-0-0-27-fixtures-for-light-agent-3md-adopt",
+  "implementation_commit": "00becaf4646b01126eea62aba2280d050664ac6e",
+  "implementation_tree": "381b718e61a269cbfa001cd149b5dddc6343fd6b",
+  "contract_digest": "2b487457ef6941571ae0c526a8135d53d2bd30de34188567f97d3bb69da50701",
+  "workspace_digest": "31b4739b4fe36fbba34bbea7d3eb4fa6791f013292b5aa17735a6b49002abb82",
+  "closing_digest": "328946e0adcaa1e66818ea9d0db2ccdb05903a86d1c7523061ab26ea9deb3d8d",
+  "review_digest": "4e0736dba1d54251035a20457823b5476756c2af452cf4bb0502891684140fec",
+  "finalization_digest": "d68e20ab0fab4a36b122cd6c128e5d04884a089bba575161896ab93179ec128e",
+  "timestamp": 1790471330
+}

@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 26
+version: 27
 status: draft
 files:
   - src/agent/types.ts
@@ -31,6 +31,8 @@ files:
   - tests/agent.spend-ask.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
+  - agent.3md
+  - tests/agent3md.smoke.test.ts
   - src/autonomous/enabled.ts
   - src/autonomous/delegate.ts
   - src/autonomous/council.ts
@@ -44,6 +46,8 @@ depends_on:
 # Agent
 
 ## Purpose
+
+Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260): validate/route/get smoke only; agent loop does not load planes for progressive disclosure until AGENT-13 is HI'd.
 
 Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
 so Discord/CLI chats trust injected facts and call memory-store/recall
@@ -358,4 +362,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a: Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary |
 | 2026-09-26 | task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out: Task run stops on SIGINT/SIGTERM with a cancelled result and a stopped verify lane, and a stalled LLM request times out (agent-loop-4) |
 | 2026-09-27 | task-run-leaves-a-sigint-it-started-with-ignored-alone-and-an-interrupted-verify-lane-stops-waiting-on-a-pipe-an: Task run leaves a SIGINT it started with ignored alone, and an interrupted verify lane stops waiting on a pipe an escaped lane process holds (agent-loop-4 follow-up) |
+| 2026-09-27 | lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13: Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring |
 | 2026-09-27 | tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points: Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6) |
