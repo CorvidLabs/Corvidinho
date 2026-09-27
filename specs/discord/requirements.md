@@ -391,8 +391,21 @@ Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
 asynchronously with a small concurrency cap so live Discord HEAR and GitHub
 WATCH ingress remain ≤ ~1 minute (DISCORD-SCHEDULE-4). Schedule ticks SHALL
-re-check channel allowlists (and rely on existing SAFE gates) so a schedule
-cannot post or act outside channels/repos already allowed (DISCORD-SCHEDULE-3).
+re-check the live allowlist (and rely on existing SAFE gates) so a schedule
+cannot post or act outside channels/repos already allowed (DISCORD-SCHEDULE-3):
+before any worktree or agent run, and again right before the post, the
+schedule's channel (when set) SHALL be allowlisted and the schedule's creator
+SHALL pass the same actor gate as live ingress (`gateActor`, REQ-discord-201):
+a deny-listed creator is refused (deny wins, the owner too); when the user or
+role allowlist is non-empty the creator's user id SHALL be listed or be the
+configured owner (a tick has no member roles, so a creator admitted only by a
+listed role is refused); empty user and role lists leave the channel gate
+alone. A run refused
+before it starts SHALL create no worktree, spawn no agent and post nothing,
+SHALL be recorded failed (`creator not allowlisted: …` or `channel not
+allowlisted: <id>`) and SHALL count toward the 5-failure auto-pause; a run
+whose creator or channel is refused by the time it would post SHALL NOT post.
+No new env var, config key, slash command or option.
 Provenance: steal archived corvid-agent schedule slash + scheduler + ADR
 (DISCORD-SCHEDULE-5). No ProcessManager. Fixture tests without live Discord.
 
@@ -402,6 +415,11 @@ Acceptance Criteria
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
 - Optional create `channel` must be allowlisted; tick re-checks before post.
+- A due schedule whose creator is on `denyUsers` is refused at tick: no agent run, no post, the run is recorded failed with `creator not allowlisted: …`.
+- With a non-empty user allowlist, a schedule by an unlisted creator is refused; one by a listed user or by the configured owner (not on the list) still runs and posts.
+- A creator deny-listed while their run is in flight gets no post.
+- Refused-creator ticks count toward the 5-failure auto-pause.
+- With empty user and role lists a schedule by any creator still runs (channel-gated only).
 - Tick returns without awaiting agent; concurrent cap respected.
 - Schedules reload from shared SQLite after reopen.
 - Durable SessionStore/WorkStore from SESSION (#61) remains the bridge path.

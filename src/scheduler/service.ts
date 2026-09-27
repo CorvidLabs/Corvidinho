@@ -1,5 +1,7 @@
 /**
  * Cooperative scheduler ticker (DISCORD-SCHEDULE-3/4).
+ * DISCORD-SCHEDULE-3: each run re-checks its creator (live actor gate) and
+ * channel against the current allowlist before it starts and before it posts.
  * Steal ADR-001: ~60s poll, max concurrent 2, no catch-up, auto-pause @ 5 fails.
  * Tick MUST return without awaiting agent work so HEAR/WATCH ingress is not starved.
  * SESSION-WORKTREE: each tick uses the schedule's project worktree/scope.
@@ -18,6 +20,7 @@ import { basename } from "node:path";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
+import { gateActor } from "../discord/permissions.ts";
 import {
   ASK_NO_OWNER_WARNING,
   askPingKey,
@@ -522,16 +525,11 @@ export class SchedulerService {
     let workspaceKind: "worktree" | "scoped_dir" | undefined;
     let branchName: string | undefined;
     try {
-      // Channel allowlist re-check before any outbound (DISCORD-SCHEDULE-3).
-      if (schedule.channelId) {
-        const gate = checkChannel(schedule.channelId, this.allowlist);
-        if (!gate.ok) {
-          this.finish(schedule, run, {
-            ok: false,
-            error: `channel not allowlisted: ${schedule.channelId}`,
-          });
-          return;
-        }
+      // Creator + channel allowlist re-check before any work (DISCORD-SCHEDULE-3).
+      const allowed = this.gateTick(schedule);
+      if (!allowed.ok) {
+        this.finish(schedule, run, { ok: false, error: allowed.error });
+        return;
       }
 
       // SESSION-WORKTREE: resolve schedule.project → isolated cwd.
@@ -614,7 +612,8 @@ export class SchedulerService {
       }
 
       if (schedule.channelId && this.outbound?.post) {
-        const gate = checkChannel(schedule.channelId, this.allowlist);
+        // Re-checked at post time: the allowlist can change mid-run.
+        const gate = this.gateTick(schedule);
         if (result.ask) {
           // REQ-discord-347: take the recorded ask first (no await since
           // finish), so no other ticker's delivery pass posts it too. A
@@ -748,6 +747,30 @@ export class SchedulerService {
       }
     }
     return posted !== false;
+  }
+
+  /**
+   * DISCORD-SCHEDULE-3 tick gate, read live on every call: the schedule's
+   * creator must pass the same actor gate as live Discord ingress
+   * (REQ-discord-201: deny list wins; a non-empty user/role list must list
+   * the creator unless they are the configured owner), and its channel, when
+   * set, must be allowlisted. The bridge's `/admin` edits the shared
+   * allowlist in place and the daemon reloads it before each tick, so a run
+   * checks before it starts and again before it posts.
+   */
+  private gateTick(schedule: Schedule): { ok: true } | { ok: false; error: string } {
+    const actor = gateActor({
+      userId: schedule.createdByUserId,
+      allowlist: this.allowlist,
+      owner: this.owner,
+    });
+    if (!actor.ok) {
+      return { ok: false, error: `creator not allowlisted: ${errorLine(actor.error)}` };
+    }
+    if (schedule.channelId && !checkChannel(schedule.channelId, this.allowlist).ok) {
+      return { ok: false, error: `channel not allowlisted: ${schedule.channelId}` };
+    }
+    return { ok: true };
   }
 
   /**

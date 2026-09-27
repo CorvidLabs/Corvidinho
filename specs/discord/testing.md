@@ -144,6 +144,17 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and a `startBridge` on the same data dir posts the ask to the owner once;
   the bridge's stop closes the gateway only after a pending-ask post in
   flight resolved. No live Discord.
+## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
+
+- `tests/scheduler.actor-gate.test.ts` — a deny-listed creator's due schedule
+  is refused at tick (no agent run, no post, `creator not allowlisted: …`,
+  one consecutive failure); with a non-empty user list an unlisted creator is
+  refused while a listed user and the configured owner (not on the list) run
+  and post; a deny-listed owner is refused; a creator deny-listed while the
+  run is in flight gets no post; refused ticks auto-pause the schedule after
+  5; empty user and role lists still run any creator. In-memory store,
+  injected agent, no live Discord.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a

@@ -3,8 +3,10 @@
  *
  * Ticks the SQLite schedules table on the 60s poll without Discord, so
  * recurring work keeps moving with no REPL and no bridge. Same gates as the
- * bridge ticker: channel allowlist re-check (DISCORD-SCHEDULE-3), per-run
- * worktree (SESSION-WORKTREE), non-interactive spawns (SAFE-1). One daemon per
+ * bridge ticker: creator + channel allowlist re-check (DISCORD-SCHEDULE-3)
+ * against the allowlist re-read before every tick (a tick is skipped while
+ * the file cannot be loaded), per-run worktree (SESSION-WORKTREE),
+ * non-interactive spawns (SAFE-1). One daemon per
  * data dir (lock file); SIGTERM/SIGINT stop ticking, wait a bounded grace for
  * in-flight runs, then kill each straggler's process tree and record it
  * failed (AGENT-3), let it park its worktree (short bounded grace), release
@@ -17,7 +19,7 @@
 
 import type { Database } from "bun:sqlite";
 import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "../agent/spend-notice.ts";
-import { loadAllowlist } from "../allowlist/load.ts";
+import { loadAllowlist, tryLoadAllowlist } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import {
   createSpawnAgentClient,
@@ -28,6 +30,7 @@ import {
   CORVIDINHO_PROTOCOL_VERSION,
   checkProtocolVersion,
 } from "../discord/protocol-version.ts";
+import { loadOwnerConfig, type OwnerRecord } from "../identity/owner.ts";
 import {
   ABANDONED_SETTLE_MS,
   DEFAULT_POLL_INTERVAL_MS,
@@ -88,6 +91,17 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Same channel gate as the bridge (allowlist ∪ DISCORD_CHANNEL_IDS). */
+function daemonGate(allowlist: AllowlistConfig, env: NodeJS.ProcessEnv): AllowlistConfig {
+  return {
+    ...allowlist,
+    discord: {
+      ...allowlist.discord,
+      channels: mergeChannelIds(allowlist, env),
+    },
+  };
+}
+
 /**
  * Start the headless ticker. Never throws for operator errors: returns
  * `{ ok: false, exitCode, message }` after logging a structured error line.
@@ -122,6 +136,7 @@ export async function startDaemon(
 
   let store: ScheduleStore;
   let gate: AllowlistConfig;
+  let owner: OwnerRecord | null;
   let agent: AgentClient;
   let allowlistSource: string;
   try {
@@ -129,14 +144,9 @@ export async function startDaemon(
     store = new ScheduleStore({ db });
     const allowlist = await loadAllowlist({ env });
     allowlistSource = allowlist.sourcePath ?? "env";
-    // Same channel gate as the bridge (allowlist ∪ DISCORD_CHANNEL_IDS).
-    gate = {
-      ...allowlist,
-      discord: {
-        ...allowlist.discord,
-        channels: mergeChannelIds(allowlist, env),
-      },
-    };
+    gate = daemonGate(allowlist, env);
+    // The owner passes the creator gate like live ingress (REQ-discord-201).
+    owner = (await loadOwnerConfig({ env })).owner;
     const bin = resolveCorvidinhoBin(env, projectRoot);
     if (!opts.agent && !opts.skipProtocolCheck) {
       const hs = await checkProtocolVersion(bin);
@@ -159,6 +169,7 @@ export async function startDaemon(
     store,
     agent,
     allowlist: gate,
+    owner,
     defaultProjectRoot: projectRoot,
     useWorktrees: opts.useWorktrees,
     // The daemon owns the interval so it can log each tick.
@@ -196,8 +207,26 @@ export async function startDaemon(
     },
   });
 
+  // Set when stop begins. A tick still reading the allowlist then claims no
+  // run: stop's drain only waits for runs already claimed.
+  let stopRequested = false;
+
   const tick = async () => {
     try {
+      // DISCORD-SCHEDULE-3: tick against the allowlist as it is now (the
+      // bridge's /admin rewrites the file), updated in place so in-flight
+      // runs re-check it too. A file that cannot be loaded skips the tick
+      // (fail closed); due schedules stay due.
+      const loaded = await tryLoadAllowlist({ env });
+      if (stopRequested) return { started: [], skipped: [] };
+      if (!loaded.ok) {
+        log("error", "tick.allowlist_failed", { error: loaded.error });
+        return { started: [], skipped: [] };
+      }
+      const live = daemonGate(loaded.config, env);
+      gate.sourcePath = live.sourcePath;
+      gate.github = live.github;
+      gate.discord = live.discord;
       const r = await scheduler.tick();
       if (r.started.length > 0 || r.skipped.length > 0) {
         log("info", "tick", {
@@ -252,6 +281,7 @@ export async function startDaemon(
 
   const stop = (reason = "stop"): Promise<DaemonStopSummary> => {
     if (stopping) return stopping;
+    stopRequested = true;
     stopping = (async () => {
       clearInterval(timer);
       scheduler.stop();

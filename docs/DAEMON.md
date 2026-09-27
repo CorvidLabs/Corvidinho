@@ -4,8 +4,14 @@ A headless process that keeps `/schedule` work ticking on the Linux host
 without Discord and without anyone sitting at a REPL (**CLI-8**,
 **AUTONOMOUS-4**). It runs the same scheduler as the Discord bridge: a 60 s
 poll, at most 2 runs at once, no catch-up, and auto-pause after 5 failures in
-a row. Each run gets its own worktree (SESSION-WORKTREE). A run whose channel
-is not on the allowlist is refused (DISCORD-SCHEDULE-3). Agents it spawns run
+a row. Each run gets its own worktree (SESSION-WORKTREE). Before each tick
+the daemon re-reads the allowlist (file and env), so `/admin` edits made in the
+bridge apply without a restart; while the file cannot be loaded, ticks are
+skipped (`tick.allowlist_failed`). A run whose channel is not on the allowlist,
+or whose creator fails the live-chat actor gate (deny-listed, or, when the user
+or role list is non-empty, not listed by user id and not the configured owner;
+a tick knows no member roles), is refused (DISCORD-SCHEDULE-3). The owner is
+read at start: restart the daemon after changing it. Agents it spawns run
 non-interactive, so dangerous tools stay denied unless allowlisted (SAFE-1).
 
 ```bash
@@ -73,7 +79,7 @@ over, so a crash never blocks a restart.
 
 On SIGTERM or SIGINT the daemon:
 
-1. stops ticking;
+1. stops ticking (a tick still re-reading the allowlist starts no run);
 2. waits up to 30 s for in-flight runs;
 3. records any runs still going as failed (`interrupted: daemon shutdown`), so
    history never shows a run stuck at "running", and kills their whole process
@@ -113,6 +119,7 @@ scrubbed for secrets (SAFE-6).
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
 | `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Its question stays on the run row until a bridge posts it. |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
+| `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (nothing ran; due schedules stay due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |
 | `daemon.stopping` / `daemon.abandoned` / `daemon.stopped` | Shutdown steps |
 
