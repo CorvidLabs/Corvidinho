@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first",
+  "implementation_commit": "9de5a86ae9294b2029be05ed8ab49cd4ff3cad14",
+  "implementation_tree": "41475ccb42d25b02200cfcebabd49a1223ecc582",
+  "contract_digest": "8142fd4737499afa0052087428a7e7fb2c19a084eb40745a1cf9310e85ece482",
+  "workspace_digest": "5a89d7f6f4eead587da78d0402b8f922c2bdb4139416d4deb4a8358075f1eb51",
+  "closing_digest": "9f6ae0b1974a7e2b35fc2ab0d45642842938d9a1cad2979488af9e60ef0fb381",
+  "review_digest": "ae1f3dc3699e79cec760508ae007de9aae76edc9cb48471c0651ae7b906cee91",
+  "finalization_digest": "6686f026692bc2a4b1b40e3a01395118ff31cb12f0ef3ab0ce3713e06264d722",
+  "timestamp": 1790533526
+}

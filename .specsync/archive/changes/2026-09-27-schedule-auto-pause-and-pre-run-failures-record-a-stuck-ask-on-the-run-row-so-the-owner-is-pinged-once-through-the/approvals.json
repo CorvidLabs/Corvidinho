@@ -1,0 +1,96 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790530485,
+      "digest": "9223e37e38991958c99eb672b6a6085f09272a80c367537e9b2ee72a5c9b41bb",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the",
+        "title": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
+        "description": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DAEMON.md",
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/scheduler/service.ts",
+          "src/scheduler/store.ts",
+          "tests/scheduler.ask-outbox.test.ts",
+          "tests/scheduler.service.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A schedule run whose failure makes FAILURE_AUTO_PAUSE (5) in a row records, in the same run-finish write, a stuck ask on its schedule_runs row saying the schedule is paused and to resume it with /schedule resume (plus the run's own question when it had one); a run that cannot start because its project cannot be resolved or its worktree cannot be created is recorded failed with the full error and a stuck ask with fixed text (no host path); the bridge posts either ask in-process at once, or its next scheduler tick posts one a daemon run left pending, once, to the schedule channel with the owner pinged once per question, and the pausing run's ask replaces its plain failure post; a run refused by the DISCORD-SCHEDULE-3 gate still posts nothing and its pause ask waits until the gate passes; tests/scheduler.ask-outbox.test.ts and tests/scheduler.service.test.ts cover each and fail on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "e2b32d0a655fbc4b1e817f5fdc89f48ac00099a1a866fd3abde8ad9bc78616c2"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790532156,
+      "digest": "9223e37e38991958c99eb672b6a6085f09272a80c367537e9b2ee72a5c9b41bb",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the",
+        "title": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
+        "description": "Schedule auto-pause and pre-run failures record a stuck ask on the run row so the owner is pinged once through the existing schedule ask post and the bridge delivery pass (AUTONOMY-2)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DAEMON.md",
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/scheduler/service.ts",
+          "src/scheduler/store.ts",
+          "tests/scheduler.ask-outbox.test.ts",
+          "tests/scheduler.service.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A schedule run whose failure makes FAILURE_AUTO_PAUSE (5) in a row records, in the same run-finish write, a stuck ask on its schedule_runs row saying the schedule is paused and to resume it with /schedule resume (plus the run's own question when it had one); a run that cannot start because its project cannot be resolved or its worktree cannot be created is recorded failed with the full error and a stuck ask with fixed text (no host path); the bridge posts either ask in-process at once, or its next scheduler tick posts one a daemon run left pending, once, to the schedule channel with the owner pinged once per question, and the pausing run's ask replaces its plain failure post; a run refused by the DISCORD-SCHEDULE-3 gate still posts nothing and its pause ask waits until the gate passes; tests/scheduler.ask-outbox.test.ts and tests/scheduler.service.test.ts cover each and fail on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "25380b06b561a4f05ca7054e8028740f3e5c5433e277179c99efdab4eb11b43c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790532998,
+      "digest": "27a3cd72323a190b13b6b80e430b1b966d58257da8eb4075dcc69d822137a22e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

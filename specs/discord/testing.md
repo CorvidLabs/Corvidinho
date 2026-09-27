@@ -39,8 +39,18 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 ## Presence version (DISCORD-12)
 
 - `tests/discord.presence.test.ts` — `formatPresenceVersionString` +
-  `buildVersionPresenceActivity` Custom type/state from shared VERSION
-  (no live token).
+  `buildVersionPresenceActivity` / `buildVersionPresenceData` Custom
+  type/state from shared VERSION (no live token).
+- Same file: `createLiveGateway` runs the real discord.js `login` with only
+  the socket connect stubbed; the IDENTIFY presence it builds
+  (`options.ws.presence`, sent as `d.presence` on every IDENTIFY) carries the
+  version Custom Status, ClientReady still calls `setPresence` with the same
+  data, and a throwing `setPresence` does not stop the ready path
+  (REQ-discord-017, no token, no network).
+- Same file: `verifyRequesterCanSend` (DISCORD-8 requester check) runs the
+  real discord.js `login` with the socket connect stubbed to fail; its
+  IDENTIFY presence carries the same version Custom Status, and the client is
+  destroyed (REQ-discord-017, no token, no network).
 
 REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.test.ts` cover SQLite persist/reload and soft TTL without live Discord.
 - MemoryStore CRUD/ACL/reload fixtures (REQ-discord-021 / MEMORY-1..4 / MEMORY-ACL-1..5).
@@ -156,6 +166,32 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and a `startBridge` on the same data dir posts the ask to the owner once;
   the bridge's stop closes the gateway only after a pending-ask post in
   flight resolved. No live Discord.
+
+## Schedule auto-pause and pre-run failures ask the owner (REQ-discord-353, AUTONOMY-2)
+
+- `tests/scheduler.ask-outbox.test.ts` — daemon + bridge on one in-memory DB:
+  the run that makes 5 failures in a row pauses the schedule and stores the
+  stuck `autoPauseAsk` (earlier failures store none); the bridge's next tick
+  posts it once with the owner ping; a stuck 5th run posts the pause line
+  plus `Last failure: <question>`; a bridge-claimed 5th failure posts the
+  pause ask with the ping and the `failed (exit 1)` context (not the run's
+  output) instead of the `❌` line; a pause ask whose in-process post
+  resolves `false` or throws stays pending with no ping key and the next
+  tick posts it once with the ping; a bridge run that throws and makes the
+  5th failure posts the pause ask at once without the error text;
+  creator-refused runs that auto-pause post nothing until the creator is
+  allowed again. With
+  worktrees on: a daemon run whose project cannot be resolved stores the
+  fixed `PROJECT_RESOLVE_FAILED_QUESTION` (full error with the host path
+  on the row only) and the bridge pings the owner once per question; a
+  bridge run whose worktree cannot be created (a `talk` branch blocks
+  `talk/<run>`) posts `WORKTREE_FAILED_QUESTION` at once with the ping,
+  once, without the host path; so does one whose worktree step throws
+  (`WORKTREE_BASE_DIR` under a regular file).
+- `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
+  when the SQL failure count reaches 5 even from a stale cache; a success
+  stores none.
+
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
 - `tests/scheduler.actor-gate.test.ts` — a deny-listed creator's due schedule
@@ -166,6 +202,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   run is in flight gets no post; refused ticks auto-pause the schedule after
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
+
+## /schedule delete audit (REQ-discord-020, SAFE-5)
+
+- `tests/discord.schedule.test.ts` — "/schedule delete audit (SAFE-5)": with a
+  DB-backed store holding one schedule and one run, the owner's delete appends
+  `schedule-delete` `started` then `ok` rows (surface `discord:schedule`, args
+  digest of the resolved id, no raw id), the reply names `#1 started · #2 ok`,
+  the schedule and its run rows are gone and the chain verifies; a throwing
+  trail, a keyed chain without the key, and no trail wired each reply
+  `audit log unavailable (SAFE-5)` and keep the schedule and its runs; a
+  non-ADMIN delete gets `not authorized` and appends `denied` (a refused pause
+  appends nothing); a store delete that throws after the intent row appends
+  `error`; an unknown id appends nothing; an `ok` row that cannot be written
+  after the delete leaves the delete in place and the reply says
+  `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
+  throws still gets only `not authorized` and deletes nothing. No live Discord.
 
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 

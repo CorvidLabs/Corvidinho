@@ -32,3 +32,27 @@ export function buildVersionPresenceActivity(
     type: PRESENCE_ACTIVITY_TYPE_CUSTOM,
   };
 }
+
+/** discord.js `PresenceData` shape carrying the version Custom Status. */
+export type VersionPresenceData = {
+  status: "online";
+  activities: [VersionPresenceActivity];
+};
+
+/**
+ * Full presence for the discord.js Client `presence` option and for
+ * `setPresence` on ClientReady (DISCORD-12). Given in the Client options,
+ * discord.js copies it into the gateway IDENTIFY payload at login, so the
+ * first IDENTIFY and every non-resumable re-identify (invalid or expired
+ * session) carry the version; ClientReady does not fire again after a
+ * re-identify. Returns a fresh object per call: discord.js mutates what it
+ * is given.
+ */
+export function buildVersionPresenceData(
+  version: string = VERSION,
+): VersionPresenceData {
+  return {
+    status: "online",
+    activities: [buildVersionPresenceActivity(version)],
+  };
+}

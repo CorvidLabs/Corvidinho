@@ -18,6 +18,7 @@ import type { PluginHandlerResult, PluginImage } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { createSpendGuard } from "./spend.ts";
 import { formatSpendWarningLine } from "./spend-notice.ts";
+import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
   ASK_AGENT_SYSTEM_INSTRUCTIONS,
   ASK_TOOL_NAME,
@@ -469,7 +470,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     taskText ? `Task:\n${taskText}` : "Task: (none provided)",
     renderSpecBriefing(specBriefing),
     verifyFeedback
-      ? `\n\nPrevious verification feedback:\n${verifyFeedback.slice(0, 4000)}`
+      ? `\n\nPrevious verification feedback:\n${verifyFeedbackExcerpt(verifyFeedback)}`
       : "",
     `\n\nAttempt ${attempt}. Capability tier: ${llm.tier}. Tools available: ${tools.length}.`,
   ];
@@ -681,7 +682,7 @@ async function singleChatCompletion(opts: {
     opts.taskText ? `Task:\n${opts.taskText}` : "Task: (none provided)",
     renderSpecBriefing(opts.specBriefing),
     opts.verifyFeedback
-      ? `\n\nPrevious verification feedback:\n${opts.verifyFeedback.slice(0, 4000)}`
+      ? `\n\nPrevious verification feedback:\n${verifyFeedbackExcerpt(opts.verifyFeedback)}`
       : "",
     `\n\nAttempt ${opts.attempt}. Reply with a concise status summary. Do not claim files were edited.`,
   ];
