@@ -6,6 +6,7 @@
  */
 
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
+import { FLEDGE_COMMAND_PREFIX } from "../../plugins/fledge/commands.ts";
 import { loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
@@ -48,8 +49,10 @@ import {
   type CapabilityTier,
 } from "./tier.ts";
 import {
+  allowlistOffers,
   argvFromToolArguments,
   buildOpenAiTools,
+  editsFilesUnreported,
   filesChangedFromToolData,
   type OpenAiToolDef,
 } from "./tools.ts";
@@ -205,7 +208,11 @@ export type CreateTaskExecuteOpts = {
   maxToolRounds?: number;
   /** Per-request LLM timeout (default {@link LLM_REQUEST_TIMEOUT_MS}). */
   llmTimeoutMs?: number;
-  /** When true, expose dangerous plugins in the catalog (still SAFE-1 gated). */
+  /**
+   * When true, expose every dangerous plugin in the catalog (still SAFE-1
+   * gated). Test seam: without it the catalog offers only the dangerous
+   * plugins `allowlist` names, never the SAFE-3-pending ones (CLI-3).
+   */
   includeDangerous?: boolean;
   /**
    * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
@@ -281,6 +288,16 @@ function toAllowSet(
   if (!allowlist) return new Set();
   if (allowlist instanceof Set) return new Set(allowlist);
   return new Set(allowlist);
+}
+
+/** The allowlist offers at least one Fledge command (FLEDGE-4 / PLUGIN-3). */
+function allowsFledge(allowlist: ReadonlySet<string>): boolean {
+  for (const name of allowlist) {
+    if (name.startsWith(FLEDGE_COMMAND_PREFIX) && allowlistOffers(allowlist, name)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -362,9 +379,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    if (includeDangerous && opts.loadPlugins !== false) {
+    if (opts.loadPlugins !== false && (includeDangerous || allowsFledge(allowlist))) {
       // FLEDGE-4: Fledge commands are all dangerous, so only discover them
-      // when this run's catalog may offer dangerous tools.
+      // when this run's catalog may offer one (the allowlist names one).
       await loadFledgePlugins({ cwd, env });
     }
     let actingIsAdmin = true;
@@ -378,6 +395,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       buildOpenAiTools({
         tier,
         includeDangerous,
+        // SAFE-1 / CLI-3: the allowlist is the consent that offers a
+        // dangerous tool; role (ROLES-CHAT-2) and tier filters still apply.
+        allowlist,
         actingIsAdmin,
         autonomous,
       }),
@@ -445,6 +465,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   } = args;
 
   const filesChanged = new Set<string>();
+  // AGENT-4: tools run this attempt whose file edits no result reports.
+  const unreportedEditTools = new Set<string>();
   const toolNamesUsed: string[] = [];
   // SAFE-1 / AGENT-5: the model may only call tools offered in this run's
   // catalog (tier + danger filtered) — never an arbitrary registered name.
@@ -555,6 +577,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
             ? `Completed after tools: ${toolNamesUsed.join(", ")}`
             : "(empty LLM reply)"),
         filesChanged: [...filesChanged],
+        ...unreportedEdits(unreportedEditTools),
       };
     }
 
@@ -619,6 +642,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       for (const f of filesChangedFromToolData(result.data)) {
         filesChanged.add(f);
       }
+      if (offered.has(name) && editsFilesUnreported(name)) {
+        unreportedEditTools.add(name);
+      }
 
       const detail = result.ok
         ? truncate(stringifyToolPayload(result), 2000)
@@ -662,7 +688,13 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   return {
     summary: landed.summary,
     filesChanged: [...filesChanged],
+    ...unreportedEdits(unreportedEditTools),
   };
+}
+
+/** `unreportedEditTools` for an execute result, only when a tool ran. */
+function unreportedEdits(tools: Set<string>): Pick<ExecuteResult, "unreportedEditTools"> {
+  return tools.size > 0 ? { unreportedEditTools: [...tools] } : {};
 }
 
 async function singleChatCompletion(opts: {

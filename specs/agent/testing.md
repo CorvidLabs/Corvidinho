@@ -40,6 +40,25 @@ dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
 reaches the verify gate": end to end through the real `shell-exec` plugin.
+## Allowlisted dangerous tools in task run (REQ-agent-501, REQ-agent-502)
+
+`tests/agent.allowlisted-dangerous.test.ts` (fake provider, fake `fledge` on
+PATH, GitHub dry run; no network): the catalog offers the allowlisted GitHub
+writes and memory forget/override at tool tier and leaves unlisted dangerous
+tools out; every offered dangerous tool is allowlisted; `files-delete` needs
+code tier; `shell-exec` and the runners are never offered from the allowlist;
+a non-ADMIN session gets no dangerous or mutating tool. Through
+`createTaskExecute` with `CORVIDINHO_ALLOWLIST=github-pr-review` the review
+runs (dry run) and an unlisted `github-issue-create` is refused; ADMIN gets
+it, non-ADMIN does not. An allowlisted `fledge-hello` is discovered, offered
+and run without `includeDangerous`; an allowlist with no `fledge-*` entry
+never spawns fledge. In a non-git project a Fledge edit no tool reported runs
+verify and fails (allowlisted, and with `includeDangerous`), a GitHub-only run
+still skips verify, and the gate off stays done.
+`tests/agent.tool-loop.test.ts` "tool loop dispatches only offered tools":
+an unlisted `danger-ping` in an interactive run and an allowlisted
+`shell-exec` at code tier are refused as not offered (REQ-agent-128).
+
 ## Verify retry feedback (REQ-agent-002, AGENT-4.a)
 
 `tests/agent.verify-feedback.test.ts`: `verifyFeedbackExcerpt` on a fledge

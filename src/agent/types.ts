@@ -69,6 +69,12 @@ export type ExecuteResult = {
    * malformed reply): runTask ends the run "failed", never "done" (AGENT-4/8).
    */
   error?: boolean;
+  /**
+   * Tools the attempt ran whose file edits no tool result reports (a Fledge
+   * command, the shell or a runner). With no git snapshot to diff, runTask
+   * runs verify anyway (AGENT-4, REQ-agent-502).
+   */
+  unreportedEditTools?: string[];
 };
 
 export type ExecuteContext = {
