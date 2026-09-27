@@ -1,6 +1,6 @@
 ---
 id: safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 05b269af23ea2be9e9c41966f6cf9ee41dfeac02
 ---

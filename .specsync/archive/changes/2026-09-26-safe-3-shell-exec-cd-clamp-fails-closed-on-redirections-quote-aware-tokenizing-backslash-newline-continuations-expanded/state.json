@@ -7,11 +7,11 @@
   "title": "SAFE-3 shell-exec cd clamp fails closed on redirections, quote-aware tokenizing, backslash-newline continuations, expanded command words and command substitutions, and moves CDPATH protection to a runtime readonly guard",
   "description": "SAFE-3 shell-exec cd clamp fails closed on redirections, quote-aware tokenizing, backslash-newline continuations, expanded command words and command substitutions, and moves CDPATH protection to a runtime readonly guard",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "05b269af23ea2be9e9c41966f6cf9ee41dfeac02",
   "created_at": 1790466281,
-  "updated_at": 1790467050,
+  "updated_at": 1790467253,
   "affected_specs": [
     "plugins"
   ],
