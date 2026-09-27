@@ -78,6 +78,8 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   spend-cap stop) and `/work` records the task `blocked`; the collapsed slash
   answer maps to its session, so a reply `ok` restates without running the
   agent, `cancel` clears with the short ack, and a substantive reply resumes
-  the same session with the question as context; a finished run keeps no
-  pending ask; without `editMessage` an @mention `ok` still restates (no live
-  Discord).
+  the same session with the question as context; a stuck `/work` ask pings
+  the owner once (the notice post) and a thin reply restates to the owner
+  only; another user's reply neither runs the agent nor touches the ask; a
+  finished run keeps no pending ask; without `editMessage` an @mention `ok`
+  still restates (no live Discord).

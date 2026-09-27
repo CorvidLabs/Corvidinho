@@ -172,6 +172,8 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(bridge.replies[0]!.content).toContain(`<@${REQUESTER}>`);
     expect(bridge.replies[0]!.content).toContain(ASK_REPLY_HINT);
     expect(bridge.replies[0]!.content).not.toContain("ANSWERED");
+    // AUTONOMY-4: a clarify restatement pings the requester only.
+    expect(bridge.replies[0]!.mentionUserIds).toEqual([REQUESTER]);
     // Still blocked on the same question; the restatement also continues it.
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk).toMatchObject(CLARIFY);
     expect(bridge.result.store.getByBotMessage("bot_1")!.id).toBe(calls[0]!.sessionId);
@@ -236,6 +238,80 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(calls[1]!.prompt).toContain("Postgres or SQLite?");
     expect(calls[1]!.prompt).toContain("Human answer:\nSQLite");
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk ?? null).toBeNull();
+    await bridge.result.stop();
+  });
+
+  test("/session start with structured options keeps a free-text pending ask (no Choose buttons were posted)", async () => {
+    const withOptions: HumanAsk = {
+      ...CLARIFY,
+      options: [
+        { id: "pg", label: "Postgres" },
+        { id: "sqlite", label: "SQLite" },
+      ],
+    };
+    const { agent, calls } = askingAgent({ ask: withOptions, summary: "Needs your input: Postgres or SQLite?" });
+    const bridge = await bridgeWith(agent);
+    const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Postgres or SQLite?");
+    const pending = bridge.result.store.getByBotMessage(answerId)!.pendingAsk;
+    expect(pending).toMatchObject(CLARIFY);
+    expect(pending!.options).toBeUndefined();
+    // Free-text semantics: a substantive reply answers and clears it.
+    await bridge.handlers.onMessage(replyTo(answerId, "SQLite"));
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.prompt).toContain("Human answer:\nSQLite");
+    expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk ?? null).toBeNull();
+    await bridge.result.stop();
+  });
+
+  test("/work stuck ask: task failed (not completed), pending kept; owner pinged once by the notice, a thin reply restates to the owner only", async () => {
+    const calls: AgentRunChatOpts[] = [];
+    const STUCK: HumanAsk = { reason: "stuck", question: "Verify keeps failing on the migration. How should I proceed?" };
+    const agent: AgentClient = {
+      async runChat(input) {
+        calls.push(input);
+        return {
+          ok: false,
+          sessionId: input.sessionId,
+          summary: "verify failed after 3 attempts",
+          exitCode: 1,
+          ask: STUCK,
+          task: { state: "failed", verified: false, verifySkipped: false, attempts: 3, cancelled: false },
+        };
+      },
+    };
+    const bridge = await bridgeWith(agent);
+    const answerId = await runSlash(bridge, "work", { description: "migrate db" }, "How should I proceed?");
+    if (!bridge.result.ok) throw new Error("bridge did not start");
+    expect(bridge.result.workStore.list()[0]!.status).toBe("failed");
+    expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk).toMatchObject(STUCK);
+    // The collapsed answer pings nobody; the owner notice is the one fresh post.
+    const answer = bridge.outbound.contentEdits.find(
+      (e) => e.messageId === answerId && typeof e.content === "string" && e.content.includes("How should I proceed?"),
+    );
+    expect(answer!.content).not.toContain(`<@${OWNER_ID}>`);
+    expect(bridge.replies).toHaveLength(1);
+    expect(bridge.replies[0]!.content).toContain(`<@${OWNER_ID}>`);
+    expect(bridge.replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    await bridge.handlers.onMessage(replyTo(answerId, "ok"));
+    expect(calls).toHaveLength(1);
+    expect(bridge.replies).toHaveLength(2);
+    expect(bridge.replies[1]!.content).toContain("> Verify keeps failing on the migration.");
+    // AUTONOMY-2/4: a stuck restatement pings the owner, never the requester.
+    expect(bridge.replies[1]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(bridge.replies[1]!.content).not.toContain(`<@${REQUESTER}>`);
+    await bridge.result.stop();
+  });
+
+  test("another user's reply to the /work answer neither answers nor clears the requester's ask (SESSION-MULTI-1)", async () => {
+    const { agent, calls } = askingAgent({ ask: CLARIFY, summary: "Needs your input: Postgres or SQLite?" });
+    const bridge = await bridgeWith(agent);
+    const answerId = await runSlash(bridge, "work", { description: "pick a DB" }, "Postgres or SQLite?");
+    for (const content of ["ok", "cancel", "SQLite"]) {
+      await bridge.handlers.onMessage({ ...replyTo(answerId, content), authorId: "333344445555666677" });
+    }
+    expect(calls).toHaveLength(1);
+    expect(bridge.replies).toHaveLength(0);
+    expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk).toMatchObject(CLARIFY);
     await bridge.result.stop();
   });
 

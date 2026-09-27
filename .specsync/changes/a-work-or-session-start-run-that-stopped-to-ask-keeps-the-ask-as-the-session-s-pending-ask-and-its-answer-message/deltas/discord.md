@@ -40,5 +40,8 @@ Acceptance Criteria
 - A substantive reply to the `/work` answer resumes the same session (`resume: true`) with the prior question and the human answer in the prompt, and clears the pending ask.
 - `/work` or `/session start` stopped at the spend cap stores no pending ask; a later `ok` to the `/work` answer runs the agent with no prior-question or cap text.
 - `/session start` with a clarify ask: the pending ask is stored; a thin reply restates, a substantive reply resumes with the question.
+- `/session start` with a clarify ask that has structured options: the pending ask is free text (no options), so a substantive reply answers and clears it.
+- `/work` with a stuck ask: the task is `failed`, the pending ask is stored; the owner is pinged once by the separate notice post (the answer itself pings nobody), and a thin reply restates the question with allowed mentions limited to the owner (never the requester).
+- A reply to the `/work` answer by another user (`ok`, `cancel` or a substantive answer) neither runs the agent nor clears or restates the requester's pending ask (SESSION-MULTI-1).
 - A finished `/work` run (`completed`) stores no pending ask and its answer still continues the session.
 - Without an editable thinking message the pending ask is still stored, and an @mention `ok` from the requester restates it without running the agent.
