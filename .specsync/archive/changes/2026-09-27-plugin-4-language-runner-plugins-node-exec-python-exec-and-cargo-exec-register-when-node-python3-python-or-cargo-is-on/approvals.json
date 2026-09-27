@@ -81,6 +81,13 @@
         "cli": "a1d6e90169434e7bf25e5b7feced747a586a3c79293d49caff240b4cff6e0e17",
         "plugins": "57c6a5ac5cecbde67231aa75f442dac3dbcaf3119c7fbfad86d57f11089007dc"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790523346,
+      "digest": "e7d9a9dc99b3fdacd611681e44c6d872b773ea2d07386d63e8aec30b7ec6b348",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
