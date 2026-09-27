@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "bridge-marks-a-reply-interrupted-after-a-restart-in-flight-replies-are-recorded-in-the-shared-db-and-the-next-bridge",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "eb6fea0760cdacd9734a792190dec1d679b174b3",
+      "contract_digest": "563518a720a7b1e58b89fb09a96c0292b6c6172fe3370422a8812fb10e85b187",
+      "execution_digest": "b4b2241358ae5595995b3de317a30c5b2b925c62cdfc36198c5b19b85d51221f",
+      "workspace_digest": "0a860f1ba642ce17e56caa577c08bd39f90194860a05c9225a22de73b342d506",
+      "timestamp": 1790467684
+    }
+  ]
+}
