@@ -113,8 +113,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` grant nothing. The bridge logs a warning and
   `doctor` shows an `admin-lists` warning when they are set.
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
-  memory forget/override (via `corvidinho plugins run` only, with the acting env set; Discord chat
-  cannot reach them, see [`discord.md`](discord.md) Memory), mutating tools in a chat session (E.6),
+  memory forget/override (from the owner's chat once `CORVIDINHO_ALLOWLIST` names them, E.3, or
+  `corvidinho plugins run` with the acting env set; see [`discord.md`](discord.md) Memory),
+  mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
 - When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
@@ -150,13 +151,14 @@ and a `denied` row goes to the audit chain.
 
 Set it in the environment of the process that runs the tool. Spawned runs inherit the
 bridge's environment, so one `CORVIDINHO_ALLOWLIST` in the bridge's `EnvironmentFile` covers
-the bridge's own `/work` PR step and reaches every run it spawns (where it unlocks nothing
-today, see below). The allowlist file
+the bridge's own `/work` PR step and reaches every run it spawns (where it puts those tools
+in the owner's tool catalog, see below). The allowlist file
 (`CORVIDINHO_ALLOWLIST_FILE`) holds the `[github]` / `[discord]` lists and `[owner]`, not tool names.
 
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
-project's Fledge plugins; re-check any time with `corvidinho plugins list`). Outside the `/work`
-draft-PR step, an entry only affects `corvidinho plugins run` (see "What an entry unlocks" below):
+project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
+`corvidinho plugins run` run the tool and offers it to the model in the owner's runs, except
+`shell-exec` and the runners (see "What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
@@ -167,12 +169,12 @@ draft-PR step, an entry only affects `corvidinho plugins run` (see "What an entr
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3) |
-| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere), and `plugins list` names any that are not loaded |
-| `memory-forget` | true | 1 | true | an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
-| `memory-override` | true | 1 | true | an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3); never offered to the model from the allowlist until the SAFE-3 decision |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
+| `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
+| `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
-| `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | an operator runs `corvidinho plugins run <name>` non-interactively |
+| `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8) |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
@@ -190,11 +192,25 @@ What an entry unlocks **today**:
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass, the requester
   to be the owner, and the repo to pass GITHUB-6.
-- Nothing else. `task run` does not offer dangerous plugins to the model yet: its tool catalog
-  leaves them out, and a call to a tool that is not offered is refused. So an allowlist entry
-  does **not** make any dangerous tool callable from Discord chat, schedules, WATCH or
-  `delegate` workers. A worker is passed the lead's effective allowlist (never a wider one),
-  but it is a plain `task run` child, so the allowlist unlocks nothing there today.
+- The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
+  model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
+  tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
+  gates are unchanged: only ADMIN runs (the owner's Discord chat, `/session start` and `/work`)
+  and a local `corvidinho task run` get them; non-owner chats, WATCH, schedules and council
+  voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
+  one), so a worker of a local run is offered the same tools, and a worker of a role session is
+  non-ADMIN and offered none.
+- Never from the allowlist: `shell-exec`, `node-exec`, `python-exec` and `cargo-exec` stay out
+  of the model's catalog even when listed, until the SAFE-3 question (can the shell and the
+  runners be kept from leaving the project root) is decided. They still run through
+  `corvidinho plugins run`.
+- Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
+  one and the run is not a non-ADMIN session. They can change files without reporting them, so
+  in a project that is not a git work tree a run that called one, or a local run's `delegate`
+  worker (which could have), runs the verify lane anyway (AGENT-4).
+- Allowlisting `git-commit`, `git-push` and `github-pr-create` for the `/work` PR step also
+  offers them to the owner's runs, so the model can commit, push or open a PR itself before the
+  run's verify.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 

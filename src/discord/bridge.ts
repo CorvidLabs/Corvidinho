@@ -552,7 +552,8 @@ export async function startBridge(
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
 
-      // AUTONOMY-5/6: while waiting on an ask, thin acks restate; cancel clears.
+      // AUTONOMY-5/6: while waiting on an ask, thin acks restate the newest
+      // one; cancel clears every open ask of the session (SESSION-MULTI-3).
       if (
         action.kind === "continue_session" &&
         session.pendingAsk &&
@@ -617,7 +618,8 @@ export async function startBridge(
           agentPrompt =
             `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
             `Human answer:\n${prompt}`;
-          store.setPendingAsk(session, null);
+          // Only the answered ask: earlier open button asks stay (SESSION-MULTI-3).
+          store.clearPendingAsk(session, pending.askId);
         }
       }
       // AGENT-6 (REQ-discord-072): the session's earlier turns, oldest first,
@@ -827,14 +829,15 @@ export async function startBridge(
           pendingToStore = spendCap ? null : toPendingAsk(askRaw);
         }
 
-        // Pending ask (AUTONOMY-5/6, SESSION-MULTI-3): a new ask is stored; a
-        // turn that leaves none (a finished turn, or a SAFE-8 spend-cap stop,
-        // which a reply cannot answer) clears a free-text pending ask while a
-        // button ask survives until it is picked or times out.
+        // Pending ask (AUTONOMY-5/6, SESSION-MULTI-3): a new ask is stored
+        // beside any open button ask, never in its place; a turn that leaves
+        // none (a finished turn, or a SAFE-8 spend-cap stop, which a reply
+        // cannot answer) clears a free-text pending ask while a button ask
+        // survives until it is picked or times out.
         if (pendingToStore) {
           store.setPendingAsk(session, pendingToStore);
         } else if (session.pendingAsk && !session.pendingAsk.options?.length) {
-          store.setPendingAsk(session, null);
+          store.clearPendingAsk(session, session.pendingAsk.askId);
         }
         if (
           askRaw &&
@@ -947,9 +950,10 @@ export async function startBridge(
       const parsed = parseAskCustomId(interaction.customId);
       if (!parsed) return;
 
-      const session = store.list().find(
-        (s) => s.pendingAsk?.askId === parsed.askId,
-      );
+      // SESSION-MULTI-3: any open ask of the session answers by its askId,
+      // not only the newest one.
+      const pressed = store.findPendingAsk(parsed.askId);
+      const session = pressed?.session;
 
       // DISCORD-5 / DISCORD-DENY-2/3 / REQ-discord-212 — a press counts only in
       // an allowlisted channel (inside the session's thread, its allowlisted
@@ -973,7 +977,7 @@ export async function startBridge(
         return;
       }
 
-      const pending = session?.pendingAsk ?? null;
+      const pending = pressed?.ask ?? null;
 
       // Wrong user or unknown ask → short ephemeral, do not leak.
       if (!session || !pending || session.userId !== interaction.userId) {
@@ -985,7 +989,7 @@ export async function startBridge(
       }
 
       if (isAskExpired(pending)) {
-        store.setPendingAsk(session, null);
+        store.clearPendingAsk(session, pending.askId);
         await interaction.reply({
           content: ASK_CHOICE_EXPIRED,
           ephemeral: true,
@@ -1014,7 +1018,8 @@ export async function startBridge(
       const label =
         findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
       const prior = pending.question;
-      store.setPendingAsk(session, null);
+      // Only the pressed ask: the session's other open asks stay (SESSION-MULTI-3).
+      store.clearPendingAsk(session, pending.askId);
       // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
       await interaction.reply({
         content: `Got it — **${label}**. Working on it…`,

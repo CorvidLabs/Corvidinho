@@ -92,6 +92,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let retries = 0;
   // Real-diff paths added to filesChanged so far (capped per run).
   let realDiffAdded = 0;
+  // AGENT-4 (REQ-agent-502): tools run so far whose edits no result reports.
+  const unreportedEditTools = new Set<string>();
 
   setState(onEvent, "planning");
   if (isAborted(signal)) {
@@ -159,6 +161,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     // failed stay in the gate, so a retry that changes nothing is verified
     // again and can never be reported done.
     filesChanged = [...new Set([...filesChanged, ...exec.filesChanged])];
+    for (const name of exec.unreportedEditTools ?? []) unreportedEditTools.add(name);
 
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -239,8 +242,26 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       }
     }
 
+    // AGENT-4 (REQ-agent-502): no git snapshot to diff, and a tool ran that
+    // can change files without reporting them (a Fledge command, or a
+    // delegate worker that may have run one): fail closed, verify runs.
+    let noDiffForUnreported = false;
+    if (
+      verifyBeforeComplete &&
+      !workspace &&
+      filesChanged.length === 0 &&
+      unreportedEditTools.size > 0
+    ) {
+      noDiffForUnreported = true;
+      emit(onEvent, {
+        type: "Text",
+        text: `Verify gate: no git working tree to diff, and ${[...unreportedEditTools].join(", ")} may have changed files no tool reported, so verifying anyway.`,
+      });
+    }
+
     const wantVerify =
-      verifyBeforeComplete && (filesChanged.length > 0 || diffUnreadable);
+      verifyBeforeComplete &&
+      (filesChanged.length > 0 || diffUnreadable || noDiffForUnreported);
 
     if (!wantVerify) {
       setState(onEvent, "done");

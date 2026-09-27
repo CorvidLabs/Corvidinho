@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9981b88e0676aa8d2035318f6970d42043525cff",
+      "contract_digest": "fbde3ed8c2c8989dc06efa19399a93d6f7553fd67185cc016e77aa534256355b",
+      "execution_digest": "7bf87dcc39ce68b55b1fc90943c9d775ec53fd259844359a5ddf805ddd8a0061",
+      "workspace_digest": "0566acdf7059ad4525ebcaa0dd6005dcc4f47967d79b8ddbbb4e61c5f04f5d59",
+      "timestamp": 1790538306
+    }
+  ]
+}
