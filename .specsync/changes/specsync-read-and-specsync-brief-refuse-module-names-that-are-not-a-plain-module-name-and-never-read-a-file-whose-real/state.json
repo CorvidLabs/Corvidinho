@@ -7,10 +7,11 @@
   "title": "Specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root",
   "description": "specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "642a843e0dee50df6cb9376f9e772dd28688ca2f",
   "created_at": 1790468377,
-  "updated_at": 1790468762,
+  "updated_at": 1790468781,
   "affected_specs": [
     "plugins"
   ],
