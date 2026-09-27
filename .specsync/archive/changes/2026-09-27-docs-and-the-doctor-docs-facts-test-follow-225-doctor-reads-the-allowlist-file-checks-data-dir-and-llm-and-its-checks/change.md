@@ -1,6 +1,6 @@
 ---
 id: docs-and-the-doctor-docs-facts-test-follow-225-doctor-reads-the-allowlist-file-checks-data-dir-and-llm-and-its-checks
-state: implementing
+state: archived
 type: documentation
 base_commit: a0e27ae09119184dc2c2c48e71076f8f3c7aaf35
 ---
