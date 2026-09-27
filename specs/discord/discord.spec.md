@@ -189,6 +189,24 @@ the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
+Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
+DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
+`ask-ping.ts` exports `formatCollapsedPing` (one line: each mentioned user with
+`COLLAPSED_PING_QUESTION` "↑ question for you" for the requester a clarify ask
+addresses, `COLLAPSED_PING_NEEDS` "↑ needs you" for everyone else — the owner
+on stuck, spend cap or the 80% warning; users in `alreadyPinged` left out;
+null when nobody is left) and the `CollapsedPing` type. `spend-post.ts`
+exports `postCollapsedPing` (sends that line as a fresh post replying to the
+collapsed answer, allowed mentions exactly those users; best effort, never
+throws, null when nothing went out); `ChannelPost` gains optional
+`replyToMessageId`. The chat answer and the answer to a run a button pick
+resumed call it after `finalizeContent` succeeds with the answer's
+`mentionUserIds` (ask mention plus the 80% warning's owner) and track the ping
+post like the answer, so a reply to it continues the session.
+`finishSlashWithOwnerNotice` calls it after a collapsed slash answer (also
+when there is no owner notice), leaving out the users its owner notice post
+already pinged. A fallback reply is itself a fresh post, so it gets no ping.
+
 Interrupted replies (REQ-discord-311, DISCORD-3 / AGENT-3):
 `src/discord/inflight-replies.ts` exports `InflightReplyStore` (`begin`,
 `setProgressMessage`, `end`, `list` over `discord_inflight_replies`, schema
@@ -277,6 +295,13 @@ never carries the "reply to answer" hint (a reply cannot lift the cap); it
 pings the owner once per cap episode across chat, slash commands and
 schedules. A slash run's owner ping is a fresh post (an edit of a deferred
 reply may not notify), with allowed mentions limited to the owner.
+An answer delivered by editing the thinking message (DISCORD-ASK-6/7) that
+mentions anyone is followed by exactly one short fresh post, replying to that
+answer, holding only those mentions and a one-line pointer, with allowed
+mentions exactly those users (never `@everyone`, `@here` or roles); no user is
+pinged twice in a turn (the slash owner notice post counts), a spend-cap ask
+whose episode already pinged carries no owner mention, and a fallback reply
+(already a fresh post) gets no extra post (REQ-discord-215).
 
 ## Behavioral Examples
 
@@ -304,6 +329,16 @@ reply may not notify), with allowed mentions limited to the owner.
   before/after counts and warns that unlisted callers now resolve to BLOCKED,
   and the audit chain gains `started` + `ok` rows
 
+### Scenario: Collapsed clarify ask pings the requester
+
+- **Given** an editable thinking message and a run that stops with a clarify
+  ask for requester R
+- **When** the bridge edits the thinking message into the ask (mentioning R)
+- **Then** it posts one fresh reply to that message, `<@R> ↑ question for
+  you`, with allowed mentions exactly `[R]`; a stuck ask instead posts
+  `<@owner> ↑ needs you`; the same ask answered by a fallback reply adds no
+  post (REQ-discord-215)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -317,6 +352,7 @@ reply may not notify), with allowed mentions limited to the owner.
 | Leftover in-flight reply, edit and reply both fail | Logged as unreachable; row deleted; bridge start continues |
 | Leftover in-flight reply in a channel no longer allowlisted | Nothing edited or posted; logged as skipped; row deleted |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
+| Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 
 ## Dependencies
 
