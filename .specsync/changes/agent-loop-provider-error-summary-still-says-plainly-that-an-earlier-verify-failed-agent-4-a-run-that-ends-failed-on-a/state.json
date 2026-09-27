@@ -7,10 +7,11 @@
   "title": "Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary",
   "description": "Agent loop provider-error summary still says plainly that an earlier verify failed (AGENT-4): a run that ends failed on a provider error after a failed verify keeps that verify output in its summary",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "a5b699c326901e3556d6c233674e6be6698454a4",
   "created_at": 1790467561,
-  "updated_at": 1790467629,
+  "updated_at": 1790467642,
   "affected_specs": [
     "agent"
   ],
