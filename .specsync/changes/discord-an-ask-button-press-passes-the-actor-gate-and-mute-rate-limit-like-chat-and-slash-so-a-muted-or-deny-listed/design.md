@@ -28,6 +28,13 @@ artifact: design
   `adaptComponent` sets the new optional `ComponentInteraction.roleIds`.
 - Order matches slash: an actor deny wins over mute (a deny-listed and muted
   presser gets the zero-width ack, not `MUTED`).
-- Trade-off: "open" and "pick" each take one rate-limit slot, as every slash
-  command does, so answering a button ask uses two slots of the shared
-  per-user budget (default 10 per 60 s). A refused press takes none.
+- Trade-off: every press takes one rate-limit slot, as every slash command
+  does: "open" and "pick" alike, and also a press on someone else's ask or an
+  expired ask, since the gates run before those checks (same order as
+  slash). A full @mention → open → pick round uses 3 slots of the shared
+  per-user budget (default 10 per 60 s); with `DISCORD_RATE_LIMIT_MAX` of 2
+  or less a user cannot finish one inside a window. A refused press takes
+  none.
+- `adaptComponent` is exported so a test covers the live press carrying the
+  member's role ids (independent review finding: without that line, role
+  allow/deny would silently not apply to presses and no test would fail).

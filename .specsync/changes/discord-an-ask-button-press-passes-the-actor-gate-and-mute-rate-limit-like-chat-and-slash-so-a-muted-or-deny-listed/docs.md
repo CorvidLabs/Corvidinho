@@ -15,5 +15,8 @@ artifact: docs
   refusals and the ask kept. After merging main, the "Rate limits and mutes
   (DISCORD-6)" subsection from #221 says the shared window also covers ask
   button presses (open and pick each count), the level applies on every
-  path, and ask button refusals stay ephemeral like slash.
+  path, and ask button refusals stay ephemeral like slash. It also says every
+  press counts (including one on someone else's or an expired ask), so a full
+  @mention → open → pick round uses 3 slots. The spec Public API names
+  `adaptComponent` as what sets `ComponentInteraction.roleIds`.
 - No CHANGELOG / STATUS / package version edits (release PRs own those).

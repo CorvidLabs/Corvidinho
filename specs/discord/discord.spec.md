@@ -276,7 +276,7 @@ button actor gate: deny lists win, non-empty user/role allowlist must match or
 be the owner); `RouterDeps.owner` passes the configured owner to
 `routeMessage` (REQ-discord-201). `interactionRoleIds` and `RawMemberRoles`
 (`gateway.ts`) read an interaction member's role ids for slash and
-`ComponentInteraction.roleIds`, so an ask button press is gated by role
+`ComponentInteraction.roleIds` (set by `adaptComponent`), so an ask button press is gated by role
 allow/deny too (REQ-discord-201).
 `replyReferenceMessageId`, `REFERENCE_TYPE_FORWARD` and
 `RawMessageReference` (`gateway.ts`) turn a MessageCreate `reference` into

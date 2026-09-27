@@ -18,11 +18,13 @@ import type { AgentClient } from "../src/discord/agent-client.ts";
 import { openCustomId, pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
+  adaptComponent,
   createNullGateway,
   interactionRoleIds,
   type ComponentInteraction,
   type GatewayHandlers,
 } from "../src/discord/gateway.ts";
+import type { SlashReplyPayload } from "../src/discord/slash-types.ts";
 import {
   EPHEMERAL_SILENT_ACK,
   MUTED,
@@ -228,6 +230,9 @@ describe("ask button press: actor gate (REQ-discord-201 / DISCORD-DENY-3)", () =
     const eph: Ephemeral[] = [];
     await b.handlers.onComponent!(press(pickCustomId(b.askId, "1"), USER_ID, eph, ["role-bad"]));
     expectRefused(b, before, eph, EPHEMERAL_SILENT_ACK);
+    const open: Ephemeral[] = [];
+    await b.handlers.onComponent!(press(openCustomId(b.askId), USER_ID, open, ["role-bad"]));
+    expectRefused(b, before, open, EPHEMERAL_SILENT_ACK);
     await b.result.stop();
   });
 
@@ -283,6 +288,34 @@ describe("ask button press: rate limit (DISCORD-6 / REQ-discord-010)", () => {
     await b.result.stop();
   });
 
+  test("over the max, open gets ephemeral RATE_LIMITED, not the choice buttons", async () => {
+    const b = await withButtonAsk(USER_ID, { DISCORD_RATE_LIMIT_MAX: "1" });
+    const before = sent(b);
+    const eph: Ephemeral[] = [];
+    await b.handlers.onComponent!(press(openCustomId(b.askId), USER_ID, eph));
+    expectRefused(b, before, eph, RATE_LIMITED);
+    await b.result.stop();
+  });
+
+  test("presses share the budget with slash: @mention + /status fill max 2, then pick is refused", async () => {
+    const b = await withButtonAsk(USER_ID, { DISCORD_RATE_LIMIT_MAX: "2" });
+    const slashReplies: SlashReplyPayload[] = [];
+    await b.handlers.onSlash!({
+      id: "ix_status",
+      commandName: "status",
+      channelId: CHAN,
+      userId: USER_ID,
+      options: {},
+      reply: async (p) => void slashReplies.push(p),
+    });
+    expect(slashReplies[0]?.content).not.toBe(RATE_LIMITED);
+    const before = sent(b);
+    const eph: Ephemeral[] = [];
+    await b.handlers.onComponent!(press(pickCustomId(b.askId, "1"), USER_ID, eph));
+    expectRefused(b, before, eph, RATE_LIMITED);
+    await b.result.stop();
+  });
+
   test("rateLimitByLevel keys on the presser's resolved level: the owner (ADMIN) still resumes", async () => {
     const b = await withButtonAsk(OWNER_ID, {
       DISCORD_RATE_LIMIT_MAX: "1",
@@ -293,6 +326,33 @@ describe("ask button press: rate limit (DISCORD-6 / REQ-discord-010)", () => {
     expect(b.prompts).toHaveLength(2);
     expect(eph[0]?.content).not.toBe(RATE_LIMITED);
     await b.result.stop();
+  });
+});
+
+describe("adaptComponent (gateway: a live press carries the member's role ids)", () => {
+  function raw(member: unknown) {
+    return {
+      id: "ix-raw",
+      customId: pickCustomId("ask-1", "1"),
+      channelId: CHAN,
+      guildId: "guild-1",
+      user: { id: USER_ID },
+      member: member as never,
+      message: { id: "stub-1" },
+      deferred: false,
+      replied: false,
+      reply: async () => undefined,
+      update: async () => undefined,
+    };
+  }
+
+  test("roleIds come from a cached member, a raw API member, or are empty outside a guild", () => {
+    const cached = adaptComponent(raw({ roles: { cache: new Map([["role-a", {}]]) } }));
+    expect(cached.roleIds).toEqual(["role-a"]);
+    expect(cached.userId).toBe(USER_ID);
+    expect(cached.messageId).toBe("stub-1");
+    expect(adaptComponent(raw({ roles: ["role-b"] })).roleIds).toEqual(["role-b"]);
+    expect(adaptComponent(raw(null)).roleIds).toEqual([]);
   });
 });
 

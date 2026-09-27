@@ -668,7 +668,8 @@ export async function createLiveGateway(
 
 
 
-function adaptComponent(interaction: {
+/** discord.js MessageComponent interaction → `ComponentInteraction` (DISCORD-ASK). */
+export function adaptComponent(interaction: {
   id: string;
   customId: string;
   channelId: string;
