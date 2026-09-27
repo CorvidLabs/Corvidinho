@@ -158,6 +158,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.31", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.31`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("parallel(a, b)");
+    expect(r.stdout).toContain("schedule-delete");
+  });
+
   test("extract_changelog_section finds 0.0.30", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.30`,
@@ -862,10 +871,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.30", () => {
+  test("package.json is 0.0.31", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.30");
+    expect(pkg.version).toBe("0.0.31");
   });
 });

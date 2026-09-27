@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "global-project-path-flag-runs-the-cli-as-if-started-in-that-directory-that-project-s-fledge-toml-specs-and-env-files-as",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "7748e834af25269c708eea05377d959511fd5483",
+  "contract_digest": "2b1005a0af7e599db47dd4338081b5190daaef8da48e68f2c8526e77cfe3f887",
+  "execution_digest": "e66991e382dfd243699e4e857a26fa20fb59c32e372dc75afc7c6bd9f650842d",
+  "workspace_digest": "9615d0b26ed413d6570d83d23bda31c4151928680a2a5cbfda5303d3c5db6c3c",
+  "timestamp": 1790537694
+}
