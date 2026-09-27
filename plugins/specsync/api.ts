@@ -277,13 +277,42 @@ export async function spawnSpecsync(
   return { success: code === 0, output: `${stdout}${stderr}`, code: code ?? 1 };
 }
 
-/** Merlin: fledge run spec-check; fallback to local specsync check. */
+/**
+ * True when the project's own `fledge.toml` (the one file `fledge run` reads;
+ * it does not search parent dirs) defines a `spec-check` task. No fledge.toml,
+ * or one without that task → false. A fledge.toml that cannot be read or
+ * parsed → true: fail closed onto the Fledge path, which reports the error,
+ * instead of quietly running a laxer plain `specsync check`.
+ */
+export function projectDefinesSpecCheckTask(cwd: string): boolean {
+  const path = join(cwd, "fledge.toml");
+  if (!existsSync(path)) return false;
+  let parsed: unknown;
+  try {
+    parsed = Bun.TOML.parse(readFileSync(path, "utf8"));
+  } catch {
+    return true;
+  }
+  const tasks =
+    parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>).tasks
+      : undefined;
+  if (!tasks || typeof tasks !== "object" || Array.isArray(tasks)) return false;
+  return Object.hasOwn(tasks, "spec-check");
+}
+
+/**
+ * Merlin: `fledge run spec-check` when fledge is on PATH and the project
+ * defines that task (Corvidinho's carries the CI Spec Sync strictness,
+ * SPECSYNC-2/7); otherwise the local `specsync check` under the project's own
+ * `.specsync` config.
+ */
 export async function runSpecCheck(
   cwd: string,
   signal?: AbortSignal,
 ): Promise<SpawnResult> {
   const fledge = Bun.which("fledge");
-  if (fledge) {
+  if (fledge && projectDefinesSpecCheckTask(cwd)) {
     const proc = Bun.spawn([fledge, "run", "spec-check"], {
       cwd,
       stdout: "pipe",
