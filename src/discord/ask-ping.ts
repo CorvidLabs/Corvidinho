@@ -13,7 +13,8 @@
  */
 
 import { createHash } from "node:crypto";
-import type { HumanAsk } from "../agent/types.ts";
+import { formatSpendWarningLine } from "../agent/spend-notice.ts";
+import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
@@ -56,7 +57,10 @@ export type FormatAskReplyOpts = {
   context?: string;
   /** Leading line (e.g. which schedule this is). */
   prefix?: string;
-  /** Include "Reply to this message to answer." (reply-tracked posts only). */
+  /**
+   * Include "Reply to this message to answer." (reply-tracked posts only;
+   * ignored for a spend-cap ask, which a reply cannot unblock).
+   */
   replyHint?: boolean;
 };
 
@@ -66,8 +70,11 @@ export type FormatAskReplyOpts = {
  * text, so a stored key never derives from a raw secret.
  */
 export function askPingKey(ask: HumanAsk): string {
+  // SAFE-8: a spend-cap question carries live amounts; key on the reason so a
+  // schedule pings once per cap episode (a clean run re-arms it).
+  const body = ask.reason === "spend-cap" ? "" : scrubSecrets(ask.question).trim();
   return createHash("sha256")
-    .update(`${ask.reason}\n${scrubSecrets(ask.question).trim()}`)
+    .update(`${ask.reason}\n${body}`)
     .digest("hex");
 }
 
@@ -93,19 +100,25 @@ function quote(text: string): string {
  * first line so a length cut can never drop the ping.
  *
  * AUTONOMY-4: clarify → requester; stuck → owner (requester===owner is fine).
+ * SAFE-8: spend-cap → owner (the operator is the one who can lift the cap).
  */
 export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   const stuck = opts.ask.reason === "stuck";
+  const spendCap = opts.ask.reason === "spend-cap";
   const ownerId = opts.owner?.discordId?.trim() || "";
   const requesterId = opts.requesterDiscordId?.trim() || "";
 
   // Clarify addresses the requester; stuck pings the owner (AUTONOMY-2/4).
-  const pingId = stuck ? ownerId : requesterId;
+  // A spend-cap stop needs the operator, so it pings the owner too (SAFE-8);
+  // callers pass `owner: null` once this cap episode already pinged.
+  const pingId = stuck || spendCap ? ownerId : requesterId;
   const mentionUserIds = pingId ? [pingId] : [];
   const ping = pingId ? ` <@${pingId}>` : "";
 
   const headline = stuck
     ? "⚠️ I'm stuck and need a human."
+    : spendCap
+    ? SPEND_CAP_HEADLINE
     : "❓ I need your input before I can continue.";
   const lines: string[] = [];
   if (opts.prefix?.trim()) lines.push(clean(opts.prefix, 300));
@@ -114,7 +127,9 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   if (stuck && opts.context?.trim()) {
     lines.push(clean(opts.context, ASK_REPLY_CONTEXT_MAX));
   }
-  if (opts.replyHint) lines.push(ASK_REPLY_HINT);
+  // SAFE-8: a reply cannot lift the cap (no Approve card yet, #96), so a
+  // spend-cap ask never invites one.
+  if (opts.replyHint && !spendCap) lines.push(ASK_REPLY_HINT);
   let content = lines.join("\n");
   if (content.length > ASK_REPLY_MAX) {
     content = `${content.slice(0, ASK_REPLY_MAX - 1)}…`;
@@ -123,9 +138,71 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   return {
     content,
     mentionUserIds,
-    status: stuck ? "⚠️ Stuck — asked for help" : "❓ Needs your input",
+    status: stuck
+      ? "⚠️ Stuck — asked for help"
+      : spendCap
+      ? SPEND_CAP_STATUS
+      : "❓ Needs your input",
     failed: stuck,
     ownerPinged,
     pinged: mentionUserIds.length > 0,
   };
+}
+
+/**
+ * SAFE-8 spend-cap ask headline: the run paused before a provider call. It
+ * names the operator because a requester cannot lift the cap.
+ */
+export const SPEND_CAP_HEADLINE =
+  "💸 I paused before spending more — the daily spend cap needs the operator.";
+export const SPEND_CAP_STATUS = "💸 Paused at the spend cap";
+
+export type SpendWarningReply = {
+  /** One line appended to the run's post. */
+  line: string;
+  /** The owner, when set, so the line can ping them. */
+  mentionUserIds: string[];
+};
+
+/**
+ * SAFE-8 80% warning line for a Discord post, rebuilt from the warning's
+ * amounts (never from child text). Pings the configured owner when set; the
+ * runner records each warning once per crossing and the bridge's outbox
+ * (src/agent/spend-outbox.ts) hands it to exactly one post.
+ */
+export function formatSpendWarningReply(
+  warning: SpendWarning,
+  owner: OwnerRecord | null | undefined,
+): SpendWarningReply {
+  const id = owner?.discordId;
+  const line = formatSpendWarningLine(warning);
+  return {
+    line: id ? line.replace(/^⚠️ /, `⚠️ <@${id}> `) : line,
+    mentionUserIds: id ? [id] : [],
+  };
+}
+
+/**
+ * A post with the SAFE-8 80% warning line appended (owner added to the
+ * allowed mentions). Returns `post` unchanged when there is no warning.
+ */
+export function withSpendWarningPost<
+  T extends { content: string; mentionUserIds?: string[] },
+>(post: T, warning: SpendWarning | undefined, owner: OwnerRecord | null | undefined): T {
+  if (!warning) return post;
+  const w = formatSpendWarningReply(warning, owner);
+  const ids = [...new Set([...(post.mentionUserIds ?? []), ...w.mentionUserIds])];
+  return {
+    ...post,
+    content: appendPostLine(post.content, w.line),
+    ...(ids.length ? { mentionUserIds: ids } : {}),
+  };
+}
+
+/** `content` + a blank line + `line`, cutting `content` so the post stays ≤ max. */
+export function appendPostLine(content: string, line: string, max = ASK_REPLY_MAX): string {
+  const room = max - line.length - 2;
+  if (room <= 0) return line.slice(0, max);
+  const head = content.length <= room ? content : `${content.slice(0, room - 1)}…`;
+  return head ? `${head}\n\n${line}` : line;
 }

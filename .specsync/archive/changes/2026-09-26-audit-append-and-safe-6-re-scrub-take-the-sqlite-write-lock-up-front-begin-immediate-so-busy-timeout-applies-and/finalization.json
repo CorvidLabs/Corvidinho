@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and",
+  "implementation_commit": "d38f210d5b05f9b905cd69d2ad6c55329f84d8b1",
+  "implementation_tree": "a3e77f4edef626ac317e3936ae459273e8ed08db",
+  "contract_digest": "fbbdf4ccfd665b59c8d725476df5110b44f76d44c024a88c82c13d49f699ba70",
+  "workspace_digest": "b803047118ca9f8db99807be3655c9138e29f579eaed465cb01b7cb84f23496b",
+  "closing_digest": "88fbb27cae53f9d858bbbfee2689093dc375745ce9188c45d4120d363fd0c6a8",
+  "review_digest": "2e017fe4f9c2523bf4abdeb4247638334af2ee349947bf1c3f54d2b57f3a6e8c",
+  "finalization_digest": "20d1d562ae45a11ed0ffbece91964f4c776065473c6e74afa5650f58c4f96562",
+  "timestamp": 1790466525
+}

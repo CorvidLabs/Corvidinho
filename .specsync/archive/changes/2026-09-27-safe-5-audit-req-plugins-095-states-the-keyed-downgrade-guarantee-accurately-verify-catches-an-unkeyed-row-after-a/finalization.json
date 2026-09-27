@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a",
+  "implementation_commit": "e96cd73aeb33485755d3244ae85f66b6463cb58c",
+  "implementation_tree": "344309cd0520c9c29a84cef60d8ad1a928f50a0a",
+  "contract_digest": "205e4604aff5790bd03c3596a623e986e52824226b48a03eb9e6bf2069593e8b",
+  "workspace_digest": "bc7f2daee83cd669e31290629d94e2ab57d96386c72b6519a29bf951414c72f5",
+  "closing_digest": "b481b15f5bffae7ae514dbd42d744fc4c8237f76074ea77236741606b298ecbf",
+  "review_digest": "0ecf226b8fa5099e4c75cfebf399e05791da938ca01a3a8f6c81465564ef4c4f",
+  "finalization_digest": "323c4fcdc5c93e0a6b5d344f2e47c9d792afa0656ce698b68e31a3e77a0838d9",
+  "timestamp": 1790469976
+}

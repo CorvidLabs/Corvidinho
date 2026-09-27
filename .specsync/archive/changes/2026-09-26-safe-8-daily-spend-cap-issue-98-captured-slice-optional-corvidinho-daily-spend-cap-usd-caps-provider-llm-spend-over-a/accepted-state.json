@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a",
+  "slug": "safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a",
+  "title": "SAFE-8 daily spend cap (issue #98 captured slice): optional CORVIDINHO_DAILY_SPEND_CAP_USD caps provider (LLM) spend over a rolling 24h; each OpenAI-compatible call is priced from a per-model table, reserved against a spend_ledger in the shared SQLite DB before it is sent and refused with a clear error when it would break the cap, then settled from provider-reported token usage; unpriced models are refused while a cap is set; no cap means no behavior change; doctor shows spend vs the cap (AUTONOMOUS-8); ledger provider/model columns are SAFE-6 scrubbed; draft SAFE-14..16 (80% warn, per-provider caps, ask at 100%) left for HI capture",
+  "description": "SAFE-8 daily spend cap (issue #98 captured slice): optional CORVIDINHO_DAILY_SPEND_CAP_USD caps provider (LLM) spend over a rolling 24h; each OpenAI-compatible call is priced from a per-model table, reserved against a spend_ledger in the shared SQLite DB before it is sent and refused with a clear error when it would break the cap, then settled from provider-reported token usage; unpriced models are refused while a cap is set; no cap means no behavior change; doctor shows spend vs the cap (AUTONOMOUS-8); ledger provider/model columns are SAFE-6 scrubbed; draft SAFE-14..16 (80% warn, per-provider caps, ask at 100%) left for HI capture",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "3429ddd55c8a26e3f68e25defb953a010dab524f",
+  "created_at": 1790455296,
+  "updated_at": 1790464202,
+  "affected_specs": [
+    "agent",
+    "cli",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/agent/spend.ts",
+    "src/agent/execute.ts",
+    "src/agent/index.ts",
+    "src/cli.ts",
+    "src/store/scrub.ts",
+    "tests/agent.spend.test.ts",
+    ".env.example",
+    "specs/agent/",
+    "specs/cli/",
+    "specs/discord/"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With CORVIDINHO_DAILY_SPEND_CAP_USD unset the provider fetch is untouched and no ledger/DB is opened; with it set, each OpenAI-compatible call is priced from the per-model table and its estimate (request bytes/3 prompt tokens + 4096-token reply reserve) is reserved in spend_ledger inside one IMMEDIATE transaction, and the call is refused before sending (SpendCapRefusal, clear message naming spent, estimate, cap and env var; surfaced as the task summary) when 24h spend + estimate would exceed the cap; the reservation settles to the provider-reported usage cost (actual), stays at the estimate when usage is missing or the request errored at the network, and drops to 0 on an HTTP error reply; spend older than 24h no longer counts; an unpriced model or an invalid cap refuses every call (never free, fail closed); spend_ledger provider/model are scrubSecrets-ed and in SCRUB_TARGETS; doctor prints a spend line (spend vs cap, calls, estimated calls, unpriced-model warning) only when a cap is set and never fails doctor; fixture tests with mocked fetch, no network"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

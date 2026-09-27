@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "task-run-leaves-a-sigint-it-started-with-ignored-alone-and-an-interrupted-verify-lane-stops-waiting-on-a-pipe-an",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "43141c560ff51045a34ecbf587dada7db7d41d98",
+      "contract_digest": "a723a4e75f9ad77af82747dd51d692c45939f00ddbd67d62def98ee1c8af5f94",
+      "execution_digest": "0f618f17f070293683a085998352a0527e9f14b07209c3bf360ea79622621b04",
+      "workspace_digest": "428f34351fc00150ca2180034b0f47d779ea092f5b13875d5478804dcd5f6f0b",
+      "timestamp": 1790470164
+    }
+  ]
+}

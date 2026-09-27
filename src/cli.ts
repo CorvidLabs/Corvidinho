@@ -15,9 +15,12 @@ import {
   TASK_OUTPUT_MODES,
   type AgentEvent,
   type CapabilityTier,
+  type SpendWarning,
   type TaskOutputMode,
   type TaskResult,
 } from "./agent/index.ts";
+import { loadLlmEnv } from "./agent/execute.ts";
+import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
@@ -34,6 +37,7 @@ import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
+import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
 import { runPlugin } from "./plugins/run.ts";
 import {
@@ -103,6 +107,7 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
   CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
+  CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -314,6 +319,9 @@ async function doctor(): Promise<number> {
     });
   }
 
+  // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
+  checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
+
   console.log("corvidinho doctor\n");
   let allOk = true;
   for (const c of checks) {
@@ -501,21 +509,44 @@ async function taskRun(opts: {
     allowlist: allowlistFromEnv(),
     onEvent: handleEvent,
     onUsage: ndjson ? (u) => ndjson.usage(u) : undefined,
-  });
-  const result: TaskResult = await runTask({
-    cwd,
-    task: opts.taskText,
-    config,
-    verifyBeforeComplete: opts.noVerify ? false : undefined,
-    maxRetries: opts.maxRetries,
-    onEvent: handleEvent,
-    execute: async (ctx) => {
-      if (ctx.verifyFeedback && !quiet) {
-        console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
-      }
-      return execute(ctx);
+    // SAFE-8: the 80% warning rides the result (--json / ndjson) for bridges.
+    onSpendWarning: (w) => {
+      spendWarning = w;
     },
   });
+  let spendWarning: SpendWarning | undefined;
+  // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
+  // and tool loop stop and the cancelled result below is still printed (exit
+  // 130). `once`: a second signal takes the default action. A signal this
+  // process started with ignored (a background job's SIGINT) is not hooked:
+  // a listener would replace SIG_IGN and removing it restores SIG_DFL.
+  const abort = new AbortController();
+  const onSignal = () => abort.abort();
+  const hooked = forwardedSignals().filter(
+    (sig) => sig === "SIGINT" || sig === "SIGTERM",
+  );
+  for (const sig of hooked) process.once(sig, onSignal);
+  let result: TaskResult;
+  try {
+    result = await runTask({
+      cwd,
+      task: opts.taskText,
+      config,
+      verifyBeforeComplete: opts.noVerify ? false : undefined,
+      maxRetries: opts.maxRetries,
+      signal: abort.signal,
+      onEvent: handleEvent,
+      execute: async (ctx) => {
+        if (ctx.verifyFeedback && !quiet) {
+          console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
+        }
+        return execute(ctx);
+      },
+    });
+  } finally {
+    for (const sig of hooked) process.off(sig, onSignal);
+  }
+  if (spendWarning) result.spendWarning = spendWarning;
 
   if (ndjson) {
     ndjson.result(result);
@@ -526,6 +557,10 @@ async function taskRun(opts: {
       `state=${result.state} verified=${result.verified} verifySkipped=${result.verifySkipped} cancelled=${result.cancelled} attempts=${result.attempts}`,
     );
     console.log(result.summary);
+    // SAFE-8: a spend-cap summary is generic; the operator details are in the ask.
+    if (result.ask && !result.summary.includes(result.ask.question)) {
+      console.log(result.ask.question);
+    }
   }
 
   if (result.cancelled) return 130;

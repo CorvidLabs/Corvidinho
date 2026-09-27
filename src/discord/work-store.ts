@@ -6,7 +6,11 @@
 import type { Database } from "bun:sqlite";
 import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
 
-export type WorkTaskStatus = "queued" | "running" | "completed" | "failed";
+/**
+ * `blocked` = the run stopped to ask a human (AUTONOMY-1/2), e.g. at the
+ * SAFE-8 spend cap: not done, not failed.
+ */
+export type WorkTaskStatus = "queued" | "running" | "completed" | "failed" | "blocked";
 
 export type WorkTaskStub = {
   id: string;
@@ -29,6 +33,7 @@ const STATUSES: ReadonlySet<string> = new Set([
   "running",
   "completed",
   "failed",
+  "blocked",
 ]);
 
 export type WorkStoreOptions = {
