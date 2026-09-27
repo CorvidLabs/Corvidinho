@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a",
+  "implementation_commit": "35a3a49c82b8842f22cd99b5f08d95d3c2e05985",
+  "implementation_tree": "338a1b6de9aac8b820b8168da5b04e1abd87ab9a",
+  "contract_digest": "770d731d721c9b2bd47ee53e49df97a88aa15aeb8ee4958415ed0f03492d4888",
+  "workspace_digest": "fa401aa9740245a53ad2fe8709ce6ea11b4b9549f6131e911aa4dbea92e4f5be",
+  "closing_digest": "7761f0ff77a1be49464918c73672adbf6b876ae2211bb7d13305513c010362fc",
+  "review_digest": "0e7030efaa3fa01e7bfe612d6209eaf74d4f9af13c2cb5c07a5056e69d2c5ba4",
+  "finalization_digest": "8a9c43966d7aab0b599147cb1ff6225f7f2900da4db48abc1b5a2be2a18d46ee",
+  "timestamp": 1790468280
+}

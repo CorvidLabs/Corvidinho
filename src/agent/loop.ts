@@ -70,6 +70,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let filesChanged: string[] = [];
   let attempts = 0;
   let verifyFeedback: string | undefined;
+  // Output of the last failed verify, kept for the human-facing summary.
+  let lastVerifyFailure: string | undefined;
   let retries = 0;
 
   setState(onEvent, "planning");
@@ -119,7 +121,10 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       signal,
     });
     summary = exec.summary;
-    filesChanged = [...exec.filesChanged];
+    // AGENT-4: union across attempts. Files from an attempt whose verify
+    // failed stay in the gate, so a retry that changes nothing is verified
+    // again and can never be reported done.
+    filesChanged = [...new Set([...filesChanged, ...exec.filesChanged])];
 
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -128,7 +133,27 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     // AUTONOMY-1: the agent asked the human — blocked, not done, no verify.
     if (exec.ask) {
       setState(onEvent, "blocked");
-      return blockedTaskResult({ ...exec, ask: exec.ask }, attempts);
+      return blockedTaskResult({ ...exec, filesChanged, ask: exec.ask }, attempts);
+    }
+
+    // AGENT-4/8: a provider / HTTP failure is a failed run, never done.
+    if (exec.error) {
+      setState(onEvent, "failed");
+      // AGENT-4: a verify that already failed is still said plainly, so the
+      // provider error does not hide failing files left on disk.
+      const verifyNote =
+        lastVerifyFailure === undefined
+          ? ""
+          : `\n\nVerification failed on an earlier attempt and was not re-run:\n${lastVerifyFailure}`;
+      return {
+        summary: `${summary}${verifyNote}`,
+        filesChanged,
+        verified: false,
+        verifySkipped: false,
+        cancelled: false,
+        state: "failed",
+        attempts,
+      };
     }
 
     const wantVerify =
@@ -194,6 +219,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       };
     }
 
+    lastVerifyFailure = result.output;
     retries += 1;
     if (retries > maxRetries) {
       emit(onEvent, {
