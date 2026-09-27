@@ -9,7 +9,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
 import { emptyConfig, type AllowlistConfig } from "../src/allowlist/types.ts";
-import { formatAskReply } from "../src/discord/ask-ping.ts";
+import {
+  COLLAPSED_PING_NEEDS,
+  COLLAPSED_PING_QUESTION,
+  formatAskReply,
+} from "../src/discord/ask-ping.ts";
 import { loadBridgeConfig } from "../src/discord/config.ts";
 import {
   PermissionLevel,
@@ -90,6 +94,16 @@ describe("docs/discord.md slash surface", () => {
       expect(row!).toContain(bit);
     }
   });
+
+  test("the criteria line cites the whole captured DISCORD-1..N range", () => {
+    const nums = [...read("hi/discord.md").matchAll(/\*\*DISCORD-(\d+)\*\*/g)].map((m) => Number(m[1]));
+    const max = Math.max(...nums);
+    const line = read("docs/discord.md")
+      .split("\n")
+      .find((l) => l.startsWith("Acceptance criteria live in"));
+    expect(line).toBeDefined();
+    expect(line!).toContain(`DISCORD-1..${max},`);
+  });
 });
 
 describe("ask pings follow AUTONOMY-4 (clarify → requester, stuck → owner)", () => {
@@ -117,6 +131,13 @@ describe("ask pings follow AUTONOMY-4 (clarify → requester, stuck → owner)",
     expect(text).toMatch(/mentions the \*\*requester\*\*/);
     expect(text).not.toContain("mentions the configured owner (");
     expect(text).not.toContain("allowed mentions to the owner plus");
+  });
+
+  test("docs/discord.md names the fresh ping post that follows a collapsed answer (REQ-discord-215)", () => {
+    const text = section(read("docs/discord.md"), "Questions and owner ping");
+    expect(text).toContain("REQ-discord-215");
+    expect(text).toContain(`\`${COLLAPSED_PING_QUESTION}\``);
+    expect(text).toContain(`\`${COLLAPSED_PING_NEEDS}\``);
   });
 
   test("docs/DISCORD-GO-LIVE.md does not claim the owner is the only user an ask can ping", () => {
@@ -240,6 +261,24 @@ describe("store, WATCH and doctor facts", () => {
       .find((b) => b.startsWith("Not dangerous, but mutating"));
     expect(para).toBeDefined();
     for (const n of names) expect(para!).toContain(`\`${n}\``);
+  });
+});
+
+describe("Developer Portal intents", () => {
+  test("DISCORD-GO-LIVE.md says when Server Members Intent is needed if any code requests GuildMembers", () => {
+    const src = ["src", "plugins"]
+      .flatMap((d) =>
+        readdirSync(join(ROOT, d), { recursive: true, withFileTypes: true })
+          .filter((e) => e.isFile() && e.name.endsWith(".ts"))
+          .map((e) => readFileSync(join(e.parentPath, e.name), "utf8")),
+      )
+      .join("\n");
+    const doc = read("docs/DISCORD-GO-LIVE.md");
+    if (src.includes("GatewayIntentBits.GuildMembers")) {
+      expect(doc).not.toMatch(/Server Members Intent is not used/);
+      expect(doc).toMatch(/Server Members Intent\*\* only if you use the DISCORD-8 requester check/);
+      expect(doc).toContain("--requesting-user-id");
+    }
   });
 });
 

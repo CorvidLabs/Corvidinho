@@ -37,3 +37,14 @@ artifact: docs
 - `allowlist.example.toml`, `.env.example` — user/role semantics, owner-only
   ADMIN, `OWNER/*`, env file location, token precedence, dry-run token,
   GitHub allowlist + WATCH env vars, reachable rate-limit levels, TTL scope.
+- Review follow-up after merging main (#213, #214, #218, #219, #220, #224):
+  `docs/DISCORD-GO-LIVE.md` says Server Members Intent is needed for the
+  DISCORD-8 requester check (`discord-post-message --requesting-user-id`
+  logs in with the Guild Members intent), and E.6 lists `discord-user-lookup`
+  and the #214 secret-path gate on `files-list` / `files-glob` / `search-grep`
+  / `git-diff`; `docs/discord.md` cites DISCORD-1..13 and IDENTITY-1..5, the
+  `/session list` / `/schedule list` scope (REQ-discord-418) and the collapsed
+  answer ping post (REQ-discord-215); `STATUS.md` adds v0.0.28 (#224), the
+  0.0.28 build fixes and 0.0.28 as untagged; `.env.example` notes
+  `DISCORD_GUILD_ID` scopes the user lookup; `AGENTS.md` notes
+  `register-commands` without a guild id registers globally with a warning.

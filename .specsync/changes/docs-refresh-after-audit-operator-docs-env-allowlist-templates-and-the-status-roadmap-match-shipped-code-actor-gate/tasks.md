@@ -11,3 +11,4 @@ artifact: tasks
 - [x] Fix docs/DISCORD-GO-LIVE.md, docs/BOX-UPDATE.md, docs/UPDATE.md, docs/WATCH.md, docs/discord.md, docs/DAEMON.md
 - [x] Fix allowlist.example.toml and .env.example (template still parses with the fail-closed loader)
 - [x] Docs test passes (21 / 21); specsync check, tsc, bun test and the verify lane green
+- [x] Review: merge main (#213, #214, #218, #219, #220, #224), re-verify every changed statement, fix the Server Members Intent claim and the post-merge drift; three more docs-facts tests (24 / 24; the three fail on the unfixed docs)

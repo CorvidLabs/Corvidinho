@@ -52,7 +52,7 @@ bun src/cli.ts plugins list
 bun src/cli.ts specsync list
 bun src/cli.ts task run --task "touch agent loop" --no-verify --json   # demo stub unless CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY is set
 bun src/cli.ts discord bridge   # needs DISCORD_TOKEN + non-empty channel allowlist; a malformed allowlist file refuses start
-bun src/cli.ts discord register-commands   # guild PUT of the 9 slash commands + clear globals (DISCORD_GUILD_ID or --guild-id)
+bun src/cli.ts discord register-commands   # guild PUT of the 9 slash commands + clear globals with DISCORD_GUILD_ID or --guild-id (without one: global register + a warning)
 bun src/cli.ts github watch     # needs GITHUB_TOKEN + CORVIDINHO_WATCH_USERNAME + non-empty GitHub repo/org allowlist
 bun src/cli.ts daemon           # headless schedule ticker (docs/DAEMON.md)
 bun test

@@ -14,7 +14,7 @@ that shipped after go-live.
 
 1. Open [Discord Developer Portal](https://discord.com/developers/applications) → **New Application** (name e.g. Corvidinho).
 2. **Bot** tab → Add Bot → Reset Token → copy token into the VM secret store only (`DISCORD_TOKEN` or `DISCORD_BOT_TOKEN`). Do not commit.
-3. **Privileged Gateway Intents:** enable **Message Content Intent** (required for mention text). Server Members Intent is not used: the bridge requests only Guilds, GuildMessages and MessageContent, and role gates read the member roles already on messages and interactions.
+3. **Privileged Gateway Intents:** enable **Message Content Intent** (required for mention text). The bridge's gateway requests only Guilds, GuildMessages and MessageContent, and role gates read the member roles already on messages and interactions. Enable **Server Members Intent** only if you use the DISCORD-8 requester check (`discord-post-message --requesting-user-id`, required under `CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1`): it logs in a short-lived client with the Guild Members intent, so without the portal toggle that login is refused and nothing is posted.
 4. **OAuth2 → URL Generator:** scopes `bot`; bot permissions at least `View Channels`, `Send Messages`, `Read Message History`, `Create Public Threads` (optional for 2.a). Generate invite URL → add bot to the target guild.
 5. In Discord: User Settings → Advanced → **Developer Mode** ON → right-click channel → **Copy Channel ID**. Those snowflakes go in `DISCORD_CHANNEL_IDS` / allowlist `[discord].channels` (non-empty required).
 
@@ -260,14 +260,16 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
   forget/override, no `delegate`/`council`, no `web-fetch` (dangerous counts as mutating).
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
-  `memory-store`/`-recall` (scoped to the acting user) and `plugins-list`.
+  `memory-store`/`-recall` (scoped to the acting user), `discord-user-lookup` (members of
+  the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
 - **Run time:** a mutating call the model makes anyway is refused with
   `not allowed for your role` (ROLES-CHAT-3). ADMIN is re-checked on every call against
   the live owner config; the prompt never grants it.
 - **Public Q&A (ROLES-CHAT-8):** GitHub reads work for any **public** repo. Private repos, and
-  repos whose visibility cannot be confirmed, are refused; deny lists still win. `files-read`
-  refuses secret-looking paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`,
-  `id_ed25519`, `*.pem`).
+  repos whose visibility cannot be confirmed, are refused; deny lists still win. Secret-looking
+  paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
+  refused when named to `files-read`, `files-list`, `search-grep` or `git-diff`, and left out
+  of `files-glob` / `files-list` results, recursive `search-grep` output and `git-diff`.
 - `/session start` and `/work` run for non-owners too, as non-ADMIN sessions. `/work` never
   opens a PR for a non-owner.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
