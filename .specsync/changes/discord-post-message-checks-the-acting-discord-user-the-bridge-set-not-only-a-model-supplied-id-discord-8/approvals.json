@@ -1,4 +1,46 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790544610,
+      "digest": "634d5807147372700174309193cba1e9eefba96286041a1745086be179ee495d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-post-message-checks-the-acting-discord-user-the-bridge-set-not-only-a-model-supplied-id-discord-8",
+        "title": "Discord-post-message checks the acting Discord user the bridge set, not only a model-supplied id (DISCORD-8)",
+        "description": "discord-post-message checks the acting Discord user the bridge set, not only a model-supplied id (DISCORD-8)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "plugins/discord/index.ts",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "tests/discord.requester-perms.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "In a run the bridge started (non-empty CORVIDINHO_ACTING_DISCORD_USER_ID), discord-post-message runs the DISCORD-8 requester check (ViewChannel + SendMessages via verifyRequesterCanSend) for the acting user even without --requesting-user-id, and refuses with nothing posted when that user lacks View or Send; a --requesting-user-id (or --requester) naming a different user is refused with nothing posted and is never checked in place of the acting user; strict mode is met by the acting user's check; a check that cannot run (Guild Members login refused because Server Members Intent is off, timeout, checker throws) refuses (fail closed) with one scrubbed reason line (SAFE-6) and nothing posted; the channel allowlist deny still wins first; with the acting env empty or unset (operator plugins run, local task run, WATCH) behaviour is unchanged (flag check when given, strict refuses a missing id, a throwing check still throws); fixture tests in tests/discord.requester-perms.test.ts fail on main and pass here; no new env var, flag, config key or command"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "88a1d27467b2fe08c73c3ad7649ce3baaabeb6817328e1ae235896058bdbff30"
+      }
+    }
+  ],
   "reopenings": []
 }

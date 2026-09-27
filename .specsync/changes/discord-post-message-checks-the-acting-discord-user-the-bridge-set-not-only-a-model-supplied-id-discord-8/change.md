@@ -1,6 +1,6 @@
 ---
 id: discord-post-message-checks-the-acting-discord-user-the-bridge-set-not-only-a-model-supplied-id-discord-8
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 606b993d7175c2f32759e3f02865492e5e884389
 ---
