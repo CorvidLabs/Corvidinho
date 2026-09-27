@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and",
+  "implementation_commit": "f9a4198518d79773a09ef1d06e5c90d392d48aff",
+  "implementation_tree": "0ae0fca0ba5fc6d2c66d5019eeedd599d30bfb2c",
+  "contract_digest": "41d51df535a44e04df936e0a331120ffbb04d52821864f56d96b64b8c9865c39",
+  "workspace_digest": "72c9af917b1a13ea992ed2c9e981cbf070a5677744599e61fd081783c7c7b607",
+  "closing_digest": "07602da2f2450032d4e3a9ac7787b86341c615cf01bf907a3d70045dab703672",
+  "review_digest": "edaa9cedee39148ba8bc0dc2e47b64e7646658c32549869e82f01bd150d83103",
+  "finalization_digest": "fe16fdba04c39675cb22107f76691b04b64fffa1b7f3ac783de1e6f6a56800fc",
+  "timestamp": 1790532436
+}

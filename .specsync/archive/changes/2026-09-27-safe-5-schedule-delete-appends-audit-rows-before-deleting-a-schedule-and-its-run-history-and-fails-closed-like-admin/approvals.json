@@ -1,0 +1,52 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790530735,
+      "digest": "1f7d7af6f3d3b02b75c127026fc7f1d5a56216ce06861d2a3f1f9a78a259206e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin",
+        "title": "SAFE-5: /schedule delete appends audit rows before deleting a schedule and its run history, and fails closed like /admin when the audit trail is unavailable",
+        "description": "SAFE-5: /schedule delete appends audit rows before deleting a schedule and its run history, and fails closed like /admin when the audit trail is unavailable",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/command-handlers/schedule.ts",
+          "tests/discord.schedule.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "/schedule delete by the owner appends SAFE-5 started then ok rows (action schedule-delete, surface discord:schedule, args digest only) before the schedule and its run history are deleted, and the reply names the row numbers; when the audit trail throws, the chain is keyed and the process has no key, or no trail is wired, it replies 'audit log unavailable (SAFE-5)' and deletes nothing; a non-ADMIN delete gets 'not authorized' and appends denied; a delete that throws after the intent row appends error; tests/discord.schedule.test.ts covers each and fails on main"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "a530ef24e0f0ce49fa3f05bc758289f80949aa6a08a2c5e1061911bfc04ac7f0"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790532454,
+      "digest": "fe30f9e73fe844932b37581047f3a4af834195c3bcc2a468d9b8eddacd11373e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

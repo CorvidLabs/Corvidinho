@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "5af50948696d1b685f1eaa429152b56565067ccc",
+  "contract_digest": "1f7d7af6f3d3b02b75c127026fc7f1d5a56216ce06861d2a3f1f9a78a259206e",
+  "execution_digest": "6d00415a604bdda493731b32fec8856dc374b7b5dc13ab620521a080584f5531",
+  "workspace_digest": "11e2de674c4e9ff389990daa9666f976a941f764a1ab607e7de77333336b45c2",
+  "timestamp": 1790532441
+}
