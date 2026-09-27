@@ -24,6 +24,7 @@ describe("SpecSync plugins + CLI", () => {
       "specsync-check",
       "specsync-brief",
       "specsync-coverage",
+      "specsync-score",
       "specsync-change-list",
       "specsync-ship-status",
     ]) {

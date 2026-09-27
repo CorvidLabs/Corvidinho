@@ -83,7 +83,10 @@ for now.
 - `specs/{agent,cli,discord,plugins,watch}/` — module specs (all `draft`) + companions
 - CI: `.github/workflows/spec-sync.yml` uses `CorvidLabs/spec-sync@v6` (version `6.0.0`)
 
-Run `specsync check` locally. Open changes with `specsync change` before
+Run `fledge run spec-check` locally: it is `specsync check --require-coverage 100`,
+the CI Spec Sync strictness, and it is a step of the verify lane.
+`corvidinho specsync coverage` / `score` print SpecSync's coverage and score
+reports. Open changes with `specsync change` before
 meaningful edits. Promote draft specs to `active` when behavior stabilizes.
 Do not invent ACCESS/bounty/MainNet surfaces.
 
