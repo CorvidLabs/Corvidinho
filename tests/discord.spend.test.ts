@@ -33,6 +33,7 @@ import {
 } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
+import { InflightReplyStore } from "../src/discord/inflight-replies.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import {
@@ -898,6 +899,41 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     // Delivered once: the next answer carries no warning.
     await handlers.onMessage({ ...MENTION, id: "m2" });
     expect(finals[1]!.content).toBe("all good");
+    await result.stop();
+  });
+
+  test("REQ-discord-311: a collapsed answer carrying the 80% warning clears its in-flight row; so does a turn where nothing went out (claims handed back)", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "all good", exitCode: 0 };
+      },
+    };
+    let failing = false;
+    const db = pendingWarningDb();
+    const inflight = new InflightReplyStore(db);
+    const { outbound, finals } = collapseOutbound(() => failing);
+    const { result, handlers, replies } = await bridgeWith(
+      agent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
+      db,
+      () => failing,
+      outbound,
+    );
+    await handlers.onMessage(MENTION);
+    expect(finals[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
+    expect(inflight.list()).toEqual([]);
+    // A second warning is pending; edit and fallback reply both fail.
+    const ledger = new SpendLedger(db);
+    ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1, capMicroUsd: 1e12, now: Date.now() });
+    expect(ledger.noteWarning({ capMicroUsd: 1_000_001, now: Date.now() })).not.toBeNull();
+    failing = true;
+    await handlers.onMessage({ ...MENTION, id: "m2" });
+    expect(replies).toHaveLength(0);
+    expect(inflight.list()).toEqual([]);
+    failing = false;
+    await handlers.onMessage({ ...MENTION, id: "m3" });
+    expect(finals.at(-1)!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
+    expect(inflight.list()).toEqual([]);
     await result.stop();
   });
 
