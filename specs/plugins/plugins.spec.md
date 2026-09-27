@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 50
+version: 49
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -510,7 +510,6 @@ unchanged and always registered.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
-| 2026-09-27 | plugin-4-language-runner-plugins: node-exec / python-exec / cargo-exec register when their toolchain is on PATH and degrade cleanly when it is missing; dangerous, code tier, argv only, cwd pinned (REQ-plugins-313..314 / PLUGIN-4) |
 | 2026-09-26 | discord-user-lookup read-only guild member resolve (REQ-plugins-312 / IDENTITY-5) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |

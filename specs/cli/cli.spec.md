@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 60
+version: 59
 status: draft
 files:
   - src/cli.ts
@@ -139,7 +139,6 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 
 ## Change Log
 
-| 2026-09-27 | plugin-4-language-runner-plugins: `plugins list` prints the language runner status lines (loaded runners with their binary, one line per missing toolchain) before the Fledge line (REQ-cli-112 / PLUGIN-4) |
 | 2026-09-26 | files-search-plugins-issue-81: package 0.0.6 with files/search + SAFE-2 (REQ-cli-013) |
 | 2026-09-26 | memory-discord-inject: package 0.0.7 with MEMORY Discord inject (REQ-cli-014) |
 | 2026-09-26 | discord-memory-auto-recall-inject-on-spawn-plus-system-prompt-store-recall-rules-agent-7-memory-2-4-draft-67-behavior: Discord MEMORY auto-recall inject on spawn plus system-prompt store/recall rules (AGENT-7 MEMORY-2/4 draft #67 behavior) package 0.0.7 |
