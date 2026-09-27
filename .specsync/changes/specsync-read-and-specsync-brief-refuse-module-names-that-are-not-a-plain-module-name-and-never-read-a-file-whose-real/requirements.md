@@ -5,9 +5,14 @@ artifact: requirements
 
 # Requirements
 
-- SAFE-2 (captured, `hi/safe.md`) and PLUGIN-1 (captured, `hi/plugin.md`):
-  SpecSync tools are typed plugins, and the tool layer keeps them inside the
-  project; they must not be a way around the file tools' project clamp.
+- SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6 (captured, `hi/specsync.md`): in a
+  repo that has `.specsync/` and `specs/`, Corvidinho lists and reads module
+  specs and the companion files next to a spec, with local binary + project
+  files; REQ-plugins-008 already says "project files only". PLUGIN-1
+  (captured, `hi/plugin.md`): SpecSync is available as typed plugin commands.
+  The SpecSync tools must not be a way around the file tools' project clamp
+  (REQ-plugins-082). SAFE-2 (`hi/safe.md`) covers delete/overwrite of
+  protected infra, not reads, so it is not the basis here.
 - Modify REQ-plugins-008 (delta `deltas/plugins.md`): `specsync-read` /
   `specsync-brief` accept only a plain module name and read only files whose
   real path is inside the project's real `specs/` dir (itself inside the

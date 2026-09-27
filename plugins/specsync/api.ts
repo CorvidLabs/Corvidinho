@@ -45,8 +45,8 @@ export function listRegisteredModules(cwd: string): string[] {
 /**
  * A module name is one registry-form segment (same shape `listRegisteredModules`
  * parses): letters, digits, `_`, `-`. No `.`/`..`, separators, absolute paths or
- * NUL, so a model-chosen name cannot point a read outside `specs/` (SAFE-2 /
- * PLUGIN-1: tools stay inside the project).
+ * NUL, so a model-chosen name cannot point a read outside `specs/` (tools stay
+ * inside the project: SPECSYNC-1/5/6 project specs + companions, PLUGIN-1).
  */
 export const MODULE_NAME_RE = /^[A-Za-z0-9_-]+$/;
 

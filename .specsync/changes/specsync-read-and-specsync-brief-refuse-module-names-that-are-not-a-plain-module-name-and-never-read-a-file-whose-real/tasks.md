@@ -20,3 +20,6 @@ artifact: tasks
 - [x] Delta for REQ-plugins-008; update `specs/plugins/plugins.spec.md`.
 - [x] Run SpecSync change check/audit, coverage check, tsc, bun test and the
       verify lane.
+- [x] Review: add Planning spec briefing (`loadRelevantSpecs`) regression
+      tests (spec, module dir and companion linking outside); cite the
+      captured HI ids that actually cover reads (SPECSYNC-1/5/6, PLUGIN-1).

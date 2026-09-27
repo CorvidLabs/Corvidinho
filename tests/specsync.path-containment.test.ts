@@ -1,10 +1,12 @@
 /**
- * REQ-plugins-008 — SpecSync tools stay inside the project (SAFE-2 / PLUGIN-1).
+ * REQ-plugins-008 — SpecSync tools stay inside the project (SPECSYNC-1/5/6,
+ * PLUGIN-1).
  *
  * specsync-read / specsync-brief take a model-chosen module name. It must be a
  * plain module name, and every file they read must realpath inside the
  * project's specs dir (symlinks too). The spawn-backed tools refuse `--root`,
- * which would point the specsync binary at another directory.
+ * which would point the specsync binary at another directory. The Planning
+ * spec briefing reads through the same helpers and must not leak either.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
@@ -18,6 +20,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { createTaskExecute } from "../src/agent/index.ts";
+import { loadRelevantSpecs } from "../src/agent/specLoader.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
@@ -253,6 +256,51 @@ describe("spawn-backed SpecSync tools refuse --root (REQ-plugins-008)", () => {
       }
     });
   }
+});
+
+describe("Planning spec briefing stays inside specs/ (REQ-plugins-008)", () => {
+  // loadRelevantSpecs reads registered modules through readModuleSpec /
+  // readCompanions and sends the briefing to the model at Planning, so a
+  // registered module whose spec, module dir or companion links outside must
+  // not leak into it.
+  function register(names: string[]) {
+    put(
+      join(dir, ".specsync", "registry.toml"),
+      `[specs]\n${names.map((n) => `${n} = "specs/${n}/${n}.spec.md"`).join("\n")}\n`,
+    );
+  }
+
+  test("a registered module still briefs at Planning", () => {
+    register(["good"]);
+    const text = loadRelevantSpecs({ cwd: dir, task: "change the good module" });
+    expect(text).toContain("# Spec: good");
+    expect(text).toContain("good context");
+  });
+
+  test("a registered module whose spec links outside is left out", () => {
+    register(["evil"]);
+    mkdirSync(join(dir, "specs", "evil"));
+    symlinkSync(join(outside, "outside.spec.md"), join(dir, "specs", "evil", "evil.spec.md"));
+    const text = loadRelevantSpecs({ cwd: dir, task: "change the evil module" });
+    expect(text).not.toContain(SECRET);
+    expect(text).toBe("");
+  });
+
+  test("a registered module dir that links outside is left out", () => {
+    register(["outside"]);
+    symlinkSync(outside, join(dir, "specs", "outside"));
+    const text = loadRelevantSpecs({ cwd: dir, task: "change the outside module" });
+    expect(text).not.toContain(SECRET);
+    expect(text).toBe("");
+  });
+
+  test("a companion that links outside never reaches the briefing", () => {
+    register(["good"]);
+    symlinkSync(join(outside, "context.md"), join(dir, "specs", "good", "tasks.md"));
+    const text = loadRelevantSpecs({ cwd: dir, task: "change the good module" });
+    expect(text).toContain("# Spec: good");
+    expect(text).not.toContain(SECRET);
+  });
 });
 
 describe("CLI + tool loop repro (REQ-plugins-008)", () => {

@@ -112,7 +112,7 @@ Acceptance Criteria
 
 Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
 
-The tools SHALL stay inside the project (SAFE-2 / PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
+The tools SHALL stay inside the project: they read this repo's `specs/` and the companions next to a spec, using project files only (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6), as typed plugin commands (PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
 
 Acceptance Criteria
 - `plugins list` includes the SpecSync command names.
@@ -125,6 +125,7 @@ Acceptance Criteria
 - Symlinks that stay inside `specs/` still read, and a missing module still reports `spec '<name>' not found`.
 - `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` given `--root <dir>` or `--root=<dir>` fail with exit 1 (`refused: --root is not allowed; SpecSync tools run on this project only`) and `specsync` is not spawned.
 - A tool-loop `specsync-read` call with a traversal name returns the refusal to the model, not the outside file.
+- The Planning spec briefing (`loadRelevantSpecs`), which reads through the same helpers, leaves out a registered module whose spec or module dir resolves outside `specs/` and never includes a companion that does.
 
 ### REQ-plugins-009
 

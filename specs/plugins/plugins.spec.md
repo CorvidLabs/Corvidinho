@@ -264,7 +264,8 @@ sessions keep the GITHUB-6 allowlist gate.
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`.
 
-SpecSync tools stay inside the project (SAFE-2 / PLUGIN-1, REQ-plugins-008).
+SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
+PLUGIN-1, REQ-plugins-008).
 `specsync-read` / `specsync-brief` take only a plain module name
 (`[A-Za-z0-9_-]+`, the registry form; optional `name=` prefix): an absolute
 path, `.` / `..`, a path separator, NUL or any other character is refused
@@ -272,7 +273,8 @@ path, `.` / `..`, a path separator, NUL or any other character is refused
 read (module spec, legacy flat spec, companions) must realpath inside the real
 `specs/` dir, which must itself realpath inside the project root; a symlinked
 specs dir, module dir, spec or companion that leaves it is refused (a refused
-companion fails the whole brief) and its content is never returned.
+companion fails the whole brief) and its content is never returned; the
+Planning spec briefing reads through the same helpers and skips it too.
 `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
 forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 `specsync-list` and `specsync-check` take no path input.

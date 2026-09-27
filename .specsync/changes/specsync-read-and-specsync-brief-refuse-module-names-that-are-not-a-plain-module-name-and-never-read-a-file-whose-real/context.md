@@ -22,10 +22,14 @@ containment check, and follow symlinks. `files-read` refuses the same path
 ("Path traversal denied"), so the SpecSync tools were a bypass of the file
 tools' project clamp.
 
-Captured HI: SAFE-2 (`hi/safe.md` — the agent's file tools cannot reach
-protected project infra; guards live in the tool layer) and PLUGIN-1
-(`hi/plugin.md` — SpecSync is available as a typed plugin). Tools stay inside
-the project. No new criterion was invented.
+Captured HI: SPECSYNC-1 (`hi/specsync.md` — in a repo with `.specsync/` and
+`specs/`, Corvidinho can list and read module specs), SPECSYNC-5 (companion
+briefing files next to a spec), SPECSYNC-6 (local binary + project files are
+enough; REQ-plugins-008 already says "project files only") and PLUGIN-1
+(`hi/plugin.md` — SpecSync is available as typed plugin commands). Tools stay
+inside the project. SAFE-2 (`hi/safe.md`) is about deleting or overwriting
+protected infra, not reads, so it is not cited as the basis. No new criterion
+was invented.
 
 Checked every other SpecSync command for the same pattern:
 
