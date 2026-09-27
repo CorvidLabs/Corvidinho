@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { isSecretPath } from "../plugins/files/protectedPaths.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
@@ -30,6 +30,8 @@ const ENV_KEYS = [
   "CORVIDINHO_ACTING_DISCORD_USER_ID",
   "CORVIDINHO_OWNER_DISCORD_ID",
   "CORVIDINHO_ALLOWLIST",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_NOSYSTEM",
 ] as const;
 
 /** Every secret file body carries one of these; none may reach a non-admin. */
@@ -217,6 +219,10 @@ describe("files-glob / files-list secret paths (ROLES-CHAT-8)", () => {
     }
     const all = await run("files-glob", ["**/*"]);
     expect((all.data as { matches: string[] }).matches).toContain("src/a.ts");
+    // A pattern naming a symlink to .ssh walks into it; the resolved path is judged.
+    const viaLink = await run("files-glob", ["notes/*"]);
+    expect(viaLink.ok).toBe(true);
+    expect((viaLink.data as { matches: string[] }).matches).toEqual([]);
   });
 
   test("non-admin files-list refuses a secret dir and hides secret entries", async () => {
@@ -247,6 +253,124 @@ describe("files-glob / files-list secret paths (ROLES-CHAT-8)", () => {
       expect(names).toContain(".ssh");
       const ssh = await run("files-list", [".ssh"]);
       expect(ssh.ok).toBe(true);
+      const viaLink = await run("files-glob", ["notes/*"]);
+      expect((viaLink.data as { matches: string[] }).matches).toContain("notes/id_rsa");
+    }
+  });
+});
+
+describe("search-grep match records", () => {
+  test("a file name holding ':N:' keeps its file, line and text", async () => {
+    asNonAdmin();
+    writeFileSync(join(dir, "src", "odd:7:name.ts"), "x\nFAKEFAKE_ODD here\n");
+    const r = await run("search-grep", ["FAKEFAKE_ODD", "src"]);
+    expect(r.ok).toBe(true);
+    const m = (r.data as { matches: { file: string; line: number; text: string }[] }).matches;
+    expect(m).toHaveLength(1);
+    expect(m[0]!.file).toBe(join(realpathSync(dir), "src", "odd:7:name.ts"));
+    expect(m[0]!.line).toBe(2);
+    expect(m[0]!.text).toBe("FAKEFAKE_ODD here");
+  });
+});
+
+describe("git-diff secret paths (ROLES-CHAT-8)", () => {
+  /** Tracked paths whose changes a non-ADMIN session must never see. */
+  const SECRET_TRACKED = [
+    ".env",
+    ".env.local",
+    "sub/.ENV",
+    "sub/.Env.prod",
+    ".ssh/config",
+    ".ssh/id_rsa",
+    "certs/server.pem",
+    "certs/b.PEM",
+    "KeyStore/x.txt",
+    "wallet-keystore.json",
+    "credentials",
+    "credentials.json",
+    "sub/Credentials.JSON",
+    "id_rsa",
+    "sub/ID_ED25519",
+    "x/.env.d/z.txt",
+  ];
+  /** Look-alikes isSecretPath does not match; their diffs stay visible. */
+  const PLAIN_TRACKED = ["src/a.ts", ".envrc", "a.pem.txt", "y/credentials/ok.txt", "envfile"];
+
+  function git(...args: string[]) {
+    const r = Bun.spawnSync(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+    if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  }
+
+  beforeEach(() => {
+    const cfg = join(dir, "..", `${relative(tmpdir(), dir)}.gitconfig`);
+    writeFileSync(cfg, "");
+    process.env.GIT_CONFIG_GLOBAL = cfg;
+    process.env.GIT_CONFIG_NOSYSTEM = "1";
+    for (const p of [...SECRET_TRACKED, ...PLAIN_TRACKED]) {
+      mkdirSync(join(dir, dirname(p)), { recursive: true });
+      writeFileSync(join(dir, p), "old\n");
+    }
+    git("init", "-q", "-b", "main");
+    git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "add", "-f", "--", ...SECRET_TRACKED, ...PLAIN_TRACKED);
+    git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init");
+    SECRET_TRACKED.forEach((p, i) => writeFileSync(join(dir, p), `FAKEFAKE_GIT_${i}\n`));
+    for (const p of PLAIN_TRACKED) writeFileSync(join(dir, p), "FAKEFAKE_PLAIN\n");
+  });
+
+  afterEach(() => {
+    rmSync(join(dir, "..", `${relative(tmpdir(), dir)}.gitconfig`), { force: true });
+  });
+
+  function expectNoGitSecrets(r: PluginHandlerResult) {
+    const text = `${r.message ?? ""}\n${r.error ?? ""}\n${JSON.stringify(r.data ?? null)}`;
+    expect(text).not.toContain("FAKEFAKE_GIT_");
+  }
+
+  test("non-admin git-diff leaves every tracked secret file out", async () => {
+    asNonAdmin();
+    for (const args of [[], ["."], ["--staged"]]) {
+      if (args[0] === "--staged") git("add", "-f", "--", ...SECRET_TRACKED, ...PLAIN_TRACKED);
+      const r = await run("git-diff", args);
+      expect(r.ok).toBe(true);
+      expectNoGitSecrets(r);
+      const files = (r.data as { files: { path: string }[] }).files.map((f) => f.path).sort();
+      expect(files).toEqual([...PLAIN_TRACKED].sort());
+      expect(r.message).toContain("FAKEFAKE_PLAIN");
+    }
+  });
+
+  test("non-admin git-diff of an explicit secret path is refused like files-read", async () => {
+    asNonAdmin();
+    for (const p of [".env", "./.env", "src/../.env", join(dir, ".env"), ".ssh", "certs/server.pem", "KeyStore", "notes", "innocent.txt"]) {
+      const r = await run("git-diff", [p]);
+      expectRefused(r);
+      expectNoGitSecrets(r);
+    }
+    const certs = await run("git-diff", ["certs"]);
+    expect(certs.ok).toBe(true);
+    expectNoGitSecrets(certs);
+    // User paths stay literal: no glob or `:(magic)` smuggled in by a path.
+    for (const p of ["*", ":(glob)**", ":(top)."]) {
+      const r = await run("git-diff", [p]);
+      expect(r.ok).toBe(true);
+      expect((r.data as { files: unknown[] }).files).toEqual([]);
+      expectNoGitSecrets(r);
+    }
+    const one = await run("git-diff", ["src/a.ts"]);
+    expect((one.data as { files: { path: string }[] }).files.map((f) => f.path)).toEqual(["src/a.ts"]);
+  });
+
+  test("ADMIN and local CLI git-diff still show tracked secret files", async () => {
+    for (const as of [asAdmin, asCli]) {
+      as();
+      const r = await run("git-diff", []);
+      expect(r.ok).toBe(true);
+      const files = (r.data as { files: { path: string }[] }).files.map((f) => f.path);
+      for (const p of SECRET_TRACKED) expect(files).toContain(p);
+      expect(r.message).toContain("FAKEFAKE_GIT_0");
+      const env = await run("git-diff", [".env"]);
+      expect(env.ok).toBe(true);
+      expect(env.message).toContain("FAKEFAKE_GIT_0");
     }
   });
 });

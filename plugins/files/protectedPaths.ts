@@ -82,6 +82,28 @@ export const SECRET_GREP_EXCLUDES: readonly string[] = [
 ];
 
 /**
+ * git exclude pathspecs mirroring isSecretPath (any `.env` / `.env.*` / `.ssh`
+ * / `*keystore*` component; key, `*.pem` and credentials basenames), so a
+ * non-ADMIN `git-diff` never prints a tracked secret file (ROLES-CHAT-8).
+ * `icase` matches isSecretPath's case folding; `**` / `/**` match any depth.
+ */
+export const SECRET_GIT_EXCLUDE_PATHSPECS: readonly string[] = [
+  "**/.env",
+  "**/.env/**",
+  "**/.env.*",
+  "**/.env.*/**",
+  "**/.ssh",
+  "**/.ssh/**",
+  "**/*keystore*",
+  "**/*keystore*/**",
+  "**/credentials",
+  "**/credentials.json",
+  "**/id_rsa",
+  "**/id_ed25519",
+  "**/*.pem",
+].map((glob) => `:(exclude,glob,icase)${glob}`);
+
+/**
  * ROLES-CHAT-8: true when this call runs in a non-ADMIN role session, so the
  * read-ish file tools refuse an explicit secret path and leave secret paths
  * out of listings and searches. ADMIN and the local CLI (no role session) keep

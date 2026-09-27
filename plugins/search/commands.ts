@@ -21,12 +21,12 @@ import {
 import { ArgvError, parseArgv } from "../files/argv.ts";
 
 /**
- * Split `grep -Z` output of a recursive search into `file:line:text` lines,
- * returning the file of each. The NUL after the name keeps a name with
- * `:N:` or a newline in it from being misread.
+ * Split `grep -Z` output of a recursive search into records: the file, the
+ * `N:text` after it, and the `file:N:text` display line. The NUL after the
+ * name keeps a name with `:N:` or a newline in it from being misread.
  */
-function splitNulRecords(stdout: string): { file: string; line: string }[] {
-  const out: { file: string; line: string }[] = [];
+function splitNulRecords(stdout: string): { file: string; rest: string; line: string }[] {
+  const out: { file: string; rest: string; line: string }[] = [];
   let pos = 0;
   while (pos < stdout.length) {
     const nul = stdout.indexOf("\0", pos);
@@ -34,7 +34,8 @@ function splitNulRecords(stdout: string): { file: string; line: string }[] {
     const end = stdout.indexOf("\n", nul + 1);
     const stop = end < 0 ? stdout.length : end;
     const file = stdout.slice(pos, nul);
-    out.push({ file, line: `${file}:${stdout.slice(nul + 1, stop)}` });
+    const rest = stdout.slice(nul + 1, stop);
+    out.push({ file, rest, line: `${file}:${rest}` });
     pos = stop + 1;
   }
   return out;
@@ -113,17 +114,27 @@ export const searchCommands: PluginCommand[] = [
         const stdout = result.stdout ?? "";
         // A directory search names each file (NUL-terminated by -Z); a single
         // file operand prints no name, and that file was checked above.
-        const lines = isDir
-          ? splitNulRecords(stdout)
-              .filter((r) => !(hideSecrets && isSecretPath(relative(root, r.file))))
-              .map((r) => r.line)
+        const records = isDir
+          ? splitNulRecords(stdout).filter(
+              (r) => !(hideSecrets && isSecretPath(relative(root, r.file))),
+            )
+          : null;
+        const lines = records
+          ? records.map((r) => r.line)
           : stdout.split("\n").filter((l) => l.length > 0);
-        const matches = lines.map((line) => {
-          // file:line:text — file may contain colons on some systems; take first two splits
-          const m = line.match(/^(.*?):(\d+):(.*)$/);
-          if (!m) return { file: line, line: 0, text: "" };
-          return { file: m[1]!, line: Number(m[2]), text: m[3]! };
-        });
+        const matches = records
+          ? records.map((r) => {
+              const m = r.rest.match(/^(\d+):(.*)$/s);
+              return m
+                ? { file: r.file, line: Number(m[1]), text: m[2]! }
+                : { file: r.file, line: 0, text: r.rest };
+            })
+          : lines.map((line) => {
+              // file:line:text — file may contain colons on some systems; take first two splits
+              const m = line.match(/^(.*?):(\d+):(.*)$/);
+              if (!m) return { file: line, line: 0, text: "" };
+              return { file: m[1]!, line: Number(m[2]), text: m[3]! };
+            });
         const data = { count: matches.length, matches };
         if (ctx.json || argv.flags.has("--json")) {
           return {

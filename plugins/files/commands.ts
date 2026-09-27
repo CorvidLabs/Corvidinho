@@ -279,10 +279,14 @@ export const filesCommands: PluginCommand[] = [
         const matches: string[] = [];
         // ROLES-CHAT-8: non-ADMIN role sessions do not see secret paths.
         const hideSecrets = await secretPathsRefused();
+        const root = realRoot(ctx.cwd);
         for await (const m of glob.scan({ cwd: ctx.cwd, onlyFiles: true, dot: true })) {
           if (hideSecrets && isSecretPath(m)) continue;
           try {
-            resolveProjectPath(ctx.cwd, m);
+            const abs = resolveProjectPath(ctx.cwd, m);
+            // A pattern naming a symlinked dir (`notes/*`, notes -> .ssh)
+            // walks into it; judge the resolved path too.
+            if (hideSecrets && isSecretPath(relative(root, abs))) continue;
             matches.push(m);
           } catch {
             // skip escapes

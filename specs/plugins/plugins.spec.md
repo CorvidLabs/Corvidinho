@@ -260,11 +260,12 @@ call GitHub read tools against any *public* repository after deny-list checks
 sessions keep the GITHUB-6 allowlist gate.
 
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
-files) for non-ADMIN role sessions via `isSecretPath`. `search-grep` and
-`files-list` refuse an explicit secret path the same way (also through a
-symlink), and `search-grep`, `files-glob` and `files-list` leave secret paths
-out of their results, whatever `--include` or glob is passed
-(REQ-plugins-267). ADMIN and the local CLI keep the access `files-read` gives.
+files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
+`files-list` and `git-diff` refuse an explicit secret path the same way (also
+through a symlink), and `search-grep`, `git-diff`, `files-glob` and
+`files-list` leave secret paths out of their results, whatever `--include`,
+glob or `--staged` is passed (REQ-plugins-267). ADMIN and the local CLI keep
+the access `files-read` gives.
 
 SAFE-5 audit chain (REQ-plugins-095): once `audit_log` holds a keyed row it
 stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
@@ -354,6 +355,12 @@ outside the DB.
 - **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a project with `.env` holding a key
 - **When** the agent runs `search-grep OPENAI_API_KEY .env`, or `search-grep <pattern>` over the project with any `--include`
 - **Then** the explicit path is refused with exit 2 like `files-read`, and the recursive search returns no line from `.env*`, `.ssh`, key or keystore files
+
+### Scenario: non-ADMIN git-diff never shows a tracked secret file (ROLES-CHAT-8)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a repo with a tracked, modified `certs/server.pem` and `src/a.ts`
+- **When** the agent runs `git-diff`, `git-diff --staged` or `git-diff certs/server.pem`
+- **Then** the diff shows `src/a.ts` only, and the explicit secret path is refused with exit 2 like `files-read`
 
 ## Error Cases
 
