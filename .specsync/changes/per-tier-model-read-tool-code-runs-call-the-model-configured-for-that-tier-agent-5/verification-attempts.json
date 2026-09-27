@@ -147,6 +147,27 @@
         "REQ-agent-079",
         "REQ-cli-009"
       ]
+    },
+    {
+      "timestamp": 1790523712,
+      "commit": "3927b6d959f9419faf1ba6c836954ebc0be10ce2",
+      "contract_digest": "89223645fe25ec24041aea1a432b58e68326aab43e9faded0af10bb839472356",
+      "execution_digest": "0f5faaa3ff80ea19a1ed64a844e71c9c8ef7e82ee599137027208ca3f9537baa",
+      "workspace_digest": "c2a302709db857dcae59b561b781f73a61c7a3971718f4a1a31a8e206ee7a0fc",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-007",
+        "REQ-agent-009",
+        "REQ-agent-079",
+        "REQ-cli-009"
+      ]
     }
   ]
 }
