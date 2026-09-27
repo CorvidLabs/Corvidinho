@@ -1,6 +1,6 @@
 ---
 id: search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 6e5370dd5174f006ec16ffc609116c016055a7b8
 ---
