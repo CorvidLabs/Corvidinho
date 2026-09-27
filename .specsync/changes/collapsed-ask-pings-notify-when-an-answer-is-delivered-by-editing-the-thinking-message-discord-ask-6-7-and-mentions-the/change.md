@@ -1,6 +1,6 @@
 ---
 id: collapsed-ask-pings-notify-when-an-answer-is-delivered-by-editing-the-thinking-message-discord-ask-6-7-and-mentions-the
-state: approved
+state: implementing
 type: bug_fix
 base_commit: dc65cf70d4a46d59c35f80acd91822df3eddf3f1
 ---
