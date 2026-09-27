@@ -1,6 +1,6 @@
 ---
 id: daemon-claimed-schedule-asks-reach-discord-the-run-row-records-the-ask-and-the-bridge-s-scheduler-tick-posts-it-once
-state: verifying
+state: archived
 type: feature
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---
