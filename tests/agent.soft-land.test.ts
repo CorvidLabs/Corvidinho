@@ -54,13 +54,14 @@ describe("stripInternalStopReason + chatBodyFromTaskResult", () => {
 });
 
 describe("stripMentions preserves snowflakes (IDENTITY-5)", () => {
-  test("rewrites <@id> to Discord user id form", () => {
+  test("keeps body for thin-ack and appends mentioned trailer", () => {
     expect(stripMentions("hey <@304028152194138114> about CS2")).toBe(
-      "hey Discord user id 304028152194138114 about CS2",
+      "hey about CS2\n[mentioned: Discord user id 304028152194138114]",
     );
-    expect(stripMentions("hi <@!181969874455756800>")).toBe(
-      "hi Discord user id 181969874455756800",
+    expect(stripMentions("<@!181969874455756800> ok")).toBe(
+      "ok\n[mentioned: Discord user id 181969874455756800]",
     );
+    expect(stripMentions("<@999> ok").split("\n")[0]).toBe("ok");
   });
 });
 
