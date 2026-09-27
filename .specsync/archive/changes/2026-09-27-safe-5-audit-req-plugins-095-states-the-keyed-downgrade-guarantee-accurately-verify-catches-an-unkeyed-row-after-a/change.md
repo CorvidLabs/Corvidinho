@@ -1,6 +1,6 @@
 ---
 id: safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a
-state: implementing
+state: archived
 type: bug_fix
 base_commit: fc2f94b5e0e41450b17f5d261e3624255fee730b
 ---
