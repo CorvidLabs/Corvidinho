@@ -1,6 +1,6 @@
 ---
 id: global-project-path-flag-runs-the-cli-as-if-started-in-that-directory-that-project-s-fledge-toml-specs-and-env-files-as
-state: approved
+state: implementing
 type: feature
 base_commit: 1c7b6ced470e0ed87e4c854f2663111713af3fa7
 ---
