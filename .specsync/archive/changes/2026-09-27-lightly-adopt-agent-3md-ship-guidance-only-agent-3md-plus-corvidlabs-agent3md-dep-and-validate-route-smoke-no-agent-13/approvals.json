@@ -1,0 +1,94 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790470832,
+      "digest": "4a9526fc6a188841ef9ca58d638a5b426274c6d9c91f005a504eb1a67cedeb11",
+      "note": "Light agent.3md packaging/docs spike; no AGENT-13 runtime",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13",
+        "title": "Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring",
+        "description": "Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring",
+        "kind": "feature",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "agent.3md",
+          "bun.lock",
+          "docs/agent.3md.md",
+          "hi/agent.md",
+          "package.json",
+          "tests/agent3md.smoke.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "agent.3md at repo root validates with validateAgent; Agent.route and Agent.get work for guidance-only skill planes in a bun smoke test; package depends on @corvidlabs/agent3md; no tool= bindings that duplicate SAFE plugins; no AGENT-13 runtime loop wiring"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "052428281984adcd562411f9896fccb668f2b0412ba1d945fc1653f88ddb326e"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790470852,
+      "digest": "4a9526fc6a188841ef9ca58d638a5b426274c6d9c91f005a504eb1a67cedeb11",
+      "note": "Re-approve after simplifying agent delta to REQ-agent-260 only",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13",
+        "title": "Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring",
+        "description": "Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring",
+        "kind": "feature",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "agent.3md",
+          "bun.lock",
+          "docs/agent.3md.md",
+          "hi/agent.md",
+          "package.json",
+          "tests/agent3md.smoke.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "agent.3md at repo root validates with validateAgent; Agent.route and Agent.get work for guidance-only skill planes in a bun smoke test; package depends on @corvidlabs/agent3md; no tool= bindings that duplicate SAFE plugins; no AGENT-13 runtime loop wiring"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "cd33c061b0fec04a000ea8a0196cf2daae1e238028f9da599f861b1228e0eece"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790471195,
+      "digest": "ab66aa4a6c2b8daf75fa79563dafa536b8203877ac0a47c6725bbd8273c0f1b1",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
