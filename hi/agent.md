@@ -21,6 +21,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 - **AGENT-6**  I can leave a session and come back to it later without losing the thread.
 - **AGENT-7**  It remembers the small durable facts I asked it to keep for this project, without needing a blockchain to do so.
 - **AGENT-8**  While it works I can see what state it is in — planning, calling a tool, verifying, or done — so bridges and the CLI are not guessing.
+- **AGENT-9**  When the tool-round budget runs out, finish with the best prose so far or a brief clarifying ask — never dump internal stop reasons like Stopped after N tool rounds into the Discord channel body (thinking embed / operator plumbing may note it)
 
 ## Notes (not numbered AC)
 
