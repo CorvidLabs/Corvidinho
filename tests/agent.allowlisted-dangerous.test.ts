@@ -306,6 +306,9 @@ function makeFledge(opts: { write?: boolean } = {}) {
 }
 
 describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-112)", () => {
+  /** Read-only Fledge core builtins every catalog offers; they spawn fledge only when called. */
+  const FLEDGE_CORE_READS = ["fledge-lanes-list", "fledge-lanes-validate"];
+
   test("allowlisting fledge-hello (no includeDangerous) discovers, offers and runs it at code tier", async () => {
     const fake = makeFledge();
     const { fetchImpl, seen } = fakeProvider([{ name: "fledge-hello", argv: ["world"] }]);
@@ -346,7 +349,8 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
       maxToolRounds: 2,
     });
     await exec({ attempt: 1, signal: new AbortController().signal });
-    expect(seen.offered.some((n) => n.startsWith("fledge-"))).toBe(false);
+    // No Fledge plugin command; only the read-only Fledge core builtins (PLUGIN-1, REQ-plugins-461).
+    expect(seen.offered.filter((n) => n.startsWith("fledge-")).sort()).toEqual(FLEDGE_CORE_READS);
     expect(get("fledge-hello")).toBeUndefined();
     expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
     expect(existsSync(join(fake.bin, "other.log"))).toBe(false);
@@ -379,7 +383,7 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
 
   test("a non-ADMIN role session with fledge-hello allowlisted never spawns fledge (ROLES-CHAT-2)", async () => {
     const { fake, seen } = await roleSessionRun("0");
-    expect(seen.offered.some((n) => n.startsWith("fledge-"))).toBe(false);
+    expect(seen.offered.filter((n) => n.startsWith("fledge-")).sort()).toEqual(FLEDGE_CORE_READS);
     expect(get("fledge-hello")).toBeUndefined();
     expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
   });

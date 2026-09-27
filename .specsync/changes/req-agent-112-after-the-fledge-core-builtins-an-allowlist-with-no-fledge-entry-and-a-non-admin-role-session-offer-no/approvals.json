@@ -1,0 +1,40 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790539880,
+      "digest": "d138a01d3ea88ad4bc4b445f94d71b36298572127671029143b087c0942b7e0b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no",
+        "title": "REQ-agent-112 after the Fledge core builtins: an allowlist with no fledge-* entry and a non-ADMIN role session offer no Fledge plugin command and never spawn fledge; the only fledge- tools they offer are the read-only core builtins fledge-lanes-list and fledge-lanes-validate (PLUGIN-1, PLUGIN-3, ROLES-CHAT-2)",
+        "description": "REQ-agent-112 after the Fledge core builtins: an allowlist with no fledge-* entry and a non-ADMIN role session offer no Fledge plugin command and never spawn fledge; the only fledge- tools they offer are the read-only core builtins fledge-lanes-list and fledge-lanes-validate (PLUGIN-1, PLUGIN-3, ROLES-CHAT-2)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "specs/agent/requirements.md",
+          "tests/agent.allowlisted-dangerous.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "tests/agent.allowlisted-dangerous.test.ts: with the Fledge core builtins registered (PLUGIN-1), a code-tier run whose allowlist names only github-pr-review, and a non-ADMIN role session with fledge-hello allowlisted, offer exactly the read-only core builtins fledge-lanes-list and fledge-lanes-validate as fledge- tools, offer and register no Fledge plugin command (fledge-hello), and start no fledge process (the fake fledge records no call). The owner's ADMIN role session still discovers and offers fledge-hello. REQ-agent-112 reads as one requirement again (the merge of #261 and #262 left a duplicated sentence), and its acceptance criteria say the same. No source change."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "82f42aad60c8fa4210cb90c7af25dbbe96cfbe4361b99e7185b1d5d81808eddd"
+      }
+    }
+  ],
+  "reopenings": []
+}
