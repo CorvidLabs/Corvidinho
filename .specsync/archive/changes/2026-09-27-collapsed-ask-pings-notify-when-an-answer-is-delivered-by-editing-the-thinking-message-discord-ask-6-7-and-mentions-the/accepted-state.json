@@ -7,11 +7,11 @@
   "title": "Collapsed ask pings notify: when an answer is delivered by editing the thinking message (DISCORD-ASK-6/7) and mentions the requester or owner, one short fresh post pings exactly those users (AUTONOMY-2/4, SAFE-8), without double pings",
   "description": "Collapsed ask pings notify: when an answer is delivered by editing the thinking message (DISCORD-ASK-6/7) and mentions the requester or owner, one short fresh post pings exactly those users (AUTONOMY-2/4, SAFE-8), without double pings",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "dc65cf70d4a46d59c35f80acd91822df3eddf3f1",
   "created_at": 1790469746,
-  "updated_at": 1790471135,
+  "updated_at": 1790471267,
   "affected_specs": [
     "discord"
   ],
