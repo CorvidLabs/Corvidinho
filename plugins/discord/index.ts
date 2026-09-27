@@ -1,10 +1,13 @@
 /**
  * Discord outbound plugins — discord-post-message is dangerous (externally visible write).
- * DISCORD-8: confused-deputy requester check (Merlin-primary).
+ * DISCORD-8: confused-deputy requester check (Merlin-primary). In a run the
+ * bridge started, the check is always for the acting Discord user the bridge
+ * set (CORVIDINHO_ACTING_DISCORD_USER_ID), never a model-supplied id.
  */
 
 import { checkChannel } from "../../src/allowlist/discord.ts";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
+import { formatErrorLine } from "../../src/store/scrub.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
 import {
@@ -37,15 +40,37 @@ function parseFlag(args: string[], name: string): string | undefined {
   return undefined;
 }
 
+/** Every value given for `name` (repeated flags and `name=value` forms). */
+function flagValues(args: string[], name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a.startsWith(`${name}=`)) out.push(a.slice(name.length + 1));
+    else if (a === name && args[i + 1] && !args[i + 1]!.startsWith("-")) out.push(args[i + 1]!);
+  }
+  return out;
+}
+
 function requireRequesterCheck(env: NodeJS.ProcessEnv): boolean {
   const raw = env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK?.trim();
   return raw === "1" || raw?.toLowerCase() === "true";
 }
 
 /**
+ * The Discord user a bridge-started run acts for (set per spawn by the
+ * bridge, REQ-discord-021); empty outside the bridge (operator `plugins run`,
+ * local `task run`, WATCH clears it).
+ */
+function actingDiscordUser(env: NodeJS.ProcessEnv): string {
+  return env.CORVIDINHO_ACTING_DISCORD_USER_ID?.trim() ?? "";
+}
+
+/**
  * Dangerous: posts a message to a Discord channel via REST.
- * Requires token + allowlisted channel. DISCORD-8 requester check when
- * --requesting-user-id is provided (or strict mode requires it).
+ * Requires token + allowlisted channel. DISCORD-8 requester check: in a
+ * bridge-started run always for the acting user (a --requesting-user-id
+ * naming anyone else is refused, and a check that cannot run refuses);
+ * otherwise when --requesting-user-id is provided (or strict mode requires it).
  */
 const discordPostMessage: PluginCommand = {
   name: "discord-post-message",
@@ -93,6 +118,25 @@ const discordPostMessage: PluginCommand = {
       };
     }
 
+    // DISCORD-8: in a bridge-started run the check is about the acting user
+    // only. A requester id naming someone else is refused, not replaced —
+    // any of them, so a repeated flag or the other alias cannot slip one by.
+    const actingUserId = actingDiscordUser(process.env);
+    const namedRequesters = [
+      ...flagValues(ctx.args, "--requesting-user-id"),
+      ...flagValues(ctx.args, "--requester"),
+    ]
+      .map((id) => id.trim())
+      .filter((id) => id !== "");
+    if (actingUserId && namedRequesters.some((id) => id !== actingUserId)) {
+      return {
+        ok: false,
+        error:
+          "refused: --requesting-user-id / --requester names a different Discord user than the one this run acts for. The requester check is always for the acting user the bridge set (DISCORD-8); leave the flag out. Nothing was posted.",
+        exitCode: 3,
+      };
+    }
+
     const token =
       process.env.DISCORD_BOT_TOKEN?.trim() ||
       process.env.DISCORD_TOKEN?.trim() ||
@@ -110,13 +154,25 @@ const discordPostMessage: PluginCommand = {
     const strict = requireRequesterCheck(process.env);
 
     // DISCORD-8 — confused-deputy: check requester can send, not only the bot.
-    if (requestingUserId) {
-      const check = await verifyRequesterCanSend(channelId, requestingUserId, {
-        token,
-        dryRun,
-      });
+    const checkUserId = actingUserId || requestingUserId;
+    if (checkUserId) {
+      let check: RequesterCheckResult;
+      try {
+        check = await verifyRequesterCanSend(channelId, checkUserId, {
+          token,
+          dryRun,
+        });
+      } catch (e) {
+        if (!actingUserId) throw e;
+        // Fail closed: a bridge run posts only after the acting user's check.
+        return {
+          ok: false,
+          error: `refused: could not check that the acting Discord user can post in channel ${channelId} (DISCORD-8), so nothing was posted: ${formatErrorLine(e, { max: 200 })}. The check logs in with the Guild Members intent to look the user up: if Server Members Intent is off for the bot in the Discord Developer Portal, turn it on.`,
+          exitCode: 3,
+        };
+      }
       if (!check.ok) {
-        const fix = requesterCheckFix(check, channelId, requestingUserId);
+        const fix = requesterCheckFix(check, channelId, checkUserId);
         return {
           ok: false,
           error: `${check.reason} — ${fix}`,
@@ -140,7 +196,7 @@ const discordPostMessage: PluginCommand = {
           dryRun: true,
           channelId,
           content: content.slice(0, 100),
-          requestingUserId: requestingUserId ?? null,
+          requestingUserId: actingUserId || (requestingUserId ?? null),
         },
         message: `dry-run post to ${channelId}`,
         exitCode: 0,
