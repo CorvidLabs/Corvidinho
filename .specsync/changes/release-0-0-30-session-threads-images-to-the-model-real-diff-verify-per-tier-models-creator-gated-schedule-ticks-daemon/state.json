@@ -7,10 +7,11 @@
   "title": "Release 0.0.30: session threads, images to the model, real-diff verify, per-tier models, creator-gated schedule ticks + daemon asks reach Discord (schema v11), CI-strict spec-check, language runners, CI tags every version",
   "description": "Release 0.0.30: session threads, images to the model, real-diff verify, per-tier models, creator-gated schedule ticks + daemon asks reach Discord (schema v11), CI-strict spec-check, language runners, CI tags every version",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "66ee70c4638346039333b8a63dc663c2984f7ed2",
   "created_at": 1790525455,
-  "updated_at": 1790525457,
+  "updated_at": 1790525461,
   "affected_specs": [
     "cli"
   ],
