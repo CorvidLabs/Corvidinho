@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix",
+  "slug": "default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix",
+  "title": "Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree",
+  "description": "Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "faa569f4ac361e7a3eff3ae3a2047227410c803d",
+  "created_at": 1790464975,
+  "updated_at": 1790465513,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/worktree/manager.ts",
+    "tests/worktree.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "talkWorktreeId and generateTalkBranchName return distinct, deterministic names for two ids that share their first 16 characters (e.g. schedule_sched_a1111111_run_aaaa and schedule_sched_a2222222_run_bbbb); ensureTalkWorkspace with such ids and default naming creates two different worktree dirs and talk branches (or two scoped dirs for a non-git project), and creating the second leaves the first's live working tree and uncommitted files in place"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
