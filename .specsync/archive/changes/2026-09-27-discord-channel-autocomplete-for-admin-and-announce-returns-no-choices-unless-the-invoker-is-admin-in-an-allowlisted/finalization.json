@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-channel-autocomplete-for-admin-and-announce-returns-no-choices-unless-the-invoker-is-admin-in-an-allowlisted",
+  "implementation_commit": "b41d32dd9f3551a124f06f4fa52fb7636c88d59d",
+  "implementation_tree": "100ffd6c8c93bc8020f84ac5042561b64fdcd5f9",
+  "contract_digest": "1a27100b6499fce94957af181b5ec5ad9ba4954fa7ccc5f561db00338052f133",
+  "workspace_digest": "38ea161549989fbff2c24d45a5fc045051e81149febabe45381336446efb621f",
+  "closing_digest": "57cf258e19851d151d666281fcf546c8ce5a30d7cbde733430d30b6ee48d5f6e",
+  "review_digest": "07452ca6b561e55f3276872206985bb9786480cd6db4ab0cd5522223fc3a44bd",
+  "finalization_digest": "59e62a52bebf728be5052947b1b992151ca94bb2fae8f1f10c503b174630a6c6",
+  "timestamp": 1790532428
+}
