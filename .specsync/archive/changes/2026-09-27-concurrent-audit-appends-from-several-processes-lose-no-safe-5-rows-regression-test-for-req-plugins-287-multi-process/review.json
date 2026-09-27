@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "49bef4449cab53a7652dedcb3b6b6250250fc0ec",
+  "contract_digest": "d3a46aaad0dd65c711df86a9f3cdef301f95a6d2572b7401d47546379f5a60f5",
+  "execution_digest": "8e2e8f30f7fedeb2a6d9cbddbe7fe9aabba65de8e554701e5565d472a1c083a2",
+  "workspace_digest": "4354f47ee29fe744cd60a06c50bb1bd53a5f9816e4d94ae6af7d0ce68f5ed761",
+  "timestamp": 1790469998
+}

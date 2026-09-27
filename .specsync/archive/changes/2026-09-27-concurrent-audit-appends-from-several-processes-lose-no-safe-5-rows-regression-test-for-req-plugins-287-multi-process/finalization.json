@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process",
+  "implementation_commit": "49bef4449cab53a7652dedcb3b6b6250250fc0ec",
+  "implementation_tree": "261ba33bf374fc86d42c172b47e71825229818d7",
+  "contract_digest": "d3a46aaad0dd65c711df86a9f3cdef301f95a6d2572b7401d47546379f5a60f5",
+  "workspace_digest": "4354f47ee29fe744cd60a06c50bb1bd53a5f9816e4d94ae6af7d0ce68f5ed761",
+  "closing_digest": "2936ab7ac3eed55341178b4a13bd85f4ca6828652f2948ed96e4a42c71f9e89e",
+  "review_digest": "502d6922dc25e0ee004db7bd16530106940dadf4183d0c23525f9ee4d205b744",
+  "finalization_digest": "772f11463906992ffbc7a21720b98fee2ed330157e320b7805b540c4e721d22a",
+  "timestamp": 1790470012
+}
