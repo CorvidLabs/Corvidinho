@@ -1,0 +1,39 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790471073,
+      "digest": "2b487457ef6941571ae0c526a8135d53d2bd30de34188567f97d3bb69da50701",
+      "note": "Companion path coverage for 0.0.27 fixtures",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "bump-package-to-0-0-27-fixtures-for-light-agent-3md-adopt",
+        "title": "Bump package to 0.0.27 fixtures for light agent.3md adopt",
+        "description": "Bump package to 0.0.27 fixtures for light agent.3md adopt",
+        "kind": "operations",
+        "affected_specs": [],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Patch bump fixtures only; REQ-agent-260 lives on the light-adopt change",
+        "acceptance_criteria": [
+          "package.json is 0.0.27; version.test and update-helpers changelog extract assert 0.0.27; CHANGELOG has 0.0.27 light agent.3md section"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "bump-package-to-0-0-27-fixtures-for-light-agent-3md-adopt",
+  "slug": "bump-package-to-0-0-27-fixtures-for-light-agent-3md-adopt",
+  "title": "Bump package to 0.0.27 fixtures for light agent.3md adopt",
+  "description": "Bump package to 0.0.27 fixtures for light agent.3md adopt",
+  "kind": "operations",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "54509c86472348332258e3bd61a7085a28f6c36a",
+  "created_at": 1790471065,
+  "updated_at": 1790471074,
+  "affected_specs": [],
+  "affected_paths": [
+    "tests/update-helpers.test.ts",
+    "tests/version.test.ts",
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Patch bump fixtures only; REQ-agent-260 lives on the light-adopt change",
+  "acceptance_criteria": [
+    "package.json is 0.0.27; version.test and update-helpers changelog extract assert 0.0.27; CHANGELOG has 0.0.27 light agent.3md section"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
