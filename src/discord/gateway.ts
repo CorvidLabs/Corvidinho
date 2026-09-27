@@ -151,6 +151,38 @@ export function flattenSlashOptions(data: readonly RawSlashOption[]): {
 }
 
 /**
+ * Discord `MessageReferenceType.Forward` (discord-api-types v10). Kept as a
+ * plain number so this module does not load discord.js eagerly.
+ */
+export const REFERENCE_TYPE_FORWARD = 1;
+
+/** Fixture-friendly subset of discord.js `Message.reference`. */
+export type RawMessageReference = {
+  messageId?: string | null;
+  channelId?: string | null;
+  type?: number | null;
+};
+
+/**
+ * DISCORD-2 / DISCORD-5 / REQ-discord-212 — the message id a MessageCreate
+ * *replies* to, or undefined. A forward (MessageReferenceType.Forward) points
+ * at a message elsewhere and is never a reply; any reference whose channel is
+ * not the message's own channel (the thread, or its parent) is dropped too,
+ * so a tracked bot message cannot pull its session into another channel.
+ */
+export function replyReferenceMessageId(
+  reference: RawMessageReference | null | undefined,
+  own: { channelId: string; parentId?: string },
+): string | undefined {
+  if (!reference?.messageId) return undefined;
+  if (reference.type === REFERENCE_TYPE_FORWARD) return undefined;
+  const refChannel = reference.channelId;
+  if (!refChannel) return undefined;
+  if (refChannel !== own.channelId && refChannel !== own.parentId) return undefined;
+  return reference.messageId;
+}
+
+/**
  * Live gateway via discord.js. Dynamic import so unit tests need not load it
  * when using the null/fake gateway.
  */
@@ -406,7 +438,10 @@ export async function createLiveGateway(
           mentionedBot: botUserId
             ? message.mentions.users.has(botUserId)
             : false,
-          referencedMessageId: message.reference?.messageId ?? undefined,
+          referencedMessageId: replyReferenceMessageId(message.reference, {
+            channelId: message.channelId,
+            parentId: isThread ? parentId : undefined,
+          }),
           authorRoleIds: message.member
             ? [...message.member.roles.cache.keys()]
             : [],
