@@ -40,6 +40,26 @@
         "REQ-discord-108",
         "REQ-discord-347"
       ]
+    },
+    {
+      "timestamp": 1790522578,
+      "commit": "6c725101f32e97ed00cc60a105c7389b39aea52e",
+      "contract_digest": "6f497e505fa644bb6ee49b4656cb958c9cceea5f8daf264b4c6d93029481e486",
+      "execution_digest": "a722b1451146d087a0f917bdece8f18a9c0bdd1b78019f301c8a3ad15b0e8b5c",
+      "workspace_digest": "25a66ee0748dbadcb0a326eda9dc099932445eec1689baef0d061eaa1fe9b166",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-098",
+        "REQ-discord-108",
+        "REQ-discord-347"
+      ]
     }
   ]
 }
