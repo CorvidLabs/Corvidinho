@@ -24,7 +24,11 @@ import {
   createEchoAgentClient,
   createSpawnAgentClient,
 } from "./agent-client.ts";
-import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
+import {
+  ASK_NO_OWNER_WARNING,
+  formatAskReply,
+  withSpendWarningPost,
+} from "./ask-ping.ts";
 import {
   ASK_CHOICE_EXPIRED,
   buildChoiceComponents,
@@ -103,6 +107,10 @@ import {
 } from "../scheduler/index.ts";
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
+import { readSpendSnapshot } from "../agent/spend.ts";
+import { formatSpendStatusLine } from "../agent/spend-notice.ts";
+import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
+import { askPingOwner } from "./spend-post.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -366,6 +374,14 @@ export async function startBridge(
     ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
     : undefined;
   if (auditLine) console.log(`[discord] ${auditLine()}`);
+  // AUTONOMOUS-8: /status shows rolling 24 h spend against the daily cap.
+  const spendLine = () =>
+    formatSpendStatusLine(
+      readSpendSnapshot({ env, db, model: loadLlmEnv(env).model }),
+    );
+  // SAFE-8: every bridge post delivers pending 80% warnings (recorded by any
+  // run on this data dir) and pings the owner once per spend-cap episode.
+  const spendAlerts = createSpendAlertOutbox({ db, env });
   // SAFE-5: /admin mutations append to the same chain (fail closed on error).
   const recordAudit = db
     ? (entry: AuditEntryInput) =>
@@ -428,6 +444,9 @@ export async function startBridge(
       memoryStore,
       announceStore,
       auditLine,
+      spendLine,
+      spendAlerts,
+      ...(replyRef.fn ? { post: replyRef.fn } : {}),
       recordAudit,
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
@@ -689,13 +708,18 @@ export async function startBridge(
           : undefined;
         const thinkExtras = { plumbing, model: llmModel };
         // AUTONOMY-1/2/4 / DISCORD-ASK: needs a human → buttons when options, else free-text.
+        // SAFE-8: a spend-cap stop is always free text (no choice can lift the
+        // cap), pings the owner once per cap episode and is never the pending ask.
         const askRaw = result.ask;
-        const resolvedOptions = askRaw
-          ? resolveAskOptions({
-              options: askRaw.options,
-              question: askRaw.question,
-            })
-          : undefined;
+        const spendCap = askRaw?.reason === "spend-cap";
+        const askOwner = askRaw ? askPingOwner(askRaw, config.owner, spendAlerts) : null;
+        const resolvedOptions =
+          askRaw && !spendCap
+            ? resolveAskOptions({
+                options: askRaw.options,
+                question: askRaw.question,
+              })
+            : undefined;
         const useButtons = Boolean(resolvedOptions?.length);
         let askBody: {
           content: string;
@@ -729,7 +753,7 @@ export async function startBridge(
         } else if (askRaw) {
           const formatted = formatAskReply({
             ask: askRaw,
-            owner: config.owner,
+            owner: askOwner?.owner,
             requesterDiscordId: msg.authorId,
             context: result.summary,
             replyHint: true,
@@ -741,21 +765,29 @@ export async function startBridge(
             failed: formatted.failed,
             ownerPinged: formatted.ownerPinged,
           };
-          pendingToStore = toPendingAsk(askRaw);
+          // AUTONOMY-5/6: a clarify or stuck ask waits for the requester's
+          // answer. A spend-cap stop is not answerable by a reply, so a later
+          // "ok" runs normally and a substantive reply carries no cap text.
+          pendingToStore = spendCap ? null : toPendingAsk(askRaw);
         }
 
-        if (askBody && pendingToStore) {
+        // Pending ask (AUTONOMY-5/6, SESSION-MULTI-3): a new ask is stored; a
+        // turn that leaves none (a finished turn, or a SAFE-8 spend-cap stop,
+        // which a reply cannot answer) clears a free-text pending ask while a
+        // button ask survives until it is picked or times out.
+        if (pendingToStore) {
           store.setPendingAsk(session, pendingToStore);
-          if (askRaw!.reason === "stuck" && !askBody.ownerPinged) {
-            console.warn(ASK_NO_OWNER_WARNING);
-          }
-        } else if (result.ok) {
-          // SESSION-MULTI-3: button pending asks survive unrelated successful turns.
-          if (session.pendingAsk && !session.pendingAsk.options?.length) {
-            store.setPendingAsk(session, null);
-          }
         } else if (session.pendingAsk && !session.pendingAsk.options?.length) {
           store.setPendingAsk(session, null);
+        }
+        if (
+          askRaw &&
+          askBody &&
+          (askRaw.reason === "stuck" || askRaw.reason === "spend-cap") &&
+          !askBody.ownerPinged &&
+          !askOwner?.deduped
+        ) {
+          console.warn(ASK_NO_OWNER_WARNING);
         }
 
         // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
@@ -765,51 +797,74 @@ export async function startBridge(
             ? result.summary.slice(0, 1800)
             : `session ${session.id} failed (exit ${result.exitCode})`;
 
-        // DISCORD-ASK-6/7 — prefer one public message: edit thinking into stub/answer.
-        const collapsed = await thinking.finalizeContent({
-          content: body,
-          components: askBody?.components,
-          mentionUserIds: askBody?.mentionUserIds,
-        });
-        if (collapsed) {
-          // The thinking message is now the answer: nothing left to recover.
-          inflight.end();
-          store.trackBotMessage(collapsed.messageId, session);
-          if (pendingToStore && askBody?.components) {
-            pendingToStore.stubMessageId = collapsed.messageId;
-            store.setPendingAsk(session, pendingToStore);
-          }
-        } else if (replyRef.fn) {
-          // Fallback when editMessage unavailable: status embed + separate reply.
-          if (askBody && pendingToStore) {
-            await (askBody.failed
-              ? thinking.fail(askBody.status, thinkExtras)
-              : thinking.done(askBody.status, thinkExtras));
-          } else if (result.ok) {
-            await thinking.done("✅ Done", thinkExtras);
-          } else {
-            await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
-          }
-          const sent = await replyRef.fn({
-            channelId,
+        // SAFE-8: the pending 80% spend warning and its owner mention ride
+        // whichever message goes out (the collapsed edit or the fallback
+        // reply); when neither does, the warning and the cap ping go back.
+        const spend = spendAlerts.takeWarning(result.spendWarning);
+        const out = withSpendWarningPost(
+          {
             content: body,
-            replyToMessageId: msg.id,
             ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-            ...(askBody?.components ? { components: askBody.components } : {}),
+          },
+          spend?.warning,
+          config.owner,
+        );
+        let delivered = false;
+        try {
+          // DISCORD-ASK-6/7 — prefer one public message: edit thinking into stub/answer.
+          const collapsed = await thinking.finalizeContent({
+            content: out.content,
+            components: askBody?.components,
+            mentionUserIds: out.mentionUserIds,
           });
-          inflight.end();
-          if (sent?.messageId) {
-            store.trackBotMessage(sent.messageId, session);
+          if (collapsed) {
+            delivered = true;
+            // The thinking message is now the answer: nothing left to recover.
+            inflight.end();
+            store.trackBotMessage(collapsed.messageId, session);
             if (pendingToStore && askBody?.components) {
-              pendingToStore.stubMessageId = sent.messageId;
+              pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+          } else if (replyRef.fn) {
+            // Fallback when editMessage unavailable: status embed + separate reply.
+            if (askBody) {
+              await (askBody.failed
+                ? thinking.fail(askBody.status, thinkExtras)
+                : thinking.done(askBody.status, thinkExtras));
+            } else if (result.ok) {
+              await thinking.done("✅ Done", thinkExtras);
+            } else {
+              await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+            }
+            const sent = await replyRef.fn({
+              channelId,
+              content: out.content,
+              replyToMessageId: msg.id,
+              ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
+              ...(askBody?.components ? { components: askBody.components } : {}),
+            });
+            inflight.end();
+            delivered = sent !== null;
+            if (sent?.messageId) {
+              store.trackBotMessage(sent.messageId, session);
+              if (pendingToStore && askBody?.components) {
+                pendingToStore.stubMessageId = sent.messageId;
+                store.setPendingAsk(session, pendingToStore);
+              }
+            }
+          } else {
+            thinking.dispose();
+            inflight.end();
+            // Dry / test: synthesize bot message id so reply continuity can be tested.
+            store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
           }
-        } else {
-          thinking.dispose();
-          inflight.end();
-          // Dry / test: synthesize bot message id so reply continuity can be tested.
-          store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+        } finally {
+          // Nothing went out: the next post carries the warning and the cap ping.
+          if (!delivered) {
+            spend?.release();
+            askOwner?.release();
+          }
         }
       } finally {
         inflight.end();
@@ -985,13 +1040,18 @@ export async function startBridge(
           : undefined;
         const thinkExtras = { plumbing, model: llmModel };
 
+        // SAFE-8: as on a chat reply — a spend-cap stop is free text, pings the
+        // owner once per cap episode and is never the pending ask.
         const askRaw = result.ask;
-        const resolvedOptions = askRaw
-          ? resolveAskOptions({
-              options: askRaw.options,
-              question: askRaw.question,
-            })
-          : undefined;
+        const spendCap = askRaw?.reason === "spend-cap";
+        const askOwner = askRaw ? askPingOwner(askRaw, config.owner, spendAlerts) : null;
+        const resolvedOptions =
+          askRaw && !spendCap
+            ? resolveAskOptions({
+                options: askRaw.options,
+                question: askRaw.question,
+              })
+            : undefined;
         const useButtons = Boolean(resolvedOptions?.length);
         let askBody: {
           content: string;
@@ -1025,7 +1085,7 @@ export async function startBridge(
         } else if (askRaw) {
           const formatted = formatAskReply({
             ask: askRaw,
-            owner: config.owner,
+            owner: askOwner?.owner,
             requesterDiscordId: interaction.userId,
             context: result.summary,
             replyHint: true,
@@ -1037,10 +1097,12 @@ export async function startBridge(
             failed: formatted.failed,
             ownerPinged: formatted.ownerPinged,
           };
-          pendingToStore = toPendingAsk(askRaw);
+          pendingToStore = spendCap ? null : toPendingAsk(askRaw);
         }
 
-        if (askBody && pendingToStore) {
+        // The pick already cleared the answered ask; store a follow-up ask
+        // (never a SAFE-8 spend-cap stop, which a reply cannot answer).
+        if (pendingToStore) {
           store.setPendingAsk(session, pendingToStore);
         }
 
@@ -1050,48 +1112,70 @@ export async function startBridge(
             ? result.summary.slice(0, 1800)
             : `session ${session.id} failed (exit ${result.exitCode})`;
 
-        // DISCORD-ASK-7 — edit stub/thinking into the final answer (no Done+extra).
-        const collapsed = await thinking.finalizeContent({
-          content: body,
-          components: askBody?.components,
-          mentionUserIds: askBody?.mentionUserIds,
-        });
-        if (collapsed) {
-          // The stub/thinking message is now the answer: nothing to recover.
-          inflight?.end();
-          store.trackBotMessage(collapsed.messageId, session);
-          if (pendingToStore && askBody?.components) {
-            pendingToStore.stubMessageId = collapsed.messageId;
-            store.setPendingAsk(session, pendingToStore);
-          }
-        } else if (replyRef.fn) {
-          if (askBody && pendingToStore) {
-            await (askBody.failed
-              ? thinking.fail(askBody.status, thinkExtras)
-              : thinking.done(askBody.status, thinkExtras));
-          } else if (result.ok) {
-            await thinking.done("✅ Done", thinkExtras);
-          } else {
-            await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
-          }
-          const sent = await replyRef.fn({
-            channelId,
+        // SAFE-8: the pending 80% warning and its owner mention ride whichever
+        // message goes out; when neither does, it and the cap ping go back.
+        const spend = spendAlerts.takeWarning(result.spendWarning);
+        const out = withSpendWarningPost(
+          {
             content: body,
-            replyToMessageId: pending.stubMessageId ?? interaction.messageId,
             ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-            ...(askBody?.components ? { components: askBody.components } : {}),
+          },
+          spend?.warning,
+          config.owner,
+        );
+        let delivered = false;
+        try {
+          // DISCORD-ASK-7 — edit stub/thinking into the final answer (no Done+extra).
+          const collapsed = await thinking.finalizeContent({
+            content: out.content,
+            components: askBody?.components,
+            mentionUserIds: out.mentionUserIds,
           });
-          inflight?.end();
-          if (sent?.messageId) {
-            store.trackBotMessage(sent.messageId, session);
+          if (collapsed) {
+            delivered = true;
+            // The stub/thinking message is now the answer: nothing to recover.
+            inflight?.end();
+            store.trackBotMessage(collapsed.messageId, session);
             if (pendingToStore && askBody?.components) {
-              pendingToStore.stubMessageId = sent.messageId;
+              pendingToStore.stubMessageId = collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
+          } else if (replyRef.fn) {
+            if (askBody) {
+              await (askBody.failed
+                ? thinking.fail(askBody.status, thinkExtras)
+                : thinking.done(askBody.status, thinkExtras));
+            } else if (result.ok) {
+              await thinking.done("✅ Done", thinkExtras);
+            } else {
+              await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+            }
+            const sent = await replyRef.fn({
+              channelId,
+              content: out.content,
+              replyToMessageId: pending.stubMessageId ?? interaction.messageId,
+              ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
+              ...(askBody?.components ? { components: askBody.components } : {}),
+            });
+            inflight?.end();
+            delivered = sent !== null;
+            if (sent?.messageId) {
+              store.trackBotMessage(sent.messageId, session);
+              if (pendingToStore && askBody?.components) {
+                pendingToStore.stubMessageId = sent.messageId;
+                store.setPendingAsk(session, pendingToStore);
+              }
+            }
+          } else {
+            thinking.dispose();
+            inflight?.end();
           }
-        } else {
-          thinking.dispose();
-          inflight?.end();
+        } finally {
+          // Nothing went out: the next post carries the warning and the cap ping.
+          if (!delivered) {
+            spend?.release();
+            askOwner?.release();
+          }
         }
 
         // DISCORD-ASK-8 — drop the ephemeral "Got it… Working…" once resume finishes
@@ -1149,11 +1233,11 @@ export async function startBridge(
       pollIntervalMs: opts.schedulerPollIntervalMs,
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
+      spendAlerts,
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
-          if (replyRef.fn) {
-            await replyRef.fn({ channelId, content, mentionUserIds });
-          }
+          if (!replyRef.fn) return false;
+          return (await replyRef.fn({ channelId, content, mentionUserIds })) !== null;
         },
       },
       // Start after gateway is up; construct with manual then start below.

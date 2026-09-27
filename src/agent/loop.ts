@@ -70,6 +70,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let filesChanged: string[] = [];
   let attempts = 0;
   let verifyFeedback: string | undefined;
+  let specBriefing: string | undefined;
   // Output of the last failed verify, kept for the human-facing summary.
   let lastVerifyFailure: string | undefined;
   let retries = 0;
@@ -85,6 +86,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     try {
       const briefing = loadRelevantSpecs({ cwd: opts.cwd, task: taskText });
       if (briefing) {
+        // AGENT-2: the constraints must reach the model, not only the event.
+        specBriefing = briefing;
         emit(onEvent, {
           type: "Text",
           text: `Planning: SpecSync briefing\n\n${briefing}`,
@@ -119,6 +122,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       attempt: attempts,
       verifyFeedback,
       signal,
+      specBriefing,
     });
     summary = exec.summary;
     // AGENT-4: union across attempts. Files from an attempt whose verify

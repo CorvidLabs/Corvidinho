@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "safe-8-daily-spend-cap-issue-98-captured-slice-optional-corvidinho-daily-spend-cap-usd-caps-provider-llm-spend-over-a",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "09490b0cac74c7292da3581adf57529101ddc50c",
+      "contract_digest": "c69983d19c1b0fcf134c122b97ece8b254ff951b29dc871d76d0db6c7a8747f6",
+      "execution_digest": "3adea6ce5e20365b212a8f428254a5a7f473610b59a2b184de9d428f53e0c0d3",
+      "workspace_digest": "50fe74e4ff67832c32f6c41b417cfb383b5e1864ca887f790d19389e4be19a1a",
+      "timestamp": 1790464192
+    }
+  ]
+}
