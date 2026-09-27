@@ -152,11 +152,12 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `SlashContext.recordAudit`.
 
 Channel autocomplete gate (REQ-discord-431, DISCORD-DENY-3 / ADMIN-4):
-`respondChannelAutocomplete` (`gateway.ts`, exported for fixtures) answers
-every autocomplete request exactly once; it first asks
+`respondChannelAutocomplete` (`gateway.ts`, exported for fixtures) first asks
 `GatewayHandlers.mayAutocompleteChannels(actor: AutocompleteActor)`
-(`commandName`, `channelId`, `userId`, member `roleIds`) and answers `[]`
-when that is unset, false or throws. The bridge wires it to the slash gate
+(`commandName`, `channelId`, `userId`, member `roleIds`) on every request and
+answers `[]` exactly once, building nothing, when that is unset, false or
+throws; an allowed request is answered once with its choices, or not at all
+past the 2.5 s autocomplete deadline. The bridge wires it to the slash gate
 order: `gateChannel` → `gateActor` → `resolvePermissionLevel` (with the live
 mute set) ≥ ADMIN.
 
