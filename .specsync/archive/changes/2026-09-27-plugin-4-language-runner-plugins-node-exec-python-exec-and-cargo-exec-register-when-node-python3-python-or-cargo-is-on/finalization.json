@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on",
+  "implementation_commit": "095c9e9dc256221e75696be90ede084141cd2e83",
+  "implementation_tree": "ab4291bf818166f998b08d136f2d5cdd6738554e",
+  "contract_digest": "78e3cb0306bcc44333b2e02180b61b7087558fe029bbe9ad47fdb962b50921b3",
+  "workspace_digest": "4ec3f3395bb79886c51a220652fe1f0c7e5cdb47be4dbbd20a5ce112914e7f73",
+  "closing_digest": "e7d9a9dc99b3fdacd611681e44c6d872b773ea2d07386d63e8aec30b7ec6b348",
+  "review_digest": "f60f110618e0ec47036328c2d36c446e3e994dafb99b2ba3532773022f46189f",
+  "finalization_digest": "2980656ab9ffe182bcde4f6a5744713bafef74ab70177c63806613d3a6ef1c8c",
+  "timestamp": 1790523346
+}
