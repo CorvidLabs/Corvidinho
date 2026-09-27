@@ -176,7 +176,8 @@ git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
-`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`. Discord/NDJSON
+`chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
+`ROLE_REFUSED_SUMMARY_NOTE` and `clipKeepingRoleNote` (REQ-agent-333). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
 appears in the final chat reply (DISCORD-3.a).
 
@@ -342,6 +343,19 @@ pick a module the request never names.
 
 `buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
 
+When the caller is not ADMIN at the call (a role session, re-checked per call
+like `runPlugin`, ROLES-CHAT-6), the tool loop answers a not-offered registered
+mutating / dangerous plugin with the role refusal `runPlugin` gives (`Denied:
+plugin "<name>" is not allowed for your role (ROLES-CHAT-3).`, exit 2) instead
+of the catalog refusal, and never runs it; an unregistered name keeps the
+catalog refusal. Once any call in a task run gets exactly that role refusal,
+every summary of that run ends with `(not allowed for your role)` once,
+exported as `ROLE_REFUSED_SUMMARY_NOTE` / `withRoleRefusalNote` from
+`src/agent/execute.ts` (the note is defined in `src/agent/task-summary.ts`);
+`resultFrame` and `chatBodyFromTaskResult` keep that closing note when they cap
+a long summary (`clipKeepingRoleNote`, REQ-agent-333). Event names and progress
+lines stay as they are.
+
 An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
 the default verify runner runs fledge in its own process group and an abort
 kills the lane's whole tree (then waits at most 250 ms for its output
@@ -383,6 +397,13 @@ model.
 - **Given** a project whose `fledge.toml` has no `[corvidinho.autonomous]`
 - **When** a code-tier task run builds its tool catalog
 - **Then** `delegate` is not offered, and a model call naming it is refused
+
+### Scenario: community user's model invents a file write
+
+- **Given** a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN=0`) at code tier
+- **When** the model calls `files-write`, which its catalog does not offer
+- **Then** the call gets the `not allowed for your role` refusal, nothing is
+  written, and the run summary ends with `(not allowed for your role)`
 
 ### Scenario: lead delegates a subtask
 
@@ -447,6 +468,8 @@ model.
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
+| Non-ADMIN caller (checked at the call) names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once, and the result frame / chat body caps keep it (ROLES-CHAT-3, REQ-agent-333) |
+| A tool's own error only quotes "not allowed for your role" | No role note (only the exact role refusal counts, REQ-agent-333) |
 | Delegation depth env malformed | Treated as the cap; no further delegation |
 | Worker hangs / lead interrupted | Worker SIGTERM then SIGKILL; lead returns after a short drain |
 | Council: fewer than 2 voices propose | No critique or decide; ok=false with the transcript |
@@ -508,4 +531,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
 | 2026-09-27 | verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first: Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85) |
 | 2026-09-27 | roles-chat-7-b-an-admin-role-session-s-github-pr-create-is-tested-safe-1-denies-it-without-an-allowlist-entry-github-6: ROLES-CHAT-7(b): an ADMIN role session's github-pr-create is tested: SAFE-1 denies it without an allowlist entry, GITHUB-6 still refuses an unlisted repo, and the dry-run PR goes through with the allowlist entry plus the GITHUB-6 repo allowlist |
+| 2026-09-27 | roles-chat-3-a-non-admin-session-s-invented-call-to-a-mutating-or-dangerous-plugin-gets-the-role-refusal-not-allowed: ROLES-CHAT-3: a non-ADMIN session's invented call to a mutating or dangerous plugin gets the role refusal (not allowed for your role), not the catalog refusal, and the run summary ends with a short (not allowed for your role) note once a call was refused for the caller's role |
 | 2026-09-27 | task-run-offers-allowlisted-dangerous-tools-to-the-model-a-dangerous-plugin-enters-the-catalog-only-when-corvidinho: Task run offers allowlisted dangerous tools to the model: a dangerous plugin enters the catalog only when CORVIDINHO_ALLOWLIST names it (tier, role and SAFE-9 filters unchanged); shell-exec and the node/python/cargo runners stay out pending the SAFE-3 decision; a non-git run whose Fledge command may have changed files verifies anyway (CLI-3, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3, AGENT-4) |
