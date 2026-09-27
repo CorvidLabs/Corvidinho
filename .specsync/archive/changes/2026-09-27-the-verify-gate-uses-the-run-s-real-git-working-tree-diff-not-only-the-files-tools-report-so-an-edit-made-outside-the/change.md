@@ -1,6 +1,6 @@
 ---
 id: the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the
-state: verifying
+state: archived
 type: bug_fix
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---

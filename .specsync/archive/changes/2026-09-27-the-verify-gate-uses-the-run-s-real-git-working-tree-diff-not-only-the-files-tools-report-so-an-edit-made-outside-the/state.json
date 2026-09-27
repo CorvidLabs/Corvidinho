@@ -7,11 +7,11 @@
   "title": "The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85)",
   "description": "The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
   "created_at": 1790519739,
-  "updated_at": 1790522612,
+  "updated_at": 1790523009,
   "affected_specs": [
     "agent",
     "discord",
