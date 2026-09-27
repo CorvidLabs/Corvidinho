@@ -7,11 +7,11 @@
   "title": "Docs refresh after audit: operator docs, env/allowlist templates and the STATUS roadmap match shipped code (actor gate, requester ping, fail-closed allowlist file, 0.0.21-0.0.27 slices)",
   "description": "Docs refresh after audit: operator docs, env/allowlist templates and the STATUS roadmap match shipped code (actor gate, requester ping, fail-closed allowlist file, 0.0.21-0.0.27 slices)",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "dbe37ce53abf815e39aa7a614b0361d9332bc0d4",
   "created_at": 1790472441,
-  "updated_at": 1790475040,
+  "updated_at": 1790475268,
   "affected_specs": [],
   "affected_paths": [
     "AGENTS.md",

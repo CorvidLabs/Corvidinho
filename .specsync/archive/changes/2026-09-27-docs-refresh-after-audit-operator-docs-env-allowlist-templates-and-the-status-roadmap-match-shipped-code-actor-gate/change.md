@@ -1,6 +1,6 @@
 ---
 id: docs-refresh-after-audit-operator-docs-env-allowlist-templates-and-the-status-roadmap-match-shipped-code-actor-gate
-state: verifying
+state: archived
 type: documentation
 base_commit: dbe37ce53abf815e39aa7a614b0361d9332bc0d4
 ---
