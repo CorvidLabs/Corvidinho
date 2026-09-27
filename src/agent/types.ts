@@ -75,6 +75,12 @@ export type ExecuteContext = {
   attempt: number;
   verifyFeedback?: string;
   signal: AbortSignal;
+  /**
+   * Planning SpecSync briefing (REQ-agent-004, AGENT-2 / SPECSYNC-1/5): the
+   * relevant module constraints and companions, passed on every attempt so
+   * the model sees them. Project data, not instructions. Absent when none.
+   */
+  specBriefing?: string;
 };
 
 export type ExecuteFn = (ctx: ExecuteContext) => Promise<ExecuteResult>;

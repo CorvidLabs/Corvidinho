@@ -1,0 +1,49 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790464355,
+      "digest": "b2fcc481877cc903500e5011d9c7ffb6b3e0a1992cad6b5066e400c23b75d859",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "planning-specsync-briefing-reaches-the-model-runtask-passes-the-loaded-spec-constraints-and-companions-to-every-execute",
+        "title": "Planning SpecSync briefing reaches the model: runTask passes the loaded spec constraints and companions to every execute attempt and the LLM user message carries them fenced as project data (AGENT-2, SPECSYNC-1/5)",
+        "description": "Planning SpecSync briefing reaches the model: runTask passes the loaded spec constraints and companions to every execute attempt and the LLM user message carries them fenced as project data (AGENT-2, SPECSYNC-1/5)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/loop.ts",
+          "src/agent/types.ts",
+          "tests/agent.execute.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "task run with a registry and a matching module spec sends that spec's Invariants and companion files to the model on every attempt (tool loop and read tier), fenced as project data in the user message, secret-scrubbed and capped at 8000 chars; no match or no task text leaves the model messages unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "5cec37541519dce53d3641a4f4a71d8e5210980b844374e7ddc7bdbaa8832f3c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790464614,
+      "digest": "139711e241e6e44047c89b9aa397c35b38cc3a78d7f08f1124203e1215580bbf",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

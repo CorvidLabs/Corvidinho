@@ -1,0 +1,104 @@
+{
+  "timestamp": 1790469863,
+  "commit": "e96cd73aeb33485755d3244ae85f66b6463cb58c",
+  "contract_digest": "205e4604aff5790bd03c3596a623e986e52824226b48a03eb9e6bf2069593e8b",
+  "execution_digest": "c0d688b682a88a4447278988c8e3f4b6c91215430770764d6d70c3736f6efecf",
+  "workspace_digest": "bc7f2daee83cd669e31290629d94e2ab57d96386c72b6519a29bf951414c72f5",
+  "acceptance_input_digest": "4f38516e9b47ad1ee5bfb7c3d795f05436709bd4bf5a2b1630035d45b1ea4587",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "docs/DISCORD-GO-LIVE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6d45f104dce6d05b7f98569e0774dbb25a877dac7cb2a5d5e6ddd78348ff0c74",
+        "entry_digest": "b3fd87fc71d4c42d4822e6497adbd6b9df1de0c2ebc2f89518076e80f51280b5",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/plugins/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+        "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/plugins.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9c5343ae60b06e3e71ac61f17893ab7959effa42c1b6609550872a8e7f5adef6",
+        "entry_digest": "38165f5a961509630cc2e95b81c26e45564d6598cf3e95a5a97ba8f980df171a",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1d35fefa687e3e71c85c578644a1221d769f0cb6a113b5cb4e08edf117443213",
+        "entry_digest": "fe10e641d7a7e50e0d476d6dfdf4674e3ec891e44cdd55a1338c6f53f287f916",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+        "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "520b92f0ebf710fac2a799c661ef60939f7b70d140385a44ba59c5f5f912af33",
+        "entry_digest": "d9ff8816da5bbcbce41b0a3fb07693809bc911fcd4e44e5cf216d608b0fc62c3",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "src/audit/log.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f3b0e399e0c9654ff91d67d43e44630b58dc7d48d54895e340e8d82e1f3e4b0e",
+        "entry_digest": "0e93a6afddf4d7ba9fffbdc754eafd1f9754beefdd88b528a10e46fc5ccaf5c3",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "tests/audit.keyed-downgrade.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ca044e6c6529ad40c53c7f366a60d03fe4afc3f420db2cea1bec5d8927de8f03",
+        "entry_digest": "32b532c79fc113437031fb16b3d1cf5a9e85cf97251719b0cd1edb5278644d87",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-plugins-095"
+  ]
+}

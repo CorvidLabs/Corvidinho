@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "planning-specsync-briefing-reaches-the-model-runtask-passes-the-loaded-spec-constraints-and-companions-to-every-execute",
+  "implementation_commit": "b29aba3e62d2ca3eebb0d29ce9cdac59e632c0c6",
+  "implementation_tree": "a9dbcb71252d7900536fe1e4e75a3536dd1537d9",
+  "contract_digest": "b2fcc481877cc903500e5011d9c7ffb6b3e0a1992cad6b5066e400c23b75d859",
+  "workspace_digest": "462e11717f18ca9cde850c2089c1a0026bb22b9aa626d26621607d5fac13cf4d",
+  "closing_digest": "139711e241e6e44047c89b9aa397c35b38cc3a78d7f08f1124203e1215580bbf",
+  "review_digest": "84d154a801a7584dfed5fd95dae852153e59a2614b54fd908ec12a0ad526827a",
+  "finalization_digest": "60e4b83ea879d47245d060e680bc8c98be23406b7d04a2089b6efbd451e4c07c",
+  "timestamp": 1790464614
+}
