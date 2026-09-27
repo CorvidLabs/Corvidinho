@@ -1,6 +1,6 @@
 ---
 id: discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 1c7b6ced470e0ed87e4c854f2663111713af3fa7
 ---

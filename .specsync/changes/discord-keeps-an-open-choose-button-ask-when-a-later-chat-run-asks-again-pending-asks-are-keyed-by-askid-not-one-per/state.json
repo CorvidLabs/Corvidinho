@@ -7,10 +7,11 @@
   "title": "Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3)",
   "description": "Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "1c7b6ced470e0ed87e4c854f2663111713af3fa7",
   "created_at": 1790534344,
-  "updated_at": 1790534359,
+  "updated_at": 1790534884,
   "affected_specs": [
     "discord"
   ],
