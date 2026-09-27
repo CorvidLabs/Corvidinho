@@ -1,0 +1,120 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790463277,
+      "digest": "d615b46117b064372f0663064279f6255efd34db0ef6badae763af5ca50b425c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm",
+        "title": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+        "description": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/agent/spend-alerts.ts",
+          "src/agent/spend-outbox.ts",
+          "src/daemon/daemon.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/work-store.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Implementation-only paths for REQ-agent-098, REQ-discord-098 and REQ-cli-098 as modified by change safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run; the canonical requirement text, spec prose and files lists for these paths are carried by that change's deltas",
+        "acceptance_criteria": [
+          "A warning recorded by a run with no Discord reply (WATCH-style guard on a shared DB file, daemon, delegate worker) is posted once with an owner ping on the bridge's next post (chat, /work, /session start or schedule), and handed back when that post fails; after spend is seen under 70% of the cap a second crossing inside 24 h warns again while spend hovering between 70% and 80% does not; the owner is pinged once per spend-cap episode across chat, slash commands and schedules; /work at the cap records the task as blocked with a paused status, the ask and a spend-cap PR line, and pings the owner in a fresh post; /session start at the cap shows the ask and pings the owner; the daemon logs spend.warning and run.needs_human warn lines; fixture tests only (mocked fetch, in-memory or temp SQLite, fake gateway)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790463690,
+      "digest": "d615b46117b064372f0663064279f6255efd34db0ef6badae763af5ca50b425c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm",
+        "title": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+        "description": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/agent/spend-alerts.ts",
+          "src/agent/spend-outbox.ts",
+          "src/daemon/daemon.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/work-store.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Implementation-only paths for REQ-agent-098, REQ-discord-098 and REQ-cli-098 as modified by change safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run; the canonical requirement text, spec prose and files lists for these paths are carried by that change's deltas",
+        "acceptance_criteria": [
+          "A warning recorded by a run with no Discord reply (WATCH-style guard on a shared DB file, daemon, delegate worker) is posted once with an owner ping on the bridge's next post (chat, /work, /session start or schedule), and handed back when that post fails; after spend is seen under 70% of the cap a second crossing inside 24 h warns again while spend hovering between 70% and 80% does not; the owner is pinged once per spend-cap episode across chat, slash commands and schedules; /work at the cap records the task as blocked with a paused status, the ask and a spend-cap PR line, and pings the owner in a fresh post; /session start at the cap shows the ask and pings the owner; the daemon logs spend.warning and run.needs_human warn lines; fixture tests only (mocked fetch, in-memory or temp SQLite, fake gateway)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790464441,
+      "digest": "d615b46117b064372f0663064279f6255efd34db0ef6badae763af5ca50b425c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-8-review-fixes-for-pr-160-issue-98-deliver-the-80-spend-warning-from-every-surface-via-a-bridge-outbox-re-arm",
+        "title": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+        "description": "SAFE-8 review fixes for PR #160 (issue #98): deliver the 80% spend warning from every surface via a bridge outbox, re-arm under 70%, ping the owner once per spend-cap episode, and handle spend-cap asks in /work and /session start",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "src/agent/spend-alerts.ts",
+          "src/agent/spend-outbox.ts",
+          "src/daemon/daemon.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/work-store.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Implementation-only paths for REQ-agent-098, REQ-discord-098 and REQ-cli-098 as modified by change safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run; the canonical requirement text, spec prose and files lists for these paths are carried by that change's deltas",
+        "acceptance_criteria": [
+          "A warning recorded by a run with no Discord reply (WATCH-style guard on a shared DB file, daemon, delegate worker) is posted once with an owner ping on the bridge's next post (chat, /work, /session start or schedule), and handed back when that post fails; after spend is seen under 70% of the cap a second crossing inside 24 h warns again while spend hovering between 70% and 80% does not; the owner is pinged once per spend-cap episode across chat, slash commands and schedules; /work at the cap records the task as blocked with a paused status, the ask and a spend-cap PR line, and pings the owner in a fresh post; /session start at the cap shows the ask and pings the owner; the daemon logs spend.warning and run.needs_human warn lines; fixture tests only (mocked fetch, in-memory or temp SQLite, fake gateway)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790464455,
+      "digest": "7bbd34d960a337bf797895e7f58af4b1f3efc5d4f7c0b4fc17472d3180ebe2dd",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
