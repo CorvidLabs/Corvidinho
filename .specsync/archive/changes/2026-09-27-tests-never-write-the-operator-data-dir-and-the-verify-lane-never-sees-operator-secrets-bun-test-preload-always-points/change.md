@@ -1,6 +1,6 @@
 ---
 id: tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 642a843e0dee50df6cb9376f9e772dd28688ca2f
 ---

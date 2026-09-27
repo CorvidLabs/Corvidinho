@@ -125,6 +125,13 @@
         "agent": "2ada3cce4650692e9014f832e280ac7b8c8d3e649a21bfe48eb3702c1f69d5b7",
         "cli": "f741b7a7372eb1990eab2c0a382743726dd455c72ab0aeecc029ca2b249860a4"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790472334,
+      "digest": "4fb00f573b90fc54113db05369c6de32d8b8692fc93c6f508dcce5dfc50a9e12",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
