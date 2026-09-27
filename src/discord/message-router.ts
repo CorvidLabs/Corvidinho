@@ -201,26 +201,27 @@ export function routeMessage(
       : { kind: "ignore", reason: "channel_not_allowlisted" };
   }
 
-  // Thread path (DISCORD-2.a + SESSION-MULTI-1): continue only the same user's
-  // thread session. Other users fall through so they get their own session.
+  // Thread path (DISCORD-2.a + SESSION-MULTI-1/2): each user has their own
+  // session in a thread, and a plain message continues only the author's own.
+  // Another user starting theirs in the same thread never takes this one over.
   if (msg.threadId) {
-    const existing = deps.store.getByThread(msg.threadId);
-    if (existing) {
+    const own = deps.store.getByThread(msg.threadId, msg.authorId);
+    if (own ?? deps.store.getByThread(msg.threadId)) {
       // Deny-listed / unlisted actors are refused even when they do not own
-      // the thread session (DISCORD-DENY-1 / REQ-discord-201).
+      // a thread session (DISCORD-DENY-1 / REQ-discord-201).
       const actorDenied = refuseActor(msg, deps);
       if (actorDenied) return actorDenied;
-      if (existing.userId === msg.authorId) {
-        // Parent/thread channel allowlist already checked above.
-        const blocked = refuseRateOrMute(msg, deps);
-        if (blocked) return blocked;
-        deps.store.touch(existing);
-        return {
-          kind: "continue_session",
-          session: existing,
-          prompt: stripMentions(msg.content) || msg.content,
-        };
-      }
+    }
+    if (own) {
+      // Parent/thread channel allowlist already checked above.
+      const blocked = refuseRateOrMute(msg, deps);
+      if (blocked) return blocked;
+      deps.store.touch(own);
+      return {
+        kind: "continue_session",
+        session: own,
+        prompt: stripMentions(msg.content) || msg.content,
+      };
     }
     // No own thread session yet — fall through; mention may start one.
   }

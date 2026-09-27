@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-thread-sessions-are-keyed-by-thread-user-so-a-second-user-starting-a-session-in-a-thread-never-takes-over-the",
+  "slug": "discord-thread-sessions-are-keyed-by-thread-user-so-a-second-user-starting-a-session-in-a-thread-never-takes-over-the",
+  "title": "Discord thread sessions are keyed by (thread, user), so a second user starting a session in a thread never takes over the first user's plain-message continuation (SESSION-MULTI-1/2)",
+  "description": "Discord thread sessions are keyed by (thread, user), so a second user starting a session in a thread never takes over the first user's plain-message continuation (SESSION-MULTI-1/2)",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
+  "created_at": 1790529861,
+  "updated_at": 1790529869,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/session-store.ts",
+    "src/discord/message-router.ts",
+    "tests/discord.thread-sessions-per-user.test.ts",
+    "docs/discord.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/requirements.md",
+    "specs/discord/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "User A @mentions the bot in a thread and continues with plain messages; user B then @mentions the bot in the same thread and gets a session of their own; A's next plain message in that thread still continues A's session (not ignored, never B's) and B's plain messages continue B's; this holds while A has an open button ask (A's askId and expiry unchanged, B's session has none), after B's session ends, and after a SQLite reload; a third user with no session there is ignored on a plain message and starts their own on @mention; tests/discord.thread-sessions-per-user.test.ts covers all of these and fails on the previous code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

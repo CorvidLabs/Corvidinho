@@ -46,6 +46,16 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - MemoryStore CRUD/ACL/reload fixtures (REQ-discord-021 / MEMORY-1..4 / MEMORY-ACL-1..5).
 - REQ-discord-022: `tests/worktree.test.ts` + `tests/discord.session-worktree.test.ts` cover isolation, park/cleanup, explicit project, schedule project scope.
 
+## Thread sessions per user (REQ-discord-046 / REQ-discord-002, DISCORD-2.a / SESSION-MULTI-1/2)
+
+- `tests/discord.thread-sessions-per-user.test.ts` — `routeMessage` +
+  `SessionStore` (no live Discord): user A starts and continues in a thread,
+  user B @mentions there and gets their own session, and A's next plain
+  message still continues A's (B's continues B's); the same while A has an
+  open button ask (id and expiry unchanged), after B's session ends, and after
+  a SQLite reload; a user with no session there is ignored on a plain message
+  and starts their own on @mention; `getByThread` with and without a user.
+
 ## MEMORY Discord auto-recall inject (REQ-discord-023)
 
 - `tests/discord.memory-inject.test.ts` — format/enrich empty+seeded scope, system prompt rules, richer memory tool argv (no live Discord).

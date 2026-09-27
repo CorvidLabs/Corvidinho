@@ -41,6 +41,7 @@ files:
   - src/discord/message-router.ts
   - tests/discord.actor-gate.test.ts
   - tests/discord.forward-channel.test.ts
+  - tests/discord.thread-sessions-per-user.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
   - src/discord/presence.ts
@@ -168,7 +169,12 @@ custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
 in `discord_sessions.pending_ask` (schema v8). Button pending asks are NOT
 cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
 substantive continue. Message router keys sessions by Discord user id + channel
-(SESSION-MULTI-1); reply/thread continue only for the session owner.
+(SESSION-MULTI-1); reply/thread continue only for the session owner. The
+store's thread index (`SessionStore.byThreadUser`) is keyed by thread id +
+Discord user id: `getByThread(threadId, userId)` returns that user's session
+in the thread, and `getByThread(threadId)` the thread's most recently active
+one, whoever owns it; another user starting a session in the thread never
+replaces the first user's (DISCORD-2.a / SESSION-MULTI-1/2, REQ-discord-046).
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
 `/work` and `/session start` keep a clarify or stuck ask as their session's
 free-text `pendingAsk` (options dropped: the slash answer has no Choose
