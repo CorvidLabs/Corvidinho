@@ -23,6 +23,7 @@ import {
   createOctokitAckClient,
   maybePostWatchAck,
   type AckClient,
+  type AckCommentResult,
 } from "./ack.ts";
 import {
   goLiveChecklist,
@@ -318,6 +319,21 @@ export async function startWatchPoller(
       return result;
     }
 
+    // WATCH-RELIABILITY-3: a 403/429 rate limit on the auto-ack or run-summary
+    // comment sets the same backoff as a rate-limited fetch, so the next poll
+    // cycle waits it out. A plain failure stays an `ack failed` /
+    // `summary failed` line only.
+    const backoffOnCommentFailure = (res: AckCommentResult): void => {
+      const waitMs = applyRateLimitBackoff({
+        status: res.status,
+        message: res.error,
+        headers: res.headers,
+      });
+      if (waitMs === null) return;
+      result.rateLimited = true;
+      result.backoffMs = Math.max(result.backoffMs ?? 0, waitMs);
+    };
+
     let events: DetectedEvent[];
     try {
       events = opts.fetchEvents
@@ -405,6 +421,7 @@ export async function startWatchPoller(
           ackClient,
           acked,
           log,
+          onPostFailed: backoffOnCommentFailure,
         });
         if (ackResult.posted) {
           successfulAcks.add(event.id);
@@ -482,6 +499,7 @@ export async function startWatchPoller(
           successfulAcks,
           summarized,
           log,
+          onPostFailed: backoffOnCommentFailure,
         });
       } catch (err) {
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
