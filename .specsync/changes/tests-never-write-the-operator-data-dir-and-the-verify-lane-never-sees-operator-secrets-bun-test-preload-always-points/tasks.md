@@ -13,3 +13,4 @@ artifact: tasks
 - [x] Spec files lists (cli: preload + new test + probe; agent: verify-env test), Public API / Invariants lines, deltas REQ-cli-262 (Added) and REQ-agent-002 (Modified).
 - [x] Full suite with operator vars set leaves the operator dir empty; `task run` with verify leaves it empty.
 - [x] tsc, bun test, SpecSync checks and `fledge lanes run verify --non-interactive`.
+- [x] Review: preload also unsets `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY` (bot-box verify lane was red on GITHUB-6 and spend-cap cases); probe case added; merged origin/main (verify runner keeps main's process-group abort handling).

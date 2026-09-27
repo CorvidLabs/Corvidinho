@@ -20,6 +20,9 @@ type Probe = {
   spawnLog: string;
   worktreeBase: string | null;
   auditKeySet: boolean;
+  runEnvSet: string[];
+  nonInteractive: boolean;
+  llmKeySet: boolean;
   rows: number;
   keyed: number;
   cliExit: number;
@@ -57,7 +60,10 @@ function auditRows(dir: string): { n: number; last: string | null } {
 }
 
 /** Child `bun test` in this repo (its bunfig preload applies) with the operator's env. */
-async function runProbe(op: string): Promise<{ code: number; probe: Probe | null; out: string }> {
+async function runProbe(
+  op: string,
+  extraEnv: Record<string, string> = {},
+): Promise<{ code: number; probe: Probe | null; out: string }> {
   const proc = Bun.spawn(
     [process.execPath, "test", "./tests/fixtures/preload-probe.ts"],
     {
@@ -68,6 +74,7 @@ async function runProbe(op: string): Promise<{ code: number; probe: Probe | null
         CORVIDINHO_AUDIT_HMAC_KEY: OPERATOR_KEY,
         CORVIDINHO_WATCH_SPAWN_LOG: join(op, "watch-spawn.jsonl"),
         WORKTREE_BASE_DIR: join(op, "worktrees"),
+        ...extraEnv,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -140,5 +147,24 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
     expect(probe, out).not.toBeNull();
     expect(isUnder(probe!.spawnLog, op)).toBe(false);
     expect(probe!.worktreeBase).toBeNull();
+  }, 60_000);
+
+  test("bot run settings (non-interactive, spend cap, LLM keys) do not reach the suite", async () => {
+    // A Discord / WATCH / daemon task run sets CORVIDINHO_NON_INTERACTIVE=1 and
+    // its verify lane runs this suite; with it, a SAFE-8 cap or an LLM key in
+    // the env, CLI and mock-LLM tests fail (or call a real model) off CI.
+    const op = operatorDir();
+    const { code, probe, out } = await runProbe(op, {
+      CORVIDINHO_NON_INTERACTIVE: "1",
+      FLEDGE_NON_INTERACTIVE: "1",
+      CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
+      CORVIDINHO_LLM_API_KEY: "sk-operator-llm-key",
+      OPENAI_API_KEY: "sk-operator-openai-key",
+    });
+    expect(code, out).toBe(0);
+    expect(probe, out).not.toBeNull();
+    expect(probe!.runEnvSet).toEqual([]);
+    expect(probe!.nonInteractive).toBe(false);
+    expect(probe!.llmKeySet).toBe(false);
   }, 60_000);
 });

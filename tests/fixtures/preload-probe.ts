@@ -7,12 +7,22 @@
  */
 import { test } from "bun:test";
 import { join } from "node:path";
+import { loadLlmEnv } from "../../src/agent/execute.ts";
 import { appendAudit, argsDigest, auditKeyFromEnv } from "../../src/audit/log.ts";
+import { isNonInteractive } from "../../src/plugins/env.ts";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
 import { defaultDbPath, resolveDataDir } from "../../src/store/paths.ts";
 import { defaultSpawnLogPath } from "../../src/watch/spawn-log.ts";
 
 const root = join(import.meta.dir, "..", "..");
+/** Bot / run settings that change test outcomes (REQ-cli-262): none may reach the suite. */
+const RUN_ENV_KEYS = [
+  "CORVIDINHO_NON_INTERACTIVE",
+  "FLEDGE_NON_INTERACTIVE",
+  "CORVIDINHO_DAILY_SPEND_CAP_USD",
+  "CORVIDINHO_LLM_API_KEY",
+  "OPENAI_API_KEY",
+] as const;
 const SHOW_ENV =
   'printf "%s|%s|%s|%s" "${CORVIDINHO_DATA_DIR-}" "${CORVIDINHO_AUDIT_HMAC_KEY-}" ' +
   '"${CORVIDINHO_WATCH_SPAWN_LOG-}" "${WORKTREE_BASE_DIR-}"';
@@ -70,6 +80,9 @@ test("preload probe writes audit rows only to the test data dir", async () => {
       spawnLog: defaultSpawnLogPath(),
       worktreeBase: process.env.WORKTREE_BASE_DIR ?? null,
       auditKeySet: auditKeyFromEnv() !== undefined,
+      runEnvSet: RUN_ENV_KEYS.filter((k) => process.env[k] !== undefined),
+      nonInteractive: isNonInteractive({}),
+      llmKeySet: loadLlmEnv().apiKey !== undefined,
       rows: row.n,
       keyed: row.keyed,
       cliExit,
