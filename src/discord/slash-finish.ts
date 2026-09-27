@@ -34,17 +34,22 @@ export type SlashFinishThinkingOpts = {
 };
 
 /**
- * Prefer finalizeContent on the progress message; resolve the deferred slash
- * reply via deleteReply (or a thin ✓) so the channel has one answer.
+ * Prefer finalizeContent on the progress message (keeping a footer-only
+ * embed with `thinkExtras`, DISCORD-3.a); resolve the deferred slash reply via
+ * deleteReply (or a thin ✓) so the channel has one answer.
  * Fallback: Done/fail (or ask) embed + full editReply/reply body.
  */
 export async function finishSlashWithThinking(
   opts: SlashFinishThinkingOpts,
 ): Promise<"collapsed" | "fallback"> {
+  // DISCORD-3.a — the collapsed answer keeps a footer-only embed (model +
+  // plumbing), failed exactly when the fallback status below would be.
   const collapsed = opts.thinking
     ? await opts.thinking.finalizeContent({
         content: opts.body,
         ...(opts.mentionUserIds ? { mentionUserIds: opts.mentionUserIds } : {}),
+        ...(opts.thinkExtras ? { extras: opts.thinkExtras } : {}),
+        failed: opts.askStatus ? opts.askStatus.failed : !opts.ok,
       })
     : null;
   if (collapsed) {
