@@ -1,6 +1,6 @@
 ---
 id: a-talk-stored-with-a-prefix-only-worktree-name-before-the-digest-change-keeps-it-after-upgrade-and-a-new-talk-whose-id
-state: implementing
+state: archived
 type: bug_fix
 base_commit: f4a9e48f6faf5d119baf9af265d010d9332df43c
 ---
