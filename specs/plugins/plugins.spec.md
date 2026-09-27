@@ -57,6 +57,7 @@ files:
   - tests/shell.plugins.test.ts
   - tests/shell.clamp-bypass.test.ts
   - tests/shell.clamp-failclosed.test.ts
+  - tests/shell.clamp-quoting.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -230,9 +231,16 @@ bounded transcript; ok only when the chair decided.
 `shell-exec` is dangerous + minTier 2 (code). Spawn cwd is pinned to plugin cwd.
 Lexical `cd`/`pushd` targets that escape the root are refused before spawn
 (SAFE-3) with exit 2, and the clamp fails closed on anything it cannot resolve
-to an in-root target. It joins backslash-newline continuations and tokenizes
-with quote awareness (quoted separators are not separators; quotes and
-backslashes are removed before checking), looks past prefix words (`{ } ! if
+to an in-root target. It tokenizes the way the shell reads a command: quoted
+and backslash-escaped text joins into one word (quoted separators are not
+separators; quotes and backslashes are removed before checking), a
+`\`-newline outside single quotes is a continuation (an escaped `\` before a
+newline is not), `#` at a word start comments to the end of the line, and a
+`$(…)` ends where those same rules say. A command with `<<` is checked both as
+dash reads it (the here-doc body is data; only an unquoted one's `$(…)` /
+backticks are analysed) and as bash may read it (`(( x << 2 ))` is arithmetic,
+so the lines after it are commands), and refuses if either does. A `cd` / `pushd`
+left open by an unterminated quote or a trailing `\` refuses. It looks past prefix words (`{ } ! if
 then else elif do while until time builtin command`, `function NAME`) and
 `NAME=value` / `NAME+=value` assignments, drops redirections (with their
 targets and any `fd` prefix such as `2>&1`, never splitting on a redirection
@@ -284,6 +292,12 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **Given** builtins loaded and `shell-exec` allowlisted
 - **When** the agent runs a `cd` outside the root hidden behind a redirection (`cd 2>&1 /etc`), quoting (`X=';' cd /etc`), a `\`-newline continuation, an expanded command word (`$(echo cd) /etc`) or a command substitution (`echo $(cd /etc && cat x)`)
 - **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn
+
+### Scenario: SAFE-3 clamp reads quoting like the shell
+
+- **Given** builtins loaded and `shell-exec` allowlisted
+- **When** the agent runs `cd "a b/../.."`, `cd a\ b/../..`, `X="a b" cd /etc`, a `cd /etc` after an escaped `\` and a newline, after a `#` comment or here-doc body holding a lone quote, or a `cd "sub` left open
+- **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn; `cd "sub dir"` and `cd sub # comment` still run
 
 ### Scenario: SAFE-3 CDPATH cannot redirect a relative cd
 
@@ -345,7 +359,8 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
-| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, comments, here-docs, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd left open by an unterminated quote or trailing `\` | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
