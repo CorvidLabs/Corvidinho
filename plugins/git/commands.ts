@@ -17,6 +17,7 @@ import type {
   PluginHandlerResult,
 } from "../../src/plugins/types.ts";
 import {
+  hasKeystoreComponent,
   isProtectedPath,
   isSecretPath,
   protectedRefuseMessage,
@@ -188,14 +189,18 @@ async function currentBranch(root: string): Promise<string | null> {
 /** Why a path must not be staged, or null when it may be. */
 function stagingRefusal(rel: string, deleted: boolean): string | null {
   const parts = rel.split("/").map((p) => p.toLowerCase());
-  const base = parts[parts.length - 1] ?? "";
   if (parts.includes(".git")) {
     return `refused (SAFE-2): '${rel}' is git metadata`;
   }
   if (deleted && isProtectedPath(rel)) {
     return `${protectedRefuseMessage(rel)} git-commit will not stage its deletion.`;
   }
-  if (parts.some((p) => p === ".env" || p.startsWith(".env.")) || base.includes("keystore")) {
+  // Any `.env*` or keystore component (a file in `keystore/` too). `rel` is
+  // repo-relative, so the checkout's own parent dirs never count.
+  if (
+    parts.some((p) => p === ".env" || p.startsWith(".env.")) ||
+    hasKeystoreComponent(parts)
+  ) {
     return (
       `refused: '${rel}' looks secret-bearing (.env* / keystore); ` +
       `git-commit never stages it (secrets stay out of the repo)`
