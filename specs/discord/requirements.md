@@ -746,13 +746,18 @@ clarify and stuck pending asks are unchanged. `/work` SHALL record a run
 that stopped to ask as `blocked` (not `completed`; a stuck run stays
 `failed`), SHALL say the PR was not opened because the run paused at the
 spend cap, and `/status` SHALL count blocked work as waiting for input.
-`/work` and `/session start` SHALL address the requester on a clarify ask
-(AUTONOMY-4) and ping the owner only for stuck and spend-cap asks; that
-owner ping and the warning SHALL go out as a fresh channel post after the
-reply (allowed mentions limited to the owner), or be appended to the reply
-when that post cannot be sent; when the reply itself fails (e.g. an
+`/work` and `/session start` SHALL answer with the ask content in the one
+message DISCORD-ASK-7 leaves (the thinking message edited into the answer
+and the deferred reply deleted, else the status plus the reply), SHALL
+address the requester on a clarify ask (AUTONOMY-4) and ping the owner only
+for stuck and spend-cap asks; a run that stopped to ask SHALL never show "✅
+Done" (the fallback status is the ask's). That owner ping and the warning
+SHALL go out as a fresh channel post after the answer (allowed mentions
+limited to the owner; an edit does not notify a mention), or be appended to
+the answer that went out (the collapsed message edited again, or the reply)
+when that post cannot be sent; when the answer itself fails (e.g. an
 interaction token that expired during a long run) the notice SHALL still go
-out as the fresh channel post and the reply's error SHALL still be raised.
+out as the fresh channel post and the answer's error SHALL still be raised.
 
 The 80% warning SHALL reach the owner even when the run that crossed it had
 no Discord reply (WATCH, the headless daemon, a delegate worker, a schedule
@@ -784,6 +789,10 @@ Acceptance Criteria
 - `/work` whose final reply throws (expired interaction token) still posts the owner notice with the spend-cap ping and the pending warning, and the error is raised; `/session start` whose reply and notice both fail leaves the warning and the cap ping for the next chat reply, which pings the owner and carries the warning.
 - A chat spend-cap reply that failed to post leaves the episode's owner ping for the next reply.
 - A schedule spend-cap post that failed sets no ping key, and the next tick's post pings the owner.
+- `/work` at the cap with an editable thinking message: the thinking message becomes the answer (`(blocked)`, the spend-cap ask, no ✅, no mention), the deferred reply is deleted, and one fresh post pings the owner with the pending warning; a second `/work` in the episode posts no owner notice.
+- `/session start` with a stuck ask collapses to the ask (no ✅) and the owner gets a fresh post; with a clarify ask the collapsed answer mentions only the requester and no owner post goes out.
+- The fresh owner post fails: the notice is appended to the collapsed answer (same message edited again, owner in its allowed mentions).
+- Collapse, reply and owner post all fail (reply throws): the error is raised and the next chat answer carries the owner ping and the warning.
 
 ### REQ-discord-088
 
