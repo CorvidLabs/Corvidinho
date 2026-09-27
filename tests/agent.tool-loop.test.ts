@@ -12,6 +12,7 @@ import {
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { register } from "../src/plugins/registry.ts";
+import { runTask } from "../src/agent/loop.ts";
 
 describe("capability tier (AGENT-5)", () => {
   test("parseCapabilityTier", () => {
@@ -437,5 +438,142 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
       | undefined;
     expect(res?.success).toBe(false);
     expect(res?.detail).toContain("not offered");
+  });
+});
+
+describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", () => {
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  const reply = (message: Record<string, unknown>) =>
+    new Response(JSON.stringify({ choices: [{ message }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  beforeEach(() => {
+    clearRegistry();
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("tool loop: HTTP 503 → error flag; a normal reply has none", async () => {
+    let status = 200;
+    const fetchImpl = async () =>
+      status === 200
+        ? reply({ role: "assistant", content: "all good" })
+        : new Response("upstream overloaded", { status });
+    const exec = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const ok = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(ok.summary).toBe("all good");
+    expect(ok.error).toBeUndefined();
+
+    status = 503;
+    const bad = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(bad.error).toBe(true);
+    expect(bad.summary).toContain("LLM HTTP 503");
+  });
+
+  test("tool loop: network failure → error flag", async () => {
+    const fetchImpl = async (): Promise<Response> => {
+      throw new Error("connect ECONNREFUSED");
+    };
+    const exec = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "code",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const r = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(r.error).toBe(true);
+    expect(r.summary).toContain("LLM request failed");
+  });
+
+  test("read tier: HTTP 401 → error flag", async () => {
+    const fetchImpl = async () => new Response("bad key", { status: 401 });
+    const exec = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "read",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const r = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(r.error).toBe(true);
+    expect(r.summary).toContain("LLM HTTP 401");
+  });
+
+  test("runTask: broken write, failed verify, then 503 on retry → failed (bug agent-loop-2)", async () => {
+    register({
+      name: "touch-marker",
+      description: "test helper that reports filesChanged",
+      dangerous: false,
+      minTier: 0,
+      async handler() {
+        return {
+          ok: true,
+          data: { filesChanged: ["app.ts"] },
+          message: "touched",
+          exitCode: 0,
+        };
+      },
+    });
+    let llmCalls = 0;
+    const fetchImpl = async () => {
+      llmCalls += 1;
+      if (llmCalls === 1) {
+        return reply({
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            { id: "t1", type: "function", function: { name: "touch-marker", arguments: "{}" } },
+          ],
+        });
+      }
+      if (llmCalls === 2) return reply({ role: "assistant", content: "wrote app.ts" });
+      return new Response("upstream overloaded", { status: 503 });
+    };
+    const execute = createTaskExecute({
+      taskText: "write app.ts",
+      env,
+      fetchImpl,
+      tier: "code",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    let verifyRuns = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 2,
+      verifyRunner: async () => {
+        verifyRuns += 1;
+        return { success: false, output: "app.ts: syntax error" };
+      },
+      execute,
+    });
+    expect(llmCalls).toBe(3);
+    expect(verifyRuns).toBe(1);
+    expect(result.attempts).toBe(2);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.summary).toContain("LLM HTTP 503");
+    expect(result.summary).toContain("Verification failed on an earlier attempt");
+    expect(result.summary).toContain("app.ts: syntax error");
   });
 });

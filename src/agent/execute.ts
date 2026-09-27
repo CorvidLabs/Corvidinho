@@ -356,6 +356,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       return {
         summary: completion.error,
         filesChanged: [...filesChanged],
+        error: true,
       };
     }
 
@@ -507,7 +508,7 @@ async function singleChatCompletion(opts: {
     onUsage: opts.onUsage,
   });
   if (!completion.ok) {
-    return { summary: completion.error, filesChanged: [] };
+    return { summary: completion.error, filesChanged: [], error: true };
   }
   const content = (completion.message.content ?? "").trim();
   return {

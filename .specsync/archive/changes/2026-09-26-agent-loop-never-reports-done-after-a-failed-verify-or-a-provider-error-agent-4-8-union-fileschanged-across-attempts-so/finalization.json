@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "agent-loop-never-reports-done-after-a-failed-verify-or-a-provider-error-agent-4-8-union-fileschanged-across-attempts-so",
+  "implementation_commit": "d0b908b709f9b2ae7f07e80ba0d7fa50d7d14492",
+  "implementation_tree": "b414be8d73d39cf21657d8c254d2374cb8a447eb",
+  "contract_digest": "c6981a479cb14f0c8f1a9b3f4cdbadab6da5f8649d4c433c2e4df24085ab9e13",
+  "workspace_digest": "fb4e3a5822c6f8f6281e83483190ae9a03c99df753473b34203812f49be5f745",
+  "closing_digest": "9e7a1b3a8ea854e0dcdc9a75302f03e41781e28bc3b3bf39fdd311fe5587da42",
+  "review_digest": "ce67cb11e86076bfb9bfb7a5517403602a5fce8457ead6ea8760083011c7c778",
+  "finalization_digest": "200ad403137b5788c6cd12dfe352d1c6b90e64c09d403cd11f153fa43f754a04",
+  "timestamp": 1790464469
+}
