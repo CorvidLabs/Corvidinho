@@ -162,7 +162,9 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
           channelId: CHAN,
           authorId: OWNER,
           authorBot: false,
-          content: ping ? "<@999> follow up on A" : "follow up on A",
+          // Discord's reply ping mentions the bot without a <@id> in the
+          // content (the gateway sets mentionedBot from message.mentions).
+          content: "follow up on A",
           mentionedBot: ping,
           referencedMessageId: answerA,
         });

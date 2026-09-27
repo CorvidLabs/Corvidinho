@@ -221,3 +221,16 @@ diffstat, commits) plus the verify result, with repo/model text in code fences
 and secrets scrubbed. Allowlisting these plugins is process-wide: the spawned
 agent can call them too.
 
+
+## Discord user lookup (IDENTITY-5 / DISCORD-13)
+
+Community chat often mentions people by snowflake id (`bug 3040…`), `@mention`, or name. The read-only plugin `discord-user-lookup` resolves members **inside the configured `DISCORD_GUILD_ID` only** (refuse other guilds):
+
+```
+discord-user-lookup --user-id 304028152194138114
+discord-user-lookup --query Gaspar
+```
+
+Inbound `<@id>` mentions are rewritten to `Discord user id <id>` so the snowflake survives for lookup. Casual social/game banter should get a prose reply; SpecSync/git/github/files are for clear Corvidinho code/product questions (ROLES-CHAT-9).
+
+When the tool-round budget runs out, the channel gets the best prose so far or a short clarifying ask — never a raw `Stopped after N tool rounds` line (AGENT-9).
