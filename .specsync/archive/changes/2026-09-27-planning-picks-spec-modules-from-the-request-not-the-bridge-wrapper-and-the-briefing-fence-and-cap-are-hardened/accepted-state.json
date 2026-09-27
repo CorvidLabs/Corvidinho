@@ -7,11 +7,11 @@
   "title": "Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened",
   "description": "Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "984332fba8490435d9d3da4fcdb29a10e42d857e",
   "created_at": 1790467726,
-  "updated_at": 1790468197,
+  "updated_at": 1790468297,
   "affected_specs": [
     "agent"
   ],
