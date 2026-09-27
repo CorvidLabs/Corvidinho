@@ -7,6 +7,7 @@ files:
   - src/agent/config.ts
   - src/agent/verify.ts
   - src/agent/loop.ts
+  - src/agent/workspace-diff.ts
   - src/agent/specLoader.ts
   - src/agent/index.ts
   - src/agent/task-summary.ts
@@ -69,6 +70,16 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
+
+Real-diff verify gate (REQ-agent-085, AGENT-4): `src/agent/workspace-diff.ts`
+exports `startWorkspaceDiff(cwd)` (a `WorkspaceDiffTracker` whose `changed()`
+lists cwd-relative paths changed since the snapshot, or null when git cannot
+be read; null tracker outside a git work tree; an optional second argument
+`WorkspaceDiffLimits` lowers the hash budget in tests),
+`WORKSPACE_DIFF_MAX_OUTPUT_BYTES`, `WORKSPACE_DIFF_HASH_MAX_BYTES`,
+`WORKSPACE_DIFF_HASH_BUDGET_BYTES` and `WORKSPACE_DIFF_MAX_FILES` (real-diff
+paths one run adds to `filesChanged`). `RunTaskOptions.workspaceDiff` is a
+test seam like `verifyRunner`, not a product surface.
 
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
@@ -174,6 +185,15 @@ Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 with `buildVerifyEnv()`.
 
 ## Invariants
+
+The verify gate trusts the working tree, not only the tools (REQ-agent-085):
+with the gate on, any path the run changed on disk since its start snapshot
+(git status, `HEAD` moves, content of already-dirty paths) is in
+`filesChanged` (up to `WORKSPACE_DIFF_MAX_FILES` per run) and forces the
+verify lane; a run ends `done` without verify
+only when no tool reported files and the real diff is empty. A diff git
+cannot read after a good snapshot verifies anyway (fail closed). The diff is
+read-only git plus in-process hashing: it never writes the index or objects.
 
 The default verify runner spawns fledge with the parent's env minus the
 delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
@@ -325,6 +345,11 @@ model.
 | Condition | Behavior |
 |-----------|----------|
 | Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
+| Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
+| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085) |
+| Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
+| Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
@@ -396,4 +421,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13: Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring |
 | 2026-09-27 | tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points: Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6) |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
+| 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |

@@ -1,6 +1,7 @@
 /**
  * Spawn corvidinho for WATCH chat with prove-before-done (AGENT-4 / FLEDGE-2 / #85).
- * Does not pass --no-verify; empty filesChanged still skips verify in the loop.
+ * Does not pass --no-verify; an empty real diff (no tool-reported files and no
+ * git working-tree change, REQ-agent-085) still skips verify in the loop.
  * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
  * Injectable for tests; no ProcessManager.
  */
