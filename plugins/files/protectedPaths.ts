@@ -14,6 +14,26 @@ function pathParts(p: string): string[] {
 }
 
 /**
+ * True when a path component contains `keystore`: a keystore file, or any
+ * file under a keystore directory (the component rule isSecretPath uses).
+ * A SpecSync change folder's name (`.specsync/changes/<id>/`,
+ * `.specsync/archive/changes/<id>/`) is a slug of the change title, not a
+ * keystore, so it does not count; the components below it still do.
+ */
+export function hasKeystoreComponent(parts: readonly string[]): boolean {
+  const lower = parts.map((p) => p.toLowerCase());
+  return lower.some((part, i) => {
+    if (!part.includes("keystore")) return false;
+    const changeFolder =
+      i < lower.length - 1 &&
+      lower[i - 1] === "changes" &&
+      (lower[i - 2] === ".specsync" ||
+        (lower[i - 2] === "archive" && lower[i - 3] === ".specsync"));
+    return !changeFolder;
+  });
+}
+
+/**
  * True when path looks like protected project infrastructure (SAFE-2).
  *
  * Pass the project `root` with an absolute path: the keystore rule then reads
@@ -30,16 +50,20 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
     if (lower === ".git") return true;
     if (lower === ".env" || lower.startsWith(".env.")) return true;
     if (lower === "specs") return true;
-    // SpecSync config, registry and archived changes. The active change
-    // folders under `.specsync/changes/` stay writable so the agent can fill
-    // change artifacts (SPECSYNC-4).
-    if (lower === ".specsync" && parts[i + 1]?.toLowerCase() !== "changes") {
+    // SpecSync config, registry and archived changes. Files inside an active
+    // change folder (`.specsync/changes/<id>/…`) stay writable so the agent
+    // can fill change artifacts (SPECSYNC-4); `.specsync/changes` and
+    // `.specsync/changes/<id>` themselves do not, so a file planted where
+    // SpecSync needs a folder cannot switch the change machinery off.
+    if (
+      lower === ".specsync" &&
+      (parts[i + 1]?.toLowerCase() !== "changes" || parts.length < i + 4)
+    ) {
       return true;
     }
   }
 
-  // Any keystore file or directory (`keystore/UTC--…`, `my.keystore`): the
-  // same component rule isSecretPath uses.
+  // Any keystore file or directory (`keystore/UTC--…`, `my.keystore`).
   let inProject = parts;
   if (root && isAbsolute(filePath)) {
     const rel = relative(root, filePath).replace(/\\/g, "/");
@@ -47,9 +71,7 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
       inProject = pathParts(rel);
     }
   }
-  if (inProject.some((part) => part.toLowerCase().includes("keystore"))) {
-    return true;
-  }
+  if (hasKeystoreComponent(inProject)) return true;
 
   const baseLower = basename(normalized).toLowerCase();
   if (baseLower === "fledge.toml") return true;

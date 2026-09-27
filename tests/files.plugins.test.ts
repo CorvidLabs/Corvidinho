@@ -80,6 +80,16 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     expect(isProtectedPath(".specsync/changes/x/tasks.md")).toBe(false);
     expect(isProtectedPath(".specsync/changes/x/deltas/plugins.md")).toBe(false);
     expect(isProtectedPath("docs/specsync.md")).toBe(false);
+    // ...but not a file planted where SpecSync needs the folders.
+    expect(isProtectedPath(".specsync/changes")).toBe(true);
+    expect(isProtectedPath(".specsync/changes/x")).toBe(true);
+    expect(isProtectedPath(".specsync/changes/.gitkeep")).toBe(true);
+    // A change id is a slug of its title, not a keystore: a change about
+    // keystores stays writable; a keystore inside a change folder does not.
+    expect(isProtectedPath(".specsync/changes/fix-keystore-dirs/tasks.md")).toBe(false);
+    expect(isProtectedPath(".specsync/changes/fix-keystore-dirs/keystore/UTC--a")).toBe(true);
+    expect(isProtectedPath(".specsync/changes/wallet-keystore.json")).toBe(true);
+    expect(isProtectedPath(".specsync/archive/changes/2026-09-27-fix-keystore-dirs/tasks.md")).toBe(true);
     // With the project root, only components below it count for keystore.
     const root = "/home/u/keystore-tools";
     expect(isProtectedPath(`${root}/src/a.ts`, root)).toBe(false);
@@ -319,6 +329,38 @@ describe("files plugins (REQ-plugins-081..083)", () => {
       });
       expect(tasks.ok).toBe(true);
       expect(readFileSync(join(dir, ".specsync", "changes", "open", "tasks.md"), "utf8")).toBe("- [x] a\n");
+
+      // So does a change whose id (a slug of its title) mentions keystores.
+      const ksChange = ".specsync/changes/safe-2-refuse-keystore-dirs/tasks.md";
+      const ksTasks = await runPlugin({
+        name: "files-write",
+        args: [ksChange, "- [x] b\n"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(ksTasks.error).toBeUndefined();
+      expect(ksTasks.ok).toBe(true);
+      expect(readFileSync(join(dir, ksChange), "utf8")).toBe("- [x] b\n");
+
+      // A file cannot take the place of the change folders themselves.
+      const other = mkdtempSync(join(tmpdir(), "corvidinho-safe2-nochanges-"));
+      try {
+        mkdirSync(join(other, ".specsync"));
+        for (const target of [".specsync/changes", ".specsync/changes/next"]) {
+          const w = await runPlugin({
+            name: "files-write",
+            args: [target, "X"],
+            cwd: other,
+            nonInteractive: true,
+          });
+          expect(w.ok).toBe(false);
+          expect(w.exitCode).toBe(2);
+          expect(w.error).toContain("SAFE-2");
+        }
+        expect(existsSync(join(other, ".specsync", "changes"))).toBe(false);
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
 
       // A symlink into a keystore directory is refused by its target path.
       symlinkSync(join(dir, "keystore", "UTC--2026-09-27--abc.json"), join(dir, "alias.json"));

@@ -173,10 +173,11 @@ plain Made with Corvidinho attribution (no @handles). Dry-run via
 CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
-Protected infra (`.env*`, `.git`, `fledge.toml`, `specs/**` / `*.spec.md`,
-`.specsync/` state outside the active `.specsync/changes/` folders, and any
-keystore file or directory inside the project) cannot be overwritten or
-deleted via file tools (SAFE-2); no in-band override. Memory plugins take the acting user and ADMIN
+Protected infra (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`,
+`specs/**` / `*.spec.md`, `.specsync/` state outside the files of an active
+`.specsync/changes/<id>/` folder, and any keystore file or directory inside
+the project; a change folder's slug name is not a keystore) cannot be
+overwritten or deleted via file tools (SAFE-2); no in-band override. Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
@@ -221,8 +222,9 @@ ignored `.env*` / keystore is never replaced by a start point's tracked copy
 (SAFE-2). Reads are `dangerous: false`, minTier 0. `git-branch-create`,
 `git-commit` and `git-push` are dangerous + minTier 2. `git-commit` needs a
 message, stages explicit file paths only (no directories / `--all` / amend),
-commits only those paths (`--only`), refuses `.env*` / keystore / `.git`
-paths and staging the deletion of SAFE-2 protected infra, and reports
+commits only those paths (`--only`), refuses `.env*` / keystore (any
+component, files in a keystore dir too) / `.git` paths and staging the
+deletion of SAFE-2 protected infra, and reports
 `filesChanged`. `git-push` pushes only the current branch to the same-named
 ref of a configured remote (never a URL), never forces, gates every push
 URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
