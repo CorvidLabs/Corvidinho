@@ -18,19 +18,29 @@ values for existing inputs are unchanged.
   (recording `<<-` and whether the word was quoted). At the next unquoted
   newline the pending bodies are skipped line by line up to an exact
   delimiter line (tabs stripped for `<<-`). For an unquoted delimiter the
-  body's `$(…)` / backticks are pushed onto the substitution list, as for any
-  other substitution.
-- Two readings of `<<`: `tokenize` takes a `hereDocs` flag. `firstDisallowedCd`
-  runs `scanCommand(cmd, root, true)` (dash) and, only if that allows it and
-  the text contains `<<`, `scanCommand(cmd, root, false)`, where `<<` is an
-  ordinary redirection and the following lines are code (bash arithmetic).
-  `eval` and substitution bodies are re-scanned under the same reading, so
-  the cost is at most two passes, never exponential.
-- `$(…)`: `captureSubstitution` finds the closing `)` by running `tokenize` from
-  just inside the `$(` in `inSubst` mode (bare `(` / `)` counted), so quotes,
-  comments and here-docs inside are read the same way. `matchParen` is removed.
-  The nested scan's own substitutions are dropped; the body is analysed again
-  from the list, keeping the work linear in nesting depth.
+  body's `$(…)` / backticks are tokenized and analysed like any other
+  substitution. The delimiter word itself is not expanded: while it is read,
+  `$(` and backticks stay literal (a fuzz run found dash expanding
+  `$(cd ..)` in the body after `cat <<`+backtick+`x`, where the clamp had
+  swallowed the rest of the text as an unclosed backtick).
+- Two readings of `<<`: `tokenize` takes a `hereDocs` flag. `checkReadings`
+  analyses the here-doc (dash) reading and, only if that allows the command and
+  the text contains `<<`, `checkCodeOnly`, where `<<` is an ordinary
+  redirection and the following lines are code (bash arithmetic). An `eval`
+  argument under the here-doc reading goes through `checkReadings` again,
+  because quote removal can form a `<<` (`<''<`) the outer text lacks; a
+  `covered` flag skips the code-only pass when an enclosing text's code-only
+  pass already takes it in, so the work stays within about twice `main`'s.
+- `$(…)`: `captureSubstitution` tokenizes the body in place by running
+  `tokenize` from just inside the `$(` in `inSubst` mode (bare `(` / `)`
+  counted), so the closing `)` is found with quotes, comments and here-docs
+  read the same way; `matchParen` is removed. `tokenize` now returns a tree
+  (`Lexed.subs`) and `analyzeLexed` walks it, so each character is tokenized
+  once per reading instead of once per nesting level (a 22 KB nested
+  here-doc input went from ~100 s to ~0.2 s during development).
+- Stack exhaustion (tens of thousands of nested `$(`, which also overflowed
+  `main`'s clamp) is caught in `firstDisallowedCd` and refused as
+  `(nested too deeply to check)` instead of throwing out of `shell-exec`.
 - Open text: `tokenize` reports `open` when it ends inside a quote, after a lone
   trailing `\`, or inside an unclosed `$(…)` / backtick. `Word` now carries its
   `start` offset. For the last command only, `analyzeFragment` refuses a

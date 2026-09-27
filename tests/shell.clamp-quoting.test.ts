@@ -65,8 +65,13 @@ describe("shell-exec SAFE-3 clamp reads quoting like the shell (REQ-plugins-087)
     // an unquoted here-doc still runs its $( ) and backticks
     expect(firstDisallowedCd("cat <<EOF\n$(cd /etc && cat x)\nEOF", root)).toBe("/etc");
     expect(firstDisallowedCd("cat <<EOF\n`cd /etc`\nEOF", root)).toBe("/etc");
+    // a backtick in the delimiter is literal, so the body after it still expands
+    expect(firstDisallowedCd("cat <<`x\n#' $(cd ..)", root)).toBe("..");
+    expect(firstDisallowedCd("<<` EOF\n #' \\ $(cd ..)", root)).toBe("..");
     // bash reads `(( x << 2 ))` as arithmetic, so the next line is a command
     expect(firstDisallowedCd("(( x = 1 << 2 ))\ncd /etc", root)).toBe("/etc");
+    // ... also when quote removal inside an eval argument forms the `<<`
+    expect(firstDisallowedCd("eval '(( x = 1 <''< 2 ))\ncd /etc'", root)).toBe("/etc");
     // body lines are also read as commands, as before (fail closed)
     expect(firstDisallowedCd("cat <<EOF\ncd /etc\nEOF\ncd sub", root)).toBe("/etc");
     // a stray quote or apostrophe in a body leaves an in-root cd allowed
@@ -89,6 +94,12 @@ describe("shell-exec SAFE-3 clamp reads quoting like the shell (REQ-plugins-087)
     expect(firstDisallowedCd("cd -P 'sub dir", root)).toBe("'sub dir");
     // an open quote in another command is left to the shell, which will not run it
     expect(firstDisallowedCd('cd sub && echo "x', root)).toBeNull();
+  });
+
+  test("unit: nesting too deep to check refuses instead of throwing", () => {
+    const depth = 100_000;
+    const cmd = `echo ${"$(echo ".repeat(depth)}cd /etc${")".repeat(depth)}`;
+    expect(firstDisallowedCd(cmd, root)).not.toBeNull();
   });
 
   test("unit: in-root forms with quoting, comments, here-docs and continuations stay allowed", () => {

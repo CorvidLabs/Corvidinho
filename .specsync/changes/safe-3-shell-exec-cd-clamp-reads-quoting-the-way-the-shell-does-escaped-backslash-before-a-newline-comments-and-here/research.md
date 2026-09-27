@@ -21,7 +21,10 @@ artifact: research
   joined). Several here-docs on one line are read in order. A quoted
   delimiter (`'EOF'`, `"EOF"`, `E"O"F`) keeps the body literal; an unquoted one
   expands `$(…)` and backticks, which run as commands. A here-doc inside
-  `$( … )` hides a `)` in its body.
+  `$( … )` hides a `)` in its body. The delimiter word is not expanded: in
+  `cat <<`+backtick+`x` the backtick is part of the delimiter (dash then
+  expands `$(cd ..)` on the body line, where `#` is not a comment), and
+  `cat <<$(x` is a syntax error.
 - bash (`/bin/sh` on some distros) reads `(( x = 1 << 2 ))` and `$[x << 2]` as
   arithmetic, so the lines after them are commands, while dash reads a
   here-doc there. Treating bodies only as data would miss

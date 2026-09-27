@@ -239,8 +239,9 @@ newline is not), `#` at a word start comments to the end of the line, and a
 `$(…)` ends where those same rules say. A command with `<<` is checked both as
 dash reads it (the here-doc body is data; only an unquoted one's `$(…)` /
 backticks are analysed) and as bash may read it (`(( x << 2 ))` is arithmetic,
-so the lines after it are commands), and refuses if either does. A `cd` / `pushd`
-left open by an unterminated quote or a trailing `\` refuses. It looks past prefix words (`{ } ! if
+so the lines after it are commands), and refuses if either does; so is each
+`eval` argument. A `cd` / `pushd` left open by an unterminated quote or a
+trailing `\` refuses, as does a command nested too deeply to check. It looks past prefix words (`{ } ! if
 then else elif do while until time builtin command`, `function NAME`) and
 `NAME=value` / `NAME+=value` assignments, drops redirections (with their
 targets and any `fd` prefix such as `2>&1`, never splitting on a redirection
@@ -360,7 +361,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, comments, here-docs, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
-| shell-exec cd/pushd left open by an unterminated quote or trailing `\` | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |

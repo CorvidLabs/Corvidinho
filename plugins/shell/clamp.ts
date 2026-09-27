@@ -107,9 +107,15 @@ const EXPANSION = /[$`*?[{]/;
 type Word = { value: string; expands: boolean; start: number };
 type Tok = { redir: true } | { word: Word };
 
-/** A tokenized command: its simple commands and where the scan stopped. */
+/**
+ * A tokenized command: its simple commands, the command substitutions inside
+ * it (each already tokenized), and where the scan stopped.
+ */
 type Lexed = {
+  /** The text that word `start` offsets refer to. */
+  text: string;
   frags: Tok[][];
+  subs: Lexed[];
   /** Index just past the scan (past the closing `)` when inside `$( )`). */
   end: number;
   /**
@@ -135,34 +141,37 @@ function matchBacktick(s: string, open: number): number {
 }
 
 /**
- * Push the body of the command substitution at `at` (`$(` or a backtick) onto
- * `substitutions` and return the index after it, or -1 when it never closes
- * (the body then runs to the end of `s`). The closing `)` of `$( )` is found
- * by the tokenizer itself, so quotes, comments and here-docs inside the body
- * are read the way the shell reads them.
+ * Tokenize the command substitution at `at` (`$(` or a backtick) onto `subs`
+ * and return the index after it, or -1 when it never closes (the body then
+ * runs to the end of `s`). A `$( )` body is tokenized in place, so its closing
+ * `)` is found with quotes, comments and here-docs read the way the shell
+ * reads them, and each character is tokenized once.
  */
 function captureSubstitution(
   s: string,
   at: number,
-  substitutions: string[],
+  subs: Lexed[],
   hereDocs: boolean,
 ): number {
   if (s[at] === "`") {
     const end = matchBacktick(s, at);
-    substitutions.push(s.slice(at + 1, end < 0 ? s.length : end - 1));
+    const body = s.slice(at + 1, end < 0 ? s.length : end - 1);
+    const inner = tokenize(body, hereDocs);
+    if (end < 0) inner.open = true;
+    subs.push(inner);
     return end;
   }
-  // Nested bodies are analysed when this body is, so drop them here.
-  const inner = tokenize(s, [], hereDocs, at + 2, true);
-  substitutions.push(s.slice(at + 2, inner.open ? s.length : inner.end - 1));
+  const inner = tokenize(s, hereDocs, at + 2, true);
+  subs.push(inner);
   return inner.open ? -1 : inner.end;
 }
 
 /**
- * Push the `$( )` / backtick bodies of an unquoted here-doc body: the shell
- * expands them, so they run as commands. `\` escapes the next character.
+ * Tokenize the `$( )` / backtick substitutions of an unquoted here-doc body
+ * onto `subs`: the shell expands them, so they run as commands. `\` escapes
+ * the next character.
  */
-function hereDocSubstitutions(body: string, substitutions: string[]): void {
+function hereDocSubstitutions(body: string, subs: Lexed[]): void {
   for (let k = 0; k < body.length; k++) {
     const c = body[k]!;
     if (c === "\\") {
@@ -170,7 +179,7 @@ function hereDocSubstitutions(body: string, substitutions: string[]): void {
       continue;
     }
     if ((c === "$" && body[k + 1] === "(") || c === "`") {
-      const end = captureSubstitution(body, k, substitutions, true);
+      const end = captureSubstitution(body, k, subs, true);
       if (end < 0) return;
       k = end - 1;
     }
@@ -185,8 +194,8 @@ function hereDocSubstitutions(body: string, substitutions: string[]): void {
  * `$(…)` / backtick). A `\`-newline outside single quotes is a line
  * continuation (an escaped `\` before a newline is not), `#` at the start of a
  * word comments to the end of the line, and a here-doc body is data, apart
- * from the substitutions an unquoted one expands. Every command-substitution
- * body is appended to `substitutions` for separate analysis. With `hereDocs`
+ * from the substitutions an unquoted one expands. Every command substitution
+ * is tokenized in place and kept in `subs` for analysis. With `hereDocs`
  * false, `<<` is an ordinary redirection and the lines after it are read as
  * commands (bash reads `(( x << 2 ))` as arithmetic, not a here-doc). With
  * `inSubst` the scan starts just inside a `$(` at `from` and stops after its
@@ -194,21 +203,23 @@ function hereDocSubstitutions(body: string, substitutions: string[]): void {
  */
 function tokenize(
   cmd: string,
-  substitutions: string[],
   hereDocs: boolean,
   from = 0,
   inSubst = false,
 ): Lexed {
   const n = cmd.length;
   const frags: Tok[][] = [];
+  const subs: Lexed[] = [];
   let cur: Tok[] = [];
   let value = "";
   let expands = false;
   let quoted = false;
   let start = -1; // where the current word began; -1 between words
   let depth = 0; // bare `(` nesting inside a `$( )` body
-  let delimNext: boolean | null = null; // next word is a here-doc delimiter (true: `<<-`)
-  const pending: HereDoc[] = []; // here-docs whose body starts after the next newline
+  // The next word is a here-doc delimiter (true: `<<-`).
+  let delimNext: boolean | null = null;
+  // Here-docs whose body starts after the next newline.
+  const pending: HereDoc[] = [];
 
   const beginWord = (at: number) => {
     if (start < 0) start = at;
@@ -236,7 +247,7 @@ function tokenize(
   const substitution = (at: number): number => {
     beginWord(at);
     expands = true;
-    const end = captureSubstitution(cmd, at, substitutions, hereDocs);
+    const end = captureSubstitution(cmd, at, subs, hereDocs);
     value += cmd.slice(at, end < 0 ? n : end);
     return end;
   };
@@ -257,7 +268,7 @@ function tokenize(
         i = next;
       }
       if (!doc.literal) {
-        hereDocSubstitutions(cmd.slice(bodyStart, bodyEnd), substitutions);
+        hereDocSubstitutions(cmd.slice(bodyStart, bodyEnd), subs);
       }
     }
     return i;
@@ -311,7 +322,11 @@ function tokenize(
           i += 2;
           continue;
         }
-        if ((d === "$" && cmd[i + 1] === "(") || d === "`") {
+        // A here-doc delimiter is not expanded: `$(` / backtick stay literal.
+        if (
+          delimNext == null &&
+          ((d === "$" && cmd[i + 1] === "(") || d === "`")
+        ) {
           const end = substitution(i);
           if (end < 0) {
             open = true;
@@ -366,7 +381,7 @@ function tokenize(
       endFrag();
       i++;
       if (inSubst) {
-        if (depth === 0) return { frags, end: i, open: false };
+        if (depth === 0) return { text: cmd, frags, subs, end: i, open: false };
         depth--;
       }
       continue;
@@ -416,7 +431,10 @@ function tokenize(
       cur.push({ redir: true });
       continue;
     }
-    if ((c === "$" && cmd[i + 1] === "(") || c === "`") {
+    if (
+      delimNext == null &&
+      ((c === "$" && cmd[i + 1] === "(") || c === "`")
+    ) {
       const end = substitution(i);
       if (end < 0) {
         open = true;
@@ -432,7 +450,7 @@ function tokenize(
   }
   endFrag();
   // Inside `$( )`, running out of text means the `)` never came.
-  return { frags, end: n, open: open || inSubst };
+  return { text: cmd, frags, subs, end: n, open: open || inSubst };
 }
 
 /** Words of a fragment with each redirection operator + its target dropped. */
@@ -536,32 +554,62 @@ function analyzeFragment(
  * refused lexically.
  */
 export function firstDisallowedCd(cmd: string, root: string): string | null {
-  const r = scanCommand(cmd, root, true);
-  if (r != null || !cmd.includes("<<")) return r;
-  // dash reads the lines after `<<` as a here-doc body, bash may read them as
-  // commands (`(( x << 2 ))` is arithmetic there): refuse if either reading does.
-  return scanCommand(cmd, root, false);
+  try {
+    return checkReadings(cmd, root, false);
+  } catch (e) {
+    // Nesting deep enough to exhaust the stack cannot be checked: refuse.
+    if (e instanceof RangeError) return "(nested too deeply to check)";
+    throw e;
+  }
 }
 
-/** `firstDisallowedCd` under one reading of `<<` (see `tokenize`). */
-function scanCommand(cmd: string, root: string, hereDocs: boolean): string | null {
-  const substitutions: string[] = [];
-  const { frags, open } = tokenize(cmd, substitutions, hereDocs);
-  const evalCommand = (inner: string): string | null =>
-    scanCommand(inner, root, hereDocs);
-  for (let k = 0; k < frags.length; k++) {
+/**
+ * dash reads the lines after `<<` as a here-doc body, bash may read them as
+ * commands (`(( x << 2 ))` is arithmetic there): refuse if either reading
+ * does. Quote removal can form a `<<` (`<''<`) inside an `eval` argument that
+ * the outer text lacks, so each `eval` is checked the same way. `covered`: an
+ * enclosing text's code-only reading already takes in this one, so it is not
+ * run again (keeping the work polynomial).
+ */
+function checkReadings(
+  cmd: string,
+  root: string,
+  covered: boolean,
+): string | null {
+  const both = !covered && cmd.includes("<<");
+  const r = analyzeLexed(tokenize(cmd, true), root, (inner) =>
+    checkReadings(inner, root, covered || both),
+  );
+  if (r != null || !both) return r;
+  return checkCodeOnly(cmd, root);
+}
+
+/** `cmd` with `<<` read as a plain redirection and every line as code. */
+function checkCodeOnly(cmd: string, root: string): string | null {
+  return analyzeLexed(tokenize(cmd, false), root, (inner) =>
+    checkCodeOnly(inner, root),
+  );
+}
+
+/** First offending cd/pushd target in a tokenized command or its subs. */
+function analyzeLexed(
+  lx: Lexed,
+  root: string,
+  evalCommand: (cmd: string) => string | null,
+): string | null {
+  for (let k = 0; k < lx.frags.length; k++) {
     // Only the last command can be the one the text ran out in.
-    const openText = open && k === frags.length - 1 ? cmd : null;
+    const openText = lx.open && k === lx.frags.length - 1 ? lx.text : null;
     const r = analyzeFragment(
-      stripRedirections(frags[k]!),
+      stripRedirections(lx.frags[k]!),
       root,
       evalCommand,
       openText,
     );
     if (r != null) return r;
   }
-  for (const body of substitutions) {
-    const r = scanCommand(body, root, hereDocs);
+  for (const sub of lx.subs) {
+    const r = analyzeLexed(sub, root, evalCommand);
     if (r != null) return r;
   }
   return null;
