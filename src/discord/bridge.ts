@@ -15,6 +15,8 @@
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
+ * A /work or /session start answer is tracked too, so its ask is answered
+ * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * SESSION-MULTI: per-user sessions.
  */
@@ -458,6 +460,12 @@ export async function startBridge(
       thinkingOutbound: resolveOutbound(),
       thinkingDebounceMs: opts.thinkingDebounceMs,
       thinkingTickMs: opts.thinkingTickMs,
+      // DISCORD-2 / AUTONOMY-5/6: a reply to a /work or /session start
+      // answer continues that session (and answers its pending ask).
+      trackBotMessage: (messageId, sessionId) => {
+        const session = store.get(sessionId);
+        if (session) store.trackBotMessage(messageId, session);
+      },
       mutedUsers,
       rateLimitState,
       rateLimitConfig,

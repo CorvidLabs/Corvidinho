@@ -38,6 +38,7 @@ files:
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
   - plugins/specsync/index.ts
+  - tests/specsync.path-containment.test.ts
   - plugins/memory/index.ts
   - plugins/memory/commands.ts
   - plugins/files/index.ts
@@ -136,6 +137,10 @@ spawned with `detached: true`. The registry exports `unregister(name, command)` 
 name only while it is still that exact command). `plugins/fledge` exports
 `fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
 root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
+`plugins/specsync/api.ts` exports `MODULE_NAME_RE` / `invalidModuleName` (the
+plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
+`refused: true` for an invalid name or an escaping path) and `readCompanions`
+(returns `error` and no files when it refuses).
 
 ## Invariants
 
@@ -276,6 +281,21 @@ Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
 the newest rows is not detectable from the DB alone; it needs an anchor kept
 outside the DB.
 
+SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
+PLUGIN-1, REQ-plugins-008).
+`specsync-read` / `specsync-brief` take only a plain module name
+(`[A-Za-z0-9_-]+`, the registry form; optional `name=` prefix): an absolute
+path, `.` / `..`, a path separator, NUL or any other character is refused
+(exit 1, nothing read, the name JSON-escaped in the error). Every file they
+read (module spec, legacy flat spec, companions) must realpath inside the real
+`specs/` dir, which must itself realpath inside the project root; a symlinked
+specs dir, module dir, spec or companion that leaves it is refused (a refused
+companion fails the whole brief) and its content is never returned; the
+Planning spec briefing reads through the same helpers and skips it too.
+`specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
+forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
+`specsync-list` and `specsync-check` take no path input.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -307,6 +327,12 @@ outside the DB.
 - **Given** `shell-exec` allowlisted
 - **When** the command sets `CDPATH` (literally or dynamically) to an outside dir and then runs `cd sub`
 - **Then** the child shell's `readonly CDPATH` and dropped `CDPATH`/`OLDPWD` env keep `cd sub` under the root; no outside path is reached
+
+### Scenario: SpecSync tools refuse to read outside the project
+
+- **Given** builtins are loaded and a file `outside.md` sits outside the project
+- **When** the agent runs `specsync-read ../../<outside>/outside` or `specsync-brief ../../<outside>`, or `specsync-read <module>` whose spec, module dir or companion is a symlink to a file outside the project
+- **Then** the run fails with exit 1 and a one-line refusal; no content from outside the project is returned
 
 ### Scenario: web-fetch refuses cloud metadata
 
@@ -373,6 +399,8 @@ outside the DB.
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
+| specsync-read/brief name not a plain module name, or a spec/companion/specs dir whose real path leaves the project specs dir | Refuse (exit 1); nothing read |
+| specsync-coverage/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
@@ -456,4 +484,5 @@ and current rows for plugins host evolution.
 | 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
 | 2026-09-27 | safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a: SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain |
+| 2026-09-27 | specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real: Specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root |
 | 2026-09-27 | search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles: Search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8) |
