@@ -182,7 +182,17 @@ describe("startDaemon", () => {
   function fixture() {
     const dataDir = tempDir();
     const projectRoot = tempDir("corvidinho-daemon-proj-");
-    const env = { ...process.env, CORVIDINHO_DATA_DIR: dataDir };
+    // Operator Discord user/role lists and owner never change test outcomes
+    // (the creator gate reads them, DISCORD-SCHEDULE-3).
+    const env = {
+      ...process.env,
+      CORVIDINHO_DATA_DIR: dataDir,
+      CORVIDINHO_DISCORD_ALLOW_USERS: "",
+      CORVIDINHO_DISCORD_ALLOW_ROLES: "",
+      CORVIDINHO_DISCORD_DENY_USERS: "",
+      CORVIDINHO_DISCORD_DENY_ROLES: "",
+      CORVIDINHO_OWNER_DISCORD_ID: "",
+    };
     return { dataDir, projectRoot, env };
   }
 
@@ -416,5 +426,207 @@ describe("startDaemon", () => {
     });
     await d.stop();
     db.close();
+  });
+  describe("live allowlist and creator gate (DISCORD-SCHEDULE-3)", () => {
+    const OWNER_ID = "123456789012345678";
+
+    function allowlistToml(discord: {
+      channels?: string[];
+      users?: string[];
+      denyUsers?: string[];
+      ownerId?: string;
+    }): string {
+      const list = (xs: string[] = []) => `[${xs.map((x) => JSON.stringify(x)).join(", ")}]`;
+      return [
+        "[discord]",
+        `channels = ${list(discord.channels)}`,
+        `users = ${list(discord.users)}`,
+        `deny_users = ${list(discord.denyUsers)}`,
+        "",
+        ...(discord.ownerId ? ["[owner]", `discord_id = "${discord.ownerId}"`, ""] : []),
+      ].join("\n");
+    }
+
+    function seedDueFor(
+      db: Database,
+      opts: { creator: string; channelId?: string; name?: string },
+    ): string {
+      const store = new ScheduleStore({ db });
+      const s = store.create({
+        name: opts.name ?? "gated",
+        cronExpression: "0 * * * *",
+        project: ".",
+        prompt: "x",
+        createdByUserId: opts.creator,
+        ...(opts.channelId ? { channelId: opts.channelId } : {}),
+      });
+      db.run("UPDATE schedules SET next_run_at = ? WHERE id = ?", [Date.now() - 1000, s.id]);
+      return s.id;
+    }
+
+    async function startWithFile(file: string, calls: string[]) {
+      const { projectRoot, env } = fixture();
+      const liveEnv = {
+        ...env,
+        CORVIDINHO_DISCORD_ALLOW_CHANNELS: "",
+        DISCORD_CHANNEL_IDS: "",
+        CORVIDINHO_ALLOWLIST_FILE: file,
+      };
+      const db = openCorvidinhoDb({ env: liveEnv });
+      const { log, lines } = memoryLogger();
+      const d = await startDaemon({
+        env: liveEnv,
+        projectRoot,
+        logger: log,
+        agent: {
+          async runChat({ sessionId, actingUserId }) {
+            calls.push(actingUserId ?? "");
+            return { ok: true, sessionId, summary: "done", exitCode: 0 };
+          },
+        },
+        useWorktrees: false,
+      });
+      if (!d.ok) throw new Error(d.message);
+      return { d, db, lines };
+    }
+
+    test("a channel removed from the allowlist file after start is refused on the next tick", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"] }));
+      const calls: string[] = [];
+      const { d, db, lines } = await startWithFile(file, calls);
+      const id = seedDueFor(db, { creator: "someone", channelId: "chan-a" });
+      // e.g. `/admin channels remove` in the bridge rewrites the file.
+      writeFileSync(file, allowlistToml({ channels: ["chan-b"] }));
+      expect((await d.tick()).started).toEqual([id]);
+      expect(await d.scheduler.drain(2_000)).toBe(true);
+      expect(calls).toEqual([]);
+      expect(lines.find((l) => l.event === "run.finished")).toMatchObject({
+        scheduleId: id,
+        ok: false,
+        error: "channel not allowlisted: chan-a",
+      });
+      await d.stop();
+      db.close();
+    });
+
+    test("a creator deny-listed in the file after start is refused on the next tick", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"] }));
+      const calls: string[] = [];
+      const { d, db, lines } = await startWithFile(file, calls);
+      const id = seedDueFor(db, { creator: "creator-1", channelId: "chan-a" });
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"], denyUsers: ["creator-1"] }));
+      expect((await d.tick()).started).toEqual([id]);
+      expect(await d.scheduler.drain(2_000)).toBe(true);
+      expect(calls).toEqual([]);
+      const finished = lines.find((l) => l.event === "run.finished");
+      expect(finished).toMatchObject({ scheduleId: id, ok: false });
+      expect(String(finished?.error)).toStartWith("creator not allowlisted: ");
+      await d.stop();
+      db.close();
+    });
+
+    test("a malformed allowlist file skips the tick: no run; the schedule stays due", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"] }));
+      const calls: string[] = [];
+      const { d, db, lines } = await startWithFile(file, calls);
+      const id = seedDueFor(db, { creator: "someone", channelId: "chan-a" });
+      writeFileSync(file, "[discord]\nchannels = [\"chan-a\"\n");
+      expect(await d.tick()).toEqual({ started: [], skipped: [] });
+      await Bun.sleep(20);
+      expect(calls).toEqual([]);
+      expect(lines.find((l) => l.event === "tick.allowlist_failed")).toMatchObject({
+        level: "error",
+      });
+      expect(lines.some((l) => l.event === "run.finished")).toBe(false);
+      // Fixed file: the still-due schedule runs on the next tick.
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"] }));
+      expect((await d.tick()).started).toEqual([id]);
+      expect(await d.scheduler.drain(2_000)).toBe(true);
+      expect(calls).toEqual(["someone"]);
+      await d.stop();
+      db.close();
+    });
+
+    test("the owner's schedule still ticks when the user list is non-empty and omits the owner", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(
+        file,
+        allowlistToml({ channels: ["chan-a"], users: ["someone-else"], ownerId: OWNER_ID }),
+      );
+      const calls: string[] = [];
+      const { d, db, lines } = await startWithFile(file, calls);
+      const id = seedDueFor(db, { creator: OWNER_ID, channelId: "chan-a" });
+      expect((await d.tick()).started).toEqual([id]);
+      expect(await d.scheduler.drain(2_000)).toBe(true);
+      expect(calls).toEqual([OWNER_ID]);
+      expect(lines.find((l) => l.event === "run.finished")).toMatchObject({
+        scheduleId: id,
+        ok: true,
+      });
+      await d.stop();
+      db.close();
+    });
+
+    test("a tick still re-reading the allowlist when stop begins claims no run", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(file, allowlistToml({ channels: ["chan-a"] }));
+      const { projectRoot, env } = fixture();
+      const liveEnv = { ...env, CORVIDINHO_ALLOWLIST_FILE: file };
+      const db = openCorvidinhoDb({ env: liveEnv });
+      const { log, lines } = memoryLogger();
+      const calls: string[] = [];
+      const d = await startDaemon({
+        env: liveEnv,
+        projectRoot,
+        logger: log,
+        agent: {
+          async runChat({ sessionId, actingUserId }) {
+            calls.push(actingUserId ?? "");
+            await Bun.sleep(100);
+            return { ok: true, sessionId, summary: "done", exitCode: 0 };
+          },
+        },
+        useWorktrees: false,
+        shutdownGraceMs: 2_000,
+      });
+      if (!d.ok) throw new Error(d.message);
+      const first = seedDueFor(db, { creator: "first", channelId: "chan-a" });
+      expect((await d.tick()).started).toEqual([first]);
+      const second = seedDueFor(db, { creator: "second", channelId: "chan-a", name: "second" });
+      // SIGTERM lands while the next tick is still reading the allowlist file.
+      const pending = d.tick();
+      const stopped = d.stop("SIGTERM");
+      expect(await pending).toEqual({ started: [], skipped: [] });
+      expect(await stopped).toEqual({ drained: true, abandoned: [] });
+      expect(calls).toEqual(["first"]);
+      expect(lines.some((l) => l.event === "daemon.abandoned" || l.event === "tick.failed")).toBe(false);
+      const runs = db
+        .query("SELECT status FROM schedule_runs WHERE schedule_id = ?")
+        .all(second);
+      expect(runs).toEqual([]);
+      db.close();
+    });
+
+    test("a creator missing from a non-empty user list (not the owner) is refused", async () => {
+      const file = join(tempDir("corvidinho-daemon-allow-"), "allowlist.toml");
+      writeFileSync(
+        file,
+        allowlistToml({ channels: ["chan-a"], users: ["someone-else"], ownerId: OWNER_ID }),
+      );
+      const calls: string[] = [];
+      const { d, db, lines } = await startWithFile(file, calls);
+      const id = seedDueFor(db, { creator: "creator-1" });
+      expect((await d.tick()).started).toEqual([id]);
+      expect(await d.scheduler.drain(2_000)).toBe(true);
+      expect(calls).toEqual([]);
+      const finished = lines.find((l) => l.event === "run.finished");
+      expect(finished).toMatchObject({ scheduleId: id, ok: false });
+      expect(String(finished?.error)).toStartWith("creator not allowlisted: ");
+      await d.stop();
+      db.close();
+    });
   });
 });

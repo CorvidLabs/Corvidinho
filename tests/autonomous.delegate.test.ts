@@ -8,6 +8,8 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
+import { loadLlmEnv } from "../src/agent/execute.ts";
+import { parseCapabilityTier } from "../src/agent/tier.ts";
 import type { TaskResult } from "../src/agent/types.ts";
 import {
   DELEGATE_DEPTH_ENV,
@@ -275,6 +277,37 @@ describe("delegate core (safety defaults)", () => {
       baseEnv: { PATH: "/usr/bin" },
     });
     expect(Object.hasOwn(env, "CORVIDINHO_ACTING_IS_ADMIN")).toBe(false);
+  });
+
+  test("a read-tier worker keeps the per-tier model keys and resolves the read model (AGENT-5, REQ-agent-079)", () => {
+    const { cmd, env } = buildDelegateSpawn({
+      bin: "/opt/corvidinho/src/cli.ts",
+      taskText: "x",
+      tier: "read",
+      childDepth: 1,
+      allowlist: [],
+      baseEnv: {
+        PATH: "/usr/bin",
+        CORVIDINHO_LLM_API_KEY: "llm-key-value",
+        CORVIDINHO_LLM_TIER: "code",
+        CORVIDINHO_LLM_MODEL: "big",
+        CORVIDINHO_LLM_MODEL_READ: "cheap",
+        CORVIDINHO_LLM_MODEL_CODE: "big2",
+      },
+    });
+    expect(env).toMatchObject({
+      CORVIDINHO_LLM_TIER: "read",
+      CORVIDINHO_LLM_MODEL: "big",
+      CORVIDINHO_LLM_MODEL_READ: "cheap",
+      CORVIDINHO_LLM_MODEL_CODE: "big2",
+    });
+    const argTier = parseCapabilityTier(cmd[cmd.indexOf("--tier") + 1]);
+    expect(argTier).toBe("read");
+    // What the worker's `task run --tier read` resolves (env tier or --tier).
+    expect(loadLlmEnv(env).model).toBe("cheap");
+    expect(loadLlmEnv(env, argTier).model).toBe("cheap");
+    // The code-tier lead itself stays on its code model.
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_TIER: "code" }).model).toBe("big2");
   });
 
   test("bin: CORVIDINHO_BIN, else this checkout's CLI (never the cwd's)", () => {

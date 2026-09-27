@@ -55,6 +55,7 @@ import {
   withToolCost,
 } from "./plugins/toolCost.ts";
 import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
+import { loadRunnerPlugins, runnerStatusLines } from "../plugins/runners/index.ts";
 import { DEFAULT_DATA_DIR_REL } from "./store/paths.ts";
 import { formatErrorLine } from "./store/scrub.ts";
 import { VERSION } from "./version.ts";
@@ -82,7 +83,7 @@ Usage:
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command
-  corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
+  corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N]
                     [--output text|json|ndjson] [--json]
@@ -110,6 +111,7 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
   CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
+  CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
   CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
@@ -337,6 +339,8 @@ async function doctor(): Promise<number> {
 
 async function pluginsList(json: boolean): Promise<number> {
   loadBuiltins();
+  // PLUGIN-4: which language runners loaded, and why any did not (idempotent).
+  const runners = loadRunnerPlugins();
   // FLEDGE-4 / PLUGIN-3: project Fledge plugins; failure degrades to builtins only.
   const fledge = await loadFledgePlugins({ cwd: process.cwd() });
   const entries = withToolCost(list());
@@ -345,7 +349,10 @@ async function pluginsList(json: boolean): Promise<number> {
   } else {
     // PLUGIN-6 / FLEDGE-5: per-command schema cost + tool-surface budget.
     console.log(
-      formatPluginsListText(entries, toolSurfaceReport(entries), fledgeStatusLines(fledge)),
+      formatPluginsListText(entries, toolSurfaceReport(entries), [
+        ...runnerStatusLines(runners),
+        ...fledgeStatusLines(fledge),
+      ]),
     );
   }
   return 0;
@@ -575,12 +582,13 @@ async function specsyncCli(
     check: "specsync-check",
     brief: "specsync-brief",
     coverage: "specsync-coverage",
+    score: "specsync-score",
     "change-list": "specsync-change-list",
     "ship-status": "specsync-ship-status",
   };
   if (!sub || !(sub in map)) {
     console.error(
-      "usage: corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]",
+      "usage: corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]",
     );
     return 1;
   }

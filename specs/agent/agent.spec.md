@@ -1,12 +1,13 @@
 ---
 module: agent
-version: 28
+version: 29
 status: draft
 files:
   - src/agent/types.ts
   - src/agent/config.ts
   - src/agent/verify.ts
   - src/agent/loop.ts
+  - src/agent/workspace-diff.ts
   - src/agent/specLoader.ts
   - src/agent/index.ts
   - src/agent/task-summary.ts
@@ -69,6 +70,27 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
+
+Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
+`TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`),
+`DEFAULT_LLM_MODEL` (`gpt-4o-mini`) and `modelForTier(env, tier)` (tier key,
+else `CORVIDINHO_LLM_MODEL`, else the default). `loadLlmEnv(env, tier?)` takes
+an explicit tier over `CORVIDINHO_LLM_TIER` and returns that tier's model;
+`createTaskExecute` passes its `tier` so `--tier` picks the model. Endpoint and
+key stay shared. `modelKeyForTier(env, tier)` names the key that set a tier's
+model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
+and `perTierModels(env)` lists each tier's model when any per-tier key is set
+(doctor `[ok] llm`; `readSpendSnapshot` flags an unpriced tier model with its
+`tier` for doctor `spend` and `/status`).
+Real-diff verify gate (REQ-agent-085, AGENT-4): `src/agent/workspace-diff.ts`
+exports `startWorkspaceDiff(cwd)` (a `WorkspaceDiffTracker` whose `changed()`
+lists cwd-relative paths changed since the snapshot, or null when git cannot
+be read; null tracker outside a git work tree; an optional second argument
+`WorkspaceDiffLimits` lowers the hash budget in tests),
+`WORKSPACE_DIFF_MAX_OUTPUT_BYTES`, `WORKSPACE_DIFF_HASH_MAX_BYTES`,
+`WORKSPACE_DIFF_HASH_BUDGET_BYTES` and `WORKSPACE_DIFF_MAX_FILES` (real-diff
+paths one run adds to `filesChanged`). `RunTaskOptions.workspaceDiff` is a
+test seam like `verifyRunner`, not a product surface.
 
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
@@ -175,12 +197,28 @@ with `buildVerifyEnv()`.
 
 ## Invariants
 
+The verify gate trusts the working tree, not only the tools (REQ-agent-085):
+with the gate on, any path the run changed on disk since its start snapshot
+(git status, `HEAD` moves, content of already-dirty paths) is in
+`filesChanged` (up to `WORKSPACE_DIFF_MAX_FILES` per run) and forces the
+verify lane; a run ends `done` without verify
+only when no tool reported files and the real diff is empty. A diff git
+cannot read after a good snapshot verifies anyway (fail closed). The diff is
+read-only git plus in-process hashing: it never writes the index or objects.
+
 The default verify runner spawns fledge with the parent's env minus the
 delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
 `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_ACTING_*`) and the LLM API keys
 (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
 `OPENROUTER_API_KEY`): tests the agent wrote never see
 operator secrets (SAFE-6).
+
+The verify lane's `spec-check` task runs `specsync check` at the CI Spec Sync
+Action's strictness: `--require-coverage` equal to the Action's
+`require-coverage` input in `.github/workflows/spec-sync.yml`, and `--strict`
+only when the Action sets `strict`. A tree the CI Spec Sync check rejects, such
+as one with an unspecced source file, fails the lane and never reaches
+verified=true (SPECSYNC-2/7, REQ-agent-005).
 
 Tool-loop system prompt SHALL include trust-inject / memory-store /
 memory-recall-before-ignorance / never-invent rules. OpenAI tool argv
@@ -261,6 +299,21 @@ pipes); an abort while verify runs is a cancel (no
 `VerifyResult`, no retry, no `stuck` ask); each LLM request is bounded by a
 timeout, and a caller abort is never reported as a timeout.
 
+Images reach the model as pixels (DISCORD-9 / REQ-agent-428, extends
+REQ-agent-008): a tool result carrying `PluginHandlerResult.image` (`files-read`
+of an image, REQ-plugins-427) keeps only its metadata in the tool message and
+the `ToolResult` detail; once the round's tool messages are all pushed (they
+must directly follow the assistant `tool_calls`), the loop adds one user
+message `[{type:"text", text:"Image(s) opened with files-read: <paths>"},
+{type:"image_url", image_url:{url:"data:<mime>;base64,<b64>"}}, …]`. The
+base64 never reaches tool text, events or ndjson. If a request carrying image
+parts gets HTTP 400, 404, 413, 415 or 422, the image user messages are
+removed, each opened image's tool message says `[image <path> could not be
+shown to this model]`, an `[operator]` Text note is emitted, and that request
+is retried once (no user message after tool messages, so strict role-order
+providers accept it); later images in the run get the same note in their tool
+message. No new env var, flag or protocol field.
+
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
 is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
@@ -293,11 +346,28 @@ model.
 - **When** the model calls `council` with `--question ...` (3 voices by default)
 - **Then** 3 read-tier voices propose, each critiques the proposals, a chair decides, and the tool result carries the decision and a bounded transcript
 
+### Scenario: the model looks at an attached image
+
+- **Given** a tool-tier run whose model calls `files-read` on a PNG under the session cwd
+- **When** the next chat/completions request is sent
+- **Then** it carries the small tool message and, right after it, one user message with an `image_url` part holding `data:image/png;base64,…` of the file
+
+### Scenario: a model without vision refuses the image
+
+- **Given** the request carrying an image part gets HTTP 400
+- **When** the loop handles it
+- **Then** it drops the image message, puts `[image <path> could not be shown to this model]` in that image's tool message, retries once, and the run completes with the model's reply
+
 ## Error Cases
 
 | Condition | Behavior |
 |-----------|----------|
 | Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
+| Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
+| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085) |
+| Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
+| Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
@@ -305,8 +375,11 @@ model.
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
+| HTTP 400 / 404 / 413 / 415 / 422 on a request carrying image parts (model or gateway without vision, image too large) | image user messages removed, each image's tool message says `[image <path> could not be shown to this model]`, `[operator]` Text note, request retried once; later images get that note in their tool message (REQ-agent-428) |
+| Any error on that retry, any other status (401 / 429 / 5xx) with images, or an error on a request with no image parts | provider error as today (`LLM HTTP <status>`, `ExecuteResult.error`; REQ-agent-242) |
 | LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
+| Source file with no spec coverage | verify lane `spec-check` (`--require-coverage 100`) fails; verified=false, retried like any verify failure |
 | SpecSync registry missing | Planning soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
@@ -367,3 +440,7 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13: Lightly adopt agent.3md: ship guidance-only agent.3md plus @corvidlabs/agent3md dep and validate/route smoke; no AGENT-13 runtime wiring |
 | 2026-09-27 | tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points: Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6) |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
+| 2026-09-27 | per-tier-model-read-tool-code-runs-call-the-model-configured-for-that-tier-agent-5: Per-tier model: read/tool/code runs call the model configured for that tier (AGENT-5) |
+| 2026-09-27 | local-spec-check-runs-at-the-ci-spec-sync-strictness-specsync-check-require-coverage-100-specsync-check-falls-back-to: Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89) |
+| 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
+| 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |

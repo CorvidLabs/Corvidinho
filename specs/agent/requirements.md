@@ -12,12 +12,13 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When `verify_before_complete` is enabled and the execute step reports files changed, completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6).
+When `verify_before_complete` is enabled and the run changed files (reported by a tool, or in the run's real git working-tree diff per REQ-agent-085), completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6).
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
 - Exhausted retries yield `verified=false` and failed state.
 - Default runner invokes fledge with `lanes run verify --non-interactive`.
+- An attempt whose execute result reports no files but that changed the git working tree (REQ-agent-085) runs verify: done with `verified=true` only on a pass, otherwise retried and then failed.
 - A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner: the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
 
 ### REQ-agent-003
@@ -47,10 +48,13 @@ Acceptance Criteria
 
 Prove-before-done verify lane SHALL include SpecSync check (`spec-check` on `lanes.verify`) so SpecSync check failures block `verified=true` (SPECSYNC-2/7). CI Spec Sync Action remains a separate workflow.
 
+The `spec-check` task SHALL run `specsync check` at the CI Spec Sync Action's strictness: `--require-coverage` equal to the Action's `require-coverage` input in `.github/workflows/spec-sync.yml`, and `--strict` only when the Action sets `strict`. A tree the CI Spec Sync check rejects SHALL NOT reach `verified=true` locally (SPECSYNC-2).
+
 Acceptance Criteria
 - `fledge.toml` `[lanes.verify]` steps include `spec-check`.
 - Default verify runner argv stays `lanes run verify --non-interactive` (spec-check runs inside the lane).
-
+- `fledge.toml` `[tasks.spec-check]` is `specsync check --require-coverage 100` while `spec-sync.yml` sets `require-coverage: "100"` and `strict: false`; a test fails when the two disagree (coverage value, `--strict` present iff `strict` is true, or an Action input the check does not know).
+- A source file under a SpecSync source dir with no spec coverage makes `fledge run spec-check` (and so the verify lane) exit non-zero, naming the file.
 
 ### REQ-agent-006
 
@@ -64,30 +68,33 @@ Acceptance Criteria
 
 ### REQ-agent-007
 
-The execute hook for `task run` SHALL call an OpenAI-compatible chat completions endpoint when `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (`CORVIDINHO_LLM_BASE_URL` / `CORVIDINHO_LLM_MODEL`), and SHALL keep the demo execute stub (synthetic filesChanged for the verify-gate exercise) when no key is set. Secrets SHALL stay in env and SHALL never be committed.
+The execute hook for `task run` SHALL call an OpenAI-compatible chat completions endpoint when `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (`CORVIDINHO_LLM_BASE_URL` / `CORVIDINHO_LLM_MODEL`, with the model chosen for the run's capability tier per REQ-agent-079), and SHALL keep the demo execute stub (synthetic filesChanged for the verify-gate exercise) when no key is set. Secrets SHALL stay in env and SHALL never be committed.
 
 Acceptance Criteria
 - No API key → demo summary + filesChanged for gate exercise.
 - Key present → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
 - Fixture tests cover no-key path; key path mocks fetch (no live API in CI).
+- Key present → every request's `model` is the run tier's model (REQ-agent-079); with no per-tier model key it is `CORVIDINHO_LLM_MODEL` (default `gpt-4o-mini`) as before.
 
 ### REQ-agent-008
 
-The system SHALL run an interruptible OpenAI-compatible tool loop when an LLM API key is set and the capability tier is `tool` or `code`: it SHALL expose non-dangerous registered plugins as `tools`, SHALL dispatch `tool_calls` via `runPlugin` under SAFE-1 non-interactive deny unless allowlisted, SHALL emit `ToolCall` and `ToolResult` events, SHALL stop promptly on AbortSignal (AGENT-3), and SHALL collect `filesChanged` only when a tool result reports them so prove-before-done stays honest (AGENT-4).
+The system SHALL run an interruptible OpenAI-compatible tool loop when an LLM API key is set and the capability tier is `tool` or `code`: it SHALL expose non-dangerous registered plugins as `tools`, SHALL dispatch `tool_calls` via `runPlugin` under SAFE-1 non-interactive deny unless allowlisted, SHALL emit `ToolCall` and `ToolResult` events, SHALL stop promptly on AbortSignal (AGENT-3), and SHALL collect the execute result's `filesChanged` only when a tool result reports them so prove-before-done stays honest (AGENT-4). Tool-reported `filesChanged` is a lower bound for the verify gate, not the whole of it: `runTask` also adds the run's real git working-tree diff (REQ-agent-085).
 
 Acceptance Criteria
 - Mock HTTP fixture: tool_call → plugin runs → final text summary.
 - Dangerous plugin without allowlist → ToolResult success=false under non-interactive.
 - Aborted signal mid-loop returns without claiming success completion of further rounds.
-- filesChanged empty unless a tool payload includes filesChanged.
+- The execute result's filesChanged is empty unless a tool payload includes filesChanged.
+- A code-tier `shell-exec` edit (its payload has no filesChanged) still reaches the verify gate through the real diff: `runTask` runs verify and never ends done on a failed lane (REQ-agent-085).
 
 ### REQ-agent-009
 
-The system SHALL accept capability tier `read|tool|code` via `--tier` or `CORVIDINHO_LLM_TIER` (default `tool`) so read-shaped work gets no tools and tool/code tiers filter plugins by `minTier` (AGENT-5). The default tool catalog SHALL omit dangerous plugins; runtime SAFE-1 SHALL still apply when dangerous tools are included.
+The system SHALL accept capability tier `read|tool|code` via `--tier` or `CORVIDINHO_LLM_TIER` (default `tool`) so read-shaped work gets no tools and tool/code tiers filter plugins by `minTier` (AGENT-5). The default tool catalog SHALL omit dangerous plugins; runtime SAFE-1 SHALL still apply when dangerous tools are included. The effective tier (`--tier` over `CORVIDINHO_LLM_TIER`) SHALL also select the model the run calls (REQ-agent-079), so read-shaped work can stay on a cheaper model than tool and code work.
 
 Acceptance Criteria
 - read → no tools in chat request.
 - tool/code → buildOpenAiTools filters by minTier; dangerous omitted by default.
+- A read run sends the read model and a code run the code model; the `--tier` / `createTaskExecute` `tier` override, not `CORVIDINHO_LLM_TIER`, picks it.
 
 ### REQ-agent-010
 
@@ -536,4 +543,103 @@ The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / 
 - Operator `Text` event may carry the stop note.
 - `chatBodyFromTaskResult` drops stop lines.
 - Fixture: `tests/agent.soft-land.test.ts`.
+
+### REQ-agent-079
+
+`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else `gpt-4o-mini` (AGENT-5). Every chat request of the run SHALL carry that model in `body.model`, so SAFE-8 spend pricing prices the tier's model. The endpoint (`CORVIDINHO_LLM_BASE_URL`) and the API key SHALL stay shared by all tiers. Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before.
+
+Acceptance Criteria
+- `CORVIDINHO_LLM_MODEL=big`, `CORVIDINHO_LLM_MODEL_READ=cheap`: a read run sends `cheap`, tool and code runs send `big`; adding `CORVIDINHO_LLM_MODEL_CODE=big2` / `CORVIDINHO_LLM_MODEL_TOOL=mid` makes code send `big2` and tool `mid`.
+- `CORVIDINHO_LLM_TIER=code` with `tier: "read"` sends `cheap`; `CORVIDINHO_LLM_TIER=read` with `tier: "code"` sends the code model.
+- A read-tier `buildDelegateSpawn` env keeps the per-tier keys and resolves `cheap` (env tier or `--tier read`).
+- Under a SAFE-8 cap, an unpriced read model stops a read run before any provider call and the spend-cap ask names that model and `CORVIDINHO_LLM_MODEL_READ` as the key to switch; a tool run on an unpriced shared model names `CORVIDINHO_LLM_MODEL`.
+- Under a cap with a priced configured model and `CORVIDINHO_LLM_MODEL_READ` unpriced, doctor prints `[warn] spend: … model "<m>" has no known price, so read-tier runs stop and ask before calling the provider` and `/status` flags the read-tier model; with every tier priced or no per-tier key the lines read as before.
+- No per-tier keys → every tier sends `CORVIDINHO_LLM_MODEL`; a blank per-tier key falls back; no model at all → `gpt-4o-mini`.
+- Fixture tests mock fetch; no live API.
+### REQ-agent-085
+
+Real-diff verify gate (AGENT-4, issue #85). When the verify gate is on,
+`runTask` SHALL snapshot the run's git project before the first attempt:
+`HEAD`, `git status --porcelain=v1 -z --untracked-files=all --no-renames`
+and a fingerprint of every dirty or untracked path (SHA-256 of the file up
+to 4 MiB while a 64 MiB content budget lasts, stat identity past either, link
+target for a symlink, never followed). Later diffs SHALL fingerprint again
+only the paths dirty at the start (with the same kind); a path that became
+dirty or untracked is a change by itself. The
+project root is the nearest directory at or above the run cwd that holds
+`.git` (as in REQ-agent-084); a cwd below the root SHALL read only its own
+subtree and report paths relative to the cwd. After each attempt that ends
+without an ask, a provider error or an abort, and before deciding whether to
+verify, `runTask` SHALL add to `filesChanged` every path that differs from the
+snapshot: paths changed between the start `HEAD` and the current `HEAD`
+(including a first commit on an unborn `HEAD`), paths that became dirty or
+untracked, paths already dirty whose status or fingerprint changed, and
+dirty paths that became clean. These join the tool-reported files and the
+union across attempts (REQ-agent-242), so an edit no tool reported
+(code-tier `shell-exec`, a delegate worker, a commit made through a shell)
+runs the verify lane and the run ends `done` only when it passes, or fails
+plainly. Paths dirty before the run and left untouched, and gitignored paths,
+SHALL NOT count. When the cwd is not inside a git work tree, or the start
+snapshot cannot be read, the gate SHALL use tool-reported files only (the
+behaviour before this requirement). When the start snapshot was read but a
+later diff cannot be, the gate SHALL fail closed: verify runs and one `Text`
+event says the diff could not be read. When the real diff adds paths no tool
+reported, one `Text` event SHALL say how many and name up to five. At most
+`WORKSPACE_DIFF_MAX_FILES` (1000) real-diff paths per run SHALL join
+`filesChanged` (the note still gives the full count and how many were
+listed), so the NDJSON `result` line stays under the parser's line cap and a
+bridge still gets the summary; the gate is unaffected because `filesChanged`
+is non-empty either way. An empty
+real diff with no tool-reported files SHALL still skip verify with
+`verifySkipped=true` (REQ-agent-003). `--no-verify` / `verify_before_complete
+= false` SHALL take no snapshot. Git SHALL run read-only through `runGit`
+(argv, no shell, hooks off, repo-locating env stripped, discovery clamped to
+the root, optional locks off) with fsmonitor off, and fingerprints are hashed
+in process: nothing is written to the index or object store. No flag,
+environment variable, config key or slash command is added. `RunTaskOptions`
+gains a `workspaceDiff` test seam (like `verifyRunner`), not a product
+surface.
+
+Acceptance Criteria
+- In a temp git repo, an attempt that rewrites a tracked file outside the file tools and reports `filesChanged: []` runs verify; a failing lane ends `failed` (`verified=false`, `verifySkipped=false`, `filesChanged` names the file, no `done` state) and a passing lane ends `done` with `verified=true`.
+- A new untracked file, a deleted tracked file, a same-size edit to a file already ` M` before the run, a commit made through a shell (clean tree, `HEAD` moved) and a first commit on an unborn `HEAD` each run verify and appear in `filesChanged`.
+- A retry after a failed verify that edits only through a shell is verified again and gets the failure output as feedback (AGENT-4.a).
+- A run whose cwd is a subdirectory of the repo counts an edit inside the cwd (reported relative to the cwd) and not one outside it.
+- Dirt present before the run and left untouched, a change only under a gitignored path, and a non-git cwd each skip verify (`verifySkipped=true`) when no tool reported files.
+- A tracker whose diff cannot be read makes verify run and emits the "could not read the git working-tree diff" `Text` event.
+- A tracker whose diff lists 30000 paths adds 1000 of them to `filesChanged` after the tool-reported ones, the note counts all 30000, and the NDJSON `result` line read in 64 KiB chunks still parses with the "Verification failed" summary.
+- With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
+- With the gate off no snapshot is taken.
+- End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
+### REQ-agent-428
+
+When a tool-loop round's tool results carry an image (`PluginHandlerResult.image`,
+`files-read` REQ-plugins-427), the tool loop (REQ-agent-008) SHALL, after it
+has pushed all of that round's tool messages, add one user message whose
+content is a text part `Image(s) opened with files-read: <paths>` followed by
+one `image_url` part per image with a `data:<mime>;base64,<bytes>` URL, so the
+model sees the pixels (DISCORD-9). The tool message and the `ToolResult` event
+detail SHALL keep only the metadata; the base64 SHALL NOT appear in tool text,
+events or ndjson. If a chat/completions request that carries image parts gets
+HTTP 400, 404, 413, 415 or 422 (a model or gateway that will not take the
+images), the loop SHALL remove every image user message, set the message of
+each opened image's tool message to `[image <path> could not be shown to this
+model]` (metadata kept, no bytes), emit an `[operator]` Text note and retry
+that request once, so the retry has no user message after tool messages;
+later images in the same run SHALL get that note in their tool message and no
+image message. Any other status (auth, rate limit, server error), a failure on
+the retry, or a failure on a request with no image parts SHALL stay a provider
+error (REQ-agent-242). No new env var, flag or protocol field.
+
+Acceptance Criteria
+- Mock HTTP: round 1 `files-read` of a PNG; the round 2 body has the small tool message (no base64) directly followed by the user message `[text, image_url(data:image/png;base64,…)]`; the round 1 body has no image part.
+- Two images in one round ride one user message after both tool messages, with two `image_url` parts.
+- The `ToolResult` detail and the run's ndjson lines never contain the base64.
+- HTTP 400 on the image request: one retry whose tool message carries the text note, with no user message after the tool messages and no base64; the run completes with the model's reply and no error flag.
+- A provider that rejects a user message right after tool messages (role order, HTTP 400) still completes on that retry.
+- 404 / 413 / 415 / 422 on the image request fall back the same way; 401 / 429 / 500 stay errors with no retry.
+- A refusal also removes the image messages of earlier rounds; each opened image's tool message carries the note.
+- After that refusal, a later image in the run goes as the note in its tool message with no second retry.
+- 400 again on the retry → error flag with `LLM HTTP 400`; 400 with no image sent → error, no retry.
+- Fixture: `tests/agent.tool-loop.test.ts`, no live provider.
 

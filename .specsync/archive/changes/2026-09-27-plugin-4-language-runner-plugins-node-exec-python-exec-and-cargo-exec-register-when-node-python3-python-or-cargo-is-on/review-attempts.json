@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "095c9e9dc256221e75696be90ede084141cd2e83",
+      "contract_digest": "78e3cb0306bcc44333b2e02180b61b7087558fe029bbe9ad47fdb962b50921b3",
+      "execution_digest": "57430334eb97541946130086cd29b1fcaa9c9cc87e7b00708f294e7c5a86da2e",
+      "workspace_digest": "4ec3f3395bb79886c51a220652fe1f0c7e5cdb47be4dbbd20a5ce112914e7f73",
+      "timestamp": 1790523335
+    }
+  ]
+}

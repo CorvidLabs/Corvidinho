@@ -158,6 +158,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.30", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.30`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("discord_session_turns");
+    expect(r.stdout).toContain("CORVIDINHO_LLM_MODEL_READ");
+  });
+
   test("extract_changelog_section finds 0.0.29", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.29`,
@@ -853,10 +862,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.29", () => {
+  test("package.json is 0.0.30", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.29");
+    expect(pkg.version).toBe("0.0.30");
   });
 });

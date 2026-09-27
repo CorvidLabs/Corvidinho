@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { afterEach, describe, expect, test, beforeEach } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +15,10 @@ import { clearRegistry, list } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { isProtectedPath } from "../plugins/files/protectedPaths.ts";
+import {
+  MAX_IMAGE_SIZE_BYTES,
+  sniffImageMediaType,
+} from "../plugins/files/image.ts";
 
 describe("files plugins (REQ-plugins-081..083)", () => {
   beforeEach(() => {
@@ -276,5 +281,132 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/** A real 1x1 PNG. */
+const PNG_BYTES = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+describe("files-read image mode (DISCORD-9 / REQ-plugins-427)", () => {
+  const prevAdmin = process.env.CORVIDINHO_ACTING_IS_ADMIN;
+  const prevActor = process.env.CORVIDINHO_ACTING_DISCORD_USER_ID;
+  let dir = "";
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    dir = mkdtempSync(join(tmpdir(), "corvidinho-files-img-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    if (prevAdmin === undefined) delete process.env.CORVIDINHO_ACTING_IS_ADMIN;
+    else process.env.CORVIDINHO_ACTING_IS_ADMIN = prevAdmin;
+    if (prevActor === undefined) delete process.env.CORVIDINHO_ACTING_DISCORD_USER_ID;
+    else process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = prevActor;
+  });
+
+  const read = (path: string) =>
+    runPlugin({ name: "files-read", args: [path], cwd: dir, json: true, nonInteractive: true });
+
+  test("files-read on a PNG returns image metadata, not UTF-8 content", async () => {
+    mkdirSync(join(dir, ".corvidinho", "attachments"), { recursive: true });
+    const rel = ".corvidinho/attachments/m-0.png";
+    writeFileSync(join(dir, rel), PNG_BYTES);
+
+    const r = await read(rel);
+    expect(r.ok).toBe(true);
+    expect(r.data).toEqual({
+      path: rel,
+      bytes: PNG_BYTES.length,
+      mediaType: "image/png",
+      image: true,
+    });
+    expect((r.data as Record<string, unknown>).content).toBeUndefined();
+    expect(r.message).toBe(
+      `image ${rel} (image/png, ${PNG_BYTES.length} bytes) opened for viewing`,
+    );
+    // The pixels ride result.image only; they round-trip to the file bytes.
+    expect(r.image?.mediaType).toBe("image/png");
+    expect(r.image?.path).toBe(rel);
+    expect(Buffer.from(r.image!.base64, "base64").equals(PNG_BYTES)).toBe(true);
+    // What reaches tool text / CLI output is small and has no decode garbage.
+    const text = JSON.stringify({ ok: r.ok, message: r.message, data: r.data });
+    expect(text).not.toContain("\uFFFD");
+    expect(text).not.toContain(r.image!.base64);
+    expect(text.length).toBeLessThan(1024);
+  });
+
+  test("images are told apart by magic bytes, not by name", async () => {
+    writeFileSync(join(dir, "photo.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]));
+    writeFileSync(join(dir, "anim.gif"), Buffer.from("GIF89a\x01\x00\x01\x00", "latin1"));
+    writeFileSync(join(dir, "pic.webp"), Buffer.concat([Buffer.from("RIFF"), Buffer.from([4, 0, 0, 0]), Buffer.from("WEBPVP8 ")]));
+    writeFileSync(join(dir, "screenshot.txt"), PNG_BYTES);
+    writeFileSync(join(dir, "notes.png"), "just text in a .png name\n");
+
+    expect((await read("photo.jpg")).image?.mediaType).toBe("image/jpeg");
+    expect((await read("anim.gif")).image?.mediaType).toBe("image/gif");
+    expect((await read("pic.webp")).image?.mediaType).toBe("image/webp");
+    expect((await read("screenshot.txt")).image?.mediaType).toBe("image/png");
+
+    const text = await read("notes.png");
+    expect(text.ok).toBe(true);
+    expect(text.image).toBeUndefined();
+    expect((text.data as { content?: string }).content).toBe("just text in a .png name\n");
+
+    expect(sniffImageMediaType(new Uint8Array([0x89, 0x50, 0x4e]))).toBeNull();
+    expect(sniffImageMediaType(Buffer.from("RIFF\0\0\0\0WAVE", "latin1"))).toBeNull();
+    expect(sniffImageMediaType(new Uint8Array())).toBeNull();
+  });
+
+  test("files-read refuses an image over 20MB", async () => {
+    const big = join(dir, "huge.png");
+    writeFileSync(big, PNG_BYTES);
+    truncateSync(big, MAX_IMAGE_SIZE_BYTES + 1); // sparse: cheap on disk
+    const r = await read("huge.png");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("refused: image 'huge.png'");
+    expect(r.error).toContain("20MB");
+    expect(r.image).toBeUndefined();
+    expect(r.data).toBeUndefined();
+
+    // Exactly at the cap is still an image.
+    truncateSync(big, MAX_IMAGE_SIZE_BYTES);
+    const atCap = await read("huge.png");
+    expect(atCap.ok).toBe(true);
+    expect(atCap.image?.mediaType).toBe("image/png");
+  });
+
+  test("a text file reads exactly as before", async () => {
+    writeFileSync(join(dir, "hello.txt"), "héllo wörld\n");
+    const r = await read("hello.txt");
+    expect(r).toEqual({
+      ok: true,
+      data: { path: "hello.txt", bytes: Buffer.byteLength("héllo wörld\n"), content: "héllo wörld\n" },
+      message: "héllo wörld\n",
+    });
+  });
+
+  test("the path clamp and the ROLES-CHAT-8 secret gate still run first", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "corvidinho-files-img-out-"));
+    try {
+      writeFileSync(join(outside, "x.png"), PNG_BYTES);
+      const escaped = await read(join(outside, "x.png"));
+      expect(escaped.ok).toBe(false);
+      expect(escaped.image).toBeUndefined();
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+
+    mkdirSync(join(dir, ".ssh"));
+    writeFileSync(join(dir, ".ssh", "shot.png"), PNG_BYTES);
+    process.env.CORVIDINHO_ACTING_IS_ADMIN = "0";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = "999999999999999999";
+    const secret = await read(".ssh/shot.png");
+    expect(secret.ok).toBe(false);
+    expect(secret.exitCode).toBe(2);
+    expect(secret.error).toContain("ROLES-CHAT-8");
+    expect(secret.image).toBeUndefined();
   });
 });

@@ -226,9 +226,11 @@ and then write the files inside the directory the agent runs in
 `attachmentCacheDir(store.cwdFor(session))`), never under a shared `/tmp`
 dir, and SHALL include those paths in the agent prompt via
 `enrichPromptWithImages`, so the agent's `files-read` (which refuses paths
-outside its cwd) can open them. The attachment dir SHALL carry a
-self-ignoring `.gitignore` so images never land in a commit, and SHALL be
-removed with the workspace when the session ends or expires
+outside its cwd) can open them; `files-read` SHALL hand the model the image
+itself as an image part, not decoded bytes (REQ-plugins-427 /
+REQ-agent-428). The attachment dir SHALL carry a self-ignoring `.gitignore`
+so images never land in a commit, and SHALL be removed with the workspace
+when the session ends or expires
 (SESSION-WORKTREE-3). Non-image / oversized / failed downloads SHALL be
 skipped with a notice. The bridge SHALL NOT introduce ProcessManager or
 weaken allowlists. Fixture tests SHALL cover extraction and localPath without
@@ -237,8 +239,10 @@ a live Discord token or live CDN.
 Acceptance Criteria
 - Supported image → downloaded + localPath under cache dir; prompt cites path.
 - Bridge: the cited path is under `<session cwd>/.corvidinho/attachments/`;
-  `files-read` with that cwd opens it; `git status` in the talk worktree stays
-  clean; ending the session deletes the file.
+  opening the cited path with `files-read` (with that cwd) gives the model the
+  image itself (an image part: `mediaType` `image/png`, base64 that
+  round-trips to the downloaded bytes), not decoded bytes; `git status` in the
+  talk worktree stays clean; ending the session deletes the file.
 - Unsupported MIME / oversize / over-5 → skipped; peers unaffected.
 - Fixture tests for appendAttachmentUrls / buildMultimodalContent /
   enrichPromptWithImages; no live token; secrets out of repo; default-deny.
@@ -251,9 +255,10 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 Discord chat reply SHALL surface a parsed summary (state / verified /
 attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
 `--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
-agent loop still skips the verify lane when `filesChanged` is empty so plain
-chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
-without a live Discord token.
+agent loop still skips the verify lane when no tool reported files and the
+run's git working tree is unchanged (REQ-agent-085), so plain chat stays
+fast. Fixture tests SHALL cover argv shape and summary parsing without a live
+Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
@@ -386,8 +391,21 @@ Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
 asynchronously with a small concurrency cap so live Discord HEAR and GitHub
 WATCH ingress remain ≤ ~1 minute (DISCORD-SCHEDULE-4). Schedule ticks SHALL
-re-check channel allowlists (and rely on existing SAFE gates) so a schedule
-cannot post or act outside channels/repos already allowed (DISCORD-SCHEDULE-3).
+re-check the live allowlist (and rely on existing SAFE gates) so a schedule
+cannot post or act outside channels/repos already allowed (DISCORD-SCHEDULE-3):
+before any worktree or agent run, and again right before the post, the
+schedule's channel (when set) SHALL be allowlisted and the schedule's creator
+SHALL pass the same actor gate as live ingress (`gateActor`, REQ-discord-201):
+a deny-listed creator is refused (deny wins, the owner too); when the user or
+role allowlist is non-empty the creator's user id SHALL be listed or be the
+configured owner (a tick has no member roles, so a creator admitted only by a
+listed role is refused); empty user and role lists leave the channel gate
+alone. A run refused
+before it starts SHALL create no worktree, spawn no agent and post nothing,
+SHALL be recorded failed (`creator not allowlisted: …` or `channel not
+allowlisted: <id>`) and SHALL count toward the 5-failure auto-pause; a run
+whose creator or channel is refused by the time it would post SHALL NOT post.
+No new env var, config key, slash command or option.
 Provenance: steal archived corvid-agent schedule slash + scheduler + ADR
 (DISCORD-SCHEDULE-5). No ProcessManager. Fixture tests without live Discord.
 
@@ -397,6 +415,11 @@ Acceptance Criteria
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
 - Optional create `channel` must be allowlisted; tick re-checks before post.
+- A due schedule whose creator is on `denyUsers` is refused at tick: no agent run, no post, the run is recorded failed with `creator not allowlisted: …`.
+- With a non-empty user allowlist, a schedule by an unlisted creator is refused; one by a listed user or by the configured owner (not on the list) still runs and posts.
+- A creator deny-listed while their run is in flight gets no post.
+- Refused-creator ticks count toward the 5-failure auto-pause.
+- With empty user and role lists a schedule by any creator still runs (channel-gated only).
 - Tick returns without awaiting agent; concurrent cap respected.
 - Schedules reload from shared SQLite after reopen.
 - Durable SessionStore/WorkStore from SESSION (#61) remains the bridge path.
@@ -865,15 +888,17 @@ Acceptance Criteria
 
 Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
 prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
-argv MUST NOT include `--no-verify`. Empty `filesChanged` continues to skip
-verify inside the agent loop (honest `verifySkipped`); when tools report file
-changes, `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
+argv MUST NOT include `--no-verify`. An empty real diff with no
+tool-reported files continues to skip verify inside the agent loop (honest
+`verifySkipped`); when tools report file changes or the run's git working
+tree changed (REQ-agent-085), `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
 of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
 Discord.
 
 Acceptance Criteria
 - Discord spawn argv never includes `--no-verify`.
 - Package `0.0.13`; docs/STATUS/CHANGELOG updated.
+- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool-reported files still skips verify (REQ-agent-085).
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-108
@@ -890,7 +915,10 @@ correct:
 - Store updates SHALL write only the columns they own. Status changes write
   status / next_run_at / updated_at; run start writes last_run_at /
   execution_count / next_run_at / updated_at; run finish writes
-  consecutive_failures (counted in SQL) / updated_at. A run finishing in one
+  consecutive_failures (counted in SQL) / updated_at, and on the run row its
+  outcome and ask (`ask_reason` / `ask_question`, REQ-discord-347); taking
+  or handing back a run's ask writes only `ask_posted_at`, with a
+  compare-and-set so one ticker takes it. A run finishing in one
   process SHALL NOT undo a pause or resume made in another.
 - The scheduler SHALL record each run's outcome exactly once, even when a
   shutdown abandons a run that later returns.
@@ -906,7 +934,8 @@ correct:
 
 Existing tick behaviour is unchanged: the 60 s poll, max 2 concurrent runs,
 no catch-up, auto-pause after 5 failures, and the non-blocking tick
-(DISCORD-SCHEDULE-4). No schema change.
+(DISCORD-SCHEDULE-4). The claim itself needs no schema change; the ask
+columns are schema v11 (REQ-discord-347).
 
 Acceptance Criteria
 - Two tickers on one DB file start a due run once; one run row, `execution_count` 1.
@@ -916,6 +945,7 @@ Acceptance Criteria
 - `abandonInFlight` records a stuck run as failed once; a late agent result does not record it again.
 - `abandonInFlight` aborts the signal the stuck run's agent was given.
 - An abort after the spawned agent exited, while its background child still holds the output pipe, kills that child and `runChat` returns.
+- A run's ask is taken by one ticker only: two bridge-wired tickers on one DB post a pending ask once (REQ-discord-347).
 
 ### REQ-discord-044
 
@@ -1474,4 +1504,134 @@ Acceptance Criteria
 - `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters, keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
 - A token that is only in the `startBridge` env and appears in the login error text is redacted in the returned message.
 - `formatRegisterCommandsFailure` on a `DiscordAPIError` 403 `Missing Access` with the bridge options gives `[discord] slash command registration failed (403): Missing Access — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and DISCORD_GUILD_ID` with no `requestBody` and no newline; with defaults a 401 names `--guild-id`, a status-less error gets no hint, and a secret env value is redacted.
+
+### REQ-discord-347
+
+A schedule run that stops to ask a human SHALL reach Discord even when the
+ticker that claimed it has no Discord connection (AUTONOMY-2, AUTONOMOUS-7;
+`corvidinho daemon`, CLI-8 / AUTONOMOUS-4). The daemon SHALL still need no
+Discord token (REQ-cli-108): it records the ask, and the bridge posts it.
+
+- Record. When a schedule run ends with an ask (`stuck`, `clarify` or
+  `spend-cap`), the run-finish write SHALL store the ask on the run's
+  `schedule_runs` row: `ask_reason`, and `ask_question` written through
+  `scrubSecrets` (SAFE-6) and capped at `ASK_QUESTION_MAX`, with
+  `ask_posted_at` unset (schema v11). `ask_question` SHALL be listed in
+  `SCRUB_TARGETS`. A run without an ask stores none.
+- In-process post. A ticker that can post (the bridge) SHALL take the ask it
+  is about to post with a compare-and-set on `ask_posted_at IS NULL` before
+  posting it, as today, so no other ticker posts it too. A run whose creator
+  or channel the live DISCORD-SCHEDULE-3 gate (REQ-discord-020) refuses posts
+  nothing and its ask stays pending.
+- Delivery. On each scheduler tick a ticker that can post SHALL, without
+  awaiting it (DISCORD-SCHEDULE-4), deliver pending asks: for each schedule
+  whose newest finished run (by completion time) has an ask no ticker took,
+  when the schedule has a channel and its creator and channel pass the same
+  live DISCORD-SCHEDULE-3 gate as a run's post (REQ-discord-020: the creator
+  through `gateActor`, deny wins, a non-empty user/role list must list the
+  creator unless they are the configured owner; the channel through
+  `checkChannel`), it SHALL take the ask with the same compare-and-set, which also re-checks
+  that the run is still its schedule's newest finished run, and post it
+  through the schedule ask post: the schedule prefix and the question, the owner
+  pinged for `stuck` and `spend-cap` and the schedule creator for `clarify`
+  (AUTONOMY-4), at most once per question per schedule (`askPingKey`) and
+  a `spend-cap` ask at most once per cap episode (`claimCapPing`, SAFE-8),
+  no reply hint on a `spend-cap` ask, and the pending 80% warning riding the
+  post. A post that does not go out (resolves `false` or throws) SHALL hand
+  the ask, the warning and the cap ping back, keep no ping key, log a
+  scrubbed `[scheduler] ask failed: …` line when it threw, and be retried on
+  a later tick. Only one delivery pass SHALL run at a time.
+- Staleness. An older pending ask SHALL NOT be posted once a later run of
+  that schedule has finished, including a run that finishes while a
+  delivery pass is posting another ask, and a deleted schedule's asks SHALL
+  NOT be posted. Runs recorded before schema v11 carry no ask and SHALL NOT
+  be posted.
+- Stop. After the scheduler's `stop()` a delivery pass SHALL take no
+  further ask, and the bridge's stop SHALL wait at most
+  `ABANDONED_SETTLE_MS` (3 s, `settleAskDelivery`) for a post in flight
+  before it closes the gateway, so that ask is either posted or handed back
+  for the next start.
+- A ticker with no outbound (the daemon) SHALL NOT take or post asks; it
+  keeps logging `run.needs_human` (REQ-cli-098).
+
+No new slash command, env var, DM or channel.
+
+Acceptance Criteria
+- A daemon-wired scheduler's stuck run stores `ask_reason` `stuck` and the question with `ask_posted_at` null and posts nothing; a bridge-wired scheduler on the same DB posts it on its next tick once, to the schedule channel, with the prefix, the stuck headline, the question and the owner mention (`mentionUserIds` [owner]); later ticks post nothing more.
+- A daemon clarify ask posts with only the schedule creator mentioned.
+- A daemon spend-cap ask pings the owner with the pending 80% warning and no reply hint; a second one in the same episode posts without a ping; an episode another surface already pinged posts without a ping.
+- The same question from two daemon runs pings once; of two pending asks of one schedule only the newest posts.
+- A later finished run, or deleting the schedule, leaves nothing to post.
+- A later run that finishes while a delivery pass is posting another schedule's ask makes that schedule's pending ask moot: it is not posted.
+- After `stop()` a delivery pass finishes the post in flight and takes no other ask (it stays pending for the next start); `settleAskDelivery(ms)` resolves false while that post is still going; the bridge's stop closes the gateway only after a pending-ask post in flight resolved.
+- A channel the bridge's allowlist refuses gets no post and the ask stays pending.
+- A creator the bridge's live allowlist no longer lists, or deny-lists, gets no post and the ask stays pending; once `/admin` puts them back (the shared allowlist edited in place) the next tick posts it with its ping.
+- A post that resolves `false` or throws leaves the ask pending with no ping key (the throw is logged); the next tick posts it with the ping.
+- A run the bridge claimed and posted is not posted again by its ticks; two bridge tickers on one DB post a pending ask once.
+- A v10 DB migrates to v11 keeping its runs, none of which is pending; a secret in the question is redacted at rest and in the post; `rescrubDatabase` re-scrubs `ask_question`.
+- `corvidinho daemon` logs `run.needs_human` for a stuck run and a Discord bridge started on the same data dir posts the ask to the owner once.
+
+### REQ-discord-072
+
+A Discord session SHALL keep its thread (AGENT-6, with DISCORD-2 /
+DISCORD-2.a "so the conversation stays coherent"). Every agent run on a
+session SHALL be recorded with that session as two turns: the human's own
+words for that run (the routed message text before memory, identity and
+image enrichment; the picked option's label for a button pick; the topic of
+`/session start`; the description of `/work`), recorded as the run starts so
+a run that throws or a bridge that dies mid-run still keeps the request, and
+the answer the bridge posted (the summary, the ask text, or the failure line,
+also when the run throws). A button ask, whose Choose stub does not show the
+question, SHALL be recorded as its question and choices. A SAFE-8 spend-cap
+stop SHALL record no answer turn, so no cap text reaches a later prompt
+(REQ-discord-098).
+
+When a run continues a live session (a reply to a tracked bot message, a
+message in the session's thread, the same user's @mention in the same
+channel, or a button pick that resumes it), the bridge SHALL put the
+session's earlier turns, oldest first, in one labelled block
+(`SESSION_THREAD_HEADER` … `SESSION_THREAD_FOOTER`, turns labelled
+`Human:` / `You (Corvidinho):`) ahead of the new message and any
+pending-ask block, before identity and memory are added. The block SHALL fit
+a fixed character budget (`SESSION_THREAD_BUDGET_CHARS`, 6000; each turn
+clipped to `SESSION_THREAD_TURN_MAX_CHARS`, 1500): the session's opening
+request and as many of the newest turns as fit SHALL be kept, and the turns
+between SHALL be replaced by one `(N earlier turns omitted)` marker. The
+block SHALL open with a `[Corvidinho …]` header and hold no blank line
+(blank lines inside a turn are collapsed), so Planning module selection
+leaves the whole block out and earlier turns or the header never pick a
+module the new message does not name (REQ-agent-004). A clipped turn SHALL
+never end on half a surrogate pair. No model summarising. A session keeps
+at most `SESSION_THREAD_MAX_TURNS` (200) turns: past it the oldest turn
+after the opening request is dropped.
+
+Turns SHALL persist in the shared SQLite DB in the module-owned
+`discord_session_turns` table (CREATE TABLE IF NOT EXISTS when a
+`SessionStore` opens the DB, no schema version bump; rows cascade with
+their session) so the thread survives a bridge restart within the soft TTL
+(REQ-discord-019). Turns SHALL live only as long as their session: ending a
+session, or its idle expiry past the soft TTL, SHALL delete its turns, and a
+session that starts fresh SHALL get no replay (SESSION-2/3; longer-term
+continuity comes from MEMORY, SESSION-4). A session belongs to one Discord
+user (SESSION-MULTI-1), so no other user's run SHALL ever see its turns.
+Turn text SHALL be passed through `scrubSecrets` before it is kept or
+replayed, and `discord_session_turns.content` SHALL be listed in
+`SCRUB_TARGETS` (SAFE-6). The run's `humanText` (the only source of SAFE-4
+confirm tokens) SHALL stay the current message only. No new env var, config
+key, CLI flag or slash command; WATCH and CLI `task run` are unchanged.
+
+Acceptance Criteria
+- A reply to the bot's answer continues the session with `resume: true`, and its prompt holds the earlier request and answer, oldest first, before the new message; `humanText` is the new message only.
+- The same user's @mention that continues their live session in the channel, and each further reply, carries every earlier turn in order.
+- After a bridge restart on the same DB file within the soft TTL, a reply to the earlier answer continues the session and its prompt holds the earlier request and answer.
+- A reply to a `/session start` or `/work` answer carries that topic or description and its answer.
+- The human's request is in the DB while its run is still going (a bridge restarted mid-run finds it), and a run that throws (chat, `/session start`, `/work`) keeps the request and the failure line, so the next message, or a reply to the failure, carries them.
+- `planningSelectionText` of a continued run's prompt is the new message only: the block's header and earlier turns (multi-paragraph answers included) pick no module, and a module the new message names still counts; a turn clipped next to an emoji never ends on half a surrogate pair.
+- A button pick's resumed run carries the original request (not only the question and the label); a later reply carries the request, the question, the picked label and the answer.
+- A spend-cap stop keeps the human's request in the thread; the next prompt holds no spend-cap text and no pending-ask block.
+- A long thread renders within the budget: the opening request right after the header, one marker whose count is exactly the turns left out, then the newest turns ending with the newest answer; one huge turn is clipped.
+- A session idle past the soft TTL starts a new session whose prompt holds no earlier turn; ending or expiring a session deletes its turns (memory and DB); orphan rows left by an older build are swept on load.
+- Another user's session in the same channel (by @mention or by replying with the ping to my answer) never sees my turns, and my continuation never sees theirs.
+- Stored turns hold `[redacted:github-token]` instead of a `ghp_` token (in memory, in the DB, and in the replayed prompt); `rescrubDatabase` rewrites a raw row in `discord_session_turns`.
+- The turns table is created on `SessionStore` open without changing `schema_meta.version`, idempotently.
 

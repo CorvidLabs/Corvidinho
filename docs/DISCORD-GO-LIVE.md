@@ -167,6 +167,7 @@ draft-PR step, an entry only affects `corvidinho plugins run` (see "What an entr
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
 | `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere), and `plugins list` names any that are not loaded |
 | `memory-forget` | true | 1 | true | an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4); Discord chat cannot reach it, see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
@@ -204,7 +205,10 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
   (mode 600, not in git).
 - One daemon per data dir: `<data dir>/daemon.lock`. A second one logs `daemon.lock_held` and exits 1.
 - It can run next to the bridge on the same DB. Each due run is claimed once. Runs the daemon
-  claims are recorded in the run history only; it never posts to Discord.
+  claims are recorded in the run history; the daemon itself never posts to Discord. A daemon
+  run that stops to ask a human (stuck, clarify, spend cap) keeps its question on the run row,
+  and the bridge's next scheduler tick posts it to the schedule's channel once (see
+  [`DAEMON.md`](DAEMON.md)).
 - Scheduled runs are never ADMIN (read/chat tools only, E.6) and always non-interactive (E.3).
 - Stop is SIGTERM: it waits up to 30 s for in-flight runs, so keep `TimeoutStopSec` above that
   (the example uses 60). Runs still going after the wait are recorded as failed and their whole

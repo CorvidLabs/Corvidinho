@@ -159,11 +159,13 @@ Acceptance Criteria
 
 ### REQ-cli-009
 
-The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop. Bridges SHALL keep `--no-verify` available for latency; the verify gate SHALL remain available when not skipped.
+The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop. Bridges SHALL keep `--no-verify` available for latency; the verify gate SHALL remain available when not skipped. The tier SHALL also select the model the run calls (REQ-agent-079). Help SHALL document the optional per-tier model keys `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, and when any of them is set the doctor `[ok] llm` line SHALL name the model each tier calls (model names only, never the API key); with none set the line SHALL read as before.
 
 Acceptance Criteria
 - Help documents `--tier` and LLM env vars (no secrets).
 - task run forwards ToolCall/ToolResult when not `--json`.
+- Help lists `CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE`.
+- With `CORVIDINHO_LLM_MODEL=big`, `_READ=cheap` and `_CODE=big2`, doctor prints `[ok] llm: … model big; per tier: read cheap, tool big, code big2` and exits 0 without the key value; with no per-tier key the line ends `model big`.
 
 ### REQ-cli-010
 
@@ -346,9 +348,11 @@ warning onto `TaskResult.spendWarning` in `--json` output and the NDJSON
 question. `corvidinho daemon`, which has no Discord, SHALL log a `warn`
 `spend.warning` line for a schedule run that crossed 80% and a `warn`
 `run.needs_human` line with the ask reason for a run that stopped to ask,
-leaving the recorded warning pending for a bridge to deliver. `--help` and
-`.env.example` SHALL list the variable and say it warns at 80% and stops and
-asks at 100%.
+leaving the recorded warning and the ask recorded on the run row pending for
+a bridge to deliver (REQ-discord-347; AUTONOMY-2 / AUTONOMOUS-7). The daemon
+SHALL NOT post or take the ask itself and still needs no Discord token
+(REQ-cli-108). `--help` and `.env.example` SHALL list the variable and say it
+warns at 80% and stops and asks at 100%.
 
 Acceptance Criteria
 - `bun src/cli.ts doctor` without the variable prints `[info] spend: no daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)`.
@@ -356,6 +360,7 @@ Acceptance Criteria
 - Invalid cap, unpriced model, 80% and cap reached yield a `warn` line with `ok: true`.
 - `task run --json` against a localhost mock LLM carries `result.spendWarning` on the crossing run only, and at the cap returns `blocked` with a `spend-cap` ask, the generic summary and exit 0 without calling the mock; `--output text` at the cap prints the summary and the ask question.
 - The daemon logs `spend.warning` (amounts and percent) and `run.needs_human` (`reason` `spend-cap`) as `warn` lines for a schedule run that reports them.
+- A stuck schedule run the daemon claims logs `run.needs_human` (`reason` `stuck`), is recorded with its ask pending, and a Discord bridge started later on the same data dir posts it to the owner once.
 
 ### REQ-cli-085
 
@@ -373,9 +378,19 @@ Acceptance Criteria
 The CLI SHALL expose `corvidinho daemon`. It ticks the shared SQLite schedules
 table on the existing 60 s poll with no Discord token and no REPL (CLI-8,
 AUTONOMOUS-4). It SHALL use the bridge's scheduler gates: the channel
-allowlist re-check (DISCORD-SCHEDULE-3), per-run worktrees
-(SESSION-WORKTREE), and non-interactive agent spawns (SAFE-1). It SHALL add no
-new environment variables.
+allowlist and schedule-creator re-check (DISCORD-SCHEDULE-3, REQ-discord-020),
+with the configured owner loaded at start (IDENTITY-1) so the owner's
+schedules pass the creator gate as they do in the bridge, per-run worktrees
+(SESSION-WORKTREE), and non-interactive agent spawns (SAFE-1). Before each
+tick the daemon SHALL re-read the allowlist the way start loads it (file, env
+overlays and `DISCORD_CHANNEL_IDS`) and SHALL gate that tick's runs against
+it, so an `/admin` edit the bridge writes to the file applies on the next
+tick without a restart. When the file exists but cannot be read or parsed the daemon SHALL
+skip that tick (fail closed, ALLOW-4): log `tick.allowlist_failed` with the
+loader's value-free error, start no run, and leave due schedules due. A
+tick still re-reading the allowlist when stop begins SHALL start no run (the
+stop only drains runs already claimed). It SHALL add no new environment
+variables.
 
 Only one daemon SHALL run per data dir. The daemon SHALL create
 `<data dir>/daemon.lock` exclusively, recording its pid and Linux process
@@ -417,6 +432,10 @@ Acceptance Criteria
 - A second daemon on the same data dir exits 1 with `daemon.lock_held` and the holder pid.
 - A lock from a dead or recycled pid is taken over; an unreadable lock younger than 5 s is not.
 - A due schedule is run headlessly and logged as `run.finished`; a non-allowlisted channel is refused without running the agent.
+- A channel removed from the allowlist file after start, or a creator added to its `deny_users`, is refused on the next tick without running the agent (`run.finished` with `channel not allowlisted: …` / `creator not allowlisted: …`).
+- A malformed allowlist file makes the next tick log `tick.allowlist_failed` and run nothing; once the file is fixed, the still-due schedule runs on the following tick.
+- With a non-empty user list that omits the owner, the configured owner's schedule still runs; an unlisted non-owner creator's schedule is refused.
+- A tick still re-reading the allowlist when SIGTERM stops the daemon claims no run: the due schedule gets no run row and the stop drains without abandoning anything.
 - Stop after the grace records stragglers as failed and frees the lock; a forced stop skips the grace.
 - A straggler spawned through the real spawn client (fake `sh` bin with a same-group and a `setsid` grandchild) has its whole tree killed at shutdown.
 - Log lines parse as JSON, and secrets in fields are redacted.
@@ -440,11 +459,19 @@ missing or fails, the command SHALL still list builtins and exit 0.
 `corvidinho plugins run fledge-<command>` SHALL discover Fledge plugins only
 when that name is not already registered, then run it under SAFE-1.
 
+Before the Fledge status line the text view SHALL print the PLUGIN-4 language
+runner status: `Language runners (PLUGIN-4): <name> (<binary>), …` for the
+runners that loaded (or `none loaded`), then one `<name> not loaded:
+<tool> not found on PATH` line per runner whose toolchain is missing
+(REQ-plugins-314). A missing toolchain SHALL NOT change the exit code (0).
+
 Acceptance Criteria
 - With a fake fledge on PATH, `plugins list` shows `fledge-hello  [dangerous, tier>=2, fledge:fledge-plugin-hello@0.2.0]  ~N tok`, the cost summary and `Fledge plugins: 1 plugin(s), 1 command(s) registered`.
 - `plugins list --json` is an array; `fledge-hello` has dangerous=true, minTier=2, origin, schemaChars, approxTokens; builtins have origin `builtin`.
 - Without fledge on PATH, builtins list, `Fledge plugins: none loaded (fledge not on PATH)` prints, exit 0.
 - `--non-interactive plugins run fledge-hello` exits 2 (SAFE-1) unless `CORVIDINHO_ALLOWLIST=fledge-hello`, which runs it in the project root.
+- With no node, python3/python or cargo on PATH, `plugins list` exits 0, still lists `shell-exec`, prints `Language runners (PLUGIN-4): none loaded` and `node-exec not loaded: node not found on PATH` / `cargo-exec not loaded: cargo not found on PATH`, and lists no runner command.
+- With only `cargo` on PATH, `plugins list` lists `cargo-exec  [dangerous, tier>=2]`, prints `cargo-exec (<path to cargo>)` on the runner line and names `node-exec` as not loaded.
 
 ### REQ-cli-017
 
@@ -631,4 +658,23 @@ Acceptance Criteria
 - `package.json` version is `0.0.29`.
 - CLI `version` prints `0.0.29`.
 - CHANGELOG has a 0.0.29 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-089
+
+`corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status>` SHALL run the matching `specsync-*` plugin command. `score` SHALL run `specsync-score`, so "are we drifting?" can be answered from the CLI with SpecSync's own score report (SPECSYNC-3). No slash command is added.
+
+Acceptance Criteria
+- `corvidinho specsync score cli --explain` runs the local `specsync score cli --explain` and prints its report, exit 0.
+- `corvidinho plugins run specsync-score --json -- --format json` returns `{ok:true,data:{output}}` with the report.
+- A failing `specsync score` (e.g. `--min-score 90` below the floor) exits with its code and prints the report on stderr.
+- `corvidinho specsync` with no or an unknown subcommand prints the usage line (which lists `score`) and exits 1; `--help` lists `score`.
+
+### REQ-cli-421
+
+The project SHALL ship package version `0.0.30` (session threads, images to the model, real-diff verify, per-tier models, creator-gated schedule ticks + daemon asks reach Discord (schema v11), CI-strict spec-check, language runners, CI tags every version). CLI `version` and Discord presence (DISCORD-12) report `0.0.30` after a restart. CHANGELOG SHALL include verbose 0.0.30 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.30`.
+- CLI `version` prints `0.0.30`.
+- CHANGELOG has a 0.0.30 section that the updater's changelog helper extracts exactly.
 

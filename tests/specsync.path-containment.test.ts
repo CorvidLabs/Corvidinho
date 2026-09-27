@@ -244,7 +244,12 @@ describe("spawn-backed SpecSync tools refuse --root (REQ-plugins-008)", () => {
     expect(refuseRootArg(["some-change-id"])).toBeNull();
   });
 
-  for (const name of ["specsync-coverage", "specsync-change-list", "specsync-ship-status"]) {
+  for (const name of [
+    "specsync-coverage",
+    "specsync-score",
+    "specsync-change-list",
+    "specsync-ship-status",
+  ]) {
     test(`${name} refuses --root before spawning specsync`, async () => {
       for (const args of [["--root", outside], [`--root=${outside}`], ["--json", "--root", outside]]) {
         const r = await run(name, args);

@@ -14,7 +14,12 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { Glob } from "bun";
-import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
+import type {
+  PluginCommand,
+  PluginHandlerResult,
+  PluginImage,
+} from "../../src/plugins/types.ts";
+import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
 import {
   isProtectedPath,
   isSecretPath,
@@ -61,6 +66,35 @@ function errResult(err: unknown): PluginHandlerResult {
   };
 }
 
+/**
+ * files-read of a PNG / JPEG / GIF / WebP (REQ-plugins-427): metadata in
+ * `data` and `message`, the bytes only on `image`. Over the 20MB image cap
+ * is refused.
+ */
+function readImage(
+  pathArg: string,
+  abs: string,
+  mediaType: PluginImage["mediaType"],
+  size: number,
+): PluginHandlerResult {
+  const overCap = (n: number): PluginHandlerResult => ({
+    ok: false,
+    error:
+      `refused: image '${pathArg}' is ${n} bytes, over the ` +
+      `${MAX_IMAGE_SIZE_BYTES / (1024 * 1024)}MB image limit`,
+    exitCode: 1,
+  });
+  if (size > MAX_IMAGE_SIZE_BYTES) return overCap(size);
+  const buf = readFileSync(abs);
+  if (buf.length > MAX_IMAGE_SIZE_BYTES) return overCap(buf.length);
+  return {
+    ok: true,
+    data: { path: pathArg, bytes: buf.length, mediaType, image: true },
+    message: `image ${pathArg} (${mediaType}, ${buf.length} bytes) opened for viewing`,
+    image: { path: pathArg, mediaType, base64: buf.toString("base64") },
+  };
+}
+
 const SIZE_GUARD_FLOOR = 64 * 1024;
 
 function checkSizeExplosion(
@@ -87,7 +121,7 @@ export const filesCommands: PluginCommand[] = [
   {
     name: "files-read",
     description:
-      "Read file contents under the project cwd. Args: <path> [--json]",
+      "Read file contents under the project cwd. A PNG/JPEG/GIF/WebP image (up to 20MB) is shown to you as a picture. Args: <path> [--json]",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -106,6 +140,10 @@ export const filesCommands: PluginCommand[] = [
           return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
         }
         assertExistingFile(abs);
+        // DISCORD-9 (REQ-plugins-427): an image goes to the model as pixels
+        // (result.image, never serialized), not as a lossy UTF-8 decode.
+        const img = sniffImageFile(abs);
+        if (img) return readImage(pathArg, abs, img.mediaType, img.size);
         const content = readFileSync(abs, "utf8");
         const data = { path: pathArg, bytes: Buffer.byteLength(content), content };
         if (ctx.json || argv.flags.has("--json")) {
