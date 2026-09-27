@@ -92,6 +92,29 @@
         "REQ-agent-501",
         "REQ-agent-502"
       ]
+    },
+    {
+      "timestamp": 1790538023,
+      "commit": "6b13af50ebdb7a054682b03995fb333b263c6e6f",
+      "contract_digest": "7090f90801f460d203d1a8940f0153ea1837527f148dfac8f91e490fa19ee2ee",
+      "execution_digest": "b92a00dde34c242854178f9e6cd76b446d0faf6cabe1626d28e6ef234ddb2c04",
+      "workspace_digest": "d24631c8f7997592d5a21dcf853c8670bae327804375df1bb2b5f5dbd5826696",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-009",
+        "REQ-agent-085",
+        "REQ-agent-112",
+        "REQ-agent-128",
+        "REQ-agent-501",
+        "REQ-agent-502"
+      ]
     }
   ]
 }
