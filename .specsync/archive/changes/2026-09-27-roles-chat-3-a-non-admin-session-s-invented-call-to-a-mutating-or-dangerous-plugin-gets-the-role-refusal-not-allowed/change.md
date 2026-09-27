@@ -1,0 +1,24 @@
+---
+id: roles-chat-3-a-non-admin-session-s-invented-call-to-a-mutating-or-dangerous-plugin-gets-the-role-refusal-not-allowed
+state: archived
+type: bug_fix
+base_commit: 0940db343de30fdb4d79d83cfa44b95c5a247681
+---
+
+# ROLES-CHAT-3: a non-ADMIN session's invented call to a mutating or dangerous plugin gets the role refusal (not allowed for your role), not the catalog refusal, and the run summary ends with a short (not allowed for your role) note once a call was refused for the caller's role
+
+## Intent
+
+ROLES-CHAT-3: a non-ADMIN session's invented call to a mutating or dangerous plugin gets the role refusal (not allowed for your role), not the catalog refusal, and the run summary ends with a short (not allowed for your role) note once a call was refused for the caller's role
+
+## Affected Canonical Specs
+
+- `agent`
+
+## Acceptance Criteria
+
+- In a non-ADMIN role session (CORVIDINHO_ACTING_IS_ADMIN=0), a tool call the model makes to any registered mutating or dangerous plugin it was not offered (files-write/edit/delete, shell-exec, github writes, discord-post-message, memory-forget/override and every other mutating plugin) gets exactly the role refusal runPlugin gives that caller (exit 2, 'Denied: plugin "<name>" is not allowed for your role (ROLES-CHAT-3).') instead of the 'not offered in this run's catalog' refusal, and still never runs (no file written). Once any tool call in a task run was refused for the caller's role (an invented call, or an offered call runPlugin refuses because ADMIN was lost mid-run), the run summary ends with the short line '(not allowed for your role)', added once and not when the summary already says 'not allowed for your role'; the live status (ToolCall/ToolResult progress) shows neither the refusal nor the invented name. A name that is not a registered plugin, and ADMIN or local CLI runs, keep the catalog refusal and get no note. tests/roles.chat.gates.test.ts proves it; the two behavior tests fail with main's execute.ts.
+
+## No-spec Rationale
+
+Not applicable

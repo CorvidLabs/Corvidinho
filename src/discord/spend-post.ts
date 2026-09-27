@@ -211,9 +211,9 @@ export async function finishSlashWithOwnerNotice(
 ): Promise<void> {
   const { notice, post, ...finish } = opts;
   const body: { mode: "collapsed" | "fallback" | null } = { mode: null };
-  const onDelivered = (mode: "collapsed" | "fallback") => {
+  const onDelivered = (mode: "collapsed" | "fallback", messageId?: string) => {
     body.mode = mode;
-    opts.onDelivered?.(mode);
+    opts.onDelivered?.(mode, messageId);
   };
   // Mentions in a collapsed (edited) answer do not notify: ping them fresh.
   const pingCollapsed = async (
@@ -254,9 +254,9 @@ export async function finishSlashWithOwnerNotice(
         ...finish,
         body: withNotice,
         mentionUserIds: mentions,
-        onDelivered: (mode) => {
+        onDelivered: (mode, messageId) => {
           delivered = true;
-          onDelivered(mode);
+          onDelivered(mode, messageId);
         },
       });
     } else {
@@ -280,11 +280,13 @@ export async function finishSlashWithOwnerNotice(
       // Who the collapsed answer mentions (the owner too once the notice rides it).
       let collapsedMentions = opts.mentionUserIds;
       if (!delivered && body.mode === "collapsed" && opts.thinking) {
-        // Append to the collapsed answer (edits it again).
+        // Append to the collapsed answer (edits it again, keeping any
+        // Choose button of a slash ask).
         try {
           delivered =
             (await opts.thinking.finalizeContent({
               content: withNotice,
+              ...(opts.components ? { components: opts.components } : {}),
               mentionUserIds: mentions,
             })) !== null;
         } catch {
@@ -293,10 +295,14 @@ export async function finishSlashWithOwnerNotice(
         if (delivered) collapsedMentions = mentions;
       } else if (!delivered && body.mode === "fallback") {
         const { interaction } = opts;
+        const payload = {
+          content: withNotice,
+          ...(opts.components ? { components: opts.components } : {}),
+        };
         try {
           await (interaction.editReply
-            ? interaction.editReply({ content: withNotice })
-            : interaction.reply({ content: withNotice }));
+            ? interaction.editReply(payload)
+            : interaction.reply(payload));
           delivered = true;
         } catch (err) {
           note(err);

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatAskSummary, stuckAfterVerifyAsk } from "../src/agent/ask.ts";
 import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
+import { loadLlmEnv } from "../src/agent/execute.ts";
 import type { HumanAsk, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/discord/agent-client.ts";
@@ -205,7 +206,11 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     expect(String(edit!.content)).toContain(`<@${MENTION.authorId}>`);
     expect(String(edit!.content)).not.toContain(`<@${OWNER_ID}>`);
     expect(String(edit!.content)).toContain(ASK_REPLY_HINT);
-    expect(edit!.embed).toBeNull();
+    // DISCORD-3.a — a free-text question is the turn's answer: footer-only embed.
+    expect(edit!.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: { text: loadLlmEnv(process.env).model },
+    });
 
     const session = result.store.getByBotMessage(edit!.messageId);
     expect(session).toBeDefined();
@@ -229,7 +234,11 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     expect(edit).toBeDefined();
     expect(String(edit!.content)).toContain("Verification still fails after 2 retries");
     expect(String(edit!.content)).not.toContain("failed (exit 1)");
-    expect(edit!.embed).toBeNull();
+    // DISCORD-3.a — a stuck ask shows as a failure in the footer-only embed.
+    expect(edit!.embed).toStrictEqual({
+      color: THINKING_COLORS.error,
+      footer: { text: loadLlmEnv(process.env).model },
+    });
     await result.stop();
   });
 

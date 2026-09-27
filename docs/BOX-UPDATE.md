@@ -33,8 +33,9 @@ The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `
 same env. A systemd unit's bridge still takes its env from the unit's own `EnvironmentFile=`,
 not from the updater (`systemctl` does not pass the caller's env on), so keep the two in step.
 Every doctor check must pass there — `discord`, `github`, `github-watch`, `fledge`,
-`specsync`, `plugins`, `data-dir`, and `allowlist-file` when an allowlist file exists (a file
-the loader cannot parse fails it) — or the update rolls back. `discord` and `github-watch`
+`specsync`, `plugins`, `data-dir`, the checkout's project files (`fledge.toml`, a
+`verify-lane` that runs spec-check, `.specsync`, `specs`), and `allowlist-file` when an
+allowlist file exists (a file the loader cannot parse fails it) — or the update rolls back. `discord` and `github-watch`
 read the allowlist file and env like the bridge and watch (deny wins); `[warn]` / `[info]`
 lines (for example `llm` without a key) do not fail doctor. The `github-watch` check needs
 `GITHUB_TOKEN`/`GH_TOKEN` and `CORVIDINHO_WATCH_USERNAME` in the env plus at least one usable

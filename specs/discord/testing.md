@@ -70,6 +70,26 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 
 - `tests/discord.memory-inject.test.ts` — format/enrich empty+seeded scope, system prompt rules, richer memory tool argv (no live Discord).
 - DISCORD-ASK-6/7: collapse thinking→stub→answer (ask-ephemeral + thinking-bridge + finalizeContent unit tests).
+- DISCORD-3.a answer footer (REQ-discord-457): `tests/discord.thinking-status.test.ts`
+  (`finalizeContent` keeps a footer-only embed `model | plumbing` with no
+  description, error color when failed, kept on a re-edit; none on a Choose
+  stub or with nothing to show), `tests/discord.thinking-bridge.test.ts`
+  (mention answer and a button pick's resumed answer carry it, the Choose stub
+  does not, the body has no plumbing), `tests/discord.slash-ask7.test.ts`
+  (`/session start` and `/work`); collapse assertions in ask-ping, spend and
+  inflight-replies tests expect the footer-only embed (no live Discord).
+
+## Button-pick resume identity (REQ-discord-446, IDENTITY-4)
+
+- `tests/discord.identity-pick.test.ts` — through `startBridge` with a fake
+  gateway and a recording agent: a non-owner's pick resume carries
+  `display_name` from the press's Discord display name, or its username when
+  there is none; the owner's pick keeps the owner map display and role line;
+  a pick with no names known injects the id only. `componentActorNames` maps
+  member display → nickname → global name → user display and the username,
+  trimmed, blank as undefined. A button press emitted on the live gateway's
+  client (real `login`, socket connect stubbed) reaches `onComponent` with the
+  presser's names, or neither when none is known (no live Discord).
 
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
@@ -110,11 +130,25 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `tests/discord.ask-ephemeral.test.ts`, `tests/discord.thin-ack.test.ts`,
   `tests/discord.inflight-replies.test.ts` — collapsed answers that mention
   someone now expect the one ping post (was: no fresh post at all).
+## Open button asks keyed by askId (REQ-discord-044, SESSION-MULTI-3 / DISCORD-ASK-3/5)
+
+- `tests/discord.ask-ephemeral.test.ts` — while a Choose ask is open, a later
+  chat run that asks again (buttons or free text) keeps the earlier ask: its
+  Choose button opens its choices and a pick resumes with that question and
+  label while the newer ask stays pending; a thin reply restates the newest;
+  a free-text answer clears only that ask; a late press on the earlier ask
+  expires only it; a timed-out earlier ask is dropped, not promoted, when the
+  newest is picked (a thin reply then runs the agent); `cancel` clears every
+  open ask; `SessionStore` keeps open
+  asks by askId in `discord_sessions.pending_ask` (one object, or an array
+  when several are open) across a reopen (no live Discord).
+
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
-  runs that stop to ask keep a free-text pending ask (options dropped; never a
-  spend-cap stop) and `/work` records the task `blocked`; the collapsed slash
+  runs that stop with an ask whose options cannot be listed (none, or a single
+  option) keep a free-text pending ask (never a spend-cap stop) and `/work`
+  records the task `blocked`; the collapsed slash
   answer maps to its session, so a reply `ok` restates without running the
   agent, `cancel` clears with the short ack, and a substantive reply resumes
   the same session with the question as context; a stuck `/work` ask pings
@@ -122,6 +156,26 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   only; another user's reply neither runs the agent nor touches the ask; a
   finished run keeps no pending ask; without `editMessage` an @mention `ok`
   still restates (no live Discord).
+- `tests/discord.slash-choose-ask.test.ts` (DISCORD-ASK-1/4) — `buttonAskFor`
+  lists structured options or a numbered list and returns null for free-form
+  questions and spend-cap stops; a `/work` clarify ask with options answers
+  with the collapsed Choose stub (no question, options or reply hint in it;
+  one Choose button; the requester's fresh ping) and keeps the ask with its
+  options and `stubMessageId`; the requester's Choose press opens the
+  ephemeral question with option buttons and a pick resumes the same session
+  (`resume: true`, chosen label) with the answer edited into the stub;
+  `/session start` with a numbered list does the same; a thin reply restates
+  the stub with its button and a substantive reply continues without clearing
+  the button ask; a stuck `/work` ask with options is `failed`, its stub pings
+  nobody and the owner notice is the one fresh post; when that notice post
+  fails the re-edited stub keeps its Choose button; without `editMessage` the
+  deferred reply carries the stub and button and its id is `stubMessageId`;
+  without listable options the answer stays free text with no button;
+  `recordSlashStub` records the stub id only on a still-pending ask of a live
+  session (not after a pick took it, not after the session ended); the live
+  gateway adapter forwards the Choose button on `editReply` and `reply`. The
+  bridge-level tests fail on the base sources (free-text answer, options
+  dropped).
 
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.

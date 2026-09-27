@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per",
+  "implementation_commit": "9981b88e0676aa8d2035318f6970d42043525cff",
+  "implementation_tree": "d8f932eb0efd2a0de84bbdd266c6ddaee8548789",
+  "contract_digest": "fbde3ed8c2c8989dc06efa19399a93d6f7553fd67185cc016e77aa534256355b",
+  "workspace_digest": "0566acdf7059ad4525ebcaa0dd6005dcc4f47967d79b8ddbbb4e61c5f04f5d59",
+  "closing_digest": "9c12ad7725d332c0ed2c4c9207a55d3ad6629c64c4d799feef28693a683b8b20",
+  "review_digest": "50d654800391c927f5fcd84c8a75431563721ec857b3d28143a19a1af9f2bd86",
+  "finalization_digest": "313c2592788a9a778fbee593164e5d9d8be3fc8c668939cb34177398117c39ca",
+  "timestamp": 1790538317
+}

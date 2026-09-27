@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadLlmEnv } from "../src/agent/execute.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { handleSessionStart } from "../src/discord/command-handlers/session.ts";
@@ -17,6 +18,7 @@ import type {
   SlashReplyPayload,
 } from "../src/discord/slash-types.ts";
 import {
+  THINKING_COLORS,
   type DiscordEmbedPayload,
   type EditMessageOpts,
   type ThinkingOutbound,
@@ -119,12 +121,13 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
     store: SessionStore,
     thinkingOutbound: ThinkingOutbound | undefined,
     tracked: string[],
+    agent: AgentClient = echoAgent(),
   ): SlashContext {
     return {
       store,
       workStore: new WorkStore(),
       allowlist: emptyConfig(),
-      agent: echoAgent(),
+      agent,
       version: "0.0.25",
       protocolVersion: 2,
       startedAt: Date.now(),
@@ -188,7 +191,11 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       expect(contentEdits.length).toBe(1);
       expect(contentEdits[0]!.content ?? "").toContain("Ship ASK-7 slash");
       expect(contentEdits[0]!.content ?? "").toContain("echo:");
-      expect(contentEdits[0]!.embed).toBeNull();
+      // DISCORD-3.a — the answer keeps a footer-only embed (model; echo has no task).
+      expect(contentEdits[0]!.embed).toStrictEqual({
+        color: THINKING_COLORS.success,
+        footer: { text: loadLlmEnv(process.env).model },
+      });
       expect(getDeleted()).toBe(1);
       // Deferred reply not filled with the full body.
       expect(edits.every((e) => !(e.content ?? "").includes("echo:"))).toBe(
@@ -217,6 +224,40 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
         true,
       );
       expect(tracked).toEqual(["msg_1"]);
+      const [session] = store.list();
+      if (session) await store.endSession(session);
+    });
+  });
+
+  test("/work answer keeps model + state/verified/verifySkipped/attempts in a footer-only embed, not the body (DISCORD-3.a)", async () => {
+    await withRepo(async (_project, store) => {
+      const { outbound, contentEdits } = mockOutbound();
+      const tracked: string[] = [];
+      const { ix } = slashIx("work", { description: "Footer plumbing" });
+      const agent: AgentClient = {
+        async runChat(input) {
+          return {
+            ok: false,
+            sessionId: input.sessionId,
+            exitCode: 1,
+            summary: "verify failed",
+            task: { state: "failed", verified: false, verifySkipped: false, attempts: 3, cancelled: true },
+          };
+        },
+      };
+      await handleWorkCommand(slashCtx(store, outbound, tracked, agent), ix);
+
+      expect(contentEdits.length).toBe(1);
+      const body = contentEdits[0]!.content ?? "";
+      expect(body).toContain("Footer plumbing");
+      expect(body).not.toContain("state=");
+      expect(body).not.toContain("attempts=");
+      expect(contentEdits[0]!.embed).toStrictEqual({
+        color: THINKING_COLORS.error,
+        footer: {
+          text: `${loadLlmEnv(process.env).model} | state=failed verified=false cancelled attempts=3`,
+        },
+      });
       const [session] = store.list();
       if (session) await store.endSession(session);
     });

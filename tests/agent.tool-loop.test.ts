@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -418,7 +418,12 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
     loadBuiltins();
   });
 
-  test("a registered but not-offered dangerous tool is refused, not run", async () => {
+  /** One tool call to `name`, then a plain reply; ToolResult events land in `events`. */
+  async function callOnce(
+    name: string,
+    args: string,
+    opts: Partial<Parameters<typeof createTaskExecute>[0]>,
+  ): Promise<{ success: boolean; detail: string } | undefined> {
     let call = 0;
     const fetchImpl = async () => {
       call += 1;
@@ -427,9 +432,7 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
           ? {
               role: "assistant",
               content: null,
-              tool_calls: [
-                { id: "c1", type: "function", function: { name: "danger-ping", arguments: "{}" } },
-              ],
+              tool_calls: [{ id: "c1", type: "function", function: { name, arguments: args } }],
             }
           : { role: "assistant", content: "done" };
       return new Response(JSON.stringify({ choices: [{ message }] }), {
@@ -446,19 +449,42 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
         CORVIDINHO_LLM_MODEL: "test-model",
       },
       fetchImpl,
-      tier: "tool",
-      // Interactive + allowlisted would have let runPlugin run it before.
-      nonInteractive: false,
-      allowlist: ["danger-ping"],
       onEvent: (e) => events.push(e),
       maxToolRounds: 3,
+      projectInstructions: false,
+      ...opts,
     });
     await exec({ attempt: 1, signal: new AbortController().signal });
-    const res = events.find((e) => e.type === "ToolResult") as
+    return events.find((e) => e.type === "ToolResult") as
       | { success: boolean; detail: string }
       | undefined;
+  }
+
+  test("a registered but not-offered dangerous tool is refused, not run", async () => {
+    // Interactive: runPlugin alone would run it. Not allowlisted ⇒ not offered.
+    const res = await callOnce("danger-ping", "{}", {
+      tier: "tool",
+      nonInteractive: false,
+      allowlist: [],
+    });
     expect(res?.success).toBe(false);
     expect(res?.detail).toContain("not offered");
+  });
+
+  test("an allowlisted SAFE-3-pending tool (shell-exec) is not offered: refused, not run, even interactive", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe3-pending-"));
+    try {
+      const res = await callOnce(
+        "shell-exec",
+        JSON.stringify({ argv: ["--command", "printf x > ran.txt"] }),
+        { tier: "code", cwd: dir, nonInteractive: false, allowlist: ["shell-exec"], autonomous: false },
+      );
+      expect(res?.success).toBe(false);
+      expect(res?.detail).toContain("not offered");
+      expect(existsSync(join(dir, "ran.txt"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

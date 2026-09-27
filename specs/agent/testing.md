@@ -40,6 +40,28 @@ dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
 reaches the verify gate": end to end through the real `shell-exec` plugin.
+## Allowlisted dangerous tools in task run (REQ-agent-501, REQ-agent-502)
+
+`tests/agent.allowlisted-dangerous.test.ts` (fake provider, fake `fledge` on
+PATH, GitHub dry run; no network): the catalog offers the allowlisted GitHub
+writes and memory forget/override at tool tier and leaves unlisted dangerous
+tools out; every offered dangerous tool is allowlisted; `files-delete` needs
+code tier; `shell-exec` and the runners are never offered from the allowlist;
+a non-ADMIN session gets no dangerous or mutating tool. Through
+`createTaskExecute` with `CORVIDINHO_ALLOWLIST=github-pr-review` the review
+runs (dry run) and an unlisted `github-issue-create` is refused; ADMIN gets
+it, non-ADMIN does not. An allowlisted `fledge-hello` is discovered, offered
+and run without `includeDangerous`; an allowlist with no `fledge-*` entry,
+or a non-ADMIN role session, never spawns fledge (the owner's ADMIN session
+does). In a non-git project a Fledge edit no tool reported runs verify and
+fails (allowlisted, and with `includeDangerous`), a GitHub-only run still
+skips verify, and the gate off stays done; a `delegate` call whose worker
+failed its own verify makes the lead verify and fail when the allowlist names
+`fledge-hello`, and skip verify when it names no `fledge-*` command.
+`tests/agent.tool-loop.test.ts` "tool loop dispatches only offered tools":
+an unlisted `danger-ping` in an interactive run and an allowlisted
+`shell-exec` at code tier are refused as not offered (REQ-agent-128).
+
 ## Verify retry feedback (REQ-agent-002, AGENT-4.a)
 
 `tests/agent.verify-feedback.test.ts`: `verifyFeedbackExcerpt` on a fledge
@@ -69,3 +91,18 @@ messages) and completes, also against a provider that rejects that role
 order; 404 / 413 / 415 / 422 fall back too, 401 / 429 / 500 do not; a refusal
 drops earlier rounds' images too; a later image after a refusal gets the note
 with no second retry; 400 on the retry, or with no image, stays an error.
+
+## Role refusal for invented calls (REQ-agent-333)
+
+`tests/roles.chat.gates.test.ts` "ROLES-CHAT-3 invented mutating calls in the
+tool loop": with a fake provider and no network, a non-ADMIN role session's
+invented call to every registered mutating plugin gets exactly `runPlugin`'s
+role refusal, runs nothing, keeps the live progress lines free of the refusal
+and the names, and the summary ends with `(not allowed for your role)` (kept on
+a later attempt); an offered `files-write` refused by `runPlugin` after the
+owner is muted mid-run also adds the note, and so does an invented
+`files-write` after an ADMIN caller is muted mid-run (ADMIN re-checked at the
+call); an offered tool whose own error only quotes the phrase adds no note; a
+long reply keeps the note through the `resultFrame` and `chatBodyFromTaskResult`
+caps; an unregistered name, ADMIN and the local CLI keep the "not offered"
+refusal with no note; a summary that already says it gets no second note.
