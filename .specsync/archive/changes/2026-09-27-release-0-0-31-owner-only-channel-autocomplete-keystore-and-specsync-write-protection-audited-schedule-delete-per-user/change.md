@@ -1,6 +1,6 @@
 ---
 id: release-0-0-31-owner-only-channel-autocomplete-keystore-and-specsync-write-protection-audited-schedule-delete-per-user
-state: implementing
+state: archived
 type: operations
 base_commit: 0940db343de30fdb4d79d83cfa44b95c5a247681
 ---
