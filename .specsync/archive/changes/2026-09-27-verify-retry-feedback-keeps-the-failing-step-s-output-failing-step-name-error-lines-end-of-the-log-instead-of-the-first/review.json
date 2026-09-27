@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "9de5a86ae9294b2029be05ed8ab49cd4ff3cad14",
+  "contract_digest": "8142fd4737499afa0052087428a7e7fb2c19a084eb40745a1cf9310e85ece482",
+  "execution_digest": "c6714d342606b30a8e9987d9d7795eb65ad91f8b9d0b90f1b9a8ab427cedbd99",
+  "workspace_digest": "5a89d7f6f4eead587da78d0402b8f922c2bdb4139416d4deb4a8358075f1eb51",
+  "timestamp": 1790533516
+}
