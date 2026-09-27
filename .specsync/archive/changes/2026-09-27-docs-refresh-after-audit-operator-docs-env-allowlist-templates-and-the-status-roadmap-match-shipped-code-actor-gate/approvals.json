@@ -1,0 +1,96 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790472827,
+      "digest": "6c760af93d724a3314f3c875aaffab7dbe19e93910e047d12a0760f207290970",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "docs-refresh-after-audit-operator-docs-env-allowlist-templates-and-the-status-roadmap-match-shipped-code-actor-gate",
+        "title": "Docs refresh after audit: operator docs, env/allowlist templates and the STATUS roadmap match shipped code (actor gate, requester ping, fail-closed allowlist file, 0.0.21-0.0.27 slices)",
+        "description": "Docs refresh after audit: operator docs, env/allowlist templates and the STATUS roadmap match shipped code (actor gate, requester ping, fail-closed allowlist file, 0.0.21-0.0.27 slices)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          ".env.example",
+          "AGENTS.md",
+          "CHANGELOG.md",
+          "README.md",
+          "STATUS.md",
+          "allowlist.example.toml",
+          "docs/BOX-UPDATE.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/UPDATE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "tests/docs.operator-facts.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Documentation and templates only, plus a docs-facts regression test under tests/; no runtime behavior, public API or canonical spec requirement changes",
+        "acceptance_criteria": [
+          "Every stale or wrong fact from the docs audit that is still true on main is corrected in AGENTS.md, README.md, STATUS.md, CHANGELOG.md (factual fixes only), docs/DISCORD-GO-LIVE.md, docs/BOX-UPDATE.md, docs/UPDATE.md, docs/WATCH.md, docs/discord.md, docs/DAEMON.md, allowlist.example.toml and .env.example; every command and env name they cite exists in code; tests/docs.operator-facts.test.ts fails on the old docs and passes on the new ones"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790474212,
+      "digest": "6c760af93d724a3314f3c875aaffab7dbe19e93910e047d12a0760f207290970",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "docs-refresh-after-audit-operator-docs-env-allowlist-templates-and-the-status-roadmap-match-shipped-code-actor-gate",
+        "title": "Docs refresh after audit: operator docs, env/allowlist templates and the STATUS roadmap match shipped code (actor gate, requester ping, fail-closed allowlist file, 0.0.21-0.0.27 slices)",
+        "description": "Docs refresh after audit: operator docs, env/allowlist templates and the STATUS roadmap match shipped code (actor gate, requester ping, fail-closed allowlist file, 0.0.21-0.0.27 slices)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          ".env.example",
+          "AGENTS.md",
+          "CHANGELOG.md",
+          "README.md",
+          "STATUS.md",
+          "allowlist.example.toml",
+          "docs/BOX-UPDATE.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/UPDATE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "tests/docs.operator-facts.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Documentation and templates only, plus a docs-facts regression test under tests/; no runtime behavior, public API or canonical spec requirement changes",
+        "acceptance_criteria": [
+          "Every stale or wrong fact from the docs audit that is still true on main is corrected in AGENTS.md, README.md, STATUS.md, CHANGELOG.md (factual fixes only), docs/DISCORD-GO-LIVE.md, docs/BOX-UPDATE.md, docs/UPDATE.md, docs/WATCH.md, docs/discord.md, docs/DAEMON.md, allowlist.example.toml and .env.example; every command and env name they cite exists in code; tests/docs.operator-facts.test.ts fails on the old docs and passes on the new ones"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790475168,
+      "digest": "1086c811cf55464f30234422b3ce3bda4ab6470b959c3a035bfaaccc9d29c8f4",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

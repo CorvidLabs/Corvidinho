@@ -1,9 +1,9 @@
 # Discord HEAR surface
 
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
-**As of:** 2026-09-26 (America/Denver). Package version from `src/version.ts` / `package.json`.
+**As of:** 2026-09-27 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..12, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6) and [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..13, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..5), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..7) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
@@ -16,14 +16,14 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 
 | Command | Options | Ephemeral? | Purpose |
 |---------|---------|------------|---------|
-| `/session list` | — | yes | List active session stubs |
+| `/session list` | — | yes | List active sessions: the owner (ADMIN) sees everyone's with full project paths; anyone else sees only their own, project shown by name (REQ-discord-418) |
 | `/session start` | `topic` (required), optional `project` | public (deferred) | Start session + agent run in isolated worktree |
-| `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line, slash names, optional git tip) |
+| `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line, slash names, announce channel, owner configured, audit chain, 24 h spend vs cap, optional git tip) |
 | `/agents` | — | yes | List local Corvidinho agent |
 | `/work` | `description` (required), optional `project` | public (deferred) | Drive a work task in isolated worktree |
 | `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check). Refuses yourself and the configured owner (DISCORD-6 / IDENTITY-2) |
 | `/unmute` | `user` (user, required) | yes | Unmute user (ADMIN) |
-| `/schedule list` | — | yes | List schedules |
+| `/schedule list` | — | yes | List schedules (non-owners see each project by name, never the host path; REQ-discord-418) |
 | `/schedule create` | `name`, `cadence`, `project`, `prompt`, optional `channel` | yes | Create recurring single-project run (ADMIN; min 5m cadence) |
 | `/schedule pause` | `schedule` (id) | yes | Pause (ADMIN) |
 | `/schedule resume` | `schedule` (id) | yes | Resume (ADMIN) |
@@ -36,12 +36,12 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
-Gate order for every slash: **channel allowlist → mute/rate → minPermission → handler**.
+Gate order for every slash: **channel allowlist → actor gate (user/role allowlist + deny lists, REQ-discord-201; ephemeral zero-width ack on refuse) → mute/rate → minPermission → handler**.
 
 
 ### Announcements (DISCORD-ANNOUNCE-1..6)
 
-Dedicated **ops/dev** announcements channel for version bumps, bridge restarts, and ship notes — **separate from the dogfood/chat allowlist**. Default-deny: no announce posts until `/announce channel` sets one. Mutations re-check ADMIN at handler time; empty admin = deny-all. Config persists in shared SQLite `schema_meta` (`discord_announce_channel_id`) under `~/.local/share/corvidinho/`.
+Dedicated **ops/dev** announcements channel for version bumps, bridge restarts, and ship notes — **separate from the dogfood/chat allowlist**. Default-deny: no announce posts until `/announce channel` sets one. Mutations re-check ADMIN at handler time; no owner configured = nobody is ADMIN (IDENTITY-3). Config persists in shared SQLite `schema_meta` (`discord_announce_channel_id`) in the data dir (`CORVIDINHO_DATA_DIR`, default `~/.local/share/corvidinho/`).
 
 On ClientReady (after every successful bridge restart), if configured, Corvidinho posts a short `bridge live **vX.Y.Z**` note plus ≤5 bullets from the matching `CHANGELOG.md` section (fallback: package description or tip) **only** to that channel — never to general allowlisted chat by default (DISCORD-ANNOUNCE-4 / REQ-discord-025).
 
@@ -79,7 +79,11 @@ Owner-only (IDENTITY-2): the dispatcher floor is ADMIN **and** the handler re-ch
 flowchart TD
   A["/admin users|channels …"] --> B{channel allowlisted?}
   B -->|no| T[Ephemeral tip / zero-width ack]
-  B -->|yes| C{minPermission ADMIN<br/>owner only}
+  B -->|yes| AG{actor gate<br/>deny lists / user+role allowlist}
+  AG -->|refused| Z[Ephemeral zero-width ack]
+  AG -->|pass| MR{muted / rate-limited?}
+  MR -->|yes| M[Ephemeral mute / slow-down reply]
+  MR -->|no| C{minPermission ADMIN<br/>owner only}
   C -->|no| N[Ephemeral not authorized]
   C -->|yes| D{handler re-check ADMIN}
   D -->|no| N
@@ -92,7 +96,7 @@ flowchart TD
 
 ### Memory (no slash)
 
-MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite under `~/.local/share/corvidinho/` (shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); empty admin = deny-all. The acting user and ADMIN come only from the env the bridge sets per spawn (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`) — never from tool argv (`--user` / `--admin` / `--db` are refused). Forget/override are two-phase (**SAFE-4**): the first call returns a confirm token (no content); `--confirm TOKEN` must come from a new turn within 10 minutes, and the token must be typed by the human. Today they are **operator-only** (`corvidinho plugins run memory-forget …` with the acting env set): dangerous tools are not offered to the model, so a Discord chat cannot reach them. A Discord admin path is tracked in #43 (ADMIN slash).
+MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite in the data dir (`CORVIDINHO_DATA_DIR`, default `~/.local/share/corvidinho/`; shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); no owner configured = nobody is ADMIN (IDENTITY-3). The acting user and ADMIN come only from the env the bridge sets per spawn (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`) — never from tool argv (`--user` / `--admin` / `--db` are refused). Forget/override are two-phase (**SAFE-4**): the first call returns a confirm token (no content); `--confirm TOKEN` must come from a new turn within 10 minutes, and the token must be typed by the human. Today they are **operator-only** (`corvidinho plugins run memory-forget …` with the acting env set): dangerous tools are not offered to the model, so a Discord chat cannot reach them. There is no Discord path for them; `/admin` (#43 / #147) covers allowlists only.
 
 ---
 
@@ -100,24 +104,26 @@ MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite under `~/.local/share/corvidinho/` (
 
 ### Thinking progress embeds (DISCORD-3)
 
-One embed edited in place: description + color + footer (`sess · phase · elapsed [| tool | ~tok]`). Phases: starting / working / done / error. Used by @mention, `/session start`, `/work`.
+One embed edited in place: description + color + footer (`sess · phase · elapsed [· model] [| tool] [| ~tok]`, plus the plumbing line `state=… verified=… [verifySkipped] [cancelled] attempts=…` on done/error — DISCORD-3.a). Phases: starting / working / done / error. Used by @mention, `/session start`, `/work`.
 
 Live source (AGENT-8 / DISCORD-3, #73; AGENT-4 / #85): the bridge spawns `task run --task <prompt> --output ndjson` (no `--no-verify`; empty `filesChanged` still skips verify in the loop) and reads one versioned frame per stdout line as the agent works. The description follows the agent state (`⏳ planning` / `working` / `calling tool <name>` / `verifying` / `done`), the footer shows the current tool, and `~tok` is the provider-reported running total when the LLM returns `usage` (rough estimate otherwise). Tool arguments are never streamed raw. The bridge requires protocol 2 (DISCORD-10): restart the bridge and the corvidinho checkout together after upgrading. If the binary streams another protocol mid-run, its frames are withheld and the reply is a "protocol mismatch — restart the bridge" notice. The final `result.summary` is capped at 4000 characters (Discord shows at most ~1800).
 
 ### Session replies (mention / continue)
 
-After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced to the user message. Summary comes from the stream's final `result` frame (same `result` as `task run --json`), falling back to the raw output summary. No attribution footer on Discord outbound today.
+After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced to the user message. Summary comes from the stream's final `result` frame (same `result` as `task run --json`), falling back to the raw output summary. No attribution footer on Discord outbound today. A reply cut off by a bridge restart (update, crash) is not left at "working…": at the next start its progress embed is marked interrupted (REQ-discord-311, `src/discord/inflight-replies.ts`).
 
 ### Questions and owner ping (AUTONOMY-1/2)
 
-When choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..7). The public Choose stub is the single ask surface (thinking "Needs your input" is collapsed into it — DISCORD-ASK-6). On done (mention or after a button pick), the stub/thinking message is edited into the final answer when practical instead of ✅ Done + a second reply (DISCORD-ASK-7). Buttons expire after ~30 minutes. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
+In @mention / reply chat, when choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..8). `/work`, `/session start` and schedules post the question as text (no buttons). The public Choose stub is the single ask surface (thinking "Needs your input" is collapsed into it — DISCORD-ASK-6). On done (mention or after a button pick), the stub/thinking message is edited into the final answer when practical instead of ✅ Done + a second reply (DISCORD-ASK-7). Buttons expire after ~30 minutes. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
 
 When a run needs a human, the reply is a question instead of a summary. Two cases:
 
 - **Clarify** — the agent called its `ask-human` tool (the task cannot go on without a human choice). The run ends in state `blocked` (never `done`, verify not run).
 - **Stuck** — verification still fails after every retry. The run stays `failed` (AGENT-4) and asks how to proceed.
 
-The reply quotes the question, mentions the configured owner (`CORVIDINHO_OWNER_DISCORD_ID` / allowlist `[owner]`, IDENTITY-1) on its first line, and for mentions ends with "Reply to this message to answer." — replying continues the same session (DISCORD-2). The post limits allowed mentions to the owner plus the replied-to user; `@everyone` / `@here` in the model's text are defanged and secrets scrubbed. No owner configured means no ping (IDENTITY-3); the question still posts and the bridge logs a warning. Scheduled runs post the same question (prefixed with the schedule line) to the schedule's channel and ping the owner once per question: a schedule stuck on the same question keeps posting it each tick without a mention until a run succeeds, the schedule is paused/resumed, or the question changes (digest kept in the schedule row, schema v7). Pings go only where the bridge already posts — no DMs. `/work` and `/session start` show the question in their one answer message (no Choose buttons); a stuck or spend-cap stop pings the owner in a separate channel post. The session then waits on that question like a chat ask: reply to the answer (or @mention the bot in that channel) — a thin reply (`ok`) restates it, `cancel` drops it, and a real answer resumes the session with the question as context. A spend-cap stop is never waiting on a reply. A `/work` run waiting on an answer records its task `blocked` (stuck: `failed`) and opens no PR.
+The reply quotes the question and, on its first line, mentions the **requester** on a clarify ask (AUTONOMY-4: the message author; for a scheduled run, the schedule creator) or the configured owner (`CORVIDINHO_OWNER_DISCORD_ID` / allowlist `[owner]`, IDENTITY-1) on a stuck ask (AUTONOMY-2) or a spend-cap stop (SAFE-8). For mentions it ends with "Reply to this message to answer." — replying continues the same session (DISCORD-2). The post limits allowed mentions to that one user plus the replied-to user; `@everyone` / `@here` in the model's text are defanged and secrets scrubbed. No owner configured means a stuck or spend-cap ask pings nobody (IDENTITY-3); the question still posts and the bridge logs a warning. Scheduled runs post the same question (prefixed with the schedule line) to the schedule's channel and ping once per question: a schedule stuck on the same question keeps posting it each tick without a mention until a run succeeds, the schedule is paused/resumed, or the question changes (digest kept in the schedule row, schema v7). Pings go only where the bridge already posts — no DMs. Discord does not notify a mention added by an edit, so when the answer is delivered by editing the thinking or Choose-stub message (DISCORD-ASK-6/7: chat, a button-pick resume, `/work`, `/session start`) and it mentions someone, the bridge follows it with one short fresh post replying to it that only pings: `↑ question for you` for the clarify requester, `↑ needs you` for the owner (stuck, spend-cap stop or the 80% spend warning). Nobody is pinged twice in one turn, and no extra post goes out when the answer was already a fresh reply (REQ-discord-215). In chat, replying to that ping post continues the session too. `/work` and `/session start` show the question in their one answer message (no Choose buttons); a stuck or spend-cap stop pings the owner in a separate channel post. The session then waits on that question like a chat ask: reply to the answer (or @mention the bot in that channel) — a thin reply (`ok`) restates it, `cancel` drops it, and a real answer resumes the session with the question as context. A spend-cap stop is never waiting on a reply. A `/work` run waiting on an answer records its task `blocked` (stuck: `failed`) and opens no PR.
+
+While a session waits on a question (AUTONOMY-5/6), thin replies (`ok`, `k`, `sure`, `hmmm`, emoji-only, …) do not clear it: the bridge restates the question instead of running the agent. `cancel` / `nevermind` / `forget it` clears it. The pending ask is stored on the session (`discord_sessions.pending_ask`), so a bridge restart keeps it. Joke or impossible asks get a short witty decline or a tiny toy demo, not a formal multiple-choice ask (AUTONOMY-7).
 
 ### Slash replies
 
@@ -187,6 +193,12 @@ flowchart TD
 - Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
 - Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
 - Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
+- Button asks (DISCORD-ASK): `src/discord/ask-buttons.ts`; thin acks / cancel (AUTONOMY-5/6): `src/discord/thin-ack.ts`
+- Identity + memory inject (IDENTITY-4 / AGENT-7): `src/discord/identity-inject.ts`, `memory-inject.ts`
+- Channel autocomplete: `src/discord/channel-autocomplete.ts`; slash registration: `register-commands.ts`
+- Durable sessions / `/work` tasks: `src/discord/session-store.ts`, `work-store.ts`; interrupted replies: `inflight-replies.ts`
+- `/session list` / `/schedule list` scope (REQ-discord-418): `src/discord/list-scope.ts`
+- User lookup (IDENTITY-5 / DISCORD-13): `plugins/discord/user-lookup.ts`
 
 
 ## Session worktrees (SESSION-WORKTREE-1..5)
@@ -199,14 +211,14 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 | Item | Behavior |
 |------|----------|
 | Default project | Bridge `projectRoot` |
-| Explicit project | Optional `project` on `/session start` and `/work`; required on `/schedule create` |
+| Explicit project | Optional `project` on `/session start` and `/work`; required on `/schedule create`; must be the bridge root, a directory inside it, or a sibling checkout whose origin OWNER/REPO passes the GitHub repo allowlist — otherwise "not authorized" (REQ-discord-202) |
 | Mid-conversation | Project never silently switches once set |
 | Root on disk | `{dirname(project)}/.corvid-worktrees/` or `WORKTREE_BASE_DIR` |
 | Branch | `talk/{sessionPrefix}-{digest}` (16-char id prefix + 16 hex of sha256 of the full id); schedule runs use `talk/schedule_{scheduleId}_{runId}` |
 | End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
 | Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
 
-Ops: restart the Discord bridge after deploying **0.0.5** so presence and spawn
+Ops: restart the Discord bridge after every update so presence and spawn
 paths pick up the build. Do not leave abandoned worktrees under the base dir
 from crashed runs — prune via `git worktree prune` in the project if needed.
 
@@ -228,8 +240,9 @@ Steps run through the existing typed plugins (`git-commit` → `git-push` →
 `github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
 is built from the real diff against the remote default branch (name-status,
 diffstat, commits) plus the verify result, with repo/model text in code fences
-and secrets scrubbed. Allowlisting these plugins is process-wide: the spawned
-agent can call them too.
+and secrets scrubbed. Allowlisting these plugins does not expose them to the
+spawned agent: `task run` leaves dangerous tools out of its catalog, so only this
+bridge step (and `corvidinho plugins run`) can use them.
 
 
 ## Discord user lookup (IDENTITY-5 / DISCORD-13)

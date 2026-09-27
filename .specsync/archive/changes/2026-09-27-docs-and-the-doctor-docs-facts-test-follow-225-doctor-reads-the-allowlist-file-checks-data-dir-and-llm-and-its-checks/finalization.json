@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-and-the-doctor-docs-facts-test-follow-225-doctor-reads-the-allowlist-file-checks-data-dir-and-llm-and-its-checks",
+  "implementation_commit": "22b05aba682668d9200916b3e428e8d2a9440ea9",
+  "implementation_tree": "16211dc873cea9637c6272a6301876796be2631a",
+  "contract_digest": "2487c3b6707902350654e5b06558304466d5b4cc1e31fdf2089bb9ca69807042",
+  "workspace_digest": "06b44256d5769c1d6786f9fffefd427fdc4c81b6d6e3d5429669bdafe4dbaa1a",
+  "closing_digest": "0d87a12e8190952bfc861f77965ec673318041467eca9079a2bea93d743080ae",
+  "review_digest": "bce8f489137ff663031d810797cc58d6601ba683720ad19749e786ce92352177",
+  "finalization_digest": "e4186d87a4125d23c32c31e7410973d9871008f1ccbb1b3ac641d582803e01cb",
+  "timestamp": 1790475794
+}
