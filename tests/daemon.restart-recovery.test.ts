@@ -6,7 +6,9 @@
  *   kept);
  * - a start after a `kill -9` fails the run the dead daemon left "running"
  *   (`interrupted: process restarted`) and removes its worktree;
- * - a start removes the worktree of a run already recorded as ended.
+ * - a start removes the worktree of a run already recorded as ended;
+ * - a start never touches a schedule-run worktree whose run its data dir does
+ *   not know (another data dir's live run, e.g. `bun test` run inside it).
  * Fixtures only: temp git repos and data dirs, fake `sh` agent bins, one
  * child Bun daemon; no Discord, no network, no token.
  */
@@ -314,5 +316,40 @@ describe("daemon start recovers what a dead process left (REQ-cli-108)", () => {
     expect(existsSync(other.worktreeDir)).toBe(true);
     expect(git(project, ["branch", "--list", "talk/someone-else"])).not.toBe("");
     await d.stop();
+  });
+
+  test("a schedule-run worktree another data dir owns is never touched, even when started inside it", async () => {
+    const { root, project, env } = fixture("corvidinho-daemon-foreign-");
+    // Another bridge/daemon (its own data dir) runs a schedule on this repo.
+    const otherDb = openCorvidinhoDb({ env: { ...env, CORVIDINHO_DATA_DIR: join(root, "other-data") } });
+    cleanups.push(() => otherDb.close());
+    const s = seedDue(otherDb, "Other data dir");
+    const otherStore = new ScheduleStore({ db: otherDb });
+    const run = otherStore.claimRun(otherStore.get(s.id)!, Date.now());
+    expect(run).not.toBeNull();
+    const key = `schedule_${s.id}_${run!.id}`;
+    const wt = await createWorktree({
+      projectWorkingDir: project,
+      branchName: `talk/${key}`,
+      worktreeId: `talk-${key}`,
+    });
+    expect(wt.success).toBe(true);
+    // Its agent's uncommitted work.
+    writeFileSync(join(wt.worktreeDir, "wip.txt"), "not committed yet\n");
+
+    // A daemon on a fresh data dir started with that worktree as its project
+    // root (what `bun test` / the verify lane inside the run does).
+    const d = await startDaemon({
+      env,
+      projectRoot: wt.worktreeDir,
+      logger: memoryLogger().log,
+      agent: { runChat: async ({ sessionId }) => ({ ok: true, sessionId, summary: "", exitCode: 0 }) },
+    });
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+    await d.stop();
+    expect(existsSync(join(wt.worktreeDir, "wip.txt"))).toBe(true);
+    expect(scheduleWorktrees(project)).toEqual([wt.worktreeDir]);
+    expect(scheduleBranches(project)).toEqual([`talk/${key}`]);
   });
 });

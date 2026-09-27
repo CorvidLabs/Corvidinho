@@ -442,16 +442,25 @@ export class ScheduleStore {
   }
 
   /**
-   * Status of a run by id (SQLite first, then this process's memory), or
-   * undefined when no such run exists (e.g. its schedule was deleted).
+   * Status and schedule of a run by id (SQLite first, then this process's
+   * memory), or undefined when this data dir has no such run (another data
+   * dir's run, or its schedule was deleted).
    */
-  runStatus(runId: string): ScheduleRunStatus | undefined {
+  runRecord(
+    runId: string,
+  ): { status: ScheduleRunStatus; scheduleId: string } | undefined {
     if (this.db) {
       const row = this.db
-        .query("SELECT status FROM schedule_runs WHERE id = ?")
-        .get(runId) as { status: string } | null;
-      if (row) return row.status as ScheduleRunStatus;
+        .query("SELECT status, schedule_id FROM schedule_runs WHERE id = ?")
+        .get(runId) as { status: string; schedule_id: string } | null;
+      if (row) {
+        return {
+          status: row.status as ScheduleRunStatus,
+          scheduleId: row.schedule_id,
+        };
+      }
     }
-    return this.runsMemory.get(runId)?.status;
+    const run = this.runsMemory.get(runId);
+    return run ? { status: run.status, scheduleId: run.scheduleId } : undefined;
   }
 }

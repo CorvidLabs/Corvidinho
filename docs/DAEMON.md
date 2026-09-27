@@ -78,9 +78,11 @@ spawned `task run` gets it too and usually finishes inside the wait.
 
 On start, before the first tick, the daemon (like the Discord bridge) records
 runs a dead process left "running" (for example after `kill -9`) as failed
-(`interrupted: process restarted`) and removes leftover schedule-run
-worktrees, again keeping any branch with commits. Runs that another live
-bridge or daemon on the same data dir is still running are left alone.
+(`interrupted: process restarted`) and removes the leftover worktrees of runs
+its data dir recorded as ended, again keeping any branch with commits. Runs
+that another live bridge or daemon on the same data dir is still running are
+left alone, and a schedule-run worktree whose run this data dir does not know
+(another data dir's run on the same repo) is never touched.
 
 ## Logs
 

@@ -363,9 +363,11 @@ A second signal SHALL skip the rest of the wait.
 
 Before its first tick the daemon SHALL run the scheduler's start-up recovery
 (REQ-discord-346): runs a dead process left `running` are recorded as failed
-(`interrupted: process restarted`) and leftover schedule-run worktrees are
-removed, keeping any branch with commits; runs another live bridge or daemon
-on the same data dir owns are left alone. When it fixed something it SHALL log
+(`interrupted: process restarted`) and leftover worktrees of runs this data
+dir recorded as ended are removed, keeping any branch with commits; runs
+another live bridge or daemon on the same data dir owns are left alone, and a
+schedule-run worktree whose run this data dir does not know (another data
+dir's) is never touched. When it fixed something it SHALL log
 `daemon.recovered` with the recovered run ids (`runs`) and the number of
 worktrees removed (`worktrees`).
 
@@ -387,6 +389,7 @@ Acceptance Criteria
 - Stop after the grace removes an abandoned run's worktree and empty `talk/schedule_*` branch before it resolves; a branch with commits is kept.
 - After `kill -9` of a daemon mid-run, the next start records that run as failed (`interrupted: process restarted`), removes its worktree and branch, and logs `daemon.recovered`.
 - Start removes a leftover worktree of a run already recorded as failed and leaves worktrees with other names alone.
+- Start never touches a schedule-run worktree whose run another data dir owns, even when the daemon's project root is that worktree: its uncommitted files and branch stay.
 
 ### REQ-cli-112
 

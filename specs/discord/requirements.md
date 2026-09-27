@@ -1376,12 +1376,17 @@ CLI-8 / AUTONOMOUS-4).
     restarted` and a completion time;
   - every schedule-run worktree (`talk-schedule_<schedule>_<run>` checked out
     on `talk/schedule_<schedule>_<run>`) registered in the default project
-    root or a schedule's project whose run is not `running` SHALL be parked
-    with the existing safe cleanup: the branch is deleted only when it has no
-    commits off the project HEAD (`branchHasOwnCommits`), otherwise kept;
+    root or a schedule's project whose run this data dir recorded, under that
+    schedule, as no longer `running` SHALL be parked with the existing safe
+    cleanup: the branch is deleted only when it has no commits off the project
+    HEAD (`branchHasOwnCommits`), otherwise kept;
   - a run whose runner process is alive (another bridge or daemon on the same
-    data dir) and its worktree SHALL be left alone, and worktrees with other
-    names SHALL NOT be touched.
+    data dir) and its worktree SHALL be left alone;
+  - a schedule-run worktree whose run this data dir does not know SHALL NOT
+    be touched: it belongs to another data dir sharing the repo (another
+    bridge or daemon, or `bun test` / the verify lane run inside a live
+    schedule worktree), and worktrees with other names SHALL NOT be touched
+    either.
   Recovery changes only the run row, not the schedule's counters, and never
   throws (errors are logged). The bridge logs one `[discord] restart
   recovery:` line when it fixed something.
@@ -1397,5 +1402,6 @@ Acceptance Criteria
 - Bridge `stop()` with a schedule run in flight (real spawn client, fake `sh` agent) records it `failed` with `interrupted: bridge shutdown`, the agent is gone, and its worktree and empty branch are removed.
 - Bridge start after a `kill -9` of a process that was running a schedule run marks that run `failed` (`interrupted: process restarted`) and removes its worktree; a run another live process owns stays `running` with its worktree and branch.
 - A claimed run records `<pid>:<proc start>`; a v9 DB migrates to v10 keeping its rows, and a `running` row without a runner is recovered.
-- Each case fails on the code before this change.
+- A daemon or bridge start never touches a schedule-run worktree whose run its data dir does not know (another data dir's run), even when started with that worktree as its project root: the worktree, its uncommitted files and its branch stay.
+- Each case above except the last guard fails on the code before this change; the guard fails on the first version of this change.
 

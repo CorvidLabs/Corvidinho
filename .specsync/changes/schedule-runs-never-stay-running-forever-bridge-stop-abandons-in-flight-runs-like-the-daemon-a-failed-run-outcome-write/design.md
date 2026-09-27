@@ -16,7 +16,8 @@ artifact: design
     or not alive (`isScheduleRunnerAlive` → `isHolderAlive`) are set `failed`,
     error `RUN_INTERRUPTED_BY_RESTART`, `completed_at` (guarded by
     `AND status = 'running'`). Counters untouched. No-op for the memory store.
-  - `runStatus(runId)` and a `durable` getter for the worktree scan.
+  - `runRecord(runId)` (status + schedule id) and a `durable` getter for the
+    worktree scan.
 - `SchedulerService`:
   - `finish()`: write first; on throw log "retrying once" and retry; on a
     second throw log `[scheduler] run failed: could not record run …`, mark
@@ -32,7 +33,10 @@ artifact: design
     on) for the default project root and each schedule's resolved project
     that is a git repo, `git worktree list --porcelain`; entries named
     exactly `talk-schedule_<s>_<srun_…>` on branch `talk/schedule_<s>_<srun_…>`
-    whose run is not `running` go through `parkWorktree(kind: "worktree")`.
+    whose run this data dir recorded (`runRecord`), under that schedule, as
+    not `running` go through `parkWorktree(kind: "worktree")`. A run the data
+    dir does not know is another data dir's (a second bridge/daemon, or
+    `bun test` inside a live schedule worktree) and is never touched.
     Errors are logged (`[scheduler] recovery failed: …`), never thrown; a
     failed row recovery skips the worktree scan.
 - Bridge: `recoverAbandoned()` right after the scheduler is built (before the
@@ -43,6 +47,11 @@ artifact: design
 - Daemon: `recoverAbandoned()` before arming the interval, `daemon.recovered`
   (warn) after `daemon.started`; `stop()` awaits `settleAbandoned(3 s)` after
   `daemon.abandoned`, before closing the DB. A second signal does not skip it.
+- Rejected: parking a schedule-run worktree whose run is unknown to this
+  data dir (review finding: a daemon or bridge started from any checkout,
+  including `tests/daemon.cli.test.ts` in the verify lane, deleted other data
+  dirs' live schedule worktrees and uncommitted work). A leftover of a run
+  whose schedule was deleted after a crash is left instead.
 - Rejected: failing every `running` row at start (kills a live daemon's run
   and worktree when a bridge restarts on the same data dir); racing the
   settle with the second signal (double SIGTERM would leak worktrees again).

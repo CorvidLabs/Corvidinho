@@ -45,6 +45,14 @@ are killed with SIGKILL. No Discord, no network, no token.
 - **Leftover of an ended run.** A run recorded failed with a worktree and
   branch named as the scheduler names them is cleaned at start; a
   `talk-someone-else` worktree and branch are untouched.
+- **Another data dir's worktree (review fix).** A second data dir claims a
+  run and creates its worktree with an uncommitted file; a daemon on a fresh
+  data dir started with that worktree as its project root (what `bun test` /
+  the verify lane inside a live schedule run does) leaves the worktree, the
+  file and the branch alone. Fails on the first version of this change,
+  which parked every schedule-run worktree whose run was not `running` in its
+  own DB (unknown included): `bun test tests/daemon.cli.test.ts` in a checkout
+  deleted every live schedule worktree registered with that repo.
 
 Also updated: `tests/watch.session-store.durable.test.ts` and
 `tests/discord.inflight-replies.test.ts` pin `SCHEMA_VERSION` (now 10).
@@ -68,7 +76,7 @@ Also run: `bunx tsc --noEmit`, `bun test`, `specsync check
 |---|---|---|
 | `REQ-discord-346` | `tests/scheduler.never-stuck.test.ts` | One throwing outcome write is retried and recorded `completed` with one event; two throwing writes log `[scheduler] run failed: could not record run …` and report `ok: false`; bridge `stop()` records the in-flight run `failed` (`interrupted: bridge shutdown`), kills the agent and removes worktree and branch; bridge start after `kill -9` fails the dead runner's run (`interrupted: process restarted`) and removes its worktree while a live runner's run and worktree stay; runner recorded and v9 → v10 migration recovers a runner-less row. |
 | `REQ-discord-346` | `tests/daemon.restart-recovery.test.ts` | Daemon start recovery and the bounded settle after abandon remove worktrees and empty branches and keep a branch with commits. |
-| `REQ-cli-108` | `tests/daemon.restart-recovery.test.ts` | Stop after the grace removes the abandoned run's worktree and empty branch before resolving (branch with commits kept); start after `kill -9` records the run failed, removes its worktree and logs `daemon.recovered`; start removes a leftover worktree of an ended run and leaves other worktrees alone. |
+| `REQ-cli-108` | `tests/daemon.restart-recovery.test.ts` | Stop after the grace removes the abandoned run's worktree and empty branch before resolving (branch with commits kept); start after `kill -9` records the run failed, removes its worktree and logs `daemon.recovered`; start removes a leftover worktree of an ended run and leaves other worktrees alone; start never touches another data dir's schedule-run worktree. |
 | `REQ-cli-108` | `tests/daemon.test.ts`, `tests/daemon.cli.test.ts` | Existing lock, tick, grace, forced stop, process-tree kill and CLI SIGTERM behaviour unchanged. |
 | `REQ-discord-108` | `tests/scheduler.service.test.ts`, `tests/daemon.test.ts` | Atomic claim and one outcome per run unchanged; `abandonInFlight` still records once and aborts. |
 | `REQ-discord-331` | `tests/scheduler.tick-errors.test.ts` | A run whose agent throws and whose `markRunFinished` always throws still logs `[scheduler] run failed:` and frees its slot with no unhandled rejection. |

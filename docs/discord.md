@@ -198,7 +198,7 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 | Branch | `talk/{sessionPrefix}-{digest}` (16-char id prefix + 16 hex of sha256 of the full id); schedule runs use `talk/schedule_{scheduleId}_{runId}` |
 | End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
 | Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
-| Schedule run at bridge stop / restart | Stop records a run still going as failed (`interrupted: bridge shutdown`), kills its agent and parks its worktree within ~3 s. Start fails runs a dead process left "running" (`interrupted: process restarted`) and parks leftover `talk-schedule_*` worktrees; runs a live `corvidinho daemon` on the same data dir owns are left alone (REQ-discord-346) |
+| Schedule run at bridge stop / restart | Stop records a run still going as failed (`interrupted: bridge shutdown`), kills its agent and parks its worktree within ~3 s. Start fails runs a dead process left "running" (`interrupted: process restarted`) and parks leftover `talk-schedule_*` worktrees of runs its data dir recorded as ended; runs a live `corvidinho daemon` on the same data dir owns, and worktrees of runs another data dir owns, are left alone (REQ-discord-346) |
 
 Ops: restart the Discord bridge after deploying **0.0.5** so presence and spawn
 paths pick up the build. Do not leave abandoned worktrees under the base dir

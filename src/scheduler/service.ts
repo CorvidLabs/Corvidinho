@@ -47,6 +47,11 @@ export const ABANDONED_SETTLE_MS = 3_000;
 /** Worktree dir of a schedule run: `talk-schedule_<schedule id>_<run id>`. */
 const RUN_WORKTREE_RE = /^talk-(schedule_[A-Za-z0-9_-]+_(srun_[A-Za-z0-9]+))$/;
 
+/** Name part of a run's worktree (`talk-<key>`) and branch (`talk/<key>`). */
+function runWorktreeKey(scheduleId: string, runId: string): string {
+  return `schedule_${scheduleId}_${runId}`.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
 function errorLine(err: unknown): string {
   try {
@@ -70,7 +75,7 @@ function logSchedulerError(where: "tick" | "run" | "recovery", err: unknown): vo
 /** Schedule-run worktrees (and their branch) registered in `projectDir`'s repo. */
 async function listScheduleRunWorktrees(
   projectDir: string,
-): Promise<Array<{ path: string; runId: string; branchName: string }>> {
+): Promise<Array<{ path: string; key: string; runId: string; branchName: string }>> {
   const proc = Bun.spawn(["git", "worktree", "list", "--porcelain"], {
     cwd: projectDir,
     stdout: "pipe",
@@ -81,7 +86,7 @@ async function listScheduleRunWorktrees(
     new Response(proc.stderr).text(),
   ]);
   if ((await proc.exited) !== 0) return [];
-  const found: Array<{ path: string; runId: string; branchName: string }> = [];
+  const found: Array<{ path: string; key: string; runId: string; branchName: string }> = [];
   for (const block of out.split("\n\n")) {
     const lines = block.split("\n");
     const path = lines.find((l) => l.startsWith("worktree "))?.slice(9);
@@ -91,7 +96,7 @@ async function listScheduleRunWorktrees(
     const m = path ? RUN_WORKTREE_RE.exec(basename(path)) : null;
     // Only the exact names runOne gives a run's worktree and branch.
     if (!path || !m || branch !== `talk/${m[1]}`) continue;
-    found.push({ path, runId: m[2]!, branchName: branch });
+    found.push({ path, key: m[1]!, runId: m[2]!, branchName: branch });
   }
   return found;
 }
@@ -365,11 +370,14 @@ export class SchedulerService {
    * Restart recovery (REQ-discord-346 / SESSION-WORKTREE-3), run once at
    * start before ticking: fail runs a dead process left "running"
    * (`interrupted: process restarted`), then remove every schedule-run
-   * worktree whose run is no longer running — a crash, or a stop whose
-   * bounded grace ran out — with the usual safe cleanup: the `talk/` branch
-   * is deleted only when it has no commits of its own, else kept. Runs a
-   * live process owns (another bridge or daemon on this data dir) and their
-   * worktrees are left alone. Never throws: errors are logged.
+   * worktree whose run this data dir recorded as ended — a crash, or a stop
+   * whose bounded grace ran out — with the usual safe cleanup: the `talk/`
+   * branch is deleted only when it has no commits of its own, else kept.
+   * Runs a live process owns (another bridge or daemon on this data dir)
+   * and their worktrees are left alone, and so is a worktree whose run this
+   * data dir does not know: it belongs to another data dir sharing the repo
+   * (another bridge or daemon, or a `bun test` / verify lane run inside a
+   * live schedule worktree). Never throws: errors are logged.
    */
   async recoverAbandoned(): Promise<ScheduleRecovery> {
     const recovery: ScheduleRecovery = { runs: [], worktrees: [] };
@@ -383,12 +391,16 @@ export class SchedulerService {
     // Memory-only stores (tests) know no other process's runs.
     if (!this.useWorktrees || !this.store.durable) return recovery;
     const projectDirs = new Set<string>([this.defaultProjectRoot]);
-    for (const schedule of this.store.list()) {
-      const resolved = resolveProjectDir(schedule.project, {
-        defaultProjectRoot: this.defaultProjectRoot,
-        github: this.allowlist.github,
-      });
-      if (resolved.ok) projectDirs.add(resolved.dir);
+    try {
+      for (const schedule of this.store.list()) {
+        const resolved = resolveProjectDir(schedule.project, {
+          defaultProjectRoot: this.defaultProjectRoot,
+          github: this.allowlist.github,
+        });
+        if (resolved.ok) projectDirs.add(resolved.dir);
+      }
+    } catch (err) {
+      logSchedulerError("recovery", err);
     }
     const seen = new Set<string>();
     for (const projectDir of projectDirs) {
@@ -397,7 +409,11 @@ export class SchedulerService {
         for (const wt of await listScheduleRunWorktrees(projectDir)) {
           if (seen.has(wt.path)) continue;
           seen.add(wt.path);
-          if (this.store.runStatus(wt.runId) === "running") continue;
+          // Only an ended run this data dir recorded, under the schedule its
+          // worktree name says. Unknown ⇒ another data dir's: never touch.
+          const known = this.store.runRecord(wt.runId);
+          if (!known || known.status === "running") continue;
+          if (runWorktreeKey(known.scheduleId, wt.runId) !== wt.key) continue;
           await parkWorktree(projectDir, wt.path, {
             kind: "worktree",
             branchName: wt.branchName,
@@ -451,10 +467,7 @@ export class SchedulerService {
         // Name the worktree/branch from the full schedule + run ids. The
         // default 16-char prefix gave every run of a schedule (and schedules
         // sharing a first id char) one dir/branch, so a new run wiped the last.
-        const runKey = `schedule_${schedule.id}_${run.id}`.replace(
-          /[^a-zA-Z0-9_-]/g,
-          "",
-        );
+        const runKey = runWorktreeKey(schedule.id, run.id);
         const ensured = await ensureTalkWorkspace({
           projectWorkingDir: resolved.dir,
           sessionId: runKey,
