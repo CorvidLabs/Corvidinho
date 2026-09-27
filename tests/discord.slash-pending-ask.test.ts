@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
-import { ASK_REPLY_HINT } from "../src/discord/ask-ping.ts";
+import { ASK_REPLY_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
@@ -59,6 +59,7 @@ async function bridgeWith(agent: AgentClient, opts: { editMessage?: boolean } = 
   // answer is the deferred interaction reply (fallback).
   const outbound = memoryThinkingOutbound();
   const replies: Reply[] = [];
+  const pings: Reply[] = [];
   const result = await startBridge({
     env: {
       DISCORD_BOT_TOKEN: "fake",
@@ -87,7 +88,7 @@ async function bridgeWith(agent: AgentClient, opts: { editMessage?: boolean } = 
     },
   });
   if (!result.ok || !box.handlers) throw new Error("bridge did not start");
-  return { result, handlers: box.handlers, outbound, replies };
+  return { result, handlers: box.handlers, outbound, replies, pings };
 }
 
 function slashInteraction(commandName: "work" | "session", options: Record<string, string>) {
@@ -133,6 +134,14 @@ async function runSlash(
     (e) => typeof e.content === "string" && e.content.includes(needle),
   );
   if (!answer) throw new Error("no collapsed slash answer");
+  // REQ-discord-215: an edit does not notify its mention, so a collapsed
+  // answer that asks the requester is followed by one fresh ping post. Set
+  // it aside so the tests below count only the replies to the answer.
+  for (let i = bridge.replies.length - 1; i >= 0; i--) {
+    if (bridge.replies[i]!.content.includes(COLLAPSED_PING_QUESTION)) {
+      bridge.pings.unshift(...bridge.replies.splice(i, 1));
+    }
+  }
   return answer.messageId;
 }
 
@@ -165,6 +174,9 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     const { agent, calls } = askingAgent({ ask: CLARIFY, summary: "Needs your input: Postgres or SQLite?" });
     const bridge = await bridgeWith(agent);
     const answerId = await runSlash(bridge, "work", { description: "pick a DB" }, "Postgres or SQLite?");
+    expect(bridge.pings).toHaveLength(1);
+    expect(bridge.pings[0]!.content).toBe(`<@${REQUESTER}> ${COLLAPSED_PING_QUESTION}`);
+    expect(bridge.pings[0]!.mentionUserIds).toEqual([REQUESTER]);
     await bridge.handlers.onMessage(replyTo(answerId, "ok"));
     expect(calls).toHaveLength(1);
     expect(bridge.replies).toHaveLength(1);

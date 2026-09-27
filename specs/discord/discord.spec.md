@@ -197,6 +197,24 @@ the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
+Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
+DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
+`ask-ping.ts` exports `formatCollapsedPing` (one line: each mentioned user with
+`COLLAPSED_PING_QUESTION` "↑ question for you" for the requester a clarify ask
+addresses, `COLLAPSED_PING_NEEDS` "↑ needs you" for everyone else — the owner
+on stuck, spend cap or the 80% warning; users in `alreadyPinged` left out;
+null when nobody is left) and the `CollapsedPing` type. `spend-post.ts`
+exports `postCollapsedPing` (sends that line as a fresh post replying to the
+collapsed answer, allowed mentions exactly those users; best effort, never
+throws, null when nothing went out); `ChannelPost` gains optional
+`replyToMessageId`. The chat answer and the answer to a run a button pick
+resumed call it after `finalizeContent` succeeds with the answer's
+`mentionUserIds` (ask mention plus the 80% warning's owner) and track the ping
+post like the answer, so a reply to it continues the session.
+`finishSlashWithOwnerNotice` calls it after a collapsed slash answer (also
+when there is no owner notice), leaving out the users its owner notice post
+already pinged. A fallback reply is itself a fresh post, so it gets no ping.
+
 Interrupted replies (REQ-discord-311, DISCORD-3 / AGENT-3):
 `src/discord/inflight-replies.ts` exports `InflightReplyStore` (`begin`,
 `setProgressMessage`, `end`, `list` over `discord_inflight_replies`, schema
@@ -293,6 +311,13 @@ never carries the "reply to answer" hint (a reply cannot lift the cap); it
 pings the owner once per cap episode across chat, slash commands and
 schedules. A slash run's owner ping is a fresh post (an edit of a deferred
 reply may not notify), with allowed mentions limited to the owner.
+An answer delivered by editing the thinking message (DISCORD-ASK-6/7) that
+mentions anyone is followed by exactly one short fresh post, replying to that
+answer, holding only those mentions and a one-line pointer, with allowed
+mentions exactly those users (never `@everyone`, `@here` or roles); no user is
+pinged twice in a turn (the slash owner notice post counts), a spend-cap ask
+whose episode already pinged carries no owner mention, and a fallback reply
+(already a fresh post) gets no extra post (REQ-discord-215).
 A `/work` or `/session start` run that stopped to ask leaves its session
 waiting on that ask exactly like a chat ask (free text, never a spend-cap
 stop), and its answer message is tracked like a chat reply, so a reply to it
@@ -324,6 +349,16 @@ by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
   before/after counts and warns that unlisted callers now resolve to BLOCKED,
   and the audit chain gains `started` + `ok` rows
 
+### Scenario: Collapsed clarify ask pings the requester
+
+- **Given** an editable thinking message and a run that stops with a clarify
+  ask for requester R
+- **When** the bridge edits the thinking message into the ask (mentioning R)
+- **Then** it posts one fresh reply to that message, `<@R> ↑ question for
+  you`, with allowed mentions exactly `[R]`; a stuck ask instead posts
+  `<@owner> ↑ needs you`; the same ask answered by a fallback reply adds no
+  post (REQ-discord-215)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -337,6 +372,7 @@ by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 | Leftover in-flight reply, edit and reply both fail | Logged as unreachable; row deleted; bridge start continues |
 | Leftover in-flight reply in a channel no longer allowlisted | Nothing edited or posted; logged as skipped; row deleted |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
+| Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 
 ## Dependencies
 
@@ -412,6 +448,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | a-talk-stored-with-a-prefix-only-worktree-name-before-the-digest-change-keeps-it-after-upgrade-and-a-new-talk-whose-id: A talk stored with a prefix-only worktree name before the digest change keeps it after upgrade, and a new talk whose id shares that prefix gets its own worktree |
 | 2026-09-26 | safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend: SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask |
 | 2026-09-27 | safe-8-x-discord-ask-7-issue-98-merge-of-208-work-and-session-start-answer-in-one-collapsed-message-and-keep-the-safe-8: SAFE-8 x DISCORD-ASK-7 (issue #98, merge of #208): /work and /session start answer in one collapsed message and keep the SAFE-8 owner notice a fresh channel post; an ask run never shows Done, and claims go back when nothing carried the notice |
+| 2026-09-27 | collapsed-ask-pings-notify-when-an-answer-is-delivered-by-editing-the-thinking-message-discord-ask-6-7-and-mentions-the: Collapsed ask pings notify: when an answer is delivered by editing the thinking message (DISCORD-ASK-6/7) and mentions the requester or owner, one short fresh post pings exactly those users (AUTONOMY-2/4, SAFE-8), without double pings |
 | 2026-09-27 | a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message: A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup: Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land) |
