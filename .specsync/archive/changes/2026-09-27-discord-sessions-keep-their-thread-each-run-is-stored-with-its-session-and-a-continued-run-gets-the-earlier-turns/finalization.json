@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-sessions-keep-their-thread-each-run-is-stored-with-its-session-and-a-continued-run-gets-the-earlier-turns",
+  "implementation_commit": "ae002c61bc2cdcb18d6fccc27444982aa945f604",
+  "implementation_tree": "228d32cf58039f320a77b8f60d5bb2b9d4448a2a",
+  "contract_digest": "e6108fe8a563eac5d3a74ea6b372c7261222e10bb42abb9dfaa86030ee68bf88",
+  "workspace_digest": "1d116bc36129a965b57fbcf7b7f444691a895f654db17fdd21c58f4aa7f8010e",
+  "closing_digest": "4f39b10621c4ce9f788aa0c7a80cf7a156ba81c3f7e18673aad3e6c2f33a1909",
+  "review_digest": "b41b4d1f191502420a43e1150a0b74e152194ff4bdd87700fd78d5cf22afffdb",
+  "finalization_digest": "3b988cac84775122e61cb198d49c1ec95ae6cb2e42ccf446a274c091116f0668",
+  "timestamp": 1790523334
+}
