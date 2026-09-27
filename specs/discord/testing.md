@@ -110,6 +110,17 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `tests/discord.ask-ephemeral.test.ts`, `tests/discord.thin-ack.test.ts`,
   `tests/discord.inflight-replies.test.ts` — collapsed answers that mention
   someone now expect the one ping post (was: no fresh post at all).
+## Open button asks keyed by askId (REQ-discord-044, SESSION-MULTI-3 / DISCORD-ASK-3/5)
+
+- `tests/discord.ask-ephemeral.test.ts` — while a Choose ask is open, a later
+  chat run that asks again (buttons or free text) keeps the earlier ask: its
+  Choose button opens its choices and a pick resumes with that question and
+  label while the newer ask stays pending; a thin reply restates the newest;
+  a free-text answer clears only that ask; a late press on the earlier ask
+  expires only it; `cancel` clears every open ask; `SessionStore` keeps open
+  asks by askId in `discord_sessions.pending_ask` (one object, or an array
+  when several are open) across a reopen (no live Discord).
+
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`

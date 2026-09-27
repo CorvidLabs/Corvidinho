@@ -33,8 +33,7 @@ import {
 } from "./session-thread.ts";
 import type { SessionStub } from "./types.ts";
 
-function serializePendingAsk(ask: PendingAsk | null | undefined): string | null {
-  if (!ask) return null;
+function pendingAskBody(ask: PendingAsk): Record<string, unknown> {
   const body: Record<string, unknown> = {
     reason: ask.reason,
     question: ask.question,
@@ -43,7 +42,44 @@ function serializePendingAsk(ask: PendingAsk | null | undefined): string | null 
   };
   if (ask.options?.length) body.options = ask.options;
   if (ask.stubMessageId) body.stubMessageId = ask.stubMessageId;
-  return JSON.stringify(body);
+  return body;
+}
+
+/**
+ * The session's open asks for `discord_sessions.pending_ask`: one object (as
+ * before) when only `pendingAsk` is open, else a JSON array, oldest first and
+ * `pendingAsk` last (SESSION-MULTI-3). Same column, no schema bump.
+ */
+function serializePendingAsks(session: SessionStub): string | null {
+  const open = [...(session.openAsks ?? [])];
+  if (session.pendingAsk) open.push(session.pendingAsk);
+  if (open.length === 0) return null;
+  if (open.length === 1) return JSON.stringify(pendingAskBody(open[0]!));
+  return JSON.stringify(open.map(pendingAskBody));
+}
+
+/**
+ * Stored open asks: the newest loads as the session's `pendingAsk`, the
+ * earlier ones as its `openAsks` (SESSION-MULTI-3). A single-object row loads
+ * as that one ask, as before.
+ */
+function parsePendingAsks(
+  raw: string | null | undefined,
+): Pick<SessionStub, "pendingAsk" | "openAsks"> {
+  if (!raw) return { pendingAsk: null };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { pendingAsk: null };
+  }
+  const asks: PendingAsk[] = [];
+  for (const item of Array.isArray(parsed) ? parsed : [parsed]) {
+    const ask = parsePendingAsk(item);
+    if (ask && !asks.some((a) => a.askId === ask.askId)) asks.push(ask);
+  }
+  const pendingAsk = asks.pop() ?? null;
+  return asks.length > 0 ? { pendingAsk, openAsks: asks } : { pendingAsk };
 }
 
 /**
@@ -51,10 +87,10 @@ function serializePendingAsk(ask: PendingAsk | null | undefined): string | null 
  * a reply cannot lift the cap (SAFE-8) — so one persisted by an earlier
  * build loads as no pending ask.
  */
-function parsePendingAsk(raw: string | null | undefined): PendingAsk | null {
-  if (!raw) return null;
+function parsePendingAsk(raw: unknown): PendingAsk | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = raw as Record<string, unknown>;
     const base = askFromUnknown(parsed);
     if (!base || base.reason === "spend-cap") return null;
     const askId =
@@ -232,7 +268,7 @@ export class SessionStore {
           worktreeBranch: row.worktree_branch ?? undefined,
           worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
             undefined,
-          pendingAsk: parsePendingAsk(row.pending_ask),
+          ...parsePendingAsks(row.pending_ask),
           createdAt: row.created_at,
           lastActivityAt: row.last_activity_at,
         };
@@ -251,7 +287,7 @@ export class SessionStore {
         worktreeBranch: row.worktree_branch ?? undefined,
         worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
           undefined,
-        pendingAsk: parsePendingAsk(row.pending_ask),
+        ...parsePendingAsks(row.pending_ask),
         createdAt: row.created_at,
         lastActivityAt: row.last_activity_at,
       };
@@ -335,7 +371,7 @@ export class SessionStore {
         session.worktreePath ?? null,
         session.worktreeBranch ?? null,
         session.worktreeState ?? null,
-        serializePendingAsk(session.pendingAsk),
+        serializePendingAsks(session),
         session.createdAt,
         session.lastActivityAt,
       ],
@@ -586,12 +622,73 @@ export class SessionStore {
   }
 
   /**
-   * Set or clear the pending human ask on a session (AUTONOMY-5/6).
-   * Persists when a DB is configured.
+   * Store a pending human ask on a session, or clear them all (AUTONOMY-5/6).
+   * Asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044): a new ask
+   * becomes the session's `pendingAsk`, and the button ask it supersedes
+   * stays open in `openAsks` until it is picked, pressed late or cancelled —
+   * a later run that asks again never takes its buttons away. A superseded
+   * free-text ask is replaced (a reply answers one question). Storing an
+   * askId the session already holds updates that ask in place. `null` clears
+   * every open ask (explicit cancel). Persists when a DB is configured.
    */
   setPendingAsk(session: SessionStub, ask: PendingAsk | null): void {
-    session.pendingAsk = ask;
+    if (!ask) {
+      session.pendingAsk = null;
+      delete session.openAsks;
+    } else if (session.pendingAsk?.askId === ask.askId) {
+      session.pendingAsk = ask;
+    } else {
+      const held = session.openAsks?.findIndex((a) => a.askId === ask.askId) ?? -1;
+      if (held >= 0) {
+        session.openAsks![held] = ask;
+      } else {
+        const prev = session.pendingAsk;
+        if (prev?.options?.length) {
+          session.openAsks = [...(session.openAsks ?? []), prev];
+        }
+        session.pendingAsk = ask;
+      }
+    }
     this.persistSession(session);
+  }
+
+  /**
+   * Clear one open ask by askId — a pick, a late press or a free-text answer
+   * (SESSION-MULTI-3). The session's other open asks stay; when `pendingAsk`
+   * is cleared the newest remaining open ask takes its place. No-op when the
+   * session does not hold that askId.
+   */
+  clearPendingAsk(session: SessionStub, askId: string): void {
+    const earlier = session.openAsks ?? [];
+    if (session.pendingAsk?.askId === askId) {
+      session.pendingAsk = earlier.at(-1) ?? null;
+      const rest = earlier.slice(0, -1);
+      if (rest.length > 0) session.openAsks = rest;
+      else delete session.openAsks;
+    } else if (earlier.some((a) => a.askId === askId)) {
+      const rest = earlier.filter((a) => a.askId !== askId);
+      if (rest.length > 0) session.openAsks = rest;
+      else delete session.openAsks;
+    } else {
+      return;
+    }
+    this.persistSession(session);
+  }
+
+  /**
+   * The live session holding open ask `askId` and that ask, whether it is the
+   * session's `pendingAsk` or an earlier open one (DISCORD-ASK-3 /
+   * SESSION-MULTI-3). Expired sessions are purged first, as in `list()`.
+   */
+  findPendingAsk(askId: string): { session: SessionStub; ask: PendingAsk } | undefined {
+    for (const session of this.list()) {
+      if (session.pendingAsk?.askId === askId) {
+        return { session, ask: session.pendingAsk };
+      }
+      const ask = session.openAsks?.find((a) => a.askId === askId);
+      if (ask) return { session, ask };
+    }
+    return undefined;
   }
 
   /**

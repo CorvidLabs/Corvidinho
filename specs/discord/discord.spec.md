@@ -175,10 +175,21 @@ Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
-custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
-in `discord_sessions.pending_ask` (schema v8). Button pending asks are NOT
-cleared by ordinary chat (SESSION-MULTI-3); free-text pending still clears on
-substantive continue. Message router keys sessions by Discord user id + channel
+custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
+(schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
+(with `askId` / `expiresAt` / options) is the newest, the one a thin reply
+restates and a free-text reply answers, and `openAsks` holds earlier button
+asks a later ask did not replace — one JSON object when one ask is open, an
+array (oldest first, newest last) when several are. `SessionStore.setPendingAsk(session, ask)`
+stores a new ask beside any open button ask (a superseded free-text ask is
+replaced; an askId already held is updated in place; `null` clears every open
+ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
+one ask (a pick, a late press or a free-text answer; the newest remaining one
+becomes `pendingAsk`) and `SessionStore.findPendingAsk(askId)` returns the live
+session and ask a button press answers. Button pending asks are NOT
+cleared by ordinary chat, nor replaced when a later run asks again
+(SESSION-MULTI-3); free-text pending still clears on substantive continue.
+Message router keys sessions by Discord user id + channel
 (SESSION-MULTI-1); reply/thread continue only for the session owner. The
 store's thread index (`SessionStore.byThreadUser`) is keyed by thread id +
 Discord user id: `getByThread(threadId, userId)` returns that user's session
@@ -398,6 +409,15 @@ by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 - **When** U sends a chat message the bridge routes to the agent
 - **Then** the agent prompt starts with the Corvidinho memory header and a
   `- person/identity: …` bullet, and the bridge logs a non-zero inject count
+
+### Scenario: A side-chat ask keeps the earlier Choose buttons (SESSION-MULTI-3)
+
+- **Given** user U has an open Choose ask A ("Which DB?") in a chat session
+- **When** U keeps chatting and that run asks again (Choose ask B, or a free-text ask)
+- **Then** B becomes the session's pending ask, A's Choose button still opens
+  its choices, and picking one resumes the session with A's question and the
+  chosen label while B stays open; a late press on A gets `that choice expired`
+  and clears only A; `cancel` clears both
 
 ### Scenario: Empty owner scope
 
