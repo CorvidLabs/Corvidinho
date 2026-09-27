@@ -2,7 +2,7 @@
  * WATCH-RELIABILITY-1..3 — summary once-per-event, spawn outcome log, 403 backoff
  * (poll fetch, auto-ack and run-summary comment).
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -176,10 +176,8 @@ type CannedReply = {
 const FIXTURE_TOKEN = ["fixture", "token", "not", "real"].join("-");
 
 const realFetch = globalThis.fetch;
-const realConsoleError = console.error;
 afterEach(() => {
   globalThis.fetch = realFetch;
-  console.error = realConsoleError;
 });
 
 /**
@@ -188,8 +186,6 @@ afterEach(() => {
  */
 function stubCommentPosts(replies: CannedReply[]): string[] {
   const posts: string[] = [];
-  // Octokit's request log prints each failed request; keep test output quiet.
-  console.error = () => {};
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
     const method = (input instanceof Request ? input.method : init?.method) ?? "GET";
@@ -226,6 +222,7 @@ async function startCommentPoller(opts: {
   now: () => number;
   logs: string[];
   events: DetectedEvent[];
+  runLoop?: boolean;
 }) {
   let fetches = 0;
   let agentRuns = 0;
@@ -239,7 +236,7 @@ async function startCommentPoller(opts: {
   const result = await startWatchPoller({
     env: envBase,
     filePath: null,
-    runLoop: false,
+    runLoop: opts.runLoop ?? false,
     agent,
     ackClient: createOctokitAckClient(FIXTURE_TOKEN),
     spawnOutcomeStore: createMemorySpawnOutcomeStore(),
@@ -343,6 +340,54 @@ describe("WATCH-RELIABILITY-3 rate limit on the auto-ack or run-summary comment"
     expect(w.fetches()).toBe(2);
     expect(posts).toHaveLength(1);
     await w.watch.stop();
+  });
+
+  test("the poll loop waits out a comment rate-limit backoff before its next poll", async () => {
+    const posts = stubCommentPosts([
+      forbidden("You have exceeded a secondary rate limit.", { "retry-after": "600" }),
+    ]);
+    const flush = async () => {
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    };
+    jest.useFakeTimers();
+    try {
+      const logs: string[] = [];
+      let clock = 2_000_000;
+      const w = await startCommentPoller({
+        now: () => clock,
+        logs,
+        events: [mkEvent({ id: "comment-rl-loop" })],
+        runLoop: true,
+      });
+      const intervalMs = w.watch.config.intervalMs;
+      expect(intervalMs).toBeLessThan(300_000);
+
+      // The loop's first tick polls at once; its auto-ack is rate-limited.
+      jest.advanceTimersByTime(0);
+      expect(w.fetches()).toBe(1);
+      await w.watch.pollOnce(); // joins the loop's in-flight cycle
+      await flush();
+      expect(w.fetches()).toBe(1);
+      expect(w.watch.getBackoffUntilMs()).toBe(clock + 600_000);
+
+      // Two normal intervals later the backoff still holds: no new poll.
+      clock += 2 * intervalMs;
+      jest.advanceTimersByTime(2 * intervalMs);
+      await flush();
+      expect(w.fetches()).toBe(1);
+
+      // Once the backoff has passed, the loop polls again; the ack is not retried.
+      clock += 600_000 - 2 * intervalMs;
+      jest.advanceTimersByTime(600_000 - 2 * intervalMs);
+      expect(w.fetches()).toBe(2);
+      await w.watch.stop(); // lets the loop's second cycle finish
+      expect(w.fetches()).toBe(2);
+      expect(posts).toHaveLength(1);
+      expect(w.agentRuns()).toBe(1);
+      expect(logs.filter((l) => l.startsWith("[watch] poll cycle "))).toHaveLength(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("x-ratelimit-remaining 0 + reset on the run summary: backoff until the reset", async () => {

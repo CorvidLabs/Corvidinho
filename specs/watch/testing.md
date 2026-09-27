@@ -20,7 +20,10 @@ module: watch
   same result as before; a 403 `retry-after: 90` on the ack sets a 90 s
   backoff (backoff line after `ack failed`), the agent still runs once with no
   summary, a pollOnce inside the backoff skips the fetch and the failed ack is
-  not retried after it; `x-ratelimit-remaining: 0` + `x-ratelimit-reset` on
+  not retried after it; with the poll loop on, a 403 `retry-after: 600` on
+  the ack keeps the loop from polling again until the 600 s have passed (not
+  after one normal interval);
+  `x-ratelimit-remaining: 0` + `x-ratelimit-reset` on
   the summary backs off until the reset (reason `x-ratelimit-reset`); a
   rate-limit message with no headers uses the 60 s default; a plain 403 on the
   ack or the summary sets no backoff.
