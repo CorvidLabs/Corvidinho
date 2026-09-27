@@ -7,11 +7,11 @@
   "title": "Box updater pidfile mode counts the bridge ready only on its Discord login line ([discord] logged in as), not the pre-login protocol version OK line, so a bridge that dies on login rolls back",
   "description": "Box updater pidfile mode counts the bridge ready only on its Discord login line ([discord] logged in as), not the pre-login protocol version OK line, so a bridge that dies on login rolls back",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "0e6e8d26b983a31b5518bc7013f75d5513fd94ba",
   "created_at": 1790471550,
-  "updated_at": 1790475365,
+  "updated_at": 1790475524,
   "affected_specs": [
     "cli"
   ],
