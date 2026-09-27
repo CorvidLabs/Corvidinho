@@ -1,0 +1,52 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790529985,
+      "digest": "2b54993b7bd66b8f9c027e32e9683c0b8f4c013389f6e557b61346d4512a9431",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-thread-sessions-are-keyed-by-thread-user-so-a-second-user-starting-a-session-in-a-thread-never-takes-over-the",
+        "title": "Discord thread sessions are keyed by (thread, user), so a second user starting a session in a thread never takes over the first user's plain-message continuation (SESSION-MULTI-1/2)",
+        "description": "Discord thread sessions are keyed by (thread, user), so a second user starting a session in a thread never takes over the first user's plain-message continuation (SESSION-MULTI-1/2)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/message-router.ts",
+          "src/discord/session-store.ts",
+          "tests/discord.thread-sessions-per-user.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "User A @mentions the bot in a thread and continues with plain messages; user B then @mentions the bot in the same thread and gets a session of their own; A's next plain message in that thread still continues A's session (not ignored, never B's) and B's plain messages continue B's; this holds while A has an open button ask (A's askId and expiry unchanged, B's session has none), after B's session ends, and after a SQLite reload; a third user with no session there is ignored on a plain message and starts their own on @mention; tests/discord.thread-sessions-per-user.test.ts covers all of these and fails on the previous code"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "60e94b846eda1313e0b0c906117caeacc4ffeafeca8224a189fb5c1b298694ed"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790533536,
+      "digest": "078e658d5d38575ee81277cfbeeead2768aebcbc9f23eb9cdc3aa2da4c6db2d4",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
