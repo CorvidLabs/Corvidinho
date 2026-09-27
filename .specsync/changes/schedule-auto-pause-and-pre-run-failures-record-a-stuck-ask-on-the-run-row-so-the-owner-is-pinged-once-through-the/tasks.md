@@ -12,3 +12,4 @@ artifact: tasks
 - [x] Docs: `docs/discord.md` (schedule asks, tick gates), `docs/DAEMON.md` (needs-human paragraph, `run.needs_human` row).
 - [x] Spec paragraph in `specs/discord/discord.spec.md`, notes in `specs/discord/testing.md`, delta Added REQ-discord-353.
 - [x] `specsync check --require-coverage 100`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive`.
+- [x] Review: a pause ask whose in-process post does not go out is handed back for the next delivery pass (a paused schedule has no next run); a run that throws posts its pause ask at once; a resolve / worktree step that throws is a pre-run failure; the pause ask of a run without its own ask carries only `failed (exit N)` as context. 3 more tests (and context assertions), failing on the first draft and on main.

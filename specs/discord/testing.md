@@ -154,14 +154,20 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   stuck `autoPauseAsk` (earlier failures store none); the bridge's next tick
   posts it once with the owner ping; a stuck 5th run posts the pause line
   plus `Last failure: <question>`; a bridge-claimed 5th failure posts the
-  pause ask with the ping instead of the `❌` line; creator-refused runs
-  that auto-pause post nothing until the creator is allowed again. With
+  pause ask with the ping and the `failed (exit 1)` context (not the run's
+  output) instead of the `❌` line; a pause ask whose in-process post
+  resolves `false` or throws stays pending with no ping key and the next
+  tick posts it once with the ping; a bridge run that throws and makes the
+  5th failure posts the pause ask at once without the error text;
+  creator-refused runs that auto-pause post nothing until the creator is
+  allowed again. With
   worktrees on: a daemon run whose project cannot be resolved stores the
   fixed `PROJECT_RESOLVE_FAILED_QUESTION` (full error with the host path
   on the row only) and the bridge pings the owner once per question; a
   bridge run whose worktree cannot be created (a `talk` branch blocks
   `talk/<run>`) posts `WORKTREE_FAILED_QUESTION` at once with the ping,
-  once, without the host path.
+  once, without the host path; so does one whose worktree step throws
+  (`WORKTREE_BASE_DIR` under a regular file).
 - `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
   when the SQL failure count reaches 5 even from a stale cache; a success
   stores none.

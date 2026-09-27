@@ -1,6 +1,6 @@
 ---
 id: schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the
-state: implementing
+state: verifying
 type: feature
 base_commit: fbaa84b7cda1bf2b462baea44cad20ef93e0df4f
 ---

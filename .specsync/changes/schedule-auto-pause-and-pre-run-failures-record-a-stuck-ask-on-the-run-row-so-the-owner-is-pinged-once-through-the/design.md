@@ -24,10 +24,17 @@ artifact: design
     auto-pause ask when `maybeAutoPause` paused, else the run's own ask;
     `onRunFinished.askReason` follows it;
   - `failBeforeRun` records the two pre-run failures with the full error
-    and a stuck ask, then posts it; `postOwnRunAsk` is the in-process post
+    and a stuck ask, then posts it (a resolve / worktree step that throws
+    is caught into the same branch); `postOwnRunAsk` is the in-process post
     of REQ-discord-347 (live gate, take the recorded ask, `postRunAsk`),
-    now shared by the pre-run branches and the normal path. The normal path
-    posts `done.ask` when there is one, else the ✅/❌ line as before.
+    now shared by the pre-run branches, the normal path and a run that
+    throws. The normal path posts `done.ask` when there is one, else the
+    ✅/❌ line as before; for a pause ask of a run without its own ask the
+    context is the `failed (exit N)` line the ❌ post showed. `finish()`
+    also returns `autoPaused`, and `postOwnRunAsk({ handBack })` releases a
+    pause ask whose post did not go out, so the next delivery pass retries
+    it (a paused schedule has no next run; other own-run asks keep the
+    REQ-discord-347 "not retried" rule).
 - Daemon and bridge wiring are unchanged: the daemon already logs
   `run.needs_human` from `askReason`, the bridge's delivery pass already
   posts any pending run ask.

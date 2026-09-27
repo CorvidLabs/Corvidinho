@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database as SqliteDatabase, type Database } from "bun:sqlite";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatAskSummary, stuckAfterVerifyAsk } from "../src/agent/ask.ts";
@@ -41,6 +41,8 @@ const OWNER = { discordId: OWNER_ID, display: "Leif" };
 const CREATOR_ID = "222233334444555566";
 const CHANNEL = "chan-allowed";
 const HOUR = 3_600_000;
+/** What a spawn that throws says (it names a host path). */
+const SPAWN_ERROR = "spawn /opt/host-only/bin/corvidinho ENOENT";
 const STUCK: HumanAsk = stuckAfterVerifyAsk(2);
 const CLARIFY: HumanAsk = { reason: "clarify", question: "Postgres or SQLite?" };
 const CAP_ASK: HumanAsk = spendCapReachedAsk({
@@ -49,7 +51,7 @@ const CAP_ASK: HumanAsk = spendCapReachedAsk({
   capMicroUsd: 5_000_000,
 });
 
-type Step = HumanAsk | "ok" | "fail";
+type Step = HumanAsk | "ok" | "fail" | "throw";
 type Post = { channelId: string; content: string; mentionUserIds?: string[] };
 
 const cleanups: Array<() => void> = [];
@@ -65,6 +67,7 @@ function stepAgent(steps: { next: Step; calls?: number }): AgentClient {
       const step = steps.next;
       if (step === "ok") return { ok: true, sessionId, summary: "done", exitCode: 0 };
       if (step === "fail") return { ok: false, sessionId, summary: "boom", exitCode: 1 };
+      if (step === "throw") throw new Error(SPAWN_ERROR);
       if (step.reason === "spend-cap") {
         return { ok: true, sessionId, summary: SPEND_CAP_SUMMARY, exitCode: 0, ask: step };
       }
@@ -553,12 +556,76 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     const last = h.posts.at(-1)!;
     expect(last.content).toStartWith("Schedule **Nightly**");
     expect(last.content).toContain(PAUSED_LINE);
+    // Like the ❌ line it replaces (and the delivery pass): the exit code,
+    // never the failed run's own output.
+    expect(last.content).toContain("failed (exit 1)");
+    expect(last.content).not.toContain("boom");
     expect(pinged(last, OWNER_ID)).toBe(true);
     expect(h.lastRun().ask_posted_at).not.toBeNull();
     expect(h.pingKeyRow()).toBe(askPingKey(autoPauseAsk()));
 
     await h.bridgeTick();
     expect(h.posts).toHaveLength(FAILURE_AUTO_PAUSE);
+  });
+
+  test("a pause ask whose in-process post does not go out (false, or throws) is handed back; the next tick posts it once with the ping", async () => {
+    const err = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      for (const failure of ["false", "throw"] as const) {
+        const posts: Post[] = [];
+        let down = false;
+        const h = pair({
+          post: async (p) => {
+            if (!down) return void posts.push(p);
+            if (failure === "throw") throw new Error("gateway down");
+            return false;
+          },
+        });
+        for (let i = 1; i < FAILURE_AUTO_PAUSE; i++) await h.bridgeRun("fail");
+        expect(posts).toHaveLength(FAILURE_AUTO_PAUSE - 1);
+
+        down = true;
+        await h.bridgeRun("fail");
+        expect(h.status()).toBe("paused");
+        expect(posts).toHaveLength(FAILURE_AUTO_PAUSE - 1);
+        // A paused schedule has no next run to post it: the ask stays pending.
+        expect(h.lastRun()).toMatchObject({
+          ask_reason: "stuck",
+          ask_question: autoPauseAsk().question,
+          ask_posted_at: null,
+        });
+        expect(h.pingKeyRow()).toBeNull();
+
+        down = false;
+        await h.bridgeTick();
+        expect(posts).toHaveLength(FAILURE_AUTO_PAUSE);
+        expect(posts.at(-1)!.content).toContain(PAUSED_LINE);
+        expect(pinged(posts.at(-1)!, OWNER_ID)).toBe(true);
+        expect(h.pingKeyRow()).toBe(askPingKey(autoPauseAsk()));
+        await h.bridgeTick();
+        expect(posts).toHaveLength(FAILURE_AUTO_PAUSE);
+      }
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  test("a bridge run that throws and auto-pauses posts the pause ask at once, without the error text", async () => {
+    const h = pair();
+    for (let i = 1; i < FAILURE_AUTO_PAUSE; i++) await h.bridgeRun("throw");
+    const before = h.posts.length;
+    await h.bridgeRun("throw");
+    expect(h.status()).toBe("paused");
+    expect(h.lastRun()).toMatchObject({ status: "failed", error: SPAWN_ERROR, ask_reason: "stuck" });
+    expect(h.lastRun().ask_posted_at).not.toBeNull();
+    expect(h.posts).toHaveLength(before + 1);
+    const post = h.posts.at(-1)!;
+    expect(post.content).toContain(PAUSED_LINE);
+    expect(post.content).not.toContain("/opt/host-only");
+    expect(pinged(post, OWNER_ID)).toBe(true);
+
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(before + 1);
   });
 
   test("refused runs that auto-pause post nothing while refused; the pause ask posts once the creator is allowed again", async () => {
@@ -652,6 +719,36 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     await h.bridgeTick();
     await h.bridgeTick();
     expect(h.posts).toHaveLength(1);
+  });
+
+  test("a worktree step that throws (not a directory) fails the run like one that returns an error", async () => {
+    const root = tempRoot("corvidinho-prerun-throw-");
+    mkdirSync(join(root, "proj"));
+    const notADir = join(root, "not-a-dir");
+    writeFileSync(notADir, "");
+    const saved = process.env.WORKTREE_BASE_DIR;
+    // mkdir of the worktree base under a regular file throws ENOTDIR.
+    process.env.WORKTREE_BASE_DIR = join(notADir, "wts");
+    try {
+      const h = pair({ projectRoot: root, project: "proj" });
+      await h.bridgeRun("ok");
+      expect(h.steps.calls ?? 0).toBe(0);
+      const row = h.lastRun();
+      expect(row).toMatchObject({
+        status: "failed",
+        ask_reason: "stuck",
+        ask_question: WORKTREE_FAILED_QUESTION,
+      });
+      expect(row.error).toStartWith("worktree failed: ");
+      expect(row.ask_posted_at).not.toBeNull();
+      expect(h.posts).toHaveLength(1);
+      expect(h.posts[0]!.content).toContain(`> ${WORKTREE_FAILED_QUESTION}`);
+      expect(h.posts[0]!.content).not.toContain(root);
+      expect(pinged(h.posts[0]!, OWNER_ID)).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.WORKTREE_BASE_DIR;
+      else process.env.WORKTREE_BASE_DIR = saved;
+    }
   });
 });
 
