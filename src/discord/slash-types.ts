@@ -15,6 +15,8 @@ import type { ScheduleStore } from "../scheduler/store.ts";
 import type { MemoryStore } from "../memory/index.ts";
 import type { AnnounceStore } from "./announce-store.ts";
 import type { WorkPrRunner } from "../work/pr.ts";
+import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
+import type { ChannelPost } from "./spend-post.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -59,6 +61,18 @@ export type SlashContext = {
   announceStore?: AnnounceStore;
   /** SAFE-5 — one-line audit chain verify summary for /status. */
   auditLine?: () => string;
+  /** AUTONOMOUS-8 — rolling 24 h spend vs the daily cap for /status (SAFE-8). */
+  spendLine?: () => string;
+  /**
+   * SAFE-8 — pending 80% warnings and the once-per-episode spend-cap ping
+   * (bridge wires the shared DB; src/agent/spend-outbox.ts).
+   */
+  spendAlerts?: SpendAlertOutbox;
+  /**
+   * Fresh channel post (bridge gateway reply) for owner notices after a slash
+   * run: a deferred-reply edit may not notify a mention (spend-post.ts).
+   */
+  post?: ChannelPost;
   /**
    * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
    * the trail is unavailable; /admin mutations then fail closed, as they do
