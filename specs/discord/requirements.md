@@ -1207,6 +1207,41 @@ Acceptance Criteria
 - With no rows, bridge start sends, edits and replies nothing.
 - A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
 
+### REQ-discord-212
+
+The bridge SHALL process a MessageCreate only when the message's own channel
+is allowlisted (DISCORD-5): the thread's parent channel (the DISCORD-2.a
+resolution) or the thread itself. This gate SHALL run before the thread,
+reply-to-bot and mention paths, and the channel recorded on a session SHALL
+NOT stand in for it, so a message that references a tracked bot message
+from an allowlisted channel never continues that session, spawns the agent,
+or posts or edits anything in a channel that is not allowlisted. Refusal
+SHALL be silent (DISCORD-DENY-1): no public reply, no DM, no reaction.
+
+The gateway SHALL set `InboundMessage.referencedMessageId` only for a reply
+in the message's own channel: a reference of type
+`MessageReferenceType.Forward` SHALL be dropped, and so SHALL a reference
+whose channel is neither the message's channel nor, inside a thread, the
+thread's parent channel. A reply in the same allowlisted channel SHALL still
+continue its session (DISCORD-2), and a thread under an allowlisted parent
+SHALL still continue its session (DISCORD-2.a).
+
+An ask button press (DISCORD-ASK) SHALL resume a session only when the press
+channel is allowlisted, or is the session's thread under an allowlisted
+parent (DISCORD-2.a), and the session's own channel, where the resumed run
+posts, is still allowlisted. Otherwise the bridge SHALL answer with an
+ephemeral ack only — the allowlist tip for an admin, the zero-width ack for
+anyone else (DISCORD-DENY-2/3) — and SHALL NOT resume the session, run the
+agent, or send or edit anything. No slash command, env var, table or column
+is added.
+
+Acceptance Criteria
+- The owner forwards a tracked bot message from an allowlisted channel into a non-allowlisted channel (with or without an @mention): `routeMessage` returns a silent `ignore` / `refuse` with no reply, the agent is not spawned, and nothing is sent, edited or deleted in that channel.
+- A thread message under a non-allowlisted parent does not continue a session whose recorded channel is allowlisted.
+- `replyReferenceMessageId` returns undefined for a forward-type reference and for a reference to another channel; it returns the message id for a same-channel reply (default or missing type) and, inside a thread, for a reference to the thread or its parent.
+- A reply to a tracked bot message in the same allowlisted channel still continues the same session; a thread under an allowlisted parent still continues its session.
+- An ask button pressed in a non-allowlisted channel, or after the session's channel left the allowlist, gets only the ephemeral zero-width ack (the allowlist tip for an admin): the ask stays pending, the agent is not run, and nothing is sent or edited; a press in the allowlisted channel, or in the session's thread under an allowlisted parent, still resumes (DISCORD-ASK-3).
+
 ### REQ-discord-215
 
 Discord does not notify a mention added by a message edit. Whenever the
