@@ -29,11 +29,7 @@ import {
   loadWatchConfig,
   type ConfigResult,
 } from "./config.ts";
-import {
-  dedupeByIssue,
-  filterNewEvents,
-  ProcessedIdStore,
-} from "./dedup.ts";
+import { dedupeByIssue, ProcessedIdStore } from "./dedup.ts";
 import {
   isGithubUserAllowed,
   isRepoAllowed,
@@ -196,9 +192,14 @@ export async function startWatchPoller(
       db,
       ttlMs: opts.sessionTtlMs ?? resolveSessionTtlMs(env),
     });
-  const processed = new ProcessedIdStore();
-  const acked = new AckedIdStore();
-  const summarized = new SummarizedIdStore();
+  // REQ-watch-247: handled ids live in the same DB as the sessions, so a
+  // restart never re-runs, re-acks or re-summarizes an event id.
+  const processed = new ProcessedIdStore({ db });
+  const acked = new AckedIdStore({ db });
+  const summarized = new SummarizedIdStore({ db });
+  // Denied ids stay apart and in-memory: a stranger's flood can only evict
+  // other denied ids (refused again, quietly), never a handled trusted id.
+  const deniedIds = new ProcessedIdStore();
   const successfulAcks = new SuccessfulAckStore();
   const searchClient =
     opts.searchClient ?? createOctokitSearchClient(config.token);
@@ -301,13 +302,15 @@ export async function startWatchPoller(
 
     result.fetched = events.length;
 
-    const fresh = filterNewEvents(events, processed.list());
+    const fresh = events.filter(
+      (e) => !processed.has(e.id) && !deniedIds.has(e.id),
+    );
     result.newEvents = fresh.length;
     const { eligible, denied } = preferAllowlisted(fresh, config.allowlist);
 
-    // Mark denied ids processed so we do not re-poll them forever (ALLOW-5 quiet).
+    // Mark denied ids seen so we do not re-poll them forever (ALLOW-5 quiet).
     for (const d of denied) {
-      processed.add(d.id);
+      deniedIds.add(d.id);
       result.refused += 1;
       opts.onAction?.({ kind: "refuse", event: d });
     }
@@ -332,13 +335,19 @@ export async function startWatchPoller(
         )
         .map((e) => e.id);
       const relatedIds = related.length > 0 ? related : [event.id];
+      // routed: routeEvent returned, so a throw after it came from the id
+      // write or later. marked: the ids are durably recorded.
+      let routed = false;
+      let marked = false;
 
       try {
         const action = routeEvent(event, {
           store,
           allowlist: config.allowlist,
         });
+        routed = true;
         processed.addMany(relatedIds);
+        marked = true;
 
         if (action.kind === "refuse" || action.kind === "ignore") {
           result.refused += 1;
@@ -439,9 +448,22 @@ export async function startWatchPoller(
       } catch (err) {
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
         // retried forever ahead of later events: log, mark processed, move on.
-        processed.addMany(relatedIds);
+        // Marking is a DB write (REQ-watch-247). Ids are marked before any
+        // ack or spawn, so if the id write itself failed nothing ran for this
+        // event: leave it for the next cycle, never mark it here (a retry that
+        // succeeds would drop a request that never ran). Only a routing
+        // failure (before the id write) is marked, as before.
+        if (!marked && !routed) {
+          try {
+            processed.addMany(relatedIds);
+            marked = true;
+          } catch {
+            // DB still failing: leave the event for the next cycle.
+          }
+        }
         logError(
-          `[watch] event ${event.repo}#${event.number} (${event.id}) failed; marked processed`,
+          `[watch] event ${event.repo}#${event.number} (${event.id}) failed; ` +
+            (marked ? "marked processed" : "not marked, retried next cycle"),
           err,
         );
       }
