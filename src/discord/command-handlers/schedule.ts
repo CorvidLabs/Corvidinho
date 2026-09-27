@@ -3,9 +3,13 @@
  * Steal from corvid-agent schedule-commands.ts — single-project first;
  * skip templates/pipelines/flock/council. Mutations ADMIN re-check at
  * handler time (DISCORD-7 / ADMIN-4); empty admin = deny-all.
+ * `delete` drops the schedule and its run history, so it leaves SAFE-5
+ * audit rows like /admin: intent first, fail closed when the trail is
+ * unavailable; a non-ADMIN delete appends `denied`.
  */
 
 import { checkChannel } from "../../allowlist/discord.ts";
+import { argsDigest, type AuditEntryInput, type AuditOutcome } from "../../audit/index.ts";
 import {
   CadenceError,
   validateAndResolveCadence,
@@ -18,6 +22,38 @@ import {
 import { projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
+
+/** Audit surface for /schedule delete rows (SAFE-5). */
+const SCHEDULE_AUDIT_SURFACE = "discord:schedule";
+/** Audit action for /schedule delete rows (SAFE-5). */
+const SCHEDULE_DELETE_AUDIT_ACTION = "schedule-delete";
+
+function deleteAuditEntry(
+  interaction: SlashInteraction,
+  outcome: AuditOutcome,
+  scheduleRef: string,
+): AuditEntryInput {
+  return {
+    action: SCHEDULE_DELETE_AUDIT_ACTION,
+    actor: interaction.userId,
+    surface: SCHEDULE_AUDIT_SURFACE,
+    // Digest only — never the raw schedule id.
+    argsDigest: argsDigest(["delete", scheduleRef]),
+    outcome,
+  };
+}
+
+/** Best-effort audit (denials / outcomes after the fact). */
+function auditSoft(ctx: SlashContext, entry: AuditEntryInput): number | undefined {
+  if (!ctx.recordAudit) return undefined;
+  try {
+    return ctx.recordAudit(entry).seq;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[audit] could not record ${entry.outcome} for ${entry.action}: ${msg}`);
+    return undefined;
+  }
+}
 
 function requireAdmin(
   ctx: SlashContext,
@@ -91,6 +127,12 @@ export async function handleScheduleCommand(
     case "resume":
     case "delete":
       if (!requireAdmin(ctx, interaction)) {
+        if (sub === "delete") {
+          auditSoft(
+            ctx,
+            deleteAuditEntry(interaction, "denied", optString(interaction, "schedule") ?? ""),
+          );
+        }
         await interaction.reply({
           content: NOT_AUTHORIZED,
           ephemeral: true,
@@ -307,9 +349,47 @@ async function handleDelete(
     });
     return;
   }
-  ctx.scheduleStore!.delete(schedule.id);
+  // SAFE-5: the intent is on the tamper-evident trail before the schedule
+  // and its run history are deleted. No trail wired (bridge without a DB)
+  // fails closed exactly like a trail that throws, as /admin does.
+  let startedSeq: number;
+  try {
+    if (!ctx.recordAudit) throw new Error("no audit database is wired to this bridge");
+    startedSeq = ctx.recordAudit(deleteAuditEntry(interaction, "started", schedule.id)).seq;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await interaction.reply({
+      content: `Refused: audit log unavailable (SAFE-5): ${msg}. Nothing changed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  let deleted: boolean;
+  try {
+    deleted = ctx.scheduleStore!.delete(schedule.id);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    auditSoft(ctx, deleteAuditEntry(interaction, "error", schedule.id));
+    await interaction.reply({
+      content: `Error: could not delete **${schedule.name}** (\`${schedule.id}\`): ${msg}.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  if (!deleted) {
+    auditSoft(ctx, deleteAuditEntry(interaction, "error", schedule.id));
+    await interaction.reply({
+      content: `Schedule not found: \`${id}\``,
+      ephemeral: true,
+    });
+    return;
+  }
+  const okSeq = auditSoft(ctx, deleteAuditEntry(interaction, "ok", schedule.id));
   await interaction.reply({
-    content: `Deleted **${schedule.name}** (\`${schedule.id}\`).`,
+    content: `Deleted **${schedule.name}** (\`${schedule.id}\`). Audit: #${startedSeq} started${
+      okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"
+    }.`,
     ephemeral: true,
   });
 }

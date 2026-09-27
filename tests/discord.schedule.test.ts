@@ -1,8 +1,10 @@
 /**
  * DISCORD-SCHEDULE slash fixtures (no live token).
  */
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { emptyConfig } from "../src/allowlist/types.ts";
+import { appendAudit, argsDigest, verifyAudit } from "../src/audit/index.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
@@ -19,6 +21,7 @@ import type {
 import { NOT_AUTHORIZED } from "../src/discord/types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
+import { migrateCorvidinhoDb } from "../src/store/db.ts";
 
 function allowCfg(channels: string[] = ["chan-allowed"]) {
   const cfg = emptyConfig();
@@ -61,6 +64,7 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     adminRoleIds: over.adminRoleIds,
     owner: over.owner,
     mutedUsers: over.mutedUsers,
+    recordAudit: over.recordAudit,
   };
 }
 
@@ -118,7 +122,12 @@ describe("/schedule dispatch", () => {
   });
 
   test("admin create + list + pause + resume + delete", async () => {
-    const ctx = makeCtx({ owner: { discordId: "boss" } });
+    const auditDb = new Database(":memory:");
+    migrateCorvidinhoDb(auditDb);
+    const ctx = makeCtx({
+      owner: { discordId: "boss" },
+      recordAudit: (entry) => appendAudit(auditDb, entry),
+    });
     const createIx = memoryInteraction({
       commandName: "schedule",
       subcommand: "create",
@@ -225,5 +234,177 @@ describe("/schedule dispatch", () => {
     await handleSlashInteraction(ctx, ix);
     expect(ix.replies[0]?.content).toBe(NOT_AUTHORIZED);
     expect(store.get(s.id)?.status).toBe("active");
+  });
+});
+
+/** SAFE-5 row shape for /schedule delete (src/discord/command-handlers/schedule.ts). */
+const SCHEDULE_AUDIT_SURFACE = "discord:schedule";
+const SCHEDULE_DELETE_AUDIT_ACTION = "schedule-delete";
+
+type AuditRow = { action: string; actor: string; surface: string; outcome: string; args_digest: string };
+
+function auditRows(db: Database): AuditRow[] {
+  return db
+    .query("SELECT action, actor, surface, outcome, args_digest FROM audit_log ORDER BY seq")
+    .all() as AuditRow[];
+}
+
+function runCount(db: Database, scheduleId: string): number {
+  return (
+    db.query("SELECT COUNT(*) AS n FROM schedule_runs WHERE schedule_id = ?").get(scheduleId) as {
+      n: number;
+    }
+  ).n;
+}
+
+/** DB-backed store with one schedule that has one recorded run. */
+function auditFixture(over: Partial<SlashContext> = {}) {
+  const db = new Database(":memory:");
+  migrateCorvidinhoDb(db);
+  const store = new ScheduleStore({ db });
+  const s = store.create({
+    name: "Nightly",
+    cronExpression: "0 * * * *",
+    project: ".",
+    prompt: "do",
+    createdByUserId: "boss",
+  });
+  store.claimRun(store.get(s.id)!);
+  expect(runCount(db, s.id)).toBe(1);
+  const ctx = makeCtx({
+    owner: { discordId: "boss" },
+    scheduleStore: store,
+    recordAudit: (entry) => appendAudit(db, entry),
+    ...over,
+  });
+  return { db, store, schedule: s, ctx };
+}
+
+function deleteIx(userId: string, schedule: string) {
+  return memoryInteraction({
+    commandName: "schedule",
+    subcommand: "delete",
+    userId,
+    options: { schedule },
+  });
+}
+
+describe("/schedule delete audit (SAFE-5)", () => {
+  test("owner delete appends started then ok before the schedule and its runs are gone; digest only", async () => {
+    const f = auditFixture();
+    const ix = deleteIx("boss", f.schedule.id.slice(0, 10));
+    await handleSlashInteraction(f.ctx, ix);
+
+    expect(ix.replies[0]?.ephemeral).toBe(true);
+    expect(ix.replies[0]?.content).toContain("Deleted **Nightly**");
+    expect(ix.replies[0]?.content).toContain("Audit: #1 started · #2 ok");
+    expect(f.store.list()).toHaveLength(0);
+    expect(runCount(f.db, f.schedule.id)).toBe(0);
+
+    const rows = auditRows(f.db);
+    expect(rows.map((r) => [r.action, r.actor, r.surface, r.outcome])).toEqual([
+      [SCHEDULE_DELETE_AUDIT_ACTION, "boss", SCHEDULE_AUDIT_SURFACE, "started"],
+      [SCHEDULE_DELETE_AUDIT_ACTION, "boss", SCHEDULE_AUDIT_SURFACE, "ok"],
+    ]);
+    // The digest names the resolved schedule id; the row never holds it raw.
+    expect(rows[0]!.args_digest).toBe(argsDigest(["delete", f.schedule.id]));
+    expect(JSON.stringify(rows)).not.toContain(f.schedule.id);
+    expect(verifyAudit(f.db).ok).toBe(true);
+  });
+
+  test("audit trail throws ⇒ fail closed: refusal, schedule and run history kept", async () => {
+    const f = auditFixture({
+      recordAudit: () => {
+        throw new Error("disk full");
+      },
+    });
+    const ix = deleteIx("boss", f.schedule.id);
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies[0]).toEqual({
+      content: "Refused: audit log unavailable (SAFE-5): disk full. Nothing changed.",
+      ephemeral: true,
+    });
+    expect(f.store.get(f.schedule.id)).toBeDefined();
+    expect(runCount(f.db, f.schedule.id)).toBe(1);
+    expect(new ScheduleStore({ db: f.db }).get(f.schedule.id)).toBeDefined();
+  });
+
+  test("no audit trail wired (bridge without a DB) ⇒ same fail-closed refusal", async () => {
+    const store = new ScheduleStore();
+    const s = store.create({
+      name: "x",
+      cronExpression: "0 * * * *",
+      project: "p",
+      prompt: "do",
+      createdByUserId: "boss",
+    });
+    const ctx = makeCtx({ owner: { discordId: "boss" }, scheduleStore: store });
+    expect(ctx.recordAudit).toBeUndefined();
+    const ix = deleteIx("boss", s.id);
+    await handleSlashInteraction(ctx, ix);
+    expect(ix.replies[0]?.ephemeral).toBe(true);
+    expect(ix.replies[0]?.content).toContain("Refused: audit log unavailable (SAFE-5)");
+    expect(ix.replies[0]?.content).toContain("Nothing changed");
+    expect(store.get(s.id)).toBeDefined();
+  });
+
+  test("keyed chain and a bridge without the key ⇒ refused, nothing deleted, chain still verifies", async () => {
+    const f = auditFixture();
+    appendAudit(
+      f.db,
+      { action: "seed", actor: "local", surface: "cli", argsDigest: argsDigest([]), outcome: "ok" },
+      { key: "k" },
+    );
+    const ix = deleteIx("boss", f.schedule.id);
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies[0]?.content).toContain("audit log unavailable (SAFE-5)");
+    expect(ix.replies[0]?.content).toContain("CORVIDINHO_AUDIT_HMAC_KEY");
+    expect(f.store.get(f.schedule.id)).toBeDefined();
+    expect(runCount(f.db, f.schedule.id)).toBe(1);
+    expect(auditRows(f.db)).toHaveLength(1);
+    expect(verifyAudit(f.db, "k").ok).toBe(true);
+  });
+
+  test("non-ADMIN delete is refused and appends denied; a refused pause appends nothing", async () => {
+    const f = auditFixture();
+    const ix = deleteIx("peon", f.schedule.id);
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies[0]).toEqual({ content: NOT_AUTHORIZED, ephemeral: true });
+    expect(f.store.get(f.schedule.id)).toBeDefined();
+    expect(auditRows(f.db).map((r) => [r.action, r.actor, r.surface, r.outcome])).toEqual([
+      [SCHEDULE_DELETE_AUDIT_ACTION, "peon", SCHEDULE_AUDIT_SURFACE, "denied"],
+    ]);
+
+    const pause = memoryInteraction({
+      commandName: "schedule",
+      subcommand: "pause",
+      userId: "peon",
+      options: { schedule: f.schedule.id },
+    });
+    await handleSlashInteraction(f.ctx, pause);
+    expect(pause.replies[0]?.content).toBe(NOT_AUTHORIZED);
+    expect(auditRows(f.db)).toHaveLength(1);
+  });
+
+  test("a delete that throws after the intent row appends error and says so", async () => {
+    const f = auditFixture();
+    f.store.delete = () => {
+      throw new Error("database is locked");
+    };
+    const ix = deleteIx("boss", f.schedule.id);
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies[0]?.content).toContain("Error: could not delete **Nightly**");
+    expect(ix.replies[0]?.content).toContain("database is locked");
+    expect(auditRows(f.db).map((r) => r.outcome)).toEqual(["started", "error"]);
+    expect(verifyAudit(f.db).ok).toBe(true);
+  });
+
+  test("unknown schedule id is not an audited delete", async () => {
+    const f = auditFixture();
+    const ix = deleteIx("boss", "sched_missing");
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies[0]?.content).toBe("Schedule not found: `sched_missing`");
+    expect(auditRows(f.db)).toHaveLength(0);
+    expect(f.store.get(f.schedule.id)).toBeDefined();
   });
 });

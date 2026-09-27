@@ -386,6 +386,19 @@ Mutations (`create|pause|resume|delete`) SHALL re-check ADMIN at handler time
 (DISCORD-7 / ADMIN-4); empty admin/owner lists SHALL deny-all. `list` MAY be
 used by allowlisted actors after normal channel and rate/mute gates.
 
+`delete` removes the schedule and its whole run history, so it SHALL leave
+SAFE-5 audit rows on the shared chain the way `/admin` does (REQ-discord-043):
+a `started` row (action `schedule-delete`, surface `discord:schedule`, actor
+the invoker's user id, args digest of the resolved schedule id — never the raw
+id) before anything is deleted, then `ok` or `error`; the reply SHALL name the
+row numbers. A non-ADMIN `delete` SHALL append `denied`. When the `started`
+row cannot be recorded — the trail throws (including a keyed chain on a
+process without `CORVIDINHO_AUDIT_HMAC_KEY`) or no trail is wired (a bridge
+without a DB) — `delete` SHALL fail closed with the ephemeral
+`Refused: audit log unavailable (SAFE-5)` reply and delete nothing; it SHALL
+never make an unaudited delete. An unknown or missing schedule id deletes
+nothing and appends no row.
+
 Cadence SHALL enforce a minimum interval of **5 minutes** at create time.
 Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
@@ -414,6 +427,9 @@ Acceptance Criteria
 - Admin can create with cadence + project + prompt; non-admin / empty admin denied.
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
+- `/schedule delete` by the owner appends `started` then `ok` (action `schedule-delete`, surface `discord:schedule`, args digest only) before the schedule and its runs are gone; the reply names both row numbers and the chain verifies.
+- When the audit trail throws, the chain is keyed and the process has no key, or no trail is wired, `/schedule delete` replies `audit log unavailable (SAFE-5)` and the schedule and its run history are kept.
+- A non-ADMIN `/schedule delete` gets `not authorized` and appends `denied`; a delete that throws after the `started` row appends `error` and says so.
 - Optional create `channel` must be allowlisted; tick re-checks before post.
 - A due schedule whose creator is on `denyUsers` is refused at tick: no agent run, no post, the run is recorded failed with `creator not allowlisted: …`.
 - With a non-empty user allowlist, a schedule by an unlisted creator is refused; one by a listed user or by the configured owner (not on the list) still runs and posts.
