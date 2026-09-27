@@ -10,18 +10,19 @@ cd /path/to/Corvidinho
 # Update to latest main:
 ./scripts/corvidinho-update.sh
 
-# Pin a release tag:
-CORVIDINHO_REF=v0.0.2 ./scripts/corvidinho-update.sh
+# Pin a release tag (must be a pushed tag; not every version is tagged —
+# list them with `git ls-remote --tags origin`):
+CORVIDINHO_REF=vX.Y.Z ./scripts/corvidinho-update.sh
 
-# Plan only:
+# Plan only (still runs `git fetch --tags --prune origin`; no checkout/install/doctor/restart):
 CORVIDINHO_UPDATE_DRY_RUN=1 ./scripts/corvidinho-update.sh
 ```
 
 ## What it does
 
-1. `git fetch --tags`
+1. `git fetch --tags --prune origin`
 2. Record current `HEAD` (rollback target)
-3. `git checkout` the requested ref (default `origin/main`; `CORVIDINHO_REF`)
+3. `git checkout --force` the requested ref (default `origin/main`; `CORVIDINHO_REF`)
 4. `bun install` (frozen lockfile, then fallback)
 5. `bun src/cli.ts doctor` (refuse to restart if doctor fails → rollback)
 6. Restart the bridge (pidfile mode unless a unit or command is configured; see below)
@@ -32,8 +33,16 @@ The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `
 same env. A systemd unit's bridge still takes its env from the unit's own `EnvironmentFile=`,
 not from the updater (`systemctl` does not pass the caller's env on), so keep the two in step.
 Every doctor check must pass there — `discord`, `github`, `github-watch`, `fledge`,
-`specsync`, `plugins` — or the update rolls back. If the env file is missing, the updater's own
-environment is used; set `CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
+`specsync`, `plugins`, and `allowlist-file` when an allowlist file exists (a file the loader
+cannot parse fails it) — or the update rolls back. The `github-watch` check needs
+`GITHUB_TOKEN`/`GH_TOKEN`, `CORVIDINHO_WATCH_USERNAME` and `CORVIDINHO_GITHUB_ALLOW_REPOS`/`_ORGS`
+in the env (repos only in the allowlist file do not count), even on a box that does not run
+WATCH. If the env file is missing, the updater's own environment is used; set
+`CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
+
+Bun also auto-loads a `.env` file from the checkout root into processes started there (`doctor`
+and a pidfile-mode bridge); spawned agents never read it (`bun --no-env-file`). Keep secrets in
+the env file above rather than a `.env` in the checkout.
 
 ## Restart configuration
 
@@ -75,14 +84,15 @@ process spawns `task run` from the updated checkout, and the wire protocol must 
 
 ## After update
 
-- Sessions/work stubs **and memories** persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. Sessions, schedules, memories, WATCH sessions and the audit chain share `corvidinho.db` (schema v7); the DB migrates on first open after an update. Forget/override of memories (own or other) requires ADMIN — the configured owner — at handler time; no owner = nobody (IDENTITY-3). Bridge restart picks up package presence version after update.
-- Confirm with Discord `/status` (ephemeral): version, uptime, protocol, channels, sessions, work, LLM line, slash names, announce channel, owner configured, audit chain, git tip.
+- Sessions/work stubs **and memories** persist in local SQLite under `~/.local/share/corvidinho/` (override `CORVIDINHO_DATA_DIR`); soft TTL ~45m (30–60m via `CORVIDINHO_SESSION_TTL_MS`). Restart no longer wipes active maps within TTL. Sessions, schedules, memories, WATCH sessions and the audit chain share `corvidinho.db` (schema v9); the DB migrates on first open after an update. Forget/override of memories (own or other) requires ADMIN — the configured owner — at handler time; no owner = nobody (IDENTITY-3). Bridge restart picks up package presence version after update.
+- Confirm with Discord `/status` (ephemeral): version, uptime, protocol, channels, sessions, work, LLM line, slash names, announce channel, owner configured, audit chain, 24 h spend vs cap, git tip.
 - Operator knobs (owner, `CORVIDINHO_ALLOWLIST`, autonomous gate, logs): [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) section E.
 
 ## Releases
 
-Pushing an annotated tag `v*` runs `.github/workflows/release.yml`, which opens a
-GitHub Release with verbose notes (commits since previous tag + upgrade pointer).
+Pushing a tag `v*` (annotated or lightweight) runs `.github/workflows/release.yml`, which opens a
+GitHub Release with verbose notes (commits since previous tag + upgrade pointer). A package
+version that was never tagged has no Release; its code ships in the next tag.
 
 ## Discord slash ghosts / duplicates
 

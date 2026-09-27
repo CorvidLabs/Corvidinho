@@ -67,7 +67,9 @@ On SIGTERM or SIGINT the daemon:
 1. stops ticking;
 2. waits up to 30 s for in-flight runs;
 3. records any runs still going as failed (`interrupted: daemon shutdown`), so
-   history never shows a run stuck at "running";
+   history never shows a run stuck at "running", and kills their whole process
+   trees (each spawned `task run` has its own process group), logging
+   `daemon.abandoned`;
 4. removes the lock and exits **0**.
 
 A second signal skips the rest of the wait. Under systemd the stop signal goes

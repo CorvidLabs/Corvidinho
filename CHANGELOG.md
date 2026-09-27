@@ -67,12 +67,12 @@
 
 ### Stop means stop — child process trees (AGENT-3)
 
-- **Process-tree kill + Fledge scoping** — [#185](https://github.com/CorvidLabs/Corvidinho/pull/185) (#112): Fledge runs, delegate workers and spawned chat/schedule agents get their own process group; a timeout, abort, parent exit or unhandled SIGINT/SIGTERM/SIGHUP kills the whole tree (including `setsid` grandchildren found via `/proc`), and signals the process started with ignored (SIGHUP under `nohup`) stay ignored. Daemon shutdown now kills runs abandoned after the grace period (CLI-8 / AUTONOMOUS-4). Model argv goes after `--` in `fledge plugins run`, and Fledge commands are bound to the project root they were discovered for (FLEDGE-4, PLUGIN-2/3).
+- **Process-tree kill + Fledge scoping** — [#185](https://github.com/CorvidLabs/Corvidinho/pull/185) (#112; merged before the v0.0.22 tag, so the v0.0.22 build already has it): Fledge runs, delegate workers and spawned chat/schedule agents get their own process group; a timeout, abort, parent exit or unhandled SIGINT/SIGTERM/SIGHUP kills the whole tree (including `setsid` grandchildren found via `/proc`), and signals the process started with ignored (SIGHUP under `nohup`) stay ignored. Daemon shutdown now kills runs abandoned after the grace period (CLI-8 / AUTONOMOUS-4). Model argv goes after `--` in `fledge plugins run`, and Fledge commands are bound to the project root they were discovered for (FLEDGE-4, PLUGIN-2/3).
 
 ### Security fixes
 
-- **SAFE-3 `cd` clamp** — [#187](https://github.com/CorvidLabs/Corvidinho/pull/187): `shell-exec` refuses `cd -`, `cd -P /`, `cd -- /etc`, `{ cd /; }`, keyword forms, `pushd`, `builtin`/`command cd`, `eval "cd …"` and `CDPATH` tricks that escaped the project root.
-- **`files-edit` literal `--new`** — [#188](https://github.com/CorvidLabs/Corvidinho/pull/188): `$&`, `$1`, `` $` ``, `$'` and `$$` in the replacement are written literally instead of being expanded.
+- **SAFE-3 `cd` clamp** — [#187](https://github.com/CorvidLabs/Corvidinho/pull/187) (already in the v0.0.22 tag): `shell-exec` refuses `cd -`, `cd -P /`, `cd -- /etc`, `{ cd /; }`, keyword forms, `pushd`, `builtin`/`command cd`, `eval "cd …"` and `CDPATH` tricks that escaped the project root.
+- **`files-edit` literal `--new`** — [#188](https://github.com/CorvidLabs/Corvidinho/pull/188) (already in the v0.0.22 tag): `$&`, `$1`, `` $` ``, `$'` and `$$` in the replacement are written literally instead of being expanded.
 - **Scrub before clip** — [#190](https://github.com/CorvidLabs/Corvidinho/pull/190) (SAFE-6): run summaries are secret-scrubbed before every length cap (500/1800/4000), so WATCH GitHub comments, spawn JSONL and Discord replies cannot leak a token or private key cut in half; a `BEGIN … PRIVATE KEY` block with no END line is now redacted (scrub rules version 2 re-scrubs stored rows once).
 - **GitHub gate reads the allowlist file** — [#191](https://github.com/CorvidLabs/Corvidinho/pull/191) (GITHUB-6): `deny_repos` / `deny_orgs` in the allowlist file now apply to every GitHub plugin command and `/work` PRs, not only env overlays; the test suite never reads the operator's real allowlist file.
 
@@ -99,7 +99,7 @@
 ### Security and correctness sweep (bug-fix PRs from an adversarial bug hunt)
 
 - **Discord actor gating** — [#176](https://github.com/CorvidLabs/Corvidinho/pull/176): chat and slash actors are checked against the user/role allowlist and deny lists (deny wins), not only the channel allowlist.
-- **`/work` and `/session start` project option** — [#177](https://github.com/CorvidLabs/Corvidinho/pull/177): the `project` option can no longer point the agent at an arbitrary git repo on the host; only configured project roots resolve.
+- **`/work` and `/session start` project option** — [#177](https://github.com/CorvidLabs/Corvidinho/pull/177): the `project` option can no longer point the agent at an arbitrary git repo on the host; it resolves only to the bridge project root, a directory inside it, or a sibling checkout whose origin OWNER/REPO passes the GitHub repo allowlist (checked on real paths; otherwise "not authorized"). Applies to `/schedule create` and schedule ticks too.
 - **Schedules get their own worktree and branch; branches with commits are never force-deleted** — [#178](https://github.com/CorvidLabs/Corvidinho/pull/178): schedule run worktree ids no longer collide, and branch cleanup deletes a branch only when it has no commits of its own, whatever the default branch is called (`trunk` included).
 - **Soft-TTL purge never parks a live session** — [#179](https://github.com/CorvidLabs/Corvidinho/pull/179): `/status` or `/session list` can no longer park the worktree out from under a running agent.
 - **Spawned Bun config pinned** — [#182](https://github.com/CorvidLabs/Corvidinho/pull/182): a planted `bunfig.toml` preload in a project cannot run code in the agent child.
@@ -136,7 +136,7 @@
 
 - **IDENTITY-4** — Discord injects acting user id + display name (owner map wins for the owner; never invents names like "Kyn"); memory stays scoped to the acting Discord user.
 - **DISCORD-3.a** — Thinking/progress embed footer shows **model**, session id, and operator plumbing (`state` / `verified` / `verifySkipped` / `attempts`). Final chat reply is **human text only** — no plumbing lines.
-- **ROLES-CHAT-8** — Non-ADMIN community sessions may use **any public GitHub** (+ site/roadmap via web-fetch); **private repos** and **secret paths** (`.env`, keys, keystores) are refused. Deny lists still win. ADMIN keeps the GITHUB-6 allowlist.
+- **ROLES-CHAT-8** — Non-ADMIN community sessions may use **any public GitHub** repo through the read tools (the system prompt names the site/roadmap, but `web-fetch` is dangerous and is not offered in chat); **private repos** and **secret paths** (`.env`, keys, keystores) are refused. Deny lists still win. ADMIN keeps the GITHUB-6 allowlist.
 
 ### Ops
 
@@ -293,7 +293,7 @@ _Also in the v0.0.17 build (backfilled — merged just before this cut):_
 ### WATCH reliability (WATCH-RELIABILITY-1..3)
 
 - **WATCH-RELIABILITY-1** — After a successful auto-ack on mention/comment start/continue, post a short agent summary comment on the same GitHub thread when the run finishes (success or failure), once per event id (Made with Corvidinho footer).
-- **WATCH-RELIABILITY-2** — Persist spawn outcome logging (start, exit code / error class, duration) as a structured `[watch] spawn …` log line and durable JSONL (`CORVIDINHO_WATCH_SPAWN_LOG` or `~/.local/share/corvidinho/watch-spawn.jsonl`) — readable without Discord.
+- **WATCH-RELIABILITY-2** — Persist spawn outcome logging (start, exit code / error class, duration) as a structured `[watch] spawn …` log line and durable JSONL (`CORVIDINHO_WATCH_SPAWN_LOG` or `<data dir>/watch-spawn.jsonl`, data dir = `CORVIDINHO_DATA_DIR` or `~/.local/share/corvidinho`) — readable without Discord.
 - **WATCH-RELIABILITY-3** — On GitHub **403 rate-limit**, back off using `Retry-After` / `x-ratelimit-reset` (documented default **60s**); skip tight re-poll loops; clear `[watch] github rate-limit backoff` log line.
 - HI captured in [`hi/watch.md`](hi/watch.md) (not draft).
 
@@ -324,7 +324,7 @@ _Backfilled: these shipped in the tagged build but were missing from the first n
 ### Security — memory ACL hardening (#59 follow-up) — [#128](https://github.com/CorvidLabs/Corvidinho/pull/128)
 
 - Memory plugins no longer accept `--user`, `--admin`, or `--db` from argv. In the LLM tool loop argv is model-controlled, so the model could previously read or overwrite any user's memories and self-assert ADMIN (MEMORY-ACL-1..4). The acting user and ADMIN now come only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`).
-- ADMIN is re-checked in the plugin handler: the bridge's per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` is required (scheduled runs never get ADMIN) and the live config must agree — empty `CORVIDINHO_DISCORD_ADMIN_USERS` + `_ROLES` ⇒ nobody; deny-listed/muted users are never ADMIN; admin user id, or admin roles configured (ADMIN-4).
+- ADMIN is re-checked in the plugin handler: the bridge's per-dispatch `CORVIDINHO_ACTING_IS_ADMIN=1` is required (scheduled runs never get ADMIN) and the live config must agree — empty `CORVIDINHO_DISCORD_ADMIN_USERS` + `_ROLES` ⇒ nobody; deny-listed/muted users are never ADMIN; admin user id, or admin roles configured (ADMIN-4). Superseded in this same package by owner-only ADMIN ([#141](https://github.com/CorvidLabs/Corvidinho/pull/141), upgrade note above): the live check now requires the configured owner, and no owner ⇒ nobody.
 - `memory-forget` / `memory-override` are real two-phase (SAFE-4): run once for a confirm token (no content), then `--confirm TOKEN` from a new turn within 10 minutes. The token is HMAC-bound to op + actor + memory id + row state (+ override content) and is single-use. No schema change.
 - `memory-recall --include-deleted` is ADMIN-only.
 - Phase 2 also needs the token to appear in the human's own message (the bridge passes only human-typed tokens), so the model cannot confirm from its own memory.
@@ -364,7 +364,7 @@ _Backfilled: these shipped in the tagged build but were missing from the first n
 - **SAFE-3:** spawn cwd pinned to plugin/project root; lexical refuse of `cd`/`pushd` that would escape (absolute outside, `..`, `~`, `$VAR`, bare `cd`) before spawn — Merlin steal.
 - Exports `CORVIDINHO_PROJECT_ROOT` into the child env for nested tools.
 - Fixture tests: happy path, SAFE-1 deny, SAFE-3 escape refuse, relative-within-root allow.
-- `docs/hi-drafts/WATCH-RELIABILITY.md` — draft only for Leif (post-ack summary, spawn outcome log, 403 backoff); **not** captured to `hi/`.
+- `docs/hi-drafts/WATCH-RELIABILITY.md` — draft only for Leif (post-ack summary, spawn outcome log, 403 backoff); **not** captured to `hi/` here — captured to `hi/watch.md` in 0.0.10.
 - After restart, typed `shell-exec` + SAFE-3 cwd clamp are available to the LLM tool loop.
 
 _Backfilled: these shipped in the tagged build but were missing from the first notes for this version._
