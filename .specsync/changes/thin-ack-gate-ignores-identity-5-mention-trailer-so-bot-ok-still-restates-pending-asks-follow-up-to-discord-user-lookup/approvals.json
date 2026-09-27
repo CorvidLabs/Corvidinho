@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790472099,
+      "digest": "67e6628da2c0804ab5d14683ca9b41728b1b0f161197dbd0305b2b34d41b9776",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup",
+        "title": "Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land)",
+        "description": "Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "tests/agent.soft-land.test.ts",
+          "tests/discord.slash-pending-ask.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "After stripMentions appends [mentioned: Discord user id …], isThinAck/isCancelAsk run on promptBodyForAskGate(prompt) so '<@bot> ok' still thin-acks a pending ask (AUTONOMY-5/6) while the full prompt keeps snowflakes for discord-user-lookup (IDENTITY-5). Fixture: tests/discord.slash-pending-ask.test.ts fallback @mention ok."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "dc84fa76ca4ac2cbe7f69a6c2509092f842ad106d101df9e3194001a8642c115"
+      }
+    }
+  ],
+  "reopenings": []
+}

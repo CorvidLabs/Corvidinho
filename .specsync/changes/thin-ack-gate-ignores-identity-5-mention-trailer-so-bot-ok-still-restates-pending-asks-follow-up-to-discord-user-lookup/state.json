@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup",
+  "slug": "thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup",
+  "title": "Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land)",
+  "description": "Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land)",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "c200ca2e34d7e2dc4a2599f7e04d5417e7606fa2",
+  "created_at": 1790472086,
+  "updated_at": 1790472099,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/bridge.ts",
+    "src/discord/message-router.ts",
+    "tests/agent.soft-land.test.ts",
+    "tests/discord.slash-pending-ask.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "After stripMentions appends [mentioned: Discord user id …], isThinAck/isCancelAsk run on promptBodyForAskGate(prompt) so '<@bot> ok' still thin-acks a pending ask (AUTONOMY-5/6) while the full prompt keeps snowflakes for discord-user-lookup (IDENTITY-5). Fixture: tests/discord.slash-pending-ask.test.ts fallback @mention ok."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
