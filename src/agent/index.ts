@@ -13,6 +13,8 @@ export type {
   TaskResult,
   VerifyResult,
   VerifyRunner,
+  WorkspaceDiffStart,
+  WorkspaceDiffTracker,
 } from "./types.ts";
 export {
   agentConfigDefaults,
@@ -21,6 +23,11 @@ export {
 } from "./config.ts";
 export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";
+export {
+  startWorkspaceDiff,
+  WORKSPACE_DIFF_HASH_MAX_BYTES,
+  WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
+} from "./workspace-diff.ts";
 
 export {
   extractConstraintSections,

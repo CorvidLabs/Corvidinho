@@ -2,8 +2,11 @@
  * Prove-before-done task loop (Merlin agent-loop Verifying steal).
  * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5).
  * Verifying: fledge lanes run verify (includes spec-check when wired).
+ * The gate sees tool-reported files plus the real git working-tree diff
+ * (REQ-agent-085).
  */
 
+import { relative, resolve } from "node:path";
 import {
   blockedTaskResult,
   formatAskSummary,
@@ -12,12 +15,17 @@ import {
 import { loadAgentConfig } from "./config.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
 import { defaultVerifyRunner } from "./verify.ts";
+import { startWorkspaceDiff } from "./workspace-diff.ts";
 import type {
   AgentEvent,
   AgentState,
   RunTaskOptions,
   TaskResult,
+  WorkspaceDiffTracker,
 } from "./types.ts";
+
+/** Changed paths named in the gate's Text note before "…". */
+const UNREPORTED_PREVIEW = 5;
 
 function emit(
   onEvent: ((e: AgentEvent) => void) | undefined,
@@ -111,6 +119,18 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     });
   }
 
+  // AGENT-4 (REQ-agent-085): snapshot the git working tree before the first
+  // attempt so the gate also sees edits no tool reports. No git work tree
+  // (or an unreadable one) ⇒ null: tool-reported files only, as before.
+  let workspace: WorkspaceDiffTracker | null = null;
+  if (verifyBeforeComplete) {
+    try {
+      workspace = await (opts.workspaceDiff ?? startWorkspaceDiff)(opts.cwd);
+    } catch {
+      workspace = null;
+    }
+  }
+
   for (;;) {
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -160,8 +180,45 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       };
     }
 
+    // AGENT-4 (REQ-agent-085): add the run's real git diff to the gate, so an
+    // edit made outside the file tools (code-tier shell-exec, a delegate
+    // worker, a commit through a shell) is verified too. A diff git cannot
+    // read after a good snapshot fails closed: verify runs.
+    let diffUnreadable = false;
+    if (workspace) {
+      let real: string[] | null;
+      try {
+        real = await workspace.changed();
+      } catch {
+        real = null;
+      }
+      if (isAborted(signal)) {
+        return cancelledResult(summary, filesChanged, attempts);
+      }
+      if (real === null) {
+        diffUnreadable = true;
+        emit(onEvent, {
+          type: "Text",
+          text: "Verify gate: could not read the git working-tree diff, so verifying anyway.",
+        });
+      } else {
+        const root = resolve(opts.cwd);
+        const reported = new Set(filesChanged.map((f) => relative(root, resolve(root, f))));
+        const unreported = real.filter((p) => !reported.has(p));
+        if (unreported.length > 0) {
+          const shown = unreported.slice(0, UNREPORTED_PREVIEW).join(", ");
+          const more = unreported.length > UNREPORTED_PREVIEW ? ", …" : "";
+          emit(onEvent, {
+            type: "Text",
+            text: `Verify gate: the git working tree has ${unreported.length} changed path(s) no tool reported (${shown}${more}).`,
+          });
+          filesChanged = [...filesChanged, ...unreported];
+        }
+      }
+    }
+
     const wantVerify =
-      verifyBeforeComplete && filesChanged.length > 0;
+      verifyBeforeComplete && (filesChanged.length > 0 || diffUnreadable);
 
     if (!wantVerify) {
       setState(onEvent, "done");

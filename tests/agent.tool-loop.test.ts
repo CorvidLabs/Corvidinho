@@ -1,4 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createTaskExecute,
   loadLlmEnv,
@@ -575,5 +578,111 @@ describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", ()
     expect(result.summary).toContain("LLM HTTP 503");
     expect(result.summary).toContain("Verification failed on an earlier attempt");
     expect(result.summary).toContain("app.ts: syntax error");
+  });
+});
+
+describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGENT-4, REQ-agent-085)", () => {
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  const reply = (message: Record<string, unknown>) =>
+    new Response(JSON.stringify({ choices: [{ message }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  let dir = "";
+
+  function g(cwd: string, ...args: string[]): void {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (v !== undefined && !k.startsWith("GIT_")) clean[k] = v;
+    }
+    const r = Bun.spawnSync(["git", ...args], { cwd, env: clean, stdout: "pipe", stderr: "pipe" });
+    if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  }
+
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    dir = mkdtempSync(join(tmpdir(), "corvidinho-shell-diff-"));
+    g(dir, "init", "-q", "-b", "main");
+    g(dir, "config", "user.name", "Fixture Bot");
+    g(dir, "config", "user.email", "fixture@example.invalid");
+    g(dir, "config", "commit.gpgsign", "false");
+    writeFileSync(join(dir, "app.ts"), "export const x = 1;\n");
+    g(dir, "add", "app.ts");
+    g(dir, "commit", "-q", "-m", "init");
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("shell-exec `printf broken > app.ts` reports no filesChanged, yet verify runs and the run is never done", async () => {
+    let llmCalls = 0;
+    const fetchImpl = async () => {
+      llmCalls += 1;
+      if (llmCalls === 1) {
+        return reply({
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "s1",
+              type: "function",
+              function: {
+                name: "shell-exec",
+                arguments: JSON.stringify({ argv: ["--command", "printf broken > app.ts"] }),
+              },
+            },
+          ],
+        });
+      }
+      return reply({ role: "assistant", content: "wrote app.ts" });
+    };
+    const events: AgentEvent[] = [];
+    const execute = createTaskExecute({
+      taskText: "write app.ts",
+      cwd: dir,
+      env,
+      fetchImpl,
+      tier: "code",
+      includeDangerous: true,
+      nonInteractive: true,
+      allowlist: ["shell-exec"],
+      loadPlugins: false,
+      projectInstructions: false,
+      autonomous: false,
+      onEvent: (e) => events.push(e),
+    });
+    const verifyCwds: string[] = [];
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      maxRetries: 0,
+      onEvent: (e) => events.push(e),
+      verifyRunner: async (cwd) => {
+        verifyCwds.push(cwd);
+        return { success: false, output: "app.ts: syntax error" };
+      },
+      execute,
+    });
+    const toolResult = events.find(
+      (e): e is Extract<AgentEvent, { type: "ToolResult" }> =>
+        e.type === "ToolResult" && e.name === "shell-exec",
+    );
+    expect(toolResult?.success).toBe(true);
+    expect(readFileSync(join(dir, "app.ts"), "utf8")).toBe("broken");
+    expect(llmCalls).toBe(2);
+    expect(verifyCwds).toEqual([dir]);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.summary).toContain("app.ts: syntax error");
+    expect(events.some((e) => e.type === "StateChanged" && e.state === "done")).toBe(false);
   });
 });

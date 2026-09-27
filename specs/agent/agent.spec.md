@@ -7,6 +7,7 @@ files:
   - src/agent/config.ts
   - src/agent/verify.ts
   - src/agent/loop.ts
+  - src/agent/workspace-diff.ts
   - src/agent/specLoader.ts
   - src/agent/index.ts
   - src/agent/task-summary.ts
@@ -69,6 +70,13 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
+
+Real-diff verify gate (REQ-agent-085, AGENT-4): `src/agent/workspace-diff.ts`
+exports `startWorkspaceDiff(cwd)` (a `WorkspaceDiffTracker` whose `changed()`
+lists cwd-relative paths changed since the snapshot, or null when git cannot
+be read; null tracker outside a git work tree), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`
+and `WORKSPACE_DIFF_HASH_MAX_BYTES`. `RunTaskOptions.workspaceDiff` is a test
+seam like `verifyRunner`, not a product surface.
 
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
@@ -174,6 +182,14 @@ Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 with `buildVerifyEnv()`.
 
 ## Invariants
+
+The verify gate trusts the working tree, not only the tools (REQ-agent-085):
+with the gate on, any path the run changed on disk since its start snapshot
+(git status, `HEAD` moves, content of already-dirty paths) is in
+`filesChanged` and forces the verify lane; a run ends `done` without verify
+only when no tool reported files and the real diff is empty. A diff git
+cannot read after a good snapshot verifies anyway (fail closed). The diff is
+read-only git plus in-process hashing: it never writes the index or objects.
 
 The default verify runner spawns fledge with the parent's env minus the
 delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
@@ -298,6 +314,10 @@ model.
 | Condition | Behavior |
 |-----------|----------|
 | Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
+| Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
+| Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085) |
+| Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |

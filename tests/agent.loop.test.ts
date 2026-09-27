@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runTask } from "../src/agent/loop.ts";
 import type { AgentEvent, VerifyRunner } from "../src/agent/types.ts";
 
@@ -381,5 +384,302 @@ describe("runTask SpecSync Planning briefing", () => {
   test("fledge.toml verify lane includes spec-check", async () => {
     const toml = await Bun.file(`${root}/fledge.toml`).text();
     expect(toml).toMatch(/\[lanes\.verify\][\s\S]*spec-check/);
+  });
+});
+
+describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-agent-085)", () => {
+  const base = mkdtempSync(join(tmpdir(), "corvidinho-real-diff-"));
+  afterAll(() => rmSync(base, { recursive: true, force: true }));
+
+  /** Test-side git (setup / assertions), repo-locating env stripped. */
+  function g(cwd: string, ...args: string[]): string {
+    const env: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (v === undefined || k.startsWith("GIT_")) continue;
+      env[k] = v;
+    }
+    const r = Bun.spawnSync(["git", ...args], { cwd, env, stdout: "pipe", stderr: "pipe" });
+    if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+    return r.stdout.toString();
+  }
+
+  /** Temp repo with app.ts committed (and nothing else unless `commit` is false). */
+  function makeRepo(commit = true): string {
+    const dir = mkdtempSync(join(base, "repo-"));
+    g(dir, "init", "-q", "-b", "main");
+    g(dir, "config", "user.name", "Fixture Bot");
+    g(dir, "config", "user.email", "fixture@example.invalid");
+    g(dir, "config", "commit.gpgsign", "false");
+    writeFileSync(join(dir, ".gitignore"), "dist/\n");
+    writeFileSync(join(dir, "app.ts"), "export const x = 1;\n");
+    if (commit) {
+      g(dir, "add", ".gitignore", "app.ts");
+      g(dir, "commit", "-q", "-m", "init");
+    }
+    return dir;
+  }
+
+  function counter(outcomes: boolean[] = [false]) {
+    const calls: string[] = [];
+    const runner: VerifyRunner = async (cwd) => {
+      calls.push(cwd);
+      const ok = outcomes[Math.min(calls.length - 1, outcomes.length - 1)]!;
+      return { success: ok, output: ok ? "ok" : "app.ts: syntax error" };
+    };
+    return { calls, runner };
+  }
+
+  test("an edit made outside file tools (shell-exec) that reports no filesChanged is still verified", async () => {
+    const dir = makeRepo();
+    const v = counter([false]);
+    const c = collect();
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      maxRetries: 1,
+      verifyRunner: v.runner,
+      onEvent: c.onEvent,
+      // What a shell-exec `echo 'export const x = ;' > app.ts` does: no filesChanged.
+      execute: async () => {
+        writeFileSync(join(dir, "app.ts"), "export const x = ;\n");
+        return { summary: "fixed it", filesChanged: [] };
+      },
+    });
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(false);
+    expect(v.calls.length).toBe(2);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.summary).toContain("Verification failed after 1 retries");
+    expect(c.states()).not.toContain("done");
+    const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(texts.some((t) => t.includes("no tool reported (app.ts)"))).toBe(true);
+  });
+
+  test("the same unreported edit ends done verified=true only when verify passes", async () => {
+    const dir = makeRepo();
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      maxRetries: 1,
+      verifyRunner: v.runner,
+      execute: async () => {
+        writeFileSync(join(dir, "app.ts"), "export const x = 2;\n");
+        return { summary: "changed x", filesChanged: [] };
+      },
+    });
+    expect(result.state).toBe("done");
+    expect(result.verified).toBe(true);
+    expect(result.verifySkipped).toBe(false);
+    expect(v.calls).toEqual([dir]);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+  });
+
+  test("a new untracked file and a deleted tracked file are detected", async () => {
+    const dir = makeRepo();
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => {
+        mkdirSync(join(dir, "src"));
+        writeFileSync(join(dir, "src", "new.ts"), "export {};\n");
+        unlinkSync(join(dir, "app.ts"));
+        return { summary: "moved things", filesChanged: [] };
+      },
+    });
+    expect(v.calls.length).toBe(1);
+    expect(result.verified).toBe(true);
+    expect(result.filesChanged).toEqual(["app.ts", "src/new.ts"]);
+  });
+
+  test("an edit to a file already dirty before the run is detected (status unchanged, content changed)", async () => {
+    const dir = makeRepo();
+    writeFileSync(join(dir, "app.ts"), "export const x = 3;\n");
+    writeFileSync(join(dir, "scratch.txt"), "operator notes\n");
+    expect(g(dir, "status", "--porcelain")).toContain(" M app.ts");
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      // Same length, same ` M` status: only the content differs.
+      execute: async () => {
+        writeFileSync(join(dir, "app.ts"), "export const x = ;;\n");
+        return { summary: "edited", filesChanged: [] };
+      },
+    });
+    expect(g(dir, "status", "--porcelain")).toContain(" M app.ts");
+    expect(v.calls.length).toBe(1);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+  });
+
+  test("a commit made through a shell (HEAD moved, clean tree) is detected", async () => {
+    const dir = makeRepo();
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => {
+        writeFileSync(join(dir, "app.ts"), "export const x = ;\n");
+        g(dir, "commit", "-q", "-am", "broken");
+        return { summary: "committed", filesChanged: [] };
+      },
+    });
+    expect(g(dir, "status", "--porcelain")).toBe("");
+    expect(v.calls.length).toBe(1);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+  });
+
+  test("the first commit on an unborn HEAD is detected", async () => {
+    const dir = makeRepo(false);
+    g(dir, "add", ".gitignore", "app.ts");
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => {
+        g(dir, "commit", "-q", "-m", "first");
+        return { summary: "committed", filesChanged: [] };
+      },
+    });
+    expect(v.calls.length).toBe(1);
+    expect(result.filesChanged).toEqual([".gitignore", "app.ts"]);
+  });
+
+  test("a retry after a failed verify that edits via shell is verified again (AGENT-4.a)", async () => {
+    const dir = makeRepo();
+    const v = counter([false, true]);
+    const feedbacks: (string | undefined)[] = [];
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      maxRetries: 2,
+      verifyRunner: v.runner,
+      execute: async ({ attempt, verifyFeedback }) => {
+        feedbacks.push(verifyFeedback);
+        writeFileSync(join(dir, "app.ts"), attempt === 1 ? "export const x = ;\n" : "export const x = 4;\n");
+        return { summary: `attempt ${attempt}`, filesChanged: [] };
+      },
+    });
+    expect(v.calls.length).toBe(2);
+    expect(result.attempts).toBe(2);
+    expect(result.state).toBe("done");
+    expect(result.verified).toBe(true);
+    expect(feedbacks[1]).toContain("app.ts: syntax error");
+  });
+
+  test("an edit in the run's subdirectory of a repo is detected, relative to the cwd", async () => {
+    const dir = makeRepo();
+    const sub = join(dir, "pkg");
+    mkdirSync(sub);
+    writeFileSync(join(sub, "lib.ts"), "export const y = 1;\n");
+    g(dir, "add", "pkg/lib.ts");
+    g(dir, "commit", "-q", "-m", "pkg");
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: sub,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => {
+        writeFileSync(join(sub, "lib.ts"), "export const y = ;\n");
+        // Outside the run's cwd: not this run's change.
+        writeFileSync(join(dir, "app.ts"), "export const x = 9;\n");
+        return { summary: "edited", filesChanged: [] };
+      },
+    });
+    expect(v.calls).toEqual([sub]);
+    expect(result.filesChanged).toEqual(["lib.ts"]);
+  });
+
+  test("dirt present before the run and left untouched does not trigger verify", async () => {
+    const dir = makeRepo();
+    writeFileSync(join(dir, "app.ts"), "export const x = 5;\n");
+    writeFileSync(join(dir, "notes.md"), "wip\n");
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => ({ summary: "just answered", filesChanged: [] }),
+    });
+    expect(v.calls.length).toBe(0);
+    expect(result.state).toBe("done");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(true);
+    expect(result.filesChanged).toEqual([]);
+  });
+
+  test("a change only under a gitignored path does not trigger verify", async () => {
+    const dir = makeRepo();
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => {
+        mkdirSync(join(dir, "dist"));
+        writeFileSync(join(dir, "dist", "out.js"), "1\n");
+        return { summary: "built", filesChanged: [] };
+      },
+    });
+    expect(v.calls.length).toBe(0);
+    expect(result.verifySkipped).toBe(true);
+  });
+
+  test("a non-git cwd falls back to tool-reported filesChanged", async () => {
+    const dir = mkdtempSync(join(base, "plain-"));
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      execute: async () => {
+        writeFileSync(join(dir, "app.ts"), "export const x = ;\n");
+        return { summary: "wrote", filesChanged: [] };
+      },
+    });
+    expect(v.calls.length).toBe(0);
+    expect(result.verifySkipped).toBe(true);
+  });
+
+  test("a diff git cannot read after a good snapshot fails closed: verify runs", async () => {
+    const v = counter([true]);
+    const c = collect();
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      verifyRunner: v.runner,
+      onEvent: c.onEvent,
+      workspaceDiff: async () => ({ changed: async () => null }),
+      execute: async () => ({ summary: "answered", filesChanged: [] }),
+    });
+    expect(v.calls.length).toBe(1);
+    expect(result.verified).toBe(true);
+    expect(result.verifySkipped).toBe(false);
+    const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(texts).toContain("Verify gate: could not read the git working-tree diff, so verifying anyway.");
+  });
+
+  test("with the gate off (--no-verify) no snapshot is taken and verify is skipped", async () => {
+    let starts = 0;
+    const v = counter([true]);
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: false,
+      verifyRunner: v.runner,
+      workspaceDiff: async () => {
+        starts += 1;
+        return { changed: async () => ["app.ts"] };
+      },
+      execute: async () => ({ summary: "wrote", filesChanged: [] }),
+    });
+    expect(starts).toBe(0);
+    expect(v.calls.length).toBe(0);
+    expect(result.verifySkipped).toBe(true);
   });
 });
