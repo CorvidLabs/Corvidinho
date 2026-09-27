@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 48
+version: 49
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -48,6 +48,7 @@ files:
   - plugins/files/protectedPaths.ts
   - plugins/files/resolvePath.ts
   - plugins/files/argv.ts
+  - plugins/files/image.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -287,6 +288,18 @@ through a symlink), and `search-grep`, `git-diff`, `files-glob` and
 glob or `--staged` is passed (REQ-plugins-267). ADMIN and the local CLI keep
 the access `files-read` gives.
 
+`files-read` image mode (DISCORD-9 / REQ-plugins-427): after the path clamp,
+the ROLES-CHAT-8 secret gate and the existing-file check, a file whose leading
+bytes are PNG, JPEG, GIF or WebP (`sniffImageMediaType` in
+`plugins/files/image.ts`; the name does not count) is returned as an image:
+`data` `{path, bytes, mediaType, image: true}`, message `image <path> (<mime>,
+N bytes) opened for viewing`, no UTF-8 `content`. The bytes ride base64 only on
+`PluginHandlerResult.image` (`PluginImage` `{path, mediaType, base64}` in
+`src/plugins/types.ts`), which no tool text, event, ndjson frame or CLI output
+serializes; the agent tool loop turns it into an image part (REQ-agent-428).
+An image over `MAX_IMAGE_SIZE_BYTES` (20 MB, the Discord attachment cap) is
+refused. Every other file reads exactly as before.
+
 SAFE-5 audit chain (REQ-plugins-095): once `audit_log` holds a keyed row it
 stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
 append after a keyed row (a dangerous run is then refused, fail closed), and
@@ -385,6 +398,12 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 - **When** the lead runs `council --question ...`
 - **Then** every voice runs `task run` at read tier with `CORVIDINHO_ALLOWLIST` empty and `CORVIDINHO_ACTING_IS_ADMIN=0`, and the result carries the chair's decision
 
+### Scenario: files-read opens an attached screenshot as an image (DISCORD-9)
+
+- **Given** a PNG at `<cwd>/.corvidinho/attachments/m-0.png`
+- **When** `files-read` runs on that path
+- **Then** it returns `data.image` true with `mediaType` `image/png` and no `content`, and the file's bytes only on `result.image` (base64) for the tool loop
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
@@ -448,6 +467,7 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 | council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
 | fledge-* called from a cwd other than its bound project root | Refuse (exit 2); fledge not started |
 | fledge-* times out / calling run aborts | exit 124 / 130; plugin process tree killed |
+| files-read of a PNG/JPEG/GIF/WebP over 20 MB | refused `refused: image '<path>' is N bytes, over the 20MB image limit` (exit 1), no bytes read into the result (REQ-plugins-427) |
 
 ## Dependencies
 
@@ -459,6 +479,7 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 | sh | shell-exec child via `sh -c` |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
+| src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays |
 | /proc (Linux) | process-tree walk for bounded child stops (proc-group) |
 
@@ -511,3 +532,4 @@ and current rows for plugins host evolution.
 | 2026-09-27 | search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles: Search-grep, files-glob and files-list refuse and hide secret paths for non-ADMIN role sessions like files-read (ROLES-CHAT-8) |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-reads-quoting-the-way-the-shell-does-escaped-backslash-before-a-newline-comments-and-here: SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused |
+| 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
