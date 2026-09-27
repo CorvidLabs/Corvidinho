@@ -16,6 +16,7 @@ Corvidinho knows a durable owner (Discord user id, optional GitHub / display suc
 - **IDENTITY-2**  Only the configured owner may use admin slash commands; non-owners cannot.
 - **IDENTITY-3**  Empty owner config means nobody is admin — default-deny.
 - **IDENTITY-4**  Discord chat injects acting user Discord id plus display name from Discord and the owner map when known; never invent names like Kyn; memory stays scoped to that acting user
+- **IDENTITY-5**  When Discord chat mentions a snowflake user id, an @mention, or asks about a named guild member, look them up via a read-only Discord member/user tool scoped to the configured guild before diving into SpecSync/git/github/files; never invent names or look up arbitrary other guilds
 
 ## Notes (not numbered AC)
 

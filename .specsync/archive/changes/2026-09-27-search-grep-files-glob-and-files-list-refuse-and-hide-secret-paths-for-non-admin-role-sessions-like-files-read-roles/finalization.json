@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "search-grep-files-glob-and-files-list-refuse-and-hide-secret-paths-for-non-admin-role-sessions-like-files-read-roles",
+  "implementation_commit": "ee260c2765cf7187bd361033a46823a863898a73",
+  "implementation_tree": "effe346e08bc79baf79a77ccd2d59b1f8f61378c",
+  "contract_digest": "2e3fcb5cc001a3d8f21bbf23638caf9e7eae41f717fb7309b0436d92017e914f",
+  "workspace_digest": "1df74e157d0b9455f872c5644553d5d9e56c9a6bbfc1ff58294646d400c09996",
+  "closing_digest": "cef07ab6aeee4d1fd387fecd30239e672af98b8eb8f98ff8672d7a1a61b95f73",
+  "review_digest": "6dbbc3cb3c20ce13ed864ae48c2e5754d5147a215d4c850f40f2e2eef4ed9bca",
+  "finalization_digest": "da3ac17c4efde3f9f71ccd42be01fe9ed2870b3d918363a64b700739a2554595",
+  "timestamp": 1790472351
+}

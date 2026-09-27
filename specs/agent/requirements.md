@@ -12,12 +12,13 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When `verify_before_complete` is enabled and the execute step reports files changed, completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2).
+When `verify_before_complete` is enabled and the execute step reports files changed, completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6).
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
 - Exhausted retries yield `verified=false` and failed state.
 - Default runner invokes fledge with `lanes run verify --non-interactive`.
+- A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner: the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
 
 ### REQ-agent-003
 
@@ -513,4 +514,26 @@ Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
 - Numbered question lines parse into options when structured options absent.
 - Single or empty options do not set HumanAsk.options.
+
+### REQ-agent-260
+
+The repository SHALL ship a root `agent.3md` that validates with
+`@corvidlabs/agent3md` `validateAgent`, exposes guidance-only skill planes
+(no `tool=` bindings that duplicate the SAFE plugin registry), and is covered
+by a bun smoke that `route`s and `get`s at least one playbook. The agent loop
+SHALL NOT load this file for progressive disclosure until AGENT-13 is HI'd
+separately.
+Acceptance Criteria
+- `validateAgent(readFileSync("agent.3md")).ok` is true in CI/tests.
+- Every skill in `Agent.manifest().skills` has `tool: null`.
+- `Agent.route` + `Agent.get` resolve a named guidance playbook (e.g. `discord-ask`).
+- `package.json` lists `@corvidlabs/agent3md` as a dependency.
+### REQ-agent-312
+When the LLM tool loop exhausts `maxToolRounds` without a final no-tool reply, execute SHALL soft-land (AGENT-9): `ExecuteResult.summary` SHALL be the last assistant prose when present, otherwise a short clarifying ask (e.g. "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?"). The summary SHALL NOT contain the operator phrase `Stopped after N tool rounds`. An operator note with that phrase MAY be emitted as a `Text` event for thinking/NDJSON. `chatBodyFromTaskResult` SHALL strip any leftover `Stopped after N tool rounds` lines before Discord outbound (defense in depth).
+The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): prefer conversational prose for social/game banter; call `discord-user-lookup` for snowflakes/@mentions/named members before repo tools; only use SpecSync/git/github/files when the query clearly needs Corvidinho codebase or product data; treat bare `bug <snowflake>` in Discord as a user id, not a GitHub issue.
+- Exhausted rounds with no prose → clarify ask; no `Stopped after` in summary.
+- Exhausted rounds with prior prose → that prose is the summary.
+- Operator `Text` event may carry the stop note.
+- `chatBodyFromTaskResult` drops stop lines.
+- Fixture: `tests/agent.soft-land.test.ts`.
 

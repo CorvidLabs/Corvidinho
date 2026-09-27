@@ -851,6 +851,33 @@ Acceptance Criteria
 - A single-occurrence edit whose `--new` contains `$$`, `$'`, `$&`, `` $` ``, `$1` and `$<n>` leaves exactly that text in the file.
 - A `--replace-all` edit with the same `--new` writes the same literal text at every match.
 
+### REQ-plugins-267
+
+In a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN` set and the acting
+user is not ADMIN), the read-ish file and git tools SHALL apply the
+ROLES-CHAT-8 secret-path gate `files-read` applies (`isSecretPath`: `.env*`,
+`.ssh`, key files, keystores, credentials). `search-grep`, `files-list` and
+`git-diff` SHALL refuse an explicit secret path, given positionally, with
+`--path`, as `./`, `..` or absolute spellings, or through a symlink that
+resolves to one, with exit 2 and the ROLES-CHAT-8 refusal message, before
+reading anything. A recursive `search-grep` SHALL NOT return a line from a
+secret file whatever `--include` is passed, `git-diff` (worktree or
+`--staged`) SHALL NOT list or print a tracked secret file, and `files-glob`
+and `files-list` SHALL leave secret paths out of their results, also when a
+glob walks a symlink into a secret directory. ADMIN sessions and the local
+CLI (no role session) SHALL keep the access `files-read` gives them. The
+gate SHALL be re-checked on each call (ROLES-CHAT-6). No new plugin, flag,
+env var or config key.
+
+Acceptance Criteria
+- Non-ADMIN `search-grep` over the project returns no line from `.env`, `.env.local`, `.ssh/*`, `*.pem`, `*keystore*`, `credentials.json` or a case variant such as `sub/.ENV`, and still returns lines from ordinary files.
+- Non-ADMIN `search-grep <pattern> .env` (also `./.env`, `src/../.env`, the absolute path, `--path .env`, `--path=.env`, `--pattern X .env`) and `search-grep` of `.ssh`, a `.pem`, a keystore or a credentials file is refused with exit 2 and a ROLES-CHAT-8 error, like `files-read .env`.
+- Non-ADMIN `search-grep` with `--include=.env`, `--include env`, `--include=*.pem`, `--include pem,ts` or `--include *` returns no secret line.
+- Non-ADMIN `search-grep` or `files-list` of a symlink to `.env` or `.ssh` is refused with exit 2; a recursive search does not follow such a symlink.
+- Non-ADMIN `files-glob` (`**/*`, `.env*`, `**/*.pem`, `.ssh/*`, and `notes/*` where `notes` links to `.ssh`) and `files-list --show-hidden` return no secret path; `files-list .ssh` is refused with exit 2.
+- Non-ADMIN `git-diff`, `git-diff .` and `git-diff --staged` list and print no tracked secret file (`.env*`, `.ssh/*`, `*.pem`, keystores, credentials, key files, case variants such as `sub/.ENV`) and still show ordinary files; `git-diff .env` (also `./.env`, `src/../.env`, the absolute path, `.ssh`, a `.pem`, a keystore dir or a symlink to a secret) is refused with exit 2; user paths stay literal pathspecs.
+- ADMIN and the local CLI still read `.env` with `files-read`, grep it explicitly and recursively, see secret paths in `files-glob` / `files-list`, and see tracked secret files in `git-diff`.
+
 ### REQ-plugins-287
 
 `appendAudit` SHALL take the shared DB write lock before it reads the
@@ -867,4 +894,15 @@ Acceptance Criteria
 - While another process holds the write lock and then commits, `appendAudit` waits and succeeds; its `prev_hash` is the other writer's row hash and the chain verifies.
 - Concurrent appenders in several processes lose no rows.
 - Several processes that each open the shared DB file, append one row and close it (as dangerous plugin runs do), all at once, get every append in and the chain verifies.
+
+### REQ-plugins-312
+
+The system SHALL register a read-only plugin `discord-user-lookup` (not dangerous, not mutating) that resolves a Discord guild member by snowflake user id (`--user-id`) or name query (`--query`) via the Discord REST API, scoped to the configured `DISCORD_GUILD_ID` only (IDENTITY-5 / DISCORD-13). A `--guild` that does not match the configured guild SHALL be refused. Empty `DISCORD_GUILD_ID` SHALL refuse. Arbitrary other guilds SHALL NOT be looked up. Dry-run (`CORVIDINHO_DISCORD_DRY_RUN=1`) SHALL succeed without a live call.
+
+Acceptance Criteria
+- `plugins list` shows `discord-user-lookup` with dangerous=false.
+- Missing guild / wrong `--guild` → refuse exit 3 without REST.
+- Dry-run by id or query succeeds with `dryRun: true`.
+- Mocked REST returns display name / username / id; 404 → clean not-a-member error.
+- Fixture: `tests/discord.user-lookup.test.ts`.
 

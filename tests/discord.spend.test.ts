@@ -876,7 +876,7 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     return db;
   }
 
-  test("the 80% warning and the owner mention ride the edit of the thinking message; no separate reply", async () => {
+  test("the 80% warning and the owner mention ride the edit of the thinking message; the only fresh post is the owner ping (an edit does not notify)", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: "all good", exitCode: 0 };
@@ -891,14 +891,19 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
       outbound,
     );
     await handlers.onMessage(MENTION);
-    expect(replies).toHaveLength(0);
     expect(finals).toHaveLength(1);
     expect(finals[0]!.content).toStartWith(`all good\n\n⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
     expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
     expect(finals[0]!.embed).toBeNull();
-    // Delivered once: the next answer carries no warning.
+    // REQ-discord-215: one short fresh post pings the owner (no answer copy).
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toBe(`<@${OWNER_ID}> ↑ needs you`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(replies[0]!.replyToMessageId).toBe(finals[0]!.messageId);
+    // Delivered once: the next answer carries no warning and pings nobody.
     await handlers.onMessage({ ...MENTION, id: "m2" });
     expect(finals[1]!.content).toBe("all good");
+    expect(replies).toHaveLength(1);
     await result.stop();
   });
 
@@ -928,7 +933,8 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     expect(ledger.noteWarning({ capMicroUsd: 1_000_001, now: Date.now() })).not.toBeNull();
     failing = true;
     await handlers.onMessage({ ...MENTION, id: "m2" });
-    expect(replies).toHaveLength(0);
+    // Only the first answer's owner ping (REQ-discord-215) went out.
+    expect(replies).toHaveLength(1);
     expect(inflight.list()).toEqual([]);
     failing = false;
     await handlers.onMessage({ ...MENTION, id: "m3" });
@@ -954,7 +960,9 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     if (!result.ok) throw new Error("bridge did not start");
     await handlers.onMessage(MENTION);
     await handlers.onMessage({ ...MENTION, id: "m2" });
-    expect(replies).toHaveLength(0);
+    // One fresh owner ping for the episode (REQ-discord-215), none for the second stop.
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toBe(`<@${OWNER_ID}> ↑ needs you`);
     expect(finals).toHaveLength(2);
     expect(finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(finals[0]!.content).not.toContain(ASK_REPLY_HINT);
@@ -1117,7 +1125,7 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     await result.stop();
   });
 
-  test("/session start with a stuck ask: collapsed answer shows the ask (not ✅ Done) and the owner gets a fresh post; a clarify ask addresses the requester with no owner post", async () => {
+  test("/session start with a stuck ask: collapsed answer shows the ask (not ✅ Done) and the owner gets a fresh post; a clarify ask addresses the requester with no owner post (only the requester ping)", async () => {
     let reason: "stuck" | "clarify" = "stuck";
     const agent: AgentClient = {
       async runChat({ sessionId }) {
@@ -1143,7 +1151,10 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     await handlers.onSlash!(slashInteraction("session", { topic: "db" }).ix);
     expect(finals[1]!.content).toContain("<@222233334444555566>");
     expect(finals[1]!.mentionUserIds).toEqual(["222233334444555566"]);
-    expect(replies).toHaveLength(1);
+    // No owner post; one fresh requester ping (REQ-discord-215).
+    expect(replies).toHaveLength(2);
+    expect(replies[1]!.content).toBe("<@222233334444555566> ↑ question for you");
+    expect(replies[1]!.mentionUserIds).toEqual(["222233334444555566"]);
     await result.stop();
   });
 

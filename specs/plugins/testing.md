@@ -19,3 +19,7 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
   tier, empty allowlist, `CORVIDINHO_ACTING_IS_ADMIN=0`, stripped tokens),
   tier clamp, long decision kept past the chat-body cap, failed chair, council time cap, one-at-a-time limiter, non-ADMIN
   `runPlugin` refusal (`tests/autonomous.council.test.ts`, REQ-plugins-118).
+
+## discord-user-lookup (REQ-plugins-312)
+
+`tests/discord.user-lookup.test.ts` — see also discord testing companion.
