@@ -152,3 +152,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `answerTurnText`) and `SessionStore` turns (module-owned table without a
   schema version change, reload after reopen, delete on end/TTL, orphan
   sweep, turn cap, scrub on write, `SCRUB_TARGETS` + `rescrubDatabase`).
+## Attached images reach the model (REQ-discord-013 modified, DISCORD-9)
+
+- `tests/discord.image-attachments.test.ts` bridge e2e now downloads a real
+  PNG: `files-read` on the prompt's cited path returns `mediaType`
+  `image/png` and `result.image` base64 equal to the downloaded bytes (not a
+  UTF-8 decode). The tool-loop half is in `tests/agent.tool-loop.test.ts`
+  (REQ-agent-428).
