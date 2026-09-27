@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails",
+  "implementation_commit": "6830514555bd0426ceea77ebff63c333c3ba6cc2",
+  "implementation_tree": "c1536a8328bd3c89ef70920e14a6091b58e8d6d7",
+  "contract_digest": "6814fa325baac400d42b40a0ab0a68c39f8c85a6a5f7ec460e85e87cb04c74b7",
+  "workspace_digest": "5cada751ff1807957d25ee99fc63ddf2f0db8a717d03153fe8a8af6d7c92f1f9",
+  "closing_digest": "1fcd649cc99c760c75428a666348ea6f38ddb56e86997d611267595a4243ad5c",
+  "review_digest": "c1786ee5c8869cc0d41033c7717637d0fb647baa9e1d57b0dae8592abadc58b3",
+  "finalization_digest": "c9d2e341f6e3b5c792d3f64eb16dc5d8f7e944ba5d6a5b13ee32dc1d30498d2e",
+  "timestamp": 1790467776
+}
