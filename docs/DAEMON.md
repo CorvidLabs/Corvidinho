@@ -47,12 +47,17 @@ on the same data dir:
   human (next point).
 - A daemon run that stops to ask a human (stuck, a clarify question, or the
   daily spend cap) records its question on the run row and logs
-  `run.needs_human`. The bridge's next scheduler tick (within about 60 s)
-  posts that question to the schedule's channel once, with the same pings
-  as a run the bridge claimed: the owner for stuck and spend-cap, the
-  schedule's creator for clarify. Only the newest ask of a schedule is
-  posted, and not at all once a later run of that schedule has finished.
-  With only the daemon running, the question waits until a bridge starts.
+  `run.needs_human`. So does a run that cannot start (its project cannot be
+  resolved or its worktree cannot be created: a fixed stuck question, the
+  full error stays on the run row and in `run.finished`) and the run whose
+  failure auto-pauses its schedule (a stuck question saying it is paused and
+  to resume it with `/schedule resume`). The bridge's next scheduler tick
+  (within about 60 s) posts that question to the schedule's channel once,
+  with the same pings as a run the bridge claimed: the owner for stuck and
+  spend-cap, the schedule's creator for clarify. Only the newest ask of a
+  schedule is posted, and not at all once a later run of that schedule has
+  finished. With only the daemon running, the question waits until a bridge
+  starts.
 
 ## Configuration
 
@@ -117,7 +122,7 @@ scrubbed for secrets (SAFE-6).
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first. |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
-| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Its question stays on the run row until a bridge posts it. |
+| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it. |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
 | `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (nothing ran; due schedules stay due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |

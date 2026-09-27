@@ -1,0 +1,92 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790530321,
+      "digest": "8142fd4737499afa0052087428a7e7fb2c19a084eb40745a1cf9310e85ece482",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first",
+        "title": "Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85)",
+        "description": "Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/loop.ts",
+          "src/agent/verify.ts",
+          "tests/agent.loop.test.ts",
+          "tests/agent.tool-loop.test.ts",
+          "tests/agent.verify-feedback.test.ts",
+          "tests/fixtures/verify-lane-log.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "After a failed verify with retries left, the retry's verifyFeedback and the model's user message (tool loop and read-tier chat) keep the failing step's output instead of the first 4000 chars of the lane log: a lane log over the cap (fledge log is stdout then stderr, so passing steps such as the --help smoke fill the head) yields at most 4000 chars naming the failing step (from fledge's Lane '<lane>' failed at step N (<name>) line), carrying that step's output from its Running task marker when it fits, else its error/fail lines (first ones first, passing-test lines excluded) plus the end of the log with fledge's failure line; output within the cap is sent unchanged as today; never over 4000 chars, never half a surrogate pair; no new flag, env var, config key, slash command, schema or package version change; the human-facing summary and NDJSON frames are unchanged; regression tests fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "083d3a384f6b68489778b58e799f75b78f5176ac9d2923d9db84cfd12e6ed5c8"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790531812,
+      "digest": "8142fd4737499afa0052087428a7e7fb2c19a084eb40745a1cf9310e85ece482",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first",
+        "title": "Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85)",
+        "description": "Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "src/agent/loop.ts",
+          "src/agent/verify.ts",
+          "tests/agent.loop.test.ts",
+          "tests/agent.tool-loop.test.ts",
+          "tests/agent.verify-feedback.test.ts",
+          "tests/fixtures/verify-lane-log.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "After a failed verify with retries left, the retry's verifyFeedback and the model's user message (tool loop and read-tier chat) keep the failing step's output instead of the first 4000 chars of the lane log: a lane log over the cap (fledge log is stdout then stderr, so passing steps such as the --help smoke fill the head) yields at most 4000 chars naming the failing step (from fledge's Lane '<lane>' failed at step N (<name>) line), carrying that step's output from its Running task marker when it fits, else its error/fail lines (first ones first, passing-test lines excluded) plus the end of the log with fledge's failure line; output within the cap is sent unchanged as today; never over 4000 chars, never half a surrogate pair; no new flag, env var, config key, slash command, schema or package version change; the human-facing summary and NDJSON frames are unchanged; regression tests fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "4e297320e5a61eb4104f55be40581b0fd340fe5df5b32fe1dc411b136492be3d"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790533526,
+      "digest": "9f6ae0b1974a7e2b35fc2ab0d45642842938d9a1cad2979488af9e60ef0fb381",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

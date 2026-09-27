@@ -80,6 +80,14 @@ function parsePendingAsk(raw: string | null | undefined): PendingAsk | null {
   }
 }
 
+/**
+ * Thread index key: one session per Discord user per thread (DISCORD-2.a /
+ * SESSION-MULTI-1). NUL never appears in a Discord id.
+ */
+function threadUserKey(threadId: string, userId: string): string {
+  return `${threadId}\u0000${userId}`;
+}
+
 function newId(): string {
   return `sess_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
@@ -111,8 +119,12 @@ export type SessionStoreOptions = {
 export class SessionStore {
   /** bot reply message id → session */
   readonly byBotMessageId = new Map<string, SessionStub>();
-  /** thread id → session */
-  readonly byThreadId = new Map<string, SessionStub>();
+  /**
+   * (thread id, Discord user id) → that user's session in the thread
+   * (DISCORD-2.a per user / SESSION-MULTI-1): a second user in a thread gets
+   * their own entry and never replaces the first user's.
+   */
+  readonly byThreadUser = new Map<string, SessionStub>();
   /** session id → session */
   readonly bySessionId = new Map<string, SessionStub>();
 
@@ -168,8 +180,8 @@ export class SessionStore {
     this.bySessionId.delete(session.id);
     this.turns.delete(session.id);
     if (session.threadId) {
-      const mapped = this.byThreadId.get(session.threadId);
-      if (mapped?.id === session.id) this.byThreadId.delete(session.threadId);
+      const key = threadUserKey(session.threadId, session.userId);
+      if (this.byThreadUser.get(key)?.id === session.id) this.byThreadUser.delete(key);
     }
     for (const [botId, s] of [...this.byBotMessageId.entries()]) {
       if (s.id === session.id) this.byBotMessageId.delete(botId);
@@ -245,7 +257,7 @@ export class SessionStore {
       };
       this.bySessionId.set(session.id, session);
       if (session.threadId) {
-        this.byThreadId.set(session.threadId, session);
+        this.byThreadUser.set(threadUserKey(session.threadId, session.userId), session);
       }
     }
 
@@ -513,7 +525,7 @@ export class SessionStore {
 
     this.bySessionId.set(session.id, session);
     if (session.threadId) {
-      this.byThreadId.set(session.threadId, session);
+      this.byThreadUser.set(threadUserKey(session.threadId, session.userId), session);
     }
     this.persistSession(session);
 
@@ -680,10 +692,24 @@ export class SessionStore {
     return session;
   }
 
-  getByThread(threadId: string): SessionStub | undefined {
-    const session = this.byThreadId.get(threadId);
-    if (this.purgeIfExpired(session)) return undefined;
-    return session;
+  /**
+   * With `userId`: that user's live session in the thread (DISCORD-2.a /
+   * SESSION-MULTI-1), never another user's. Without it: the most recently
+   * active live session in the thread, whoever owns it.
+   */
+  getByThread(threadId: string, userId?: string): SessionStub | undefined {
+    if (userId !== undefined) {
+      const session = this.byThreadUser.get(threadUserKey(threadId, userId));
+      if (this.purgeIfExpired(session)) return undefined;
+      return session;
+    }
+    let best: SessionStub | undefined;
+    for (const session of [...this.byThreadUser.values()]) {
+      if (session.threadId !== threadId) continue;
+      if (this.purgeIfExpired(session)) continue;
+      if (!best || session.lastActivityAt > best.lastActivityAt) best = session;
+    }
+    return best;
   }
 
   get(sessionId: string): SessionStub | undefined {

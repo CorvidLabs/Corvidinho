@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "schedule-auto-pause-and-pre-run-failures-record-a-stuck-ask-on-the-run-row-so-the-owner-is-pinged-once-through-the",
+  "implementation_commit": "dc9a75ec1a5995dfa7c4e072a085aa7eaa36d943",
+  "implementation_tree": "8c2f91db6b1804bdf1c22fe82ce8beccee028232",
+  "contract_digest": "9223e37e38991958c99eb672b6a6085f09272a80c367537e9b2ee72a5c9b41bb",
+  "workspace_digest": "122b9a331211571c6b3a57a988820aee66bfdc1f9465c8be7d590d74cbf1c85e",
+  "closing_digest": "27a3cd72323a190b13b6b80e430b1b966d58257da8eb4075dcc69d822137a22e",
+  "review_digest": "6e9bc529ebdb7227b670d2467ebdd3b5c920c508d89a889cbe2f2fcf779f464e",
+  "finalization_digest": "ce95778e6d0cac47a1b6eaf3a7196574ecf1615fd8834d361e34380883b21243",
+  "timestamp": 1790532998
+}
