@@ -10,5 +10,6 @@ artifact: tasks
 - [x] Add `buildVersionPresenceData` in `src/discord/presence.ts`.
 - [x] Pass it as the Client `presence` option in `createLiveGateway`; keep `setPresence` on ready with the same data.
 - [x] Regression tests in `tests/discord.presence.test.ts`; prove the IDENTIFY test fails with `main`'s gateway and the file passes after.
+- [x] Review: the DISCORD-8 requester check (`verifyRequesterCanSend`) opens a second gateway session with the same bot token and identified with an empty activity list; pass the same presence there, with a regression test that fails on `main`.
 - [x] Modified delta for REQ-discord-017; spec Public API line, `specs/discord/testing.md` and `docs/discord.md` presence row updated.
 - [x] `specsync check --require-coverage 100`, `bunx tsc --noEmit`, `bun test` and `fledge lanes run verify --non-interactive`.

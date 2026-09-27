@@ -7,5 +7,6 @@ artifact: requirements
 
 DISCORD-12 (hi/discord.md). Modified REQ-discord-017: the existing text and
 acceptance bullets are kept; the Client `presence` option, one shared
-builder, and four acceptance bullets (IDENTIFY presence, ready still sets it,
-no new surface, regression tests) are added.
+builder, the DISCORD-8 requester-check Client carrying the same presence, and
+five acceptance bullets (IDENTIFY presence, ready still sets it, no new
+surface, requester-check IDENTIFY presence, regression tests) are added.

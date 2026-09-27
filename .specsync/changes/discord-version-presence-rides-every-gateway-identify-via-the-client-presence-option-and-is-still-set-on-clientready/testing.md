@@ -23,6 +23,10 @@ it. Each test stops the gateway (`client.destroy()`).
   the same status and activity, sets `botUserId` and calls `onReady`.
 - **Ready survives a failed set**: a throwing `setPresence` is logged and
   `onReady` still runs.
+- **Requester check IDENTIFY presence**: `verifyRequesterCanSend` (DISCORD-8)
+  runs the real `login` with `client.ws.connect` stubbed to throw after the
+  IDENTIFY presence is built; `client.options.ws.presence` carries the
+  package-version Custom Status, the call rejects and the client is destroyed.
 
 ## Before and after
 
@@ -32,7 +36,10 @@ it. Each test stops the gateway (`client.destroy()`).
   which shows `setPresence` on ready is kept as it was.
 - `main`'s `gateway.ts` and `presence.ts`: the file fails to load
   (`buildVersionPresenceData` not exported).
-- Branch: 10 pass, 0 fail.
+- `main`'s `src/discord/requester-perms.ts` with the rest of the branch:
+  10 pass, 1 fail. The requester-check test fails with "Expected length: 1,
+  Received length: 0".
+- Branch: 11 pass, 0 fail.
 
 Also run: `bun test`, `bunx tsc --noEmit`,
 `specsync check --require-coverage 100` and
@@ -42,4 +49,4 @@ Also run: `bun test`, `bunx tsc --noEmit`,
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-discord-017` | `tests/discord.presence.test.ts` | The IDENTIFY presence discord.js builds at login carries the version Custom Status (fails on `main`: empty activity list); ClientReady still sets the same presence; a throwing `setPresence` does not stop the ready path; `buildVersionPresenceData` / `buildVersionPresenceActivity` shape from the shared VERSION. |
+| `REQ-discord-017` | `tests/discord.presence.test.ts` | The IDENTIFY presence discord.js builds at login carries the version Custom Status (fails on `main`: empty activity list); ClientReady still sets the same presence; a throwing `setPresence` does not stop the ready path; the DISCORD-8 requester-check login identifies with the same presence (fails on `main`); `buildVersionPresenceData` / `buildVersionPresenceActivity` shape from the shared VERSION. |

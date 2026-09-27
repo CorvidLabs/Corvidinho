@@ -23,8 +23,11 @@ The live discord.js Client SHALL also be constructed with the same version
 presence as its `presence` option, so the presence discord.js copies into the
 gateway IDENTIFY payload at login carries the version Custom Status on the
 first IDENTIFY and on every non-resumable re-identify (invalid or expired
-session), where `ClientReady` does not fire again. Both uses SHALL build the
-presence from one helper (`buildVersionPresenceData`) as a fresh object per
+session), where `ClientReady` does not fire again. The short-lived discord.js
+Client that the DISCORD-8 requester check (`verifyRequesterCanSend`) logs in
+with the same bot token SHALL carry the same version presence, so its IDENTIFY
+never sends an empty activity list under the bot name. Every use SHALL build
+the presence from one helper (`buildVersionPresenceData`) as a fresh object per
 call.
 
 Acceptance Criteria
@@ -36,4 +39,5 @@ Acceptance Criteria
 - The IDENTIFY presence discord.js builds at login (`options.ws.presence`, sent as `d.presence` on every IDENTIFY) has status `online` and exactly one activity: type 4, name `Custom Status`, state `v<version>`; it is never an empty activity list.
 - ClientReady still calls `setPresence` with the same status and activity; a throwing `setPresence` is logged and the ready handler still records the bot user id and calls `onReady`.
 - No new slash command, env var, config key or allowlist change.
-- Regression tests in `tests/discord.presence.test.ts` run the real discord.js `login` with only the socket connect stubbed (no token, no network); the IDENTIFY test fails on `main` and passes after.
+- The DISCORD-8 requester-check Client (`verifyRequesterCanSend`) identifies with the same version presence (status `online`, one type 4 `Custom Status` activity), never an empty activity list.
+- Regression tests in `tests/discord.presence.test.ts` run the real discord.js `login` with only the socket connect stubbed (no token, no network); the bridge and requester-check IDENTIFY tests fail on `main` and pass after.

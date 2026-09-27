@@ -10,6 +10,7 @@ artifact: docs
   ClientReady still sets it.
 - `specs/discord/testing.md`: presence section lists the new tests.
 - `docs/discord.md` formatting table: the Presence row says the status is
-  sent on every gateway IDENTIFY and set again on ready.
+  sent on every gateway IDENTIFY (also on the DISCORD-8 requester-check
+  login) and set again on ready.
 
 No README, CHANGELOG or STATUS change; no version bump.

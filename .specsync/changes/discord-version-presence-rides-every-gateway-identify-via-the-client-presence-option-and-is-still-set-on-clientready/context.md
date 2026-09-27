@@ -21,5 +21,10 @@ Ready, so `ClientReady` does not fire again after a non-resumable
 re-identify (invalid or expired session): the gateway then shows no custom
 status until the bridge restarts. That breaks "always".
 
+The DISCORD-8 requester check (`verifyRequesterCanSend`, used by
+`discord-post-message --requesting-user-id`) builds a second Client with the
+same bot token and intents only, so its IDENTIFY has the same empty activity
+list.
+
 Scope: this slice only. Open PRs #232 (ask-button actor gate) and #233
 (SAFE-3 clamp) are unrelated and untouched.

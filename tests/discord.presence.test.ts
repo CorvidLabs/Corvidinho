@@ -7,6 +7,10 @@ import { join } from "node:path";
 import { Client, Events } from "discord.js";
 import { createLiveGateway } from "../src/discord/gateway.ts";
 import {
+  setRequesterPermCheckerForTests,
+  verifyRequesterCanSend,
+} from "../src/discord/requester-perms.ts";
+import {
   PRESENCE_ACTIVITY_TYPE_CUSTOM,
   buildVersionPresenceActivity,
   buildVersionPresenceData,
@@ -182,5 +186,52 @@ describe("live gateway presence on IDENTIFY (DISCORD-12)", () => {
     } finally {
       await gateway.stop();
     }
+  });
+});
+
+/**
+ * DISCORD-12 on the second gateway login. The DISCORD-8 requester check
+ * (`discord-post-message --requesting-user-id`) opens its own short-lived
+ * gateway session with the same bot token; its IDENTIFY must carry the version
+ * too, not an empty activity list. Real `login`, socket connect stubbed to
+ * fail after the IDENTIFY presence is built: no token, no network.
+ */
+describe("requester check presence on IDENTIFY (DISCORD-12)", () => {
+  test("the requester check client identifies with the version Custom Status", async () => {
+    setRequesterPermCheckerForTests(undefined);
+    const realLogin = Client.prototype.login;
+    let identifyPresence: WsPresence | undefined;
+    let destroyed = false;
+    Client.prototype.login = async function (this: Client, token?: string) {
+      const ws = this.ws as unknown as { connect: () => Promise<void> };
+      ws.connect = async () => {
+        identifyPresence = (this.options.ws as { presence?: WsPresence })
+          .presence;
+        throw new Error("offline fixture: no gateway");
+      };
+      const realDestroy = this.destroy.bind(this);
+      this.destroy = async () => {
+        destroyed = true;
+        return realDestroy();
+      };
+      return realLogin.call(this, token);
+    };
+    try {
+      await expect(
+        verifyRequesterCanSend("100", "200", {
+          token: "fixture-token-not-real",
+        }),
+      ).rejects.toThrow("offline fixture: no gateway");
+    } finally {
+      Client.prototype.login = realLogin;
+    }
+    expect(destroyed).toBe(true);
+    expect(identifyPresence?.status).toBe("online");
+    expect(identifyPresence?.activities).toHaveLength(1);
+    expect(identifyPresence?.activities[0]).toMatchObject({
+      type: 4,
+      name: "Custom Status",
+      state: `v${VERSION}`,
+    });
   });
 });

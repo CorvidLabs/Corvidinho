@@ -47,6 +47,10 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   version Custom Status, ClientReady still calls `setPresence` with the same
   data, and a throwing `setPresence` does not stop the ready path
   (REQ-discord-017, no token, no network).
+- Same file: `verifyRequesterCanSend` (DISCORD-8 requester check) runs the
+  real discord.js `login` with the socket connect stubbed to fail; its
+  IDENTIFY presence carries the same version Custom Status, and the client is
+  destroyed (REQ-discord-017, no token, no network).
 
 REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.test.ts` cover SQLite persist/reload and soft TTL without live Discord.
 - MemoryStore CRUD/ACL/reload fixtures (REQ-discord-021 / MEMORY-1..4 / MEMORY-ACL-1..5).

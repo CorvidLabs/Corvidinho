@@ -19,5 +19,11 @@ handler keeps calling `setPresence`, now with `buildVersionPresenceData`
 unchanged. `ActivityType` is no longer destructured: the helper's type 4 is
 `ActivityType.Custom`.
 
+`verifyRequesterCanSend` (`src/discord/requester-perms.ts`, DISCORD-8) builds
+its own short-lived Client and logs in with the same bot token, so it opens a
+second gateway session. It now passes `presence: buildVersionPresenceData()`
+too; without it that IDENTIFY sends `status: online` with an empty activity
+list under the bot name.
+
 No new slash command, env var, config key, table or column. The SQLite
 schema is untouched. `/status` and the version source are unchanged.
