@@ -7,10 +7,11 @@
   "title": "Release 0.0.32: allowlisted tools reach the model, Fledge core builtins, Choose asks on work and session start, open asks kept per askId, role-refusal note, --project, doctor and init name project files",
   "description": "Release 0.0.32: allowlisted tools reach the model, Fledge core builtins, Choose asks on work and session start, open asks kept per askId, role-refusal note, --project, doctor and init name project files",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "19ec0e5bb09f48def1c420c4a970a79e0b3203b5",
   "created_at": 1790541880,
-  "updated_at": 1790541882,
+  "updated_at": 1790541888,
   "affected_specs": [
     "cli"
   ],
