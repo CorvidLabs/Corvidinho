@@ -43,6 +43,8 @@ describe("corvidinho task run CLI", () => {
     expect(code).toBe(0);
     expect(out).toContain("task run");
     expect(out).toContain("--no-verify");
+    // REQ-cli-009 / AGENT-5: the optional per-tier model keys are documented.
+    expect(out).toContain("CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE");
   });
 
   test("task run --no-verify --json skips gate", async () => {

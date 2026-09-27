@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "per-tier-model-read-tool-code-runs-call-the-model-configured-for-that-tier-agent-5",
+  "implementation_commit": "273a7e28e75d9987ce0a72ecafd1e16cfe3b4777",
+  "implementation_tree": "d21346b21fc69da707340c8e60bd8f02553215da",
+  "contract_digest": "89223645fe25ec24041aea1a432b58e68326aab43e9faded0af10bb839472356",
+  "workspace_digest": "c2a302709db857dcae59b561b781f73a61c7a3971718f4a1a31a8e206ee7a0fc",
+  "closing_digest": "2b7dd8119d2b5c21879b9d7f2fb86fc69de5b512731180113741a528fc6bbe4f",
+  "review_digest": "aa575e27012fc526a2c847242ee423e4abc9e668965e6b12e55cf1cd66727b03",
+  "finalization_digest": "54e39e2576d1029c5874ba4fc2e637ae93fa0604ceac9429b77dc9075d620c62",
+  "timestamp": 1790523921
+}

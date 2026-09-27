@@ -12,6 +12,7 @@
 import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { loadLlmEnv } from "./agent/execute.ts";
+import { perTierModels } from "./agent/tier.ts";
 import { checkChannel } from "./allowlist/discord.ts";
 import { isRepoAllowed } from "./allowlist/github.ts";
 import {
@@ -219,6 +220,15 @@ export function githubWatchDoctorCheck(
   );
 }
 
+/**
+ * `; per tier: read …, tool …, code …` when any per-tier model key is set
+ * (AGENT-5), else "" so the line reads as before. Model names only.
+ */
+function perTierModelsDetail(env: NodeJS.ProcessEnv): string {
+  const m = perTierModels(env);
+  return m ? `; per tier: read ${m.read}, tool ${m.tool}, code ${m.code}` : "";
+}
+
 /** `task run` without a key uses the demo stub: warn, never fail doctor. */
 export function llmDoctorCheck(env: NodeJS.ProcessEnv = process.env): DoctorCheck {
   const llm = loadLlmEnv(env);
@@ -226,7 +236,7 @@ export function llmDoctorCheck(env: NodeJS.ProcessEnv = process.env): DoctorChec
     return {
       name: "llm",
       ok: true,
-      detail: `CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model ${llm.model}`,
+      detail: `CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model ${llm.model}${perTierModelsDetail(env)}`,
     };
   }
   return {
