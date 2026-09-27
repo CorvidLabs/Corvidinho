@@ -70,6 +70,14 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 
 - `tests/discord.memory-inject.test.ts` — format/enrich empty+seeded scope, system prompt rules, richer memory tool argv (no live Discord).
 - DISCORD-ASK-6/7: collapse thinking→stub→answer (ask-ephemeral + thinking-bridge + finalizeContent unit tests).
+- DISCORD-3.a answer footer (REQ-discord-457): `tests/discord.thinking-status.test.ts`
+  (`finalizeContent` keeps a footer-only embed `model | plumbing` with no
+  description, error color when failed, kept on a re-edit; none on a Choose
+  stub or with nothing to show), `tests/discord.thinking-bridge.test.ts`
+  (mention answer and a button pick's resumed answer carry it, the Choose stub
+  does not, the body has no plumbing), `tests/discord.slash-ask7.test.ts`
+  (`/session start` and `/work`); collapse assertions in ask-ping, spend and
+  inflight-replies tests expect the footer-only embed (no live Discord).
 
 ## Button-pick resume identity (REQ-discord-446, IDENTITY-4)
 

@@ -871,10 +871,14 @@ export async function startBridge(
         let delivered = false;
         try {
           // DISCORD-ASK-6/7 — prefer one public message: edit thinking into stub/answer.
+          // DISCORD-3.a — the answer (not a Choose stub) keeps a footer-only
+          // embed with the model and plumbing; its outcome matches the fallback.
           const collapsed = await thinking.finalizeContent({
             content: out.content,
             components: askBody?.components,
             mentionUserIds: out.mentionUserIds,
+            extras: thinkExtras,
+            failed: askBody ? askBody.failed : !result.ok,
           });
           if (collapsed) {
             delivered = true;
@@ -1230,10 +1234,13 @@ export async function startBridge(
         let delivered = false;
         try {
           // DISCORD-ASK-7 — edit stub/thinking into the final answer (no Done+extra).
+          // DISCORD-3.a — footer-only embed (model + plumbing) on the answer.
           const collapsed = await thinking.finalizeContent({
             content: out.content,
             components: askBody?.components,
             mentionUserIds: out.mentionUserIds,
+            extras: thinkExtras,
+            failed: askBody ? askBody.failed : !result.ok,
           });
           if (collapsed) {
             delivered = true;
