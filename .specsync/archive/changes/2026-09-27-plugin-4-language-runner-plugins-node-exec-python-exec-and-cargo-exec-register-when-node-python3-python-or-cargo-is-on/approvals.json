@@ -1,0 +1,94 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790520800,
+      "digest": "78e3cb0306bcc44333b2e02180b61b7087558fe029bbe9ad47fdb962b50921b3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on",
+        "title": "PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root)",
+        "description": "PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root)",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "plugins/runners/commands.ts",
+          "plugins/runners/index.ts",
+          "src/cli.ts",
+          "src/plugins/builtins.ts",
+          "tests/runners.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When node, python3 (else python) or cargo resolves on an absolute PATH entry at builtin load, plugins list and the code-tier tool catalog show node-exec, python-exec and cargo-exec, each dangerous=true and minTier=2 (SAFE-1 non-interactive deny unless allowlisted; not offered to non-ADMIN role sessions, below code tier or without dangerous tools); each runs its toolchain's absolute binary with the model's argv verbatim (no shell, no expansion, flags kept) with cwd pinned to the plugin cwd, the verify lane's scrubbed env without CDPATH/OLDPWD, a timeout, per-stream output caps and process-tree kill on the calling run's abort (exit 130) or timeout (exit 124); a non-zero exit is ok:false with that code; when a toolchain is missing its runner is not registered or offered, plugins list still exits 0 and prints a line naming each missing tool, other builtins (shell-exec, files-*) are unaffected, and a registered binary that disappears returns exit 127 instead of throwing; no new slash command, env var or config key"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "a1d6e90169434e7bf25e5b7feced747a586a3c79293d49caff240b4cff6e0e17",
+        "plugins": "b5dad57d2f5c32b72710a3f5294769b0c21e178d5461abe5d6dfc29e99602708"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790522311,
+      "digest": "78e3cb0306bcc44333b2e02180b61b7087558fe029bbe9ad47fdb962b50921b3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on",
+        "title": "PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root)",
+        "description": "PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root)",
+        "kind": "feature",
+        "affected_specs": [
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "plugins/runners/commands.ts",
+          "plugins/runners/index.ts",
+          "src/cli.ts",
+          "src/plugins/builtins.ts",
+          "tests/runners.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When node, python3 (else python) or cargo resolves on an absolute PATH entry at builtin load, plugins list and the code-tier tool catalog show node-exec, python-exec and cargo-exec, each dangerous=true and minTier=2 (SAFE-1 non-interactive deny unless allowlisted; not offered to non-ADMIN role sessions, below code tier or without dangerous tools); each runs its toolchain's absolute binary with the model's argv verbatim (no shell, no expansion, flags kept) with cwd pinned to the plugin cwd, the verify lane's scrubbed env without CDPATH/OLDPWD, a timeout, per-stream output caps and process-tree kill on the calling run's abort (exit 130) or timeout (exit 124); a non-zero exit is ok:false with that code; when a toolchain is missing its runner is not registered or offered, plugins list still exits 0 and prints a line naming each missing tool, other builtins (shell-exec, files-*) are unaffected, and a registered binary that disappears returns exit 127 instead of throwing; no new slash command, env var or config key"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "a1d6e90169434e7bf25e5b7feced747a586a3c79293d49caff240b4cff6e0e17",
+        "plugins": "57c6a5ac5cecbde67231aa75f442dac3dbcaf3119c7fbfad86d57f11089007dc"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790523346,
+      "digest": "e7d9a9dc99b3fdacd611681e44c6d872b773ea2d07386d63e8aec30b7ec6b348",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

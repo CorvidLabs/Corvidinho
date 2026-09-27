@@ -66,6 +66,9 @@ files:
   - tests/shell.clamp-bypass.test.ts
   - tests/shell.clamp-failclosed.test.ts
   - tests/shell.clamp-quoting.test.ts
+  - plugins/runners/index.ts
+  - plugins/runners/commands.ts
+  - tests/runners.plugins.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -107,7 +110,9 @@ depends_on: []
 Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 (GITHUB-2/3/5), memory-store/recall/forget/override (MEMORY / REQ-plugins-010),
 file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
-`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088), the
+`shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088),
+language runners `node-exec` / `python-exec` / `cargo-exec` that register only
+when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
 SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
 typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
@@ -121,7 +126,12 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 
 Export allowlist load + github/discord gate helpers used by plugins and future
 HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
-Shell plugins register via `loadShellPlugins` (`shell-exec`). Git plugins
+Shell plugins register via `loadShellPlugins` (`shell-exec`). Language
+runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
+which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`
+with a reason) that `runnerStatusLines` renders for `plugins list`;
+`resolveRunnerBin`, `RUNNERS`, `runnerCommand(spec, bin)`, `runRunner` and
+`runnerChildEnv` are exported for tests. Git plugins
 register via `loadGitPlugins` (`plugins/git/index.ts`).
 `plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
 takes the resolver/transport seams, `webFetch` is the guarded GET core,
@@ -337,6 +347,28 @@ unknown Fledge task. A `fledge.toml` that cannot be parsed keeps the Fledge
 path (fail closed). `specsync-score` (SPECSYNC-3) is read-only (tier 0, not
 dangerous, no API key) and returns the local `specsync score` report with the
 forwarded args (module filters, `--explain`, `--format json`).
+`specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
+forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
+`specsync-list` and `specsync-check` take no path input.
+Language runners (PLUGIN-4, REQ-plugins-313..314): at builtin load each of
+`node`, `python3` (else `python`) and `cargo` is resolved with `Bun.which` over
+the absolute entries of PATH only, skipping a hit that is the running Bun
+binary (the `node` shim `bun run` adds); a found toolchain registers `node-exec` /
+`python-exec` / `cargo-exec` bound to that absolute binary, a missing one
+registers nothing (never offered, never a tool that cannot start). Each runner
+is `dangerous: true`, `minTier: 2`, and spawns `[bin, ...argv]` (no shell) with
+cwd = the plugin cwd, the verify lane's scrubbed env (`buildVerifyEnv`) minus
+`CDPATH` / `OLDPWD` plus `CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
+timeout (exit 124), 64 KiB per-stream caps, and its process group killed on
+timeout or the calling run's abort (exit 130); output is secret-scrubbed. Empty
+argv is a usage error (exit 1, nothing spawned); a binary that cannot start
+returns exit 127. `plugins list` prints which runners loaded (with the binary)
+and one line per missing toolchain, and still exits 0. `shell-exec` is
+unchanged and always registered. The pinned cwd is where the runner starts,
+not a sandbox: the code it runs can `process.chdir` / `os.chdir`, and
+`cargo --manifest-path` can name another crate; no SAFE-3 `cd` clamp applies
+(the runners add no shell). They are gated like `shell-exec` instead:
+dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 
 ## Behavioral Examples
 
@@ -375,6 +407,18 @@ forwarded args (module filters, `--explain`, `--format json`).
 - **Given** `shell-exec` allowlisted
 - **When** the command sets `CDPATH` (literally or dynamically) to an outside dir and then runs `cd sub`
 - **Then** the child shell's `readonly CDPATH` and dropped `CDPATH`/`OLDPWD` env keep `cd sub` under the root; no outside path is reached
+
+### Scenario: language runner registered when its toolchain is on PATH
+
+- **Given** `node` is on PATH and `CORVIDINHO_ALLOWLIST` names `node-exec`
+- **When** a non-interactive run calls `node-exec` with `["-e","console.log(process.cwd())"]`
+- **Then** node runs with that argv (no shell) in the project root and prints it; without the allowlist entry the run is denied (exit 2, SAFE-1)
+
+### Scenario: missing toolchain degrades cleanly
+
+- **Given** `cargo` is not on PATH
+- **When** builtins load and an operator runs `corvidinho plugins list`
+- **Then** `cargo-exec` is not registered or offered, the list prints `cargo-exec not loaded: cargo not found on PATH`, and exits 0 with every other builtin listed
 
 ### Scenario: SpecSync tools refuse to read outside the project
 
@@ -495,6 +539,11 @@ forwarded args (module filters, `--explain`, `--format json`).
 | council time cap or lead abort | ok=false (exit 130), state cancelled, voices stopped |
 | fledge-* called from a cwd other than its bound project root | Refuse (exit 2); fledge not started |
 | fledge-* times out / calling run aborts | exit 124 / 130; plugin process tree killed |
+| node / python3+python / cargo not on PATH at builtin load | Runner not registered or offered; `plugins list` names it `not loaded` and exits 0 (PLUGIN-4) |
+| node-exec / python-exec / cargo-exec non-interactive + not allowlisted | Deny (exit 2, SAFE-1); nothing spawned |
+| runner called with no argv | Usage error (exit 1); nothing spawned |
+| runner binary gone after load (cannot start) | ok=false, exit 127 with the reason; never throws |
+| runner times out / calling run aborts | exit 124 / 130; runner process tree killed |
 | files-read of a PNG/JPEG/GIF/WebP over 20 MB | refused `refused: image '<path>' is N bytes, over the 20MB image limit` (exit 1), no bytes read into the result (REQ-plugins-427) |
 
 ## Dependencies
@@ -505,6 +554,8 @@ forwarded args (module filters, `--explain`, `--format json`).
 | @octokit/rest | REST list/view/checks + create/comment/review for gated write commands |
 | node:fs / path | path clamp, symlink resolve, glob/list, shell cwd pin |
 | sh | shell-exec child via `sh -c` |
+| node / python3 / python / cargo (optional system binaries) | language runners via `Bun.spawn` argv arrays, only when on PATH |
+| src/agent/verify.ts | `buildVerifyEnv` scrub for the language runners' child env |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
@@ -561,4 +612,5 @@ and current rows for plugins host evolution.
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-reads-quoting-the-way-the-shell-does-escaped-backslash-before-a-newline-comments-and-here: SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused |
 | 2026-09-27 | local-spec-check-runs-at-the-ci-spec-sync-strictness-specsync-check-require-coverage-100-specsync-check-falls-back-to: Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89) |
+| 2026-09-27 | plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on: PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root) |
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
