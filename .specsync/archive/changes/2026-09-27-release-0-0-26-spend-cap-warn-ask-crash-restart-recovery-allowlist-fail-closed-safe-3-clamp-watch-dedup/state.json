@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-26-spend-cap-warn-ask-crash-restart-recovery-allowlist-fail-closed-safe-3-clamp-watch-dedup",
+  "slug": "release-0-0-26-spend-cap-warn-ask-crash-restart-recovery-allowlist-fail-closed-safe-3-clamp-watch-dedup",
+  "title": "Release 0.0.26: spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup",
+  "description": "Release 0.0.26: spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup",
+  "kind": "operations",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd",
+  "created_at": 1790469451,
+  "updated_at": 1790469559,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.26; version prints 0.0.26; CHANGELOG 0.0.26 extractable; STATUS rows"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

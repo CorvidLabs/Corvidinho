@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790465109,
+      "digest": "7fa7c4784392fa82b08cfbaa5bcd6959c9dac74ec3c71e7d8c8a0799ac1eb0bf",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "default-talk-worktree-ids-and-branch-names-include-a-digest-of-the-full-session-id-so-ids-sharing-a-16-char-prefix",
+        "title": "Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree",
+        "description": "Default talk worktree ids and branch names include a digest of the full session id so ids sharing a 16-char prefix never share a worktree",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "src/worktree/manager.ts",
+          "tests/worktree.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "talkWorktreeId and generateTalkBranchName return distinct, deterministic names for two ids that share their first 16 characters (e.g. schedule_sched_a1111111_run_aaaa and schedule_sched_a2222222_run_bbbb); ensureTalkWorkspace with such ids and default naming creates two different worktree dirs and talk branches (or two scoped dirs for a non-git project), and creating the second leaves the first's live working tree and uncommitted files in place"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "55e3c77a8ed86814361db07124671ce3ef7e537f6b559226586b48589d2ff1c6"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790465450,
+      "digest": "f66b246b15f4441d6b6d830254a2cd03bb4f5bcf13283aba6c83cfff74889b67",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
