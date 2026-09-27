@@ -15,7 +15,8 @@ artifact: plan
 4. `plugins/files/commands.ts`: image branch after `assertExistingFile`.
 5. `src/agent/execute.ts`: `ChatMessage.content` widened to parts; one
    image user message per round after the tool messages; HTTP status on
-   provider errors; one retry with a text note on a 400 carrying images.
+   provider errors; one retry with a text note in the tool message on a
+   400 / 404 / 413 / 415 / 422 carrying images.
 6. Regression tests in `tests/files.plugins.test.ts`,
    `tests/agent.tool-loop.test.ts`, `tests/discord.image-attachments.test.ts`;
    prove they fail with main's sources swapped in and pass on the branch.

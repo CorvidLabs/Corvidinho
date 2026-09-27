@@ -722,6 +722,13 @@ describe("files-read images reach the model as image parts (DISCORD-9 / REQ-agen
     expect(everything).not.toContain(PNG_B64.slice(0, 24));
   });
 
+  /** The retried request's tool message for `id`, parsed. */
+  const toolPayload = (body: { messages: Msg[] }, id: string) =>
+    JSON.parse(String(body.messages.find((m) => m.role === "tool" && m.tool_call_id === id)!.content));
+  /** True when some user message comes right after a tool message. */
+  const userAfterTool = (body: { messages: Msg[] }) =>
+    body.messages.some((m, i) => m.role === "user" && body.messages[i - 1]?.role === "tool");
+
   test("HTTP 400 on the image round retries once with a text note and completes", async () => {
     const r = run((n, body) =>
       n === 1
@@ -736,14 +743,83 @@ describe("files-read images reach the model as image parts (DISCORD-9 / REQ-agen
     expect(r.bodies).toHaveLength(3);
     expect(hasImagePart(r.bodies[1]!)).toBe(true);
     expect(hasImagePart(r.bodies[2]!)).toBe(false);
-    const note = r.bodies[2]!.messages.at(-1)!;
-    expect(note.role).toBe("user");
-    expect(note.content).toBe(
-      "Image(s) opened with files-read: shot.png\n[image shot.png could not be shown to this model]",
-    );
+    // The retry has the shape of a run without images: the note sits in the
+    // image's tool message and no user message follows the tool messages.
+    const retry = r.bodies[2]!.messages;
+    expect(retry.slice(-2).map((m) => m.role)).toEqual(["assistant", "tool"]);
+    expect(userAfterTool(r.bodies[2]!)).toBe(false);
+    const payload = toolPayload(r.bodies[2]!, "c1");
+    expect(payload.message).toBe("[image shot.png could not be shown to this model]");
+    expect(payload.data).toMatchObject({ path: "shot.png", mediaType: "image/png", image: true });
     expect(JSON.stringify(r.bodies[2])).not.toContain(PNG_B64);
     const texts = r.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
-    expect(texts.some((t) => t.startsWith("[operator] the model refused image input"))).toBe(true);
+    expect(texts).toContain(
+      "[operator] the model refused image input (HTTP 400); retried once with a text note",
+    );
+  });
+
+  test("a provider that rejects a user turn right after tool results still completes", async () => {
+    // Some OpenAI-compatible APIs (e.g. Mistral) 400 on role order, not on images.
+    const r = run((n, body) =>
+      n === 1
+        ? ok(readCall("c1", "shot.png"))
+        : userAfterTool(body)
+          ? new Response("Unexpected role 'user' after role 'tool'", { status: 400 })
+          : ok({ role: "assistant", content: "answered without the picture" }),
+    );
+    const result = await r.result;
+    expect(result.error).toBeUndefined();
+    expect(result.summary).toBe("answered without the picture");
+    expect(r.bodies).toHaveLength(3);
+    expect(userAfterTool(r.bodies[2]!)).toBe(false);
+  });
+
+  test("404 / 413 / 415 / 422 on the image request also fall back; 401 / 429 / 500 do not", async () => {
+    for (const status of [404, 413, 415, 422]) {
+      const r = run((n, body) =>
+        n === 1
+          ? ok(readCall("c1", "shot.png"))
+          : hasImagePart(body)
+            ? new Response("No endpoints found that support image input", { status })
+            : ok({ role: "assistant", content: `fell back after ${status}` }),
+      );
+      const result = await r.result;
+      expect(result.error).toBeUndefined();
+      expect(result.summary).toBe(`fell back after ${status}`);
+      expect(r.bodies).toHaveLength(3);
+      expect(hasImagePart(r.bodies[2]!)).toBe(false);
+    }
+    for (const status of [401, 429, 500]) {
+      const r = run((n) =>
+        n === 1 ? ok(readCall("c1", "shot.png")) : new Response("nope", { status }),
+      );
+      const result = await r.result;
+      expect(result.error).toBe(true);
+      expect(result.summary).toContain(`LLM HTTP ${status}`);
+      expect(r.bodies).toHaveLength(2);
+    }
+  });
+
+  test("a refusal takes out the images of earlier rounds too", async () => {
+    const r = run((n, body) => {
+      if (n === 1) return ok(readCall("c1", "shot.png"));
+      if (n === 2) return ok(readCall("c2", "second.png"));
+      if (hasImagePart(body)) return new Response("too many images", { status: 413 });
+      return ok({ role: "assistant", content: "two notes" });
+    });
+    const result = await r.result;
+    expect(result.summary).toBe("two notes");
+    // 1: read shot, 2: image ok + read second, 3: 413 with both, 4: retry
+    expect(r.bodies).toHaveLength(4);
+    const parts = r.bodies[2]!.messages.filter((m) => Array.isArray(m.content));
+    expect(parts).toHaveLength(2);
+    const retry = r.bodies[3]!;
+    expect(hasImagePart(retry)).toBe(false);
+    expect(retry.messages.some((m) => m.role === "user" && Array.isArray(m.content))).toBe(false);
+    expect(userAfterTool(retry)).toBe(false);
+    expect(toolPayload(retry, "c1").message).toBe("[image shot.png could not be shown to this model]");
+    expect(toolPayload(retry, "c2").message).toBe("[image second.png could not be shown to this model]");
+    expect(JSON.stringify(retry)).not.toContain(PNG_B64);
   });
 
   test("after one refusal, a later image goes as a text note with no second retry", async () => {
@@ -760,9 +836,12 @@ describe("files-read images reach the model as image parts (DISCORD-9 / REQ-agen
     // 1: read shot, 2: 400 with image, 3: retry with note, 4: note for second.png
     expect(r.bodies).toHaveLength(4);
     expect(hasImagePart(r.bodies[3]!)).toBe(false);
-    expect(r.bodies[3]!.messages.at(-1)!.content).toBe(
-      "Image(s) opened with files-read: second.png\n[image second.png could not be shown to this model]",
+    const last = r.bodies[3]!.messages.at(-1)!;
+    expect(last).toMatchObject({ role: "tool", tool_call_id: "c2" });
+    expect(toolPayload(r.bodies[3]!, "c2").message).toBe(
+      "[image second.png could not be shown to this model]",
     );
+    expect(userAfterTool(r.bodies[3]!)).toBe(false);
   });
 
   test("a 400 on the text retry, or with no image sent, is still an error", async () => {

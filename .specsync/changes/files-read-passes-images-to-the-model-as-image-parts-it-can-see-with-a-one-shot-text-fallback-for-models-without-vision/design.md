@@ -26,12 +26,18 @@ artifact: design
     last tool message one user message `[text "Image(s) opened with
     files-read: <paths>", image_url…]` is pushed and remembered in
     `imageMessages`.
-  - `chatCompletions` errors carry `status`. A 400 while `imageMessages` is
-    non-empty rewrites those messages to the text note, sets
+  - `chatCompletions` errors carry `status`. A 400 / 404 / 413 / 415 / 422
+    (`IMAGE_REFUSED_HTTP_STATUSES`) while `imageMessages` is non-empty
+    removes those user messages, rewrites each opened image's tool message
+    to the note (`imageRefusedToolContent`: metadata kept, message
+    `[image <path> could not be shown to this model]`), sets
     `imagesRefused`, emits `[operator] the model refused image input (HTTP
-    400); retried once with a text note`, and repeats the request once. With
-    `imagesRefused`, later rounds push the note directly. A second failure is
-    returned as today.
+    <status>); retried once with a text note`, and repeats the request once.
+    The retry has no user message after tool messages, so a provider that
+    rejects that role order (e.g. Mistral's "Unexpected role 'user' after
+    role 'tool'") accepts it. With `imagesRefused`, later image tool
+    messages carry the note and no image message is pushed. A second
+    failure is returned as today.
 - No bridge change, no new env var / flag / slash command / protocol field,
   no schema bump.
 
@@ -42,6 +48,10 @@ options consistent with DISCORD-9:
 
 - Images stay in the conversation for later rounds (re-sent each request);
   no "latest image only" trimming.
-- Fallback trigger is HTTP 400 only (not 415 / 422), one retry per run.
+- Fallback trigger is HTTP 400 / 404 / 413 / 415 / 422 (400: no vision or
+  a bad image; 404: a gateway such as OpenRouter with no image-capable route
+  for the model; 413: payload too large; 415 / 422: a server that rejects
+  content parts), one retry per run. 401 / 403 / 429 / 5xx are not image
+  refusals and stay errors. (Widened in review from 400 only.)
 - No per-round image count cap beyond the tool-round budget; the 20 MB
   per-image cap matches Discord attachments.

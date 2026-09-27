@@ -225,6 +225,22 @@ type ChatMessage = {
 /** What the provider sends back: text content only. */
 type AssistantMessage = ChatMessage & { content: string | null };
 
+/** A tool result that opened an image, and the tool message it went out in. */
+type OpenedImage = {
+  tool: ChatMessage;
+  result: PluginHandlerResult & { image: PluginImage };
+};
+
+/**
+ * Replies to a request carrying image parts that mean "not this input"
+ * (REQ-agent-428): 400 (no vision / bad image), 404 (a gateway with no
+ * image-capable route), 413 (too large), 415, 422. Auth, rate-limit and
+ * server errors are not retried without the image.
+ */
+const IMAGE_REFUSED_HTTP_STATUSES: ReadonlySet<number> = new Set([
+  400, 404, 413, 415, 422,
+]);
+
 type ToolCallPayload = {
   id: string;
   type: "function";
@@ -450,9 +466,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     { role: "system", content: system },
     { role: "user", content: userParts.join("") },
   ];
-  // DISCORD-9 (REQ-agent-428): user messages holding image parts, and the
-  // images in each, so a model that refuses images gets text notes instead.
-  const imageMessages = new Map<ChatMessage, PluginImage[]>();
+  // DISCORD-9 (REQ-agent-428): each user message holding image parts, with
+  // the tool results that opened them, so a refusal can take the parts out.
+  const imageMessages: { message: ChatMessage; opened: OpenedImage[] }[] = [];
   let imagesRefused = false;
 
   for (let round = 1; round <= maxToolRounds; round++) {
@@ -475,17 +491,27 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       });
     let completion = await request();
 
-    if (!completion.ok && completion.status === 400 && imageMessages.size > 0) {
-      // A model without vision: swap the image parts for a text note and
-      // retry this request once; later images go as notes too.
-      for (const [m, images] of imageMessages) {
-        m.content = imageFallbackText(images);
+    if (
+      !completion.ok &&
+      completion.status !== undefined &&
+      IMAGE_REFUSED_HTTP_STATUSES.has(completion.status) &&
+      imageMessages.length > 0
+    ) {
+      // A model (or gateway) that will not take the images: drop the image
+      // user messages, put a text note in each image's tool message and retry
+      // this request once; later images get the note too. No user message is
+      // left after tool messages, so providers that require the assistant
+      // turn right after tool results accept the retry.
+      for (const { message, opened } of imageMessages) {
+        const at = messages.indexOf(message);
+        if (at >= 0) messages.splice(at, 1);
+        for (const o of opened) o.tool.content = imageRefusedToolContent(o.result);
       }
-      imageMessages.clear();
+      imageMessages.length = 0;
       imagesRefused = true;
       emit(onEvent, {
         type: "Text",
-        text: "[operator] the model refused image input (HTTP 400); retried once with a text note",
+        text: `[operator] the model refused image input (HTTP ${completion.status}); retried once with a text note`,
       });
       completion = await request();
     }
@@ -519,7 +545,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       };
     }
 
-    const roundImages: PluginImage[] = [];
+    const roundImages: OpenedImage[] = [];
     for (const tc of calls) {
       if (signal.aborted) {
         return {
@@ -591,24 +617,25 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         detail,
       });
 
-      messages.push({
+      const toolMessage: ChatMessage = {
         role: "tool",
         tool_call_id: tc.id || name,
         content: stringifyToolPayload(result),
-      });
-      if (result.ok && result.image) roundImages.push(result.image);
+      };
+      messages.push(toolMessage);
+      if (result.ok && result.image) {
+        const opened = { tool: toolMessage, result: { ...result, image: result.image } };
+        if (imagesRefused) toolMessage.content = imageRefusedToolContent(opened.result);
+        else roundImages.push(opened);
+      }
     }
 
     // Tool messages must directly follow the assistant tool_calls, so the
     // round's images ride one user message after them.
     if (roundImages.length > 0) {
-      if (imagesRefused) {
-        messages.push({ role: "user", content: imageFallbackText(roundImages) });
-      } else {
-        const m = imageUserMessage(roundImages);
-        messages.push(m);
-        imageMessages.set(m, roundImages);
-      }
+      const message = imageUserMessage(roundImages.map((o) => o.result.image));
+      messages.push(message);
+      imageMessages.push({ message, opened: roundImages });
     }
   }
 
@@ -832,16 +859,15 @@ function extractAssistantMessage(data: unknown): AssistantMessage | null {
   };
 }
 
-function imagePathsLine(images: PluginImage[]): string {
-  return `Image(s) opened with files-read: ${images.map((i) => i.path).join(", ")}`;
-}
-
 /** The round's images as one user message of image_url parts (REQ-agent-428). */
 function imageUserMessage(images: PluginImage[]): ChatMessage {
   return {
     role: "user",
     content: [
-      { type: "text", text: imagePathsLine(images) },
+      {
+        type: "text",
+        text: `Image(s) opened with files-read: ${images.map((i) => i.path).join(", ")}`,
+      },
       ...images.map(
         (i): ChatContentPart => ({
           type: "image_url",
@@ -852,12 +878,15 @@ function imageUserMessage(images: PluginImage[]): ChatMessage {
   };
 }
 
-/** Text in place of image parts for a model that refused them. */
-function imageFallbackText(images: PluginImage[]): string {
-  return [
-    imagePathsLine(images),
-    ...images.map((i) => `[image ${i.path} could not be shown to this model]`),
-  ].join("\n");
+/**
+ * The tool message for an image the model would not take: the text note in
+ * place of "opened for viewing", metadata kept, no bytes (REQ-agent-428).
+ */
+function imageRefusedToolContent(result: OpenedImage["result"]): string {
+  return stringifyToolPayload({
+    ...result,
+    message: `[image ${result.image.path} could not be shown to this model]`,
+  });
 }
 
 function stringifyToolPayload(result: {

@@ -269,10 +269,12 @@ must directly follow the assistant `tool_calls`), the loop adds one user
 message `[{type:"text", text:"Image(s) opened with files-read: <paths>"},
 {type:"image_url", image_url:{url:"data:<mime>;base64,<b64>"}}, …]`. The
 base64 never reaches tool text, events or ndjson. If a request carrying image
-parts gets HTTP 400, every image part is replaced by `[image <path> could not
-be shown to this model]`, an `[operator]` Text note is emitted, and that
-request is retried once; later images in the run go as the same text note. No
-new env var, flag or protocol field.
+parts gets HTTP 400, 404, 413, 415 or 422, the image user messages are
+removed, each opened image's tool message says `[image <path> could not be
+shown to this model]`, an `[operator]` Text note is emitted, and that request
+is retried once (no user message after tool messages, so strict role-order
+providers accept it); later images in the run get the same note in their tool
+message. No new env var, flag or protocol field.
 
 `ask-human` is intercepted by the tool loop (never dispatched as a plugin) and
 is offered only on tool/code tiers. A run with an ask is never `done`; the
@@ -316,7 +318,7 @@ model.
 
 - **Given** the request carrying an image part gets HTTP 400
 - **When** the loop handles it
-- **Then** it swaps the part for `[image <path> could not be shown to this model]`, retries once, and the run completes with the model's reply
+- **Then** it drops the image message, puts `[image <path> could not be shown to this model]` in that image's tool message, retries once, and the run completes with the model's reply
 
 ## Error Cases
 
@@ -330,8 +332,8 @@ model.
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
-| HTTP 400 on a request carrying image parts (model without vision) | image parts replaced by `[image <path> could not be shown to this model]`, `[operator]` Text note, request retried once; later images sent as that note (REQ-agent-428) |
-| HTTP 400 again on that retry, or on a request with no image parts | provider error as today (`LLM HTTP 400`, `ExecuteResult.error`; REQ-agent-242) |
+| HTTP 400 / 404 / 413 / 415 / 422 on a request carrying image parts (model or gateway without vision, image too large) | image user messages removed, each image's tool message says `[image <path> could not be shown to this model]`, `[operator]` Text note, request retried once; later images get that note in their tool message (REQ-agent-428) |
+| Any error on that retry, any other status (401 / 429 / 5xx) with images, or an error on a request with no image parts | provider error as today (`LLM HTTP <status>`, `ExecuteResult.error`; REQ-agent-242) |
 | LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |

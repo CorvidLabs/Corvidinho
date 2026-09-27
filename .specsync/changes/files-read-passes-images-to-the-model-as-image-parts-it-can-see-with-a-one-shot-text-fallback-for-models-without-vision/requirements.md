@@ -12,7 +12,8 @@ artifact: requirements
 - `REQ-agent-428` (Added, agent; extends REQ-agent-008): the tool loop sends
   a round's images as one user message of `image_url` data-URL parts after
   the round's tool messages; base64 never in tool text, events or ndjson; one
-  retry with a text note on HTTP 400; later images as the note.
+  retry with a text note in the tool message on HTTP 400 / 404 / 413 / 415 /
+  422; later images as the note.
 - `REQ-discord-013` (Modified, discord): the bridge acceptance criterion
   "`files-read` with that cwd opens it" becomes "opening the cited path with
   `files-read` gives the model the image itself (an image part), not decoded
