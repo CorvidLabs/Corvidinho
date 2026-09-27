@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose",
+  "implementation_commit": "cb80548c1708f062fa26ba61795e79bd9cebcbb7",
+  "implementation_tree": "132db6727d1b5ab88a037da086ddfa34fdb10a92",
+  "contract_digest": "91be2ca7ab9fcb19ec45aa68e08f1a8dfc17331d7618ed8932698d328f765687",
+  "workspace_digest": "95753f54bff0e521e07eb065580c63efb379cd78a69b14db117a823ca38e0418",
+  "closing_digest": "9f1920351564c3a4f7941da118b89e0caa2899b1408eb240016cd3bc8a0a92eb",
+  "review_digest": "a05996edb358d980d1381026e78a6733bbf0e402c46d62000c44f64f67a15d9f",
+  "finalization_digest": "048a79ccdff744de6e41986e0333aa58e661f80c3d80b17a2a1b7c6138968e89",
+  "timestamp": 1790466816
+}
