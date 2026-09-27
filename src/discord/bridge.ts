@@ -491,11 +491,21 @@ export async function startBridge(
       thinkingOutbound: resolveOutbound(),
       thinkingDebounceMs: opts.thinkingDebounceMs,
       thinkingTickMs: opts.thinkingTickMs,
-      // DISCORD-2 / AUTONOMY-5/6: a reply to a /work or /session start
-      // answer continues that session (and answers its pending ask).
+      // DISCORD-2 / AUTONOMY-5/6 (REQ-discord-002, REQ-discord-044): a reply
+      // to a /work or /session start answer continues that session (and
+      // answers its pending ask); the router keeps SESSION-MULTI-1, so only
+      // the session's own user continues it.
       trackBotMessage: (messageId, sessionId) => {
         const session = store.get(sessionId);
-        if (session) store.trackBotMessage(messageId, session);
+        if (!session) return;
+        try {
+          store.trackBotMessage(messageId, session);
+        } catch (err) {
+          // Best effort: the answer is already out, so a failed bot-message
+          // DB write (e.g. "database is locked") must not stop the slash run
+          // from resolving its deferred reply. The in-memory map is set first.
+          console.warn(`[discord] slash answer tracking for ${sessionId} failed:`, err);
+        }
       },
       mutedUsers,
       rateLimitState,
