@@ -7,10 +7,11 @@
   "title": "A talk stored with a prefix-only worktree name before the digest change keeps it after upgrade, and a new talk whose id shares that prefix gets its own worktree",
   "description": "A talk stored with a prefix-only worktree name before the digest change keeps it after upgrade, and a new talk whose id shares that prefix gets its own worktree",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "f4a9e48f6faf5d119baf9af265d010d9332df43c",
   "created_at": 1790468130,
-  "updated_at": 1790468170,
+  "updated_at": 1790468182,
   "affected_specs": [
     "discord"
   ],

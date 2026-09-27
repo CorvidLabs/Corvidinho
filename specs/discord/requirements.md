@@ -965,6 +965,7 @@ Acceptance Criteria
 - Two ids that share their first 16 characters (e.g. `schedule_sched_a1111111_run_aaaa` and `schedule_sched_a2222222_run_bbbb`) get different default worktree ids and branch names; the same id always gets the same names.
 - `ensureTalkWorkspace` with default naming for two such ids creates two different worktrees and branches; the first's uncommitted files survive the second's setup.
 - In a non-git project the two ids get different scoped dirs and the first's files survive.
+- A talk stored before the digest change with a prefix-only worktree path and `talk/` branch keeps that path and branch when it re-binds after a restart, and a new talk whose id shares that prefix gets a different worktree and branch and leaves the stored talk's worktree, branch and uncommitted files in place.
 
 ### REQ-discord-331
 
