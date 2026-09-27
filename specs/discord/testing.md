@@ -117,7 +117,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   Choose button opens its choices and a pick resumes with that question and
   label while the newer ask stays pending; a thin reply restates the newest;
   a free-text answer clears only that ask; a late press on the earlier ask
-  expires only it; `cancel` clears every open ask; `SessionStore` keeps open
+  expires only it; a timed-out earlier ask is dropped, not promoted, when the
+  newest is picked (a thin reply then runs the agent); `cancel` clears every
+  open ask; `SessionStore` keeps open
   asks by askId in `discord_sessions.pending_ask` (one object, or an array
   when several are open) across a reopen (no live Discord).
 

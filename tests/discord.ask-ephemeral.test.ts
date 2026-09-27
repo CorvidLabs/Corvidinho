@@ -542,6 +542,34 @@ describe("open button asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044
     await result.stop();
   });
 
+  test("an earlier ask past its timeout is never promoted, so a thin reply after the newest pick runs the agent", async () => {
+    const { result, handlers, replies, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, CACHE_ASK, "Using Redis", "You're welcome"]),
+    );
+    await say(handlers, "m1", "set up storage");
+    const askA = result.store.list()[0]!.pendingAsk!;
+    await say(handlers, "m2", "and caching?");
+    const session = result.store.list()[0]!;
+    const askB = session.pendingAsk!;
+    session.openAsks![0]!.expiresAt = Date.now() - 1;
+
+    await press(handlers, pickCustomId(askB.askId, "1"));
+    expect(calls).toHaveLength(3);
+    // The timed-out ask A is dropped, not promoted to be restated.
+    const after = result.store.list()[0]!;
+    expect(after.pendingAsk ?? null).toBeNull();
+    expect(after.openAsks).toBeUndefined();
+
+    const before = replies.length;
+    await say(handlers, "m3", "ok");
+    expect(calls).toHaveLength(4);
+    expect(calls[3]!.prompt).not.toContain("Which DB?]");
+    expect(replies.slice(before).some((r) => r.content.includes("Which DB?"))).toBe(false);
+    const late = await press(handlers, openCustomId(askA.askId));
+    expect(String(late[0]!.content).toLowerCase()).toContain("already");
+    await result.stop();
+  });
+
   test("an explicit cancel clears every open ask of the session", async () => {
     const { result, handlers, replies, calls } = await bridgeWith(
       scriptedAgent([OPTIONS_ASK, CACHE_ASK]),
@@ -550,6 +578,8 @@ describe("open button asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044
     const askA = result.store.list()[0]!.pendingAsk!;
     await say(handlers, "m2", "and caching?");
     const askB = result.store.list()[0]!.pendingAsk!;
+    // Both asks are open before the cancel.
+    expect(result.store.list()[0]!.openAsks?.map((a) => a.askId)).toEqual([askA.askId]);
     await say(handlers, "m3", "cancel");
     expect(calls).toHaveLength(2);
     expect(replies.at(-1)!.content).toBe(ASK_CANCELLED_ACK);

@@ -185,7 +185,8 @@ stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
 one ask (a pick, a late press or a free-text answer; the newest remaining one
-becomes `pendingAsk`) and `SessionStore.findPendingAsk(askId)` returns the live
+that has not timed out becomes `pendingAsk`, and timed-out earlier ones are
+dropped then, never restated) and `SessionStore.findPendingAsk(askId)` returns the live
 session and ask a button press answers. Button pending asks are NOT
 cleared by ordinary chat, nor replaced when a later run asks again
 (SESSION-MULTI-3); free-text pending still clears on substantive continue.

@@ -16,8 +16,11 @@ artifact: design
   `null` clears every open ask (explicit cancel, as before).
 - `SessionStore.clearPendingAsk(session, askId)`: clear one ask (pick, late
   press, free-text answer, post-run free-text clear); the newest remaining open
-  ask is promoted to `pendingAsk`, so "pendingAsk set" still means "an ask is
-  open" for the thin-ack/cancel gate.
+  ask that has not timed out is promoted to `pendingAsk`, so "pendingAsk set"
+  still means "an ask is open" for the thin-ack/cancel gate. Earlier asks
+  already past their timeout are dropped then (never promoted): a thin reply
+  must not restate buttons that only answer "that choice expired", nor keep
+  thin replies from reaching the agent.
 - `SessionStore.findPendingAsk(askId)`: the live session (via `list()`, which
   purges expired sessions, as the old lookup did) and the matching ask.
 - Bridge: `onComponent` looks the press up with `findPendingAsk`, and the
@@ -36,5 +39,5 @@ presses by askId.
 
 Design choices pending Leif: cancel clears every open ask (not only the
 newest); expired earlier asks are kept (so a late press still gets "that
-choice expired") until pressed, cancelled or the session ends — no cap on how
-many stay open.
+choice expired") until pressed, cancelled, a newer ask is cleared (then they
+are dropped, not promoted) or the session ends — no cap on how many stay open.

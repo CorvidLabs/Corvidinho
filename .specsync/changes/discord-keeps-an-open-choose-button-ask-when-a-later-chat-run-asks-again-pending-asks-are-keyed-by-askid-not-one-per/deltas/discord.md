@@ -28,7 +28,9 @@ option buttons keep working until pressed or expired; a superseded free-text
 ask is replaced. A button press SHALL be matched to the session's open ask
 with that askId, whichever of its open asks it is. A pick, a late press or a
 free-text answer SHALL clear only that ask, and the newest remaining open ask
-SHALL become `pendingAsk`; an explicit cancel SHALL clear every open ask of
+that has not timed out SHALL become `pendingAsk` (earlier asks already past
+their timeout are dropped then, never promoted, so a thin-ack continue never
+restates expired buttons); an explicit cancel SHALL clear every open ask of
 the session. Open asks SHALL persist in `discord_sessions.pending_ask` with
 no schema change (one JSON object when one ask is open, as before; a JSON
 array, oldest first, when several are) and reload with the session. No new
@@ -63,5 +65,6 @@ Acceptance Criteria
 - While Choose ask A is open, a chat message whose run asks again with Choose ask B makes B the pending ask and keeps A open: a thin reply restates B, A's Choose button opens A's choices, and a pick of A resumes the session with A's question and the chosen label while B stays pending; a re-press of A is a no-op; B's pick then resumes with B's question.
 - While Choose ask A is open, a run that asks a free-text question F makes F the pending ask; a substantive reply answers F (prior-question context) and clears only F, so A is pending again and its buttons still resume the session.
 - A late press on an earlier open ask gets `ASK_CHOICE_EXPIRED` and clears only that ask; the newer ask stays open.
+- When the newest ask is picked while an earlier open ask has timed out, the earlier ask is dropped, not promoted: the session has no pending ask, a thin reply runs the agent, and a press on the dropped ask is a no-op.
 - `cancel` with several open asks clears all of them with the short ack and no agent run; a later press on any of them is a no-op.
 - `SessionStore`: one open ask persists as one JSON object; two persist as an array and reload as `pendingAsk` plus `openAsks` after a reopen; re-storing a held askId updates it in place; `findPendingAsk` finds an earlier open ask; clearing the newest promotes the earlier one; a new ask replaces a free-text ask but never a button ask; `null` clears all.

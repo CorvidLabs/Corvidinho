@@ -23,7 +23,7 @@ import {
 } from "../worktree/index.ts";
 import { askFromUnknown } from "../agent/ask.ts";
 import type { HumanAsk } from "../agent/types.ts";
-import type { PendingAsk } from "./ask-buttons.ts";
+import { isAskExpired, type PendingAsk } from "./ask-buttons.ts";
 import {
   clipTurnText,
   ensureSessionTurns,
@@ -625,8 +625,9 @@ export class SessionStore {
    * Store a pending human ask on a session, or clear them all (AUTONOMY-5/6).
    * Asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044): a new ask
    * becomes the session's `pendingAsk`, and the button ask it supersedes
-   * stays open in `openAsks` until it is picked, pressed late or cancelled —
-   * a later run that asks again never takes its buttons away. A superseded
+   * stays open in `openAsks` until it is picked, pressed late or cancelled
+   * (or, once timed out, until a newer ask is cleared) — a later run that
+   * asks again never takes its buttons away. A superseded
    * free-text ask is replaced (a reply answers one question). Storing an
    * askId the session already holds updates that ask in place. `null` clears
    * every open ask (explicit cancel). Persists when a DB is configured.
@@ -655,14 +656,18 @@ export class SessionStore {
   /**
    * Clear one open ask by askId — a pick, a late press or a free-text answer
    * (SESSION-MULTI-3). The session's other open asks stay; when `pendingAsk`
-   * is cleared the newest remaining open ask takes its place. No-op when the
-   * session does not hold that askId.
+   * is cleared the newest remaining open ask that has not timed out takes its
+   * place, and earlier asks already past their timeout are dropped then, so a
+   * thin reply never restates buttons that only answer "that choice expired".
+   * No-op when the session does not hold that askId.
    */
   clearPendingAsk(session: SessionStub, askId: string): void {
     const earlier = session.openAsks ?? [];
     if (session.pendingAsk?.askId === askId) {
-      session.pendingAsk = earlier.at(-1) ?? null;
-      const rest = earlier.slice(0, -1);
+      const nowMs = this.nowMs();
+      const live = earlier.filter((a) => !isAskExpired(a, nowMs));
+      session.pendingAsk = live.at(-1) ?? null;
+      const rest = live.slice(0, -1);
       if (rest.length > 0) session.openAsks = rest;
       else delete session.openAsks;
     } else if (earlier.some((a) => a.askId === askId)) {
