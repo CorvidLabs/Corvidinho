@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-31-owner-only-channel-autocomplete-keystore-and-specsync-write-protection-audited-schedule-delete-per-user",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "63a2ac17462a690e593fd144806a7ecf49e3a650",
+  "contract_digest": "e47fb27c253ba0c7cebab2d22a639ac6d02c7d81b8ac54b3bce180d8a8b4981a",
+  "execution_digest": "54a657ce92cc3d320927f88bb542f387c5126ae2febc544e850d4b89e2f95fe8",
+  "workspace_digest": "e17f6a9f2d0036534669c299d82adb51b781beaf7c5819e56f21204e4a5419f1",
+  "timestamp": 1790535062
+}
