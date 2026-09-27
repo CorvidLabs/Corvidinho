@@ -3,32 +3,59 @@
  * No in-band override (Merlin files-delete pattern).
  */
 
-import { basename } from "node:path";
+import { basename, isAbsolute, relative } from "node:path";
 import {
   resolveActingIsAdmin,
   roleSessionActive,
 } from "../../src/plugins/roles.ts";
 
-/** True when path looks like protected project infrastructure (SAFE-2). */
-export function isProtectedPath(filePath: string): boolean {
-  const normalized = filePath.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter((p) => p.length > 0 && p !== ".");
+function pathParts(p: string): string[] {
+  return p.split("/").filter((part) => part.length > 0 && part !== ".");
+}
 
-  for (const part of parts) {
-    const lower = part.toLowerCase();
+/**
+ * True when path looks like protected project infrastructure (SAFE-2).
+ *
+ * Pass the project `root` with an absolute path: the keystore rule then reads
+ * only the components below the root, so a project checked out under a
+ * directory such as `~/keystore-tools/` does not become read-only as a whole.
+ * The exact-name rules (.git / .env* / specs / .specsync) read the whole path.
+ */
+export function isProtectedPath(filePath: string, root?: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  const parts = pathParts(normalized);
+
+  for (let i = 0; i < parts.length; i++) {
+    const lower = parts[i]!.toLowerCase();
     if (lower === ".git") return true;
     if (lower === ".env" || lower.startsWith(".env.")) return true;
     if (lower === "specs") return true;
+    // SpecSync config, registry and archived changes. The active change
+    // folders under `.specsync/changes/` stay writable so the agent can fill
+    // change artifacts (SPECSYNC-4).
+    if (lower === ".specsync" && parts[i + 1]?.toLowerCase() !== "changes") {
+      return true;
+    }
   }
 
-  const base = basename(normalized);
-  const baseLower = base.toLowerCase();
+  // Any keystore file or directory (`keystore/UTC--…`, `my.keystore`): the
+  // same component rule isSecretPath uses.
+  let inProject = parts;
+  if (root && isAbsolute(filePath)) {
+    const rel = relative(root, filePath).replace(/\\/g, "/");
+    if (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel)) {
+      inProject = pathParts(rel);
+    }
+  }
+  if (inProject.some((part) => part.toLowerCase().includes("keystore"))) {
+    return true;
+  }
+
+  const baseLower = basename(normalized).toLowerCase();
   if (baseLower === "fledge.toml") return true;
   // Bun runtime config: a planted `preload` runs code in every spawned agent.
   if (baseLower === "bunfig.toml" || baseLower === ".bunfig.toml") return true;
   if (baseLower.endsWith(".spec.md")) return true;
-  if (baseLower.includes("keystore")) return true;
-  if (baseLower === "wallet-keystore.json") return true;
 
   return false;
 }
@@ -36,7 +63,7 @@ export function isProtectedPath(filePath: string): boolean {
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +
-    `(.env* / .git / fledge.toml / bunfig.toml / specs / *.spec.md / keystores). ` +
+    `(.env* / .git / fledge.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
     `There is NO override — edit via SpecSync or outside the agent file tools.`
   );
 }

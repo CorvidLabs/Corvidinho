@@ -600,6 +600,32 @@ describe("git-commit", () => {
     expect(ignored.ok).toBe(false);
     expect(ignored.error).toContain("ignored");
   });
+
+  test("SAFE-2: .specsync/ state deletes are refused; an archived change's folder delete stages (SPECSYNC-4)", async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, ".specsync", "changes", "done"), { recursive: true });
+    writeFileSync(join(repo, ".specsync", "config.toml"), "enforcement = \"strict\"\n");
+    writeFileSync(join(repo, ".specsync", "changes", "done", "state.json"), "{}\n");
+    g(repo, "add", ".specsync");
+    g(repo, "commit", "-q", "-m", "sdd");
+
+    unlinkSync(join(repo, ".specsync", "config.toml"));
+    const cfg = await run("git-commit", ["-m", "drop sdd", ".specsync/config.toml"], repo);
+    expect(cfg.ok).toBe(false);
+    expect(cfg.exitCode).toBe(2);
+    expect(cfg.error).toContain("SAFE-2");
+    expect(g(repo, "ls-files", ".specsync/config.toml").trim()).toBe(".specsync/config.toml");
+
+    unlinkSync(join(repo, ".specsync", "changes", "done", "state.json"));
+    const moved = await run(
+      "git-commit",
+      ["-m", "chore: archive change", ".specsync/changes/done/state.json"],
+      repo,
+    );
+    expect(moved.error).toBeUndefined();
+    expect(moved.ok).toBe(true);
+    expect(g(repo, "ls-files", ".specsync/changes/done/state.json").trim()).toBe("");
+  });
 });
 
 describe("git-push (GITHUB-6, never force)", () => {
