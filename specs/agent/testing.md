@@ -13,3 +13,16 @@
 ## Soft-land tool rounds (REQ-agent-312)
 
 `tests/agent.soft-land.test.ts` covers exhaustion soft-land, chatBody scrub, and mention rewrite.
+
+## Images as image parts (REQ-agent-428, DISCORD-9)
+
+`tests/agent.tool-loop.test.ts` ("files-read images reach the model as image
+parts") — scripted fake `fetchImpl`: the round after a `files-read` of a PNG
+carries the small tool message then one user message with an `image_url`
+data URL; two images in a round share one user message; `ToolResult` detail
+and ndjson never hold the base64; HTTP 400 on the image request retries once
+with the note in the image's tool message (no user message after tool
+messages) and completes, also against a provider that rejects that role
+order; 404 / 413 / 415 / 422 fall back too, 401 / 429 / 500 do not; a refusal
+drops earlier rounds' images too; a later image after a refusal gets the note
+with no second retry; 400 on the retry, or with no image, stays an error.
