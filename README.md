@@ -32,6 +32,20 @@ hi check
 
 Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN` / `GH_TOKEN`) stay in the environment — never in the repo or chat logs.
 
+### Another project without `cd` (CLI-5)
+
+```bash
+bun src/cli.ts --project ~/code/other task run --task "…" --json
+bun src/cli.ts doctor --project=../other
+```
+
+`--project <path>` (any command, before a `--`) runs the CLI as if it had been started in
+`<path>`: it reads that project's `fledge.toml`, specs and files, and its `.env` files as Bun
+loads them there (`.env`, `.env.<NODE_ENV>`, `.env.local`; variables already set in the
+environment win). The start directory's `.env` values do not carry over, and the project's
+`bunfig.toml` is never read. Only this process: spawned agents still run with `--no-env-file`.
+A path that does not exist or is not a directory stops with one error line (exit 1).
+
 ## Discord HEAR (thin)
 
 ```bash

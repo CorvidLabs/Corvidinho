@@ -20,6 +20,7 @@ files:
   - tests/fixtures/preload-probe.ts
   - tests/cli.clean-errors.test.ts
   - tests/fixtures/fake-http-401.ts
+  - tests/cli.project-path.test.ts
 
 db_tables: []
 depends_on:
@@ -42,7 +43,10 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `main` | `argv: string[]` | `Promise<number>` | CLI entry; exit code |
 | `runCli` | `argv: string[], run?: (argv) => Promise<number>` | `Promise<number>` | Top-level error boundary around `main` (REQ-cli-419) |
 | `reportCliError` | `err: unknown, opts?: { json?: boolean }` | `number` | One scrubbed error line + hint; returns the exit code (REQ-cli-419) |
-| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error) |
+| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error; a `ProjectDirError` carries its own) |
+| `parseGlobalFlags` | `args: string[]` | `{ rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505) |
+| `readStartEnv` | `path?: string` | `Record<string, string> or null` | The env this process was started with (`/proc/self/environ`), before Bun added the start directory's `.env*` values (REQ-cli-505) |
+| `enterProject` | `path: string, opts?: { startEnv? }` | `EnterProjectResult` | CLI-5 `--project`: env as Bun builds it for a process started in `path` (probe pinned to `SPAWN_BUN_CONFIG`), then `chdir`; changes nothing on failure (REQ-cli-505) |
 | `attribution` | `format?: "markdown" or "plain"` | `string` | Return the canonical footer in the requested format |
 | `startDaemon` | `opts?: StartDaemonOptions` | `Promise<StartDaemonResult>` | Take the data-dir lock and arm the headless schedule ticker (CLI-8 / AUTONOMOUS-4) |
 | `runDaemon` | `opts?: StartDaemonOptions` | `Promise<number>` | `corvidinho daemon`: start, then stop cleanly on SIGTERM/SIGINT |
@@ -71,6 +75,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `ATTRIBUTION_PLAIN` | Canonical plain-text footer without account handles |
 | `DEFAULT_SHUTDOWN_GRACE_MS` | Daemon stop waits this long (30 s) for in-flight runs |
 | `DAEMON_LOCK_FILE` | `daemon.lock` in the data dir |
+| `PROJECT_ENV_TIMEOUT_MS` | Cap (15 s) on the one-off `.env` probe `--project` runs (REQ-cli-505) |
 
 ### Exported Types
 
@@ -81,6 +86,8 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `DaemonLock` / `DaemonLockHolder` / `AcquireDaemonLockOptions` / `AcquireDaemonLockResult` | Single-instance lock |
 | `DaemonLogger` / `DaemonLogLevel` / `DaemonLogFields` / `DaemonLoggerOptions` | JSON-line logger |
 | `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
+| `EnterProjectResult` | `{ ok: true, dir }` or `{ ok: false, error, hint }` from `enterProject` (REQ-cli-505) |
+| `ProjectDirError` | Error class for an unusable `--project`; `hint` is the operator's next step (REQ-cli-505) |
 | `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
 
 ## Invariants
@@ -97,6 +104,7 @@ doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info`
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Before every tick it re-reads the allowlist (file, env overlays, `DISCORD_CHANNEL_IDS`) into the scheduler's gate in place, so `/admin` edits apply without a restart, and it passes the configured owner so the owner's schedules pass the creator gate (DISCORD-SCHEDULE-3 / REQ-cli-108); a file that does not load skips that tick (`tick.allowlist_failed`), and a tick still re-reading it when stop begins claims no run. Restarts are systemd's job (docs/DAEMON.md).
 No command ends in a stack trace, a library object dump or Bun's crash footer (REQ-cli-419, CLI-4 / CLI-7 / SAFE-6): `runCli` sends anything `main` throws, and `plugins run` sends an unknown name or a throwing handler, to `reportCliError`, which prints `corvidinho: <line>` and `hint: …` on stderr (`--json`: `{ "ok": false, "error": <line> }` on stdout, hint on stderr) and exits with the error's own `exitCode` or 1. `<line>` is `formatErrorLine` (first message line, SAFE-6 scrubbed, secret env values redacted, capped). `discord register-commands` failures and `github watch` 401 stops are one line too.
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
+`--project <path>` (CLI-5, REQ-cli-505) runs the top-level process as if started in `<path>`: before any command, the env becomes what Bun builds for a process started there (Bun's own `.env*` loading, probed once in `<path>` from `/proc/self/environ` with Bun config pinned to `SPAWN_BUN_CONFIG`; set variables win; the start directory's `.env*` values do not carry over), then the process `chdir`s there, so `fledge.toml`, specs and project files are `<path>`'s. A missing, non-directory, unreadable or empty `--project` is one `reportCliError` line (exit 1) and changes nothing. Read only before `--`, never from `--task` text; spawned agents keep `--no-env-file`.
 `bun test` never writes the operator's state (REQ-cli-262, SAFE-5): the preload always points `CORVIDINHO_DATA_DIR` at its own temp dir, unsets `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR` plus the run settings that change test outcomes (`CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`), and makes `Bun.spawn` / `Bun.spawnSync` without an explicit `env` pass that env to children.
 
 ## Behavioral Examples
@@ -106,6 +114,12 @@ No command ends in a stack trace, a library object dump or Bun's crash footer (R
 - **Given** no GITHUB_TOKEN / GH_TOKEN
 - **When** the operator runs `corvidinho github watch`
 - **Then** exit non-zero naming the token env and go-live checklist
+
+### Scenario: Another project without cd
+
+- **Given** the operator's shell is in directory A and project P has its own `fledge.toml`, specs and `.env`
+- **When** the operator runs `corvidinho --project P task run --task "…"`
+- **Then** the run uses P's `fledge.toml`, plans with P's specs and has P's `.env` values (not A's), exactly as when started in P
 
 ### Scenario: Second daemon on one data dir
 
@@ -118,6 +132,8 @@ No command ends in a stack trace, a library object dump or Bun's crash footer (R
 | Condition | Behavior |
 |-----------|----------|
 | Unknown command | Print error + help; exit 1 |
+| `--project` path missing, not a directory, unreadable, or no path given | `corvidinho: --project …` + `hint: pass --project the path of an existing project directory`; exit 1; no command runs; `--json` → `{ok:false,error}` (REQ-cli-505) |
+| `--project` `.env` probe fails | `corvidinho: --project <dir>: could not load its .env files …` + hint to check the dir and its `.env` files; exit 1; nothing changed (REQ-cli-505) |
 | `specsync` with no or an unknown subcommand | Usage line naming every subcommand (`score` included); exit 1 |
 | `plugins run` unknown name (incl. `fledge-*`) | `corvidinho: Unknown plugin command: <name>` + `hint:` (`plugins list`); exit 1; `--json` → `{ok:false,error}` |
 | A command throws (plugin handler, unusable data dir, …) | One scrubbed line + `hint:`; exit the error's `exitCode` or 1; no stack, no crash footer |
