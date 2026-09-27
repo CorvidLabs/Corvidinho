@@ -7,11 +7,11 @@
   "title": "SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused",
   "description": "SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "07fa953887ab61dde8a0e32ee1161b5981695dea",
   "created_at": 1790468301,
-  "updated_at": 1790475551,
+  "updated_at": 1790475576,
   "affected_specs": [
     "plugins"
   ],
