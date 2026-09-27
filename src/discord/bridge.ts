@@ -508,21 +508,21 @@ export async function startBridge(
 
       await thinking.start({ description: "Working on your request..." });
 
-      // SESSION-WORKTREE: bind isolated cwd on start; reuse on continue (no silent switch).
-      if (action.kind === "start_session" || !session.worktreePath) {
-        const bound = await store.bindWorktree(session);
-        if (!bound.ok) {
-          await thinking.fail(`❌ worktree: ${bound.error}`);
-          if (replyRef.fn) {
-            await replyRef.fn({
-              channelId,
-              content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
-              replyToMessageId: msg.id,
-            });
-          }
-          await store.endSession(session);
-          return;
+      // SESSION-WORKTREE: bind isolated cwd on start; on continue reuse the
+      // live worktree (no silent switch), or re-create it when its directory
+      // is gone (crash mid-park) — never a dead or parked cwd.
+      const bound = await store.bindWorktree(session);
+      if (!bound.ok) {
+        await thinking.fail(`❌ worktree: ${bound.error}`);
+        if (replyRef.fn) {
+          await replyRef.fn({
+            channelId,
+            content: `Could not isolate worktree for session \`${session.id}\`: ${bound.error}`,
+            replyToMessageId: msg.id,
+          });
         }
+        await store.endSession(session);
+        return;
       }
 
       const sessionCwd = store.cwdFor(session);
@@ -813,17 +813,18 @@ export async function startBridge(
       });
       await thinking.start({ description: "Working on your request..." });
 
-      if (!session.worktreePath) {
-        const bound = await store.bindWorktree(session);
-        if (!bound.ok) {
-          await thinking.fail(`❌ worktree: ${bound.error}`);
-          try {
-            await interaction.deleteReply?.();
-          } catch {
-            /* ignore */
-          }
-          return;
+      // SESSION-WORKTREE-3 / REQ-discord-357: bind on every turn, as the chat
+      // path does, so a parked or missing worktree is re-created, never the
+      // repo root or a dead directory.
+      const bound = await store.bindWorktree(session);
+      if (!bound.ok) {
+        await thinking.fail(`❌ worktree: ${bound.error}`);
+        try {
+          await interaction.deleteReply?.();
+        } catch {
+          /* ignore */
         }
+        return;
       }
       const sessionCwd = store.cwdFor(session);
 
