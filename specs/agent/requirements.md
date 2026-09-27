@@ -12,7 +12,7 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When `verify_before_complete` is enabled and the run changed files (reported by a tool, or in the run's real git working-tree diff per REQ-agent-085), completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6).
+When `verify_before_complete` is enabled and the run changed files (reported by a tool, or in the run's real git working-tree diff per REQ-agent-085), completion SHALL run `fledge lanes run verify --non-interactive`. Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
@@ -20,6 +20,13 @@ Acceptance Criteria
 - Default runner invokes fledge with `lanes run verify --non-interactive`.
 - An attempt whose execute result reports no files but that changed the git working tree (REQ-agent-085) runs verify: done with `verified=true` only on a pass, otherwise retried and then failed.
 - A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner: the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
+- A failing lane log whose passing steps (lint, a `--help` smoke over 4000 chars) come before a failing `test` step gives the retry's `verifyFeedback` and the tool loop's next request at most 4000 chars that name `Failing step: test (step 3 of lane 'verify')` and carry the failing test's error lines and fledge's failure line, not the `--help` text (AGENT-4.a).
+- A failing step whose own output is over the cap keeps its first error lines and the end of the log (the last failure, the test summary, fledge's failure line); passing-test lines are not kept as error lines.
+- A raw verify feedback over the cap passed to the read-tier chat is cut to the failing step and the end of the log, not its first 4000 chars.
+- Verify output within the cap reaches the retry and the model whole, as before.
+- The excerpt is never longer than its cap and never holds half a surrogate pair.
+- Console chatter in the failing step that only mentions a failure (`… marked failed`, `error_class=ok`, as Corvidinho's own tests log on stdout before bun's stderr report) does not crowd out that step's `error:`, `Expected:` / `Received:` and `(fail)` lines.
+- Colour escapes (FORCE_COLOR reaching the lane) are dropped from an over-cap log and hide neither fledge's markers nor passing-test lines; a failing parallel step is named `parallel(<tasks>)` and kept from its `Running parallel:` line; a log with no fledge markers is not called a failing step's output.
 
 ### REQ-agent-003
 
@@ -642,4 +649,28 @@ Acceptance Criteria
 - After that refusal, a later image in the run goes as the note in its tool message with no second retry.
 - 400 again on the retry → error flag with `LLM HTTP 400`; 400 with no image sent → error, no retry.
 - Fixture: `tests/agent.tool-loop.test.ts`, no live provider.
+
+### REQ-agent-165
+
+ROLES-CHAT-7(b) prove-before-done for GitHub PR creation. When an ADMIN role
+session (`CORVIDINHO_ACTING_IS_ADMIN=1` and the acting Discord user is the
+configured owner, re-checked by `resolveActingIsAdmin`, ROLES-CHAT-4/6) runs
+`github-pr-create` non-interactively through `runPlugin` (the tool loop's
+dispatch, REQ-agent-008), the ROLES-CHAT role gate SHALL let it through, and
+the call SHALL still be gated by SAFE: with no `github-pr-create` entry in
+the allowlist it SHALL be refused with exit 2 and the SAFE-1 denial (not the
+"not allowed for your role" refusal), and nothing is created; with the entry
+but an empty GITHUB-6 repo allowlist it SHALL be refused with exit 3 and a
+GITHUB-6 error; with the entry and the repo on the GITHUB-6 repo allowlist
+(`CORVIDINHO_GITHUB_ALLOW_REPOS`) the dry-run (`CORVIDINHO_GITHUB_DRY_RUN=1`)
+SHALL succeed and return the PR it would open. The proof runs dry-run only,
+with the GitHub token and allow/deny env cleared: no network, no token. No
+product code, flag, environment variable, config key or slash command is
+added.
+
+Acceptance Criteria
+- `tests/roles.chat.gates.test.ts` "(b) admin github-pr-create: SAFE-1 denies without an allowlist entry; dry-run ok with the allowlist + GITHUB-6 repo allowlist": as the configured owner with `CORVIDINHO_ACTING_IS_ADMIN=1`, `resolveActingIsAdmin()` is true; `github-pr-create --repo CorvidLabs/Corvidinho …` with an empty allowlist returns `ok: false`, exit 2, an error containing `SAFE-1` and not `not allowed for your role`.
+- The same call with `allowlist: ["github-pr-create"]` and no GITHUB-6 repo allowlist returns `ok: false`, exit 3, an error containing `GITHUB-6`.
+- With `CORVIDINHO_GITHUB_ALLOW_REPOS=CorvidLabs/Corvidinho` added, it returns `ok: true`, exit 0 and data `{ dryRun: true, owner: "CorvidLabs", repo: "Corvidinho", title, head, base }` as given.
+- The test fails when SAFE-1 is skipped for ADMIN GitHub writes, when the GITHUB-6 repo gate is skipped for ADMIN, or when the role gate refuses ADMIN; the suite on main before this change passes under each of those three mutations.
 

@@ -21,25 +21,34 @@ const COMPANIONS = [
   "design.md",
 ] as const;
 
+/**
+ * Module names: in a SpecSync project (a `.specsync/` dir), each
+ * `specs/<name>/<name>.spec.md` that `readModuleSpec` reads (see
+ * `listSpecsDirModules`), plus the `[specs]` names of `.specsync/registry.toml`
+ * when that file exists. SpecSync does not keep a registry in step with the
+ * specs dir (`specsync init` writes none, and `specsync scaffold` does not add
+ * to the one `specsync init-registry` writes), so the registry alone can miss
+ * modules (SPECSYNC-1/5).
+ */
 export function listRegisteredModules(cwd: string): string[] {
+  const names = new Set(listSpecsDirModules(cwd));
   const registryPath = join(cwd, ".specsync", "registry.toml");
-  if (!existsSync(registryPath)) return [];
-  const content = readFileSync(registryPath, "utf8");
-  const names: string[] = [];
-  let inSpecs = false;
-  for (const raw of content.split(/\r?\n/)) {
-    const line = raw.replace(/#.*$/, "").trim();
-    if (!line) continue;
-    if (line.startsWith("[")) {
-      inSpecs = line === "[specs]";
-      continue;
+  if (existsSync(registryPath)) {
+    const content = readFileSync(registryPath, "utf8");
+    let inSpecs = false;
+    for (const raw of content.split(/\r?\n/)) {
+      const line = raw.replace(/#.*$/, "").trim();
+      if (!line) continue;
+      if (line.startsWith("[")) {
+        inSpecs = line === "[specs]";
+        continue;
+      }
+      if (!inSpecs) continue;
+      const m = line.match(/^([A-Za-z0-9_-]+)\s*=/);
+      if (m) names.add(m[1]!);
     }
-    if (!inSpecs) continue;
-    const m = line.match(/^([A-Za-z0-9_-]+)\s*=/);
-    if (m) names.push(m[1]!);
   }
-  names.sort((a, b) => a.localeCompare(b));
-  return names;
+  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -88,6 +97,39 @@ function realSpecsDir(cwd: string): SpecsDir {
     };
   }
   return { ok: true, real };
+}
+
+/**
+ * Specs-dir modules: each `specs/<name>/<name>.spec.md` that `readModuleSpec`
+ * reads, i.e. a plain module name whose spec is a file resolving (symlinks
+ * followed) inside the real specs dir. Only in a SpecSync project (`.specsync/`
+ * is a dir); no specs dir, or one resolving outside the project → [].
+ */
+function listSpecsDirModules(cwd: string): string[] {
+  try {
+    if (!statSync(join(cwd, ".specsync")).isDirectory()) return [];
+  } catch {
+    return [];
+  }
+  const specs = realSpecsDir(cwd);
+  if (!specs.ok) return [];
+  let entries: string[];
+  try {
+    entries = readdirSync(specs.real);
+  } catch {
+    return [];
+  }
+  const names = entries.filter(
+    (name) =>
+      MODULE_NAME_RE.test(name) &&
+      containedSpecFile(
+        specs.real,
+        join(specs.real, name, `${name}.spec.md`),
+        `specs/${name}/${name}.spec.md`,
+      ).ok,
+  );
+  names.sort((a, b) => a.localeCompare(b));
+  return names;
 }
 
 type ContainedFile =

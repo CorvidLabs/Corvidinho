@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync",
+  "slug": "specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync",
+  "title": "SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5)",
+  "description": "SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5)",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
+  "created_at": 1790530491,
+  "updated_at": 1790533700,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "plugins/specsync/api.ts",
+    "plugins/specsync/commands.ts",
+    "tests/specsync.registry-fallback.test.ts",
+    "specs/plugins/plugins.spec.md",
+    "specs/plugins/requirements.md",
+    "specs/agent/agent.spec.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With no .specsync/registry.toml in a project whose .specsync/ is a dir (the layout specsync init + specsync scaffold <name> leave), specsync-list and corvidinho specsync list return, sorted, each module with a specs/<name>/<name>.spec.md that specsync-read reads (plain module name, spec a file resolving inside the real specs/ dir); a listed name reads with specsync-read / specsync-brief, and the Planning spec briefing (loadRelevantSpecs) includes that module's constraint sections and its context.md / tasks.md companions (SPECSYNC-1, SPECSYNC-5). A registry.toml that exists adds its [specs] names to those specs/ modules (sorted, each once), so a module scaffolded after specsync init-registry, which the registry does not name, is still listed and briefed. No .specsync/ dir, no specs/ dir, or a specs/ dir resolving outside the project lists nothing from specs/; a legacy flat specs/<name>.md, a dir without its spec, a spec that is a dir, a non-plain name, and a spec or module dir that links outside specs/ are not listed from specs/ and never reach the briefing. No slash command, env var or config key is added; the SQLite schema is unchanged. Regression tests fail on main and pass on the branch; tsc, bun test, specsync check --require-coverage 100 and the verify lane are green."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
