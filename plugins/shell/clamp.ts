@@ -8,6 +8,10 @@
  * substitutions, so redirections, quoting, `\`-newlines, `$(…)`/backticks and
  * dynamic `CDPATH`/`DIRSTACK` can no longer smuggle a `cd` past the check. A
  * `cd`/`pushd` left open by an unterminated quote or a trailing `\` refuses.
+ * A shell that reads its commands from standard input (`… | sh`, `sh -s`,
+ * `xargs sh`, `sh < file`) refuses unless that input is a here-string or
+ * here-doc, whose text is checked like an `eval` argument; so does a `-c`
+ * whose string comes from input (`xargs sh -c`, `xargs -I{} sh -c '…{}…'`).
  */
 
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
@@ -105,7 +109,19 @@ const EXPANSION = /[$`*?[{]/;
 
 /** A word, its expansion flag, and where it starts in the tokenized text. */
 type Word = { value: string; expands: boolean; start: number };
-type Tok = { redir: true } | { word: Word };
+
+/**
+ * A redirection: the fd it sets (`2>` → 2; `<`-family default 0, `>`-family
+ * 1), its operator (`<`, `<<`, `<<-`, `<<<`, `<&`, `>`, `&>` …) and, for a
+ * here-doc read as dash reads it, the body and whether its delimiter was
+ * quoted (a literal body).
+ */
+type Redir = {
+  fd: number;
+  op: string;
+  doc?: { body: string; literal: boolean };
+};
+type Tok = { redir: Redir } | { word: Word };
 
 /**
  * A tokenized command: its simple commands, the command substitutions inside
@@ -150,7 +166,13 @@ const BASH: Reading = { hereDocs: true, ansiC: true };
 const BASH_CODE: Reading = { hereDocs: false, ansiC: true };
 
 /** A here-doc (`<<` / `<<-`) whose body starts after the next newline. */
-type HereDoc = { delim: string; stripTabs: boolean; literal: boolean };
+type HereDoc = {
+  delim: string;
+  stripTabs: boolean;
+  literal: boolean;
+  /** Its redirection token, which gets the body once it is read. */
+  redir: Redir;
+};
 
 /** Index after the backtick closing the one at `open`, or -1 when none does. */
 function matchBacktick(s: string, open: number): number {
@@ -248,6 +270,8 @@ function tokenize(
   let parens = 0; // bare `(` nesting inside a `$( )` body
   // The next word is a here-doc delimiter (true: `<<-`).
   let delimNext: boolean | null = null;
+  // The redirection token of that here-doc.
+  let hereDoc: Redir = { fd: 0, op: "<<" };
   // Here-docs whose body starts after the next newline.
   const pending: HereDoc[] = [];
 
@@ -257,7 +281,12 @@ function tokenize(
   const endWord = () => {
     if (start >= 0) {
       if (delimNext != null) {
-        pending.push({ delim: value, stripTabs: delimNext, literal: quoted });
+        pending.push({
+          delim: value,
+          stripTabs: delimNext,
+          literal: quoted,
+          redir: hereDoc,
+        });
         delimNext = null;
       }
       cur.push({ word: { value, expands, start } });
@@ -297,10 +326,9 @@ function tokenize(
         }
         i = next;
       }
-      if (!doc.literal) {
-        const body = cmd.slice(bodyStart, bodyEnd);
-        hereDocSubstitutions(body, subs, reading, depth);
-      }
+      const body = cmd.slice(bodyStart, bodyEnd);
+      doc.redir.doc = { body, literal: doc.literal };
+      if (!doc.literal) hereDocSubstitutions(body, subs, reading, depth);
     }
     return i;
   };
@@ -425,7 +453,7 @@ function tokenize(
         endWord();
         i += 2;
         if (cmd[i] === ">") i++;
-        cur.push({ redir: true });
+        cur.push({ redir: { fd: 1, op: "&>" } });
         continue;
       }
       endFrag();
@@ -434,8 +462,10 @@ function tokenize(
       continue;
     }
     if (c === ">" || c === "<") {
+      let fd = c === "<" ? 0 : 1;
       // A leading all-digit word is the fd of this redirection, not a token.
       if (start >= 0 && /^\d+$/.test(value)) {
+        if (!quoted) fd = Number(value);
         value = "";
         expands = false;
         quoted = false;
@@ -445,23 +475,32 @@ function tokenize(
       }
       i++;
       const d = cmd[i];
-      if (reading.hereDocs && c === "<" && d === "<" && cmd[i + 1] !== "<") {
+      if (c === "<" && d === "<" && cmd[i + 1] === "<") {
+        // bash `<<<` here-string: the next word is the input.
+        i += 2;
+        cur.push({ redir: { fd, op: "<<<" } });
+        continue;
+      }
+      if (reading.hereDocs && c === "<" && d === "<") {
         // `<<` / `<<-` here-doc: the next word is its delimiter.
         i++;
         delimNext = cmd[i] === "-";
         if (delimNext) i++;
-        cur.push({ redir: true });
+        hereDoc = { fd, op: delimNext ? "<<-" : "<<" };
+        cur.push({ redir: hereDoc });
         continue;
       }
+      let op: string = c;
       if (
         d === ">" ||
         d === "&" ||
         d === "|" ||
         (c === "<" && (d === ">" || d === "<"))
       ) {
+        op += d;
         i++;
       }
-      cur.push({ redir: true });
+      cur.push({ redir: { fd, op } });
       continue;
     }
     if (reading.ansiC && c === "$" && cmd[i + 1] === "'") {
@@ -510,25 +549,40 @@ function tokenize(
   return { text: cmd, frags, subs, depth, end: n, open: open || inSubst };
 }
 
-/** Words of a fragment with each redirection operator + its target dropped. */
-function stripRedirections(frag: Tok[]): Word[] {
+/** A redirection of a simple command and the word it takes, if any. */
+type Redirect = Redir & { target?: Word };
+
+/** A simple command: its words and its redirections. */
+type Parts = { words: Word[]; redirs: Redirect[] };
+
+/**
+ * Split a fragment into its words and its redirections. Each redirection
+ * operator takes the next word as its target, and that word is dropped from
+ * the words.
+ */
+function splitFragment(frag: Tok[]): Parts {
   const consumed = new Array<boolean>(frag.length).fill(false);
+  const redirs: Redirect[] = [];
   for (let k = 0; k < frag.length; k++) {
-    if ("redir" in frag[k]!) {
-      for (let m = k + 1; m < frag.length; m++) {
-        if ("word" in frag[m]!) {
-          consumed[m] = true;
-          break;
-        }
+    const tk = frag[k]!;
+    if (!("redir" in tk)) continue;
+    let target: Word | undefined;
+    for (let m = k + 1; m < frag.length; m++) {
+      const next = frag[m]!;
+      if ("word" in next) {
+        consumed[m] = true;
+        target = next.word;
+        break;
       }
     }
+    redirs.push({ ...tk.redir, target });
   }
   const words: Word[] = [];
   for (let k = 0; k < frag.length; k++) {
     const tk = frag[k]!;
     if ("word" in tk && !consumed[k]) words.push(tk.word);
   }
-  return words;
+  return { words, redirs };
 }
 
 /** Shells whose `-c` string runs as a command (matched by name or path). */
@@ -538,8 +592,54 @@ const SHELLS = new Set([
 
 /** Shell options that take the next word as their argument. */
 const SHELL_OPT_ARGS = new Set([
-  "-o", "+o", "-O", "+O", "--rcfile", "--init-file",
+  "-o", "+o", "-O", "+O", "--rcfile", "--init-file", "--emulate",
 ]);
+
+/** Last path component (`/bin/sh` → `sh`). */
+function baseName(v: string): string {
+  return v.slice(v.lastIndexOf("/") + 1);
+}
+
+/**
+ * A shell's options after the shell word at `k` (up to `end`): whether `-c`
+ * was given, the index of its first operand (the `-c` string or a script
+ * file), or -1 when there is none or `-s` makes the shell read its commands
+ * from standard input, and whether it only prints `--version` / `--help`.
+ * `-` ends the options like `--`, and each `o` / `O` in a cluster
+ * (`-eo pipefail`) takes the next word.
+ */
+function shellArgs(
+  words: Word[],
+  k: number,
+  end = words.length,
+): { dashC: boolean; operand: number; info: boolean } {
+  let dashC = false;
+  let dashS = false;
+  let info = false;
+  let m = k + 1;
+  for (; m < end; m++) {
+    const v = words[m]!.value;
+    if (v === "--" || v === "-") {
+      m++;
+      break;
+    }
+    if (SHELL_OPT_ARGS.has(v)) {
+      m++;
+      continue;
+    }
+    if (/^[-+][A-Za-z]+$/.test(v)) {
+      if (v[0] === "-" && v.includes("c")) dashC = true;
+      if (v[0] === "-" && v.includes("s")) dashS = true;
+      m += (v.slice(1).match(/[oO]/g) ?? []).length;
+      continue;
+    }
+    if (v === "--version" || v === "--help") info = true;
+    if (v.startsWith("--")) continue; // --norc, --login, --posix …
+    break;
+  }
+  const operand = m < end && (dashC || !dashS) ? m : -1;
+  return { dashC, operand, info };
+}
 
 /**
  * Check the `-c` string of every shell named in `words` like an `eval`
@@ -552,31 +652,231 @@ function shellScripts(
   evalCommand: (cmd: string) => string | null,
 ): string | null {
   for (let k = 0; k < words.length; k++) {
-    const name = words[k]!.value;
-    if (!SHELLS.has(name.slice(name.lastIndexOf("/") + 1))) continue;
-    let dashC = false;
-    let m = k + 1;
-    for (; m < words.length; m++) {
-      const v = words[m]!.value;
-      if (v === "--") {
-        m++;
-        break;
-      }
-      if (SHELL_OPT_ARGS.has(v)) {
-        m++;
-        continue;
-      }
-      if (/^[-+][A-Za-z]+$/.test(v)) {
-        if (v[0] === "-" && v.includes("c")) dashC = true;
-        continue;
-      }
-      if (v.startsWith("--")) continue; // --norc, --login, --posix …
-      break;
-    }
-    const script = words[m];
+    if (!SHELLS.has(baseName(words[k]!.value))) continue;
+    const { dashC, operand } = shellArgs(words, k);
+    const script = words[operand];
     if (!dashC || !script) continue;
     if (script.expands) return script.value || "$(...)";
     const r = evalCommand(script.value);
+    if (r != null) return r;
+  }
+  return null;
+}
+
+/**
+ * Exec wrappers that run the command after their options: the short option
+ * letters and the long options that take an argument.
+ */
+const WRAPPERS: Record<string, { short: string; long: string[] }> = {
+  busybox: { short: "", long: [] },
+  env: { short: "u", long: ["--unset"] },
+  exec: { short: "a", long: [] },
+  nice: { short: "n", long: ["--adjustment"] },
+  nohup: { short: "", long: [] },
+  setsid: { short: "", long: [] },
+  stdbuf: { short: "ioe", long: ["--input", "--output", "--error"] },
+  timeout: { short: "sk", long: ["--signal", "--kill-after"] },
+  xargs: {
+    short: "aEILnPsd",
+    long: [
+      "--arg-file", "--max-args", "--max-procs", "--max-chars", "--delimiter",
+      "--process-slot-var",
+    ],
+  },
+};
+
+/**
+ * The command that the exec wrapper at `k` runs (`env X=1 sh`, `timeout 5 sh`,
+ * `xargs -0 sh`, `coproc sh`) and the replace string of an `xargs -I` /
+ * `-i` / `--replace`, or null when `k` is not a wrapper or its command cannot
+ * be read (`env -C`, `env -S`).
+ */
+function wrapped(
+  words: Word[],
+  k: number,
+  end: number,
+): { k: number; replace: string | null } | null {
+  const name = baseName(words[k]!.value);
+  if (name === "coproc") {
+    // bash `coproc [NAME] { …; }` or `coproc command`.
+    let m = k + 1;
+    if (words[m + 1]?.value === "{") m++;
+    if (words[m]?.value === "{") m++;
+    return m < end ? { k: m, replace: null } : null;
+  }
+  const spec = WRAPPERS[name];
+  if (!spec) return null;
+  let replace: string | null = null;
+  let m = k + 1;
+  for (; m < end; m++) {
+    const v = words[m]!.value;
+    if (v === "--") {
+      m++;
+      break;
+    }
+    if (name === "env" && (v === "-" || ASSIGNMENT.test(v))) continue;
+    if (!v.startsWith("-") || v === "-") break;
+    if (v.startsWith("--")) {
+      const eq = v.indexOf("=");
+      const opt = eq < 0 ? v : v.slice(0, eq);
+      if (name === "env" && (opt === "--chdir" || opt === "--split-string")) {
+        return null;
+      }
+      if (name === "xargs" && opt === "--replace") {
+        replace = eq < 0 ? "{}" : v.slice(eq + 1);
+      }
+      if (eq < 0 && spec.long.includes(opt)) m++;
+      continue;
+    }
+    for (let p = 1; p < v.length; p++) {
+      const ch = v[p]!;
+      if (name === "env" && (ch === "C" || ch === "S")) return null;
+      if (name === "xargs" && ch === "i") {
+        replace = v.slice(p + 1) || "{}"; // optional, attached only
+        break;
+      }
+      if (spec.short.includes(ch)) {
+        let arg = v.slice(p + 1);
+        if (!arg) arg = words[++m]?.value ?? "";
+        if (name === "xargs" && ch === "I") replace = arg;
+        break;
+      }
+    }
+  }
+  if (name === "timeout") m++; // the duration
+  return m < end ? { k: m, replace } : null;
+}
+
+/**
+ * A command word in a simple command, how far its arguments run, and the
+ * replace string of the `xargs` that runs it, if any.
+ */
+type CommandAt = { k: number; end: number; replace: string | null };
+
+/**
+ * The words of a simple command that run as commands, starting at the command
+ * word `i`: the command word, what exec wrappers around it run, and the
+ * command after each `find … -exec` / `-execdir` / `-ok` / `-okdir` (whose
+ * arguments end at its `;` or `{} +`).
+ */
+function commandWords(words: Word[], i: number): CommandAt[] {
+  const out: CommandAt[] = [];
+  const todo: CommandAt[] = [{ k: i, end: words.length, replace: null }];
+  for (let at = todo.pop(); at; at = todo.pop()) {
+    out.push(at);
+    if (baseName(words[at.k]!.value) === "find") {
+      for (let m = at.k + 1; m + 1 < at.end; m++) {
+        if (!/^-(exec|execdir|ok|okdir)$/.test(words[m]!.value)) continue;
+        let e = m + 1;
+        while (
+          e < at.end &&
+          words[e]!.value !== ";" &&
+          !(words[e]!.value === "+" && words[e - 1]!.value === "{}")
+        ) {
+          e++;
+        }
+        todo.push({ k: m + 1, end: e, replace: null });
+        m = e;
+      }
+      continue;
+    }
+    const next = wrapped(words, at.k, at.end);
+    if (next) {
+      todo.push({ k: next.k, end: at.end, replace: next.replace ?? at.replace });
+    }
+  }
+  return out;
+}
+
+/** A script operand that is a stream, not a file (`/dev/stdin`, `/dev/fd/3`). */
+const STREAM_PATH = /^(\/dev\/(stdin|fd\/\d+)|\/proc\/(self|thread-self|\d+)\/fd\/\d+)$/;
+
+/**
+ * The text a shell reads its commands from, fed through a here-doc: the body
+ * as the shell expands it. An unquoted body drops the `\` before `$`, a
+ * backtick, `\` and a newline (the `\`-newline pair is dropped whole); any
+ * other `$` or backtick expands to text the clamp cannot see, so it refuses.
+ */
+function hereDocText(
+  doc: { body: string; literal: boolean },
+): { text: string } | null {
+  if (doc.literal) return { text: doc.body };
+  let text = "";
+  for (let k = 0; k < doc.body.length; k++) {
+    const c = doc.body[k]!;
+    const d = doc.body[k + 1];
+    if (c === "\\" && d != null && "$`\\\n".includes(d)) {
+      if (d !== "\n") text += d;
+      k++;
+      continue;
+    }
+    if (c === "$" || c === "`") return null;
+    text += c;
+  }
+  return { text };
+}
+
+/**
+ * First offending cd/pushd target in what a shell that reads its commands
+ * from standard input would run. A here-string or here-doc is the only input
+ * the clamp can read, so it is checked like an `eval` argument (and refuses if
+ * it would expand); a pipe, a file, a dup'd fd, a process substitution or the
+ * standard input the command inherits refuse.
+ */
+function stdinCommands(
+  shell: string,
+  redirs: Redirect[],
+  evalCommand: (cmd: string) => string | null,
+): string | null {
+  const input = redirs.filter((r) => r.fd === 0).at(-1);
+  if (input?.op === "<<<" && input.target) {
+    if (input.target.expands) {
+      return `${input.target.value || "$(...)"} (shell input would expand)`;
+    }
+    return evalCommand(input.target.value);
+  }
+  if (input?.op === "<<" || input?.op === "<<-") {
+    // Read as bash may read it (no body), the lines are checked as commands.
+    if (!input.doc) return null;
+    const doc = hereDocText(input.doc);
+    if (doc == null) return `${shell} (shell input would expand)`;
+    return evalCommand(doc.text);
+  }
+  return `${shell} (reads commands from standard input)`;
+}
+
+/**
+ * First offending shell in the simple command at `i` whose commands the clamp
+ * cannot see: a shell (the command word, or run by an exec wrapper or
+ * `find -exec`) that reads them from standard input — no `-c` and no script
+ * operand, `-s`, `-`, or a `/dev/stdin`-style operand — unless that input is
+ * a here-string or here-doc that checks clean; a `-c` with no command string
+ * after it (`xargs sh -c`); and a `-c` string holding the replace string of
+ * the `xargs -I` that runs it.
+ */
+function shellInput(
+  { words, redirs }: Parts,
+  i: number,
+  evalCommand: (cmd: string) => string | null,
+): string | null {
+  for (const { k, end, replace } of commandWords(words, i)) {
+    const shell = words[k]!.value;
+    if (!SHELLS.has(baseName(shell))) continue;
+    const { dashC, operand, info } = shellArgs(words, k, end);
+    if (info) continue;
+    if (dashC) {
+      if (operand < 0) return `${shell} -c (command string comes from input)`;
+      if (replace && words[operand]!.value.includes(replace)) {
+        return `${replace} (xargs fills in the ${shell} -c string)`;
+      }
+      continue; // the -c string itself is checked by shellScripts
+    }
+    if (operand >= 0) {
+      const v = words[operand]!.value;
+      if (STREAM_PATH.test(v)) return `${v} (reads commands from a stream)`;
+      continue; // a script file: not read by this check
+    }
+    const r = stdinCommands(shell, redirs, evalCommand);
     if (r != null) return r;
   }
   return null;
@@ -588,18 +888,26 @@ function shellScripts(
  * out in (open quote, trailing `\`); a cd/pushd there refuses.
  */
 function analyzeFragment(
-  words: Word[],
+  parts: Parts,
   root: string,
   evalCommand: (cmd: string) => string | null,
   openText: string | null,
 ): string | null {
+  const { words } = parts;
+  // `command -v` / `-V` only looks the command up; it does not run it.
+  let lookupOnly = false;
   let i = 0;
   while (i < words.length) {
     const w = words[i]!;
     if (DIRSTACK_WRITE.test(w.value)) return "$DIRSTACK";
     if (PREFIX_WORDS.has(w.value)) {
       i++;
-      while (i < words.length && words[i]!.value.startsWith("-")) i++;
+      while (i < words.length && words[i]!.value.startsWith("-")) {
+        if (w.value === "command" && /[vV]/.test(words[i]!.value)) {
+          lookupOnly = true;
+        }
+        i++;
+      }
       continue;
     }
     if (w.value === "function") {
@@ -624,7 +932,9 @@ function analyzeFragment(
     return evalCommand(rest.map((w) => w.value).join(" "));
   }
   if (head.value !== "cd" && head.value !== "pushd") {
-    return shellScripts(words.slice(i), evalCommand);
+    const r = shellScripts(words.slice(i), evalCommand);
+    if (r != null || lookupOnly) return r;
+    return shellInput(parts, i, evalCommand);
   }
 
   let j = i + 1;
@@ -658,8 +968,10 @@ function analyzeFragment(
  * First offending cd/pushd target in `cmd`, or null when every cd-like is safe.
  * Fail-closed: unparsable or expanded command words, `cd -`, expanded or
  * escaping targets, dir-stack writes, escaping cd inside command
- * substitutions, and a cd/pushd left open by an unterminated quote or a
- * trailing `\` all refuse. Runtime hardening (`CDPATH=; readonly CDPATH`,
+ * substitutions, a cd/pushd left open by an unterminated quote or a
+ * trailing `\`, and a shell reading commands the clamp cannot see (standard
+ * input other than a clean here-string / here-doc, a `-c` string from input)
+ * all refuse. Runtime hardening (`CDPATH=; readonly CDPATH`,
  * dropped `CDPATH`/`OLDPWD`) covers what a lexer cannot, so CDPATH is no longer
  * refused lexically.
  */
@@ -731,7 +1043,7 @@ function analyzeLexed(
     // Only the last command can be the one the text ran out in.
     const openText = lx.open && k === lx.frags.length - 1 ? lx.text : null;
     const r = analyzeFragment(
-      stripRedirections(lx.frags[k]!),
+      splitFragment(lx.frags[k]!),
       root,
       evalHere,
       openText,

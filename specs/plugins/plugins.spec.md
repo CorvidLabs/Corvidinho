@@ -64,6 +64,7 @@ files:
   - tests/shell.clamp-bypass.test.ts
   - tests/shell.clamp-failclosed.test.ts
   - tests/shell.clamp-quoting.test.ts
+  - tests/shell.clamp-stdin.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -262,7 +263,16 @@ targets and any `fd` prefix such as `2>&1`, never splitting on a redirection
 `&`) and skips `cd` options (`-P -L -e -@ -n --`). It refuses `cd -`, a target
 the shell would expand (`$`, backtick, glob, brace), a command word that would
 expand, an `eval` or shell `-c` string that would expand, escaping `cd` inside a command
-substitution (`$(…)` / backticks), and `DIRSTACK` writes. CDPATH is not refused
+substitution (`$(…)` / backticks), and `DIRSTACK` writes. A shell that reads
+its commands from standard input (the command word, or run by `env`, `exec`,
+`nohup`, `timeout`, `nice`, `stdbuf`, `setsid`, `busybox`, `xargs`, `coproc`
+or `find -exec`, with no `-c` and no script operand, `-s`, `-`, or a
+`/dev/stdin`-style operand) refuses unless its input is a here-string or
+here-doc, which is checked like an `eval` argument (an unquoted here-doc as the
+shell expands it; input that would expand refuses); a pipe, inherited stdin, a
+file, a dup'd fd or a process substitution refuses. So does a `-c` with no
+string (`xargs sh -c`) or a `-c` string holding the replace string of the
+`xargs -I` that runs it (REQ-plugins-430). CDPATH is not refused
 lexically: the child shell runs `CDPATH=; readonly CDPATH` and does not inherit
 `CDPATH` or `OLDPWD`, so a `CDPATH` set (even dynamically) in the command cannot
 redirect a relative `cd`. SAFE-1 non-interactive deny applies unless allowlisted.
@@ -342,6 +352,12 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 - **Given** builtins loaded and `shell-exec` allowlisted
 - **When** the agent runs `cd "a b/../.."`, `cd a\ b/../..`, `X="a b" cd /etc`, a `cd /etc` after an escaped `\` and a newline, after a `#` comment or here-doc body holding a lone quote, or a `cd "sub` left open
 - **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn; `cd "sub dir"` and `cd sub # comment` still run
+
+### Scenario: SAFE-3 clamp refuses a shell reading commands it cannot see
+
+- **Given** builtins loaded and `shell-exec` allowlisted
+- **When** the agent runs `echo 'cd .. && pwd' | sh`, `printf 'cd ..' | sh -s`, `… | sh -`, `… | sh /dev/stdin`, `echo 'cd ..; pwd' | xargs -0 sh -c`, `xargs -I{} sh -c 'echo {}'`, `bash -c "bash <<< 'cd .. && pwd'"` or an unquoted here-doc whose body the shell expands to `cd ..`
+- **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn; an in-root here-doc, here-string or `-c` string fed to a shell and `bash scripts/build.sh` still run
 
 ### Scenario: SAFE-3 CDPATH cannot redirect a relative cd
 
@@ -425,6 +441,7 @@ forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec runs a shell that reads its commands from stdin (pipe, inherited, file, fd, process substitution, `-s`, `-`, `/dev/stdin`) other than a clean here-string / here-doc, or a `-c` string from input (`xargs sh -c`, `xargs -I`) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
 | Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
