@@ -1,6 +1,6 @@
 ---
 id: release-0-0-29-slash-asks-session-continuity-allowlisted-channel-gates-secret-path-hiding-schedule-run-recovery-schema
-state: draft
+state: implementing
 type: operations
 base_commit: d0819cca081eccce8aee657f037ed0a44940f0b8
 ---
