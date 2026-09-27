@@ -45,7 +45,11 @@ export type SlashInteraction = {
   options: Record<string, SlashOptionValue>;
   reply: (opts: SlashReplyPayload) => Promise<void>;
   deferReply?: (opts?: { ephemeral?: boolean }) => Promise<void>;
-  editReply?: (opts: SlashReplyPayload) => Promise<void>;
+  /**
+   * Resolves with the reply's message id when the gateway knows it, so a
+   * fallback slash answer can be tracked for DISCORD-2 replies.
+   */
+  editReply?: (opts: SlashReplyPayload) => Promise<void | { messageId?: string }>;
   /** DISCORD-ASK-7 — drop deferred reply when thinking carries the answer. */
   deleteReply?: () => Promise<void>;
 };
