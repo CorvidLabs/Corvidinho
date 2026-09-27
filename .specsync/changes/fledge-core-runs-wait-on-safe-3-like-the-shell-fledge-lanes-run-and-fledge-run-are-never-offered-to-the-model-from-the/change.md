@@ -1,6 +1,6 @@
 ---
 id: fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the
-state: verifying
+state: implementing
 type: bug_fix
 base_commit: d36bb43a329a4bff19cffcfaccfe82c57996f8ea
 ---
