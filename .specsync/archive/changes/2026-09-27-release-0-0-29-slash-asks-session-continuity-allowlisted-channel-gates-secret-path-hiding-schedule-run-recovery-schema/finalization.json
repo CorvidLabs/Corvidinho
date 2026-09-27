@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-29-slash-asks-session-continuity-allowlisted-channel-gates-secret-path-hiding-schedule-run-recovery-schema",
+  "implementation_commit": "fa2640d46b0556970b79ea2740846220872c9f90",
+  "implementation_tree": "9281675ac8124eb9015d60731817d1c28f948f79",
+  "contract_digest": "d04db88d81f984ebb5185c57c73532159e6329db90441109277e294796105891",
+  "workspace_digest": "1b8b25d7a68720ce1c65c77b095ce64dccf43428d8a2d9123d72e6311c948eed",
+  "closing_digest": "0c6e95ee0efc552898a79128ecde31dfd7bdbaf72844b18a1a2eccbfaf5cf798",
+  "review_digest": "afedd0a3921da3ea186de64132a03ff7cfbe5cf0c22ed39f7ce5fe55c5b1191b",
+  "finalization_digest": "be74407d8c3d2885ee67fb6f19bf66140a3f14794b958655f006685ec5addf2c",
+  "timestamp": 1790477091
+}

@@ -1,20 +1,25 @@
 ---
 module: cli
-version: 56
+version: 58
 status: draft
 files:
   - src/cli.ts
+  - src/doctor.ts
+  - tests/cli.doctor-truth.test.ts
   - src/version.ts
   - src/attribution.ts
   - src/daemon/daemon.ts
   - src/daemon/lock.ts
   - src/daemon/log.ts
   - src/daemon/index.ts
+  - tests/daemon.restart-recovery.test.ts
   - .env.example
   - STATUS.md
   - tests/preload.ts
   - tests/preload.operator-data-dir.test.ts
   - tests/fixtures/preload-probe.ts
+  - tests/cli.clean-errors.test.ts
+  - tests/fixtures/fake-http-401.ts
 
 db_tables: []
 depends_on:
@@ -35,6 +40,9 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
 | `main` | `argv: string[]` | `Promise<number>` | CLI entry; exit code |
+| `runCli` | `argv: string[], run?: (argv) => Promise<number>` | `Promise<number>` | Top-level error boundary around `main` (REQ-cli-419) |
+| `reportCliError` | `err: unknown, opts?: { json?: boolean }` | `number` | One scrubbed error line + hint; returns the exit code (REQ-cli-419) |
+| `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error) |
 | `attribution` | `format?: "markdown" or "plain"` | `string` | Return the canonical footer in the requested format |
 | `startDaemon` | `opts?: StartDaemonOptions` | `Promise<StartDaemonResult>` | Take the data-dir lock and arm the headless schedule ticker (CLI-8 / AUTONOMOUS-4) |
 | `runDaemon` | `opts?: StartDaemonOptions` | `Promise<number>` | `corvidinho daemon`: start, then stop cleanly on SIGTERM/SIGINT |
@@ -44,6 +52,13 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `readProcStart` | `pid: number` | `string or null` | Field 22 of /proc/<pid>/stat |
 | `createDaemonLogger` | `opts?: DaemonLoggerOptions` | `DaemonLogger` | JSON-line logger (scrubbed) |
 | `formatDaemonLogLine` | `level, event, fields?, now?` | `string` | One scrubbed JSON log line |
+| `loadDoctorAllowlist` | `env?, home?` | `Promise<DoctorAllowlist>` | Allowlists as the bridge / WATCH load them (file + env; the file read once), plus the file-only and env-only halves; `ok: false` when the file does not load |
+| `discordChannelUsage` | `allow, env?` | `AllowlistUsage` | Bridge channel set (`mergeChannelIds`) minus deny-listed channels: listed / usable count and sources |
+| `githubRepoUsage` | `allow` | `AllowlistUsage` | WATCH repo set (`expandWatchRepos`) minus deny-listed repos / orgs and entries the gate cannot use: listed / usable / denied count and sources |
+| `discordDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `discord` line (token + usable channels, source named) |
+| `githubWatchDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `github-watch` line (token + username + usable repos, source named) |
+| `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
+| `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 
 ### Exported Constants
 
@@ -65,13 +80,18 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `StartDaemonOptions` / `StartDaemonResult` / `DaemonStopSummary` | Daemon start/stop contract (test seams: agent, db, poll, grace, lock) |
 | `DaemonLock` / `DaemonLockHolder` / `AcquireDaemonLockOptions` / `AcquireDaemonLockResult` | Single-instance lock |
 | `DaemonLogger` / `DaemonLogLevel` / `DaemonLogFields` / `DaemonLoggerOptions` | JSON-line logger |
+| `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
+| `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
 
 ## Invariants
 
 task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
+doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `discord` and `github-watch` checks load allowlists through the bridge / WATCH loader (allowlist file + env overlays, `mergeChannelIds` / `expandWatchRepos`), drop deny-listed entries (deny wins) and entries the gate cannot use (a repo that is not OWNER/REPO; the line names deny wins only when every entry is deny-listed), count a token / watch login only when not blank (as the bridge / WATCH trim), and name the source (`file`, `env`, `file + env`) and count, never ids, repos or tokens; a file that does not load fails both. The `llm` line is `ok` with `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (value not shown) and `warn` (task run uses the demo stub) without, never changing the exit code. The `data-dir` line probes the shared data dir with a temp dir it removes: `ok` exists + writable, `info` missing but creatable (not created), `fail` otherwise, including a symlink to nothing (exit 1).
 Attribution output uses only the project name and repository link and contains no account handle.
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning stays pending for a bridge to deliver.
+`daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Restarts are systemd's job (docs/DAEMON.md).
+No command ends in a stack trace, a library object dump or Bun's crash footer (REQ-cli-419, CLI-4 / CLI-7 / SAFE-6): `runCli` sends anything `main` throws, and `plugins run` sends an unknown name or a throwing handler, to `reportCliError`, which prints `corvidinho: <line>` and `hint: …` on stderr (`--json`: `{ "ok": false, "error": <line> }` on stdout, hint on stderr) and exits with the error's own `exitCode` or 1. `<line>` is `formatErrorLine` (first message line, SAFE-6 scrubbed, secret env values redacted, capped). `discord register-commands` failures and `github watch` 401 stops are one line too.
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
 `bun test` never writes the operator's state (REQ-cli-262, SAFE-5): the preload always points `CORVIDINHO_DATA_DIR` at its own temp dir, unsets `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR` plus the run settings that change test outcomes (`CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`), and makes `Bun.spawn` / `Bun.spawnSync` without an explicit `env` pass that env to children.
 
@@ -94,8 +114,17 @@ doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info`
 | Condition | Behavior |
 |-----------|----------|
 | Unknown command | Print error + help; exit 1 |
+| `plugins run` unknown name (incl. `fledge-*`) | `corvidinho: Unknown plugin command: <name>` + `hint:` (`plugins list`); exit 1; `--json` → `{ok:false,error}` |
+| A command throws (plugin handler, unusable data dir, …) | One scrubbed line + `hint:`; exit the error's `exitCode` or 1; no stack, no crash footer |
+| `discord register-commands` rejected | `[discord] register-commands failed (<status>): <line>` (+ token hint on 401/403); exit 1 |
+| `github watch` token rejected (GitHub 401) | Poller stops with one line naming `GITHUB_TOKEN / GH_TOKEN`; exit 1 |
 | Attribution command | Print the canonical markdown footer; exit 0 |
 | Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
+| Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
+| Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
+| Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
+| Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github-watch` (bridge / WATCH trim them); exit 1 |
 | Task verify exhausted | Exit 1; JSON verified false |
 | Task run gets SIGINT / SIGTERM | Run aborted (verify lane and tool loop stopped); cancelled result printed (ndjson `result` frame); exit 130 |
 | Task run started with SIGINT ignored (background job) | SIGINT stays ignored; SIGTERM still cancels (exit 130) |
@@ -135,3 +164,8 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-27 | task-run-leaves-a-sigint-it-started-with-ignored-alone-and-an-interrupted-verify-lane-stops-waiting-on-a-pipe-an: Task run leaves a SIGINT it started with ignored alone, and an interrupted verify lane stops waiting on a pipe an escaped lane process holds (agent-loop-4 follow-up) |
 | 2026-09-27 | release-0-0-26-spend-cap-warn-ask-crash-restart-recovery-allowlist-fail-closed-safe-3-clamp-watch-dedup: Release 0.0.26: spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup |
 | 2026-09-27 | tests-never-write-the-operator-data-dir-and-the-verify-lane-never-sees-operator-secrets-bun-test-preload-always-points: Tests never write the operator data dir and the verify lane never sees operator secrets: bun test preload always points CORVIDINHO_DATA_DIR at its own temp dir and clears CORVIDINHO_AUDIT_HMAC_KEY / CORVIDINHO_WATCH_SPAWN_LOG / WORKTREE_BASE_DIR; the fledge verify runner spawns with DISCORD_*, GitHub tokens, LLM API keys, the audit key and CORVIDINHO_ACTING_* stripped (SAFE-5 / SAFE-6) |
+| 2026-09-27 | schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write: Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree |
+| 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |
+| 2026-09-27 | box-updater-pidfile-mode-counts-the-bridge-ready-only-on-its-discord-login-line-discord-logged-in-as-not-the-pre-login: Box updater pidfile mode counts the bridge ready only on its Discord login line ([discord] logged in as), not the pre-login protocol version OK line, so a bridge that dies on login rolls back |
+| 2026-09-27 | doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and: Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable |
+| 2026-09-27 | release-0-0-29-slash-asks-session-continuity-allowlisted-channel-gates-secret-path-hiding-schedule-run-recovery-schema: Release 0.0.29: slash asks + session continuity, allowlisted-channel gates, secret-path hiding, schedule-run recovery (schema v10), clean CLI errors, doctor reads the allowlist file |

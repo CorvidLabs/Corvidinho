@@ -24,5 +24,7 @@ Constraints: existing HI only (DISCORD-6, ALLOW-5, DISCORD-DENY-3,
 ROLES-CHAT-1, IDENTITY-1/2); no new command, env var, table or column. A press
 needs an interaction ack, so every refusal is ephemeral. The pending ask must
 not be cleared on a refusal, so the owner can still answer it once allowed.
-PR #221 (open, DISCORD-6 rate limit by level) also modifies REQ-discord-010;
-this change keeps REQ-discord-010's existing text and only adds to it.
+PR #221 (DISCORD-6 rate limit by level, merged to main while this change was
+open) also modified REQ-discord-010. After merging main, this change's delta
+carries REQ-discord-010 as main has it (#221's paragraph and bullets
+included) and only adds the ask button paragraph and bullets.

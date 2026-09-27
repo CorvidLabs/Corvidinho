@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-name-schema-v10-and-the-merged-daemon-shutdown-steps-after-222-met-the-229-docs-refresh",
+  "implementation_commit": "ebb1706c60f285e95ba76b7dc9c1e01500464e02",
+  "implementation_tree": "3b5ddcd7d47c29937b5d7b311c3456e98584e222",
+  "contract_digest": "e7d52772193b546ca548386fb1ec38402655d9b6a7a5f0befcd87f6550563f42",
+  "workspace_digest": "b05a4d2c659f241638f09e39414b70ce9de7cdf6cdcf8b166d9268ad0a621a8f",
+  "closing_digest": "44166b90768669f7759080ba7ad030b9f1de6de044b412b6ac428fa93a0b7fc1",
+  "review_digest": "003af24e5c64b0c25553a50292c26a16582ee0e91974b8685762fb71d0bd0985",
+  "finalization_digest": "27d1de86eadc9cd4d57a6c7c00c651a409afb0b10c1f3d00306dce1bbeb5af2a",
+  "timestamp": 1790476537
+}

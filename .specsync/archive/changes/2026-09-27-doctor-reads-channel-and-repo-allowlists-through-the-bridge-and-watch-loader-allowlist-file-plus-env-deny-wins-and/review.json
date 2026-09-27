@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "3ad94241a8f6ed8541ed3cd03e20ac96e93abc34",
+  "contract_digest": "e9ada9609ddae8a8b9def4aa0a3b00f0ea6e0e4cf0a697312c04051000572516",
+  "execution_digest": "0a6ca37162b7e3224c3e5cafdacef7f5339f73df9a996c3920d96f0c791a06ee",
+  "workspace_digest": "42175ecc19d6658522f5d93d5ba3405dedb5cd54e2300353834060fb44845919",
+  "timestamp": 1790475152
+}

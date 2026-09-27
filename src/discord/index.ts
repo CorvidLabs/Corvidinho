@@ -148,6 +148,7 @@ export {
 export {
   registerSlashCommandSet,
   registerSlashCommandsLive,
+  formatRegisterCommandsFailure,
   applicationGuildCommandsRoute,
   applicationCommandsRoute,
   type PutCommandsFn,

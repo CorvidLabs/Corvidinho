@@ -23,6 +23,7 @@ export {
   type PollCycleResult,
   type StartWatchOptions,
   type StartWatchResult,
+  type WatchFatal,
 } from "./poller.ts";
 export { routeEvent, type RouterDeps } from "./router.ts";
 export {

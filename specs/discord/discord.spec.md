@@ -43,6 +43,7 @@ files:
   - src/discord/gateway.ts
   - src/discord/presence.ts
   - src/discord/bridge.ts
+  - tests/discord.login-failure.test.ts
   - src/discord/thinking-status.ts
   - src/discord/slash-finish.ts
   - src/discord/slash-commands.ts
@@ -53,6 +54,7 @@ files:
   - src/discord/list-scope.ts
   - tests/discord.session-list-scope.test.ts
   - tests/discord.slash-ask7.test.ts
+  - tests/discord.slash-reply-continuity.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
@@ -60,6 +62,7 @@ files:
   - src/work/pr-body.ts
   - tests/work.pr.test.ts
   - src/discord/command-handlers/mute.ts
+  - tests/discord.rate-mute-limits.test.ts
   - src/discord/command-handlers/schedule.ts
   - src/discord/command-handlers/announce.ts
   - src/discord/command-handlers/admin.ts
@@ -79,6 +82,7 @@ files:
   - tests/scheduler.service.test.ts
   - tests/scheduler.worktree.test.ts
   - tests/scheduler.tick-errors.test.ts
+  - tests/scheduler.never-stuck.test.ts
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
@@ -117,6 +121,12 @@ STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
 
+Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
+(`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
+`formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
+`formatRegisterCommandsFailure` (`register-commands.ts`) words a failed slash
+registration (CLI `register-commands` and the bridge's registration on ready).
+
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `src/discord/index.ts`). `/admin`: `handleAdminCommand`, `formatConfigShow`,
@@ -137,7 +147,7 @@ an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 `ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
 Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
-(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
+(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
@@ -220,7 +230,7 @@ already pinged. A fallback reply is itself a fresh post, so it gets no ping.
 Interrupted replies (REQ-discord-311, DISCORD-3 / AGENT-3):
 `src/discord/inflight-replies.ts` exports `InflightReplyStore` (`begin`,
 `setProgressMessage`, `end`, `list` over `discord_inflight_replies`, schema
-v9, `SCHEMA_VERSION` 9), `recoverInterruptedReplies`, `buildInterruptedEmbed`,
+v9), `recoverInterruptedReplies`, `buildInterruptedEmbed`,
 `INTERRUPTED_REPLY_TEXT` / `INTERRUPTED_REPLY_STATUS` and the `InflightReply`
 / `RecoverInterruptedRepliesOptions` / `RecoverInterruptedRepliesResult`
 types (`mayPost` option, `skipped` count). The bridge records a row per
@@ -275,6 +285,14 @@ allow/deny too (REQ-discord-201).
 an ask button press on the press channel and the session's own channel
 (REQ-discord-212).
 
+DISCORD-6 (REQ-discord-010): `rateLimitByLevel` keys on the actor's
+`resolvePermissionLevel` on chat and slash unless `RouterDeps.rateLimit.permLevel`
+/ `SlashContext.permLevelFor` pins one; `claimRefusalNotice` (with the optional
+`RateLimitState.refusalNoticeAt` map) limits public MessageCreate mute/rate
+notices to one per user per window; `command-handlers/mute.ts` exports
+`MUTE_SELF_OR_OWNER_REFUSED`, the ephemeral refusal for `/mute` of yourself or
+the configured owner.
+
 ## Invariants
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
@@ -302,7 +320,7 @@ memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only 
 a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. a thread's allowlisted parent channel + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 `/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
-Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108).
+Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108). A run never stays "running" forever (REQ-discord-346): `finish()` counts a run recorded only after `markRunFinished` (one IMMEDIATE transaction) succeeds, retrying a throwing write once and otherwise logging `[scheduler] run failed: could not record run …` and counting it failed; the bridge's `stop()` abandons in-flight runs like the daemon (`interrupted: bridge shutdown`); both stops wait ≤3 s (`settleAbandoned`, `ABANDONED_SETTLE_MS`) for aborted runs to park their worktree; each claimed run records its runner (`schedule_runs.runner` = `<pid>:<proc start>`, schema v10, `SCHEMA_VERSION` 10), and the bridge and daemon start with `recoverAbandoned()`, which fails runs whose runner is gone (`interrupted: process restarted`, `RUN_INTERRUPTED_BY_RESTART`) and parks leftover `talk-schedule_<schedule>_<run>` worktrees of runs this data dir recorded as no longer running, deleting a branch only when it has no commits of its own; a live runner's run and worktree are left alone, and a schedule-run worktree whose run this data dir does not know (another data dir's, e.g. `bun test` run inside it) is never touched.
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
@@ -386,6 +404,7 @@ by the requester never goes unheard (AUTONOMY-1/5/6 / REQ-discord-044).
 | Leftover in-flight reply in a channel no longer allowlisted | Nothing edited or posted; logged as skipped; row deleted |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
+| Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
 ## Dependencies
 
@@ -465,6 +484,10 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message: A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending |
 | 2026-09-27 | discord-dogfood-member-user-lookup-for-snowflakes-identity-5-discord-13-soft-land-tool-round-exhaustion-without-dumping: Discord dogfood: member/user lookup for snowflakes (IDENTITY-5/DISCORD-13), soft-land tool-round exhaustion without dumping Stopped after N (AGENT-9), chat prefers prose over SpecSync/github thrash (ROLES-CHAT-9); package 0.0.28 |
 | 2026-09-27 | thin-ack-gate-ignores-identity-5-mention-trailer-so-bot-ok-still-restates-pending-asks-follow-up-to-discord-user-lookup: Thin-ack gate ignores IDENTITY-5 mention trailer so <@bot> ok still restates pending asks (follow-up to discord-user-lookup soft-land) |
+| 2026-09-27 | discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved: DISCORD-6 rate limits and mutes: DISCORD_RATE_LIMIT_BY_LEVEL applies to chat and slash via the actor's resolved permission level, /mute refuses the invoker and the configured owner, and a muted or rate-limited user gets at most one public MessageCreate notice per rate-limit window |
 | 2026-09-27 | scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners: Scope /session list to the acting member and hide host paths from non-owners |
 | 2026-09-27 | discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted: Discord: a reply or forward that references a tracked bot message never continues the session outside an allowlisted channel (DISCORD-5, DISCORD-DENY-1) |
+| 2026-09-27 | schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write: Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree |
+| 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |
+| 2026-09-27 | replying-to-a-session-start-or-work-answer-continues-that-session-discord-2: Replying to a /session start or /work answer continues that session (DISCORD-2) |
 | 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |

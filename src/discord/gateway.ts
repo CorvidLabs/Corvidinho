@@ -8,7 +8,10 @@ import {
   type ChannelCandidate,
 } from "./channel-autocomplete.ts";
 import { buildSlashCommandBodies } from "./slash-commands.ts";
-import { registerSlashCommandsLive } from "./register-commands.ts";
+import {
+  formatRegisterCommandsFailure,
+  registerSlashCommandsLive,
+} from "./register-commands.ts";
 import type {
   SlashInteraction,
   SlashOptionValue,
@@ -266,7 +269,13 @@ export async function createLiveGateway(
         }
       }
     } catch (err) {
-      console.error("[discord] slash command registration failed:", err);
+      // REQ-discord-417: one scrubbed line, never the DiscordAPIError dump.
+      console.error(
+        formatRegisterCommandsFailure(err, {
+          what: "slash command registration failed",
+          guildHint: "DISCORD_GUILD_ID",
+        }),
+      );
     }
   }
 
@@ -337,8 +346,13 @@ export async function createLiveGateway(
           await interaction.reply(payload);
         }
       } else {
-        await interaction.editReply(payload);
+        // discord.js resolves editReply with the reply Message; its id lets a
+        // fallback slash answer continue the session on reply (DISCORD-2).
+        const sent = await interaction.editReply(payload);
+        const id = (sent as { id?: unknown } | null | undefined)?.id;
+        return typeof id === "string" && id ? { messageId: id } : undefined;
       }
+      return undefined;
     };
 
     const roleIds = interactionRoleIds(interaction.member);
@@ -372,9 +386,7 @@ export async function createLiveGateway(
           );
         }
       },
-      editReply: async (opts) => {
-        await send(opts, "edit");
-      },
+      editReply: (opts) => send(opts, "edit"),
       deleteReply: async () => {
         if (typeof interaction.deleteReply === "function") {
           await interaction.deleteReply();

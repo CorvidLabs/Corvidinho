@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790476119,
+      "digest": "e7d52772193b546ca548386fb1ec38402655d9b6a7a5f0befcd87f6550563f42",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "docs-name-schema-v10-and-the-merged-daemon-shutdown-steps-after-222-met-the-229-docs-refresh",
+        "title": "Docs name schema v10 and the merged daemon shutdown steps after #222 met the #229 docs refresh",
+        "description": "docs name schema v10 and the merged daemon shutdown steps after #222 met the #229 docs refresh",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "docs/BOX-UPDATE.md",
+          "docs/DAEMON.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Docs-only merge follow-up: #222 added schema v10 (schedule_runs.runner) and a 3 s worktree grace; #229's refreshed docs predate it. No spec or source change.",
+        "acceptance_criteria": [
+          "docs/BOX-UPDATE.md names schema v10 (SCHEMA_VERSION in src/store/db.ts) and tests/docs.operator-facts.test.ts passes; docs/DAEMON.md shutdown steps list both the process-group kill with daemon.abandoned and the 3 s worktree cleanup grace."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790476537,
+      "digest": "44166b90768669f7759080ba7ad030b9f1de6de044b412b6ac428fa93a0b7fc1",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

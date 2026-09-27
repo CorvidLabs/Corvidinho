@@ -24,6 +24,7 @@ import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
+  formatRegisterCommandsFailure,
   goLiveChecklist,
   registerSlashCommandsLive,
   startBridge,
@@ -33,30 +34,32 @@ import {
   startWatchPoller,
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
+import {
+  dataDirDoctorCheck,
+  discordDoctorCheck,
+  githubWatchDoctorCheck,
+  llmDoctorCheck,
+  loadDoctorAllowlist,
+  type DoctorCheck,
+} from "./doctor.ts";
 import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
-import { runPlugin } from "./plugins/run.ts";
+import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
   formatPluginsListText,
   toolSurfaceReport,
   withToolCost,
 } from "./plugins/toolCost.ts";
 import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
+import { DEFAULT_DATA_DIR_REL } from "./store/paths.ts";
+import { formatErrorLine } from "./store/scrub.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
-
-type DoctorCheck = {
-  name: string;
-  ok: boolean;
-  detail: string;
-  /** Printed label override (informational checks never fail doctor). */
-  mark?: string;
-};
 
 function printHelp(): void {
   console.log(`corvidinho ${VERSION}
@@ -69,7 +72,7 @@ Usage:
   corvidinho version                Print version
   corvidinho attribution             Print the canonical attribution footer
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
-  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
+  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins / LLM key / data dir
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
   corvidinho discord register-commands
                                     Full-overwrite slash set (guild PUT + clear globals)
@@ -211,19 +214,11 @@ async function doctor(): Promise<number> {
   loadBuiltins();
   const checks: DoctorCheck[] = [];
 
-  const discordTokenSet = envPresent("DISCORD_TOKEN") || envPresent("DISCORD_BOT_TOKEN");
-  const discordChannels =
-    envPresent("DISCORD_CHANNEL_IDS") ||
-    envPresent("CORVIDINHO_DISCORD_ALLOW_CHANNELS");
-  checks.push({
-    name: "discord",
-    ok: discordTokenSet && discordChannels,
-    detail: discordTokenSet
-      ? discordChannels
-        ? "token + channel allowlist env present (values not shown)"
-        : "token present but channel allowlist empty — set DISCORD_CHANNEL_IDS or CORVIDINHO_DISCORD_ALLOW_CHANNELS"
-      : "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN (go-live: token + non-empty Discord allowlists)",
-  });
+  // CLI-4 / ALLOW-3/4 — channel / repo allowlists through the bridge / WATCH
+  // loader (allowlist file + env overlays, deny wins); source named, values not.
+  const allow = await loadDoctorAllowlist(process.env);
+  const discordCheck = discordDoctorCheck(allow, process.env);
+  checks.push(discordCheck);
 
   const tokenOk = envPresent("GITHUB_TOKEN") || envPresent("GH_TOKEN");
   checks.push({
@@ -234,21 +229,8 @@ async function doctor(): Promise<number> {
       : "missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins",
   });
 
-  const watchUser = envPresent("CORVIDINHO_WATCH_USERNAME") || envPresent("GITHUB_WATCH_USERNAME");
-  const watchRepos =
-    envPresent("CORVIDINHO_GITHUB_ALLOW_REPOS") ||
-    envPresent("CORVIDINHO_GITHUB_ALLOW_ORGS");
-  checks.push({
-    name: "github-watch",
-    ok: tokenOk && watchUser && watchRepos,
-    detail: !tokenOk
-      ? "WATCH needs GITHUB_TOKEN/GH_TOKEN (poll-first; see docs/WATCH.md)"
-      : !watchUser
-        ? "set CORVIDINHO_WATCH_USERNAME (login to listen for)"
-        : !watchRepos
-          ? "set CORVIDINHO_GITHUB_ALLOW_REPOS / ORGS (empty = deny-all)"
-          : "token + username + repo allow env present (values not shown)",
-  });
+  const watchCheck = githubWatchDoctorCheck(allow, process.env);
+  checks.push(watchCheck);
 
   const fledgePath = which("fledge");
   checks.push({
@@ -319,6 +301,11 @@ async function doctor(): Promise<number> {
     });
   }
 
+  // CLI-4 — task run without a key uses the demo stub (warn, never fails doctor);
+  // the bridge, watch, daemon and memory tools need a writable data dir.
+  checks.push(llmDoctorCheck(process.env));
+  checks.push(dataDirDoctorCheck(process.env));
+
   // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
   checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
 
@@ -337,11 +324,11 @@ async function doctor(): Promise<number> {
   console.log(
     "One or more checks failed. Install/configure the missing pieces; secrets stay out of the repo.",
   );
-  if (!discordTokenSet || !discordChannels) {
+  if (!discordCheck.ok) {
     console.log("");
     console.log(goLiveChecklist());
   }
-  if (!tokenOk || !watchUser || !watchRepos) {
+  if (!watchCheck.ok) {
     console.log("");
     console.log(watchGoLiveChecklist());
   }
@@ -377,14 +364,20 @@ async function pluginsRun(
   if (name.startsWith("fledge-") && !get(name)) {
     await loadFledgePlugins({ cwd: process.cwd() });
   }
-  const result = await runPlugin({
-    name,
-    args: passArgs,
-    json: opts.json,
-    nonInteractive: opts.nonInteractive,
-    allowlist: allowlistFromEnv(),
-    cwd: process.cwd(),
-  });
+  let result: Awaited<ReturnType<typeof runPlugin>>;
+  try {
+    result = await runPlugin({
+      name,
+      args: passArgs,
+      json: opts.json,
+      nonInteractive: opts.nonInteractive,
+      allowlist: allowlistFromEnv(),
+      cwd: process.cwd(),
+    });
+  } catch (err) {
+    // REQ-cli-419: an unknown name or a throwing handler is one clean line.
+    return reportCliError(err, { json: opts.json });
+  }
   if (!result.ok) {
     if (opts.json) {
       console.log(JSON.stringify({ ok: false, error: result.error, data: result.data }, null, 2));
@@ -662,7 +655,8 @@ async function discordRegisterCommands(argv: string[]): Promise<number> {
     }
     return 0;
   } catch (err) {
-    console.error("[discord] register-commands failed:", err);
+    // REQ-cli-419: one scrubbed line, never the raw DiscordAPIError dump.
+    console.error(formatRegisterCommandsFailure(err));
     return 1;
   }
 }
@@ -700,11 +694,11 @@ async function githubWatch(): Promise<number> {
     `[watch] poll-first started for @${result.config.mentionUsername} on ${result.config.repos.join(", ")} every ${result.config.intervalMs}ms` +
       (result.config.dryRun ? " (dry-run)" : ""),
   );
-  await new Promise<void>((resolve) => {
+  return new Promise<number>((resolve) => {
     const stop = async () => {
       console.log("[watch] shutting down...");
       await result.stop();
-      resolve();
+      resolve(0);
     };
     process.once("SIGINT", () => {
       void stop();
@@ -712,8 +706,18 @@ async function githubWatch(): Promise<number> {
     process.once("SIGTERM", () => {
       void stop();
     });
+    // REQ-cli-419: a rejected token (401) stops the poller; exit non-zero.
+    void result.fatal.then(async (f) => {
+      try {
+        await result.stop();
+      } catch {
+        // The poll loop already stopped; a failed DB close must not hang or
+        // crash the exit (the fatal line was printed by the poller).
+      } finally {
+        resolve(f.exitCode);
+      }
+    });
   });
-  return 0;
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -834,7 +838,74 @@ export async function main(argv: string[]): Promise<number> {
   return 1;
 }
 
+/** One next step for the operator, matched to the error kind (CLI-4). */
+export function cliErrorHint(err: unknown): string {
+  if (err instanceof PluginNotFoundError) {
+    return "run `corvidinho plugins list` for the available commands";
+  }
+  const e = err as { code?: unknown; path?: unknown } | null;
+  const code = e && typeof e === "object" && typeof e.code === "string" ? e.code : "";
+  if (
+    (/^E[A-Z]+$/.test(code) && typeof e?.path === "string") ||
+    // The data dir exists but the DB in it cannot be opened (bun:sqlite).
+    /^SQLITE_(CANTOPEN|READONLY|PERM|NOTADB)$/.test(code)
+  ) {
+    return `check that the path exists and is writable; the data dir is CORVIDINHO_DATA_DIR (default ~/${DEFAULT_DATA_DIR_REL})`;
+  }
+  return "run `corvidinho doctor` to check the environment";
+}
+
+function cliExitCode(err: unknown): number {
+  const c = (err as { exitCode?: unknown } | null)?.exitCode;
+  return typeof c === "number" && Number.isInteger(c) && c >= 1 && c <= 255 ? c : 1;
+}
+
+/**
+ * REQ-cli-419 (CLI-4 / CLI-7 / SAFE-6): report a failed command as one
+ * scrubbed line plus a hint, never a stack or a library dump. Text mode:
+ * `corvidinho: <line>` then `hint: …` on stderr. `--json`: `{ ok: false,
+ * error }` on stdout (the `plugins run --json` error shape), hint on stderr.
+ * Returns the error's own `exitCode` (1–255) or 1.
+ */
+export function reportCliError(err: unknown, opts: { json?: boolean } = {}): number {
+  const line = formatErrorLine(err);
+  if (opts.json) {
+    console.log(JSON.stringify({ ok: false, error: line }, null, 2));
+  } else {
+    console.error(`corvidinho: ${line}`);
+  }
+  console.error(`hint: ${cliErrorHint(err)}`);
+  return cliExitCode(err);
+}
+
+/** True when argv asks for a single JSON result (`--json` / `--output json`). */
+function wantsJson(args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--") break;
+    if (a === "--json" || a === "--output=json") return true;
+    if (a === "--output" && args[i + 1] === "json") return true;
+  }
+  return false;
+}
+
+/**
+ * Top-level CLI error boundary (REQ-cli-419): runs `main` and turns anything
+ * it throws into {@link reportCliError} output and a non-zero exit code, so
+ * no command ends in a stack trace or Bun's crash footer.
+ */
+export async function runCli(
+  argv: string[],
+  run: (argv: string[]) => Promise<number> = main,
+): Promise<number> {
+  try {
+    return await run(argv);
+  } catch (err) {
+    return reportCliError(err, { json: wantsJson(argv.slice(2)) });
+  }
+}
+
 if (import.meta.main) {
-  const code = await main(process.argv);
+  const code = await runCli(process.argv);
   process.exit(code);
 }

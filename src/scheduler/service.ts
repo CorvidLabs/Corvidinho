@@ -6,8 +6,12 @@
  * CLI-8 / AUTONOMOUS-4: the same ticker runs inside the Discord bridge and in
  * `corvidinho daemon`; each tick re-reads SQLite and claims a due run
  * atomically, so two tickers on one data dir fire it once.
+ * REQ-discord-346: a run never stays "running" forever — an outcome write is
+ * retried once, stops abandon in-flight runs and let them park their
+ * worktree, and a start recovers runs and worktrees a dead process left.
  */
 
+import { basename } from "node:path";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
@@ -24,6 +28,7 @@ import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
   ensureTalkWorkspace,
+  isGitRepo,
   parkWorktree,
   resolveProjectDir,
 } from "../worktree/index.ts";
@@ -32,6 +37,30 @@ import type { Schedule, ScheduleRun, ScheduleStore } from "./store.ts";
 export const DEFAULT_POLL_INTERVAL_MS = 60_000;
 export const DEFAULT_MAX_CONCURRENT = 2;
 export const FAILURE_AUTO_PAUSE = 5;
+/**
+ * How long a stop waits, after aborting abandoned runs, for them to park
+ * their worktree and branch (REQ-discord-346). Short and bounded: the agent
+ * tree is already killed; what is left is `git worktree remove`.
+ */
+export const ABANDONED_SETTLE_MS = 3_000;
+
+/** Worktree dir of a schedule run: `talk-schedule_<schedule id>_<run id>`. */
+const RUN_WORKTREE_RE = /^talk-(schedule_[A-Za-z0-9_-]+_(srun_[A-Za-z0-9]+))$/;
+
+/** Name part of a run's worktree (`talk-<key>`) and branch (`talk/<key>`). */
+function runWorktreeKey(scheduleId: string, runId: string): string {
+  return `schedule_${scheduleId}_${runId}`.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
+/** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
+function errorLine(err: unknown): string {
+  try {
+    const msg = String(err instanceof Error ? err.message : err);
+    return scrubSecrets(msg).replace(/\s+/g, " ").trim().slice(0, 500);
+  } catch {
+    return "(unprintable error)";
+  }
+}
 
 /**
  * Log a tick or run error that nothing else would catch (REQ-discord-331).
@@ -39,15 +68,37 @@ export const FAILURE_AUTO_PAUSE = 5;
  * Never throws: it runs in the `.catch` that keeps these promises from
  * rejecting.
  */
-function logSchedulerError(where: "tick" | "run", err: unknown): void {
-  let text: string;
-  try {
-    const msg = String(err instanceof Error ? err.message : err);
-    text = scrubSecrets(msg).replace(/\s+/g, " ").trim().slice(0, 500);
-  } catch {
-    text = "(unprintable error)";
+function logSchedulerError(where: "tick" | "run" | "recovery", err: unknown): void {
+  console.error(`[scheduler] ${where} failed: ${errorLine(err)}`);
+}
+
+/** Schedule-run worktrees (and their branch) registered in `projectDir`'s repo. */
+async function listScheduleRunWorktrees(
+  projectDir: string,
+): Promise<Array<{ path: string; key: string; runId: string; branchName: string }>> {
+  const proc = Bun.spawn(["git", "worktree", "list", "--porcelain"], {
+    cwd: projectDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [out] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  if ((await proc.exited) !== 0) return [];
+  const found: Array<{ path: string; key: string; runId: string; branchName: string }> = [];
+  for (const block of out.split("\n\n")) {
+    const lines = block.split("\n");
+    const path = lines.find((l) => l.startsWith("worktree "))?.slice(9);
+    const branch = lines
+      .find((l) => l.startsWith("branch refs/heads/"))
+      ?.slice("branch refs/heads/".length);
+    const m = path ? RUN_WORKTREE_RE.exec(basename(path)) : null;
+    // Only the exact names runOne gives a run's worktree and branch.
+    if (!path || !m || branch !== `talk/${m[1]}`) continue;
+    found.push({ path, key: m[1]!, runId: m[2]!, branchName: branch });
   }
-  console.error(`[scheduler] ${where} failed: ${text}`);
+  return found;
 }
 
 export type SchedulerOutbound = {
@@ -111,6 +162,14 @@ export type SchedulerServiceOpts = {
   onRunFinished?: (event: ScheduleRunFinished) => void;
 };
 
+/** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
+export type ScheduleRecovery = {
+  /** Runs a dead process left "running", now failed. */
+  runs: ScheduleRun[];
+  /** Leftover schedule-run worktrees removed (branch kept when it has commits). */
+  worktrees: string[];
+};
+
 type InFlight = {
   schedule: Schedule;
   run: ScheduleRun;
@@ -136,6 +195,8 @@ export class SchedulerService {
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
   private readonly finishedRuns = new WeakSet<ScheduleRun>();
+  /** Abandoned runs still cleaning up (parking their worktree). */
+  private readonly abandoned = new Set<Promise<void>>();
   private tickInFlight = false;
 
   constructor(opts: SchedulerServiceOpts) {
@@ -265,12 +326,105 @@ export class SchedulerService {
   abandonInFlight(reason: string): string[] {
     const ids: string[] = [];
     for (const [id, entry] of this.running) {
-      this.finish(entry.schedule, entry.run, { ok: false, error: reason });
+      try {
+        this.finish(entry.schedule, entry.run, { ok: false, error: reason });
+      } catch (err) {
+        // Never skip the abort: an unrecorded run is recovered at next start.
+        logSchedulerError("run", err);
+      }
       entry.stop.abort(new Error(reason));
+      // Its runOne still parks the worktree once the agent is gone.
+      const settled = entry.settled;
+      this.abandoned.add(settled);
+      void settled.finally(() => this.abandoned.delete(settled));
       ids.push(id);
     }
     this.running.clear();
     return ids;
+  }
+
+  /**
+   * After `abandonInFlight`, wait up to `timeoutMs` for the aborted runs to
+   * finish cleaning up (park their worktree / empty branch), so a stop that
+   * exits right after leaves nothing behind (REQ-discord-346). Resolves true
+   * when all are done; what is still pending is recovered at next start.
+   */
+  async settleAbandoned(timeoutMs: number): Promise<boolean> {
+    if (this.abandoned.size === 0) return true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, Math.max(0, timeoutMs));
+    });
+    try {
+      await Promise.race([
+        Promise.allSettled([...this.abandoned]).then(() => undefined),
+        timeout,
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    return this.abandoned.size === 0;
+  }
+
+  /**
+   * Restart recovery (REQ-discord-346 / SESSION-WORKTREE-3), run once at
+   * start before ticking: fail runs a dead process left "running"
+   * (`interrupted: process restarted`), then remove every schedule-run
+   * worktree whose run this data dir recorded as ended — a crash, or a stop
+   * whose bounded grace ran out — with the usual safe cleanup: the `talk/`
+   * branch is deleted only when it has no commits of its own, else kept.
+   * Runs a live process owns (another bridge or daemon on this data dir)
+   * and their worktrees are left alone, and so is a worktree whose run this
+   * data dir does not know: it belongs to another data dir sharing the repo
+   * (another bridge or daemon, or a `bun test` / verify lane run inside a
+   * live schedule worktree). Never throws: errors are logged.
+   */
+  async recoverAbandoned(): Promise<ScheduleRecovery> {
+    const recovery: ScheduleRecovery = { runs: [], worktrees: [] };
+    try {
+      recovery.runs = this.store.recoverAbandonedRuns(this.nowFn());
+    } catch (err) {
+      // Without the run rows we cannot tell leftovers from live runs.
+      logSchedulerError("recovery", err);
+      return recovery;
+    }
+    // Memory-only stores (tests) know no other process's runs.
+    if (!this.useWorktrees || !this.store.durable) return recovery;
+    const projectDirs = new Set<string>([this.defaultProjectRoot]);
+    try {
+      for (const schedule of this.store.list()) {
+        const resolved = resolveProjectDir(schedule.project, {
+          defaultProjectRoot: this.defaultProjectRoot,
+          github: this.allowlist.github,
+        });
+        if (resolved.ok) projectDirs.add(resolved.dir);
+      }
+    } catch (err) {
+      logSchedulerError("recovery", err);
+    }
+    const seen = new Set<string>();
+    for (const projectDir of projectDirs) {
+      try {
+        if (!isGitRepo(projectDir)) continue;
+        for (const wt of await listScheduleRunWorktrees(projectDir)) {
+          if (seen.has(wt.path)) continue;
+          seen.add(wt.path);
+          // Only an ended run this data dir recorded, under the schedule its
+          // worktree name says. Unknown ⇒ another data dir's: never touch.
+          const known = this.store.runRecord(wt.runId);
+          if (!known || known.status === "running") continue;
+          if (runWorktreeKey(known.scheduleId, wt.runId) !== wt.key) continue;
+          await parkWorktree(projectDir, wt.path, {
+            kind: "worktree",
+            branchName: wt.branchName,
+          });
+          recovery.worktrees.push(wt.path);
+        }
+      } catch (err) {
+        logSchedulerError("recovery", err);
+      }
+    }
+    return recovery;
   }
 
   private async runOne(
@@ -313,10 +467,7 @@ export class SchedulerService {
         // Name the worktree/branch from the full schedule + run ids. The
         // default 16-char prefix gave every run of a schedule (and schedules
         // sharing a first id char) one dir/branch, so a new run wiped the last.
-        const runKey = `schedule_${schedule.id}_${run.id}`.replace(
-          /[^a-zA-Z0-9_-]/g,
-          "",
-        );
+        const runKey = runWorktreeKey(schedule.id, run.id);
         const ensured = await ensureTalkWorkspace({
           projectWorkingDir: resolved.dir,
           sessionId: runKey,
@@ -456,7 +607,11 @@ export class SchedulerService {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.finish(schedule, run, { ok: false, error: msg });
+      // Already recorded (a post failed after the outcome was written, or
+      // the run was abandoned): log it instead of swallowing it.
+      if (!this.finish(schedule, run, { ok: false, error: msg })) {
+        logSchedulerError("run", err);
+      }
     } finally {
       try {
         // Park/remove so another talk never silently reuses this cwd.
@@ -478,6 +633,10 @@ export class SchedulerService {
   /**
    * Record a run outcome once, then auto-pause after repeated failures.
    * Returns false when the run was already recorded (e.g. abandoned).
+   * REQ-discord-346: the run counts as recorded only once the store write
+   * succeeds. A write that throws (SQLITE_BUSY) is logged and retried once;
+   * if that fails too it is logged as `[scheduler] run failed: …` and the
+   * run counts as failed here (its row is recovered at the next start).
    */
   private finish(
     schedule: Schedule,
@@ -491,18 +650,35 @@ export class SchedulerService {
     },
   ): boolean {
     if (this.finishedRuns.has(run)) return false;
+    const record = { ok: result.ok, summary: result.summary, error: result.error };
+    let outcome: { ok: boolean; error?: string } = record;
+    try {
+      this.store.markRunFinished(schedule, run, record);
+    } catch (first) {
+      console.error(
+        `[scheduler] run ${run.id} of schedule ${schedule.id}: recording its outcome failed, retrying once: ${errorLine(first)}`,
+      );
+      try {
+        this.store.markRunFinished(schedule, run, record);
+      } catch (second) {
+        const why = errorLine(second);
+        console.error(
+          `[scheduler] run failed: could not record run ${run.id} of schedule ${schedule.id} (${result.ok ? "completed" : "failed"}); counted as failed: ${why}`,
+        );
+        outcome = { ok: false, error: `run outcome not recorded: ${why}` };
+        run.status = "failed";
+        run.error = outcome.error;
+        run.completedAt = this.nowFn();
+        schedule.consecutiveFailures += 1;
+      }
+    }
     this.finishedRuns.add(run);
-    this.store.markRunFinished(schedule, run, {
-      ok: result.ok,
-      summary: result.summary,
-      error: result.error,
-    });
     const autoPaused = this.maybeAutoPause(schedule);
     this.onRunFinished?.({
       scheduleId: schedule.id,
       runId: run.id,
-      ok: result.ok,
-      error: result.error,
+      ok: outcome.ok,
+      error: outcome.error,
       autoPaused,
       ...(result.askReason ? { askReason: result.askReason } : {}),
       ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),

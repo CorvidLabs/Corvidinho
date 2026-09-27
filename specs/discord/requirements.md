@@ -28,6 +28,9 @@ The system SHALL continue the same session id when a user replies to a bot messa
 Acceptance Criteria
 - Reply referencing a tracked bot message resumes that session id.
 - Thread id map keeps one session per thread.
+- The answer message of `/session start` and `/work` is a tracked bot message of the session that slash command created: the thinking message it was collapsed into (DISCORD-ASK-7), or, when collapse fails, the deferred slash reply when the gateway returns its message id.
+- After a user runs `/session start` (or `/work`) twice (topics A then B), that user's reply to A's answer resumes session A, with the reply ping on and with it off; it never runs in session B and is never dropped.
+- Another user's reply to that answer never resumes the session, even when that user is the configured owner (ADMIN) (SESSION-MULTI-1): with the ping off it is ignored, with the ping on it starts or continues that user's own session.
 
 ### REQ-discord-003
 
@@ -147,6 +150,22 @@ in-memory set (no SQLite in this thin slice). The bridge SHALL NOT introduce
 ProcessManager or weaken allowlists. Fixture tests SHALL cover per-user
 independence without a live Discord token.
 
+The permission level that `rateLimitByLevel` (`DISCORD_RATE_LIMIT_BY_LEVEL`)
+keys on SHALL be the actor's level from `resolvePermissionLevel` (user id,
+role ids, allowlist, configured owner; mutes are checked before the rate
+limit) on both the chat path (`routeMessage`) and slash dispatch, unless a
+caller passes an explicit level (`RouterDeps.rateLimit.permLevel` /
+`SlashContext.permLevelFor`). `/mute` SHALL refuse a target that is the
+invoker or the configured owner (IDENTITY-2) with an ephemeral message and
+SHALL leave the mute set unchanged, so the owner can never mute themselves
+out of ADMIN and `/unmute` until restart. MessageCreate has no ephemeral:
+a muted or rate-limited user's @mention/reply/thread message SHALL get at
+most one public notice (`MUTED` / `RATE_LIMITED`) per user per rate-limit
+window (`claimRefusalNotice`); later refusals in that window SHALL be
+silent, still with no session and no agent run. Slash refusals SHALL stay
+ephemeral on every call (DISCORD-DENY / Discord's 3 s ack). No new env var,
+slash command, table or column.
+
 An ask button press (DISCORD-ASK, open or pick) SHALL run the same mute and
 rate limit check against the same per-user state as chat and slash, after the
 channel gate (REQ-discord-212) and the actor gate (REQ-discord-201). The
@@ -165,6 +184,12 @@ Acceptance Criteria
 - `rateLimitByLevel` override applies when permLevel provided.
 - Mention/reply/thread continue and slash share the same per-user limits/mutes.
 - No ProcessManager; secrets out of repo; default-deny allowlists unchanged.
+- With `DISCORD_RATE_LIMIT_MAX=3` and `DISCORD_RATE_LIMIT_BY_LEVEL={"3":100}`, the owner's 4th and later `/status` and @mentions in the window are served; a member's 4th `/status` gets an ephemeral "Slow down!" and a member's 4th @mention is refused.
+- A member who passes only by an allowed role is limited at the STANDARD (2) level max on chat and slash; an explicit `permLevelFor` still overrides.
+- Owner `/mute user:<owner>` gets an ephemeral refusal and the owner is not muted; `/unmute` and `/status` still work for the owner. Any invoker's `/mute` of the configured owner, and a self-mute with no owner configured, are refused the same way. `/mute` of another user still mutes them.
+- A muted user who sends 5 @mentions gets exactly one public reply and no session or agent run; a rate-limited user (max 1) who sends 5 gets one public "Slow down!"; a peer is still served.
+- After a notice, a muted user's reply-to-bot in the same window is refused silently; once the window has passed since that notice, the next refusal notifies once again.
+- A muted user's `/status` gets the ephemeral `MUTED` reply on every call and nothing is posted publicly.
 - A muted session owner's ask button press (open or pick) gets only the ephemeral `MUTED` reply, press after press: the agent does not run, nothing is sent or edited, and the ask stays pending; after `/unmute` the same button resumes the session.
 - With `DISCORD_RATE_LIMIT_MAX=1`, a member's pick after their @mention gets only the ephemeral `RATE_LIMITED` reply and the ask stays pending, while another user is still served; with `DISCORD_RATE_LIMIT_BY_LEVEL={"3":100}` the owner's pick after their @mention still resumes.
 
@@ -1362,4 +1387,115 @@ Acceptance Criteria
 - A member's `/status` has counts only, with no session id, mention, topic or project path.
 - A member's `/schedule list` shows the project name, not the absolute path; the owner's shows the full path.
 - Regression tests in `tests/discord.session-list-scope.test.ts` fail on `main` and pass after the fix.
+
+### REQ-discord-346
+
+A schedule run SHALL NOT stay `running` forever, and SHALL NOT leave its
+worktree behind, when the process running it stops, crashes or cannot write
+its outcome (DISCORD-SCHEDULE-2 / DISCORD-SCHEDULE-4 / SESSION-WORKTREE-3 /
+CLI-8 / AUTONOMOUS-4).
+
+- Outcome write. `SchedulerService` SHALL treat a run as recorded only after
+  `markRunFinished` succeeds. A write that throws (for example
+  `SQLITE_BUSY` past the 5 s busy timeout) SHALL be logged to stderr
+  (scrubbed, one line) and retried once. If the retry also throws, the
+  scheduler SHALL log `[scheduler] run failed: could not record run <run> of
+  schedule <schedule> …`, count the run as failed (`onRunFinished` with
+  `ok: false` and a "run outcome not recorded" error, and the in-memory
+  failure count) and leave the row to start-up recovery. An error that reaches
+  a run's catch after its outcome was already recorded SHALL be logged as
+  `[scheduler] run failed: <message>`, never swallowed. `markRunFinished`
+  SHALL write the schedule's failure counter and the run row in one
+  IMMEDIATE transaction, so a retried write never counts a failure twice.
+- Bridge stop. The Discord bridge's `stop()` SHALL, like the daemon, record
+  every schedule run still in flight as failed (`interrupted: bridge
+  shutdown`) through `abandonInFlight`, which aborts the run's agent process
+  tree (REQ-discord-108). Nothing is posted for an abandoned run.
+- Bounded settle. After `abandonInFlight`, the bridge and the daemon SHALL
+  wait up to 3 s (`settleAbandoned(ABANDONED_SETTLE_MS)`) for the aborted
+  runs to park their worktree and delete their empty `talk/schedule_*`
+  branch before the stop resolves.
+- Runner. Each claimed run SHALL record the process running it in
+  `schedule_runs.runner` as `<pid>:<Linux /proc start time>` (schema v10),
+  so a recycled pid never passes for a process that died.
+- Start-up recovery. Before its first tick, the bridge (when its scheduler is
+  enabled) and `corvidinho daemon` SHALL run `recoverAbandoned()`:
+  - every `running` row whose runner is gone, or not recorded (rows from
+    before v10), SHALL be marked `failed` with error `interrupted: process
+    restarted` and a completion time;
+  - every schedule-run worktree (`talk-schedule_<schedule>_<run>` checked out
+    on `talk/schedule_<schedule>_<run>`) registered in the default project
+    root or a schedule's project whose run this data dir recorded, under that
+    schedule, as no longer `running` SHALL be parked with the existing safe
+    cleanup: the branch is deleted only when it has no commits off the project
+    HEAD (`branchHasOwnCommits`), otherwise kept;
+  - a run whose runner process is alive (another bridge or daemon on the same
+    data dir) and its worktree SHALL be left alone;
+  - a schedule-run worktree whose run this data dir does not know SHALL NOT
+    be touched: it belongs to another data dir sharing the repo (another
+    bridge or daemon, or `bun test` / the verify lane run inside a live
+    schedule worktree), and worktrees with other names SHALL NOT be touched
+    either.
+  Recovery changes only the run row, not the schedule's counters, and never
+  throws (errors are logged). The bridge logs one `[discord] restart
+  recovery:` line when it fixed something.
+
+Existing behaviour is unchanged: the 60 s poll, max 2 concurrent runs, no
+catch-up, auto-pause after 5 failures, the atomic claim (REQ-discord-108) and
+the non-blocking tick (REQ-discord-331). No new env var, slash command or CLI
+flag.
+
+Acceptance Criteria
+- `markRunFinished` throwing once: the run row is `completed`, `onRunFinished` fires once with `ok: true`, and a "retrying once" line is logged.
+- `markRunFinished` throwing twice: `[scheduler] run failed: could not record run …` is logged, `onRunFinished` fires once with `ok: false` and "not recorded", the in-memory failure count is 1, the slot is freed and nothing rejects.
+- Bridge `stop()` with a schedule run in flight (real spawn client, fake `sh` agent) records it `failed` with `interrupted: bridge shutdown`, the agent is gone, and its worktree and empty branch are removed.
+- Bridge start after a `kill -9` of a process that was running a schedule run marks that run `failed` (`interrupted: process restarted`) and removes its worktree; a run another live process owns stays `running` with its worktree and branch.
+- A claimed run records `<pid>:<proc start>`; a v9 DB migrates to v10 keeping its rows, and a `running` row without a runner is recovered.
+- A daemon or bridge start never touches a schedule-run worktree whose run its data dir does not know (another data dir's run), even when started with that worktree as its project root: the worktree, its uncommitted files and its branch stay.
+- Each case above except the last guard fails on the code before this change; the guard fails on the first version of this change.
+### REQ-discord-417
+
+Errors shown to an operator SHALL be one SAFE-6 line, and a rejected Discord
+login SHALL end the bridge start cleanly (CLI-4, SAFE-6).
+
+- `formatErrorLine(err, { env?, max? })` in `src/store/scrub.ts` SHALL return
+  the error message only (a `TypeError` / `RangeError` / `ReferenceError` /
+  `SyntaxError` keeps its class name; other names are dropped), with the
+  literal value of each set secret env var from `.env.example`
+  (`DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`,
+  `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`;
+  values of 8+ characters) replaced by `[redacted:env-secret]`, then passed
+  through `scrubSecrets`, cut to its first line and capped at
+  `ERROR_LINE_MAX` (300) characters. It SHALL NOT throw; an unprintable value
+  gives `(unprintable error)`.
+- `startBridge` SHALL catch a rejected `gateway.start()`, stop the
+  half-started gateway (the schedule ticker is not started yet) and return
+  `{ ok: false, exitCode: 1, message }` with
+  `message = formatDiscordLoginFailure(err, { env })` (the bridge's env, so a
+  token passed only in `startBridge({ env })` is redacted too): discord.js
+  `TokenInvalid`
+  counts as 401; on 401/403 it is
+  `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; otherwise
+  `discord login failed: <line> — check DISCORD_TOKEN and that discord.com is
+  reachable`.
+- `formatRegisterCommandsFailure(err, { what?, guildHint?, env? })` in
+  `src/discord/register-commands.ts` SHALL return one line
+  `[discord] <what> (<status>): <line>` (`what` defaults to
+  `register-commands failed`; no status part when the error has none), adding
+  `— check DISCORD_TOKEN / DISCORD_BOT_TOKEN and <guildHint>` (default
+  `--guild-id`) on 401/403. The bridge's slash registration on gateway ready
+  SHALL log it with `what: "slash command registration failed"` and
+  `guildHint: "DISCORD_GUILD_ID"`, never the DiscordAPIError object (stack,
+  `rawError`, `requestBody`).
+
+Existing start refusals (missing token, empty channel allowlist) are
+unchanged. No new env var, slash command, CLI flag, table or column.
+
+Acceptance Criteria
+- `startBridge` whose gateway `start()` throws discord.js `TokenInvalid` returns `{ ok: false, exitCode: 1 }` with `discord login failed (401): check DISCORD_TOKEN (An invalid token was provided.)` and calls the gateway's `stop()` once.
+- A `DiscordAPIError` with status 403 gives `discord login failed (403): check DISCORD_TOKEN …` on one line with no `rawError`.
+- `corvidinho discord bridge` with a token Discord rejects exits 1 with that line and no stack, crash footer or token value.
+- `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters, keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
+- A token that is only in the `startBridge` env and appears in the login error text is redacted in the returned message.
+- `formatRegisterCommandsFailure` on a `DiscordAPIError` 403 `Missing Access` with the bridge options gives `[discord] slash command registration failed (403): Missing Access — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and DISCORD_GUILD_ID` with no `requestBody` and no newline; with defaults a 401 names `--guild-id`, a status-less error gets no hint, and a secret env value is redacted.
 

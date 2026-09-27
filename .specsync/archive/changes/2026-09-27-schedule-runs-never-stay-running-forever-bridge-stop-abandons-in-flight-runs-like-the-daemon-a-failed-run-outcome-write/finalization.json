@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "schedule-runs-never-stay-running-forever-bridge-stop-abandons-in-flight-runs-like-the-daemon-a-failed-run-outcome-write",
+  "implementation_commit": "3e068e67c5c37233dc5ef71555efe6ca4ac2b3bb",
+  "implementation_tree": "f82212d02f0f8dda1a3505e62256d44e313dd90d",
+  "contract_digest": "9b5a67d64988120476985bd123b020373ec4cd7218e9b834a5bdb80f7534cf35",
+  "workspace_digest": "a402711df5d24247baf13ef671a58d6c1f9e1d5010fa75a0557e4832e348ab00",
+  "closing_digest": "9126f255f80a80567e250299a36a39c335f62faaf0c2121d6ac7e646bcd0d004",
+  "review_digest": "71764e7ac6b590615ac2e64597d3275ce7f0d47a4fedf65c82b1c5b6be050be9",
+  "finalization_digest": "789565457bdc584d3dbaf7c94d5712bd9553c0ce7e6a467ecc39a72da4408c2a",
+  "timestamp": 1790475535
+}

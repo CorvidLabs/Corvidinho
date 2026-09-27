@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "docs-and-the-doctor-docs-facts-test-follow-225-doctor-reads-the-allowlist-file-checks-data-dir-and-llm-and-its-checks",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "22b05aba682668d9200916b3e428e8d2a9440ea9",
+      "contract_digest": "2487c3b6707902350654e5b06558304466d5b4cc1e31fdf2089bb9ca69807042",
+      "execution_digest": "c74cdcd85b820239cc5405861e23034a6a6a4bde1cddc10f6144f75ad356b41d",
+      "workspace_digest": "06b44256d5769c1d6786f9fffefd427fdc4c81b6d6e3d5429669bdafe4dbaa1a",
+      "timestamp": 1790475786
+    }
+  ]
+}

@@ -14,7 +14,7 @@ that shipped after go-live.
 
 1. Open [Discord Developer Portal](https://discord.com/developers/applications) → **New Application** (name e.g. Corvidinho).
 2. **Bot** tab → Add Bot → Reset Token → copy token into the VM secret store only (`DISCORD_TOKEN` or `DISCORD_BOT_TOKEN`). Do not commit.
-3. **Privileged Gateway Intents:** enable **Message Content Intent** (required for mention text). Enable Server Members Intent only if you later need role gates beyond channel allowlists.
+3. **Privileged Gateway Intents:** enable **Message Content Intent** (required for mention text). The bridge's gateway requests only Guilds, GuildMessages and MessageContent, and role gates read the member roles already on messages and interactions. Enable **Server Members Intent** only if you use the DISCORD-8 requester check (`discord-post-message --requesting-user-id`, required under `CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1`): it logs in a short-lived client with the Guild Members intent, so without the portal toggle that login is refused and nothing is posted.
 4. **OAuth2 → URL Generator:** scopes `bot`; bot permissions at least `View Channels`, `Send Messages`, `Read Message History`, `Create Public Threads` (optional for 2.a). Generate invite URL → add bot to the target guild.
 5. In Discord: User Settings → Advanced → **Developer Mode** ON → right-click channel → **Copy Channel ID**. Those snowflakes go in `DISCORD_CHANNEL_IDS` / allowlist `[discord].channels` (non-empty required).
 
@@ -24,11 +24,13 @@ that shipped after go-live.
 mkdir -p ~/.config/corvidinho
 cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # edit channels = ["YOUR_CHANNEL_ID"]  — empty = refuse start
+# A file that cannot be read or parsed also refuses start (bridge, watch, daemon) and makes
+# every gate refuse — never an env-only fallback. `corvidinho doctor` shows the line and key.
 
 # Env (secret store / systemd EnvironmentFile — never git):
 # DISCORD_TOKEN=…
 # DISCORD_CHANNEL_IDS=…          # or rely on allowlist file / CORVIDINHO_DISCORD_ALLOW_CHANNELS
-# optional: CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES  (empty = deny-all when checked)
+# optional: CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES  (both empty = anyone in an allowlisted channel; once set, only listed users/roles + owner)
 # optional: CORVIDINHO_ALLOWLIST_FILE=/path/to/allowlist.toml
 # optional DISCORD-6: DISCORD_RATE_LIMIT_WINDOW_MS=60000 DISCORD_RATE_LIMIT_MAX=10
 # optional DISCORD-6 mute seed: DISCORD_MUTED_USER_IDS=
@@ -58,16 +60,21 @@ bun src/cli.ts discord bridge
 
 When doctor/bridge are green **except** missing real token, status is **READY-FOR-SECRETS** — then ping CoS/Leif via the secure room for the token + confirm channel IDs.
 
-`doctor`'s Discord check reads the environment only (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`
-plus `DISCORD_CHANNEL_IDS` or `CORVIDINHO_DISCORD_ALLOW_CHANNELS`). A box that lists its
-channels only in the allowlist file still starts the bridge, but `doctor` reports the
-channel allowlist as missing.
+`doctor`'s Discord check loads the channel allowlist the way the bridge does: the allowlist
+file `[discord].channels` plus `CORVIDINHO_DISCORD_ALLOW_CHANNELS` and `DISCORD_CHANNEL_IDS`.
+A channel that is also deny-listed does not count (deny wins). The line names where the
+channels came from (`file`, `env` or `file + env`) and how many, never the ids. The
+`github-watch` check does the same for `[github]` repos / orgs and
+`CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS`. `doctor` also warns when no LLM key is set
+(`task run` uses the demo stub) and checks the data dir is writable (`data-dir`). Its
+`allowlist-file` check fails when the file exists but cannot be parsed, with the line and key
+(never the values); the bridge, `github watch` and `daemon` refuse to start until it is fixed.
 
 ## D. Run
 
 ```bash
 corvidinho discord bridge
-# or: CORVIDINHO_DISCORD_DRY_RUN=1 corvidinho discord bridge   # no live connect
+# or: CORVIDINHO_DISCORD_DRY_RUN=1 DISCORD_TOKEN=dummy corvidinho discord bridge   # no live connect; any non-empty token value + a channel list still required
 ```
 
 Long-running processes on the box, one data dir (`CORVIDINHO_DATA_DIR`, default
@@ -109,8 +116,10 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   memory forget/override (via `corvidinho plugins run` only, with the acting env set; Discord chat
   cannot reach them, see [`discord.md`](discord.md) Memory), mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
-- When a run asks for a human (AUTONOMY-1/2), the owner is the only user it can ping. With no
-  owner the question still posts and the bridge logs
+- When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
+  author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
+  stop (SAFE-8) ping the owner. With no owner a stuck or spend-cap question still posts and the
+  bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
 
 ### E.2 Protocol 2: restart the bridge, WATCH and daemon together (DISCORD-10)
@@ -166,7 +175,7 @@ draft-PR step, an entry only affects `corvidinho plugins run` (see "What an entr
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6):
-`files-write` (minTier 2), `files-edit` (minTier 2), `delegate` (minTier 2, autonomous extra, E.5).
+`files-write` (minTier 2), `files-edit` (minTier 2), `delegate` and `council` (minTier 2, autonomous extras, E.5).
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
@@ -198,7 +207,9 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
   claims are recorded in the run history only; it never posts to Discord.
 - Scheduled runs are never ADMIN (read/chat tools only, E.6) and always non-interactive (E.3).
 - Stop is SIGTERM: it waits up to 30 s for in-flight runs, so keep `TimeoutStopSec` above that
-  (the example uses 60). Restarts are systemd's job (`Restart=on-failure`).
+  (the example uses 60). Runs still going after the wait are recorded as failed and their whole
+  process trees are killed (`daemon.abandoned`); a second signal skips the wait. Restarts are
+  systemd's job (`Restart=on-failure`).
 - Logs are JSON lines on stdout: `journalctl -u corvidinho-daemon -o cat`.
 
 ### E.5 Autonomous mode gate (AUTONOMOUS-1, AUTONOMOUS-5, SAFE-9)
@@ -217,12 +228,14 @@ counts; a missing file, section or key, or any other value, means off.
   `/work` and schedule runs work in a git worktree made from the project checkout's `HEAD`, so
   **commit** the change there; an uncommitted edit is not seen by those runs.
 - `fledge.toml` is protected infra (SAFE-2): the agent's file tools cannot flip the switch.
-- Today the gate controls one tool, `delegate`. The model sees it only when all of these hold:
+- Today the gate controls two tools, `delegate` and `council`. The model sees them only when all of these hold:
   the gate is on; the tier is `code` (`CORVIDINHO_LLM_TIER=code`); the session is ADMIN (the
   owner in Discord) or a local CLI run with no role session; and the delegation depth is below 2.
   Workers run at the lead's tier or lower, at most 2 at a time and 4 per lead, and never get
-  Discord/GitHub tokens or the audit key.
-- WATCH and scheduled runs are never ADMIN, so they never get `delegate`.
+  Discord/GitHub tokens or the audit key. `council` is for a top-level lead only (a delegated
+  worker is refused): 2–5 voices (default 3) at `read` tier by default and never above `tool`,
+  at most 2 councils per run, 15 min cap per council.
+- WATCH and scheduled runs are never ADMIN, so they never get `delegate` or `council`.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Non-owner users: ROLES-CHAT
@@ -244,17 +257,19 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
-  forget/override, no `delegate`, no `web-fetch` (dangerous counts as mutating).
+  forget/override, no `delegate`/`council`, no `web-fetch` (dangerous counts as mutating).
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
-  `memory-store`/`-recall` (scoped to the acting user) and `plugins-list`.
+  `memory-store`/`-recall` (scoped to the acting user), `discord-user-lookup` (members of
+  the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
 - **Run time:** a mutating call the model makes anyway is refused with
   `not allowed for your role` (ROLES-CHAT-3). ADMIN is re-checked on every call against
   the live owner config; the prompt never grants it.
 - **Public Q&A (ROLES-CHAT-8):** GitHub reads work for any **public** repo. Private repos, and
-  repos whose visibility cannot be confirmed, are refused; deny lists still win. `files-read`
-  refuses secret-looking paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`,
-  `id_ed25519`, `*.pem`).
+  repos whose visibility cannot be confirmed, are refused; deny lists still win. Secret-looking
+  paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
+  refused when named to `files-read`, `files-list`, `search-grep` or `git-diff`, and left out
+  of `files-glob` / `files-list` results, recursive `search-grep` output and `git-diff`.
 - `/session start` and `/work` run for non-owners too, as non-ADMIN sessions. `/work` never
   opens a PR for a non-owner.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.

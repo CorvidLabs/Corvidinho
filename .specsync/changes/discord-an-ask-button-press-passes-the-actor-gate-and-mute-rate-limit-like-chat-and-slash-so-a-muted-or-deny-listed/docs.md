@@ -12,5 +12,8 @@ artifact: docs
 - `docs/discord.md`: the gate-order line now names the actor gate
   (`gateActor`, missing before) and the press gate order; the ask section
   says a press gets the same actor and mute/rate gates, with ephemeral
-  refusals and the ask kept.
+  refusals and the ask kept. After merging main, the "Rate limits and mutes
+  (DISCORD-6)" subsection from #221 says the shared window also covers ask
+  button presses (open and pick each count), the level applies on every
+  path, and ask button refusals stay ephemeral like slash.
 - No CHANGELOG / STATUS / package version edits (release PRs own those).

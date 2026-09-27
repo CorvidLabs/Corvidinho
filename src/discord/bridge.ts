@@ -107,6 +107,7 @@ import {
   type InflightReply,
 } from "./inflight-replies.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { formatErrorLine } from "../store/scrub.ts";
 import {
   appendAudit,
   auditKeyFromEnv,
@@ -116,6 +117,7 @@ import {
 } from "../audit/index.ts";
 import { MemoryStore } from "../memory/index.ts";
 import {
+  ABANDONED_SETTLE_MS,
   ScheduleStore,
   SchedulerService,
 } from "../scheduler/index.ts";
@@ -260,6 +262,27 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
       return true;
     },
   };
+}
+
+/**
+ * REQ-discord-417: one scrubbed line for a failed gateway login. discord.js
+ * turns a 401 into `TokenInvalid` (no status); REST errors carry `status`.
+ */
+export function formatDiscordLoginFailure(
+  err: unknown,
+  opts: { env?: NodeJS.ProcessEnv } = {},
+): string {
+  const e = (err && typeof err === "object" ? err : {}) as {
+    code?: unknown;
+    status?: unknown;
+  };
+  const status =
+    e.code === "TokenInvalid" ? 401 : typeof e.status === "number" ? e.status : undefined;
+  const detail = formatErrorLine(err, { env: opts.env });
+  if (status === 401 || status === 403) {
+    return `discord login failed (${status}): check DISCORD_TOKEN (${detail})`;
+  }
+  return `discord login failed${status ? ` (${status})` : ""}: ${detail} — check DISCORD_TOKEN and that discord.com is reachable`;
 }
 
 /**
@@ -472,11 +495,21 @@ export async function startBridge(
       thinkingOutbound: resolveOutbound(),
       thinkingDebounceMs: opts.thinkingDebounceMs,
       thinkingTickMs: opts.thinkingTickMs,
-      // DISCORD-2 / AUTONOMY-5/6: a reply to a /work or /session start
-      // answer continues that session (and answers its pending ask).
+      // DISCORD-2 / AUTONOMY-5/6 (REQ-discord-002, REQ-discord-044): a reply
+      // to a /work or /session start answer continues that session (and
+      // answers its pending ask); the router keeps SESSION-MULTI-1, so only
+      // the session's own user continues it.
       trackBotMessage: (messageId, sessionId) => {
         const session = store.get(sessionId);
-        if (session) store.trackBotMessage(messageId, session);
+        if (!session) return;
+        try {
+          store.trackBotMessage(messageId, session);
+        } catch (err) {
+          // Best effort: the answer is already out, so a failed bot-message
+          // DB write (e.g. "database is locked") must not stop the slash run
+          // from resolving its deferred reply. The in-memory map is set first.
+          console.warn(`[discord] slash answer tracking for ${sessionId} failed:`, err);
+        }
       },
       mutedUsers,
       rateLimitState,
@@ -1336,6 +1369,17 @@ export async function startBridge(
       manual: true,
     });
   }
+  if (scheduler) {
+    // REQ-discord-346: schedule runs a dead process left "running" are failed
+    // and their worktrees removed before the first tick; runs another live
+    // process (e.g. `corvidinho daemon`) owns are left alone.
+    const recovered = await scheduler.recoverAbandoned();
+    if (recovered.runs.length > 0 || recovered.worktrees.length > 0) {
+      console.log(
+        `[discord] restart recovery: ${recovered.runs.length} interrupted schedule run(s) marked failed, ${recovered.worktrees.length} leftover schedule worktree(s) removed`,
+      );
+    }
+  }
 
   const gateway = await factory(config, handlers);
   // If factory is createLiveGateway-like, reply is set inside; for custom, allow handlers.reply
@@ -1345,7 +1389,17 @@ export async function startBridge(
   if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
   if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
 
-  await gateway.start();
+  try {
+    await gateway.start();
+  } catch (err) {
+    // REQ-discord-417: a rejected login is a clean non-zero exit, not a
+    // DiscordAPIError dump and Bun crash footer. The scheduler is not
+    // started yet; tear down the half-started client so the process can end.
+    await Promise.resolve()
+      .then(() => gateway.stop())
+      .catch(() => undefined);
+    return { ok: false, exitCode: 1, message: formatDiscordLoginFailure(err, { env }) };
+  }
   if (inflightReplies && interruptedReplies.length > 0) {
     // After login: the REST calls need the token. Sequential, never throws.
     // Only rows still present are unfinished: a reply whose thinking message
@@ -1385,6 +1439,20 @@ export async function startBridge(
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       scheduler?.stop();
+      if (scheduler) {
+        // REQ-discord-346: like the daemon, a schedule run still going is
+        // recorded failed and its agent tree killed, then gets a short
+        // bounded grace to park its worktree before the process exits.
+        const abandoned = scheduler.abandonInFlight(
+          "interrupted: bridge shutdown",
+        );
+        if (abandoned.length > 0) {
+          console.log(
+            `[discord] shutdown: ${abandoned.length} in-flight schedule run(s) recorded failed`,
+          );
+          await scheduler.settleAbandoned(ABANDONED_SETTLE_MS);
+        }
+      }
       await gateway.stop();
     },
   };

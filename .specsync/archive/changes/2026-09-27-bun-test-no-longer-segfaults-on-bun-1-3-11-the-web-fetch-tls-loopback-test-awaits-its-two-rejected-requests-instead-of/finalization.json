@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "bun-test-no-longer-segfaults-on-bun-1-3-11-the-web-fetch-tls-loopback-test-awaits-its-two-rejected-requests-instead-of",
+  "implementation_commit": "207d3f51f209ac22f973c24ec8837e9c67aa36fa",
+  "implementation_tree": "ef1550f523fa3f7dd0bc3a2edd9c3d9e24a61607",
+  "contract_digest": "34ddb6880b28912388f2685ba667a338bf33257a19f9938969f5ab7b2a92d812",
+  "workspace_digest": "b6c6bb32f29505d96bb055f16fe0dbabc6fcfa9dd2e392d726c81e7d136ac046",
+  "closing_digest": "3d98a6364cd8f9dfdd1dea340b49d6a05ea92f544e34f01730d35b7bf8d8db47",
+  "review_digest": "dbadeb9a66c1bfc4f290771592610d0d3f7f449281b0ec33ee3555aa5284f0b8",
+  "finalization_digest": "041e3baddc0e03b3596bf239ec5e3f38889ad5c5c02f1c7423c89fc5b4eb0306",
+  "timestamp": 1790475438
+}

@@ -30,6 +30,41 @@ Acceptance Criteria
 
 `bun src/cli.ts doctor` checks Discord token env presence, `gh auth status`, and whether `fledge` / `specsync` are on PATH, never printing secret values.
 
+Doctor SHALL say what is missing before a long-running surface fails on it
+(CLI-4). The `discord` and `github-watch` checks SHALL evaluate the channel
+and repo allowlists through the same loader the Discord bridge and GitHub
+WATCH use (allowlist file plus env overlays, ALLOW-1..4): the bridge's channel
+set (`[discord].channels`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS` and
+`DISCORD_CHANNEL_IDS`) and WATCH's repo set (`[github]` repos / orgs and
+`CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS`). An entry that is also
+deny-listed (file or env) SHALL NOT count (deny wins). A passing line SHALL
+name where the usable entries came from (`file`, `env` or `file + env`)
+and the count, never the ids, repos or tokens. An entry the gate cannot use
+at all (a repo that is not OWNER/REPO) SHALL NOT count either, and the
+failing line SHALL name deny wins only when every entry is deny-listed. A
+token or watch login SHALL count only when it is not blank, as the bridge and
+WATCH trim them. An allowlist file that exists
+but does not load SHALL fail both checks, since the bridge and watch refuse to
+start on it. Doctor SHALL print an `llm` line: `[ok]` when
+`CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (value not shown),
+otherwise `[warn]` saying `task run` uses the demo stub; the `llm` line
+SHALL NOT change the exit code. Doctor SHALL print a `data-dir` line for the
+shared data dir (`CORVIDINHO_DATA_DIR`, default
+`~/.local/share/corvidinho`, MEMORY-1): `[ok]` when it exists and is
+writable, `[info]` when it does not exist yet but its nearest existing parent
+is writable (doctor SHALL NOT create it), and a failing `[fail]` line (exit 1)
+when it is not a directory, is a symlink to a path that does not exist
+(`mkdir -p` fails on it), cannot be created or is not writable.
+
+Acceptance Criteria
+- With `[discord] channels` and `[github] repos` only in the allowlist file (`CORVIDINHO_ALLOWLIST_FILE`), plus token and `CORVIDINHO_WATCH_USERNAME`, doctor prints `[ok] discord` and `[ok] github-watch` naming source `file`, no `[missing]` line, and exits 0 when the other checks pass; the default `~/.config/corvidinho/allowlist.toml` (no `CORVIDINHO_ALLOWLIST_FILE`) reads the same way.
+- A blank (whitespace-only) Discord or GitHub token or watch login prints `[missing]`; a repo entry that is not OWNER/REPO fails `github-watch` without claiming it is deny-listed.
+- Env-only entries name source `env`; entries in both name `file + env`; the line gives the usable count.
+- A channel or repo that is allowlisted and also deny-listed (env deny over file allow, file deny over env allow) does not count: doctor prints `[missing]` naming deny wins and exits 1.
+- A malformed allowlist file fails `discord` and `github-watch` (the bridge / watch refuse to start) even when env allowlists are set.
+- No LLM key prints `[warn] llm` naming the demo stub without changing the exit code; `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` prints `[ok] llm` without the value.
+- A writable data dir prints `[ok] data-dir`; a missing one under a writable parent prints `[info] data-dir` and is not created; a data dir that is a file, sits under a file, is a symlink to nothing or (as a non-root user) is not writable prints `[fail] data-dir` and doctor exits 1; the writable probe leaves nothing in the data dir.
+- Doctor output never contains the token, LLM key, channel ids or repo / org names.
 
 ## Constraints
 
@@ -354,9 +389,22 @@ On SIGTERM or SIGINT the daemon SHALL:
 - kill the process tree of any run still going (the spawned agent and
   everything it started, REQ-plugins-154) and record it as failed
   (`interrupted: daemon shutdown`);
+- wait up to 3 s more (a second signal does not skip this) for those runs to
+  park their worktree and delete their empty `talk/schedule_*` branch (a
+  branch with commits is kept, REQ-discord-346);
 - remove its lock and exit 0.
 
 A second signal SHALL skip the rest of the wait.
+
+Before its first tick the daemon SHALL run the scheduler's start-up recovery
+(REQ-discord-346): runs a dead process left `running` are recorded as failed
+(`interrupted: process restarted`) and leftover worktrees of runs this data
+dir recorded as ended are removed, keeping any branch with commits; runs
+another live bridge or daemon on the same data dir owns are left alone, and a
+schedule-run worktree whose run this data dir does not know (another data
+dir's) is never touched. When it fixed something it SHALL log
+`daemon.recovered` with the recovered run ids (`runs`) and the number of
+worktrees removed (`worktrees`).
 
 Daemon logs SHALL be one JSON object per line on stdout
 (`ts`, `level`, `component`, `event`, then fields), with every string value
@@ -373,6 +421,10 @@ Acceptance Criteria
 - A straggler spawned through the real spawn client (fake `sh` bin with a same-group and a `setsid` grandchild) has its whole tree killed at shutdown.
 - Log lines parse as JSON, and secrets in fields are redacted.
 - `--help` lists `daemon`.
+- Stop after the grace removes an abandoned run's worktree and empty `talk/schedule_*` branch before it resolves; a branch with commits is kept.
+- After `kill -9` of a daemon mid-run, the next start records that run as failed (`interrupted: process restarted`), removes its worktree and branch, and logs `daemon.recovered`.
+- Start removes a leftover worktree of a run already recorded as failed and leaves worktrees with other names alone.
+- Start never touches a schedule-run worktree whose run another data dir owns, even when the daemon's project root is that worktree: its uncommitted files and branch stay.
 
 ### REQ-cli-112
 
@@ -465,7 +517,12 @@ updater SHALL source `CORVIDINHO_ENV_FILE` once, after `bun install` and before 
 env. `CORVIDINHO_BRIDGE_CMD` SHALL run in `bash -lc` with its text passed through the
 environment rather than the shell's argv, so a `pkill -f` pattern in it cannot match that shell,
 and the documented `pkill -f` examples SHALL match the bridge process but not a shell whose
-command line holds the example.
+command line holds the example. In pidfile mode the updater SHALL count the restarted bridge
+ready only when its log holds the line the gateway prints on Discord ClientReady
+(`[discord] logged in as <tag>`), never on the pre-login `[discord] protocol version N OK`
+line; if the bridge exits or that line does not appear within `CORVIDINHO_READY_TIMEOUT`, the
+update SHALL roll back and exit 1 with log lines only. Unit mode SHALL keep its
+`systemctl is-active` check.
 
 Acceptance Criteria
 - Unit set + leftover stale pidfile: `systemctl restart <unit>` runs, no `discord bridge` is started, the pidfile is removed.
@@ -475,6 +532,11 @@ Acceptance Criteria
 - A rollback restart after a failed `bun install` or a failed `doctor` sees `CORVIDINHO_ENV_FILE`.
 - A `CORVIDINHO_BRIDGE_CMD` containing `pkill -f '<pattern>'` completes (exit 0, no rollback) instead of killing its own shell.
 - Each `pkill -f` pattern in `docs/BOX-UPDATE.md` matches `bun src/cli.ts discord bridge` and an absolute-path bridge command line, and does not match `bash -lc` holding the example.
+- `log_indicates_ready` rejects a log holding only `[discord] protocol version N OK` (with or without a following login error) and accepts one holding `[discord] logged in as <tag>`, the line `src/discord/gateway.ts` prints inside its `Events.ClientReady` handler.
+- Pidfile mode, a bridge that prints the protocol line and then exits 1: the update rolls back to the previous SHA and exits 1; it never logs "ready signal observed" or "OK updated".
+- Pidfile mode, a bridge that prints the protocol line and never logs in: after `CORVIDINHO_READY_TIMEOUT` the updater logs a ready timeout naming the login line, rolls back and exits 1.
+- Pidfile mode, a bridge that prints the login line: the update exits 0 with no rollback.
+- Unit mode still runs `systemctl is-active --quiet <unit>`; an inactive unit rolls back and exits 1.
 
 ### REQ-cli-026
 
@@ -511,4 +573,62 @@ Acceptance Criteria
 - A CLI or shell a test spawns without an explicit `env` (`Bun.spawn(argv)`, `Bun.spawn({ cmd })`, `Bun.spawnSync(argv)`) resolves the preload's data dir and sees no audit key, WATCH spawn log or worktree base override.
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
 - With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY` and `OPENAI_API_KEY` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
+
+### REQ-cli-419
+
+A failing CLI command SHALL print one plain-language error line and a hint and
+exit non-zero, never a stack trace, a code frame, a library object dump or
+Bun's crash footer (CLI-4), and SHALL keep the single-JSON-result shape under
+`--json` (CLI-7). The line SHALL NOT contain a secret (SAFE-6).
+
+- `runCli(argv)` SHALL wrap `main` as the top-level error boundary (the
+  `import.meta.main` entry uses it): anything `main` throws SHALL go to
+  `reportCliError`, whose return value is the exit code.
+- `reportCliError(err, { json })` SHALL print `corvidinho: <line>` then
+  `hint: <hint>` on stderr. In JSON mode (`--json` or `--output json`
+  before `--`) it SHALL print `{ "ok": false, "error": <line> }` on stdout,
+  the `plugins run --json` error shape, and the hint on stderr. `<line>` is
+  `formatErrorLine(err)` (REQ-discord-417). The exit code SHALL be the
+  error's own integer `exitCode` in 1..255, else 1, so existing codes hold
+  (`PluginNotFoundError` stays 1).
+- The hint SHALL match the error: an unknown plugin names
+  `corvidinho plugins list`; a filesystem error with a path, or a bun:sqlite
+  error opening the DB (`SQLITE_CANTOPEN` / `SQLITE_READONLY` /
+  `SQLITE_PERM` / `SQLITE_NOTADB`), names `CORVIDINHO_DATA_DIR` and its
+  default `~/.local/share/corvidinho`; anything else names
+  `corvidinho doctor`.
+- `plugins run` SHALL catch an unknown name (including `fledge-*`) or a
+  plugin handler that throws and report it through `reportCliError` (text
+  and `--json`). A plugin result with `ok: false` keeps its existing output
+  and exit code.
+- `discord register-commands` SHALL report a failed registration as one line,
+  `[discord] register-commands failed (<status>): <line>`, adding
+  `— check DISCORD_TOKEN / DISCORD_BOT_TOKEN and --guild-id` on 401/403
+  (`formatRegisterCommandsFailure`, REQ-discord-417), and exit 1.
+- `github watch` SHALL exit with `fatal.exitCode` even when the poller's
+  `stop()` rejects after the 401 halt.
+- `github watch` SHALL stop the poller and exit with `fatal.exitCode` (1)
+  when WATCH halts on a GitHub 401 (REQ-watch-418). SIGINT/SIGTERM still stop
+  it with exit 0.
+
+No global `unhandledRejection` handler, env var, flag or command is added.
+
+Acceptance Criteria
+- `plugins run nosuchplugin` and `plugins run fledge-nosuch` exit 1 with `corvidinho: Unknown plugin command: <name>` and a `corvidinho plugins list` hint; with `--json`, stdout is `{ok:false,error:"Unknown plugin command: nosuchplugin"}`.
+- `CORVIDINHO_DATA_DIR=/proc/nope CORVIDINHO_ACTING_DISCORD_USER_ID=1 plugins run memory-recall` exits 1 with exactly two stderr lines, the error naming `/proc/nope` and a hint naming `CORVIDINHO_DATA_DIR`; with `--json` stdout is `{ok:false,error}`.
+- `CORVIDINHO_DATA_DIR=/proc/nope … discord bridge` exits 1 with `corvidinho: <line>` and the data-dir hint.
+- `discord register-commands --guild-id 1` with a token Discord rejects (401) exits 1 with one stderr line `[discord] register-commands failed (401): …` naming `DISCORD_TOKEN`.
+- `github watch` with a token GitHub rejects (401) exits 1 by itself.
+- None of these outputs contains a stack frame, a code frame, Bun's crash footer, `node_modules`, `rawError`, `requestBody` or the token value.
+- `runCli` returns a thrown error's `exitCode` (or 1) and passes a normal exit code through unchanged.
+- A data dir whose `corvidinho.db` cannot be opened (`SQLITE_CANTOPEN`) makes `plugins run memory-recall` exit 1 with exactly two stderr lines, `corvidinho: unable to open database file` and a hint naming `CORVIDINHO_DATA_DIR`; a `SQLITE_BUSY` error or a filesystem error with no path keeps the `corvidinho doctor` hint.
+
+### REQ-cli-420
+
+The project SHALL ship package version `0.0.29` (slash asks + session continuity, allowlisted-channel gates, secret-path hiding, schedule-run recovery (schema v10), clean CLI errors, doctor reads the allowlist file). CLI `version` and Discord presence (DISCORD-12) report `0.0.29` after a restart. CHANGELOG SHALL include verbose 0.0.29 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.29`.
+- CLI `version` prints `0.0.29`.
+- CHANGELOG has a 0.0.29 section that the updater's changelog helper extracts exactly.
 

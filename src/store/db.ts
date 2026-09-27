@@ -198,7 +198,14 @@ CREATE TABLE IF NOT EXISTS discord_inflight_replies (
 );
 `;
 
-export const SCHEMA_VERSION = 9;
+/**
+ * v10 — schedule run owner (REQ-discord-346): `<pid>:<proc start>` of the
+ * bridge or daemon running a schedule run, so the next start fails only runs
+ * whose process is gone and never one another live process still owns.
+ */
+const SCHEMA_V10_RUN_COLUMNS = ["runner"] as const;
+
+export const SCHEMA_VERSION = 10;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -283,6 +290,17 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V9_SQL);
     db.run("UPDATE schema_meta SET value = '9' WHERE key = 'version'");
     version = 9;
+  }
+  if (version < 10) {
+    for (const col of SCHEMA_V10_RUN_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedule_runs ADD COLUMN ${col} TEXT`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.run("UPDATE schema_meta SET value = '10' WHERE key = 'version'");
+    version = 10;
   }
 }
 

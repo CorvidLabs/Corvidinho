@@ -46,11 +46,41 @@ describe("update-helpers.sh", () => {
     expect(r.exitCode).toBe(0);
   });
 
-  test("log_indicates_ready matches protocol OK", () => {
+  test("REQ-cli-347: log_indicates_ready rejects protocol OK alone (printed before Discord login)", () => {
     const r = bashEval(
       `source "${helpers}"; log_indicates_ready '[discord] protocol version 1 OK'`,
     );
+    expect(r.exitCode).not.toBe(0);
+  });
+
+  test("REQ-cli-347: log_indicates_ready rejects protocol OK followed by a login failure", () => {
+    const blob = "[discord] protocol version 2 OK\nDiscordAPIError[403]: Missing Access";
+    const r = bashEval(`source "${helpers}"; log_indicates_ready "$(printf '${blob}')"`);
+    expect(r.exitCode).not.toBe(0);
+  });
+
+  test("REQ-cli-347: log_indicates_ready accepts protocol OK followed by the login line", () => {
+    const blob = "[discord] protocol version 2 OK\n[discord] logged in as Corvidinho#1234";
+    const r = bashEval(`source "${helpers}"; log_indicates_ready "$(printf '${blob}')"`);
     expect(r.exitCode).toBe(0);
+  });
+
+  test("REQ-cli-347: the ready line is the one the gateway prints on ClientReady, after login", () => {
+    const gateway = readFileSync(join(root, "src/discord/gateway.ts"), "utf8");
+    const readyAt = gateway.indexOf("client.on(Events.ClientReady");
+    const lineAt = gateway.indexOf("console.log(`[discord] logged in as ${ready.user.tag}`)");
+    expect(readyAt).toBeGreaterThan(-1);
+    // Printed inside the ClientReady handler (the next handler registration comes after it).
+    expect(lineAt).toBeGreaterThan(readyAt);
+    expect(lineAt).toBeLessThan(gateway.indexOf("client.on(", readyAt + 1));
+    expect(gateway.split("[discord] logged in as").length - 1).toBe(1);
+    const r = bashEval(
+      `source "${helpers}"; log_indicates_ready '[discord] logged in as Corvidinho#1234'`,
+    );
+    expect(r.exitCode).toBe(0);
+    // The protocol line comes from the pre-login handshake and never counts.
+    const proto = readFileSync(join(root, "src/discord/protocol-version.ts"), "utf8");
+    expect(proto).toContain("console.log(`[discord] protocol version ${result.version} OK`)");
   });
 
   test("log_indicates_ready rejects noise", () => {
@@ -126,6 +156,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).toContain("ROLES-CHAT");
     expect(r.stdout).toContain("files-write");
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
+  });
+
+  test("extract_changelog_section finds 0.0.29", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.29`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Slash asks stay pending");
+    expect(r.stdout).toContain("schedule_runs.runner");
   });
 
   test("extract_changelog_section finds 0.0.28", () => {
@@ -318,12 +357,16 @@ interface FakeBox {
   calls: string;
   pidfile: string;
   envFile: string;
+  /** HEAD before the update (the rollback target). */
+  prevSha: string;
   run(env: Record<string, string>): { exitCode: number; out: string };
   lines(): string[];
+  head(): string;
   cleanup(): void;
 }
 
-function makeFakeBox(): FakeBox {
+/** `ahead`: origin/main gets a commit the box does not have, so an update moves HEAD. */
+function makeFakeBox(opts: { ahead?: boolean } = {}): FakeBox {
   const dir = mkdtempSync(join(tmpdir(), "corvidinho-update-test-"));
   const bin = join(dir, "bin");
   const box = join(dir, "box");
@@ -345,12 +388,22 @@ case "$*" in
     [ -n "\${CORVIDINHO_FAKE_MARK:-}" ] || exit 1
     exit 0 ;;
   *" version") echo 0.0.0 ;;
-  *"discord bridge") echo "[discord] logged in as Fake#0001"; exec sleep 3 ;;
+  *"discord bridge")
+    # Like the real bridge: the protocol handshake line comes before the Discord login.
+    echo "[discord] protocol version 2 OK"
+    case "\${FAKE_BRIDGE:-ready}" in
+      login-fails) sleep 0.3; echo "DiscordAPIError[403]: Missing Access (fake)" >&2; exit 1 ;;
+      no-login) exec sleep 30 ;;
+      *) sleep 0.3; echo "[discord] logged in as Fake#0001"; exec sleep 3 ;;
+    esac ;;
 esac
 exit 0
 `;
   const fakeSystemctl = `#!/usr/bin/env bash
 echo "systemctl $* | mark=\${CORVIDINHO_FAKE_MARK:-unset}" >> "$FAKE_CALLS"
+case "$1" in
+  is-active) [ "\${FAKE_UNIT_INACTIVE:-0}" = "1" ] && exit 3 ;;
+esac
 exit 0
 `;
   writeFileSync(join(bin, "bun"), fakeBun);
@@ -363,6 +416,7 @@ exit 0
       { cwd, stdout: "pipe", stderr: "pipe" },
     );
     if (p.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${new TextDecoder().decode(p.stderr)}`);
+    return new TextDecoder().decode(p.stdout).trim();
   };
   git(["init", "-q", "--bare", origin], dir);
   git(["init", "-q", "-b", "main"], box);
@@ -371,12 +425,21 @@ exit 0
   git(["commit", "-q", "-m", "seed"], box);
   git(["remote", "add", "origin", origin], box);
   git(["push", "-q", "origin", "main"], box);
+  const prevSha = git(["rev-parse", "HEAD"], box);
+  if (opts.ahead) {
+    writeFileSync(join(box, "next.txt"), "next\n");
+    git(["add", "next.txt"], box);
+    git(["commit", "-q", "-m", "next"], box);
+    git(["push", "-q", "origin", "main"], box);
+    git(["reset", "-q", "--hard", prevSha], box);
+  }
 
   return {
     dir,
     calls,
     pidfile,
     envFile,
+    prevSha,
     run(env) {
       const proc = Bun.spawnSync(["bash", updateSh], {
         cwd: box,
@@ -401,6 +464,9 @@ exit 0
     },
     lines() {
       return readFileSync(calls, "utf8").split("\n").filter(Boolean);
+    },
+    head() {
+      return git(["rev-parse", "HEAD"], box);
     },
     cleanup() {
       // Stop a fake bridge the pidfile path may have spawned.
@@ -556,23 +622,241 @@ describe("corvidinho-update.sh restart mode + env (fake box)", () => {
   });
 });
 
+describe("corvidinho-update.sh ready gate (fake box)", () => {
+  test("REQ-cli-347: pidfile mode: a bridge that prints protocol OK then exits 1 on login rolls back", () => {
+    const box = makeFakeBox({ ahead: true });
+    try {
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1", CORVIDINHO_READY_TIMEOUT: "3", FAKE_BRIDGE: "login-fails" });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).not.toContain("ready signal observed");
+      expect(r.out).not.toContain("OK updated");
+      // Exit is seen as soon as the pid is reaped; where nothing reaps it, the timeout catches it.
+      expect(r.out).toMatch(/bridge exited before ready|ready timeout/);
+      expect(r.out).toContain("ROLLBACK: bridge restart/health failed");
+      expect(r.out).toContain("ROLLBACK: checkout restored to");
+      expect(box.head()).toBe(box.prevSha);
+      // Forward start + rollback restart, both from the pidfile path.
+      expect(box.lines().filter((l) => l.includes("discord bridge")).length).toBe(2);
+    } finally {
+      box.cleanup();
+    }
+  }, 45_000);
+
+  test("REQ-cli-347: pidfile mode: a bridge that never logs in rolls back after CORVIDINHO_READY_TIMEOUT", () => {
+    const box = makeFakeBox({ ahead: true });
+    try {
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1", CORVIDINHO_READY_TIMEOUT: "2", FAKE_BRIDGE: "no-login" });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).toContain("waiting up to 2s for [discord] logged in as");
+      expect(r.out).toContain("ready timeout");
+      expect(r.out).not.toContain("ready signal observed");
+      expect(r.out).toContain("ROLLBACK: bridge restart/health failed");
+      expect(box.head()).toBe(box.prevSha);
+    } finally {
+      box.cleanup();
+    }
+  }, 45_000);
+
+  test("REQ-cli-347: pidfile mode: a bridge that prints the login line passes", () => {
+    const box = makeFakeBox({ ahead: true });
+    try {
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1", FAKE_BRIDGE: "ready" });
+      expect(r.exitCode).toBe(0);
+      expect(r.out).toContain("ready signal observed");
+      expect(r.out).toContain("OK updated");
+      expect(r.out).not.toContain("ROLLBACK");
+      expect(box.head()).not.toBe(box.prevSha);
+    } finally {
+      box.cleanup();
+    }
+  }, 45_000);
+
+  test("REQ-cli-347: systemd mode keeps its systemctl is-active check", () => {
+    const ok = makeFakeBox({ ahead: true });
+    try {
+      const r = ok.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge", CORVIDINHO_SKIP_DOCTOR: "1" });
+      expect(r.exitCode).toBe(0);
+      expect(ok.lines()).toContain("systemctl is-active --quiet corvidinho-bridge | mark=from-env-file");
+      expect(ok.lines().some((l) => l.includes("discord bridge"))).toBe(false);
+    } finally {
+      ok.cleanup();
+    }
+    const down = makeFakeBox({ ahead: true });
+    try {
+      const r = down.run({
+        CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge",
+        CORVIDINHO_SKIP_DOCTOR: "1",
+        FAKE_UNIT_INACTIVE: "1",
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).toContain("ROLLBACK: bridge restart/health failed");
+      expect(down.head()).toBe(down.prevSha);
+    } finally {
+      down.cleanup();
+    }
+  }, 45_000);
+});
+
 describe("release workflow", () => {
-  test("release.yml triggers on v* tags and is idempotent-aware", () => {
+  test("release.yml tags every package version and creates its Release (push to main, vX.Y.Z tag, dispatch backfill)", () => {
     expect(existsSync(releaseYml)).toBe(true);
     const body = readFileSync(releaseYml, "utf8");
-    expect(body).toContain("tags:");
-    expect(body).toContain("v*");
-    expect(body).toContain("softprops/action-gh-release");
-    expect(body).toContain("Idempotency");
+    // Triggers: main pushes auto-tag (with catch-up), a person's v* tag, and a manual backfill.
+    expect(body).toMatch(/branches:\s*\n\s*- main/);
+    expect(body).toContain('- "v*"');
+    expect(body).toContain("workflow_dispatch:");
     expect(body).toContain("contents: write");
+    expect(body).toContain("!github.event.deleted");
+    // Tags at each version's bump commit; idempotent on tags and Releases.
+    expect(body).toContain("package_version_commits origin/main");
+    expect(body).toContain('release_push_targets "$versions" "$ver"');
+    expect(body).toContain('release_dispatch_targets "$versions" "$VERSIONS"');
+    expect(body).toContain('git rev-parse -q --verify "refs/tags/${tag}"');
+    expect(body).toContain('gh release view "${tag}"');
+    expect(body).toContain("--verify-tag");
+    expect(body).not.toMatch(/git push[^\n]*(--force|-f\b|--delete)/);
+    expect(body).not.toMatch(/git tag[^\n]*(-f\b|--force|-d\b)/);
+    expect(body).not.toContain("gh release delete");
+    // Event data reaches the shell through env only: no ${{ }} inside any run script.
+    const runBlocks = [...body.matchAll(/run: \|\n((?:(?: {10}.*)?\n)*)/g)].map((m) => m[1]);
+    expect(runBlocks.length).toBe(2);
+    for (const block of runBlocks) expect(block).not.toContain("${{");
+  });
+});
+
+describe("release tagging helpers", () => {
+  // A throwaway repo: 0.0.1, a non-version commit, a release cut to 0.0.2, a
+  // dependency-only package.json change, then a feature commit bumping to 0.0.3
+  // whose subject names another version.
+  function makeRepo() {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-reltag-"));
+    // The workflow sources the helpers under strict mode; so do these tests.
+    const run = (script: string) =>
+      bashEval(
+        `cd "${dir}" && export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t && set -euo pipefail && source "${helpers}" && ${script}`,
+      );
+    const pkg = (version: string, dep = "1") =>
+      JSON.stringify({ name: "x", version, scripts: { version: "bun src/cli.ts version" }, dependencies: { d: dep } }, null, 2);
+    const commit = (files: Record<string, string>, subject: string) => {
+      for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
+      const r = run(`git add -A && git commit -q -m "${subject}"`);
+      if (r.exitCode !== 0) throw new Error(r.stderr);
+    };
+    expect(run("git init -q -b main").exitCode).toBe(0);
+    commit({ "package.json": pkg("0.0.1"), "CHANGELOG.md": "# Changelog\n\n## 0.0.1\n\n### First cut\n\n- a\n" }, "boot (#1)");
+    commit({ "README.md": "hi\n" }, "docs: readme (#2)");
+    commit(
+      { "package.json": pkg("0.0.2"), "CHANGELOG.md": "# Changelog\n\n## 0.0.2\n\n### Second thing\n\n- b\n\n## 0.0.1\n\n### First cut\n\n- a\n" },
+      "chore(release): v0.0.2 — second thing (#5)",
+    );
+    commit({ "package.json": pkg("0.0.2", "2") }, "chore(deps): bump d (#6)");
+    commit(
+      {
+        "package.json": pkg("0.0.3", "2"),
+        "CHANGELOG.md": "# Changelog\n\n## 0.0.3\n\n### Third heading\n\n- c\n\n## 0.0.2\n\n### Second thing\n\n- b\n",
+      },
+      "feat: stuff (v0.0.2) (#7)",
+    );
+    const sha = (rev: string) => run(`git rev-parse ${rev}`).stdout.trim();
+    const versions = join(dir, ".versions.txt");
+    return { dir, sha, run, versions, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  test("package_version_commits lists each version once at the commit that bumped it, oldest first; a bad ref fails", () => {
+    const repo = makeRepo();
+    try {
+      const r = repo.run("package_version_commits main");
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.trim().split("\n")).toEqual([
+        `0.0.1 ${repo.sha("HEAD~4")}`,
+        `0.0.2 ${repo.sha("HEAD~2")}`,
+        `0.0.3 ${repo.sha("HEAD")}`,
+      ]);
+      expect(repo.run("package_version_at HEAD~1").stdout.trim()).toBe("0.0.2");
+      expect(repo.run("package_version_commits nosuch").exitCode).not.toBe(0);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_push_targets catches up every untagged version from the oldest tag to main's, oldest first", () => {
+    const repo = makeRepo();
+    try {
+      expect(repo.run(`package_version_commits main > "${repo.versions}"`).exitCode).toBe(0);
+      // Only 0.0.1 tagged: 0.0.2 and 0.0.3 are pending.
+      expect(repo.run("git tag -a v0.0.1 HEAD~4 -m v0.0.1").exitCode).toBe(0);
+      let r = repo.run(`release_push_targets "${repo.versions}" 0.0.3`);
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.trim().split("\n")).toEqual([`v0.0.2 ${repo.sha("HEAD~2")}`, `v0.0.3 ${repo.sha("HEAD")}`]);
+      // Everything tagged: main's version is still listed so its Release is ensured.
+      expect(repo.run("git tag -a v0.0.2 HEAD~2 -m v0.0.2 && git tag -a v0.0.3 HEAD -m v0.0.3").exitCode).toBe(0);
+      r = repo.run(`release_push_targets "${repo.versions}" 0.0.3`);
+      expect(r.stdout.trim()).toBe(`v0.0.3 ${repo.sha("HEAD")}`);
+      // Versions older than the oldest existing tag (a bootstrap) are never tagged.
+      expect(repo.run("git tag -d v0.0.1 v0.0.3 >/dev/null").exitCode).toBe(0);
+      r = repo.run(`release_push_targets "${repo.versions}" 0.0.3`);
+      expect(r.stdout.trim()).toBe(`v0.0.3 ${repo.sha("HEAD")}`);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_dispatch_targets takes space, comma or newline lists, oldest first, and refuses bad input", () => {
+    const repo = makeRepo();
+    try {
+      expect(repo.run(`package_version_commits main > "${repo.versions}"`).exitCode).toBe(0);
+      const r = repo.run(`release_dispatch_targets "${repo.versions}" $'0.0.3,v0.0.2\n0.0.3'`);
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.trim().split("\n")).toEqual([`v0.0.2 ${repo.sha("HEAD~2")}`, `v0.0.3 ${repo.sha("HEAD")}`]);
+      for (const bad of ["''", "'0.0.9'", "'abc'", "'0.0.2-rc.1'", "'$(id)'"]) {
+        expect(repo.run(`release_dispatch_targets "${repo.versions}" ${bad}`).exitCode).not.toBe(0);
+      }
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_tag_subject: a release cut keeps its summary; another bump uses its CHANGELOG heading", () => {
+    const repo = makeRepo();
+    try {
+      expect(repo.run("release_tag_subject 0.0.2 HEAD~2").stdout.trim()).toBe("v0.0.2 — second thing");
+      expect(repo.run("release_tag_subject 0.0.3 HEAD").stdout.trim()).toBe("v0.0.3 — Third heading");
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_notes: package.json version, CHANGELOG section, commits since the previous vX.Y.Z tag, updater line", () => {
+    const repo = makeRepo();
+    try {
+      // A non-release tag in between must not shorten the range.
+      expect(repo.run("git tag -a v0.0.2 HEAD~2 -m v0.0.2 && git tag vfoo HEAD~1 && git tag -a v0.0.3 HEAD -m v0.0.3").exitCode).toBe(0);
+      const r = repo.run("release_notes v0.0.3");
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout).toContain("## Corvidinho v0.0.3");
+      expect(r.stdout).toContain("**package.json version:** `0.0.3`");
+      expect(r.stdout).toContain("**Commit range:** `v0.0.2..v0.0.3`");
+      expect(r.stdout).toContain("### Changes (CHANGELOG.md)\n\n### Third heading");
+      expect(r.stdout).not.toContain("### Second thing");
+      expect(r.stdout).toContain("- chore(deps): bump d (#6)");
+      expect(r.stdout).toContain("- feat: stuff (v0.0.2) (#7)");
+      expect(r.stdout).not.toContain("second thing (#5)");
+      expect(r.stdout).toContain("CORVIDINHO_REF=v0.0.3 ./scripts/corvidinho-update.sh");
+      expect(r.stdout).toContain("Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)");
+      // A tag whose commit carries another package version says so.
+      expect(repo.run("git tag -a v0.0.9 HEAD~1 -m v0.0.9").exitCode).toBe(0);
+      expect(repo.run("release_notes v0.0.9").stdout).toContain("**package.json version:** `0.0.2`");
+    } finally {
+      repo.cleanup();
+    }
   });
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.28", () => {
+  test("package.json is 0.0.29", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.28");
+    expect(pkg.version).toBe("0.0.29");
   });
 });
