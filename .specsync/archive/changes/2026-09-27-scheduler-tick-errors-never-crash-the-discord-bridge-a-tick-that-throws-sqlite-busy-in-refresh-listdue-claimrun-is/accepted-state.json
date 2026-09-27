@@ -7,11 +7,11 @@
   "title": "Scheduler tick errors never crash the Discord bridge: a tick that throws (SQLITE_BUSY in refresh/listDue/claimRun) is caught and logged scrubbed and the next tick still runs; fire-and-forget runs never reject and always free their running slot",
   "description": "Scheduler tick errors never crash the Discord bridge: a tick that throws (SQLITE_BUSY in refresh/listDue/claimRun) is caught and logged scrubbed and the next tick still runs; fire-and-forget runs never reject and always free their running slot",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "aef2cde685e9e9be6f0dc1c4311a916e33981afc",
   "created_at": 1790463248,
-  "updated_at": 1790467256,
+  "updated_at": 1790467344,
   "affected_specs": [
     "discord"
   ],
