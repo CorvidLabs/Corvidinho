@@ -1,0 +1,41 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790468762,
+      "digest": "82325661bd8dadc5181f204750b9e980e6bff2b8975640704faee479d33d5058",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real",
+        "title": "Specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root",
+        "description": "specsync-read and specsync-brief refuse module names that are not a plain module name and never read a file whose real path is outside the project specs dir; coverage, change-list and ship-status refuse --root",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/specsync/api.ts",
+          "plugins/specsync/commands.ts",
+          "tests/specsync.path-containment.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "specsync-read and specsync-brief accept only a plain module name (letters, digits, _ or -, the registry form; the optional name= prefix stays) and refuse with exit 1 and a clean one-line error, reading nothing, an absolute path, a .. segment, a path separator, a NUL byte or any other character. Every file they read (module spec, legacy flat spec, companions) must realpath inside the real project specs dir, which must itself realpath inside the project root, so a symlinked specs dir, module dir, spec file or companion that points outside the project is refused and its content is never returned (companions: the whole brief refuses). specsync-coverage, specsync-change-list and specsync-ship-status refuse a forwarded --root or --root=VALUE (exit 1, specsync not spawned) so they cannot report on another directory; specsync-list and specsync-check take no path input and are unchanged. Registered modules still read and brief as before. Regression tests for each vector (traversal, absolute, separator, NUL, symlink escape of spec, module dir, companion and specs dir, --root) fail on main and pass with the fix; tsc --noEmit and bun test green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "da9dceb46e5777fa0ad070c862778e096ecba1ade3c9dd8b8d74c2acd75f20a7"
+      }
+    }
+  ],
+  "reopenings": []
+}

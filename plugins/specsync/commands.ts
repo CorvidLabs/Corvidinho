@@ -7,6 +7,7 @@ import {
   listRegisteredModules,
   readCompanions,
   readModuleSpec,
+  refuseRootArg,
   runSpecCheck,
   spawnSpecsync,
 } from "./api.ts";
@@ -86,7 +87,9 @@ export const specsyncCommands: PluginCommand[] = [
       const name = ctx.args[0]?.replace(/^name=/, "");
       if (!name) return fail("missing module name (usage: specsync-brief <module>)");
       const spec = readModuleSpec(ctx.cwd, name);
+      if (!spec.ok && spec.refused) return fail(spec.error);
       const companions = readCompanions(ctx.cwd, name);
+      if (companions.error) return fail(companions.error);
       if (!spec.ok && companions.files.length === 0) {
         return fail(`no spec or companions found for module '${name}'`);
       }
@@ -116,6 +119,8 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
       const result = await spawnSpecsync(ctx.cwd, ["coverage", ...ctx.args]);
       if (!result.success) {
         return fail(result.output || "specsync coverage failed", result.code || 1);
@@ -129,6 +134,8 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
       const result = await spawnSpecsync(ctx.cwd, ["change", "list", ...ctx.args]);
       if (!result.success) {
         return fail(result.output || "specsync change list failed", result.code || 1);
@@ -142,6 +149,8 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
       const result = await spawnSpecsync(ctx.cwd, [
         "change",
         "ship-status",

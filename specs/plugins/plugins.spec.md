@@ -35,6 +35,7 @@ files:
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
   - plugins/specsync/index.ts
+  - tests/specsync.path-containment.test.ts
   - plugins/memory/index.ts
   - plugins/memory/commands.ts
   - plugins/files/index.ts
@@ -133,6 +134,10 @@ spawned with `detached: true`. The registry exports `unregister(name, command)` 
 name only while it is still that exact command). `plugins/fledge` exports
 `fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
 root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
+`plugins/specsync/api.ts` exports `MODULE_NAME_RE` / `invalidModuleName` (the
+plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
+`refused: true` for an invalid name or an escaping path) and `readCompanions`
+(returns `error` and no files when it refuses).
 
 ## Invariants
 
@@ -259,6 +264,19 @@ sessions keep the GITHUB-6 allowlist gate.
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`.
 
+SpecSync tools stay inside the project (SAFE-2 / PLUGIN-1, REQ-plugins-008).
+`specsync-read` / `specsync-brief` take only a plain module name
+(`[A-Za-z0-9_-]+`, the registry form; optional `name=` prefix): an absolute
+path, `.` / `..`, a path separator, NUL or any other character is refused
+(exit 1, nothing read, the name JSON-escaped in the error). Every file they
+read (module spec, legacy flat spec, companions) must realpath inside the real
+`specs/` dir, which must itself realpath inside the project root; a symlinked
+specs dir, module dir, spec or companion that leaves it is refused (a refused
+companion fails the whole brief) and its content is never returned.
+`specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
+forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
+`specsync-list` and `specsync-check` take no path input.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -290,6 +308,12 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **Given** `shell-exec` allowlisted
 - **When** the command sets `CDPATH` (literally or dynamically) to an outside dir and then runs `cd sub`
 - **Then** the child shell's `readonly CDPATH` and dropped `CDPATH`/`OLDPWD` env keep `cd sub` under the root; no outside path is reached
+
+### Scenario: SpecSync tools refuse to read outside the project
+
+- **Given** builtins are loaded and a file `outside.md` sits outside the project
+- **When** the agent runs `specsync-read ../../<outside>/outside` or `specsync-brief ../../<outside>`, or `specsync-read <module>` whose spec, module dir or companion is a symlink to a file outside the project
+- **Then** the run fails with exit 1 and a one-line refusal; no content from outside the project is returned
 
 ### Scenario: web-fetch refuses cloud metadata
 
@@ -344,6 +368,8 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
+| specsync-read/brief name not a plain module name, or a spec/companion/specs dir whose real path leaves the project specs dir | Refuse (exit 1); nothing read |
+| specsync-coverage/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
