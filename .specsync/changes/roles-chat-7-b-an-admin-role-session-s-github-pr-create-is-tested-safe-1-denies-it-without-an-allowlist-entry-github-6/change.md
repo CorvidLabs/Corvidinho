@@ -1,6 +1,6 @@
 ---
 id: roles-chat-7-b-an-admin-role-session-s-github-pr-create-is-tested-safe-1-denies-it-without-an-allowlist-entry-github-6
-state: draft
+state: implementing
 type: bug_fix
 base_commit: fbaa84b7cda1bf2b462baea44cad20ef93e0df4f
 ---

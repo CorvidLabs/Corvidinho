@@ -1,4 +1,39 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790530253,
+      "digest": "8999c175bcee65fbb9b63100d18f23978c24d7786133f6a8b19ad027e0a77668",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "roles-chat-7-b-an-admin-role-session-s-github-pr-create-is-tested-safe-1-denies-it-without-an-allowlist-entry-github-6",
+        "title": "ROLES-CHAT-7(b): an ADMIN role session's github-pr-create is tested: SAFE-1 denies it without an allowlist entry, GITHUB-6 still refuses an unlisted repo, and the dry-run PR goes through with the allowlist entry plus the GITHUB-6 repo allowlist",
+        "description": "ROLES-CHAT-7(b): an ADMIN role session's github-pr-create is tested: SAFE-1 denies it without an allowlist entry, GITHUB-6 still refuses an unlisted repo, and the dry-run PR goes through with the allowlist entry plus the GITHUB-6 repo allowlist",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "tests/roles.chat.gates.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "In tests/roles.chat.gates.test.ts, an ADMIN role session (CORVIDINHO_ACTING_IS_ADMIN=1, acting user = configured owner) running github-pr-create non-interactively is refused with exit 2 and a SAFE-1 error (not the role refusal) when the allowlist has no github-pr-create entry; with the entry but an empty GITHUB-6 repo allowlist it is refused with exit 3 and a GITHUB-6 error; with the entry plus CORVIDINHO_GITHUB_ALLOW_REPOS=CorvidLabs/Corvidinho the dry-run PR returns ok with dryRun true and the given owner, repo, title, head and base. The test fails if SAFE-1 or the GITHUB-6 repo gate is skipped for ADMIN github writes, or if the role gate refuses ADMIN; main's suite catches none of these."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "81feafed392994711ae2bef3f9238e1f82b2ac8c228c3dbedc2e0de8a728bdc1"
+      }
+    }
+  ],
   "reopenings": []
 }
