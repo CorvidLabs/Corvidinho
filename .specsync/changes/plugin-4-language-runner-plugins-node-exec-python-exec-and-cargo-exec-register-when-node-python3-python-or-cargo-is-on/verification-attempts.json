@@ -60,6 +60,26 @@
         "REQ-plugins-313",
         "REQ-plugins-314"
       ]
+    },
+    {
+      "timestamp": 1790520845,
+      "commit": "14033daf1a4bb18a76ed0ef7014d503e3174d454",
+      "contract_digest": "78e3cb0306bcc44333b2e02180b61b7087558fe029bbe9ad47fdb962b50921b3",
+      "execution_digest": "5c3092416c9186de426a3145cd8b01b8c00dac7ecba4aff5f833c076008604f2",
+      "workspace_digest": "405993a8d4f36195ebb9a9ae89bfc8b438482c5ca975bdffa779b47165aea6e6",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-112",
+        "REQ-plugins-313",
+        "REQ-plugins-314"
+      ]
     }
   ]
 }
