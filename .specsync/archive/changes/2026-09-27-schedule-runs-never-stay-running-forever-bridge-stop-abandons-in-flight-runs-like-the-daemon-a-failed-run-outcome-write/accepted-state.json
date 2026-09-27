@@ -7,11 +7,11 @@
   "title": "Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree",
   "description": "Schedule runs never stay running forever: bridge stop abandons in-flight runs like the daemon, a failed run-outcome write is retried once then logged and counted failed, bridge and daemon start fail runs a dead process left running and remove leftover schedule worktrees, and stop waits a short bounded grace for aborted runs to park their worktree",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "bf9a5b20b2a13f77eb503567428ff5551321bc9c",
   "created_at": 1790470226,
-  "updated_at": 1790475386,
+  "updated_at": 1790475535,
   "affected_specs": [
     "discord",
     "cli"
