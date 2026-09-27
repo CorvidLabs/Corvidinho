@@ -7,10 +7,11 @@
   "title": "SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail",
   "description": "SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "cfbcd0c705ff32a4c88d65978bdfbab7a76583ed",
   "created_at": 1790518966,
-  "updated_at": 1790519407,
+  "updated_at": 1790519426,
   "affected_specs": [
     "plugins"
   ],
