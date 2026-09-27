@@ -11,6 +11,10 @@ import {
 import { runTask } from "../src/agent/loop.ts";
 import type { AgentEvent, VerifyRunner } from "../src/agent/types.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "../src/agent/workspace-diff.ts";
+import { failingLaneLog, HELP_HEAD, LANE_FAILED_LINE } from "./fixtures/verify-lane-log.ts";
+
+/** The model-facing verify feedback cap (`VERIFY_FEEDBACK_MAX_CHARS`, AGENT-4.a). */
+const FEEDBACK_CAP = 4000;
 
 function collect() {
   const events: AgentEvent[] = [];
@@ -86,6 +90,56 @@ describe("runTask prove-before-done", () => {
       "verifying",
       "done",
     ]);
+  });
+
+  test("a lane log whose passing steps fill the first 4000 chars still gives the retry the failing step's output (AGENT-4.a)", async () => {
+    const { log } = failingLaneLog();
+    let verifyN = 0;
+    const feedbacks: (string | undefined)[] = [];
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 3,
+      verifyRunner: async () => {
+        verifyN += 1;
+        return verifyN === 1 ? { success: false, output: log } : { success: true, output: "ok" };
+      },
+      execute: async ({ attempt, verifyFeedback }) => {
+        feedbacks.push(verifyFeedback);
+        return { summary: `attempt ${attempt}`, filesChanged: ["src/a.ts"] };
+      },
+    });
+    expect(result.state).toBe("done");
+    expect(result.verified).toBe(true);
+    const fb = feedbacks[1] ?? "";
+    expect(fb.startsWith("Verification failed. Fix these errors and try again:\n\n")).toBe(true);
+    expect(fb.length).toBeLessThanOrEqual(FEEDBACK_CAP);
+    expect(fb).toContain("Failing step: test (step 3 of lane 'verify')");
+    expect(fb).toContain("error: expect(received).toBe(expected)");
+    expect(fb).toContain("Expected: 7\nReceived: 6");
+    expect(fb).toContain("(fail) sum of three");
+    expect(fb).toContain(LANE_FAILED_LINE);
+    expect(fb).not.toContain(HELP_HEAD);
+  });
+
+  test("a verify output within the cap reaches the retry whole (AGENT-4.a)", async () => {
+    const output = "src/a.ts(3,5): error TS2322: Type 'string' is not assignable to type 'number'.";
+    let verifyN = 0;
+    const feedbacks: (string | undefined)[] = [];
+    await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 1,
+      verifyRunner: async () => {
+        verifyN += 1;
+        return verifyN === 1 ? { success: false, output } : { success: true, output: "ok" };
+      },
+      execute: async ({ verifyFeedback }) => {
+        feedbacks.push(verifyFeedback);
+        return { summary: "x", filesChanged: ["src/a.ts"] };
+      },
+    });
+    expect(feedbacks[1]).toBe(`Verification failed. Fix these errors and try again:\n\n${output}`);
   });
 
   test("exhausted retries → failed verified=false", async () => {
