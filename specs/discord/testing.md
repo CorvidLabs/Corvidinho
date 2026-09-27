@@ -157,6 +157,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
 
+## /schedule delete audit (REQ-discord-020, SAFE-5)
+
+- `tests/discord.schedule.test.ts` — "/schedule delete audit (SAFE-5)": with a
+  DB-backed store holding one schedule and one run, the owner's delete appends
+  `schedule-delete` `started` then `ok` rows (surface `discord:schedule`, args
+  digest of the resolved id, no raw id), the reply names `#1 started · #2 ok`,
+  the schedule and its run rows are gone and the chain verifies; a throwing
+  trail, a keyed chain without the key, and no trail wired each reply
+  `audit log unavailable (SAFE-5)` and keep the schedule and its runs; a
+  non-ADMIN delete gets `not authorized` and appends `denied` (a refused pause
+  appends nothing); a store delete that throws after the intent row appends
+  `error`; an unknown id appends nothing; an `ok` row that cannot be written
+  after the delete leaves the delete in place and the reply says
+  `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
+  throws still gets only `not authorized` and deletes nothing. No live Discord.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
