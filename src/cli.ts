@@ -37,6 +37,7 @@ import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
+import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
 import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
@@ -522,20 +523,37 @@ async function taskRun(opts: {
     },
   });
   let spendWarning: SpendWarning | undefined;
-  const result: TaskResult = await runTask({
-    cwd,
-    task: opts.taskText,
-    config,
-    verifyBeforeComplete: opts.noVerify ? false : undefined,
-    maxRetries: opts.maxRetries,
-    onEvent: handleEvent,
-    execute: async (ctx) => {
-      if (ctx.verifyFeedback && !quiet) {
-        console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
-      }
-      return execute(ctx);
-    },
-  });
+  // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
+  // and tool loop stop and the cancelled result below is still printed (exit
+  // 130). `once`: a second signal takes the default action. A signal this
+  // process started with ignored (a background job's SIGINT) is not hooked:
+  // a listener would replace SIG_IGN and removing it restores SIG_DFL.
+  const abort = new AbortController();
+  const onSignal = () => abort.abort();
+  const hooked = forwardedSignals().filter(
+    (sig) => sig === "SIGINT" || sig === "SIGTERM",
+  );
+  for (const sig of hooked) process.once(sig, onSignal);
+  let result: TaskResult;
+  try {
+    result = await runTask({
+      cwd,
+      task: opts.taskText,
+      config,
+      verifyBeforeComplete: opts.noVerify ? false : undefined,
+      maxRetries: opts.maxRetries,
+      signal: abort.signal,
+      onEvent: handleEvent,
+      execute: async (ctx) => {
+        if (ctx.verifyFeedback && !quiet) {
+          console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
+        }
+        return execute(ctx);
+      },
+    });
+  } finally {
+    for (const sig of hooked) process.off(sig, onSignal);
+  }
   if (spendWarning) result.spendWarning = spendWarning;
 
   if (ndjson) {

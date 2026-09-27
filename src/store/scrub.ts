@@ -165,7 +165,8 @@ function tableExists(db: Database, table: string): boolean {
 /**
  * Re-scrub every stored free-text column. Returns rows changed per table.
  * A scrubbed memory key that would collide with an existing active key gets
- * a short row-id suffix so the unique index holds.
+ * a short row-id suffix so the unique index holds. BEGIN IMMEDIATE, so a
+ * concurrent writer is waited for under busy_timeout.
  */
 export function rescrubDatabase(db: Database): {
   rowsUpdated: number;
@@ -207,7 +208,7 @@ export function rescrubDatabase(db: Database): {
       byTable[table] = changed;
       rowsUpdated += changed;
     }
-  })();
+  }).immediate();
   return { rowsUpdated, byTable };
 }
 

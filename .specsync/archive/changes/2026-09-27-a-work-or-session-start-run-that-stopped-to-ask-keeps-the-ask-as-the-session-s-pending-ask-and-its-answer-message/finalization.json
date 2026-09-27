@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message",
+  "implementation_commit": "c8b1bb9d8e6383e4fd45f7828e44bc1cfc63e3bf",
+  "implementation_tree": "a41a4ecc44af7b25c7aa155e9d36dedd80e1d4b5",
+  "contract_digest": "e97aacf3db05c1e7a74b39e7f39d874f7482c192c2844b0e8d0b45b48dded14f",
+  "workspace_digest": "341db39f3560955c7e8c5ca3c7e415a98c7d3597ba531ae01724846568e66369",
+  "closing_digest": "46af3d8fdabf7fa295f9995bd28257da28cd9b33089df71ecb94eeb6c51c559e",
+  "review_digest": "59911fa0812647d35e6433b479da2209d3407f84f48cc070ed4af4f2a8957151",
+  "finalization_digest": "f658470f789c7390d5eae6149de8ecdac03fcc7323bffc2013e3d40861613404",
+  "timestamp": 1790470989
+}

@@ -137,6 +137,16 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).toContain("Interrupted replies");
   });
 
+  test("extract_changelog_section finds 0.0.27", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.27`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("agent.3md");
+    expect(r.stdout).toContain("@corvidlabs/agent3md");
+    expect(r.stdout).toContain("AGENT-13");
+  });
+
   test("extract_changelog_section finds 0.0.25", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.25`,
@@ -550,10 +560,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.26", () => {
+  test("package.json is 0.0.27", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.26");
+    expect(pkg.version).toBe("0.0.27");
   });
 });

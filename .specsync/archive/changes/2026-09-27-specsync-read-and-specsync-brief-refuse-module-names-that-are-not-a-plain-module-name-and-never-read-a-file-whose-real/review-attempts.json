@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "specsync-read-and-specsync-brief-refuse-module-names-that-are-not-a-plain-module-name-and-never-read-a-file-whose-real",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "cf3aead0b9a7d2b513d753d147430a4e1242c5e8",
+      "contract_digest": "82325661bd8dadc5181f204750b9e980e6bff2b8975640704faee479d33d5058",
+      "execution_digest": "a3c42dc19de39011ab924b75adf8f6d1bf61ae60c4563afe6aad66255bc3f4bd",
+      "workspace_digest": "b968bf030b86944c94f4e4db633823c0268f7d07fe5fc36925654cddb1c3a117",
+      "timestamp": 1790470967
+    }
+  ]
+}
