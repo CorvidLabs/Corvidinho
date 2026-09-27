@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 43
+version: 45
 status: draft
 files:
   - src/plugins/types.ts
@@ -18,6 +18,8 @@ files:
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
+  - tests/store.busy-lock.test.ts
+  - tests/audit.keyed-downgrade.test.ts
   - src/allowlist/types.ts
   - src/allowlist/load.ts
   - src/allowlist/github.ts
@@ -259,6 +261,15 @@ sessions keep the GITHUB-6 allowlist gate.
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`.
 
+SAFE-5 audit chain (REQ-plugins-095): once `audit_log` holds a keyed row it
+stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
+append after a keyed row (a dangerous run is then refused, fail closed), and
+`verifyAudit` with the key reports an unkeyed row after a keyed row as the
+break. An unkeyed prefix followed by keyed rows still verifies as mixed.
+Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
+the newest rows is not detectable from the DB alone; it needs an anchor kept
+outside the DB.
+
 ## Behavioral Examples
 
 ### Scenario: memory-store description shows argv example
@@ -347,6 +358,7 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting, `\`-newline, expanded command words, command substitutions, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
+| Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
 | web-fetch non-http(s) scheme or URL credentials | Refuse (exit 2) |
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
@@ -418,6 +430,11 @@ and current rows for plugins host evolution.
 | 2026-09-26 | test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a: Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file makes the GitHub plugin gate refuse (REQ-plugins-253) |
 | 2026-09-26 | shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops: Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root |
 | 2026-09-26 | harden-child-process-lifetimes-and-fledge-scoping-issue-112-follow-up-to-154-157-167-fledge-plugin-argv-after-own: Harden child process lifetimes and Fledge scoping (issue #112 follow-up to #154, #157, #167): fledge plugin argv after --, own process group plus tree kill on timeout or abort for Fledge runs, delegate workers and schedule runs, daemon shutdown kills abandoned runs, Fledge commands scoped to the project root they were discovered for |
-
+| 2026-09-26 | audit-append-and-safe-6-re-scrub-take-the-sqlite-write-lock-up-front-begin-immediate-so-busy-timeout-applies-and: Audit append and SAFE-6 re-scrub take the SQLite write lock up front (BEGIN IMMEDIATE) so busy_timeout applies and concurrent writers wait instead of failing with database is locked (SAFE-5, SAFE-6) |
 | 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
+| 2026-09-27 | concurrent-audit-appends-from-several-processes-lose-no-safe-5-rows-regression-test-for-req-plugins-287-multi-process: Concurrent audit appends from several processes lose no SAFE-5 rows: regression test for REQ-plugins-287 multi-process acceptance (review follow-up for PR 211) |
+| 2026-09-26 | safe-5-audit-verify-rejects-unkeyed-rows-after-a-keyed-row-and-appendaudit-refuses-unkeyed-appends-to-a-keyed-chain-so: SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256 |
+| 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
+| 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
+| 2026-09-27 | safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a: SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain |
