@@ -15,6 +15,6 @@ Full operator notes (systemd / `BRIDGE_CMD`, dry-run, doctor): **[`docs/BOX-UPDA
 
 - Stop/start via `/tmp/corvidinho-discord-bridge.pid`
 - Log: `/tmp/corvidinho-discord-bridge.log`
-- Success requires `[discord] logged in` or `protocol version … OK` within `CORVIDINHO_READY_TIMEOUT` (default 60s)
+- Success requires the bridge's Discord login line `[discord] logged in as …` within `CORVIDINHO_READY_TIMEOUT` (default 60s); the earlier `protocol version … OK` line is printed before login and does not count
 - On failure: rollback to previous SHA + restart — **log only** (never Discord panic posts)
 - Secrets: source `~/.config/corvidinho/env` (`CORVIDINHO_ENV_FILE`) — never hardcode; see `.env.example`

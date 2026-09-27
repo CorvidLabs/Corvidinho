@@ -46,11 +46,41 @@ describe("update-helpers.sh", () => {
     expect(r.exitCode).toBe(0);
   });
 
-  test("log_indicates_ready matches protocol OK", () => {
+  test("REQ-cli-347: log_indicates_ready rejects protocol OK alone (printed before Discord login)", () => {
     const r = bashEval(
       `source "${helpers}"; log_indicates_ready '[discord] protocol version 1 OK'`,
     );
+    expect(r.exitCode).not.toBe(0);
+  });
+
+  test("REQ-cli-347: log_indicates_ready rejects protocol OK followed by a login failure", () => {
+    const blob = "[discord] protocol version 2 OK\nDiscordAPIError[403]: Missing Access";
+    const r = bashEval(`source "${helpers}"; log_indicates_ready "$(printf '${blob}')"`);
+    expect(r.exitCode).not.toBe(0);
+  });
+
+  test("REQ-cli-347: log_indicates_ready accepts protocol OK followed by the login line", () => {
+    const blob = "[discord] protocol version 2 OK\n[discord] logged in as Corvidinho#1234";
+    const r = bashEval(`source "${helpers}"; log_indicates_ready "$(printf '${blob}')"`);
     expect(r.exitCode).toBe(0);
+  });
+
+  test("REQ-cli-347: the ready line is the one the gateway prints on ClientReady, after login", () => {
+    const gateway = readFileSync(join(root, "src/discord/gateway.ts"), "utf8");
+    const readyAt = gateway.indexOf("client.on(Events.ClientReady");
+    const lineAt = gateway.indexOf("console.log(`[discord] logged in as ${ready.user.tag}`)");
+    expect(readyAt).toBeGreaterThan(-1);
+    // Printed inside the ClientReady handler (the next handler registration comes after it).
+    expect(lineAt).toBeGreaterThan(readyAt);
+    expect(lineAt).toBeLessThan(gateway.indexOf("client.on(", readyAt + 1));
+    expect(gateway.split("[discord] logged in as").length - 1).toBe(1);
+    const r = bashEval(
+      `source "${helpers}"; log_indicates_ready '[discord] logged in as Corvidinho#1234'`,
+    );
+    expect(r.exitCode).toBe(0);
+    // The protocol line comes from the pre-login handshake and never counts.
+    const proto = readFileSync(join(root, "src/discord/protocol-version.ts"), "utf8");
+    expect(proto).toContain("console.log(`[discord] protocol version ${result.version} OK`)");
   });
 
   test("log_indicates_ready rejects noise", () => {
@@ -318,12 +348,16 @@ interface FakeBox {
   calls: string;
   pidfile: string;
   envFile: string;
+  /** HEAD before the update (the rollback target). */
+  prevSha: string;
   run(env: Record<string, string>): { exitCode: number; out: string };
   lines(): string[];
+  head(): string;
   cleanup(): void;
 }
 
-function makeFakeBox(): FakeBox {
+/** `ahead`: origin/main gets a commit the box does not have, so an update moves HEAD. */
+function makeFakeBox(opts: { ahead?: boolean } = {}): FakeBox {
   const dir = mkdtempSync(join(tmpdir(), "corvidinho-update-test-"));
   const bin = join(dir, "bin");
   const box = join(dir, "box");
@@ -345,12 +379,22 @@ case "$*" in
     [ -n "\${CORVIDINHO_FAKE_MARK:-}" ] || exit 1
     exit 0 ;;
   *" version") echo 0.0.0 ;;
-  *"discord bridge") echo "[discord] logged in as Fake#0001"; exec sleep 3 ;;
+  *"discord bridge")
+    # Like the real bridge: the protocol handshake line comes before the Discord login.
+    echo "[discord] protocol version 2 OK"
+    case "\${FAKE_BRIDGE:-ready}" in
+      login-fails) sleep 0.3; echo "DiscordAPIError[403]: Missing Access (fake)" >&2; exit 1 ;;
+      no-login) exec sleep 30 ;;
+      *) sleep 0.3; echo "[discord] logged in as Fake#0001"; exec sleep 3 ;;
+    esac ;;
 esac
 exit 0
 `;
   const fakeSystemctl = `#!/usr/bin/env bash
 echo "systemctl $* | mark=\${CORVIDINHO_FAKE_MARK:-unset}" >> "$FAKE_CALLS"
+case "$1" in
+  is-active) [ "\${FAKE_UNIT_INACTIVE:-0}" = "1" ] && exit 3 ;;
+esac
 exit 0
 `;
   writeFileSync(join(bin, "bun"), fakeBun);
@@ -363,6 +407,7 @@ exit 0
       { cwd, stdout: "pipe", stderr: "pipe" },
     );
     if (p.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${new TextDecoder().decode(p.stderr)}`);
+    return new TextDecoder().decode(p.stdout).trim();
   };
   git(["init", "-q", "--bare", origin], dir);
   git(["init", "-q", "-b", "main"], box);
@@ -371,12 +416,21 @@ exit 0
   git(["commit", "-q", "-m", "seed"], box);
   git(["remote", "add", "origin", origin], box);
   git(["push", "-q", "origin", "main"], box);
+  const prevSha = git(["rev-parse", "HEAD"], box);
+  if (opts.ahead) {
+    writeFileSync(join(box, "next.txt"), "next\n");
+    git(["add", "next.txt"], box);
+    git(["commit", "-q", "-m", "next"], box);
+    git(["push", "-q", "origin", "main"], box);
+    git(["reset", "-q", "--hard", prevSha], box);
+  }
 
   return {
     dir,
     calls,
     pidfile,
     envFile,
+    prevSha,
     run(env) {
       const proc = Bun.spawnSync(["bash", updateSh], {
         cwd: box,
@@ -401,6 +455,9 @@ exit 0
     },
     lines() {
       return readFileSync(calls, "utf8").split("\n").filter(Boolean);
+    },
+    head() {
+      return git(["rev-parse", "HEAD"], box);
     },
     cleanup() {
       // Stop a fake bridge the pidfile path may have spawned.
@@ -554,6 +611,81 @@ describe("corvidinho-update.sh restart mode + env (fake box)", () => {
       expect(matches(shell)).toBe(false);
     }
   });
+});
+
+describe("corvidinho-update.sh ready gate (fake box)", () => {
+  test("REQ-cli-347: pidfile mode: a bridge that prints protocol OK then exits 1 on login rolls back", () => {
+    const box = makeFakeBox({ ahead: true });
+    try {
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1", CORVIDINHO_READY_TIMEOUT: "3", FAKE_BRIDGE: "login-fails" });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).not.toContain("ready signal observed");
+      expect(r.out).not.toContain("OK updated");
+      // Exit is seen as soon as the pid is reaped; where nothing reaps it, the timeout catches it.
+      expect(r.out).toMatch(/bridge exited before ready|ready timeout/);
+      expect(r.out).toContain("ROLLBACK: bridge restart/health failed");
+      expect(r.out).toContain("ROLLBACK: checkout restored to");
+      expect(box.head()).toBe(box.prevSha);
+      // Forward start + rollback restart, both from the pidfile path.
+      expect(box.lines().filter((l) => l.includes("discord bridge")).length).toBe(2);
+    } finally {
+      box.cleanup();
+    }
+  }, 45_000);
+
+  test("REQ-cli-347: pidfile mode: a bridge that never logs in rolls back after CORVIDINHO_READY_TIMEOUT", () => {
+    const box = makeFakeBox({ ahead: true });
+    try {
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1", CORVIDINHO_READY_TIMEOUT: "2", FAKE_BRIDGE: "no-login" });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).toContain("waiting up to 2s for [discord] logged in as");
+      expect(r.out).toContain("ready timeout");
+      expect(r.out).not.toContain("ready signal observed");
+      expect(r.out).toContain("ROLLBACK: bridge restart/health failed");
+      expect(box.head()).toBe(box.prevSha);
+    } finally {
+      box.cleanup();
+    }
+  }, 45_000);
+
+  test("REQ-cli-347: pidfile mode: a bridge that prints the login line passes", () => {
+    const box = makeFakeBox({ ahead: true });
+    try {
+      const r = box.run({ CORVIDINHO_SKIP_DOCTOR: "1", FAKE_BRIDGE: "ready" });
+      expect(r.exitCode).toBe(0);
+      expect(r.out).toContain("ready signal observed");
+      expect(r.out).toContain("OK updated");
+      expect(r.out).not.toContain("ROLLBACK");
+      expect(box.head()).not.toBe(box.prevSha);
+    } finally {
+      box.cleanup();
+    }
+  }, 45_000);
+
+  test("REQ-cli-347: systemd mode keeps its systemctl is-active check", () => {
+    const ok = makeFakeBox({ ahead: true });
+    try {
+      const r = ok.run({ CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge", CORVIDINHO_SKIP_DOCTOR: "1" });
+      expect(r.exitCode).toBe(0);
+      expect(ok.lines()).toContain("systemctl is-active --quiet corvidinho-bridge | mark=from-env-file");
+      expect(ok.lines().some((l) => l.includes("discord bridge"))).toBe(false);
+    } finally {
+      ok.cleanup();
+    }
+    const down = makeFakeBox({ ahead: true });
+    try {
+      const r = down.run({
+        CORVIDINHO_BRIDGE_UNIT: "corvidinho-bridge",
+        CORVIDINHO_SKIP_DOCTOR: "1",
+        FAKE_UNIT_INACTIVE: "1",
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.out).toContain("ROLLBACK: bridge restart/health failed");
+      expect(down.head()).toBe(down.prevSha);
+    } finally {
+      down.cleanup();
+    }
+  }, 45_000);
 });
 
 describe("release workflow", () => {

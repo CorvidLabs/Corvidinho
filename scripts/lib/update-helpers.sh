@@ -1,18 +1,19 @@
 # Shared helpers for scripts/corvidinho-update.sh (sourced; not executed alone).
 # Keep predicates pure so tests can `bash -c 'source …; …'`.
 
-# Return 0 if a log line (or blob) indicates Discord bridge is ready.
-# Matches bridge stdout: "[discord] logged in as …" and "protocol version N OK".
+# The bridge prints this line on Discord ClientReady, i.e. only after a successful login
+# (src/discord/gateway.ts). Keep the two in step.
+BRIDGE_READY_LINE='[discord] logged in as'
+
+# Return 0 if a log line (or blob) indicates the Discord bridge is ready.
+# Only the login line counts: "[discord] protocol version N OK" is printed before
+# client.login, so a bridge with a bad token prints it and then dies.
 log_indicates_ready() {
   local blob="${1:-}"
   [[ -n "$blob" ]] || return 1
-  if printf '%s\n' "$blob" | grep -Eq '\[discord\] logged in'; then
-    return 0
-  fi
-  if printf '%s\n' "$blob" | grep -Eq 'protocol version[[:space:]]+[0-9]+[[:space:]]+OK'; then
-    return 0
-  fi
-  return 1
+  # Plain substring match, no pipe: under the updater's pipefail a grep -q that stops
+  # reading early could fail the pipeline on a long log.
+  [[ "$blob" == *"$BRIDGE_READY_LINE "* ]]
 }
 
 # Extract a CHANGELOG.md section for version VER (with or without leading v).
