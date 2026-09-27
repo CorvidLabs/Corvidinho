@@ -21,7 +21,7 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line, slash names, optional git tip) |
 | `/agents` | — | yes | List local Corvidinho agent |
 | `/work` | `description` (required), optional `project` | public (deferred) | Drive a work task in isolated worktree |
-| `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check) |
+| `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check). Refuses yourself and the configured owner (DISCORD-6 / IDENTITY-2) |
 | `/unmute` | `user` (user, required) | yes | Unmute user (ADMIN) |
 | `/schedule list` | — | yes | List schedules |
 | `/schedule create` | `name`, `cadence`, `project`, `prompt`, optional `channel` | yes | Create recurring single-project run (ADMIN; min 5m cadence) |
@@ -122,6 +122,13 @@ The reply quotes the question, mentions the configured owner (`CORVIDINHO_OWNER_
 ### Slash replies
 
 Mostly ephemeral plain text (`/status`, `/agents`, `/session list`, mute/unmute, gates). `/session start` and `/work` use deferred public replies with summary. Replying to a `/session start` or `/work` answer continues that session, with or without the reply ping (DISCORD-2); only the user who started it continues it (SESSION-MULTI-1).
+
+### Rate limits and mutes (DISCORD-6)
+
+- One per-user sliding window (`DISCORD_RATE_LIMIT_WINDOW_MS`, default 60s; `DISCORD_RATE_LIMIT_MAX`, default 10) covers @mention / reply / thread messages and slash commands together.
+- `DISCORD_RATE_LIMIT_BY_LEVEL` (JSON, e.g. `{"3":100}`) overrides the max for the actor's resolved permission level on both paths: 3 = owner (ADMIN), 2 = allowed user or role (or anyone in an allowlisted channel when the user and role lists are empty).
+- `/mute` refuses yourself and the configured owner with an ephemeral message: a muted owner is not ADMIN, so `/unmute` would be refused until the bridge restarts. Mutes are in memory (seed: `DISCORD_MUTED_USER_IDS`).
+- A muted or rate-limited user's chat message gets at most **one** public notice ("You do not have permission…" / "Slow down!") per user per rate-limit window; later messages in that window are refused silently. Slash refusals stay ephemeral on every call.
 
 ---
 
