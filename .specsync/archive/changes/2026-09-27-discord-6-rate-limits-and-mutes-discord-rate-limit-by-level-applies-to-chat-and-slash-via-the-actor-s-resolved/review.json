@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-6-rate-limits-and-mutes-discord-rate-limit-by-level-applies-to-chat-and-slash-via-the-actor-s-resolved",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "043e7e5c49658a8a9f90cb24786a5d61afbe7a7f",
+  "contract_digest": "945a088e93e3fa62f861a27034e04f51bcf513fc4b2cea7e9d0b6559611c594c",
+  "execution_digest": "e848e117109857096b46bf278bfc25b20b93c05c948b02183364a4e3b3b24437",
+  "workspace_digest": "29b51f7672eacbcfd0a7b20c419630512db41aa0a66081d5d8e2167e5d7c298c",
+  "timestamp": 1790475482
+}
