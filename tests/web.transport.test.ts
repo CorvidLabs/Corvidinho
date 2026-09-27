@@ -262,8 +262,20 @@ describe.skipIf(!hasOpenssl)("TLS: pinned IP with original SNI + certificate nam
       expect(seen[0]!.servername).toBe("pinned.test");
       expect(seen[0]!.head).toContain(`Host: pinned.test:${port}`);
 
-      await expect(trusted(req(`https://other.test:${port}/`))).rejects.toThrow();
-      await expect(createSocketTransport()(req(`https://pinned.test:${port}/`))).rejects.toThrow();
+      // Workaround for a Bun 1.3.11 crash (fixed in 1.4.2): plain awaits, not
+      // expect(promise).rejects. This code runs inside a TLS socket callback,
+      // and .rejects runs the event loop there; Bun 1.3.11 then frees the
+      // closed socket while its TLS code still uses it and segfaults.
+      const wrongName = await trusted(req(`https://other.test:${port}/`)).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(wrongName).toBeInstanceOf(Error);
+      const untrustedCa = await createSocketTransport()(req(`https://pinned.test:${port}/`)).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(untrustedCa).toBeInstanceOf(Error);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
