@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and",
+  "slug": "safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and",
+  "title": "SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable)",
+  "description": "SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
+  "created_at": 1790529919,
+  "updated_at": 1790532436,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "plugins/files/protectedPaths.ts",
+    "plugins/files/commands.ts",
+    "tests/files.plugins.test.ts",
+    "tests/git.plugins.test.ts",
+    "specs/plugins/requirements.md",
+    "specs/plugins/plugins.spec.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "files-write, files-edit and files-delete refuse (exit 2, SAFE-2, file unchanged / not created) any path with a component containing 'keystore' inside the project (keystore/UTC--..., config/Keystore/wallet.json, a symlink into a keystore dir); they also refuse .specsync/ config, registry, version and archive files; files under the active change folders .specsync/changes/ stay writable; a project checked out under a keystore-named directory can still write its ordinary files; git-commit refuses staging the deletion of .specsync/config.toml but stages the deletion of an archived change's .specsync/changes/<id>/ files"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

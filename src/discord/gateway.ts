@@ -18,7 +18,7 @@ import type {
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
-import { buildVersionPresenceActivity } from "./presence.ts";
+import { buildVersionPresenceData } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
@@ -55,6 +55,13 @@ export type GatewayHandlers = {
    * Bridge wires `config.channelIds` (mutated in place by /admin).
    */
   getAllowlistedChannelIds?: () => readonly string[];
+  /**
+   * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431 — may this invoker see channel
+   * autocomplete choices? Asked on every autocomplete request; unset or false
+   * ⇒ empty choices (fail closed). The bridge wires the slash gate order:
+   * channel allowlist → actor gate → ADMIN (owner, not muted).
+   */
+  mayAutocompleteChannels?: (actor: AutocompleteActor) => boolean;
   onReady?: (botUserId: string) => void;
   /** Optional outbound helper used by bridge after agent reply. */
   reply?: (opts: {
@@ -94,6 +101,33 @@ export type GatewayHandlers = {
     messageId: string;
   }) => Promise<boolean>;
 };
+
+/** Who asked for channel autocomplete, and where (REQ-discord-431). */
+export type AutocompleteActor = {
+  commandName: string;
+  channelId: string;
+  userId: string;
+  roleIds: string[];
+};
+
+/** Fixture-friendly subset of a discord.js interaction member. */
+type RawInteractionMember = {
+  roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+} | null;
+
+/**
+ * Member role snowflakes: a cached GuildMember (`roles.cache`) or the raw API
+ * member (`roles: string[]`); none when absent.
+ */
+function memberRoleIds(member: RawInteractionMember | undefined): string[] {
+  const roles = member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return [...roles];
+  if (roles.cache && typeof roles.cache.keys === "function") {
+    return [...roles.cache.keys()];
+  }
+  return [];
+}
 
 export type DiscordGateway = {
   start(): Promise<void>;
@@ -205,7 +239,6 @@ export async function createLiveGateway(
     GatewayIntentBits,
     Events,
     ChannelType,
-    ActivityType,
     MessageFlags,
   } = discord;
   const presenceVersion = opts?.version ?? PACKAGE_VERSION;
@@ -216,6 +249,10 @@ export async function createLiveGateway(
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
     ],
+    // DISCORD-12: discord.js copies this into the gateway IDENTIFY payload at
+    // login, so the first IDENTIFY and any non-resumable re-identify carry the
+    // version. ClientReady does not fire again after a re-identify.
+    presence: buildVersionPresenceData(presenceVersion),
   });
 
   let botUserId: string | null = null;
@@ -332,16 +369,7 @@ export async function createLiveGateway(
       return undefined;
     };
 
-    const roleIds: string[] = [];
-    const member = interaction.member;
-    if (member?.roles) {
-      const roles = member.roles;
-      if (Array.isArray(roles)) {
-        roleIds.push(...roles);
-      } else if (roles.cache && typeof roles.cache.keys === "function") {
-        roleIds.push(...roles.cache.keys());
-      }
-    }
+    const roleIds = memberRoleIds(interaction.member);
 
     return {
       id: interaction.id,
@@ -390,18 +418,9 @@ export async function createLiveGateway(
         botUserId = ready.user.id;
         console.log(`[discord] logged in as ${ready.user.tag}`);
         try {
-          const activity = buildVersionPresenceActivity(presenceVersion);
-          ready.user.setPresence({
-            status: "online",
-            activities: [
-              {
-                name: activity.name,
-                state: activity.state,
-                type: ActivityType.Custom,
-              },
-            ],
-          });
-          console.log(`[discord] presence set: ${activity.state}`);
+          const presence = buildVersionPresenceData(presenceVersion);
+          ready.user.setPresence(presence);
+          console.log(`[discord] presence set: ${presence.activities[0].state}`);
         } catch (err) {
           console.warn("[discord] presence set failed:", err);
         }
@@ -713,11 +732,20 @@ type ChannelTypeEnum = { GuildText: number };
  * Live autocomplete for STRING channel options on /admin channels add|remove
  * and /announce channel. Lists guild text channels from cache (Guilds intent);
  * remove scopes to the live allowlist when provided.
+ *
+ * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431: Discord shows these options to
+ * every guild member, so each request is re-checked here. Unless
+ * `handlers.mayAutocompleteChannels` says this invoker is ADMIN in an
+ * allowlisted channel, the answer is an empty choice list: no channel names,
+ * ids or allowlist entries leak.
  */
-async function respondChannelAutocomplete(
+export async function respondChannelAutocomplete(
   interaction: {
     commandName: string;
     createdTimestamp: number;
+    channelId: string;
+    user: { id: string };
+    member?: RawInteractionMember;
     guild: {
       channels: {
         cache: { values: () => IterableIterator<{ id: string; name: string; type: number }> };
@@ -734,6 +762,27 @@ async function respondChannelAutocomplete(
   ChannelType: ChannelTypeEnum,
 ): Promise<void> {
   const started = interaction.createdTimestamp;
+  // Fail closed: no gate wired, a refusal or a throwing gate ⇒ no choices.
+  let allowed = false;
+  try {
+    allowed =
+      handlers.mayAutocompleteChannels?.({
+        commandName: interaction.commandName,
+        channelId: interaction.channelId,
+        userId: interaction.user.id,
+        roleIds: memberRoleIds(interaction.member),
+      }) === true;
+  } catch (err) {
+    console.error("[discord] autocomplete gate failed:", err);
+  }
+  if (!allowed) {
+    try {
+      await interaction.respond([]);
+    } catch (err) {
+      console.error("[discord] autocomplete respond failed:", err);
+    }
+    return;
+  }
   let choices: { name: string; value: string }[] = [];
   try {
     const focusedRaw = interaction.options.getFocused(true);

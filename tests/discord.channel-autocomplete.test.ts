@@ -1,8 +1,20 @@
 /**
- * STRING + autocomplete channel matching (ADMIN-2 / DISCORD-ANNOUNCE-2).
- * Pure unit tests — no live Discord.
+ * STRING + autocomplete channel matching (ADMIN-2 / DISCORD-ANNOUNCE-2) and
+ * its ADMIN gate (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431).
+ * Fixture tests — no live Discord.
  */
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
+import { createEchoAgentClient } from "../src/discord/agent-client.ts";
+import { startBridge } from "../src/discord/bridge.ts";
+import {
+  createNullGateway,
+  respondChannelAutocomplete,
+  type AutocompleteActor,
+  type GatewayHandlers,
+} from "../src/discord/gateway.ts";
 import {
   AUTOCOMPLETE_MAX_CHOICES,
   buildChannelAutocompleteChoices,
@@ -162,5 +174,213 @@ describe("slash bodies: STRING + autocomplete", () => {
       type: OPT_STRING,
       autocomplete: true,
     });
+  });
+});
+
+/**
+ * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431 — Discord shows channel
+ * autocomplete to every guild member, so the gateway re-checks each request:
+ * no choices unless the invoker is ADMIN (the owner) in an allowlisted channel.
+ * Fixture interactions + a dry-run bridge; no live Discord token or network.
+ */
+describe("channel autocomplete gate (DISCORD-DENY-3 / ADMIN-4)", () => {
+  const OWNER_ID = "200000000000000001";
+  const OTHER_ID = "200000000000000002";
+  const ALLOWED = "100000000000000001"; // #general, the only allowlisted channel
+  const OUTSIDE = "100000000000000002"; // #dev-ops, a guild channel not allowlisted
+  const TEXT = { GuildText: 0 };
+  // The guild channel cache the gateway reads (discord.js `guild.channels.cache`).
+  const CACHE = GUILD.map((c) => ({ id: c.id, name: c.name, type: c.type ?? 0 }));
+
+  type Call = {
+    commandName: "admin" | "announce";
+    group?: string;
+    sub: string;
+    userId: string;
+    channelId?: string;
+    roleIds?: string[];
+    query?: string;
+  };
+
+  const ADD: Omit<Call, "userId"> = { commandName: "admin", group: "channels", sub: "add" };
+  const REMOVE: Omit<Call, "userId"> = { commandName: "admin", group: "channels", sub: "remove" };
+  const ANNOUNCE: Omit<Call, "userId"> = { commandName: "announce", sub: "channel" };
+
+  async function autocomplete(handlers: GatewayHandlers, call: Call): Promise<string[]> {
+    const responses: { name: string; value: string }[][] = [];
+    await respondChannelAutocomplete(
+      {
+        commandName: call.commandName,
+        createdTimestamp: Date.now(),
+        channelId: call.channelId ?? ALLOWED,
+        user: { id: call.userId },
+        member: { roles: call.roleIds ?? [] },
+        guild: { channels: { cache: { values: () => CACHE.values() } } },
+        options: {
+          getFocused: () => ({ name: "channel", value: call.query ?? "" }),
+          getSubcommand: () => call.sub,
+          getSubcommandGroup: () => call.group ?? null,
+        },
+        respond: async (choices) => {
+          responses.push(choices);
+        },
+      },
+      handlers,
+      TEXT,
+    );
+    // Exactly one answer per request (Discord's 3s rule), refused or not.
+    expect(responses).toHaveLength(1);
+    return responses[0]!.map((c) => c.value);
+  }
+
+  async function withBridge(
+    env: Record<string, string>,
+    body: (h: GatewayHandlers, mute: (id: string) => void) => Promise<void>,
+  ): Promise<void> {
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const result = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: ALLOWED,
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: join(
+          mkdtempSync(join(tmpdir(), "corvidinho-ac-gate-")),
+          "missing.toml",
+        ),
+        ...env,
+      },
+      projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-ac-gate-proj-")),
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      thinkingDebounceMs: 0,
+      thinkingTickMs: 60_000,
+      agent: createEchoAgentClient({ delayMs: 0 }),
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        return createNullGateway();
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok || !box.handlers) return;
+    try {
+      await body(box.handlers, result.muteUser);
+    } finally {
+      await result.stop();
+    }
+  }
+
+  const WITH_OWNER = { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID };
+  const ALL_TEXT = GUILD.filter((c) => c.type === 0).map((c) => c.id).sort();
+
+  test("owner in an allowlisted channel keeps today's choices", async () => {
+    await withBridge(WITH_OWNER, async (h) => {
+      expect((await autocomplete(h, { ...ADD, userId: OWNER_ID })).sort()).toEqual(ALL_TEXT);
+      expect((await autocomplete(h, { ...ANNOUNCE, userId: OWNER_ID })).sort()).toEqual(
+        ALL_TEXT,
+      );
+      // remove stays scoped to the live allowlist.
+      expect(await autocomplete(h, { ...REMOVE, userId: OWNER_ID })).toEqual([ALLOWED]);
+      expect(await autocomplete(h, { ...ADD, userId: OWNER_ID, query: "corvid" })).toEqual([
+        "100000000000000003",
+      ]);
+    });
+  });
+
+  test("a non-owner in an allowlisted channel gets no choices (no allowlist leak)", async () => {
+    await withBridge(WITH_OWNER, async (h) => {
+      for (const call of [ADD, REMOVE, ANNOUNCE]) {
+        expect(await autocomplete(h, { ...call, userId: OTHER_ID })).toEqual([]);
+        expect(await autocomplete(h, { ...call, userId: OTHER_ID, query: "gen" })).toEqual([]);
+      }
+    });
+  });
+
+  test("a non-owner on the user allowlist is still not ADMIN", async () => {
+    await withBridge(
+      { ...WITH_OWNER, CORVIDINHO_DISCORD_ALLOW_USERS: OTHER_ID },
+      async (h) => {
+        for (const call of [ADD, REMOVE, ANNOUNCE]) {
+          expect(await autocomplete(h, { ...call, userId: OTHER_ID })).toEqual([]);
+        }
+      },
+    );
+  });
+
+  test("the owner outside an allowlisted channel gets no choices", async () => {
+    await withBridge(WITH_OWNER, async (h) => {
+      for (const call of [ADD, REMOVE, ANNOUNCE]) {
+        expect(await autocomplete(h, { ...call, userId: OWNER_ID, channelId: OUTSIDE })).toEqual(
+          [],
+        );
+      }
+    });
+  });
+
+  test("a muted owner or an owner holding a deny-listed role gets no choices", async () => {
+    await withBridge({ ...WITH_OWNER, CORVIDINHO_DISCORD_DENY_ROLES: "banned" }, async (h, mute) => {
+      expect(
+        await autocomplete(h, { ...ADD, userId: OWNER_ID, roleIds: ["banned"] }),
+      ).toEqual([]);
+      expect(await autocomplete(h, { ...REMOVE, userId: OWNER_ID })).toEqual([ALLOWED]);
+      mute(OWNER_ID);
+      for (const call of [ADD, REMOVE, ANNOUNCE]) {
+        expect(await autocomplete(h, { ...call, userId: OWNER_ID })).toEqual([]);
+      }
+    });
+  });
+
+  test("no owner configured: nobody gets choices (IDENTITY-3 / ADMIN-4)", async () => {
+    await withBridge({}, async (h) => {
+      for (const call of [ADD, REMOVE, ANNOUNCE]) {
+        expect(await autocomplete(h, { ...call, userId: OWNER_ID })).toEqual([]);
+        expect(await autocomplete(h, { ...call, userId: OTHER_ID })).toEqual([]);
+      }
+    });
+  });
+
+  test("the gateway fails closed: no gate wired, a false gate or a throwing gate", async () => {
+    const seen: AutocompleteActor[] = [];
+    const base = { onMessage: () => {}, getAllowlistedChannelIds: () => [ALLOWED] };
+    expect(await autocomplete(base, { ...ADD, userId: OWNER_ID })).toEqual([]);
+    expect(
+      await autocomplete(
+        {
+          ...base,
+          mayAutocompleteChannels: (a) => {
+            seen.push(a);
+            return false;
+          },
+        },
+        { ...ANNOUNCE, userId: OTHER_ID, roleIds: ["crew"] },
+      ),
+    ).toEqual([]);
+    expect(seen).toEqual([
+      { commandName: "announce", channelId: ALLOWED, userId: OTHER_ID, roleIds: ["crew"] },
+    ]);
+    const original = console.error;
+    console.error = () => {};
+    try {
+      expect(
+        await autocomplete(
+          {
+            ...base,
+            mayAutocompleteChannels: () => {
+              throw new Error("boom");
+            },
+          },
+          { ...ADD, userId: OWNER_ID },
+        ),
+      ).toEqual([]);
+    } finally {
+      console.error = original;
+    }
+    expect(
+      (
+        await autocomplete(
+          { ...base, mayAutocompleteChannels: () => true },
+          { ...ADD, userId: OWNER_ID },
+        )
+      ).sort(),
+    ).toEqual(ALL_TEXT);
   });
 });

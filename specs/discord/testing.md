@@ -39,8 +39,18 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
 ## Presence version (DISCORD-12)
 
 - `tests/discord.presence.test.ts` — `formatPresenceVersionString` +
-  `buildVersionPresenceActivity` Custom type/state from shared VERSION
-  (no live token).
+  `buildVersionPresenceActivity` / `buildVersionPresenceData` Custom
+  type/state from shared VERSION (no live token).
+- Same file: `createLiveGateway` runs the real discord.js `login` with only
+  the socket connect stubbed; the IDENTIFY presence it builds
+  (`options.ws.presence`, sent as `d.presence` on every IDENTIFY) carries the
+  version Custom Status, ClientReady still calls `setPresence` with the same
+  data, and a throwing `setPresence` does not stop the ready path
+  (REQ-discord-017, no token, no network).
+- Same file: `verifyRequesterCanSend` (DISCORD-8 requester check) runs the
+  real discord.js `login` with the socket connect stubbed to fail; its
+  IDENTIFY presence carries the same version Custom Status, and the client is
+  destroyed (REQ-discord-017, no token, no network).
 
 REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.test.ts` cover SQLite persist/reload and soft TTL without live Discord.
 - MemoryStore CRUD/ACL/reload fixtures (REQ-discord-021 / MEMORY-1..4 / MEMORY-ACL-1..5).
@@ -182,6 +192,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   run is in flight gets no post; refused ticks auto-pause the schedule after
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
+
+## /schedule delete audit (REQ-discord-020, SAFE-5)
+
+- `tests/discord.schedule.test.ts` — "/schedule delete audit (SAFE-5)": with a
+  DB-backed store holding one schedule and one run, the owner's delete appends
+  `schedule-delete` `started` then `ok` rows (surface `discord:schedule`, args
+  digest of the resolved id, no raw id), the reply names `#1 started · #2 ok`,
+  the schedule and its run rows are gone and the chain verifies; a throwing
+  trail, a keyed chain without the key, and no trail wired each reply
+  `audit log unavailable (SAFE-5)` and keep the schedule and its runs; a
+  non-ADMIN delete gets `not authorized` and appends `denied` (a refused pause
+  appends nothing); a store delete that throws after the intent row appends
+  `error`; an unknown id appends nothing; an `ok` row that cannot be written
+  after the delete leaves the delete in place and the reply says
+  `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
+  throws still gets only `not authorized` and deletes nothing. No live Discord.
 
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
