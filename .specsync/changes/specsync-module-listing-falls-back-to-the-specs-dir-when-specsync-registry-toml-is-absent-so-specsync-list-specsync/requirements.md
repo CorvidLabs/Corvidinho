@@ -10,7 +10,8 @@ artifact: requirements
   **REQ-plugins-008** (delta `deltas/plugins.md`): with no
   `.specsync/registry.toml`, `specsync-list` returns the
   `specs/<name>/<name>.spec.md` modules that `specsync-read` reads; a
-  registry that exists stays authoritative.
+  registry that exists adds its names to them, so a module scaffolded after
+  `specsync init-registry` is not hidden.
 - SPECSYNC-5 (captured): companion files are read when starting work on a
   module. Same REQ: the Planning spec briefing in a registry-less SpecSync
   project includes the module's constraints and its `context.md` /

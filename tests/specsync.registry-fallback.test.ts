@@ -6,8 +6,10 @@
  * `specs/<name>/<name>.spec.md` (+ companions) but no `registry.toml`. With no
  * registry file the module names come from the specs dir, so specsync-list,
  * specsync-read / specsync-brief by listed name and the Planning spec briefing
- * (with companions) work there. A registry file stays authoritative when
- * present, and the fallback lists only specs that stay inside `specs/`.
+ * (with companions) work there. `specsync scaffold` does not add to a registry
+ * `specsync init-registry` wrote, so a registry file adds its names to the
+ * specs-dir modules rather than replacing them. The specs-dir listing covers
+ * only specs that stay inside `specs/`.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
@@ -138,22 +140,52 @@ describe("no registry.toml: modules come from specs/ (SPECSYNC-1)", () => {
   );
 });
 
-describe("registry.toml stays authoritative when present", () => {
-  test("only registered names are listed, not every specs/ module", () => {
+describe("a registry.toml adds its names to the specs/ modules (SPECSYNC-1)", () => {
+  test("a stale registry naming only some modules still lists every specs/ module", () => {
     scaffoldProject();
     put(join(dir, "specs", "auth", "auth.spec.md"), spec("auth"));
     put(join(dir, ".specsync", "registry.toml"), '[specs]\nauth = "specs/auth/auth.spec.md"\n');
-    expect(listRegisteredModules(dir)).toEqual(["auth"]);
+    expect(listRegisteredModules(dir)).toEqual(["auth", "billing"]);
+    const text = loadRelevantSpecs({ cwd: dir, task: "change the billing module" });
+    expect(text).toContain("# Spec: billing");
+    expect(text).toContain("# Companion: billing/context.md");
   });
 
-  test("a registry with no [specs] entries lists nothing", () => {
+  test("a registry with no [specs] entries still lists the specs/ modules", () => {
     scaffoldProject();
     put(join(dir, ".specsync", "registry.toml"), '[registry]\nname = "x"\n');
-    expect(listRegisteredModules(dir)).toEqual([]);
+    expect(listRegisteredModules(dir)).toEqual(["billing"]);
   });
+
+  test("registry names are kept (even without a spec on disk), once each, sorted", () => {
+    scaffoldProject();
+    put(
+      join(dir, ".specsync", "registry.toml"),
+      '[specs]\nghost = "specs/ghost/ghost.spec.md"\nbilling = "specs/billing/billing.spec.md"\n',
+    );
+    expect(listRegisteredModules(dir)).toEqual(["billing", "ghost"]);
+  });
+
+  test.skipIf(!Bun.which("specsync"))(
+    "real specsync: a module scaffolded after init-registry is listed and briefs",
+    () => {
+      const sh = (args: string[]) =>
+        Bun.spawnSync(args, { cwd: dir, stdout: "pipe", stderr: "pipe" });
+      expect(sh(["git", "init", "-q"]).exitCode).toBe(0);
+      expect(sh(["specsync", "init"]).exitCode).toBe(0);
+      expect(sh(["specsync", "scaffold", "billing"]).exitCode).toBe(0);
+      expect(sh(["specsync", "init-registry"]).exitCode).toBe(0);
+      expect(sh(["specsync", "scaffold", "auth"]).exitCode).toBe(0);
+      expect(existsSync(join(dir, ".specsync", "registry.toml"))).toBe(true);
+      expect(listRegisteredModules(dir)).toEqual(["auth", "billing"]);
+      const text = loadRelevantSpecs({ cwd: dir, task: "change the auth module" });
+      expect(text).toContain("# Spec: auth");
+      expect(text).toContain("# Companion: auth/context.md");
+    },
+  );
 });
 
-describe("the fallback lists only what specsync-read reads inside specs/ (REQ-plugins-008)", () => {
+describe("the specs/ listing covers only what specsync-read reads inside specs/ (REQ-plugins-008)", () => {
   test("not a SpecSync project (no .specsync/ dir): nothing listed, briefing empty", () => {
     put(join(dir, "specs", "billing", "billing.spec.md"), spec("billing"));
     expect(listRegisteredModules(dir)).toEqual([]);

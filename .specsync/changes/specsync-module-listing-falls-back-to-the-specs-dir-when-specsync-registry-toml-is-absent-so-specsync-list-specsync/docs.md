@@ -13,6 +13,8 @@ artifact: docs
 - `specs/agent/agent.spec.md`: the error row "SpecSync registry missing →
   Planning soft-fails" now says Planning lists `specs/` modules instead and
   only soft-fails when there are none.
+- `specs/plugins/plugins.spec.md` also gains the scenario "SpecSync
+  registry.toml older than specs/".
 - `plugins/specsync/commands.ts`: `specsync-list` tool description.
 - README / STATUS / docs do not claim the registry is required, so they are
   unchanged. No CHANGELOG version section and no package bump.

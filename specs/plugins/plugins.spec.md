@@ -153,10 +153,10 @@ spawned with `detached: true`. The registry exports `unregister(name, command)` 
 name only while it is still that exact command). `plugins/fledge` exports
 `fledgeRunArgv` and `fledgeBindings`; `fledgePluginCommand` takes the project
 root it binds to, and `runFledgeCommand` / `spawnCapped` take `signal`.
-`plugins/specsync/api.ts` exports `listRegisteredModules` (the `[specs]` names
-of `.specsync/registry.toml`; with no registry file in a project that has a
-`.specsync/` dir, each `specs/<name>/<name>.spec.md` that `readModuleSpec`
-reads), `MODULE_NAME_RE` / `invalidModuleName` (the
+`plugins/specsync/api.ts` exports `listRegisteredModules` (in a project that
+has a `.specsync/` dir, each `specs/<name>/<name>.spec.md` that
+`readModuleSpec` reads, plus the `[specs]` names of `.specsync/registry.toml`
+when that file exists; sorted, each once), `MODULE_NAME_RE` / `invalidModuleName` (the
 plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
 `refused: true` for an invalid name or an escaping path), `readCompanions`
 (returns `error` and no files when it refuses), `projectDefinesSpecCheckTask`
@@ -343,15 +343,18 @@ Planning spec briefing reads through the same helpers and skips it too.
 `specsync-ship-status` refuse a forwarded `--root` / `--root=…` (exit 1) before
 spawning `specsync`. `specsync-list` and `specsync-check` take no path input.
 
-`specsync-list` (and the Planning briefing's module list) reads
-`.specsync/registry.toml` `[specs]` when that file exists, even when it names
-no module. With no registry file in a SpecSync project (`.specsync/` is a dir,
-the layout `specsync init` / `specsync scaffold` leave) it lists, sorted, each
+`specsync-list` (and the Planning briefing's module list) lists, sorted and
+each name once, in a SpecSync project (`.specsync/` is a dir, the layout
+`specsync init` / `specsync scaffold` leave) each
 `specs/<name>/<name>.spec.md` that `specsync-read` would read: a plain module
 name whose spec is a file resolving inside the real `specs/` dir (a legacy
 flat `specs/<name>.md`, a dir without its spec, or a spec or module dir that
 links outside `specs/` is not listed). No `.specsync/` dir, no `specs/` dir, or
-a `specs/` dir resolving outside the project lists nothing (SPECSYNC-1/5).
+a `specs/` dir resolving outside the project adds no name from `specs/`. When
+`.specsync/registry.toml` exists its `[specs]` names are listed too: SpecSync
+does not keep that file in step with `specs/` (`specsync init` writes none,
+and `specsync scaffold` does not add to the one `specsync init-registry`
+writes), so a registry never hides a module under `specs/` (SPECSYNC-1/5).
 
 `specsync-check` runs `fledge run spec-check` only when fledge is on PATH and
 the project's own `fledge.toml` defines a `spec-check` task; with no
@@ -446,6 +449,12 @@ dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 - **When** the agent runs `specsync-list` (or `corvidinho specsync list`), or starts a task on the billing module
 - **Then** `billing` is listed (`1 spec(s) registered`), `specsync-read billing` / `specsync-brief billing` return it, and the Planning briefing carries `# Spec: billing` with its companions
 
+### Scenario: SpecSync registry.toml older than specs/
+
+- **Given** a project where `specsync init` + `specsync scaffold billing` + `specsync init-registry` + `specsync scaffold auth` left a `.specsync/registry.toml` naming only `billing`
+- **When** the agent runs `specsync-list`, or starts a task on the auth module
+- **Then** both `auth` and `billing` are listed, and the Planning briefing carries `# Spec: auth` with its companions
+
 ### Scenario: specsync-check without a Fledge spec-check task
 
 - **Given** a project with `.specsync/` and `specs/` whose `fledge.toml` has no `spec-check` task (or no `fledge.toml`), and fledge on PATH
@@ -531,7 +540,7 @@ dangerous, SAFE-1 allowlist, code tier, ADMIN only.
 | Path escapes project cwd / symlink escape (incl. dangling link target or loop) | Refuse (exit 1) |
 | specsync-read/brief name not a plain module name, or a spec/companion/specs dir whose real path leaves the project specs dir | Refuse (exit 1); nothing read |
 | specsync-coverage/score/change-list/ship-status given `--root` | Refuse (exit 1); specsync not spawned |
-| specsync-list / Planning briefing with no `.specsync/registry.toml` | List `specs/<name>/<name>.spec.md` modules that stay inside `specs/` (only when `.specsync/` is a dir); none → `0 spec(s) registered`, no briefing |
+| specsync-list / Planning briefing with no `.specsync/registry.toml`, or one naming only some modules | List `specs/<name>/<name>.spec.md` modules that stay inside `specs/` (only when `.specsync/` is a dir) plus any registry names; none → `0 spec(s) registered`, no briefing |
 | specsync-check, fledge on PATH but the project defines no `spec-check` task | Run local `specsync check` (no `Unknown task` failure) |
 | specsync-check, project `fledge.toml` unparsable | Keep `fledge run spec-check` (fail closed; Fledge reports the error) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
@@ -635,4 +644,4 @@ and current rows for plugins host evolution.
 | 2026-09-27 | local-spec-check-runs-at-the-ci-spec-sync-strictness-specsync-check-require-coverage-100-specsync-check-falls-back-to: Local spec-check runs at the CI Spec Sync strictness (specsync check --require-coverage 100), specsync-check falls back to specsync check when the project defines no Fledge spec-check task, and a read-only specsync-score tool reports SpecSync spec scores (SPECSYNC-2/3, issue 89) |
 | 2026-09-27 | plugin-4-language-runner-plugins-node-exec-python-exec-and-cargo-exec-register-when-node-python3-python-or-cargo-is-on: PLUGIN-4 language runner plugins: node-exec, python-exec and cargo-exec register when node, python3/python or cargo is on PATH and degrade cleanly when the toolchain is missing (dangerous, code tier, argv only, cwd pinned to the project root) |
 | 2026-09-27 | files-read-passes-images-to-the-model-as-image-parts-it-can-see-with-a-one-shot-text-fallback-for-models-without-vision: Files-read passes images to the model as image parts it can see, with a one-shot text fallback for models without vision (DISCORD-9) |
-| 2026-09-27 | specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync: SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5) |
+| 2026-09-27 | specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync: SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5); a registry.toml that exists adds its names to the specs-dir modules instead of hiding modules scaffolded after it |

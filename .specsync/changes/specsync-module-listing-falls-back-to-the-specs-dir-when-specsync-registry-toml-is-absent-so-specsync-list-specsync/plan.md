@@ -10,7 +10,7 @@ artifact: plan
    `0 spec(s) registered`, Planning prints `no SpecSync modules matched`.
 2. Add `tests/specsync.registry-fallback.test.ts` (list, CLI, read/brief by
    listed name, Planning briefing with companions, optional real-binary case,
-   registry-authoritative and containment guards). Confirm the new behaviour
+   registry-union and containment guards). Confirm the new behaviour
    cases fail with main's `plugins/specsync/api.ts`.
 3. Implement `listSpecsDirModules` fallback in `plugins/specsync/api.ts`;
    update the `specsync-list` description.
