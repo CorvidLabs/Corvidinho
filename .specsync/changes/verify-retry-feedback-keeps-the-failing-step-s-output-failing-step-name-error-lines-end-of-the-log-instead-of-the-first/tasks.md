@@ -12,3 +12,4 @@ artifact: tasks
 - [x] Guard tests pass on main and branch: short verify output reaches the retry whole (loop and read-tier chat).
 - [x] Delta (agent, Modified REQ-agent-002), spec prose (Public API, Invariants, Error Cases, files), testing.md.
 - [x] Full suite, typecheck, SpecSync and the verify lane green.
+- [x] Review: error lines that report a failure are kept before log lines that only mention one (Corvidinho's bun test stdout chatter crowded the failure out); colour escapes dropped over the cap; parallel steps named whole; no-marker header no longer claims a failing step. Tests fail on d43ac3e's verify.ts.

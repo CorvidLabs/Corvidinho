@@ -219,11 +219,16 @@ A verify retry works from the failing step's output, not the start of the
 lane log (REQ-agent-002, AGENT-4.a). The runner's output is stdout then
 stderr, so steps that passed first (a typecheck, a `--help` smoke) can fill
 the head. Output within `VERIFY_FEEDBACK_MAX_CHARS` reaches the model whole;
-over it, the feedback names the failing step (fledge's `Lane '<lane>' failed
-at step N (<name>)` line) and carries that step's output from its `Running
-task: <name>` marker when it fits, else its error / fail lines (first ones
-first, passing-test lines left out) and the end of the log. It is never
-longer than the cap and never cut inside a surrogate pair.
+over it, colour escapes are dropped, the feedback names the failing step
+(fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is
+`parallel(<tasks>)`) and carries that step's output from its `Running task:
+<name>` marker (a parallel step's `Running parallel:` line) when it fits,
+else its error / fail lines and the end of the log. Error lines that report a
+failure (`error:`, `Expected:`, `(fail)`, `file(1,2): error TS…`, `✗`) are
+kept before lines that only mention one (`… marked failed`), so a step's
+console chatter cannot crowd its failure out; first ones first, passing-test
+lines left out, printed in log order. It is never longer than the cap and
+never cut inside a surrogate pair.
 
 The default verify runner spawns fledge with the parent's env minus the
 delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,

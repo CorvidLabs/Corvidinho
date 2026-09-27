@@ -92,3 +92,55 @@ export function noisyFailingLaneLog(noise = 120): string {
   ].join("\n");
   return `${stdout}${stderr}`;
 }
+
+/**
+ * The lane as Corvidinho's own `bun test` really fails: bun's reporter writes
+ * to stderr, and the tests' console output fills stdout right after the
+ * `Running task: test` marker (about 41 KB on this repo at v0.0.30, with log
+ * lines that mention "failed" or "error" without being a failure). With the
+ * log joined stdout then stderr, `chatter` such lines come before the real
+ * failure, and more stderr (file headers, console.error) comes after it, so
+ * the failure is neither the first error-ish line nor in the end of the log.
+ */
+export function chattyFailingLaneLog(chatter = 20): string {
+  const { stdout } = failingLaneLog();
+  const logLines: string[] = [];
+  for (let i = 0; i < chatter; i++) {
+    logLines.push(
+      `[discord] restart recovery: ${i} interrupted schedule run(s) marked failed, ${i} leftover worktree(s) removed`,
+    );
+    logLines.push(
+      `[watch] spawn outcome event=c-${i} session=wsess_${i} ok=true exit=0 error_class=ok duration_ms=0`,
+    );
+    logLines.push(`[bridge] tick ${i}: 0 due, 0 claimed`);
+  }
+  const laterFiles: string[] = [];
+  for (let i = 0; i < 40; i++) {
+    laterFiles.push("", `tests/discord.case-${i}.test.ts:`);
+    laterFiles.push("[discord] no owner configured — nobody is ADMIN (IDENTITY-3).");
+  }
+  const stderr = [
+    "",
+    "tests/discord.slash-reply-continuity.test.ts:",
+    "[discord] no owner configured — nobody is ADMIN (IDENTITY-3).",
+    "",
+    "tests/sum.test.ts:",
+    '3 | test("sum of three", () => { expect(1 + 2 + 3).toBe(7); });',
+    "                                                   ^",
+    "error: expect(received).toBe(expected)",
+    "",
+    "Expected: 7",
+    "Received: 6",
+    "",
+    "      at <anonymous> (/work/tests/sum.test.ts:3:48)",
+    "(fail) sum of three [0.34ms]",
+    ...laterFiles,
+    "",
+    " 1848 pass",
+    " 1 fail",
+    "Ran 1849 tests across 145 files. [165.07s]",
+    LANE_FAILED_LINE,
+    "",
+  ].join("\n");
+  return `${stdout}${logLines.join("\n")}\n${stderr}`;
+}

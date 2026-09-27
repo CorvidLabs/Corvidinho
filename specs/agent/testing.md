@@ -47,9 +47,13 @@ lane log shaped like Corvidinho's own (`tests/fixtures/verify-lane-log.ts`:
 `lint` and a `--help` smoke over 4000 chars pass, then `test` fails) keeps the
 failing step whole and drops the `--help` head; a failing step whose own
 output is over the cap keeps its first error lines and the end of the log,
-with no passing-test lines; a log with no fledge markers keeps its end; output
-within the cap is unchanged; never over the cap and never half a surrogate
-pair. `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
+with no passing-test lines; console chatter that only mentions a failure
+(the `chattyFailingLaneLog` fixture: Corvidinho's bun test stdout before its
+stderr report) does not crowd out the failure's own lines; colour escapes are
+dropped and hide no marker; a failing parallel step is named whole and kept
+from its `Running parallel:` line; a log with no fledge markers keeps its end
+and is not called a failing step's output; output within the cap is
+unchanged; never over the cap and never half a surrogate pair. `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
 names the failing test within 4000 chars; a short output arrives whole.
 `tests/agent.tool-loop.test.ts`: the tool loop's retry request and the
 read-tier chat carry the failing step, not the first 4000 chars.
