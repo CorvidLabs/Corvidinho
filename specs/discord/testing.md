@@ -29,7 +29,8 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   plugin requester/strict gates (no live token).
 - Same file: in a bridge-started run (`CORVIDINHO_ACTING_DISCORD_USER_ID`
   set) the post checks the acting user without `--requesting-user-id`, refuses
-  a requesting id naming another user, meets strict mode with the acting
+  a requesting id naming another user (either alias, also a second id beside
+  the acting user's), meets strict mode with the acting
   user's check, and refuses with one scrubbed line when the check cannot run
   (a throwing checker; the real discord.js `login` stubbed to fail as with
   Server Members Intent off); a `fetch` spy proves nothing is posted. With the

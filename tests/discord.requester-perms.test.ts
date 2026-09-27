@@ -285,6 +285,24 @@ describe("discord-post-message checks the acting Discord user (DISCORD-8)", () =
     expect(posts).toEqual(["https://discord.com/api/v10/channels/999/messages"]);
   });
 
+  test("a second requester id beside the acting user's (repeated flag or the other alias) is refused too", async () => {
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = ACTOR;
+    checker("ok");
+    for (const flag of [
+      ["--requesting-user-id", ACTOR, "--requester", OTHER],
+      ["--requester", ACTOR, "--requesting-user-id", OTHER],
+      ["--requesting-user-id", ACTOR, "--requesting-user-id", OTHER],
+      [`--requesting-user-id=${ACTOR}`, "--requesting-user-id", OTHER],
+    ]) {
+      const r = await post(flag);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(3);
+      expect(r.error).toContain("different Discord user");
+    }
+    expect(checked).toEqual([]);
+    expect(posts).toEqual([]);
+  });
+
   test("a --requesting-user-id naming another user is refused, never checked in place of the acting user", async () => {
     process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = ACTOR;
     checker("ok");

@@ -10,8 +10,8 @@ All in `plugins/discord/index.ts` (`discord-post-message` handler):
 1. Channel allowlist gate (unchanged, still first).
 2. `actingDiscordUser(process.env)` = trimmed
    `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty outside the bridge).
-3. Acting user set and a non-empty `--requesting-user-id` / `--requester`
-   that differs from it → refuse, exit 3, "names a different Discord user …
+3. Acting user set and any non-empty `--requesting-user-id` / `--requester`
+   value (every occurrence of either alias) that differs from it → refuse, exit 3, "names a different Discord user …
    Nothing was posted." (checked before the token lookup; no check runs).
    A requesting id equal to the acting user is accepted.
 4. Token lookup (unchanged).

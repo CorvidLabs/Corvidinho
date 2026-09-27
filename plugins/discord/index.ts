@@ -40,6 +40,17 @@ function parseFlag(args: string[], name: string): string | undefined {
   return undefined;
 }
 
+/** Every value given for `name` (repeated flags and `name=value` forms). */
+function flagValues(args: string[], name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a.startsWith(`${name}=`)) out.push(a.slice(name.length + 1));
+    else if (a === name && args[i + 1] && !args[i + 1]!.startsWith("-")) out.push(args[i + 1]!);
+  }
+  return out;
+}
+
 function requireRequesterCheck(env: NodeJS.ProcessEnv): boolean {
   const raw = env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK?.trim();
   return raw === "1" || raw?.toLowerCase() === "true";
@@ -108,18 +119,20 @@ const discordPostMessage: PluginCommand = {
     }
 
     // DISCORD-8: in a bridge-started run the check is about the acting user
-    // only. A requester id naming someone else is refused, not replaced.
+    // only. A requester id naming someone else is refused, not replaced —
+    // any of them, so a repeated flag or the other alias cannot slip one by.
     const actingUserId = actingDiscordUser(process.env);
-    if (
-      actingUserId &&
-      requestingUserId !== undefined &&
-      requestingUserId.trim() !== "" &&
-      requestingUserId.trim() !== actingUserId
-    ) {
+    const namedRequesters = [
+      ...flagValues(ctx.args, "--requesting-user-id"),
+      ...flagValues(ctx.args, "--requester"),
+    ]
+      .map((id) => id.trim())
+      .filter((id) => id !== "");
+    if (actingUserId && namedRequesters.some((id) => id !== actingUserId)) {
       return {
         ok: false,
         error:
-          "refused: --requesting-user-id names a different Discord user than the one this run acts for. The requester check is always for the acting user the bridge set (DISCORD-8); leave --requesting-user-id out. Nothing was posted.",
+          "refused: --requesting-user-id / --requester names a different Discord user than the one this run acts for. The requester check is always for the acting user the bridge set (DISCORD-8); leave the flag out. Nothing was posted.",
         exitCode: 3,
       };
     }
