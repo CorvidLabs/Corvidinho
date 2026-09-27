@@ -55,6 +55,7 @@ import {
   withToolCost,
 } from "./plugins/toolCost.ts";
 import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
+import { loadRunnerPlugins, runnerStatusLines } from "../plugins/runners/index.ts";
 import { DEFAULT_DATA_DIR_REL } from "./store/paths.ts";
 import { formatErrorLine } from "./store/scrub.ts";
 import { VERSION } from "./version.ts";
@@ -338,6 +339,8 @@ async function doctor(): Promise<number> {
 
 async function pluginsList(json: boolean): Promise<number> {
   loadBuiltins();
+  // PLUGIN-4: which language runners loaded, and why any did not (idempotent).
+  const runners = loadRunnerPlugins();
   // FLEDGE-4 / PLUGIN-3: project Fledge plugins; failure degrades to builtins only.
   const fledge = await loadFledgePlugins({ cwd: process.cwd() });
   const entries = withToolCost(list());
@@ -346,7 +349,10 @@ async function pluginsList(json: boolean): Promise<number> {
   } else {
     // PLUGIN-6 / FLEDGE-5: per-command schema cost + tool-surface budget.
     console.log(
-      formatPluginsListText(entries, toolSurfaceReport(entries), fledgeStatusLines(fledge)),
+      formatPluginsListText(entries, toolSurfaceReport(entries), [
+        ...runnerStatusLines(runners),
+        ...fledgeStatusLines(fledge),
+      ]),
     );
   }
   return 0;
