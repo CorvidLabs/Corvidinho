@@ -69,6 +69,41 @@
       "approved_delta_digests": {
         "plugins": "4c634914b3c43a20e4bf6c2cd986b88d17f38a5e20a9a3852bb98b8c04dff273"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790472301,
+      "digest": "4ec2036eb273554f50b1f278c9a8b430b81de85da0ec1dc2431d4410de88a950",
+      "note": "delta extended: bash $'…' reading and shell -c strings",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-3-shell-exec-cd-clamp-reads-quoting-the-way-the-shell-does-escaped-backslash-before-a-newline-comments-and-here",
+        "title": "SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused",
+        "description": "SAFE-3 shell-exec cd clamp reads quoting the way the shell does: escaped backslash before a newline, comments and here-doc bodies no longer hide a cd, the end of a command substitution is found with the same tokenizer, and a cd/pushd command left open by a quote or trailing backslash is refused",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/shell/clamp.ts",
+          "tests/shell.clamp-quoting.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "shell-exec refuses before spawn (exit 2, SAFE-3) the reported quoted and escaped cd forms: mkdir -p \"a b\" && cd \"a b/../..\", cd \"zz q/../..\", cd a\\ b/../.., cd 'a b'/../.., X=\"a b\" cd /etc and cd sub/..\\<nl>/.. (each checked as the single target word the shell sees); it also refuses echo a\\\\<nl>cd /etc (escaped backslash, real newline), a cd hidden by a quote inside a # comment, a cd after a here-doc whose body holds a lone quote (<<EOF, <<'EOF', <<-EOF), a cd after a $( ) whose comment or here-doc holds a ), an escaping cd inside a $( ) or backtick in an unquoted here-doc body, a cd after (( x = 1 << 2 )) (bash arithmetic), and any cd/pushd command left open by an unterminated quote or a trailing backslash; a command with << is checked both as dash reads it (here-doc body is data) and as bash may read it (lines are commands) and refuses if either does; cd \"sub dir\", cd sub # comment, cd sub \\<nl>&& ls, a here-doc body holding a stray quote before an in-root cd sub, eval \"cd /; ls\" (still refused as /) and every existing clamp assertion keep their results; no new flag, env var or command"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "972bc6a8f651fe760e3ccf7655fae43ae5a3645ecbb24402d6a252d17a2fab28"
+      }
     }
   ],
   "reopenings": []
