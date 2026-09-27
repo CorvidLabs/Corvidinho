@@ -45,4 +45,4 @@ Constraints: no new slash command, env var, CLI flag or schema change. Bot
 message ids are persisted through the existing `SessionStore.trackBotMessage`.
 Out of scope (separate defects in the same report): `/work` / `/session
 start` not storing `pendingAsk` (defect 3, fixed on main by #216), and the
-forwarded-message allowlist gap in the reply path (defect 2, PR #218).
+forwarded-message allowlist gap in the reply path (defect 2, fixed on main by #218).
