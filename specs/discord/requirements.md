@@ -1031,6 +1031,8 @@ Acceptance Criteria
 - A thin reply to a slash Choose stub restates the stub with its Choose button without running the agent; a substantive reply continues the session and the button ask stays pending.
 - `/work` with a stuck ask that has options: the task is `failed`, the Choose stub pings nobody and the owner is told by the separate notice post; when that post fails, the notice is appended to the stub and the Choose button stays.
 - Without an editable thinking message, the deferred reply carries the Choose stub and its button, and its message id is the pending ask's `stubMessageId`.
+- The stub's message id is recorded only while its ask is still the pending ask of a live session: a pick that already took the ask is not undone, and a session ended before the stub went out is not written back to the DB.
+- The live gateway adapter forwards the Choose button on the deferred-reply edit and on a plain reply.
 - A spend-cap stop never becomes a button ask, even with options.
 
 ### REQ-discord-045
