@@ -13,6 +13,7 @@ import {
   parkWorktree,
   removeWorktree,
   resolveProjectDir,
+  talkWorktreeId,
 } from "../src/worktree/index.ts";
 
 function gitOut(dir: string, args: string[]): string {
@@ -84,6 +85,55 @@ describe("worktree manager (SESSION-WORKTREE-1/3/5)", () => {
       writeFileSync(join(a.workspace.workDir, "only-a.txt"), "a");
       expect(existsSync(join(a.workspace.workDir, "only-a.txt"))).toBe(true);
       expect(existsSync(join(b.workspace.workDir, "only-a.txt"))).toBe(false);
+    } finally {
+      delete process.env.WORKTREE_BASE_DIR;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("ids sharing a 16-char prefix get distinct default worktrees; B's setup leaves A's live worktree alone", async () => {
+    const root = mkdtempSync(join(tmpdir(), "corvidinho-wt-prefix-"));
+    try {
+      const project = join(root, "proj");
+      initGitRepo(project);
+      process.env.WORKTREE_BASE_DIR = join(root, "wts");
+      // Scheduler-shaped ids: both start with `schedule_sched_a`.
+      const idA = "schedule_sched_a1111111_run_aaaa";
+      const idB = "schedule_sched_a2222222_run_bbbb";
+      expect(talkWorktreeId(idA)).not.toBe(talkWorktreeId(idB));
+      expect(generateTalkBranchName(idA)).not.toBe(generateTalkBranchName(idB));
+      // Deterministic: the same id always maps to the same names.
+      expect(talkWorktreeId(idA)).toBe(talkWorktreeId(idA));
+      expect(generateTalkBranchName(idA)).toBe(generateTalkBranchName(idA));
+
+      const a = await ensureTalkWorkspace({ projectWorkingDir: project, sessionId: idA });
+      expect(a.ok).toBe(true);
+      if (!a.ok) return;
+      writeFileSync(join(a.workspace.workDir, "a-wip.txt"), "wip");
+
+      const b = await ensureTalkWorkspace({ projectWorkingDir: project, sessionId: idB });
+      expect(b.ok).toBe(true);
+      if (!b.ok) return;
+      expect(b.workspace.workDir).not.toBe(a.workspace.workDir);
+      expect(b.workspace.branchName).not.toBe(a.workspace.branchName);
+      // A's live working tree and uncommitted edit survive B's setup.
+      expect(existsSync(join(a.workspace.workDir, "a-wip.txt"))).toBe(true);
+      expect(gitOut(a.workspace.workDir, ["branch", "--show-current"])).toBe(
+        a.workspace.branchName ?? "",
+      );
+
+      // Non-git project: scoped dirs are distinct too.
+      const plain = join(root, "plain");
+      mkdirSync(plain, { recursive: true });
+      const sa = await ensureTalkWorkspace({ projectWorkingDir: plain, sessionId: idA });
+      expect(sa.ok).toBe(true);
+      if (!sa.ok) return;
+      writeFileSync(join(sa.workspace.workDir, "a-note.txt"), "a");
+      const sb = await ensureTalkWorkspace({ projectWorkingDir: plain, sessionId: idB });
+      expect(sb.ok).toBe(true);
+      if (!sb.ok) return;
+      expect(sb.workspace.workDir).not.toBe(sa.workspace.workDir);
+      expect(existsSync(join(sa.workspace.workDir, "a-note.txt"))).toBe(true);
     } finally {
       delete process.env.WORKTREE_BASE_DIR;
       rmSync(root, { recursive: true, force: true });

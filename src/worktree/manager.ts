@@ -3,6 +3,7 @@
  * Steal from corvid-agent server/lib/worktree* — Linux headless only.
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { repoSlugFromRemoteUrl } from "../../plugins/git/parse.ts";
@@ -38,7 +39,7 @@ export type RemoveWorktreeOptions = {
 export type EnsureTalkWorkspaceOptions = {
   projectWorkingDir: string;
   sessionId: string;
-  /** Override worktree id (default talk-{sessionPrefix}). */
+  /** Override worktree id (default talk-{sessionPrefix}-{digest}). */
   worktreeId?: string;
   /** Override branch name. */
   branchName?: string;
@@ -75,15 +76,25 @@ export function getWorktreeBaseDir(projectWorkingDir: string): string {
   return resolve(dirname(projectWorkingDir), ".corvid-worktrees");
 }
 
-/** Branch: talk/{sessionId-prefix} */
-export function generateTalkBranchName(sessionId: string): string {
+/**
+ * Name part for a talk's worktree/branch: a readable 16-char prefix of the
+ * id plus a sha256 digest of the full id. The prefix alone collided for ids
+ * that share it (e.g. `schedule_<id>_<run>` kept only `schedule_sched_<c>`),
+ * so one talk's setup removed another's live worktree.
+ */
+function talkNamePart(sessionId: string): string {
   const sessionPrefix = sessionId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 16);
-  return `talk/${sessionPrefix || "unknown"}`;
+  const digest = createHash("sha256").update(sessionId).digest("hex").slice(0, 16);
+  return `${sessionPrefix || "unknown"}-${digest}`;
+}
+
+/** Branch: talk/{sessionId-prefix}-{digest} */
+export function generateTalkBranchName(sessionId: string): string {
+  return `talk/${talkNamePart(sessionId)}`;
 }
 
 export function talkWorktreeId(sessionId: string): string {
-  const sessionPrefix = sessionId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 16);
-  return `talk-${sessionPrefix || "unknown"}`;
+  return `talk-${talkNamePart(sessionId)}`;
 }
 
 function isWithin(child: string, parent: string): boolean {
