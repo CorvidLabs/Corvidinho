@@ -271,6 +271,26 @@ describe("doctor checks the LLM key and the data dir (defect 8)", () => {
     expectNoValues(withCorvid.out + withOpenai.out);
   }, 30_000);
 
+  test("per-tier model keys (AGENT-5): [ok] llm names each tier's model, never the key", async () => {
+    const plain = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_LLM_MODEL: "big" }));
+    expect(plain.out).toContain(
+      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big\n",
+    );
+    const r = await runDoctor(
+      readyEnv({
+        ...allowEnv,
+        CORVIDINHO_LLM_MODEL: "big",
+        CORVIDINHO_LLM_MODEL_READ: "cheap",
+        CORVIDINHO_LLM_MODEL_CODE: "big2",
+      }),
+    );
+    expect(r.out).toContain(
+      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big; per tier: read cheap, tool big, code big2",
+    );
+    expect(r.code).toBe(0);
+    expectNoValues(plain.out + r.out);
+  }, 30_000);
+
   test("a writable data dir is [ok]", async () => {
     const r = await runDoctor(readyEnv(allowEnv));
     expect(r.out).toContain(`[ok] data-dir: ${dataDir} exists and is writable`);

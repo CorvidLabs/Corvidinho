@@ -45,9 +45,12 @@ export {
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
 export {
+  DEFAULT_LLM_MODEL,
   loadTierFromEnv,
+  modelForTier,
   parseCapabilityTier,
   tierAllowsPlugin,
+  TIER_MODEL_ENV,
   TIER_RANK,
 } from "./tier.ts";
 export type { CapabilityTier } from "./tier.ts";

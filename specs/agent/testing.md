@@ -13,3 +13,12 @@
 ## Soft-land tool rounds (REQ-agent-312)
 
 `tests/agent.soft-land.test.ts` covers exhaustion soft-land, chatBody scrub, and mention rewrite.
+
+## Per-tier model (REQ-agent-079)
+
+`tests/agent.tool-loop.test.ts` "per-tier model (AGENT-5, REQ-agent-079)":
+fallback order, `--tier` override precedence, request `model` per tier, no
+per-tier keys = unchanged, SAFE-8 pricing of an unpriced read model.
+`tests/autonomous.delegate.test.ts`: a read-tier worker env resolves the read
+model. `tests/cli.doctor-truth.test.ts` / `tests/agent.cli.test.ts`: doctor
+`[ok] llm` per-tier line and help (REQ-cli-009).

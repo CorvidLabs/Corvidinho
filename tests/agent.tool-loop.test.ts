@@ -1,8 +1,15 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createTaskExecute,
+  DEFAULT_LLM_MODEL,
   loadLlmEnv,
+  modelForTier,
   parseCapabilityTier,
+  TIER_MODEL_ENV,
+  type CapabilityTier,
   tierAllowsPlugin,
   buildOpenAiTools,
   argvFromToolArguments,
@@ -575,5 +582,124 @@ describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", ()
     expect(result.summary).toContain("LLM HTTP 503");
     expect(result.summary).toContain("Verification failed on an earlier attempt");
     expect(result.summary).toContain("app.ts: syntax error");
+  });
+});
+
+describe("per-tier model (AGENT-5, REQ-agent-079)", () => {
+  const base = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "big",
+  };
+
+  /** body.model of every chat request one attempt sends. */
+  async function modelsSent(
+    env: Record<string, string>,
+    tier?: CapabilityTier,
+  ): Promise<string[]> {
+    const models: string[] = [];
+    const fetchImpl = async (_i: string | URL | Request, init?: RequestInit) => {
+      models.push(String(JSON.parse(String(init?.body ?? "{}")).model));
+      return new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    const exec = createTaskExecute({
+      taskText: "summarize",
+      env,
+      fetchImpl,
+      ...(tier ? { tier } : {}),
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    return models;
+  }
+
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("loadLlmEnv: the tier's key wins, else CORVIDINHO_LLM_MODEL, else the default", () => {
+    const env = { ...base, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL_READ: " cheap " };
+    expect(loadLlmEnv(env)).toMatchObject({ tier: "read", model: "cheap" });
+    // An explicit tier (e.g. --tier) overrides CORVIDINHO_LLM_TIER and picks its model.
+    expect(loadLlmEnv(env, "code")).toMatchObject({ tier: "code", model: "big" });
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_CODE: "big2" }, "code").model).toBe("big2");
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "tool").model).toBe("mid");
+    // Blank per-tier key falls back; no model at all keeps today's default.
+    expect(loadLlmEnv({ ...base, CORVIDINHO_LLM_MODEL_READ: "  " }, "read").model).toBe("big");
+    expect(loadLlmEnv({ CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "read").model).toBe(DEFAULT_LLM_MODEL);
+    expect(DEFAULT_LLM_MODEL).toBe("gpt-4o-mini");
+    expect(TIER_MODEL_ENV).toEqual({
+      read: "CORVIDINHO_LLM_MODEL_READ",
+      tool: "CORVIDINHO_LLM_MODEL_TOOL",
+      code: "CORVIDINHO_LLM_MODEL_CODE",
+    });
+    // Endpoint and key stay shared.
+    expect(loadLlmEnv(env, "code")).toMatchObject({ apiKey: "secret", baseUrl: "https://llm.test/v1" });
+    expect(modelForTier(env, "read")).toBe("cheap");
+  });
+
+  test("a read-tier run calls the read model; a code-tier run calls the code (else shared) model", async () => {
+    const env = { ...base, CORVIDINHO_LLM_MODEL_READ: "cheap" };
+    expect(await modelsSent(env, "read")).toEqual(["cheap"]);
+    expect(await modelsSent(env, "code")).toEqual(["big"]);
+    expect(await modelsSent(env, "tool")).toEqual(["big"]);
+    const withCode = { ...env, CORVIDINHO_LLM_MODEL_CODE: "big2", CORVIDINHO_LLM_MODEL_TOOL: "mid" };
+    expect(await modelsSent(withCode, "code")).toEqual(["big2"]);
+    expect(await modelsSent(withCode, "tool")).toEqual(["mid"]);
+    expect(await modelsSent(withCode, "read")).toEqual(["cheap"]);
+  });
+
+  test("the --tier override (opts.tier) picks the model, not CORVIDINHO_LLM_TIER", async () => {
+    const env = {
+      ...base,
+      CORVIDINHO_LLM_MODEL_READ: "cheap",
+      CORVIDINHO_LLM_MODEL_CODE: "big2",
+    };
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "code" }, "read")).toEqual(["cheap"]);
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "read" }, "code")).toEqual(["big2"]);
+    // No override: the env tier picks it.
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "read" })).toEqual(["cheap"]);
+  });
+
+  test("no per-tier keys: every tier sends CORVIDINHO_LLM_MODEL, as before", async () => {
+    for (const tier of ["read", "tool", "code"] as const) {
+      expect(await modelsSent(base, tier)).toEqual(["big"]);
+    }
+  });
+
+  test("SAFE-8 pricing follows the tier's model: an unpriced read model stops before the call", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-tier-model-spend-"));
+    try {
+      const env = {
+        ...base,
+        CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+        CORVIDINHO_LLM_MODEL_READ: "local-unpriced-cheap",
+        CORVIDINHO_DATA_DIR: dir,
+        CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
+      };
+      let calls = 0;
+      const exec = createTaskExecute({
+        taskText: "summarize",
+        env,
+        tier: "read",
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
+        },
+        loadPlugins: false,
+        projectInstructions: false,
+      });
+      const r = await exec({ attempt: 1, signal: new AbortController().signal });
+      expect(calls).toBe(0);
+      expect(r.ask?.reason).toBe("spend-cap");
+      expect(r.ask?.question).toContain('model "local-unpriced-cheap" has no known price');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

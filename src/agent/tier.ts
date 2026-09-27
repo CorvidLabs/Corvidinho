@@ -32,6 +32,32 @@ export function tierAllowsPlugin(
   return RANK[providerTier] >= need;
 }
 
+/**
+ * Optional per-tier model keys (AGENT-5): a tier's key wins, else
+ * `CORVIDINHO_LLM_MODEL`, else {@link DEFAULT_LLM_MODEL}. Endpoint and API key
+ * stay shared across tiers.
+ */
+export const TIER_MODEL_ENV: Readonly<Record<CapabilityTier, string>> = {
+  read: "CORVIDINHO_LLM_MODEL_READ",
+  tool: "CORVIDINHO_LLM_MODEL_TOOL",
+  code: "CORVIDINHO_LLM_MODEL_CODE",
+};
+
+/** Model used when neither the tier's key nor `CORVIDINHO_LLM_MODEL` is set. */
+export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
+
+/** The model a run at `tier` calls (AGENT-5). */
+export function modelForTier(
+  env: NodeJS.ProcessEnv,
+  tier: CapabilityTier,
+): string {
+  return (
+    env[TIER_MODEL_ENV[tier]]?.trim() ||
+    env.CORVIDINHO_LLM_MODEL?.trim() ||
+    DEFAULT_LLM_MODEL
+  );
+}
+
 export function loadTierFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   fallback: CapabilityTier = "tool",

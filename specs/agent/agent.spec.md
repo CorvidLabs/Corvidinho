@@ -70,6 +70,14 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
 totals; `extractUsage` reads OpenAI-compatible `usage`.
 
+Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
+`TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`),
+`DEFAULT_LLM_MODEL` (`gpt-4o-mini`) and `modelForTier(env, tier)` (tier key,
+else `CORVIDINHO_LLM_MODEL`, else the default). `loadLlmEnv(env, tier?)` takes
+an explicit tier over `CORVIDINHO_LLM_TIER` and returns that tier's model;
+`createTaskExecute` passes its `tier` so `--tier` picks the model. Endpoint and
+key stay shared.
+
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
 completions request (headers and body); `createTaskExecute` takes
