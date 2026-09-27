@@ -114,6 +114,7 @@ import {
 } from "../audit/index.ts";
 import { MemoryStore } from "../memory/index.ts";
 import {
+  ABANDONED_SETTLE_MS,
   ScheduleStore,
   SchedulerService,
 } from "../scheduler/index.ts";
@@ -1329,6 +1330,17 @@ export async function startBridge(
       manual: true,
     });
   }
+  if (scheduler) {
+    // REQ-discord-346: schedule runs a dead process left "running" are failed
+    // and their worktrees removed before the first tick; runs another live
+    // process (e.g. `corvidinho daemon`) owns are left alone.
+    const recovered = await scheduler.recoverAbandoned();
+    if (recovered.runs.length > 0 || recovered.worktrees.length > 0) {
+      console.log(
+        `[discord] restart recovery: ${recovered.runs.length} interrupted schedule run(s) marked failed, ${recovered.worktrees.length} leftover schedule worktree(s) removed`,
+      );
+    }
+  }
 
   const gateway = await factory(config, handlers);
   // If factory is createLiveGateway-like, reply is set inside; for custom, allow handlers.reply
@@ -1388,6 +1400,20 @@ export async function startBridge(
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       scheduler?.stop();
+      if (scheduler) {
+        // REQ-discord-346: like the daemon, a schedule run still going is
+        // recorded failed and its agent tree killed, then gets a short
+        // bounded grace to park its worktree before the process exits.
+        const abandoned = scheduler.abandonInFlight(
+          "interrupted: bridge shutdown",
+        );
+        if (abandoned.length > 0) {
+          console.log(
+            `[discord] shutdown: ${abandoned.length} in-flight schedule run(s) recorded failed`,
+          );
+          await scheduler.settleAbandoned(ABANDONED_SETTLE_MS);
+        }
+      }
       await gateway.stop();
     },
   };

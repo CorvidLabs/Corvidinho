@@ -389,9 +389,22 @@ On SIGTERM or SIGINT the daemon SHALL:
 - kill the process tree of any run still going (the spawned agent and
   everything it started, REQ-plugins-154) and record it as failed
   (`interrupted: daemon shutdown`);
+- wait up to 3 s more (a second signal does not skip this) for those runs to
+  park their worktree and delete their empty `talk/schedule_*` branch (a
+  branch with commits is kept, REQ-discord-346);
 - remove its lock and exit 0.
 
 A second signal SHALL skip the rest of the wait.
+
+Before its first tick the daemon SHALL run the scheduler's start-up recovery
+(REQ-discord-346): runs a dead process left `running` are recorded as failed
+(`interrupted: process restarted`) and leftover worktrees of runs this data
+dir recorded as ended are removed, keeping any branch with commits; runs
+another live bridge or daemon on the same data dir owns are left alone, and a
+schedule-run worktree whose run this data dir does not know (another data
+dir's) is never touched. When it fixed something it SHALL log
+`daemon.recovered` with the recovered run ids (`runs`) and the number of
+worktrees removed (`worktrees`).
 
 Daemon logs SHALL be one JSON object per line on stdout
 (`ts`, `level`, `component`, `event`, then fields), with every string value
@@ -408,6 +421,10 @@ Acceptance Criteria
 - A straggler spawned through the real spawn client (fake `sh` bin with a same-group and a `setsid` grandchild) has its whole tree killed at shutdown.
 - Log lines parse as JSON, and secrets in fields are redacted.
 - `--help` lists `daemon`.
+- Stop after the grace removes an abandoned run's worktree and empty `talk/schedule_*` branch before it resolves; a branch with commits is kept.
+- After `kill -9` of a daemon mid-run, the next start records that run as failed (`interrupted: process restarted`), removes its worktree and branch, and logs `daemon.recovered`.
+- Start removes a leftover worktree of a run already recorded as failed and leaves worktrees with other names alone.
+- Start never touches a schedule-run worktree whose run another data dir owns, even when the daemon's project root is that worktree: its uncommitted files and branch stay.
 
 ### REQ-cli-112
 

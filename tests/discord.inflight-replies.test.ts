@@ -141,11 +141,12 @@ async function start(
 describe("schema v9 discord_inflight_replies (REQ-discord-311)", () => {
   test("fresh DB reaches schema 9 with the table", () => {
     const db = memDb();
-    expect(SCHEMA_VERSION).toBe(9);
+    // v10 (schedule run runner, REQ-discord-346) builds on v9.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(9);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
-    expect(v.value).toBe("9");
+    expect(v.value).toBe(String(SCHEMA_VERSION));
     expect(inflightRows(db)).toEqual([]);
   });
 

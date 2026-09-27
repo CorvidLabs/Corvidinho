@@ -7,7 +7,9 @@
  * worktree (SESSION-WORKTREE), non-interactive spawns (SAFE-1). One daemon per
  * data dir (lock file); SIGTERM/SIGINT stop ticking, wait a bounded grace for
  * in-flight runs, then kill each straggler's process tree and record it
- * failed (AGENT-3), release the lock, exit 0.
+ * failed (AGENT-3), let it park its worktree (short bounded grace), release
+ * the lock, exit 0. Start first recovers runs and worktrees a dead process
+ * left (REQ-discord-346).
  *
  * Supervision/restart is systemd's job (docs/DAEMON.md); heartbeat, crash DMs
  * and running the bridge/watch inside the daemon are not built here.
@@ -27,6 +29,7 @@ import {
   checkProtocolVersion,
 } from "../discord/protocol-version.ts";
 import {
+  ABANDONED_SETTLE_MS,
   DEFAULT_POLL_INTERVAL_MS,
   ScheduleStore,
   SchedulerService,
@@ -208,6 +211,10 @@ export async function startDaemon(
     }
   };
 
+  // REQ-discord-346: before the first tick, fail runs a dead process left
+  // "running" and remove leftover schedule-run worktrees.
+  const recovered = await scheduler.recoverAbandoned();
+
   const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   // Ref'd on purpose: this interval is what keeps the daemon process alive.
   const timer = setInterval(() => {
@@ -227,6 +234,12 @@ export async function startDaemon(
     schedulesActive: all.filter((s) => s.status === "active").length,
     schedulesPaused: all.filter((s) => s.status === "paused").length,
   });
+  if (recovered.runs.length > 0 || recovered.worktrees.length > 0) {
+    log("warn", "daemon.recovered", {
+      runs: recovered.runs.map((r) => r.id),
+      worktrees: recovered.worktrees.length,
+    });
+  }
 
   let forceResolve: (() => void) | undefined;
   const forced = new Promise<false>((resolve) => {
@@ -251,6 +264,8 @@ export async function startDaemon(
         : scheduler.abandonInFlight(`interrupted: daemon shutdown (${reason})`);
       if (abandoned.length > 0) {
         log("warn", "daemon.abandoned", { scheduleIds: abandoned });
+        // Let the killed runs park their worktree before we exit.
+        await scheduler.settleAbandoned(ABANDONED_SETTLE_MS);
       }
       if (ownsDb) db?.close();
       lock.release();

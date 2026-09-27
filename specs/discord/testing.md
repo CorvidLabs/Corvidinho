@@ -106,6 +106,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
 
+## Schedule runs never stuck (REQ-discord-346)
+
+- `tests/scheduler.never-stuck.test.ts` — a `markRunFinished` that throws
+  once is retried (row `completed`, one `ok: true` event, "retrying once"
+  logged); one that throws twice logs `[scheduler] run failed: could not
+  record run …` and reports the run failed; bridge `stop()` with a real spawn
+  client and a fake `sh` agent records the in-flight run `failed`
+  (`interrupted: bridge shutdown`), kills the agent and removes its worktree
+  and branch; bridge start after a `kill -9` of a child process that was
+  running a schedule run fails it (`interrupted: process restarted`) and
+  removes its worktree, while a live child's run, worktree and branch stay;
+  a bridge started inside a schedule-run worktree whose run another data dir
+  owns leaves that worktree, its uncommitted file and its branch alone;
+  a claimed run records `<pid>:<proc start>` and a v9 DB migrates to v10 with
+  its old `running` row recovered. Temp git repos and SQLite files, no live
+  Discord.
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a

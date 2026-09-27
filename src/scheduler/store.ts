@@ -11,7 +11,29 @@
 
 import type { Database } from "bun:sqlite";
 import { getNextCronDate } from "./cron.ts";
+import { isHolderAlive, readProcStart } from "../daemon/lock.ts";
 import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
+
+/** Error recorded on a run a dead process left "running" (REQ-discord-346). */
+export const RUN_INTERRUPTED_BY_RESTART = "interrupted: process restarted";
+
+/**
+ * Identity of the process that runs a schedule run: `<pid>:<Linux /proc start
+ * time>`, so a recycled pid never passes for the process that died.
+ */
+export function scheduleRunnerId(pid: number = process.pid): string {
+  return `${pid}:${readProcStart(pid) ?? ""}`;
+}
+
+/** True while the process a runner id names still runs (same start time). */
+export function isScheduleRunnerAlive(runner: string): boolean {
+  const [pidText, procStart] = runner.split(":");
+  return isHolderAlive({
+    pid: Number(pidText),
+    startedAt: "",
+    procStart: procStart ? procStart : null,
+  });
+}
 
 export type ScheduleStatus = "active" | "paused";
 
@@ -118,10 +140,18 @@ export class ScheduleStore {
   private memory = new Map<string, Schedule>();
   private runsMemory = new Map<string, ScheduleRun>();
   private readonly db?: Database;
+  /** Recorded on each run this store claims (REQ-discord-346). */
+  private readonly runner: string;
 
-  constructor(opts: { db?: Database } = {}) {
+  constructor(opts: { db?: Database; runner?: string } = {}) {
     this.db = opts.db;
+    this.runner = opts.runner ?? scheduleRunnerId();
     this.refresh();
+  }
+
+  /** Runs live in SQLite (they outlive this process); false for memory. */
+  get durable(): boolean {
+    return this.db !== undefined;
   }
 
   /**
@@ -310,54 +340,127 @@ export class ScheduleStore {
     schedule.nextRunAt = next;
     if (this.db) {
       this.db.run(
-        `INSERT INTO schedule_runs (id, schedule_id, status, summary, error, started_at, completed_at)
-         VALUES (?, ?, ?, NULL, NULL, ?, NULL)`,
-        [run.id, run.scheduleId, run.status, run.startedAt],
+        `INSERT INTO schedule_runs (id, schedule_id, status, summary, error, started_at, completed_at, runner)
+         VALUES (?, ?, ?, NULL, NULL, ?, NULL, ?)`,
+        [run.id, run.scheduleId, run.status, run.startedAt, this.runner],
       );
     }
     return run;
   }
 
+  /**
+   * Record a run's outcome. The SQLite writes run in one IMMEDIATE
+   * transaction: the write lock is taken up front (so busy_timeout applies)
+   * and an attempt that throws (SQLITE_BUSY) changes nothing, so the
+   * scheduler can retry it without counting a failure twice. The cached
+   * run/schedule are updated only after the write succeeds.
+   */
   markRunFinished(
     schedule: Schedule,
     run: ScheduleRun,
     result: { ok: boolean; summary?: string; error?: string },
     now = Date.now(),
   ): void {
-    run.status = result.ok ? "completed" : "failed";
+    const status: ScheduleRunStatus = result.ok ? "completed" : "failed";
+    let failures = result.ok ? 0 : schedule.consecutiveFailures + 1;
+    const db = this.db;
+    if (db) {
+      failures = db
+        .transaction(() => {
+          // Count in SQL, not from the cached row, so every writer agrees.
+          db.run(
+            `UPDATE schedules SET
+               consecutive_failures = CASE WHEN ? = 1 THEN 0 ELSE consecutive_failures + 1 END,
+               updated_at = ?
+             WHERE id = ?`,
+            [result.ok ? 1 : 0, now, schedule.id],
+          );
+          const row = db
+            .query("SELECT consecutive_failures FROM schedules WHERE id = ?")
+            .get(schedule.id) as { consecutive_failures: number } | null;
+          db.run(
+            `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?
+             WHERE id = ?`,
+            [status, scrubOpt(result.summary), scrubOpt(result.error), now, run.id],
+          );
+          return row ? row.consecutive_failures : failures;
+        })
+        .immediate();
+    }
+    run.status = status;
     run.summary = result.summary;
     run.error = result.error;
     run.completedAt = now;
-    if (result.ok) {
-      schedule.consecutiveFailures = 0;
-    } else {
-      schedule.consecutiveFailures += 1;
-    }
+    schedule.consecutiveFailures = failures;
     schedule.updatedAt = now;
-    if (this.db) {
-      // Count in SQL, not from the cached row, so every writer agrees.
-      this.db.run(
-        `UPDATE schedules SET
-           consecutive_failures = CASE WHEN ? = 1 THEN 0 ELSE consecutive_failures + 1 END,
-           updated_at = ?
-         WHERE id = ?`,
-        [result.ok ? 1 : 0, now, schedule.id],
+  }
+
+  /**
+   * Restart recovery (REQ-discord-346 / SESSION-WORKTREE-3): a run left
+   * "running" by a process that is gone (kill -9, crash, a stop that could
+   * not record it) can never finish. Mark it failed with
+   * `interrupted: process restarted` instead of showing it running forever.
+   * A run whose runner process still lives (another bridge or daemon on this
+   * data dir) is left alone. Rows from before runners were recorded count as
+   * gone. Only the run row changes; the schedule's counters do not. No-op for
+   * the in-memory store. Call at start, before this process ticks.
+   */
+  recoverAbandonedRuns(
+    now = Date.now(),
+    isAlive: (runner: string) => boolean = isScheduleRunnerAlive,
+  ): ScheduleRun[] {
+    if (!this.db) return [];
+    const rows = this.db
+      .query(
+        "SELECT id, schedule_id, started_at, runner FROM schedule_runs WHERE status = 'running'",
+      )
+      .all() as Array<{
+      id: string;
+      schedule_id: string;
+      started_at: number;
+      runner: string | null;
+    }>;
+    const recovered: ScheduleRun[] = [];
+    for (const r of rows) {
+      if (r.runner && isAlive(r.runner)) continue;
+      const res = this.db.run(
+        `UPDATE schedule_runs SET status = 'failed', error = ?, completed_at = ?
+         WHERE id = ? AND status = 'running'`,
+        [RUN_INTERRUPTED_BY_RESTART, now, r.id],
       );
-      const row = this.db
-        .query("SELECT consecutive_failures FROM schedules WHERE id = ?")
-        .get(schedule.id) as { consecutive_failures: number } | null;
-      if (row) schedule.consecutiveFailures = row.consecutive_failures;
-      this.db.run(
-        `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?
-         WHERE id = ?`,
-        [
-          run.status,
-          scrubOpt(run.summary),
-          scrubOpt(run.error),
-          run.completedAt,
-          run.id,
-        ],
-      );
+      if (res.changes === 0) continue;
+      recovered.push({
+        id: r.id,
+        scheduleId: r.schedule_id,
+        status: "failed",
+        error: RUN_INTERRUPTED_BY_RESTART,
+        startedAt: r.started_at,
+        completedAt: now,
+      });
     }
+    return recovered;
+  }
+
+  /**
+   * Status and schedule of a run by id (SQLite first, then this process's
+   * memory), or undefined when this data dir has no such run (another data
+   * dir's run, or its schedule was deleted).
+   */
+  runRecord(
+    runId: string,
+  ): { status: ScheduleRunStatus; scheduleId: string } | undefined {
+    if (this.db) {
+      const row = this.db
+        .query("SELECT status, schedule_id FROM schedule_runs WHERE id = ?")
+        .get(runId) as { status: string; schedule_id: string } | null;
+      if (row) {
+        return {
+          status: row.status as ScheduleRunStatus,
+          scheduleId: row.schedule_id,
+        };
+      }
+    }
+    const run = this.runsMemory.get(runId);
+    return run ? { status: run.status, scheduleId: run.scheduleId } : undefined;
   }
 }
