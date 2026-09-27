@@ -131,3 +131,21 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   a member's `/work` A/B works the same, and another user's reply (even the
   configured owner's) never resumes A; a throwing tracking write still lets
   the answer collapse and the deferred reply be deleted (no live Discord).
+
+## Session thread replay (REQ-discord-072, AGENT-6 / SESSION-3 / SESSION-MULTI-1 / SAFE-4 / SAFE-6)
+
+- `tests/discord.session-thread.test.ts` — through `startBridge` with a fake
+  gateway and a recording agent: a reply, the same user's @mention and
+  further replies carry every earlier turn oldest first before the new
+  message (`humanText` the new message only); a second bridge on the same DB
+  file continues the thread; replies to `/session start` and `/work` answers
+  carry the topic/description and answer; a button pick carries the original
+  request; a spend-cap stop keeps the request but no cap text; replayed and
+  stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
+  replay; another user's session never sees my turns; confirm tokens only
+  from the current message (no live Discord).
+- `tests/discord.session-thread.unit.test.ts` — the renderer (budget,
+  opening request + newest turns, exact omitted count, per-turn clip,
+  `answerTurnText`) and `SessionStore` turns (module-owned table without a
+  schema version change, reload after reopen, delete on end/TTL, orphan
+  sweep, turn cap, scrub on write, `SCRUB_TARGETS` + `rescrubDatabase`).

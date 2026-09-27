@@ -19,6 +19,8 @@
  * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * SESSION-MULTI: per-user sessions.
+ * AGENT-6: each run is recorded with its session and a continued run gets the
+ * earlier turns replayed ahead of the new message (session-thread.ts).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -85,6 +87,7 @@ import {
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
 import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
 import { SessionStore } from "./session-store.ts";
+import { answerTurnText, withSessionThread } from "./session-thread.ts";
 import { handleSlashInteraction } from "./slash-dispatch.ts";
 import type { SlashContext } from "./slash-types.ts";
 import {
@@ -615,6 +618,10 @@ export async function startBridge(
           store.setPendingAsk(session, null);
         }
       }
+      // AGENT-6 (REQ-discord-072): the session's earlier turns, oldest first,
+      // go ahead of the new message and any pending-ask block, so a continued
+      // run keeps the thread. A new session has none.
+      agentPrompt = withSessionThread(agentPrompt, store.threadFor(session));
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
@@ -840,6 +847,10 @@ export async function startBridge(
           : result.ok
             ? result.summary.slice(0, 1800)
             : `session ${session.id} failed (exit ${result.exitCode})`;
+        // AGENT-6: keep this exchange with the session for its next run — the
+        // human's own words (before enrichment) and the answer as posted (a
+        // spend-cap stop records no answer, REQ-discord-098).
+        store.recordExchange(session, prompt, answerTurnText(body, pendingToStore ?? askRaw));
 
         // SAFE-8: the pending 80% spend warning and its owner mention ride
         // whichever message goes out (the collapsed edit or the fallback
@@ -1005,9 +1016,13 @@ export async function startBridge(
       });
 
       const channelId = session.threadId ?? session.channelId;
-      const agentPrompt =
+      // AGENT-6 (REQ-discord-072): the earlier turns (the original request
+      // included) go ahead of the answered question, as on a chat reply.
+      const agentPrompt = withSessionThread(
         `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]\n\n` +
-        `Human answer:\n${label}`;
+          `Human answer:\n${label}`,
+        store.threadFor(session),
+      );
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
@@ -1188,6 +1203,8 @@ export async function startBridge(
           : result.ok
             ? result.summary.slice(0, 1800)
             : `session ${session.id} failed (exit ${result.exitCode})`;
+        // AGENT-6: the pick and its answer join the session's thread.
+        store.recordExchange(session, label, answerTurnText(body, pendingToStore ?? askRaw));
 
         // SAFE-8: the pending 80% warning and its owner mention ride whichever
         // message goes out; when neither does, it and the cap ping go back.

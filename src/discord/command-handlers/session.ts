@@ -16,6 +16,7 @@ import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
 import { toPendingAsk } from "../ask-buttons.ts";
+import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
   askPingOwner,
@@ -229,6 +230,17 @@ export async function handleSessionStart(
     : result.ok
       ? result.summary.slice(0, 1500)
       : `failed (exit ${result.exitCode})`;
+  // AGENT-6 (REQ-discord-072): the topic and its answer open the session's
+  // thread, so a reply to this answer carries them. The ask shows as text (no
+  // buttons); a spend-cap stop records no answer (REQ-discord-098).
+  ctx.store.recordExchange(
+    session,
+    topic,
+    answerTurnText(
+      summary,
+      result.ask ? { reason: result.ask.reason, question: result.ask.question } : null,
+    ),
+  );
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";

@@ -1,14 +1,15 @@
 /**
  * Discord session stub maps (DISCORD-1 / 2 / 2.a) with optional SQLite
- * durability + soft TTL (SESSION-1..4 / REQ-discord-019) and per-talk
- * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022).
+ * durability + soft TTL (SESSION-1..4 / REQ-discord-019), per-talk
+ * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022) and the
+ * session's thread of turns (AGENT-6 / REQ-discord-072).
  * No ProcessManager.
  */
 
 import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import type { AllowlistConfig } from "../allowlist/types.ts";
-import { scrubOpt } from "../store/scrub.ts";
+import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
 import {
   isSessionExpired,
   resolveSessionTtlMs,
@@ -23,6 +24,12 @@ import {
 import { askFromUnknown } from "../agent/ask.ts";
 import type { HumanAsk } from "../agent/types.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
+import {
+  clipTurnText,
+  ensureSessionTurns,
+  SESSION_THREAD_MAX_TURNS,
+  type SessionTurn,
+} from "./session-thread.ts";
 import type { SessionStub } from "./types.ts";
 
 function serializePendingAsk(ask: PendingAsk | null | undefined): string | null {
@@ -116,6 +123,8 @@ export class SessionStore {
   private readonly ensureWorktreeOnCreate: boolean;
   /** session id → number of agent runs in flight (REQ-discord-204). */
   private readonly activeRuns = new Map<string, number>();
+  /** session id → recorded turns, oldest first (REQ-discord-072). */
+  private readonly turns = new Map<string, SessionTurn[]>();
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
@@ -125,6 +134,7 @@ export class SessionStore {
     this.allowlist = opts.allowlist;
     this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
     if (this.db) {
+      ensureSessionTurns(this.db);
       this.loadFromDb();
     }
   }
@@ -155,6 +165,7 @@ export class SessionStore {
 
   private removeLocal(session: SessionStub): void {
     this.bySessionId.delete(session.id);
+    this.turns.delete(session.id);
     if (session.threadId) {
       const mapped = this.byThreadId.get(session.threadId);
       if (mapped?.id === session.id) this.byThreadId.delete(session.threadId);
@@ -253,6 +264,32 @@ export class SessionStore {
       }
       this.byBotMessageId.set(row.bot_message_id, session);
     }
+
+    // REQ-discord-072: turns of live sessions only. Rows whose session is gone
+    // (ended or expired by a build that did not delete them) are dropped.
+    this.db.run(
+      `DELETE FROM discord_session_turns
+       WHERE session_id NOT IN (SELECT id FROM discord_sessions)`,
+    );
+    const turnRows = this.db
+      .query(
+        `SELECT session_id, role, content, created_at
+         FROM discord_session_turns ORDER BY id`,
+      )
+      .all() as Array<{
+      session_id: string;
+      role: string;
+      content: string;
+      created_at: number;
+    }>;
+    for (const row of turnRows) {
+      if (!this.bySessionId.has(row.session_id)) continue;
+      const role = row.role;
+      if (role !== "human" && role !== "agent") continue;
+      const list = this.turns.get(row.session_id) ?? [];
+      list.push({ role, content: row.content, createdAt: row.created_at });
+      this.turns.set(row.session_id, list);
+    }
   }
 
   private persistSession(session: SessionStub): void {
@@ -308,6 +345,9 @@ export class SessionStore {
       `DELETE FROM discord_session_bot_messages WHERE session_id = ?`,
       [sessionId],
     );
+    this.db.run(`DELETE FROM discord_session_turns WHERE session_id = ?`, [
+      sessionId,
+    ]);
     this.db.run(`DELETE FROM discord_sessions WHERE id = ?`, [sessionId]);
   }
 
@@ -539,6 +579,70 @@ export class SessionStore {
   setPendingAsk(session: SessionStub, ask: PendingAsk | null): void {
     session.pendingAsk = ask;
     this.persistSession(session);
+  }
+
+  /**
+   * Record one finished agent run on a live session: the human's own words
+   * (before memory/identity/image enrichment) and the answer the bridge
+   * posted (AGENT-6 / REQ-discord-072). Each turn is scrubbed (SAFE-6) and
+   * clipped before it is kept; past SESSION_THREAD_MAX_TURNS the oldest turn
+   * after the opening request is dropped. An ended or expired session is not
+   * recorded, so its thread never comes back (SESSION-3). The DB write is best
+   * effort: a failure is logged and the in-memory thread still holds the turn.
+   */
+  recordExchange(session: SessionStub, human: string, answer: string): void {
+    if (this.bySessionId.get(session.id) !== session) return;
+    const createdAt = this.nowMs();
+    const add: SessionTurn[] = [];
+    for (const [role, text] of [
+      ["human", human],
+      ["agent", answer],
+    ] as const) {
+      // Scrub before clipping, so a cut never leaves half a secret behind.
+      const content = clipTurnText(scrubSecrets(text));
+      if (content) add.push({ role, content, createdAt });
+    }
+    if (add.length === 0) return;
+    const list = this.turns.get(session.id) ?? [];
+    list.push(...add);
+    let dropped = 0;
+    while (list.length > SESSION_THREAD_MAX_TURNS) {
+      list.splice(1, 1);
+      dropped += 1;
+    }
+    this.turns.set(session.id, list);
+    if (!this.db) return;
+    const db = this.db;
+    try {
+      db.transaction(() => {
+        for (const t of add) {
+          db.run(
+            `INSERT INTO discord_session_turns (session_id, role, content, created_at)
+             VALUES (?, ?, ?, ?)`,
+            [session.id, t.role, t.content, t.createdAt],
+          );
+        }
+        if (dropped > 0) {
+          // Keep the opening turn and the newest MAX - 1, as in memory.
+          db.run(
+            `DELETE FROM discord_session_turns
+             WHERE session_id = ?1
+               AND id NOT IN (SELECT id FROM discord_session_turns
+                              WHERE session_id = ?1 ORDER BY id LIMIT 1)
+               AND id NOT IN (SELECT id FROM discord_session_turns
+                              WHERE session_id = ?1 ORDER BY id DESC LIMIT ?2)`,
+            [session.id, SESSION_THREAD_MAX_TURNS - 1],
+          );
+        }
+      })();
+    } catch (err) {
+      console.warn(`[discord] session thread write for ${session.id} failed:`, err);
+    }
+  }
+
+  /** The session's recorded turns, oldest first (a copy; REQ-discord-072). */
+  threadFor(session: SessionStub): SessionTurn[] {
+    return [...(this.turns.get(session.id) ?? [])];
   }
 
   /**

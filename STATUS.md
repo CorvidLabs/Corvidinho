@@ -194,7 +194,7 @@ Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)
 
 **Honest gaps before first flip (not inventing HI):**
 
-- Full LLM tool loop on top of prove-before-done — **shipped** [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) (thin MVP: env-gated OpenAI tools → plugins; read/tool/code tier; SAFE-1 deny unchanged). Remaining gaps: no turn persistence/replay (AGENT-6; durable sessions only live within the soft TTL), no mid-run tier escalation, dangerous tools not offered to the model in `task run` (SAFE-1). MEMORY (#64/#131), the NDJSON event stream (#139) and the files/search plugins (#127) shipped
+- Full LLM tool loop on top of prove-before-done — **shipped** [#31](https://github.com/CorvidLabs/Corvidinho/issues/31) (thin MVP: env-gated OpenAI tools → plugins; read/tool/code tier; SAFE-1 deny unchanged). Remaining gaps: Discord sessions keep their thread within the soft TTL (AGENT-6, REQ-discord-072: turns stored per session and replayed, bounded, into continued runs), but CLI `task run` has no session resume (CLI-6) and long threads are elided, not summarised (#72 drafts SESSION-5/6 are not captured); no mid-run tier escalation, dangerous tools not offered to the model in `task run` (SAFE-1). MEMORY (#64/#131), the NDJSON event stream (#139) and the files/search plugins (#127) shipped
 - SpecSync agent tools (#8→#22) so the live CLI can list/read/check specs — **shipped**
 - For Discord callers: HEAR (#5) **live on Leif's box** (token + allowlists); bun-spawn for `.ts` fixed in [#32](https://github.com/CorvidLabs/Corvidinho/pull/32)
 - For GH @mention callers: WATCH poll (#19) shipped — still needs VM token + username + allowlists; webhook optional later
