@@ -158,6 +158,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.29", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.29`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Slash asks stay pending");
+    expect(r.stdout).toContain("schedule_runs.runner");
+  });
+
   test("extract_changelog_section finds 0.0.28", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.28`,
@@ -701,10 +710,10 @@ describe("release workflow", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.28", () => {
+  test("package.json is 0.0.29", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.28");
+    expect(pkg.version).toBe("0.0.29");
   });
 });
