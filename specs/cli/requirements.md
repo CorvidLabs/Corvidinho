@@ -476,3 +476,12 @@ Acceptance Criteria
 - A `CORVIDINHO_BRIDGE_CMD` containing `pkill -f '<pattern>'` completes (exit 0, no rollback) instead of killing its own shell.
 - Each `pkill -f` pattern in `docs/BOX-UPDATE.md` matches `bun src/cli.ts discord bridge` and an absolute-path bridge command line, and does not match `bash -lc` holding the example.
 
+### REQ-cli-026
+
+The project SHALL ship package version `0.0.26` (spend cap warn/ask, crash + restart recovery, allowlist fail-closed, SAFE-3 clamp, WATCH dedup). CLI `version` and Discord presence (DISCORD-12) report `0.0.26` after a restart. CHANGELOG SHALL include verbose 0.0.26 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.26`.
+- CLI `version` prints `0.0.26`.
+- CHANGELOG has a 0.0.26 section that the updater's changelog helper extracts exactly.
+
