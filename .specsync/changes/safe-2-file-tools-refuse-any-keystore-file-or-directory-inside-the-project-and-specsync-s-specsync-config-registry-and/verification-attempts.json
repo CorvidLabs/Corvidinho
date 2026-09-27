@@ -112,6 +112,25 @@
         "REQ-plugins-083",
         "REQ-plugins-182"
       ]
+    },
+    {
+      "timestamp": 1790532181,
+      "commit": "6681019dd4c5b83943af17727b48ddfbefde4d4b",
+      "contract_digest": "41d51df535a44e04df936e0a331120ffbb04d52821864f56d96b64b8c9865c39",
+      "execution_digest": "90bec829b7d3f7cc77650b756c23ddd339bce2e2012bf328e188e601e3fde6ee",
+      "workspace_digest": "72c9af917b1a13ea992ed2c9e981cbf070a5677744599e61fd081783c7c7b607",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-083",
+        "REQ-plugins-182"
+      ]
     }
   ]
 }
