@@ -1,9 +1,9 @@
 {
-  "timestamp": 1790530059,
-  "commit": "aadc08217962557bf35a8e98317f61e41a9a7b74",
+  "timestamp": 1790531431,
+  "commit": "cc1103dab89af624a6aac58efa12a9e8daff33cc",
   "contract_digest": "41d51df535a44e04df936e0a331120ffbb04d52821864f56d96b64b8c9865c39",
-  "execution_digest": "87b7a75308f147931c4d552a440ad4ae3870dff96e77f334d8a4cbc4bd8fac0e",
-  "workspace_digest": "81497786f24102caade9238abd5a40a255d7ee3ee4e03c80792c453339e8733a",
+  "execution_digest": "90bec829b7d3f7cc77650b756c23ddd339bce2e2012bf328e188e601e3fde6ee",
+  "workspace_digest": "72c9af917b1a13ea992ed2c9e981cbf070a5677744599e61fd081783c7c7b607",
   "passed": true,
   "commands": [
     {
@@ -13,6 +13,7 @@
     }
   ],
   "requirement_ids": [
-    "REQ-plugins-083"
+    "REQ-plugins-083",
+    "REQ-plugins-182"
   ]
 }
