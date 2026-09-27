@@ -33,12 +33,14 @@ The updater sources `CORVIDINHO_ENV_FILE` once — after `bun install`, before `
 same env. A systemd unit's bridge still takes its env from the unit's own `EnvironmentFile=`,
 not from the updater (`systemctl` does not pass the caller's env on), so keep the two in step.
 Every doctor check must pass there — `discord`, `github`, `github-watch`, `fledge`,
-`specsync`, `plugins`, and `allowlist-file` when an allowlist file exists (a file the loader
-cannot parse fails it) — or the update rolls back. The `github-watch` check needs
-`GITHUB_TOKEN`/`GH_TOKEN`, `CORVIDINHO_WATCH_USERNAME` and `CORVIDINHO_GITHUB_ALLOW_REPOS`/`_ORGS`
-in the env (repos only in the allowlist file do not count), even on a box that does not run
-WATCH. If the env file is missing, the updater's own environment is used; set
-`CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
+`specsync`, `plugins`, `data-dir`, and `allowlist-file` when an allowlist file exists (a file
+the loader cannot parse fails it) — or the update rolls back. `discord` and `github-watch`
+read the allowlist file and env like the bridge and watch (deny wins); `[warn]` / `[info]`
+lines (for example `llm` without a key) do not fail doctor. The `github-watch` check needs
+`GITHUB_TOKEN`/`GH_TOKEN` and `CORVIDINHO_WATCH_USERNAME` in the env plus at least one usable
+allowed repo or org (allowlist file `[github]` or `CORVIDINHO_GITHUB_ALLOW_REPOS`/`_ORGS`),
+even on a box that does not run WATCH. If the env file is missing, the updater's own
+environment is used; set `CORVIDINHO_SKIP_DOCTOR=1` only knowingly.
 
 Bun also auto-loads a `.env` file from the checkout root into processes started there (`doctor`
 and a pidfile-mode bridge); spawned agents never read it (`bun --no-env-file`). Keep secrets in

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and",
+  "implementation_commit": "3ad94241a8f6ed8541ed3cd03e20ac96e93abc34",
+  "implementation_tree": "14538ac118d9a4a0ea4fc9928e9a118f5615fc71",
+  "contract_digest": "e9ada9609ddae8a8b9def4aa0a3b00f0ea6e0e4cf0a697312c04051000572516",
+  "workspace_digest": "42175ecc19d6658522f5d93d5ba3405dedb5cd54e2300353834060fb44845919",
+  "closing_digest": "cafc89dafd0550f4c0f4cc45c8c6d80341a9db704a3b479f40b26bd1d0e71ac6",
+  "review_digest": "7fbc037c2ec73a24207bdcd49e9612d763aace1ee5e98a0bfc3a252a5348b05a",
+  "finalization_digest": "39eff9d392f8b6bf4464dd7889b55779fd61adb3d1f8933431cfa0864f1f5b18",
+  "timestamp": 1790475161
+}
