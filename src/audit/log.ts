@@ -6,9 +6,11 @@
  * HMAC-SHA256, so someone who can write the DB but not read the VM env cannot
  * re-sign the chain. Without a key the chain is plain SHA-256 (integrity only)
  * and verify says so. Once a keyed row exists the chain stays keyed: an
- * unkeyed row after it is refused on append and fails verify, so keyed rows
- * cannot be relinked as plain SHA-256. Rows hold ids, digests and outcomes —
- * never raw args or memory content.
+ * unkeyed row after it is refused on append and fails verify, so a keyed row
+ * cannot be relinked as plain SHA-256 while a keyed row before it stays.
+ * Rewriting every keyed row as unkeyed, or dropping the newest rows, is not
+ * detectable from the DB alone (that needs an anchor outside the DB). Rows
+ * hold ids, digests and outcomes — never raw args or memory content.
  */
 
 import { createHash, createHmac } from "node:crypto";

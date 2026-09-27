@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790468894,
+      "digest": "205e4604aff5790bd03c3596a623e986e52824226b48a03eb9e6bf2069593e8b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a",
+        "title": "SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain",
+        "description": "SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "src/audit/log.ts",
+          "tests/audit.keyed-downgrade.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "REQ-plugins-095 and the src/audit/log.ts module comment no longer claim that keyed rows can never be relinked as plain SHA-256: they state that verify with the key reports an unkeyed row that follows a keyed row as the break, and that downgrading every keyed row (from the first keyed row on) or dropping the newest rows is not detectable from the DB alone (needs an out-of-DB anchor); the relink acceptance criterion names a keyed row that follows a keyed row, with a regression test for a legacy unkeyed prefix followed by keyed rows where the last keyed row is edited and relinked unkeyed (fails verify at that row); docs/DISCORD-GO-LIVE.md says a process without the key refuses dangerous plugin runs and /admin changes once the chain is keyed; no runtime behaviour change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "b583bc5c2e03fd2367d14a7e92a6817a3f7f348f2017d4d81bf5bff6c3aef6bc"
+      }
+    }
+  ],
+  "reopenings": []
+}

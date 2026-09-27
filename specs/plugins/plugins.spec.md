@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 44
+version: 45
 status: draft
 files:
   - src/plugins/types.ts
@@ -265,6 +265,9 @@ stays keyed. `appendAudit` without `CORVIDINHO_AUDIT_HMAC_KEY` refuses to
 append after a keyed row (a dangerous run is then refused, fail closed), and
 `verifyAudit` with the key reports an unkeyed row after a keyed row as the
 break. An unkeyed prefix followed by keyed rows still verifies as mixed.
+Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
+the newest rows is not detectable from the DB alone; it needs an anchor kept
+outside the DB.
 
 ## Behavioral Examples
 
@@ -429,3 +432,4 @@ and current rows for plugins host evolution.
 | 2026-09-26 | safe-5-audit-verify-rejects-unkeyed-rows-after-a-keyed-row-and-appendaudit-refuses-unkeyed-appends-to-a-keyed-chain-so: SAFE-5 audit verify rejects unkeyed rows after a keyed row and appendAudit refuses unkeyed appends to a keyed chain so keyed rows cannot be relinked as unkeyed SHA-256 |
 | 2026-09-26 | safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded: SAFE-3 shell-exec cd clamp fails closed — quote-aware tokenizer joins `\`-newlines, drops redirections (never splitting a redirection `&`), refuses expanded command words, `eval` with expansion, escaping cd inside command substitutions and DIRSTACK writes; CDPATH protection moves to the child shell's `CDPATH=; readonly CDPATH` (dropped CDPATH/OLDPWD env) so a dynamic CDPATH cannot redirect a relative cd; closes PR #187 review findings |
 | 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
+| 2026-09-27 | safe-5-audit-req-plugins-095-states-the-keyed-downgrade-guarantee-accurately-verify-catches-an-unkeyed-row-after-a: SAFE-5 audit REQ-plugins-095 states the keyed-downgrade guarantee accurately: verify catches an unkeyed row after a keyed row, but downgrading every keyed row or dropping the newest rows needs an out-of-DB anchor; go-live doc says a keyless process refuses dangerous runs on a keyed chain |

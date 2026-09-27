@@ -91,6 +91,24 @@ describe("audit chain keyed downgrade (SAFE-5)", () => {
     expect(formatAuditLine(v)).toBe("Audit: 3 entries · chain BROKEN at #2");
   });
 
+  test("after a legacy unkeyed prefix, a keyed row relinked unkeyed behind a keyed row fails verify", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    appendAudit(db, entry("a"));
+    appendAudit(db, entry("b"));
+    appendAudit(db, entry("memory-forget"), { key: KEY });
+    appendAudit(db, entry("memory-forget", "222"), { key: KEY });
+    expect(formatAuditLine(verifyAudit(db, KEY))).toBe(
+      "Audit: 4 entries · chain OK (mixed keyed/unkeyed)",
+    );
+
+    downgradeFrom(db, 4, (r) => {
+      r.actor = "111";
+    });
+    const v = verifyAudit(db, KEY);
+    expect(v).toMatchObject({ ok: false, keyAvailable: true, brokenAtSeq: 4 });
+    expect(formatAuditLine(v)).toBe("Audit: 4 entries · chain BROKEN at #4");
+  });
+
   test("an unkeyed append after a keyed row is refused, so the chain stays verifiable", () => {
     const db = openCorvidinhoDb({ memory: true });
     appendAudit(db, entry("a"), { key: KEY });
