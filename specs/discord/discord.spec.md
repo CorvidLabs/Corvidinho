@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 62
+version: 66
 status: draft
 files:
   - src/discord/types.ts
@@ -42,11 +42,13 @@ files:
   - src/discord/presence.ts
   - src/discord/bridge.ts
   - src/discord/thinking-status.ts
+  - src/discord/slash-finish.ts
   - src/discord/slash-commands.ts
   - src/discord/register-commands.ts
   - src/discord/slash-types.ts
   - src/discord/slash-dispatch.ts
   - src/discord/command-handlers/session.ts
+  - tests/discord.slash-ask7.test.ts
   - src/discord/command-handlers/status.ts
   - src/discord/command-handlers/agents.ts
   - src/discord/command-handlers/work.ts
@@ -126,8 +128,9 @@ When an ask has structured options (or a numbered list in the question),
 `src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
 an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 `ASK_CHOICE_EXPIRED`). Free-text clarify remains when options cannot be listed.
-Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick prefer editing
-that message into the final answer (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent`.
+Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
+`/session start` / `/work` prefer editing that message into the final answer
+(DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist `pendingAsk` (with `askId` / `expiresAt` / options)
@@ -157,7 +160,7 @@ The bridge builds one `createSpendAlertOutbox({ db, env })`
 `release` hands the ping back when the post fails), `askNeedsOwner` (stuck
 and spend-cap ping the owner; clarify addresses the requester, AUTONOMY-4),
 `takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
-`replyWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
+`finishSlashWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
 `AskPingOwner` types. The chat reply (also the reply to a run a button pick
 resumed; a spend-cap stop never gets choice buttons; the warning line and
 owner mention ride the collapsed edit of the thinking message, DISCORD-ASK-6/7,
@@ -166,15 +169,20 @@ or the fallback reply, and go back when neither went out), `/work`,
 `spendWarning` only when there is no DB), and hand it and the cap ping back
 when the post does not go out (`SchedulerOutbound.post` may resolve `false`;
 a schedule then keeps no ping key). `OwnerNotice.release` hands back what a
-slash notice claimed; `replyWithOwnerNotice` still posts the notice when the
-slash reply itself fails (expired interaction token) and re-raises that
-error. A `spend-cap` stop is never the session's `pendingAsk` (a reply cannot
+slash notice claimed; `finishSlashWithOwnerNotice` answers through
+`finishSlashWithThinking` (DISCORD-ASK-7: the thinking message collapsed into
+the answer, else the ask/Done/fail status plus the reply; its `askStatus`
+keeps an ask run from showing "✅ Done", `mentionUserIds` limits the
+collapsed answer's mentions and `onDelivered` reports the answer went out),
+then posts the notice fresh (an edit does not notify), appends it to the
+answer when that post fails, still posts it when the answer itself fails
+(expired interaction token) and re-raises that error. A `spend-cap` stop is never the session's `pendingAsk` (a reply cannot
 lift the cap), and a stored one loads as none. `/work` and
 `/session start` post `result.ask` through `formatAskReply` (paused status,
 not ✅; a clarify ask addresses the requester); `WorkTaskStatus` gains
 `blocked` (listed on `/status` as waiting for input when > 0); the owner
 ping (stuck and spend-cap only) and the warning go out as a fresh post after
-the reply. `formatAskReply` pings the owner for a `spend-cap` ask like a
+the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
@@ -348,6 +356,10 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-26 | agent-run-summaries-are-secret-scrubbed-before-every-length-clip-and-a-private-key-block-cut-before-its-end-line-is: Agent run summaries are secret-scrubbed before every length clip, and a private-key block cut before its END line is redacted |
 | 2026-09-26 | discord-ask-ephemeral-buttons-session-multi: DISCORD-ASK-1..5 ephemeral button asks + SESSION-MULTI-1..4 per-user sessions (package 0.0.22) |
 | 2026-09-26 | discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22: DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22 |
+| 2026-09-26 | parking-a-talk-s-worktree-records-the-parked-state-before-removal-and-bind-re-creates-a-recorded-worktree-whose: Parking a talk's worktree records the parked state before removal and bind re-creates a recorded worktree whose directory is gone, so a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3) |
+| 2026-09-26 | allowlist-file-toml-reader-loads-multi-line-arrays-and-fails-closed-on-anything-it-cannot-parse-so-file-deny-lists-are: Allowlist file TOML reader loads multi-line arrays and fails closed on anything it cannot parse, so file deny lists are never silently dropped |
 | 2026-09-26 | discord-ask-6-7-tighten-ask-ux: DISCORD-ASK-6/7 collapse thinking into Choose stub; edit stub/thinking into final answer; package 0.0.23 |
 | 2026-09-26 | discord-ask-6-7-tighten-ask-ux-collapse-thinking-into-one-choose-stub-edit-stub-thinking-into-final-answer-instead-of: DISCORD-ASK-6/7 tighten ask UX: collapse thinking into one Choose stub; edit stub/thinking into final answer instead of Done+extra reply; package 0.0.23 |
+| 2026-09-26 | align-session-start-and-work-with-discord-ask-7-collapse-thinking-into-one-final-message-instead-of-done-embed-plus: Align /session start and /work with DISCORD-ASK-7: collapse thinking into one final message instead of Done embed plus interaction reply |
+| 2026-09-26 | discord-ask-8-clear-ephemeral-choice-buttons-on-pick-and-delete-got-it-working-ephemeral-after-resume: DISCORD-ASK-8: clear ephemeral choice buttons on pick and delete Got-it Working ephemeral after resume |
 | 2026-09-26 | safe-8-review-follow-up-for-pr-160-issue-98-a-post-that-did-not-go-out-hands-back-the-80-spend-warning-and-the-spend: SAFE-8 review follow-up for PR #160 (issue #98): a post that did not go out hands back the 80% spend warning and the spend-cap owner ping on every bridge surface (a slash reply that fails, e.g. an expired interaction token, still posts the owner notice), a warning claimed while spend is back under 80% stays pending for the next post at 80% or more, and a spend-cap stop is never kept as the session pending ask |

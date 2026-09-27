@@ -11,6 +11,7 @@ import {
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
@@ -19,7 +20,7 @@ import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
 import {
   askNeedsOwner,
   askPingOwner,
-  replyWithOwnerNotice,
+  finishSlashWithOwnerNotice,
   slashOwnerNotice,
 } from "../spend-post.ts";
 
@@ -131,13 +132,18 @@ export async function handleWorkCommand(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
     ctx.workStore.setStatus(task, "failed", msg);
-    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Work \`${task.id}\` failed: ${msg}`;
-    if (interaction.editReply) {
-      await interaction.editReply({ content: body });
-    } else {
-      await interaction.reply({ content: body });
-    }
+    // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
+    await finishSlashWithThinking({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras: { model: llmModel },
+      ok: false,
+      failStatus: `❌ ${msg}`,
+    });
     return;
   }
 
@@ -165,23 +171,19 @@ export async function handleWorkCommand(
       })
     : null;
   if (ask && result.ask) {
+    // The status (ask, not "✅ Done") is set when the answer goes out below.
     ctx.workStore.setStatus(task, ask.failed ? "failed" : "blocked", result.summary.slice(0, 500));
-    await (ask.failed
-      ? thinking?.fail(ask.status, thinkExtras)
-      : thinking?.done(ask.status, thinkExtras));
     if (askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
       console.warn(ASK_NO_OWNER_WARNING);
     }
   } else if (result.ok) {
     ctx.workStore.setStatus(task, "completed", result.summary.slice(0, 500));
-    await thinking?.done("✅ Done", thinkExtras);
   } else {
     ctx.workStore.setStatus(
       task,
       "failed",
       `exit ${result.exitCode}`,
     );
-    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
   }
 
   const summary = ask
@@ -217,7 +219,10 @@ export async function handleWorkCommand(
     summary,
   ].join("\n");
 
-  // Owner ping for the ask + pending SAFE-8 80% warning, as a fresh post.
+  // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
+  // reply); the owner ping for the ask and the pending SAFE-8 80% warning go
+  // out as a fresh post (an edit does not notify), claims handed back when
+  // nothing carried them.
   const notice = slashOwnerNotice({
     owner: ctx.owner,
     outbox: ctx.spendAlerts,
@@ -226,7 +231,19 @@ export async function handleWorkCommand(
     spendWarning: result.spendWarning,
     label: `/work \`${task.id}\``,
   });
-  await replyWithOwnerNotice({ interaction, body, notice, post: ctx.post });
+  await finishSlashWithOwnerNotice({
+    thinking,
+    body,
+    interaction,
+    sessionId: session.id,
+    trackBotMessage: ctx.trackBotMessage,
+    thinkExtras,
+    ok: result.ok,
+    failStatus: `❌ exit ${result.exitCode}`,
+    ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+    notice,
+    post: ctx.post,
+  });
 }
 
 /** One reply line for the /work PR step; never throws (REQ-discord-088). */

@@ -10,13 +10,14 @@ import {
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { finishSlashWithThinking } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
 import {
   askNeedsOwner,
   askPingOwner,
-  replyWithOwnerNotice,
+  finishSlashWithOwnerNotice,
   slashOwnerNotice,
 } from "../spend-post.ts";
 
@@ -154,13 +155,18 @@ export async function handleSessionStart(
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
-    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Session \`${session.id}\` failed: ${msg}`;
-    if (interaction.editReply) {
-      await interaction.editReply({ content: body });
-    } else {
-      await interaction.reply({ content: body });
-    }
+    // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
+    await finishSlashWithThinking({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras: { model: llmModel },
+      ok: false,
+      failStatus: `❌ ${msg}`,
+    });
     return;
   }
 
@@ -187,17 +193,9 @@ export async function handleSessionStart(
         context: result.summary,
       })
     : null;
-  if (ask && result.ask) {
-    await (ask.failed
-      ? thinking?.fail(ask.status, thinkExtras)
-      : thinking?.done(ask.status, thinkExtras));
-    if (askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
-      console.warn(ASK_NO_OWNER_WARNING);
-    }
-  } else if (result.ok) {
-    await thinking?.done("✅ Done", thinkExtras);
-  } else {
-    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+  // The status (ask, not "✅ Done") is set when the answer goes out below.
+  if (ask && result.ask && askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
+    console.warn(ASK_NO_OWNER_WARNING);
   }
 
   const summary = ask
@@ -210,7 +208,10 @@ export async function handleSessionStart(
     : "";
   const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
 
-  // Owner ping for the ask + pending SAFE-8 80% warning, as a fresh post.
+  // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
+  // reply); the owner ping for the ask and the pending SAFE-8 80% warning go
+  // out as a fresh post (an edit does not notify), claims handed back when
+  // nothing carried them.
   const notice = slashOwnerNotice({
     owner: ctx.owner,
     outbox: ctx.spendAlerts,
@@ -219,7 +220,19 @@ export async function handleSessionStart(
     spendWarning: result.spendWarning,
     label: `/session \`${session.id}\``,
   });
-  await replyWithOwnerNotice({ interaction, body, notice, post: ctx.post });
+  await finishSlashWithOwnerNotice({
+    thinking,
+    body,
+    interaction,
+    sessionId: session.id,
+    trackBotMessage: ctx.trackBotMessage,
+    thinkExtras,
+    ok: result.ok,
+    failStatus: `❌ exit ${result.exitCode}`,
+    ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+    notice,
+    post: ctx.post,
+  });
 }
 
 export async function handleSessionCommand(

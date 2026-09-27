@@ -19,7 +19,7 @@ import type { HumanAsk, SpendWarning, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createDaemonLogger, startDaemon } from "../src/daemon/index.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/discord/agent-client.ts";
-import { replyWithOwnerNotice } from "../src/discord/spend-post.ts";
+import { finishSlashWithOwnerNotice } from "../src/discord/spend-post.ts";
 import {
   appendPostLine,
   ASK_REPLY_HINT,
@@ -168,7 +168,7 @@ const MENTION = {
 };
 
 describe("bridge replies", () => {
-  test("spend-cap ask → question + owner ping; never an error status (fallback reply path)", async () => {
+  test("spend-cap ask → question + owner ping; status paused, not an error (fallback reply path)", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: `state=blocked\n${formatAskSummary(CAP_ASK)}`, exitCode: 0, ask: CAP_ASK };
@@ -180,11 +180,9 @@ describe("bridge replies", () => {
     expect(replies[0]!.content).toContain(SPEND_CAP_HEADLINE);
     expect(replies[0]!.content).toContain("Daily spend cap reached");
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    // DISCORD-ASK-6/7: finalizeContent closes the thinking status before the
-    // fallback reply, so the embed keeps its progress state — never an error.
-    for (const e of outbound.edits) {
-      expect((e.embed as DiscordEmbedPayload).color).not.toBe(THINKING_COLORS.error);
-    }
+    const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
+    expect(last.description).toContain(SPEND_CAP_STATUS);
+    expect(last.color).not.toBe(THINKING_COLORS.error);
     await result.stop();
   });
 
@@ -331,8 +329,12 @@ function slashInteraction(commandName: "work" | "session", options: Record<strin
     reply: async (p) => void edits.push(p),
     deferReply: async () => {},
     editReply: async (p) => void edits.push(p),
+    deleteReply: async () => {
+      deleted.push(true);
+    },
   };
-  return { ix, edits };
+  const deleted: boolean[] = [];
+  return { ix, edits, deleted };
 }
 
 const CAP_RESULT = {
@@ -575,16 +577,31 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
   });
 
   test("without a gateway post (or when it fails) the owner notice is appended to the slash reply", async () => {
+    const reply = (edits: SlashReplyPayload[]): SlashInteraction => ({
+      id: "ix",
+      commandName: "work",
+      channelId: "c",
+      userId: "u",
+      options: {},
+      reply: async (p) => void edits.push(p),
+      editReply: async (p) => void edits.push(p),
+    });
     const edits: SlashReplyPayload[] = [];
-    await replyWithOwnerNotice({
-      interaction: { channelId: "c", reply: async (p) => void edits.push(p), editReply: async (p) => void edits.push(p) },
+    await finishSlashWithOwnerNotice({
+      thinking: null,
+      interaction: reply(edits),
+      sessionId: "s",
+      ok: true,
       body: "Work task `w` (blocked).",
       notice: { content: `💸 <@${OWNER_ID}> x`, mentionUserIds: [OWNER_ID], release: () => {} },
     });
     expect(edits.map((e) => e.content)).toEqual([`Work task \`w\` (blocked).\n\n💸 <@${OWNER_ID}> x`]);
     const edits2: SlashReplyPayload[] = [];
-    await replyWithOwnerNotice({
-      interaction: { channelId: "c", reply: async (p) => void edits2.push(p), editReply: async (p) => void edits2.push(p) },
+    await finishSlashWithOwnerNotice({
+      thinking: null,
+      interaction: reply(edits2),
+      sessionId: "s",
+      ok: true,
       body: "B",
       notice: { content: "N", mentionUserIds: [], release: () => {} },
       post: async () => null,
@@ -1013,6 +1030,129 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     expect(last.components).toBeNull();
     expect(last.mentionUserIds).toEqual([OWNER_ID]);
     expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    await result.stop();
+  });
+});
+
+describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a fresh post", () => {
+  function pendingWarningDb() {
+    const db = openCorvidinhoDb({ memory: true });
+    const ledger = new SpendLedger(db);
+    ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    expect(ledger.noteWarning({ capMicroUsd: 1_000_000, now: Date.now() })).not.toBeNull();
+    return db;
+  }
+  const capAgent: AgentClient = {
+    async runChat({ sessionId }) {
+      return { ...CAP_RESULT, sessionId };
+    },
+  };
+
+  test("/work at the cap: the thinking message becomes the paused ask (not ✅ Done), the deferred reply is dropped, the owner is pinged once in a fresh post with the warning", async () => {
+    const { outbound, finals } = collapseOutbound();
+    const { result, handlers, replies } = await bridgeWith(
+      capAgent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      pendingWarningDb(),
+      () => false,
+      outbound,
+    );
+    if (!result.ok) throw new Error("bridge did not start");
+    const first = slashInteraction("work", { description: "add storage" });
+    await handlers.onSlash!(first.ix);
+    expect(first.edits).toHaveLength(0);
+    expect(first.deleted).toHaveLength(1);
+    expect(finals).toHaveLength(1);
+    expect(finals[0]!.content).toContain("(blocked)");
+    expect(finals[0]!.content).toContain(SPEND_CAP_HEADLINE);
+    expect(finals[0]!.content).not.toContain("✅");
+    expect(finals[0]!.content).not.toContain("<@");
+    expect(finals[0]!.mentionUserIds).toEqual([]);
+    expect(result.workStore.list()[0]!.status).toBe("blocked");
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toMatch(new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
+    expect(replies[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    // Same episode, warning delivered: no second owner post.
+    const second = slashInteraction("work", { description: "more storage" });
+    await handlers.onSlash!(second.ix);
+    expect(finals).toHaveLength(2);
+    expect(replies).toHaveLength(1);
+    await result.stop();
+  });
+
+  test("/session start with a stuck ask: collapsed answer shows the ask (not ✅ Done) and the owner gets a fresh post; a clarify ask addresses the requester with no owner post", async () => {
+    let reason: "stuck" | "clarify" = "stuck";
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return {
+          ok: true,
+          sessionId,
+          summary: "Needs a human",
+          exitCode: 0,
+          ask: { reason, question: "Verify keeps failing — how should I proceed" },
+          task: { state: "blocked", verified: false, verifySkipped: true, attempts: 3, cancelled: false },
+        };
+      },
+    };
+    const { outbound, finals } = collapseOutbound();
+    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID }, openCorvidinhoDb({ memory: true }), () => false, outbound);
+    await handlers.onSlash!(slashInteraction("session", { topic: "storage" }).ix);
+    expect(finals[0]!.content).toContain("I'm stuck and need a human");
+    expect(finals[0]!.content).not.toContain("✅");
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.content).toMatch(new RegExp(`^⚠️ <@${OWNER_ID}> /session \`[^\`]+\` is stuck`));
+    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    reason = "clarify";
+    await handlers.onSlash!(slashInteraction("session", { topic: "db" }).ix);
+    expect(finals[1]!.content).toContain("<@222233334444555566>");
+    expect(finals[1]!.mentionUserIds).toEqual(["222233334444555566"]);
+    expect(replies).toHaveLength(1);
+    await result.stop();
+  });
+
+  test("the fresh owner post fails: the notice is appended to the collapsed answer (edited again)", async () => {
+    const { outbound, finals } = collapseOutbound();
+    const { result, handlers, replies } = await bridgeWith(
+      capAgent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      openCorvidinhoDb({ memory: true }),
+      () => true,
+      outbound,
+    );
+    await handlers.onSlash!(slashInteraction("work", { description: "add storage" }).ix);
+    expect(replies).toHaveLength(0);
+    expect(finals).toHaveLength(2);
+    expect(finals[1]!.messageId).toBe(finals[0]!.messageId);
+    expect(finals[1]!.content).toStartWith(finals[0]!.content!);
+    expect(finals[1]!.content).toMatch(new RegExp(`💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
+    expect(finals[1]!.mentionUserIds).toEqual([OWNER_ID]);
+    await result.stop();
+  });
+
+  test("nothing carried the notice (collapse, owner post and re-edit all fail; the reply throws): the warning and the cap ping go to the next chat answer", async () => {
+    let failing = true;
+    const { outbound, finals } = collapseOutbound(() => failing);
+    const { result, handlers, replies } = await bridgeWith(
+      capAgent,
+      { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
+      pendingWarningDb(),
+      () => failing,
+      outbound,
+    );
+    const { ix } = slashInteraction("work", { description: "add storage" });
+    ix.editReply = async () => {
+      throw new Error("Unknown interaction (token expired)");
+    };
+    await expect(handlers.onSlash!(ix)).rejects.toThrow("token expired");
+    expect(finals).toHaveLength(0);
+    expect(replies).toHaveLength(0);
+    failing = false;
+    await handlers.onMessage(MENTION);
+    expect(finals).toHaveLength(1);
+    expect(finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(finals[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
     await result.stop();
   });
 });

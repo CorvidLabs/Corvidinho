@@ -8,7 +8,8 @@
  *    `claimCapPing`); later spend-cap asks still post, without a ping.
  *  - Every post takes the pending 80% warning from the outbox (recorded by
  *    whichever run crossed, on any surface) and pings the owner with it.
- *  - Slash runs answer by editing their deferred reply; an edit may not
+ *  - Slash runs answer in one message (the thinking message collapsed into
+ *    the answer, DISCORD-ASK-7, else the deferred reply); an edit does not
  *    notify a mention, so the owner notice goes out as a fresh channel post
  *    with allowed mentions limited to the owner.
  *  - A post that did not go out hands its claims back (the warning and the
@@ -19,7 +20,7 @@ import type { SpendAlertOutbox, TakenSpendWarning } from "../agent/spend-outbox.
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { appendPostLine, formatSpendWarningReply } from "./ask-ping.ts";
-import type { SlashInteraction } from "./slash-types.ts";
+import { finishSlashWithThinking, type SlashFinishThinkingOpts } from "./slash-finish.ts";
 
 export type AskPingOwner = {
   /** Owner to mention on the ask post, or null for no ping. */
@@ -136,56 +137,98 @@ export function slashOwnerNotice(opts: {
 }
 
 /**
- * Send a slash run's final reply, then its owner notice as a fresh channel
- * post. Without a post function, or when that post fails, the notice is
- * appended to the reply instead so it is never dropped. A failed reply (e.g.
- * an interaction token that expired during a long run) does not stop the
- * notice: it still goes out as a channel post, and when nothing carried it
- * the notice's claims are handed back for the next post. The reply's error
- * is re-thrown afterwards so the gateway still logs it.
+ * Finish a slash run (`/work`, `/session start`) with its owner notice.
+ *
+ * The body goes out as one message when practical (DISCORD-ASK-7:
+ * finishSlashWithThinking collapses the thinking message into it and drops
+ * the deferred reply; else the fallback status + reply). The owner notice
+ * (stuck / spend-cap ping, pending 80% warning) is then a FRESH channel post
+ * with allowed mentions limited to the owner — an edit does not notify a
+ * mention. When that post cannot be sent, the notice is appended to the
+ * answer that went out (the collapsed message is edited again, or the reply
+ * re-edited); without a post function it rides the body from the start.
+ * A body that fails (e.g. an interaction token that expired during a long
+ * run) does not stop the notice post. When nothing carried the notice its
+ * claims are handed back for the next post, and the body's error is
+ * re-thrown afterwards so the gateway still logs it.
  */
-export async function replyWithOwnerNotice(opts: {
-  interaction: Pick<SlashInteraction, "channelId" | "reply" | "editReply">;
-  body: string;
-  notice: OwnerNotice | null;
-  post?: ChannelPost;
-}): Promise<void> {
-  const { interaction, notice, post } = opts;
-  const send = (content: string) =>
-    interaction.editReply ? interaction.editReply({ content }) : interaction.reply({ content });
+export async function finishSlashWithOwnerNotice(
+  opts: SlashFinishThinkingOpts & {
+    notice: OwnerNotice | null;
+    post?: ChannelPost;
+  },
+): Promise<void> {
+  const { notice, post, ...finish } = opts;
   if (!notice) {
-    await send(opts.body);
+    await finishSlashWithThinking(finish);
     return;
   }
+  const withNotice = appendPostLine(opts.body, notice.content);
+  const mentions = [...new Set([...(opts.mentionUserIds ?? []), ...notice.mentionUserIds])];
   let delivered = false;
-  const reply: { failed: boolean; err?: unknown } = { failed: false };
-  const trySend = async (content: string): Promise<boolean> => {
-    try {
-      await send(content);
-      return true;
-    } catch (err) {
-      if (!reply.failed) Object.assign(reply, { failed: true, err });
-      return false;
-    }
+  const body: { mode: "collapsed" | "fallback" | null } = { mode: null };
+  const failure: { failed: boolean; err?: unknown } = { failed: false };
+  const note = (err: unknown) => {
+    if (!failure.failed) Object.assign(failure, { failed: true, err });
   };
-  if (post) {
-    const replied = await trySend(opts.body);
-    try {
-      delivered =
-        (await post({
-          channelId: interaction.channelId,
-          content: notice.content,
-          mentionUserIds: notice.mentionUserIds,
-        })) !== null;
-    } catch {
-      delivered = false;
+  try {
+    if (!post) {
+      await finishSlashWithThinking({
+        ...finish,
+        body: withNotice,
+        mentionUserIds: mentions,
+        onDelivered: () => {
+          delivered = true;
+        },
+      });
+    } else {
+      try {
+        await finishSlashWithThinking({
+          ...finish,
+          onDelivered: (mode) => {
+            body.mode = mode;
+          },
+        });
+      } catch (err) {
+        note(err);
+      }
+      try {
+        delivered =
+          (await post({
+            channelId: opts.interaction.channelId,
+            content: notice.content,
+            mentionUserIds: notice.mentionUserIds,
+          })) !== null;
+      } catch {
+        delivered = false;
+      }
+      if (!delivered && body.mode === "collapsed" && opts.thinking) {
+        // Append to the collapsed answer (edits it again).
+        try {
+          delivered =
+            (await opts.thinking.finalizeContent({
+              content: withNotice,
+              mentionUserIds: mentions,
+            })) !== null;
+        } catch {
+          delivered = false;
+        }
+      } else if (!delivered && body.mode === "fallback") {
+        const { interaction } = opts;
+        try {
+          await (interaction.editReply
+            ? interaction.editReply({ content: withNotice })
+            : interaction.reply({ content: withNotice }));
+          delivered = true;
+        } catch (err) {
+          note(err);
+        }
+      }
     }
-    if (!delivered && replied) {
-      delivered = await trySend(appendPostLine(opts.body, notice.content));
-    }
-  } else {
-    delivered = await trySend(appendPostLine(opts.body, notice.content));
+  } catch (err) {
+    note(err);
+  } finally {
+    if (!delivered) notice.release();
   }
-  if (!delivered) notice.release();
-  if (reply.failed) throw reply.err;
+  if (failure.failed) throw failure.err;
 }

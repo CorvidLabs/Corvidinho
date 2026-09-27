@@ -6,6 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { scrubOpt } from "../store/scrub.ts";
 import {
@@ -310,21 +311,48 @@ export class SessionStore {
     this.db.run(`DELETE FROM discord_sessions WHERE id = ?`, [sessionId]);
   }
 
+  /**
+   * Write a session row's worktree columns. UPDATE only, so a row already
+   * deleted (ended or TTL-purged talk) is never re-inserted.
+   */
+  private persistWorktreeState(session: SessionStub): void {
+    if (!this.db) return;
+    this.db.run(
+      `UPDATE discord_sessions
+       SET worktree_path = ?, worktree_branch = ?, worktree_state = ?
+       WHERE id = ?`,
+      [
+        session.worktreePath ?? null,
+        session.worktreeBranch ?? null,
+        session.worktreeState ?? null,
+        session.id,
+      ],
+    );
+  }
+
   /** Park/remove worktree so another talk cannot reuse it as cwd. */
   async parkSessionWorktree(session: SessionStub): Promise<void> {
     if (!session.worktreePath || !session.project) {
       session.worktreeState = "removed";
       return;
     }
-    if (session.worktreeState === "parked" || session.worktreeState === "removed") {
+    // `parked` with a path still recorded is a park cut short (crash before
+    // the removal finished): parking is idempotent, so finish it.
+    if (session.worktreeState === "removed") {
       return;
     }
+    // Record `parked` before any removal side effect: a crash from here on
+    // restarts with a row that bindWorktree re-binds fresh, never one that
+    // still says `active` at a removed directory (SESSION-WORKTREE-3).
+    session.worktreeState = "parked";
+    this.persistWorktreeState(session);
     const state = await parkWorktree(session.project, session.worktreePath, {
       kind: session.worktreeBranch ? "worktree" : "scoped_dir",
       branchName: session.worktreeBranch,
     });
     session.worktreeState = state;
     session.worktreePath = undefined;
+    this.persistWorktreeState(session);
   }
 
   /**
@@ -339,6 +367,9 @@ export class SessionStore {
   /**
    * Bind an isolated workspace onto a session (idempotent if already bound).
    * Never silently switches project mid-conversation (SESSION-WORKTREE-4).
+   * A recorded worktree whose directory is gone (crash mid-park, removed out
+   * of band) is re-created for the same project and session, never handed
+   * out as cwd (SESSION-WORKTREE-3).
    */
   async bindWorktree(
     session: SessionStub,
@@ -361,17 +392,20 @@ export class SessionStore {
           };
         }
       }
-      return {
-        ok: true,
-        workspace: {
-          kind: session.worktreeBranch ? "worktree" : "scoped_dir",
-          workDir: session.worktreePath,
-          projectWorkingDir: session.project ?? session.worktreePath,
-          branchName: session.worktreeBranch,
-          worktreeId: session.id,
-          state: "active",
-        },
-      };
+      if (existsSync(session.worktreePath)) {
+        return {
+          ok: true,
+          workspace: {
+            kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+            workDir: session.worktreePath,
+            projectWorkingDir: session.project ?? session.worktreePath,
+            branchName: session.worktreeBranch,
+            worktreeId: session.id,
+            state: "active",
+          },
+        };
+      }
+      // Recorded worktree is gone: fall through and re-create it below.
     }
 
     const defaultRoot =
@@ -567,7 +601,11 @@ export class SessionStore {
     return out.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
   }
 
-  /** Agent cwd for a session: worktree when active, else project, else default. */
+  /**
+   * Agent cwd for a session: worktree when active, else project, else default.
+   * Call after bindWorktree, which verifies the recorded worktree directory
+   * and re-creates a missing one.
+   */
   cwdFor(session: SessionStub): string | undefined {
     if (session.worktreePath && session.worktreeState === "active") {
       return session.worktreePath;

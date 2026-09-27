@@ -46,6 +46,8 @@ export type SlashInteraction = {
   reply: (opts: SlashReplyPayload) => Promise<void>;
   deferReply?: (opts?: { ephemeral?: boolean }) => Promise<void>;
   editReply?: (opts: SlashReplyPayload) => Promise<void>;
+  /** DISCORD-ASK-7 — drop deferred reply when thinking carries the answer. */
+  deleteReply?: () => Promise<void>;
 };
 
 export type SlashContext = {
