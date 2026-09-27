@@ -138,6 +138,17 @@ labelled replay block, `SESSION_THREAD_HEADER` / `SESSION_THREAD_FOOTER`,
 human's words as a run starts, the posted answer or failure line when it
 ends) and `SessionStore.threadFor(session)` returns them oldest first.
 
+Scrub at rest (REQ-discord-066, SAFE-6): `src/store/scrub.ts` exports
+`scrubSecrets` / `scrubOpt`, `scrubJsonText(raw, keepKeys)` (scrubs the string
+values of one stored JSON document, key names and the values under `keepKeys`
+unchanged, re-serialized only when a value changed; text that does not parse
+is scrubbed as text, `parsed: false`), `SCRUB_TARGETS` (text `columns` per
+table plus `json` columns with their id keys: `discord_sessions.pending_ask`
+keeps `askId`, `stubMessageId` and option `id`), `rescrubDatabase` (returns
+`rowsUpdated`, `byTable` and `jsonUnparsed`, and logs one
+`[scrub] <table>.<column>: N stored value(s) were not valid JSON` line per
+column, never the text) and `ensureScrubbed`; `SCRUB_RULES_VERSION` is 3.
+
 Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 (`src/store/scrub.ts`) turn any thrown value into one scrubbed operator line;
 `formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
@@ -182,7 +193,10 @@ custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
 restates and a free-text reply answers, and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
-array (oldest first, newest last) when several are. `SessionStore.setPendingAsk(session, ask)`
+array (oldest first, newest last) when several are. The stored question and
+option labels are secret-scrubbed (SAFE-6 / REQ-discord-066); askId,
+expiresAt, option ids and stubMessageId are stored as they are, and the SAFE-6
+re-scrub rewrites the column value by value as JSON (`scrubJsonText`). `SessionStore.setPendingAsk(session, ask)`
 stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
@@ -442,6 +456,14 @@ REQ-discord-044).
   its choices, and picking one resumes the session with A's question and the
   chosen label while B stays open; a late press on A gets `that choice expired`
   and clears only A; `cancel` clears both
+
+### Scenario: An open ask never keeps a secret at rest (SAFE-6)
+
+- **Given** a run asks "Which token? ghp_…" with the choices "keep sk-ant-…" and "drop it"
+- **When** the session saves the open ask, or an older build's raw row is re-scrubbed on the next DB open after `SCRUB_RULES_VERSION` rises
+- **Then** `discord_sessions.pending_ask` holds `[redacted:github-token]` and
+  `[redacted:anthropic-key]` in valid JSON, with the same askId, option ids,
+  expiresAt and stubMessageId, so the Choose button still opens the choices
 
 ### Scenario: Empty owner scope
 

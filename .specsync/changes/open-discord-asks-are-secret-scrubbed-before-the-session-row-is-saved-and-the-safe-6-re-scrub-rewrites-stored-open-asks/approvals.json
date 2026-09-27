@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790544751,
+      "digest": "743676052ad5b7934a83f6d1538ca8703583b4d5770e6559c0b1719ac9ea1cd0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks",
+        "title": "Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6)",
+        "description": "Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/session-store.ts",
+          "src/store/scrub.ts",
+          "tests/store.scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A button ask or free-text ask whose question or option label holds a vendor-key-shaped secret is stored in discord_sessions.pending_ask with [redacted:<kind>] in place of the secret, for both the single-object and the JSON-array row, and the session reloads with the same askId, option ids, expiresAt and stubMessageId (SAFE-6); when the scrub rules version rises, the next DB open re-scrubs raw pending_ask rows written by an older build by parsing the JSON, scrubbing its text values and re-serializing it (askId, expiresAt, option ids and stubMessageId byte-identical), the rewritten row stays valid JSON and loads as a pending ask even when a question holds a private-key block with no END line, a second open is a no-op, and a row that is not JSON is scrubbed as text and counted and logged without its content (SAFE-6 re-scrub); SCRUB_RULES_VERSION rises to 3; no SQLite schema version bump, no new table, column, env var, config key, CLI or slash command; regression tests fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "e47dcd2d2f7ba67ee31ce44fb40302cea22f3ee533f1fdfeeefa2693cfc036ed"
+      }
+    }
+  ],
+  "reopenings": []
+}

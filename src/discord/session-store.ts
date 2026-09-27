@@ -33,14 +33,22 @@ import {
 } from "./session-thread.ts";
 import type { SessionStub } from "./types.ts";
 
+/**
+ * One open ask as stored. The question and option labels are model-written
+ * text, so they are secret-scrubbed like every stored text (SAFE-6); askId,
+ * expiresAt, option ids and stubMessageId are kept as they are, so open
+ * buttons keep working.
+ */
 function pendingAskBody(ask: PendingAsk): Record<string, unknown> {
   const body: Record<string, unknown> = {
     reason: ask.reason,
-    question: ask.question,
+    question: scrubSecrets(ask.question),
     askId: ask.askId,
     expiresAt: ask.expiresAt,
   };
-  if (ask.options?.length) body.options = ask.options;
+  if (ask.options?.length) {
+    body.options = ask.options.map((o) => ({ ...o, label: scrubSecrets(o.label) }));
+  }
   if (ask.stubMessageId) body.stubMessageId = ask.stubMessageId;
   return body;
 }

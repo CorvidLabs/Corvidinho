@@ -2,10 +2,11 @@
  * SAFE-6 scrub before persist + automatic re-scrub (REQ-discord-066 / #66).
  * Fake secrets are assembled at runtime — never realistic literals in the repo.
  */
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { toPendingAsk, type PendingAsk } from "../src/discord/ask-buttons.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 import { MemoryStore } from "../src/memory/store.ts";
@@ -210,6 +211,201 @@ describe("automatic re-scrub when rules tighten", () => {
       db2.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("open Discord asks persist scrubbed and are re-scrubbed as JSON (SAFE-6)", () => {
+  // A private-key block with no END line: a text scrub runs to the end of the text.
+  const openKey = "-----BEGIN " + "OPENSSH PRIVATE KEY-----\n" + a(40);
+  const pendingRow = (db: ReturnType<typeof openCorvidinhoDb>, id: string) =>
+    (db.query("SELECT pending_ask FROM discord_sessions WHERE id = ?").get(id) as {
+      pending_ask: string | null;
+    }).pending_ask;
+
+  test("question and option labels are scrubbed in the one-object and the array row; ids reload unchanged", () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-scrub-asks-"));
+    try {
+      const path = join(dir, "corvidinho.db");
+      const db1 = openCorvidinhoDb({ path });
+      const store1 = new SessionStore({ db: db1 });
+      const s = store1.create({ channelId: "c", userId: "u" });
+      const button: PendingAsk = {
+        ...toPendingAsk(
+          {
+            reason: "clarify",
+            question: `Which token? ${FAKE.github}`,
+            options: [
+              { id: "keep", label: `keep ${FAKE.anthropic}` },
+              { id: "drop", label: "drop it" },
+            ],
+          },
+          { askId: "aska" },
+        ),
+        stubMessageId: "stub-a",
+      };
+      store1.setPendingAsk(s, button);
+      expect(JSON.parse(pendingRow(db1, s.id)!)).toEqual({
+        reason: "clarify",
+        question: "Which token? [redacted:github-token]",
+        askId: "aska",
+        expiresAt: button.expiresAt,
+        options: [
+          { id: "keep", label: "keep [redacted:anthropic-key]" },
+          { id: "drop", label: "drop it" },
+        ],
+        stubMessageId: "stub-a",
+      });
+
+      // A second open ask (free text) turns the row into an array (SESSION-MULTI-3).
+      const text = toPendingAsk(
+        { reason: "stuck", question: `Retry with ${FAKE.openai}?` },
+        { askId: "askb" },
+      );
+      store1.setPendingAsk(s, text);
+      const stored = pendingRow(db1, s.id)!;
+      for (const secret of [FAKE.github, FAKE.anthropic, FAKE.openai]) {
+        expect(stored).not.toContain(secret.slice(0, 20));
+      }
+      const many = JSON.parse(stored) as Array<Record<string, unknown>>;
+      expect(many.map((x) => x.askId)).toEqual(["aska", "askb"]);
+      expect(many[0]!.question).toBe("Which token? [redacted:github-token]");
+      expect(many[1]!.question).toBe("Retry with [redacted:openai-key]?");
+      db1.close();
+
+      const db2 = openCorvidinhoDb({ path });
+      const store2 = new SessionStore({ db: db2 });
+      const back = store2.get(s.id)!;
+      expect(back.pendingAsk).toMatchObject({
+        askId: "askb",
+        expiresAt: text.expiresAt,
+        question: "Retry with [redacted:openai-key]?",
+      });
+      expect(back.openAsks).toHaveLength(1);
+      expect(back.openAsks![0]).toMatchObject({
+        askId: "aska",
+        expiresAt: button.expiresAt,
+        stubMessageId: "stub-a",
+        question: "Which token? [redacted:github-token]",
+      });
+      expect(back.openAsks![0]!.options).toEqual([
+        { id: "keep", label: "keep [redacted:anthropic-key]" },
+        { id: "drop", label: "drop it" },
+      ]);
+      expect(store2.findPendingAsk("aska")?.session.id).toBe(s.id);
+      db2.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("raw rows from an older build are rewritten as valid JSON on next open, ids byte-identical; second open is a no-op", () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-rescrub-asks-"));
+    try {
+      const path = join(dir, "corvidinho.db");
+      const now = Date.now();
+      const single = {
+        reason: "clarify",
+        question: `Paste it? ${openKey}`,
+        askId: "ask1",
+        expiresAt: now + 60_000,
+        options: [
+          { id: "yes", label: `yes ${FAKE.slack}` },
+          { id: "no", label: "no" },
+        ],
+        stubMessageId: "1111",
+      };
+      const array = [
+        {
+          reason: "clarify",
+          question: "Which DB?",
+          askId: "ask2",
+          expiresAt: now + 60_000,
+          options: [
+            { id: "pg", label: "Postgres" },
+            { id: "my", label: "MySQL" },
+          ],
+          stubMessageId: "2222",
+        },
+        { reason: "stuck", question: `401 with ${FAKE.github}`, askId: "ask3", expiresAt: now + 120_000 },
+      ];
+      const clean = JSON.stringify({ reason: "clarify", question: "Ship it?", askId: "ask4", expiresAt: now + 60_000 });
+      // A text scrub would cut the row: the open key block runs to the end.
+      expect(() => JSON.parse(scrubSecrets(JSON.stringify(single)))).toThrow();
+
+      const db1 = openCorvidinhoDb({ path });
+      const insert = db1.prepare(
+        "INSERT INTO discord_sessions (id, channel_id, user_id, pending_ask, created_at, last_activity_at) VALUES (?, 'c', ?, ?, ?, ?)",
+      );
+      insert.run("s1", "u1", JSON.stringify(single), now, now);
+      insert.run("s2", "u2", JSON.stringify(array), now, now);
+      insert.run("s3", "u3", clean, now, now);
+      // Saved under the previous rules (version 2 did not re-scrub open asks).
+      db1.run("UPDATE schema_meta SET value = '2' WHERE key = 'scrub_rules_version'");
+      db1.close();
+
+      const db2 = openCorvidinhoDb({ path });
+      const one = pendingRow(db2, "s1")!;
+      expect(one).not.toContain(a(40));
+      expect(one).not.toContain(FAKE.slack);
+      expect(JSON.parse(one)).toEqual({
+        ...single,
+        question: "Paste it? [redacted:private-key]",
+        options: [
+          { id: "yes", label: "yes [redacted:slack-token]" },
+          { id: "no", label: "no" },
+        ],
+      });
+      expect(one).toContain(`"askId":"ask1","expiresAt":${single.expiresAt}`);
+      expect(one).toContain(`"stubMessageId":"1111"`);
+      const two = pendingRow(db2, "s2")!;
+      expect(two).not.toContain(FAKE.github);
+      expect(JSON.parse(two)).toEqual([array[0], { ...array[1], question: "401 with [redacted:github-token]" }]);
+      expect(pendingRow(db2, "s3")).toBe(clean);
+      const v = db2.query("SELECT value FROM schema_meta WHERE key = 'scrub_rules_version'").get() as { value: string };
+      expect(Number(v.value)).toBe(SCRUB_RULES_VERSION);
+      expect(ensureScrubbed(db2)).toEqual({ ran: false, rowsUpdated: 0 });
+      expect(rescrubDatabase(db2)).toMatchObject({ rowsUpdated: 0, jsonUnparsed: 0 });
+      expect(pendingRow(db2, "s1")).toBe(one);
+
+      // The rewritten rows still load as open asks, buttons intact.
+      const store = new SessionStore({ db: db2 });
+      expect(store.get("s1")!.pendingAsk).toMatchObject({
+        askId: "ask1",
+        expiresAt: single.expiresAt,
+        stubMessageId: "1111",
+        question: "Paste it? [redacted:private-key]",
+      });
+      expect(store.get("s1")!.pendingAsk!.options?.map((o) => o.id)).toEqual(["yes", "no"]);
+      expect(store.findPendingAsk("ask2")).toMatchObject({ session: { id: "s2" }, ask: { stubMessageId: "2222" } });
+      expect(store.findPendingAsk("ask3")?.ask.question).toBe("401 with [redacted:github-token]");
+      db2.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a stored ask that is not JSON is scrubbed as text and counted; its content is never logged", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const cut = `{"reason":"clarify","question":"cut ${FAKE.github}`;
+    db.run(
+      "INSERT INTO discord_sessions (id, channel_id, user_id, pending_ask, created_at, last_activity_at) VALUES ('s1', 'c', 'u', ?, 1, 1)",
+      [cut],
+    );
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = rescrubDatabase(db);
+      expect(r.jsonUnparsed).toBe(1);
+      expect(r.byTable.discord_sessions).toBe(1);
+      expect(pendingRow(db, "s1")).toBe(`{"reason":"clarify","question":"cut [redacted:github-token]`);
+      const logged = warn.mock.calls.flat().map(String).join("\n");
+      expect(logged).toContain("discord_sessions.pending_ask: 1");
+      expect(logged).not.toContain("cut ");
+      expect(logged).not.toContain(FAKE.github);
+      expect(logged).not.toContain("[redacted:");
+    } finally {
+      warn.mockRestore();
+      db.close();
     }
   });
 });
