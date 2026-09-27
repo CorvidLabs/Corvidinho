@@ -142,10 +142,12 @@ export function scrubOpt(text: string | null | undefined): string | null {
 
 /**
  * Every free-text column Corvidinho persists. Keep in sync with src/store/db.ts
- * and module-owned tables (spend_ledger: src/agent/spend.ts).
+ * and module-owned tables (spend_ledger: src/agent/spend.ts;
+ * discord_session_turns: src/discord/session-thread.ts).
  */
 export const SCRUB_TARGETS: ReadonlyArray<{ table: string; columns: readonly string[] }> = [
   { table: "discord_sessions", columns: ["topic"] },
+  { table: "discord_session_turns", columns: ["content"] },
   { table: "discord_work_tasks", columns: ["description", "summary"] },
   { table: "schedules", columns: ["name", "description", "prompt"] },
   { table: "schedule_runs", columns: ["summary", "error"] },
