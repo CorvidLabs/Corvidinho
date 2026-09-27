@@ -1,6 +1,6 @@
 ---
 id: safe-8-x-discord-ask-7-issue-98-merge-of-208-work-and-session-start-answer-in-one-collapsed-message-and-keep-the-safe-8
-state: implementing
+state: archived
 type: bug_fix
 base_commit: f9dc47ff912aa4682d102d73aa8e62018717c63f
 ---

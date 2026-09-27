@@ -7,11 +7,11 @@
   "title": "SAFE-8 x DISCORD-ASK-7 (issue #98, merge of #208): /work and /session start answer in one collapsed message and keep the SAFE-8 owner notice a fresh channel post; an ask run never shows Done, and claims go back when nothing carried the notice",
   "description": "SAFE-8 x DISCORD-ASK-7 (issue #98, merge of #208): /work and /session start answer in one collapsed message and keep the SAFE-8 owner notice a fresh channel post; an ask run never shows Done, and claims go back when nothing carried the notice",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "f9dc47ff912aa4682d102d73aa8e62018717c63f",
   "created_at": 1790467597,
-  "updated_at": 1790467933,
+  "updated_at": 1790468033,
   "affected_specs": [
     "discord"
   ],
