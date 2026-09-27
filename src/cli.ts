@@ -34,6 +34,7 @@ import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
+import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
 import { runPlugin } from "./plugins/run.ts";
 import {
@@ -504,11 +505,15 @@ async function taskRun(opts: {
   });
   // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
   // and tool loop stop and the cancelled result below is still printed (exit
-  // 130). `once`: a second signal takes the default action.
+  // 130). `once`: a second signal takes the default action. A signal this
+  // process started with ignored (a background job's SIGINT) is not hooked:
+  // a listener would replace SIG_IGN and removing it restores SIG_DFL.
   const abort = new AbortController();
   const onSignal = () => abort.abort();
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
+  const hooked = forwardedSignals().filter(
+    (sig) => sig === "SIGINT" || sig === "SIGTERM",
+  );
+  for (const sig of hooked) process.once(sig, onSignal);
   let result: TaskResult;
   try {
     result = await runTask({
@@ -527,8 +532,7 @@ async function taskRun(opts: {
       },
     });
   } finally {
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
+    for (const sig of hooked) process.off(sig, onSignal);
   }
 
   if (ndjson) {

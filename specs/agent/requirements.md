@@ -353,7 +353,11 @@ An abort SHALL stop the run's work, not only its bookkeeping (AGENT-3):
   the lane tasks it started, REQ-plugins-154), so no verify step keeps
   running in the background. An already-aborted signal SHALL NOT start the
   lane. The lane SHALL also be stopped when this process exits or dies of a
-  SIGINT / SIGTERM / SIGHUP it does not handle.
+  SIGINT / SIGTERM / SIGHUP it does not handle. After an abort the runner
+  SHALL wait at most a short grace (250 ms) for the lane's output pipes, so
+  a lane process that escaped the kill (its own session, already
+  reparented) and still holds a pipe SHALL NOT keep the cancelled run from
+  returning.
 - `runTask` SHALL return the cancelled result (`cancelled=true`,
   `verified=false`, state `failed`) when the signal aborted while the verify
   lane ran, whatever exit the stopped lane reports and however many retries
@@ -373,6 +377,7 @@ Acceptance Criteria
 - A caller abort during a stalled request returns promptly with an `LLM request failed:` summary, not a timeout.
 - A verify runner that sees the abort and returns a failed lane with `maxRetries: 0` yields `cancelled=true`, no `ask`, no `VerifyResult` event and one execute attempt.
 - An interrupted `task run` stops a fake `fledge` and the lane task it started (REQ-cli-244).
+- An interrupted `task run` whose lane left an escaped process (`setsid`, reparented) holding the lane's stdout exits 130 with a cancelled `result` frame within seconds, not when that process ends.
 
 ### REQ-agent-232
 

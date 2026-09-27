@@ -17,6 +17,14 @@ export const VERIFY_ARGS = [
   "--non-interactive",
 ] as const;
 
+/**
+ * After an abort, how long the runner still waits for the lane's output
+ * pipes. The caller drops that output (a cancel), and a lane process that
+ * escaped the tree kill (its own session, already reparented) may hold a pipe
+ * open for as long as it runs.
+ */
+const ABORT_PIPE_GRACE_MS = 250;
+
 export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   const fledge = Bun.which("fledge");
   if (!fledge) {
@@ -44,17 +52,31 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
     return code;
   });
   const untrack = trackChildProcess(proc.pid, () => atExit);
+  // An abort stops waiting on the output pipes after a short grace (AGENT-3).
+  let giveUp: () => void = () => {};
+  const gaveUp = new Promise<null>((resolve) => {
+    giveUp = () => resolve(null);
+  });
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
   const onAbort = () => {
     killProcessTree(proc.pid, { known: atExit });
+    graceTimer ??= setTimeout(giveUp, ABORT_PIPE_GRACE_MS);
   };
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const code = await exited;
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const output = `${stdout}${stderr}`;
-    return { success: code === 0, output };
+    const read = Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const out = await Promise.race([read, gaveUp]);
+    if (out === null) {
+      return { success: false, output: "verify lane aborted" };
+    }
+    const [stdout, stderr] = out;
+    return { success: code === 0, output: `${stdout}${stderr}` };
   } finally {
+    if (graceTimer) clearTimeout(graceTimer);
     signal?.removeEventListener("abort", onAbort);
     untrack();
   }

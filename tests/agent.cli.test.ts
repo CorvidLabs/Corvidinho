@@ -185,4 +185,117 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
       }
     }, 30_000);
   }
+
+  /** Temp dir with a fake `fledge` (a sh script body) on PATH. */
+  function fakeLane(body: string) {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-task-signal-"));
+    const bin = join(dir, "bin");
+    const work = join(dir, "work");
+    mkdirSync(bin);
+    mkdirSync(work);
+    writeFileSync(join(bin, "fledge"), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(bin, "fledge"), 0o755);
+    return { dir, bin, work };
+  }
+
+  /** `task run --task demo --output ndjson` (demo tier: verify always runs). */
+  function spawnTaskRun(lane: { bin: string; work: string }, wrap: string[] = []) {
+    return Bun.spawn(
+      [...wrap, "bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--output", "ndjson"],
+      {
+        cwd: lane.work,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          PATH: `${lane.bin}:${process.env.PATH ?? ""}`,
+          CORVIDINHO_LLM_API_KEY: "",
+          OPENAI_API_KEY: "",
+        },
+      },
+    );
+  }
+
+  const pidIn = (file: string) =>
+    existsSync(file) ? Number(readFileSync(file, "utf8").trim()) || 0 : 0;
+
+  function lastResult(out: string): Record<string, unknown> | undefined {
+    const frames = out
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as { type: string; result?: Record<string, unknown> });
+    const last = frames[frames.length - 1];
+    return last?.type === "result" ? last.result : undefined;
+  }
+
+  test("SIGINT the run started with ignored (a background job) stays ignored; SIGTERM still cancels", async () => {
+    const lane = fakeLane(`echo $$ > "$PWD/../fledge.pid"\nexec sleep 30`);
+    const pidFile = join(lane.dir, "fledge.pid");
+    // A non-interactive shell starts `cmd &` with SIGINT ignored.
+    const proc = spawnTaskRun(lane, ["sh", "-c", 'trap "" INT; exec "$@"', "sh"]);
+    let fledgePid = 0;
+    try {
+      const out = new Response(proc.stdout).text();
+      expect(await waitFor(() => pidIn(pidFile) > 0, 10_000)).toBe(true);
+      fledgePid = pidIn(pidFile);
+
+      proc.kill("SIGINT");
+      await Bun.sleep(1_000);
+      expect(proc.exitCode).toBeNull();
+      expect(proc.signalCode).toBeNull();
+      expect(pidAlive(fledgePid)).toBe(true);
+
+      proc.kill("SIGTERM");
+      const code = await Promise.race([
+        proc.exited,
+        Bun.sleep(10_000).then(() => "still running" as const),
+      ]);
+      expect(code).toBe(130);
+      expect(lastResult(await out)).toMatchObject({ cancelled: true, state: "failed" });
+      expect(await waitFor(() => !pidAlive(fledgePid), 2_000)).toBe(true);
+    } finally {
+      if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+      if (fledgePid > 0 && pidAlive(fledgePid)) process.kill(fledgePid, "SIGKILL");
+      rmSync(lane.dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("a lane process that escaped the tree kill and holds the output pipe does not keep the run from exiting", async () => {
+    // The escaped task has its own session and was reparented before the
+    // signal (out of /proc reach), and still holds the lane's stdout.
+    const lane = fakeLane(
+      `(setsid sh -c 'echo $$ > "$PWD/../escaped.pid"; exec sleep 30' &)\n` +
+        `echo $$ > "$PWD/../fledge.pid"\nexec sleep 30`,
+    );
+    const pidFile = join(lane.dir, "fledge.pid");
+    const escapedFile = join(lane.dir, "escaped.pid");
+    const proc = spawnTaskRun(lane);
+    let fledgePid = 0;
+    let escapedPid = 0;
+    try {
+      const out = new Response(proc.stdout).text();
+      expect(
+        await waitFor(() => pidIn(pidFile) > 0 && pidIn(escapedFile) > 0, 10_000),
+      ).toBe(true);
+      fledgePid = pidIn(pidFile);
+      escapedPid = pidIn(escapedFile);
+
+      const t0 = Date.now();
+      proc.kill("SIGTERM");
+      const code = await Promise.race([
+        proc.exited,
+        Bun.sleep(10_000).then(() => "still running" as const),
+      ]);
+      expect(code).toBe(130);
+      expect(Date.now() - t0).toBeLessThan(8_000);
+      expect(lastResult(await out)).toMatchObject({ cancelled: true, state: "failed" });
+      expect(await waitFor(() => !pidAlive(fledgePid), 2_000)).toBe(true);
+    } finally {
+      if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+      for (const pid of [fledgePid, escapedPid]) {
+        if (pid > 0 && pidAlive(pid)) process.kill(pid, "SIGKILL");
+      }
+      rmSync(lane.dir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 25
+version: 26
 status: draft
 files:
   - src/agent/types.ts
@@ -174,7 +174,8 @@ filesystem.
 
 An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
 the default verify runner runs fledge in its own process group and an abort
-kills the lane's whole tree; an abort while verify runs is a cancel (no
+kills the lane's whole tree (then waits at most 250 ms for its output
+pipes); an abort while verify runs is a cancel (no
 `VerifyResult`, no retry, no `stuck` ask); each LLM request is bounded by a
 timeout, and a caller abort is never reported as a timeout.
 
@@ -219,6 +220,7 @@ model.
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
+| Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
 | LLM provider stalls (no headers, or a body that never ends) | request aborted after `LLM_REQUEST_TIMEOUT_MS`; summary `LLM request timed out after <ms>ms` |
 | fledge missing | verify failure output names PATH miss |
 | SpecSync registry missing | Planning soft-fails; execute continues |
@@ -267,3 +269,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-26 | discord-ask-ephemeral-buttons-session-multi: ask-human options + ask-options parse for DISCORD-ASK buttons |
 | 2026-09-26 | discord-ask-1-5-ephemeral-discord-button-asks-session-multi-1-4-per-user-sessions-package-0-0-22: DISCORD-ASK-1..5 ephemeral Discord button asks + SESSION-MULTI-1..4 per-user sessions; package 0.0.22 |
 | 2026-09-26 | task-run-stops-on-sigint-sigterm-with-a-cancelled-result-and-a-stopped-verify-lane-and-a-stalled-llm-request-times-out: Task run stops on SIGINT/SIGTERM with a cancelled result and a stopped verify lane, and a stalled LLM request times out (agent-loop-4) |
+| 2026-09-27 | task-run-leaves-a-sigint-it-started-with-ignored-alone-and-an-interrupted-verify-lane-stops-waiting-on-a-pipe-an: Task run leaves a SIGINT it started with ignored alone, and an interrupted verify lane stops waiting on a pipe an escaped lane process holds (agent-loop-4 follow-up) |
