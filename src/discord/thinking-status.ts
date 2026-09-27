@@ -40,7 +40,8 @@ export type ThinkingSnapshot = {
 };
 
 export type DiscordEmbedPayload = {
-  description: string;
+  /** Omitted on a footer-only embed (DISCORD-3.a answer footer). */
+  description?: string;
   color: number;
   footer?: { text: string };
 };
@@ -138,6 +139,24 @@ export function buildThinkingEmbed(snap: ThinkingSnapshot): DiscordEmbedPayload 
     color: phaseColor(snap.phase),
     footer: { text: buildThinkingFooter(snap) },
   };
+}
+
+/**
+ * DISCORD-3.a — footer-only embed kept on a collapsed final answer: the model
+ * and the run's plumbing (`state=… verified=… [verifySkipped] attempts=…`),
+ * so they stay out of the answer body. Null when neither is known (the
+ * answer then carries no embed).
+ */
+export function buildAnswerFooterEmbed(snap: {
+  phase: ThinkingPhase;
+  model?: string;
+  plumbing?: string;
+}): DiscordEmbedPayload | null {
+  const parts = [snap.model?.trim(), snap.plumbing?.trim()].filter(
+    (p): p is string => Boolean(p),
+  );
+  if (!parts.length) return null;
+  return { color: phaseColor(snap.phase), footer: { text: parts.join(" | ") } };
 }
 
 /**
@@ -370,14 +389,20 @@ export class ThinkingStatus {
 
   /**
    * DISCORD-ASK-6/7 — turn the progress message into the final channel body
-   * (Choose stub or answer), clearing the thinking embed. Returns the message
-   * id on success; null when editMessage is unavailable or edit fails (caller
-   * should fall back to a new reply).
+   * (Choose stub or answer), replacing the thinking embed. A Choose stub
+   * (`components`) carries no embed; a final answer keeps a footer-only
+   * embed with the model and `extras.plumbing` (DISCORD-3.a), colored as a
+   * failure when `failed`. A later call (e.g. appending a notice) keeps the
+   * plumbing and outcome of the first. Returns the message id on success;
+   * null when editMessage is unavailable or edit fails (caller should fall
+   * back to a new reply).
    */
   async finalizeContent(opts: {
     content: string;
     components?: unknown[];
     mentionUserIds?: string[];
+    extras?: { plumbing?: string; model?: string };
+    failed?: boolean;
   }): Promise<{ messageId: string } | null> {
     if (this.closed && !this.messageId) return null;
     this.stopTicker();
@@ -385,17 +410,26 @@ export class ThinkingStatus {
     // Only close on success so callers can fall back to done()/fail()+reply
     // when editMessage is missing or the edit fails (DISCORD-ASK-7).
     if (!id || !this.outbound.editMessage) return null;
+    if (opts.extras?.plumbing != null) {
+      this.plumbing = opts.extras.plumbing.trim() || undefined;
+    }
+    if (opts.extras?.model != null) this.model = opts.extras.model.trim() || undefined;
+    const phase: ThinkingPhase =
+      (opts.failed ?? this.phase === "error") ? "error" : "done";
+    const embed = opts.components?.length
+      ? null
+      : buildAnswerFooterEmbed({ phase, model: this.model, plumbing: this.plumbing });
     const ok = await this.outbound.editMessage({
       channelId: this.channelId,
       messageId: id,
       content: opts.content,
-      embed: null,
+      embed,
       components: opts.components ?? null,
       mentionUserIds: opts.mentionUserIds,
     });
     if (!ok) return null;
     this.closed = true;
-    this.phase = "done";
+    this.phase = phase;
     return { messageId: id };
   }
 

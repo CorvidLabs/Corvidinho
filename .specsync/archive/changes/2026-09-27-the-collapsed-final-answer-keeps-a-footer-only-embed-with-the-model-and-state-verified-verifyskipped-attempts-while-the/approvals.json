@@ -1,0 +1,58 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790535642,
+      "digest": "7a7c3d5e96b23007c53e547b1e4a85d660c9799a03737e8f6b6b27b8beab5ce3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the",
+        "title": "The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a)",
+        "description": "The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/thinking-status.ts",
+          "tests/discord.ask-ping.test.ts",
+          "tests/discord.inflight-replies.test.ts",
+          "tests/discord.slash-ask7.test.ts",
+          "tests/discord.spend.test.ts",
+          "tests/discord.thinking-bridge.test.ts",
+          "tests/discord.thinking-status.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When the thinking message is edited into the final answer (an @mention reply, the answer to a run a button pick resumed, /session start and /work), the edit keeps one footer-only embed (no description) whose footer is the model and the run's plumbing (state=… verified=… [verifySkipped] [cancelled] attempts=…), success-colored or error-colored exactly when the fallback status would be done or fail, and the answer body stays human text with no plumbing; a Choose stub (the edit that carries buttons) still has no embed; an append re-edit (SAFE-8 owner notice) keeps the footer; with neither model nor plumbing known no embed is sent; tests fail on the previous code (embed null on every collapse) and pass after"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "6006f94cdd3c55397672a752a1983a807b108bcd0e36521a6c19babbbb935107"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790537684,
+      "digest": "685d77b467b1c8d5f4516adeb7492fc0d39f58bce12590df53d492eccdbe0225",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
