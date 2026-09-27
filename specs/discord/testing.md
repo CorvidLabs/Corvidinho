@@ -79,7 +79,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   there is none; the owner's pick keeps the owner map display and role line;
   a pick with no names known injects the id only. `componentActorNames` maps
   member display → nickname → global name → user display and the username,
-  trimmed, blank as undefined (no live Discord).
+  trimmed, blank as undefined. A button press emitted on the live gateway's
+  client (real `login`, socket connect stubbed) reaches `onComponent` with the
+  presser's names, or neither when none is known (no live Discord).
 
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 

@@ -5,8 +5,9 @@ artifact: requirements
 
 # Requirements
 
-IDENTITY-4 (hi/identity.md). Added REQ-discord-446: every Discord agent run
-(chat message, ask button pick resume, `/session start`, `/work`) injects
+IDENTITY-4 (hi/identity.md). Added REQ-discord-446: every interactive
+Discord agent run (chat message, ask button pick resume, `/session start`,
+`/work`) injects
 the acting user's Discord id plus the display name resolved from the owner
 map and the Discord names on that interaction; the button pick resume takes
 the presser's names from the component interaction. No existing REQ covered

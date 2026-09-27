@@ -4,23 +4,28 @@
  * carries them on `ComponentInteraction` and the bridge passes them to
  * `enrichPromptWithIdentity`. The owner map still wins for the owner, and a
  * pick with no names known injects the id only (never an invented name).
- * Driven through `startBridge` with a fake gateway; no live Discord.
+ * Driven through `startBridge` with a fake gateway, and through the live
+ * gateway's InteractionCreate listener with the socket connect stubbed out;
+ * no token, no network.
  */
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
+import { Client, Events } from "discord.js";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   componentActorNames,
+  createLiveGateway,
   createNullGateway,
   type ComponentInteraction,
   type GatewayHandlers,
 } from "../src/discord/gateway.ts";
 import { IDENTITY_INJECT_HEADER } from "../src/discord/identity-inject.ts";
+import type { BridgeConfig } from "../src/discord/types.ts";
 
 const CHAN = "chan-identity-pick";
 const OWNER = "100000000000000011";
@@ -192,5 +197,83 @@ describe("componentActorNames — the gateway's presser names (IDENTITY-4 / REQ-
         member: { displayName: "" },
       }),
     ).toEqual({ userDisplayName: undefined, userUsername: undefined });
+  });
+});
+
+/**
+ * The live gateway wiring: a discord.js button press reaches `onComponent`
+ * with the presser's names. Real `login` with the socket connect stubbed out
+ * (as in `tests/discord.presence.test.ts`); the press is emitted on the client.
+ */
+describe("live gateway button press carries the presser's names (IDENTITY-4 / REQ-discord-446)", () => {
+  const fixtureConfig = {
+    token: "fixture-token-not-real",
+    channelIds: [CHAN],
+  } as unknown as BridgeConfig;
+
+  async function pressThroughLiveGateway(press: {
+    user: { id: string; username?: string | null; globalName?: string | null };
+    member?: { displayName?: string | null; nickname?: string | null } | null;
+  }): Promise<ComponentInteraction> {
+    const seen: ComponentInteraction[] = [];
+    const realLogin = Client.prototype.login;
+    let client: Client | null = null;
+    Client.prototype.login = async function (this: Client, token?: string) {
+      client = this;
+      (this.ws as unknown as { connect: () => Promise<void> }).connect =
+        async () => {};
+      return realLogin.call(this, token);
+    };
+    let gateway: Awaited<ReturnType<typeof createLiveGateway>> | null = null;
+    try {
+      gateway = await createLiveGateway(fixtureConfig, {
+        onMessage: () => {},
+        onComponent: (ix) => {
+          seen.push(ix);
+        },
+      });
+      await gateway.start();
+    } finally {
+      Client.prototype.login = realLogin;
+    }
+    try {
+      if (!client) throw new Error("login was not called");
+      (client as Client).emit(Events.InteractionCreate, {
+        id: "ix-live",
+        customId: pickCustomId("ask-live", "1"),
+        channelId: CHAN,
+        guildId: "guild-1",
+        message: { id: "stub-1" },
+        deferred: false,
+        replied: false,
+        reply: async () => ({}),
+        update: async () => ({}),
+        isAutocomplete: () => false,
+        isMessageComponent: () => true,
+        isChatInputCommand: () => false,
+        ...press,
+      } as never);
+      expect(seen).toHaveLength(1);
+      return seen[0]!;
+    } finally {
+      await gateway.stop();
+    }
+  }
+
+  test("a guild press carries the member display name and the username", async () => {
+    const ix = await pressThroughLiveGateway({
+      user: { id: MEMBER, username: "ada", globalName: "Ada Global" },
+      member: { displayName: "Ada Member", nickname: null },
+    });
+    expect(ix.userId).toBe(MEMBER);
+    expect(ix.userDisplayName).toBe("Ada Member");
+    expect(ix.userUsername).toBe("ada");
+  });
+
+  test("a press with no names known carries neither", async () => {
+    const ix = await pressThroughLiveGateway({ user: { id: MEMBER }, member: null });
+    expect(ix.userId).toBe(MEMBER);
+    expect(ix.userDisplayName).toBeUndefined();
+    expect(ix.userUsername).toBeUndefined();
   });
 });

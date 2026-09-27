@@ -200,7 +200,7 @@ flowchart TD
 - Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
 - Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
 - Button asks (DISCORD-ASK): `src/discord/ask-buttons.ts`; thin acks / cancel (AUTONOMY-5/6): `src/discord/thin-ack.ts`
-- Identity + memory inject (IDENTITY-4 / AGENT-7): `src/discord/identity-inject.ts`, `memory-inject.ts` — every Discord run (chat, button pick, `/session start`, `/work`) gets the acting user's id plus their Discord display name or username when known (owner map display wins for the owner)
+- Identity + memory inject (IDENTITY-4 / AGENT-7): `src/discord/identity-inject.ts`, `memory-inject.ts` — chat, button-pick, `/session start` and `/work` runs get the acting user's id plus their Discord display name or username when known (owner map display wins for the owner)
 - Channel autocomplete: `src/discord/channel-autocomplete.ts`; slash registration: `register-commands.ts`
 - Durable sessions / `/work` tasks: `src/discord/session-store.ts`, `work-store.ts`; interrupted replies: `inflight-replies.ts`
 - `/session list` / `/schedule list` scope (REQ-discord-418): `src/discord/list-scope.ts`
