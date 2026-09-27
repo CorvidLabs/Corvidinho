@@ -7,10 +7,11 @@
   "title": "Discord button-pick resume injects the presser's display name and username like a chat message (IDENTITY-4)",
   "description": "Discord button-pick resume injects the presser's display name and username like a chat message (IDENTITY-4)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "1c7b6ced470e0ed87e4c854f2663111713af3fa7",
   "created_at": 1790534438,
-  "updated_at": 1790534507,
+  "updated_at": 1790534528,
   "affected_specs": [
     "discord"
   ],
