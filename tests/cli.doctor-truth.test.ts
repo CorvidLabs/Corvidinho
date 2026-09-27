@@ -538,6 +538,19 @@ describe("project files: doctor and a report-only init name what is missing (CLI
         readyProject('[tasks.test]\ncmd = "bun test"\n\n[lanes.verify]\nsteps = ["test", "spec-check"]\n'),
         "[missing] verify-lane: [lanes.verify] runs the spec-check task but fledge.toml defines no [tasks.spec-check] — the lane fails on it",
       ],
+      // fledge refuses a lane that names an undefined task, spec-check or not.
+      [
+        readyProject(VERIFY_WITH_SPEC_CHECK.replace('steps = ["test", "spec-check"]', 'steps = ["lint", "test", "spec-check"]')),
+        "[missing] verify-lane: [lanes.verify] needs task `lint`, which fledge.toml does not define — the lane fails on it every run",
+      ],
+      [
+        readyProject('[tasks.spec-check]\ncmd = "specsync check"\ndeps = ["build"]\n\n[lanes.verify]\nsteps = ["spec-check"]\n'),
+        "[missing] verify-lane: [lanes.verify] needs task `build`, which fledge.toml does not define — the lane fails on it every run",
+      ],
+      [
+        readyProject('[lanes.verify]\nsteps = [{ run = "/usr/local/bin/specsync check" }, { run = "sh -c \'specsync check --strict\'" }]\n'),
+        "[ok] verify-lane: [lanes.verify] runs spec-check",
+      ],
       [
         readyProject('[lanes.verify]\nsteps = [{ run = "specsync check --strict" }]\n'),
         "[ok] verify-lane: [lanes.verify] runs spec-check",
@@ -585,11 +598,47 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expectNoValues(r.out);
 
     const imported = readyProject(VERIFY_WITH_SPEC_CHECK, { ".fledge/lanes/broken.toml": "[lanes\n" });
+    // A FIFO is never opened (reading one would block doctor).
+    const fifoDir = project({ ".specsync/config.toml": "", "specs/a/a.spec.md": "# A\n" });
+    expect(Bun.spawnSync(["mkfifo", join(fifoDir, "fledge.toml")]).exitCode).toBe(0);
+    const f = await runCmd("init", cleanEnv({}), fifoDir);
+    expect(f.out).toContain(
+      `[missing] fledge.toml: ${join(fifoDir, "fledge.toml")} cannot be read or is not valid TOML`,
+    );
+    expect(f.code).toBe(1);
+
     const i = await runCmd("init", cleanEnv({}), imported);
     expect(i.out).toContain(`[ok] fledge.toml: found in ${imported}`);
     expect(i.out).toContain(
       "[missing] verify-lane: .fledge/lanes/broken.toml cannot be read or is not valid TOML — fledge cannot load the verify lane",
     );
     expect(i.code).toBe(1);
+  }, 30_000);
+
+  test("from a subdirectory of a git project, init points at the project root that has the files instead of creating new ones", async () => {
+    const top = readyProject(VERIFY_WITH_SPEC_CHECK, { ".git/HEAD": "ref: refs/heads/main\n" });
+    const sub = join(top, "src");
+    mkdirSync(sub);
+    const r = await runCmd("init", cleanEnv({}), sub);
+    const hint = `${top} (the project root) has it — run corvidinho there`;
+    expect(r.out).toContain(
+      `[missing] fledge.toml: not found in ${sub} — task run's verify gate (\`fledge lanes run verify\`) needs it; ${hint}`,
+    );
+    expect(r.out).toContain(
+      `[missing] .specsync: not found in ${sub} — SpecSync has no project config (.specsync/config.toml) for spec-check; ${hint}`,
+    );
+    expect(r.out).toContain(`[missing] specs: not found in ${sub} — spec-check has no specs to hold the code to; ${hint}`);
+    expect(r.out).not.toContain("fledge run --init");
+    expect(r.out).not.toContain("specsync init");
+    expect(r.code).toBe(1);
+    expect(readdirSync(sub)).toEqual([]);
+
+    // A root without the item keeps the creator command.
+    const bare = project({ ".git/HEAD": "ref: refs/heads/main\n", "specs/a/a.spec.md": "# A\n" });
+    mkdirSync(join(bare, "pkg"));
+    const b = await runCmd("init", cleanEnv({}), join(bare, "pkg"));
+    expect(b.out).toContain("`fledge run --init` creates one");
+    expect(b.out).toContain("`specsync init` creates it");
+    expect(b.out).toContain(`[missing] specs: not found in ${join(bare, "pkg")} — spec-check has no specs to hold the code to; ${bare} (the project root) has it`);
   }, 30_000);
 });

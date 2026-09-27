@@ -23,6 +23,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { loadLlmEnv } from "./agent/execute.ts";
+import { findProjectRoot } from "./agent/project-instructions.ts";
 import { perTierModels } from "./agent/tier.ts";
 import { checkChannel } from "./allowlist/discord.ts";
 import { isRepoAllowed } from "./allowlist/github.ts";
@@ -360,8 +361,10 @@ function mergeMissing(into: Map<string, unknown>, from: unknown): void {
   }
 }
 
+/** A regular file's TOML (a FIFO or device is never opened: it could block doctor). */
 function readTomlTable(path: string): Table | null {
   try {
+    if (!statSync(path).isFile()) return null;
     return tableOf(Bun.TOML.parse(readFileSync(path, "utf8")));
   } catch {
     return null;
@@ -370,7 +373,8 @@ function readTomlTable(path: string): Table | null {
 
 /**
  * What `fledge lanes run` loads in `dir`: `fledge.toml`, then any
- * `.fledge/lanes/*.toml` imports (fledge.toml's tasks and lanes win).
+ * `.fledge/lanes/*.toml` imports in directory order, as fledge reads them
+ * (the first definition of a task or lane wins, fledge.toml's first).
  * `broken` names the first file that cannot be read or is not TOML; the
  * parser's message is not kept (it may quote the file).
  */
@@ -392,7 +396,7 @@ function loadFledgeProject(dir: string): FledgeProject {
   let imports: string[] = [];
   try {
     if (statSync(importDir).isDirectory()) {
-      imports = readdirSync(importDir).filter((f) => f.endsWith(".toml")).sort();
+      imports = readdirSync(importDir).filter((f) => f.endsWith(".toml"));
     }
   } catch {
     // No imported lanes.
@@ -409,9 +413,9 @@ function loadFledgeProject(dir: string): FledgeProject {
 /** The fledge task that runs SpecSync on the verify lane (Merlin pattern; SPECSYNC-2/7). */
 const SPEC_CHECK_TASK = "spec-check";
 
-/** A shell command line that runs `specsync check`. */
+/** A shell command line that runs `specsync check` (bare, by path or quoted). */
 function runsSpecsyncCheck(cmd: unknown): boolean {
-  return typeof cmd === "string" && /(?:^|[\s;&|(])specsync\s+check(?![\w-])/.test(cmd);
+  return typeof cmd === "string" && /(?:^|[\s;&|(/"'`])specsync\s+check(?![\w-])/.test(cmd);
 }
 
 /**
@@ -457,13 +461,64 @@ function taskRunsSpecCheck(
   );
 }
 
-function fledgeTomlCheck(dir: string, project: FledgeProject): DoctorCheck {
+/**
+ * Task names the lane steps reach (with their `deps`, which fledge runs
+ * first) that no `[tasks]` table defines, in order, each once. Fledge
+ * refuses a lane naming one and fails the step whose deps name one.
+ */
+function undefinedLaneTasks(steps: string[], tasks: Map<string, unknown>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (name: string): void => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    if (!tasks.has(name)) {
+      out.push(name);
+      return;
+    }
+    const deps = tableOf(tasks.get(name)).deps;
+    if (Array.isArray(deps)) for (const d of deps) if (typeof d === "string") walk(d);
+  };
+  for (const s of steps) walk(s);
+  return out;
+}
+
+/** A task name from the project's file, safe to print on one line. */
+function printableName(name: string): string {
+  const clean = name.replace(/[^\x20-\x7e]/g, "?");
+  return `\`${clean.length > 60 ? `${clean.slice(0, 60)}…` : clean}\``;
+}
+
+/**
+ * The git project root above `dir` when `dir` is a subdirectory of one
+ * (`task run` in a subdirectory runs its verify lane there, where fledge
+ * finds no fledge.toml); null otherwise.
+ */
+function projectRootAbove(dir: string): string | null {
+  const root = findProjectRoot(dir);
+  return root !== dir ? root : null;
+}
+
+/** The fix for a project item missing from `dir` that `rootAbove` holds. */
+function runFromRootHint(rootAbove: string): string {
+  return `${rootAbove} (the project root) has it — run corvidinho there`;
+}
+
+function fledgeTomlCheck(
+  dir: string,
+  project: FledgeProject,
+  rootAbove: string | null,
+): DoctorCheck {
   const name = "fledge.toml";
   if (project.state === "absent") {
+    const fix =
+      rootAbove && existsSync(join(rootAbove, "fledge.toml"))
+        ? runFromRootHint(rootAbove)
+        : "`fledge run --init` creates one";
     return {
       name,
       ok: false,
-      detail: `not found in ${dir} — task run's verify gate (\`fledge lanes run verify\`) needs it; \`fledge run --init\` creates one`,
+      detail: `not found in ${dir} — task run's verify gate (\`fledge lanes run verify\`) needs it; ${fix}`,
     };
   }
   if (project.state === "broken" && project.file === "fledge.toml") {
@@ -491,30 +546,52 @@ function verifyLaneCheck(project: FledgeProject): DoctorCheck {
     );
   }
   const { tasks, cmds } = laneStepParts(tableOf(project.lanes.get("verify")).steps);
-  if (cmds.some(runsSpecsyncCheck) || tasks.some((t) => taskRunsSpecCheck(t, project.tasks))) {
-    return { name, ok: true, detail: "[lanes.verify] runs spec-check" };
-  }
-  if (tasks.includes(SPEC_CHECK_TASK)) {
+  const undefinedTasks = undefinedLaneTasks(tasks, project.tasks);
+  if (undefinedTasks.includes(SPEC_CHECK_TASK)) {
     return fail(
       "[lanes.verify] runs the spec-check task but fledge.toml defines no [tasks.spec-check] — the lane fails on it",
     );
+  }
+  if (undefinedTasks.length > 0) {
+    const shown = undefinedTasks.slice(0, 3).map(printableName).join(", ");
+    const more = undefinedTasks.length > 3 ? ` and ${undefinedTasks.length - 3} more` : "";
+    return fail(
+      `[lanes.verify] needs task ${shown}${more}, which fledge.toml does not define — the lane fails on it every run`,
+    );
+  }
+  if (cmds.some(runsSpecsyncCheck) || tasks.some((t) => taskRunsSpecCheck(t, project.tasks))) {
+    return { name, ok: true, detail: "[lanes.verify] runs spec-check" };
   }
   return fail(
     "[lanes.verify] has no spec-check step — task run would call work done without checking specs (AGENT-4 / SPECSYNC-2); add a spec-check task that runs `specsync check` to its steps",
   );
 }
 
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * A project directory the SpecSync tools read (`.specsync/`, `specs/`); the
- * check is named after it.
+ * check is named after it. `why` says what fails without it, `create` the
+ * command that creates it (or, from a subdirectory, the project root that
+ * holds it).
  */
 function projectDirCheck(
   dir: string,
-  check: { name: ".specsync" | "specs"; missing: string },
+  rootAbove: string | null,
+  check: { name: ".specsync" | "specs"; why: string; create: string },
 ): DoctorCheck {
-  const { name, missing } = check;
+  const { name, why } = check;
   const path = join(dir, name);
   const fail = (detail: string): DoctorCheck => ({ name, ok: false, detail });
+  const fix =
+    rootAbove && isDirectory(join(rootAbove, name)) ? runFromRootHint(rootAbove) : check.create;
+  const missing = `${why}; ${fix}`;
   try {
     if (!statSync(path).isDirectory()) return fail(`${path} is not a directory — ${missing}`);
   } catch (e) {
@@ -531,23 +608,26 @@ function projectDirCheck(
  * lane with a spec-check step (`verify-lane`), `.specsync/` and `specs/`.
  * A missing item fails (`[missing]`) and is named in plain language with
  * what fails without it and, where Fledge / SpecSync has one, the command
- * that creates it. Shared by `doctor` and the report-only `init`; reads
- * only, creates nothing, never prints file contents.
+ * that creates it — or, in a subdirectory of a git project whose root has
+ * the item, that root to run from. Shared by `doctor` and the report-only
+ * `init`; reads only, creates nothing, never prints file contents.
  */
 export function projectFilesDoctorChecks(cwd: string = process.cwd()): DoctorCheck[] {
   const dir = resolve(cwd);
   const fledge = loadFledgeProject(dir);
+  const rootAbove = projectRootAbove(dir);
   return [
-    fledgeTomlCheck(dir, fledge),
+    fledgeTomlCheck(dir, fledge, rootAbove),
     verifyLaneCheck(fledge),
-    projectDirCheck(dir, {
+    projectDirCheck(dir, rootAbove, {
       name: ".specsync",
-      missing:
-        "SpecSync has no project config (.specsync/config.toml) for spec-check; `specsync init` creates it",
+      why: "SpecSync has no project config (.specsync/config.toml) for spec-check",
+      create: "`specsync init` creates it",
     }),
-    projectDirCheck(dir, {
+    projectDirCheck(dir, rootAbove, {
       name: "specs",
-      missing: "spec-check has no specs to hold the code to; `specsync generate` scaffolds them",
+      why: "spec-check has no specs to hold the code to",
+      create: "`specsync generate` scaffolds them",
     }),
   ];
 }
