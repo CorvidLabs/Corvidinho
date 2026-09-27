@@ -1,6 +1,6 @@
 ---
 id: doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and
-state: verifying
+state: archived
 type: bug_fix
 base_commit: 9973a2753d922d3b9871c381d650e0374f0ee8d9
 ---
