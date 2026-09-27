@@ -10,6 +10,10 @@
  * gateway limits allowed mentions to the intended user(s). Posts go only
  * where the caller already posts (allowlisted channel reply or schedule
  * channel) — no DM path, no new channel (DISCORD-5 / DISCORD-8).
+ *
+ * An edit does not notify its mentions, so an answer collapsed into the
+ * thinking message (DISCORD-ASK-6/7) is followed by the one-line
+ * formatCollapsedPing post (REQ-discord-215).
  */
 
 import { createHash } from "node:crypto";
@@ -205,4 +209,47 @@ export function appendPostLine(content: string, line: string, max = ASK_REPLY_MA
   if (room <= 0) return line.slice(0, max);
   const head = content.length <= room ? content : `${content.slice(0, room - 1)}…`;
   return head ? `${head}\n\n${line}` : line;
+}
+
+/** Pointer for the user a collapsed answer asks a question (AUTONOMY-4). */
+export const COLLAPSED_PING_QUESTION = "↑ question for you";
+/** Pointer for a user a collapsed answer needs (owner: AUTONOMY-2, SAFE-8). */
+export const COLLAPSED_PING_NEEDS = "↑ needs you";
+
+export type CollapsedPing = {
+  /** One line: only the mention(s) and their pointer. */
+  content: string;
+  /** Exactly the users mentioned in `content` (the post's allowed mentions). */
+  mentionUserIds: string[];
+};
+
+/**
+ * DISCORD-ASK-6/7 with AUTONOMY-2/4 and SAFE-8: Discord does not notify a
+ * mention added by a message edit, so an answer collapsed into the thinking
+ * message that mentions someone is followed by this short fresh post.
+ * `questionUserIds` are the users the answer asks a question (the clarify
+ * requester, "↑ question for you"); every other mentioned user is needed
+ * ("↑ needs you": the owner on stuck, spend cap or the 80% warning).
+ * Users in `alreadyPinged` (a fresh post already pinged them this turn, e.g.
+ * the slash owner notice) are left out. Null when nobody is left to ping.
+ */
+export function formatCollapsedPing(opts: {
+  mentionUserIds: readonly string[] | undefined;
+  questionUserIds?: readonly string[];
+  alreadyPinged?: readonly string[];
+}): CollapsedPing | null {
+  const skip = new Set((opts.alreadyPinged ?? []).map((id) => id.trim()));
+  const ids = [
+    ...new Set((opts.mentionUserIds ?? []).map((id) => id.trim()).filter((id) => id && !skip.has(id))),
+  ];
+  if (ids.length === 0) return null;
+  const question = new Set((opts.questionUserIds ?? []).map((id) => id.trim()));
+  const asked = ids.filter((id) => question.has(id));
+  const needed = ids.filter((id) => !question.has(id));
+  const part = (group: string[], pointer: string) =>
+    group.length ? `${group.map((id) => `<@${id}>`).join(" ")} ${pointer}` : "";
+  const content = [part(asked, COLLAPSED_PING_QUESTION), part(needed, COLLAPSED_PING_NEEDS)]
+    .filter(Boolean)
+    .join(" · ");
+  return { content, mentionUserIds: [...asked, ...needed] };
 }
