@@ -168,7 +168,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `audit log unavailable (SAFE-5)` and keep the schedule and its runs; a
   non-ADMIN delete gets `not authorized` and appends `denied` (a refused pause
   appends nothing); a store delete that throws after the intent row appends
-  `error`; an unknown id appends nothing. No live Discord.
+  `error`; an unknown id appends nothing; an `ok` row that cannot be written
+  after the delete leaves the delete in place and the reply says
+  `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
+  throws still gets only `not authorized` and deletes nothing. No live Discord.
 
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 

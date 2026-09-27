@@ -407,4 +407,38 @@ describe("/schedule delete audit (SAFE-5)", () => {
     expect(auditRows(f.db)).toHaveLength(0);
     expect(f.store.get(f.schedule.id)).toBeDefined();
   });
+
+  test("ok row lost after the delete: the delete stands and the reply says the ok row was not recorded", async () => {
+    const auditDb = new Database(":memory:");
+    migrateCorvidinhoDb(auditDb);
+    const f = auditFixture({
+      recordAudit: (entry) => {
+        if (entry.outcome === "ok") throw new Error("database is locked");
+        return appendAudit(auditDb, entry);
+      },
+    });
+    const ix = deleteIx("boss", f.schedule.id);
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies).toHaveLength(1);
+    expect(ix.replies[0]?.content).toContain("Deleted **Nightly**");
+    expect(ix.replies[0]?.content).toContain(
+      "Audit: #1 started · ok row not recorded (see bridge log).",
+    );
+    expect(f.store.get(f.schedule.id)).toBeUndefined();
+    expect(runCount(f.db, f.schedule.id)).toBe(0);
+    expect(auditRows(auditDb).map((r) => r.outcome)).toEqual(["started"]);
+  });
+
+  test("non-ADMIN delete with the trail unavailable still gets not authorized; nothing deleted", async () => {
+    const f = auditFixture({
+      recordAudit: () => {
+        throw new Error("disk full");
+      },
+    });
+    const ix = deleteIx("peon", f.schedule.id);
+    await handleSlashInteraction(f.ctx, ix);
+    expect(ix.replies).toEqual([{ content: NOT_AUTHORIZED, ephemeral: true }]);
+    expect(f.store.get(f.schedule.id)).toBeDefined();
+    expect(runCount(f.db, f.schedule.id)).toBe(1);
+  });
 });
