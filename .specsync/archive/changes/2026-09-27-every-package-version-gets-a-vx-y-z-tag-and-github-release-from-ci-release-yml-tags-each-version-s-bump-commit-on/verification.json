@@ -1,0 +1,82 @@
+{
+  "timestamp": 1790480901,
+  "commit": "6506a64c213f99a7827ec414de6a6aff341230e9",
+  "contract_digest": "8246e30638c877aaf9eae87816c0ac84f94b03e7d6feec8d205df5a7b5627365",
+  "execution_digest": "24d0427c5193375d7f23c90801be5607865f026b203619c73b4c2c3f68489ca1",
+  "workspace_digest": "340c9090e3f7e8f692019fe5405f9e3519b93ba1f37ec3b48d077b41ed284297",
+  "acceptance_input_digest": "57fca22c1d726020652d7eed2e8496e466a7240fc21e83241c073e484ff2ff1a",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": ".github/workflows/release.yml",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7f07f8506e83e6841efbd8482a6cdf0fa5d9110916e1d1847b4e75bb210995ae",
+        "entry_digest": "33996d996fcb23aa096d7a5ad75a1725dec646125ffce064d74a9367feeffe4d",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "454b41eac39c8d12ab2a5960362907c387ef3e467671013827c7fe963a4d9fc3",
+        "entry_digest": "856fe5b4476808c27b093763216e3fc3ea49e93bdcbb1ad64fe13b8b8b16708e",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/BOX-UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4816f8f73ec722bbbdbecfc9e3c43cb0b7958acedc48e28e69aa546b2d6a0f1c",
+        "entry_digest": "02dac947227cfaaad880b5205d7987bd36e544df6673dfd93c2e4b9097e42b07",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6acd2f44992efe8d53b4d8c060a261d4f8f32c854000a94952c9976345cb0253",
+        "entry_digest": "f31adf2ca0163cbcdbf2a595acb9eb034475982e8141cf8bfb9e6d9dfe7bf3d1",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "scripts/lib/update-helpers.sh",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2c27f5bb073ba02082d64d7d983fcd2e4c0c85023822bd4027db88e2c20d5b5c",
+        "entry_digest": "d231b8192c9ca5c4df9426635525115f9d72b5eda9fc80e96efdb56c62a8d87c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "tests/update-helpers.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7f7733e2ca7eea1f423d17b6e8546d952f8bf6ff4d45aa3847d9ea705ea8f674",
+        "entry_digest": "80ad870bd9b145334cb8f9513adb957cb9221a4ac1890049a40cc83daf1b1ed0",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

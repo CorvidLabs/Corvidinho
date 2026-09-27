@@ -698,14 +698,157 @@ describe("corvidinho-update.sh ready gate (fake box)", () => {
 });
 
 describe("release workflow", () => {
-  test("release.yml triggers on v* tags and is idempotent-aware", () => {
+  test("release.yml tags every package version and creates its Release (push to main, vX.Y.Z tag, dispatch backfill)", () => {
     expect(existsSync(releaseYml)).toBe(true);
     const body = readFileSync(releaseYml, "utf8");
-    expect(body).toContain("tags:");
-    expect(body).toContain("v*");
-    expect(body).toContain("softprops/action-gh-release");
-    expect(body).toContain("Idempotency");
+    // Triggers: main pushes auto-tag (with catch-up), a person's v* tag, and a manual backfill.
+    expect(body).toMatch(/branches:\s*\n\s*- main/);
+    expect(body).toContain('- "v*"');
+    expect(body).toContain("workflow_dispatch:");
     expect(body).toContain("contents: write");
+    expect(body).toContain("!github.event.deleted");
+    // Tags at each version's bump commit; idempotent on tags and Releases.
+    expect(body).toContain("package_version_commits origin/main");
+    expect(body).toContain('release_push_targets "$versions" "$ver"');
+    expect(body).toContain('release_dispatch_targets "$versions" "$VERSIONS"');
+    expect(body).toContain('git rev-parse -q --verify "refs/tags/${tag}"');
+    expect(body).toContain('gh release view "${tag}"');
+    expect(body).toContain("--verify-tag");
+    expect(body).not.toMatch(/git push[^\n]*(--force|-f\b|--delete)/);
+    expect(body).not.toMatch(/git tag[^\n]*(-f\b|--force|-d\b)/);
+    expect(body).not.toContain("gh release delete");
+    // Event data reaches the shell through env only: no ${{ }} inside any run script.
+    const runBlocks = [...body.matchAll(/run: \|\n((?:(?: {10}.*)?\n)*)/g)].map((m) => m[1]);
+    expect(runBlocks.length).toBe(2);
+    for (const block of runBlocks) expect(block).not.toContain("${{");
+  });
+});
+
+describe("release tagging helpers", () => {
+  // A throwaway repo: 0.0.1, a non-version commit, a release cut to 0.0.2, a
+  // dependency-only package.json change, then a feature commit bumping to 0.0.3
+  // whose subject names another version.
+  function makeRepo() {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-reltag-"));
+    // The workflow sources the helpers under strict mode; so do these tests.
+    const run = (script: string) =>
+      bashEval(
+        `cd "${dir}" && export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t && set -euo pipefail && source "${helpers}" && ${script}`,
+      );
+    const pkg = (version: string, dep = "1") =>
+      JSON.stringify({ name: "x", version, scripts: { version: "bun src/cli.ts version" }, dependencies: { d: dep } }, null, 2);
+    const commit = (files: Record<string, string>, subject: string) => {
+      for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
+      const r = run(`git add -A && git commit -q -m "${subject}"`);
+      if (r.exitCode !== 0) throw new Error(r.stderr);
+    };
+    expect(run("git init -q -b main").exitCode).toBe(0);
+    commit({ "package.json": pkg("0.0.1"), "CHANGELOG.md": "# Changelog\n\n## 0.0.1\n\n### First cut\n\n- a\n" }, "boot (#1)");
+    commit({ "README.md": "hi\n" }, "docs: readme (#2)");
+    commit(
+      { "package.json": pkg("0.0.2"), "CHANGELOG.md": "# Changelog\n\n## 0.0.2\n\n### Second thing\n\n- b\n\n## 0.0.1\n\n### First cut\n\n- a\n" },
+      "chore(release): v0.0.2 — second thing (#5)",
+    );
+    commit({ "package.json": pkg("0.0.2", "2") }, "chore(deps): bump d (#6)");
+    commit(
+      {
+        "package.json": pkg("0.0.3", "2"),
+        "CHANGELOG.md": "# Changelog\n\n## 0.0.3\n\n### Third heading\n\n- c\n\n## 0.0.2\n\n### Second thing\n\n- b\n",
+      },
+      "feat: stuff (v0.0.2) (#7)",
+    );
+    const sha = (rev: string) => run(`git rev-parse ${rev}`).stdout.trim();
+    const versions = join(dir, ".versions.txt");
+    return { dir, sha, run, versions, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  test("package_version_commits lists each version once at the commit that bumped it, oldest first; a bad ref fails", () => {
+    const repo = makeRepo();
+    try {
+      const r = repo.run("package_version_commits main");
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.trim().split("\n")).toEqual([
+        `0.0.1 ${repo.sha("HEAD~4")}`,
+        `0.0.2 ${repo.sha("HEAD~2")}`,
+        `0.0.3 ${repo.sha("HEAD")}`,
+      ]);
+      expect(repo.run("package_version_at HEAD~1").stdout.trim()).toBe("0.0.2");
+      expect(repo.run("package_version_commits nosuch").exitCode).not.toBe(0);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_push_targets catches up every untagged version from the oldest tag to main's, oldest first", () => {
+    const repo = makeRepo();
+    try {
+      expect(repo.run(`package_version_commits main > "${repo.versions}"`).exitCode).toBe(0);
+      // Only 0.0.1 tagged: 0.0.2 and 0.0.3 are pending.
+      expect(repo.run("git tag -a v0.0.1 HEAD~4 -m v0.0.1").exitCode).toBe(0);
+      let r = repo.run(`release_push_targets "${repo.versions}" 0.0.3`);
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.trim().split("\n")).toEqual([`v0.0.2 ${repo.sha("HEAD~2")}`, `v0.0.3 ${repo.sha("HEAD")}`]);
+      // Everything tagged: main's version is still listed so its Release is ensured.
+      expect(repo.run("git tag -a v0.0.2 HEAD~2 -m v0.0.2 && git tag -a v0.0.3 HEAD -m v0.0.3").exitCode).toBe(0);
+      r = repo.run(`release_push_targets "${repo.versions}" 0.0.3`);
+      expect(r.stdout.trim()).toBe(`v0.0.3 ${repo.sha("HEAD")}`);
+      // Versions older than the oldest existing tag (a bootstrap) are never tagged.
+      expect(repo.run("git tag -d v0.0.1 v0.0.3 >/dev/null").exitCode).toBe(0);
+      r = repo.run(`release_push_targets "${repo.versions}" 0.0.3`);
+      expect(r.stdout.trim()).toBe(`v0.0.3 ${repo.sha("HEAD")}`);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_dispatch_targets takes space, comma or newline lists, oldest first, and refuses bad input", () => {
+    const repo = makeRepo();
+    try {
+      expect(repo.run(`package_version_commits main > "${repo.versions}"`).exitCode).toBe(0);
+      const r = repo.run(`release_dispatch_targets "${repo.versions}" $'0.0.3,v0.0.2\n0.0.3'`);
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.trim().split("\n")).toEqual([`v0.0.2 ${repo.sha("HEAD~2")}`, `v0.0.3 ${repo.sha("HEAD")}`]);
+      for (const bad of ["''", "'0.0.9'", "'abc'", "'0.0.2-rc.1'", "'$(id)'"]) {
+        expect(repo.run(`release_dispatch_targets "${repo.versions}" ${bad}`).exitCode).not.toBe(0);
+      }
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_tag_subject: a release cut keeps its summary; another bump uses its CHANGELOG heading", () => {
+    const repo = makeRepo();
+    try {
+      expect(repo.run("release_tag_subject 0.0.2 HEAD~2").stdout.trim()).toBe("v0.0.2 — second thing");
+      expect(repo.run("release_tag_subject 0.0.3 HEAD").stdout.trim()).toBe("v0.0.3 — Third heading");
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("release_notes: package.json version, CHANGELOG section, commits since the previous vX.Y.Z tag, updater line", () => {
+    const repo = makeRepo();
+    try {
+      // A non-release tag in between must not shorten the range.
+      expect(repo.run("git tag -a v0.0.2 HEAD~2 -m v0.0.2 && git tag vfoo HEAD~1 && git tag -a v0.0.3 HEAD -m v0.0.3").exitCode).toBe(0);
+      const r = repo.run("release_notes v0.0.3");
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout).toContain("## Corvidinho v0.0.3");
+      expect(r.stdout).toContain("**package.json version:** `0.0.3`");
+      expect(r.stdout).toContain("**Commit range:** `v0.0.2..v0.0.3`");
+      expect(r.stdout).toContain("### Changes (CHANGELOG.md)\n\n### Third heading");
+      expect(r.stdout).not.toContain("### Second thing");
+      expect(r.stdout).toContain("- chore(deps): bump d (#6)");
+      expect(r.stdout).toContain("- feat: stuff (v0.0.2) (#7)");
+      expect(r.stdout).not.toContain("second thing (#5)");
+      expect(r.stdout).toContain("CORVIDINHO_REF=v0.0.3 ./scripts/corvidinho-update.sh");
+      expect(r.stdout).toContain("Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)");
+      // A tag whose commit carries another package version says so.
+      expect(repo.run("git tag -a v0.0.9 HEAD~1 -m v0.0.9").exitCode).toBe(0);
+      expect(repo.run("release_notes v0.0.9").stdout).toContain("**package.json version:** `0.0.2`");
+    } finally {
+      repo.cleanup();
+    }
   });
 });
 

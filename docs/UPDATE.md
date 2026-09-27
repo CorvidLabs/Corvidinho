@@ -1,6 +1,6 @@
 # Updating Corvidinho
 
-Ship cuts are **GitHub Releases** on tags `v*` — see [Releases](https://github.com/CorvidLabs/Corvidinho/releases). Tag pushes run `.github/workflows/release.yml` (idempotent if the release already exists). Not every package version is tagged (for example 0.0.12, 0.0.13, 0.0.16, 0.0.18 and 0.0.21 were not); an untagged version has no Release and its code ships in the next tag.
+Ship cuts are **GitHub Releases** on tags `v*` — see [Releases](https://github.com/CorvidLabs/Corvidinho/releases). `.github/workflows/release.yml` tags every package version when its `package.json` bump lands on main and creates the Release (it catches up any earlier untagged version; a hand-pushed `vX.Y.Z` tag still works; existing tags and Releases are never moved). Versions 0.0.2 onward are tagged.
 
 ## Prefer the safe updater
 

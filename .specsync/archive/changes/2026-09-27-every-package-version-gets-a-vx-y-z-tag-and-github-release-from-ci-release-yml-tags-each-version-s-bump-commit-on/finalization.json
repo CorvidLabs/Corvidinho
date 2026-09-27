@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "every-package-version-gets-a-vx-y-z-tag-and-github-release-from-ci-release-yml-tags-each-version-s-bump-commit-on",
+  "implementation_commit": "6506a64c213f99a7827ec414de6a6aff341230e9",
+  "implementation_tree": "c16eabecc9dc78a356560550d089e6adc61449df",
+  "contract_digest": "8246e30638c877aaf9eae87816c0ac84f94b03e7d6feec8d205df5a7b5627365",
+  "workspace_digest": "340c9090e3f7e8f692019fe5405f9e3519b93ba1f37ec3b48d077b41ed284297",
+  "closing_digest": "ede588525497828ae129c99923656a48269d6c84ff62d359602f3de908a22202",
+  "review_digest": "3830a71a3554387ced1b19c6ecf999e08651ef725b58bfecd02a17b831a08ec8",
+  "finalization_digest": "ff6c6a72e3159ca23477a8089f94b60d610bfbd9dc1c6b41e5ce0f4c7731a7f5",
+  "timestamp": 1790480910
+}
