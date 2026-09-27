@@ -44,8 +44,13 @@ const BOOL_FLAGS = [
   "--allow-empty",
 ] as const;
 
-function refuseProtected(userPath: string, absPath: string): PluginHandlerResult | null {
-  if (isProtectedPath(userPath) || isProtectedPath(absPath)) {
+function refuseProtected(
+  userPath: string,
+  absPath: string,
+  cwd: string,
+): PluginHandlerResult | null {
+  const root = realRoot(cwd);
+  if (isProtectedPath(userPath, root) || isProtectedPath(absPath, root)) {
     return {
       ok: false,
       error: protectedRefuseMessage(userPath),
@@ -176,7 +181,7 @@ export const filesCommands: PluginCommand[] = [
           argv.positional.slice(flaggedPath != null ? 0 : 1).join(" ");
 
         const abs = resolveProjectPath(ctx.cwd, pathArg);
-        const blocked = refuseProtected(pathArg, abs);
+        const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
 
         const allowLarge = argv.flags.has("--allow-large");
@@ -241,7 +246,7 @@ export const filesCommands: PluginCommand[] = [
           };
         }
         const abs = resolveProjectPath(ctx.cwd, pathArg);
-        const blocked = refuseProtected(pathArg, abs);
+        const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
         assertExistingFile(abs);
 
@@ -417,7 +422,7 @@ export const filesCommands: PluginCommand[] = [
           return { ok: false, error: "missing path", exitCode: 1 };
         }
         const abs = resolveProjectPath(ctx.cwd, pathArg);
-        const blocked = refuseProtected(pathArg, abs);
+        const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
         assertExistingFile(abs);
         rmSync(abs);
