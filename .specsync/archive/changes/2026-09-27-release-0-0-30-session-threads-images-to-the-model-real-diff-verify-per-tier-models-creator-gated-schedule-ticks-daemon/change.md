@@ -1,6 +1,6 @@
 ---
 id: release-0-0-30-session-threads-images-to-the-model-real-diff-verify-per-tier-models-creator-gated-schedule-ticks-daemon
-state: implementing
+state: archived
 type: operations
 base_commit: 66ee70c4638346039333b8a63dc663c2984f7ed2
 ---
