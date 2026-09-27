@@ -20,3 +20,8 @@ artifact: tasks
       `docs/BOX-UPDATE.md` (`data-dir` must pass; `llm` warn only).
 - [x] Run SpecSync change approve / check / audit, coverage check, tsc,
       bun test and the verify lane.
+- [x] Review: read the allowlist file once (`preloaded`); trim token /
+      login presence like the bridge / WATCH; "deny wins" only when every
+      repo entry is denied; a symlink-to-nothing data dir fails; tests for
+      each plus the default allowlist path, a non-writable data dir
+      (non-root) and a clean probe; re-approve and re-check.

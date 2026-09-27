@@ -20,7 +20,11 @@ set (`[discord].channels`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS` and
 `CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS`). An entry that is also
 deny-listed (file or env) SHALL NOT count (deny wins). A passing line SHALL
 name where the usable entries came from (`file`, `env` or `file + env`)
-and the count, never the ids, repos or tokens. An allowlist file that exists
+and the count, never the ids, repos or tokens. An entry the gate cannot use
+at all (a repo that is not OWNER/REPO) SHALL NOT count either, and the
+failing line SHALL name deny wins only when every entry is deny-listed. A
+token or watch login SHALL count only when it is not blank, as the bridge and
+WATCH trim them. An allowlist file that exists
 but does not load SHALL fail both checks, since the bridge and watch refuse to
 start on it. Doctor SHALL print an `llm` line: `[ok]` when
 `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (value not shown),
@@ -30,13 +34,15 @@ shared data dir (`CORVIDINHO_DATA_DIR`, default
 `~/.local/share/corvidinho`, MEMORY-1): `[ok]` when it exists and is
 writable, `[info]` when it does not exist yet but its nearest existing parent
 is writable (doctor SHALL NOT create it), and a failing `[fail]` line (exit 1)
-when it is not a directory, cannot be created or is not writable.
+when it is not a directory, is a symlink to a path that does not exist
+(`mkdir -p` fails on it), cannot be created or is not writable.
 
 Acceptance Criteria
-- With `[discord] channels` and `[github] repos` only in the allowlist file (`CORVIDINHO_ALLOWLIST_FILE`), plus token and `CORVIDINHO_WATCH_USERNAME`, doctor prints `[ok] discord` and `[ok] github-watch` naming source `file`, no `[missing]` line, and exits 0 when the other checks pass.
+- With `[discord] channels` and `[github] repos` only in the allowlist file (`CORVIDINHO_ALLOWLIST_FILE`), plus token and `CORVIDINHO_WATCH_USERNAME`, doctor prints `[ok] discord` and `[ok] github-watch` naming source `file`, no `[missing]` line, and exits 0 when the other checks pass; the default `~/.config/corvidinho/allowlist.toml` (no `CORVIDINHO_ALLOWLIST_FILE`) reads the same way.
+- A blank (whitespace-only) Discord or GitHub token or watch login prints `[missing]`; a repo entry that is not OWNER/REPO fails `github-watch` without claiming it is deny-listed.
 - Env-only entries name source `env`; entries in both name `file + env`; the line gives the usable count.
 - A channel or repo that is allowlisted and also deny-listed (env deny over file allow, file deny over env allow) does not count: doctor prints `[missing]` naming deny wins and exits 1.
 - A malformed allowlist file fails `discord` and `github-watch` (the bridge / watch refuse to start) even when env allowlists are set.
 - No LLM key prints `[warn] llm` naming the demo stub without changing the exit code; `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` prints `[ok] llm` without the value.
-- A writable data dir prints `[ok] data-dir`; a missing one under a writable parent prints `[info] data-dir` and is not created; a data dir that is a file or sits under a file prints `[fail] data-dir` and doctor exits 1.
+- A writable data dir prints `[ok] data-dir`; a missing one under a writable parent prints `[info] data-dir` and is not created; a data dir that is a file, sits under a file, is a symlink to nothing or (as a non-root user) is not writable prints `[fail] data-dir` and doctor exits 1; the writable probe leaves nothing in the data dir.
 - Doctor output never contains the token, LLM key, channel ids or repo / org names.

@@ -15,7 +15,9 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -188,6 +190,56 @@ describe("doctor allowlists use the bridge / WATCH loader (defect 7)", () => {
     expectNoValues(r.out);
   }, 30_000);
 
+  test("the default allowlist path (~/.config/corvidinho/allowlist.toml, no CORVIDINHO_ALLOWLIST_FILE) is read too", async () => {
+    const home = join(root, "home-default");
+    mkdirSync(join(home, ".config", "corvidinho"), { recursive: true });
+    writeFileSync(
+      join(home, ".config", "corvidinho", "allowlist.toml"),
+      `[discord]\nchannels = ["${CHANNEL}"]\n\n[github]\norgs = ["${ORG}"]\n`,
+    );
+    const env = readyEnv({ HOME: home });
+    delete env.CORVIDINHO_ALLOWLIST_FILE;
+    const r = await runDoctor(env);
+    expect(r.out).toContain("[ok] discord: token + 1 allowlisted channel(s) from file");
+    expect(r.out).toContain("[ok] github-watch: token + username + 1 allowlisted repo/org entry from file");
+    expect(r.code).toBe(0);
+    expectNoValues(r.out);
+  }, 30_000);
+
+  test("a blank token or watch login is missing, as the bridge / watch trim them", async () => {
+    const r = await runDoctor(
+      readyEnv({
+        DISCORD_TOKEN: "   ",
+        GITHUB_TOKEN: " ",
+        DISCORD_CHANNEL_IDS: CHANNEL,
+        CORVIDINHO_GITHUB_ALLOW_REPOS: REPO,
+      }),
+    );
+    expect(r.out).toContain("[missing] discord: missing DISCORD_TOKEN or DISCORD_BOT_TOKEN");
+    expect(r.out).toContain("[missing] github-watch: WATCH needs GITHUB_TOKEN/GH_TOKEN");
+    expect(r.code).toBe(1);
+
+    const login = await runDoctor(
+      readyEnv({
+        CORVIDINHO_WATCH_USERNAME: "  ",
+        DISCORD_CHANNEL_IDS: CHANNEL,
+        CORVIDINHO_GITHUB_ALLOW_REPOS: REPO,
+      }),
+    );
+    expect(login.out).toContain("[missing] github-watch: set CORVIDINHO_WATCH_USERNAME");
+    expect(login.code).toBe(1);
+  }, 30_000);
+
+  test("a repo entry WATCH cannot use (not OWNER/REPO) is not reported as deny-listed", async () => {
+    const r = await runDoctor(
+      readyEnv({ DISCORD_CHANNEL_IDS: CHANNEL, CORVIDINHO_GITHUB_ALLOW_REPOS: "doctor-fixture-bare-name" }),
+    );
+    expect(r.out).toContain("[missing] github-watch: no allowlisted repo/org entry is usable");
+    expect(r.out).not.toContain("every allowlisted repo/org is also deny-listed");
+    expect(r.out).not.toContain("doctor-fixture-bare-name");
+    expect(r.code).toBe(1);
+  }, 30_000);
+
   test("no allowlist anywhere still reports the empty channel / repo lists", async () => {
     const r = await runDoctor(readyEnv({}));
     expect(r.out).toContain("[missing] discord: token present but channel allowlist empty");
@@ -244,5 +296,47 @@ describe("doctor checks the LLM key and the data dir (defect 8)", () => {
     const asFile = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_DATA_DIR: blocker }));
     expect(asFile.out).toContain(`[fail] data-dir: ${blocker} is not a directory`);
     expect(asFile.code).toBe(1);
+  }, 30_000);
+
+  test("a data dir that is a symlink to nothing is [fail] (mkdir -p fails on it), not creatable", async () => {
+    const link = join(root, "dangling-data");
+    symlinkSync(join(root, "no-such-target"), link);
+    const r = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_DATA_DIR: link }));
+    expect(r.out).toContain(`[fail] data-dir: ${link} is a symlink to a path that does not exist`);
+    expect(r.code).toBe(1);
+
+    const under = join(link, "data");
+    const nested = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_DATA_DIR: under }));
+    expect(nested.out).toContain(
+      `[fail] data-dir: ${under} cannot be created (${link} is a symlink to a path that does not exist)`,
+    );
+    expect(nested.code).toBe(1);
+  }, 30_000);
+
+  // Root writes through mode bits, so this only runs as a normal user (CI).
+  test.skipIf(process.getuid?.() === 0)(
+    "a data dir that exists but is not writable is [fail] and doctor exits 1; the probe leaves nothing",
+    async () => {
+      const ro = join(root, "read-only-data");
+      mkdirSync(ro);
+      chmodSync(ro, 0o555);
+      try {
+        const r = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_DATA_DIR: ro }));
+        expect(r.out).toContain(`[fail] data-dir: ${ro} is not writable (EACCES)`);
+        expect(r.code).toBe(1);
+      } finally {
+        chmodSync(ro, 0o755);
+      }
+      expect(readdirSync(ro)).toEqual([]);
+    },
+    30_000,
+  );
+
+  test("the writable probe leaves nothing behind in the data dir", async () => {
+    const clean = join(root, "probe-clean");
+    mkdirSync(clean);
+    const r = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_DATA_DIR: clean }));
+    expect(r.out).toContain(`[ok] data-dir: ${clean} exists and is writable`);
+    expect(readdirSync(clean)).toEqual([]);
   }, 30_000);
 });

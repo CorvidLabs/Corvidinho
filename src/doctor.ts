@@ -9,7 +9,7 @@
  * Secret and list values are never printed (SAFE-6).
  */
 
-import { mkdtempSync, rmdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { loadLlmEnv } from "./agent/execute.ts";
 import { checkChannel } from "./allowlist/discord.ts";
@@ -18,6 +18,7 @@ import {
   configFromEnvOnly,
   loadAllowlist,
   loadAllowlistFile,
+  resolveAllowlistPath,
 } from "./allowlist/load.ts";
 import type { AllowlistConfig } from "./allowlist/types.ts";
 import { mergeChannelIds } from "./discord/config.ts";
@@ -44,29 +45,41 @@ export type DoctorAllowlist =
   | { ok: true; merged: AllowlistConfig; file: AllowlistConfig | null; env: AllowlistConfig }
   | { ok: false; error: string };
 
-/** Usable (allowlisted and not deny-listed) entry count and its sources. */
+/**
+ * Usable (allowlisted and not deny-listed) entry count and its sources;
+ * `denied` counts listed entries a deny list refuses (the rest of
+ * `listed - usable` are entries the gate cannot use, e.g. not OWNER/REPO).
+ */
 export type AllowlistUsage = {
   listed: number;
   usable: number;
+  denied: number;
   sources: AllowlistSource[];
 };
 
+/**
+ * Resolves and reads the allowlist file once, exactly as `loadAllowlist` does
+ * for the bridge / WATCH, then merges the env overlays through `loadAllowlist`
+ * itself (`preloaded`), so the merged set and the file half come from the
+ * same read.
+ */
 export async function loadDoctorAllowlist(
   env: NodeJS.ProcessEnv = process.env,
   home?: string,
 ): Promise<DoctorAllowlist> {
-  let merged: AllowlistConfig;
-  try {
-    merged = await loadAllowlist({ env, home });
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+  const path = resolveAllowlistPath(env, home);
   let file: AllowlistConfig | null = null;
-  if (merged.sourcePath) {
-    const loaded = await loadAllowlistFile(merged.sourcePath);
+  if (path && existsSync(path)) {
+    const loaded = await loadAllowlistFile(path);
     if (!loaded.ok) return { ok: false, error: loaded.error };
-    file = { sourcePath: merged.sourcePath, github: loaded.github, discord: loaded.discord };
+    file = { sourcePath: path, github: loaded.github, discord: loaded.discord };
   }
+  const merged = await loadAllowlist({
+    env,
+    home,
+    filePath: null,
+    preloaded: file ? { sourcePath: path!, github: file.github, discord: file.discord } : null,
+  });
   return { ok: true, merged, file, env: configFromEnvOnly(env) };
 }
 
@@ -97,6 +110,8 @@ export function discordChannelUsage(
   return {
     listed: listed.length,
     usable: usable.length,
+    // A listed channel fails the channel gate only on a deny list.
+    denied: listed.length - usable.length,
     sources: sourcesOf(
       usable,
       allow.file?.discord.channels ?? [],
@@ -110,10 +125,13 @@ export function githubRepoUsage(
   allow: Extract<DoctorAllowlist, { ok: true }>,
 ): AllowlistUsage {
   const listed = expandWatchRepos(allow.merged);
-  const usable = listed.filter((r) => isRepoAllowed(r, allow.merged.github).ok);
+  const gates = listed.map((r) => ({ r, gate: isRepoAllowed(r, allow.merged.github) }));
+  const usable = gates.filter((g) => g.gate.ok).map((g) => g.r);
+  const denied = gates.filter((g) => !g.gate.ok && g.gate.error.endsWith(" is denied")).length;
   return {
     listed: listed.length,
     usable: usable.length,
+    denied,
     sources: sourcesOf(
       usable,
       allow.file ? expandWatchRepos(allow.file) : [],
@@ -122,9 +140,9 @@ export function githubRepoUsage(
   };
 }
 
+/** Set and not blank — the bridge / WATCH trim tokens and logins the same way. */
 function present(env: NodeJS.ProcessEnv, name: string): boolean {
-  const v = env[name];
-  return typeof v === "string" && v.length > 0;
+  return (env[name]?.trim() ?? "").length > 0;
 }
 
 function fromText(sources: AllowlistSource[]): string {
@@ -193,9 +211,11 @@ export function githubWatchDoctorCheck(
     };
   }
   return fail(
-    use.listed > 0
-      ? "every allowlisted repo/org is also deny-listed (deny wins) — WATCH acts on no repo"
-      : "set CORVIDINHO_GITHUB_ALLOW_REPOS / ORGS or allowlist file [github] repos / orgs (empty = deny-all)",
+    use.listed === 0
+      ? "set CORVIDINHO_GITHUB_ALLOW_REPOS / ORGS or allowlist file [github] repos / orgs (empty = deny-all)"
+      : use.denied === use.listed
+        ? "every allowlisted repo/org is also deny-listed (deny wins) — WATCH acts on no repo"
+        : "no allowlisted repo/org entry is usable (deny-listed, or a repo that is not OWNER/REPO / an org that is not a bare name) — WATCH acts on no repo",
   );
 }
 
@@ -230,6 +250,18 @@ function isMissing(e: unknown): boolean {
 }
 
 /**
+ * A symlink whose target does not exist: `stat` says ENOENT, yet `mkdir -p`
+ * fails on it (EEXIST), so it is not "created on first use".
+ */
+function isBrokenLink(p: string): boolean {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The data dir holds `corvidinho.db` for the bridge, WATCH, daemon and memory
  * tools. Probes by creating and removing a temp dir (in the data dir, or in
  * its nearest existing parent when it does not exist yet); leaves nothing.
@@ -252,6 +284,7 @@ export function dataDirDoctorCheck(
     exists = true;
   } catch (e) {
     if (!isMissing(e)) return fail(`cannot be read (${errCode(e)})`);
+    if (isBrokenLink(dir)) return fail("is a symlink to a path that does not exist");
   }
 
   let probeIn = dir;
@@ -269,6 +302,9 @@ export function dataDirDoctorCheck(
         break;
       } catch (e) {
         if (!isMissing(e)) return fail(`cannot be created (${errCode(e)})`);
+        if (isBrokenLink(cur)) {
+          return fail(`cannot be created (${cur} is a symlink to a path that does not exist)`);
+        }
       }
     }
   }
