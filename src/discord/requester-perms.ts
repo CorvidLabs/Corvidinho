@@ -5,6 +5,8 @@
  * Archive cross-channel-guard.ts is advisory only — not used as ACL.
  */
 
+import { buildVersionPresenceData } from "./presence.ts";
+
 export type RequesterCheckResult =
   | { ok: true }
   | { ok: false; status: 403 | 404; reason: string };
@@ -78,6 +80,10 @@ export async function verifyRequesterCanSend(
     discord;
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+    // DISCORD-12: this check opens its own gateway session with the bot token.
+    // Without a presence its IDENTIFY carries an empty activity list, which can
+    // replace the bridge's version Custom Status under the bot name.
+    presence: buildVersionPresenceData(),
   });
 
   try {

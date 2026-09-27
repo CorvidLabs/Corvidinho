@@ -1,6 +1,7 @@
 /**
- * ROLES-CHAT-7 prove-before-done: non-ADMIN cannot mutate; ADMIN still SAFE-gated;
- * channel allowlist still required.
+ * ROLES-CHAT-7 prove-before-done: non-ADMIN cannot mutate; ADMIN still SAFE-gated
+ * (files-write, shell-exec, github-pr-create + GITHUB-6); channel allowlist
+ * still required. GitHub runs are dry-run only (no network, no token).
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -12,7 +13,10 @@ import { emptyConfig } from "../src/allowlist/types.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
-import { ROLE_REFUSED_MESSAGE } from "../src/plugins/roles.ts";
+import {
+  ROLE_REFUSED_MESSAGE,
+  resolveActingIsAdmin,
+} from "../src/plugins/roles.ts";
 
 const OWNER = "181969874455756800";
 const NON_OWNER = "999999999999999999";
@@ -27,16 +31,33 @@ const ACTING_KEYS = [
   "CORVIDINHO_MEMORY_INMEM",
 ] as const;
 
+/** GITHUB-6 gate + GitHub write keys: cleared per test so no operator env admits a repo or reaches the network. */
+const GITHUB_KEYS = [
+  "CORVIDINHO_GITHUB_ALLOW_REPOS",
+  "CORVIDINHO_GITHUB_ALLOW_ORGS",
+  "CORVIDINHO_GITHUB_ALLOW_USERS",
+  "CORVIDINHO_GITHUB_DENY_REPOS",
+  "CORVIDINHO_GITHUB_DENY_ORGS",
+  "CORVIDINHO_GITHUB_DENY_USERS",
+  "CORVIDINHO_GITHUB_DRY_RUN",
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+] as const;
+
 let prev: Record<string, string | undefined> = {};
 let tmpRoot = "";
 
 function snapEnv() {
   prev = {};
   for (const k of ACTING_KEYS) prev[k] = process.env[k];
+  for (const k of GITHUB_KEYS) {
+    prev[k] = process.env[k];
+    delete process.env[k];
+  }
 }
 
 function restoreEnv() {
-  for (const k of ACTING_KEYS) {
+  for (const k of [...ACTING_KEYS, ...GITHUB_KEYS]) {
     if (prev[k] === undefined) delete process.env[k];
     else process.env[k] = prev[k];
   }
@@ -162,6 +183,57 @@ describe("ROLES-CHAT-7 role tool gates", () => {
       cwd: tmpRoot,
     });
     expect(shellOk.ok).toBe(true);
+  });
+
+  test("(b) admin github-pr-create: SAFE-1 denies without an allowlist entry; dry-run ok with the allowlist + GITHUB-6 repo allowlist", async () => {
+    asAdmin();
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    expect(await resolveActingIsAdmin()).toBe(true);
+    const args = [
+      "--repo",
+      "CorvidLabs/Corvidinho",
+      "--title",
+      "admin role session",
+      "--head",
+      "corvidinho/roles-chat-7",
+      "--base",
+      "main",
+    ];
+    const run = (allowlist: string[]) =>
+      runPlugin({
+        name: "github-pr-create",
+        args,
+        nonInteractive: true,
+        allowlist,
+        cwd: tmpRoot,
+      });
+
+    // ADMIN passes the role gate but not SAFE-1: no allowlist entry, no PR.
+    const denied = await run([]);
+    expect(denied.ok).toBe(false);
+    expect(denied.exitCode).toBe(2);
+    expect(denied.error ?? "").toContain("SAFE-1");
+    expect(denied.error ?? "").not.toContain(ROLE_REFUSED_MESSAGE);
+
+    // Allowlisted, but the GITHUB-6 repo allowlist is empty: still refused.
+    const noRepo = await run(["github-pr-create"]);
+    expect(noRepo.ok).toBe(false);
+    expect(noRepo.exitCode).toBe(3);
+    expect(noRepo.error ?? "").toContain("GITHUB-6");
+
+    // Allowlist entry + GITHUB-6 repo allowlist: the dry-run PR goes through.
+    process.env.CORVIDINHO_GITHUB_ALLOW_REPOS = "CorvidLabs/Corvidinho";
+    const ok = await run(["github-pr-create"]);
+    expect(ok.ok).toBe(true);
+    expect(ok.exitCode).toBe(0);
+    expect(ok.data).toMatchObject({
+      dryRun: true,
+      owner: "CorvidLabs",
+      repo: "Corvidinho",
+      title: "admin role session",
+      head: "corvidinho/roles-chat-7",
+      base: "main",
+    });
   });
 
   test("(b) admin catalog includes files-write at code tier (still omits dangerous unless includeDangerous)", () => {

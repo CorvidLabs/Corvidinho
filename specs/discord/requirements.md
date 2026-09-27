@@ -23,11 +23,11 @@ Acceptance Criteria
 
 ### REQ-discord-002
 
-The system SHALL continue the same session id when a user replies to a bot message (DISCORD-2). Inside a Discord thread the system SHALL keep one session id for that thread (DISCORD-2.a).
+The system SHALL continue the same session id when a user replies to a bot message (DISCORD-2). Inside a Discord thread the system SHALL keep one session id for that thread (DISCORD-2.a), one for each user in it (SESSION-MULTI-1, REQ-discord-046).
 
 Acceptance Criteria
 - Reply referencing a tracked bot message resumes that session id.
-- Thread id map keeps one session per thread.
+- Thread map keeps one session per thread for each user, keyed by thread id and Discord user id; another user's session in the thread never replaces it.
 - The answer message of `/session start` and `/work` is a tracked bot message of the session that slash command created: the thinking message it was collapsed into (DISCORD-ASK-7), or, when collapse fails, the deferred slash reply when the gateway returns its message id.
 - After a user runs `/session start` (or `/work`) twice (topics A then B), that user's reply to A's answer resumes session A, with the reply ping on and with it off; it never runs in session B and is never dropped.
 - Another user's reply to that answer never resumes the session, even when that user is the configured owner (ADMIN) (SESSION-MULTI-1): with the ping off it is ignored, with the ping on it starts or continues that user's own session.
@@ -321,12 +321,28 @@ stay short; the system SHALL NOT invent extra status chrome, new slash commands,
 or allowlist changes. Fixture tests SHALL cover the presence payload builder
 without a live Discord token.
 
+The live discord.js Client SHALL also be constructed with the same version
+presence as its `presence` option, so the presence discord.js copies into the
+gateway IDENTIFY payload at login carries the version Custom Status on the
+first IDENTIFY and on every non-resumable re-identify (invalid or expired
+session), where `ClientReady` does not fire again. The short-lived discord.js
+Client that the DISCORD-8 requester check (`verifyRequesterCanSend`) logs in
+with the same bot token SHALL carry the same version presence, so its IDENTIFY
+never sends an empty activity list under the bot name. Every use SHALL build
+the presence from one helper (`buildVersionPresenceData`) as a fresh object per
+call.
+
 Acceptance Criteria
 - Presence activity state/name uses shared VERSION (e.g. `v0.0.3`), not a hardcoded bridge constant.
 - Custom type (4) preferred with `state` holding the short version string.
 - ClientReady / restart path sets presence; failure to set presence SHALL NOT abort slash registration or the bridge.
 - Slash registration bodies and allowlists unchanged.
 - Fixture test covers `buildVersionPresenceActivity` / format helper without a live token.
+- The IDENTIFY presence discord.js builds at login (`options.ws.presence`, sent as `d.presence` on every IDENTIFY) has status `online` and exactly one activity: type 4, name `Custom Status`, state `v<version>`; it is never an empty activity list.
+- ClientReady still calls `setPresence` with the same status and activity; a throwing `setPresence` is logged and the ready handler still records the bot user id and calls `onReady`.
+- No new slash command, env var, config key or allowlist change.
+- The DISCORD-8 requester-check Client (`verifyRequesterCanSend`) identifies with the same version presence (status `online`, one type 4 `Custom Status` activity), never an empty activity list.
+- Regression tests in `tests/discord.presence.test.ts` run the real discord.js `login` with only the socket connect stubbed (no token, no network); the bridge and requester-check IDENTIFY tests fail on `main` and pass after.
 
 ### REQ-discord-018
 
@@ -400,6 +416,19 @@ Mutations (`create|pause|resume|delete`) SHALL re-check ADMIN at handler time
 (DISCORD-7 / ADMIN-4); empty admin/owner lists SHALL deny-all. `list` MAY be
 used by allowlisted actors after normal channel and rate/mute gates.
 
+`delete` removes the schedule and its whole run history, so it SHALL leave
+SAFE-5 audit rows on the shared chain the way `/admin` does (REQ-discord-043):
+a `started` row (action `schedule-delete`, surface `discord:schedule`, actor
+the invoker's user id, args digest of the resolved schedule id — never the raw
+id) before anything is deleted, then `ok` or `error`; the reply SHALL name the
+row numbers. A non-ADMIN `delete` SHALL append `denied`. When the `started`
+row cannot be recorded — the trail throws (including a keyed chain on a
+process without `CORVIDINHO_AUDIT_HMAC_KEY`) or no trail is wired (a bridge
+without a DB) — `delete` SHALL fail closed with the ephemeral
+`Refused: audit log unavailable (SAFE-5)` reply and delete nothing; it SHALL
+never make an unaudited delete. An unknown or missing schedule id deletes
+nothing and appends no row.
+
 Cadence SHALL enforce a minimum interval of **5 minutes** at create time.
 Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
@@ -428,6 +457,9 @@ Acceptance Criteria
 - Admin can create with cadence + project + prompt; non-admin / empty admin denied.
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
+- `/schedule delete` by the owner appends `started` then `ok` (action `schedule-delete`, surface `discord:schedule`, args digest only) before the schedule and its runs are gone; the reply names both row numbers and the chain verifies.
+- When the audit trail throws, the chain is keyed and the process has no key, or no trail is wired, `/schedule delete` replies `audit log unavailable (SAFE-5)` and the schedule and its run history are kept.
+- A non-ADMIN `/schedule delete` gets `not authorized` and appends `denied`; a delete that throws after the `started` row appends `error` and says so.
 - Optional create `channel` must be allowlisted; tick re-checks before post.
 - A due schedule whose creator is on `denyUsers` is refused at tick: no agent run, no post, the run is recorded failed with `creator not allowlisted: …`.
 - With a non-empty user allowlist, a schedule by an unlisted creator is refused; one by a listed user or by the configured owner (not on the list) still runs and posts.
@@ -1022,11 +1054,17 @@ Discord user id (+ channel / thread). Reply-to-bot and thread continue SHALL
 only resume when the message author owns that session. Other users talking
 while one has an open button ask SHALL not share history or invalidate the
 other's buttons. Memory inject SHALL remain scoped to the acting Discord user.
+Inside a thread a plain message SHALL continue the author's own session in
+that thread; another user starting a session in the same thread SHALL NOT
+take it over (SESSION-MULTI-1/2).
 
 Acceptance Criteria
 - Two @mentions from different users yield two session ids.
 - A non-owner reply to another user's bot message does not continue that session.
 - Same user @mention reuses their active session in the channel.
+- In one thread, after user A starts a session and user B then @mentions the bot there (B's own session), A's plain message continues A's session and B's continues B's; neither is ignored nor runs in the other's session.
+- The same holds while A has an open button ask (the ask keeps its id and expiry; B's session has none), after B's session ends, and after a restart (sessions reloaded from SQLite).
+- A plain message from a user with no session of their own in the thread is ignored; their @mention starts their own session.
 
 ### REQ-discord-203
 
@@ -1659,6 +1697,64 @@ Acceptance Criteria
 - Stored turns hold `[redacted:github-token]` instead of a `ghp_` token (in memory, in the DB, and in the replayed prompt); `rescrubDatabase` rewrites a raw row in `discord_session_turns`.
 - The turns table is created on `SessionStore` open without changing `schema_meta.version`, idempotently.
 
+### REQ-discord-353
+
+A schedule SHALL NOT stop, or fail to start a run, silently (AUTONOMY-2:
+"When stuck, it pings the configured owner on Discord rather than dying
+silently"). Two schedule-run outcomes SHALL record a `stuck` ask on the
+run's `schedule_runs` row, so the REQ-discord-347 ask post and delivery
+pass ping the owner:
+
+- Pre-run failure. A run whose project cannot be resolved (`project resolve
+  failed: …`) or whose worktree cannot be created (`worktree failed: …`),
+  including a step that throws instead of returning an error, SHALL still
+  spawn no agent and be recorded failed with that full error,
+  and SHALL record a stuck ask whose question is fixed text naming the step
+  (`PROJECT_RESOLVE_FAILED_QUESTION`, `WORKTREE_FAILED_QUESTION`), never the
+  host path or the error text (REQ-discord-418, SAFE-6), so a repeat of the
+  same failure keeps one ping key.
+- Auto-pause. The run whose failure makes `FAILURE_AUTO_PAUSE` (5) failures
+  in a row, counted in SQL in the same run-finish transaction as today
+  (REQ-discord-108), SHALL store the stuck `autoPauseAsk` in that same write
+  instead of its own ask: `Paused after 5 failed runs in a row. Fix the
+  cause, then resume it with /schedule resume.`, followed by a
+  `Last failure: <question>` line when the run stopped with its own ask. The
+  pause itself is unchanged (status `paused`, ping key cleared). A run that
+  succeeds SHALL never store it.
+- Delivery. A ticker that can post (the bridge) SHALL post such an ask of
+  its own run at once through the in-process ask post of REQ-discord-347
+  (live DISCORD-SCHEDULE-3 gate, compare-and-set take, schedule prefix, stuck
+  headline, the owner mentioned, once per question per schedule through
+  `askPingKey`); the pausing run's ask SHALL replace its plain `❌` post.
+  When the pausing run had no ask of its own, the post's context SHALL be
+  only what that `❌` post showed (`failed (exit N)`, the summary the run
+  row keeps and the delivery pass posts), never the run's own output; a run
+  that throws posts its pause ask at once with no context. An in-process
+  post of the pause ask that does not go out (resolves `false` or throws)
+  SHALL hand the ask back with no ping key kept, so a later delivery pass
+  posts it: a paused schedule has no next run to post it. An ask a ticker
+  with no outbound (the daemon) recorded SHALL be posted by the bridge's
+  next delivery pass. `ScheduleRunFinished.askReason` SHALL be
+  `stuck` for these runs, so the daemon logs `run.needs_human`
+  (REQ-cli-098).
+- Gate. A run the DISCORD-SCHEDULE-3 gate refuses (REQ-discord-020) SHALL
+  still record no ask of its own and post nothing; when refused runs
+  auto-pause the schedule, the pause ask SHALL stay pending until the gate
+  passes, like any pending ask.
+
+No new slash command, env var, config key, table, column or schema version;
+`/schedule resume` is the existing ADMIN subcommand.
+
+Acceptance Criteria
+- A daemon-claimed run that makes 5 failures in a row pauses the schedule and stores `ask_reason` `stuck` with the pause question and `ask_posted_at` null; `onRunFinished` reports `autoPaused: true` and `askReason: "stuck"`; the bridge's next tick posts it once with the schedule prefix, the stuck headline, the pause line, the `failed (exit 1)` context and `mentionUserIds` [owner]; the 4 earlier failures record no ask and post nothing.
+- A stuck run that makes the 5th failure posts one ask: the pause line followed by `Last failure: <its question>`.
+- A bridge-claimed run that makes the 5th failure posts the pause ask with the owner ping and the `failed (exit 1)` context (not the run's output) instead of the `❌` line (the 4 earlier ones post `❌` with no ping), records the ping key and is not posted again.
+- A bridge-claimed pause ask whose post resolves `false` or throws stays pending with no ping key; the next tick posts it once with the owner ping.
+- A bridge run that throws and makes the 5th failure posts the pause ask at once with the owner ping and without the error text.
+- Refused runs that auto-pause the schedule spawn no agent and post nothing; once the creator is allowed again the next tick posts the pause ask with the owner ping.
+- A daemon run whose project cannot be resolved spawns no agent, keeps `project resolve failed: …` (with the host path) on the row and stores the fixed question; the bridge posts it with the owner ping and without the host path; the same failure again posts without a ping.
+- A bridge run whose worktree cannot be created keeps `worktree failed: …` on the row and posts the fixed question at once with the owner ping, once; so does one whose worktree step throws.
+- The pause ask is chosen by the failure count in SQL: a store handle whose cache is stale stores it when SQL reaches 5; a success stores no ask and resets the count.
 ### REQ-discord-431
 
 Channel autocomplete on the STRING `channel` options (`/admin channels add|remove`, `/announce channel`) SHALL list channels only for ADMIN invoking from an allowlisted channel (DISCORD-DENY-3 / ADMIN-4). The check SHALL be re-run on every autocomplete request, never trusted from registration, in the slash gate order: the interaction's channel passes the channel allowlist (`gateChannel`), the actor passes `gateActor` (deny users/roles win; a non-empty user/role allowlist applies), and `resolvePermissionLevel` with the live mute set is ADMIN (the configured owner; no owner means nobody, IDENTITY-3). Otherwise the gateway SHALL answer an empty choice list, so no channel name, id or allowlist entry reaches a non-admin. The gateway SHALL also answer an empty list when no gate is wired or the gate throws (fail closed). An allowed request SHALL keep today's choices: guild text channels for `add` and `/announce channel`, and the live allowlist for `remove`. Autocomplete SHALL NOT consume a rate-limit slot. No new slash command, option, env key or schema version.

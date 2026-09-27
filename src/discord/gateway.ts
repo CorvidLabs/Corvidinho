@@ -18,7 +18,7 @@ import type {
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
-import { buildVersionPresenceActivity } from "./presence.ts";
+import { buildVersionPresenceData } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
@@ -246,7 +246,6 @@ export async function createLiveGateway(
     GatewayIntentBits,
     Events,
     ChannelType,
-    ActivityType,
     MessageFlags,
   } = discord;
   const presenceVersion = opts?.version ?? PACKAGE_VERSION;
@@ -257,6 +256,10 @@ export async function createLiveGateway(
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
     ],
+    // DISCORD-12: discord.js copies this into the gateway IDENTIFY payload at
+    // login, so the first IDENTIFY and any non-resumable re-identify carry the
+    // version. ClientReady does not fire again after a re-identify.
+    presence: buildVersionPresenceData(presenceVersion),
   });
 
   let botUserId: string | null = null;
@@ -422,18 +425,9 @@ export async function createLiveGateway(
         botUserId = ready.user.id;
         console.log(`[discord] logged in as ${ready.user.tag}`);
         try {
-          const activity = buildVersionPresenceActivity(presenceVersion);
-          ready.user.setPresence({
-            status: "online",
-            activities: [
-              {
-                name: activity.name,
-                state: activity.state,
-                type: ActivityType.Custom,
-              },
-            ],
-          });
-          console.log(`[discord] presence set: ${activity.state}`);
+          const presence = buildVersionPresenceData(presenceVersion);
+          ready.user.setPresence(presence);
+          console.log(`[discord] presence set: ${presence.activities[0].state}`);
         } catch (err) {
           console.warn("[discord] presence set failed:", err);
         }

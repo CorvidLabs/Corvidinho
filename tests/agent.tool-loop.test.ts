@@ -25,6 +25,15 @@ import { readSpendSnapshot, spendDoctorCheck } from "../src/agent/spend.ts";
 import { formatSpendStatusLine } from "../src/agent/spend-notice.ts";
 import { modelKeyForTier, perTierModels } from "../src/agent/tier.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import {
+  failingLaneLog,
+  HELP_HEAD,
+  LANE_FAILED_LINE,
+  noisyFailingLaneLog,
+} from "./fixtures/verify-lane-log.ts";
+
+/** The model-facing verify feedback cap (`VERIFY_FEEDBACK_MAX_CHARS`, AGENT-4.a). */
+const FEEDBACK_CAP = 4000;
 
 describe("capability tier (AGENT-5)", () => {
   test("parseCapabilityTier", () => {
@@ -693,6 +702,113 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     expect(result.filesChanged).toEqual(["app.ts"]);
     expect(result.summary).toContain("app.ts: syntax error");
     expect(events.some((e) => e.type === "StateChanged" && e.state === "done")).toBe(false);
+  });
+});
+
+describe("verify retry feedback reaches the model as the failing step's output (AGENT-4.a, REQ-agent-002)", () => {
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  type Body = { messages: { role: string; content: unknown }[] };
+  const bodies: Body[] = [];
+  const fetchImpl = async (_i: string | URL | Request, init?: RequestInit) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Body);
+    return new Response(
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "fixed it" } }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  /** The user message's verify feedback block, between its label and "Attempt N". */
+  function feedbackSent(body: Body | undefined): string {
+    const user = body?.messages.find((m) => m.role === "user")?.content;
+    const text = typeof user === "string" ? user : "";
+    const label = "Previous verification feedback:\n";
+    const at = text.indexOf(label);
+    if (at === -1) return "";
+    const end = text.indexOf("\n\nAttempt ", at);
+    return text.slice(at + label.length, end === -1 ? undefined : end);
+  }
+
+  beforeEach(() => {
+    clearRegistry();
+    bodies.length = 0;
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("tool loop: after a lane whose --help smoke fills the first 4000 chars, the retry request carries the failing test", async () => {
+    const execute = createTaskExecute({
+      taskText: "fix the sum",
+      env,
+      fetchImpl,
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const { log } = failingLaneLog();
+    let verifyN = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 2,
+      verifyRunner: async () => {
+        verifyN += 1;
+        return verifyN === 1 ? { success: false, output: log } : { success: true, output: "ok" };
+      },
+      // The model's edit is not the point here: report one so verify runs.
+      execute: async (ctx) => ({ ...(await execute(ctx)), filesChanged: ["src/sum.ts"] }),
+    });
+    expect(result.state).toBe("done");
+    expect(bodies).toHaveLength(2);
+    expect(feedbackSent(bodies[0])).toBe("");
+    const sent = feedbackSent(bodies[1]);
+    expect(sent.length).toBeLessThanOrEqual(FEEDBACK_CAP);
+    expect(sent).toContain("Verification failed. Fix these errors and try again:");
+    expect(sent).toContain("Failing step: test (step 3 of lane 'verify')");
+    expect(sent).toContain("error: expect(received).toBe(expected)");
+    expect(sent).toContain("Expected: 7\nReceived: 6");
+    expect(sent).toContain("(fail) sum of three");
+    expect(sent).toContain(LANE_FAILED_LINE);
+    expect(sent).not.toContain(HELP_HEAD);
+  });
+
+  test("read tier: a raw feedback over the cap is cut to the failing step and the end, not its first 4000 chars", async () => {
+    const execute = createTaskExecute({
+      taskText: "why did verify fail?",
+      env,
+      fetchImpl,
+      tier: "read",
+      projectInstructions: false,
+    });
+    await execute({
+      attempt: 2,
+      verifyFeedback: noisyFailingLaneLog(),
+      signal: new AbortController().signal,
+    });
+    const sent = feedbackSent(bodies[0]);
+    expect(sent.length).toBeLessThanOrEqual(FEEDBACK_CAP);
+    expect(sent).toContain("Failing step: test (step 3 of lane 'verify')");
+    expect(sent).toContain("FIRST-FAILURE");
+    expect(sent).toContain("SECOND-FAILURE");
+    expect(sent).toContain(LANE_FAILED_LINE);
+    expect(sent).not.toContain(HELP_HEAD);
+  });
+
+  test("a feedback within the cap is sent whole", async () => {
+    const execute = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "read",
+      projectInstructions: false,
+    });
+    const feedback = "Verification failed. Fix these errors and try again:\n\nlint boom";
+    await execute({ attempt: 2, verifyFeedback: feedback, signal: new AbortController().signal });
+    expect(feedbackSent(bodies[0])).toBe(feedback);
   });
 });
 

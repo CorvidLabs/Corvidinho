@@ -1,0 +1,84 @@
+{
+  "timestamp": 1790532761,
+  "commit": "6752c9dd2a96abc56ceb1ac5df703c1683853b51",
+  "contract_digest": "8999c175bcee65fbb9b63100d18f23978c24d7786133f6a8b19ad027e0a77668",
+  "execution_digest": "c010f8b7824d7e968cb10812ebf34f5cdc579ff5df8e9749f571dd951d36dd16",
+  "workspace_digest": "1c7ec2ea7c681adb303054de64fd3d4086cdf5e63667fe2539249eeac00e102d",
+  "acceptance_input_digest": "67154c66138738108f34e5871a23f5b47d6d5c71582d72699cfa89692b540783",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "specs/agent/agent.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "12edf576161fa4440593d717f287dbd4840c4d8e28baeae6829c343a9bec6458",
+        "entry_digest": "0bc705f08070a081317998667444480ef1ef9ac63ec30a8f09449817858cb400",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+        "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "99d62dddd0afd9f794e7df8a277e9c08f84b823c62c923bd4cc26513379eec4b",
+        "entry_digest": "545185f38f8f7d3f63f8d0c991a66dfe1ea384789560ee73ce7b754948fbdb3c",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+        "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ad56e9659f03df97f1095ab39f646bc949cb86224e4831a53bc26e1f0594fac6",
+        "entry_digest": "835263034b4e837cdd4a8f19cadbf1294b851a4d59d0630dd4c5f644ca20749a",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "tests/roles.chat.gates.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8dc019dd231e24feb5dae9e384853ade920328d39b84c4f07f85ce30c2f43c04",
+        "entry_digest": "50f1e4f3a85f36fa7d745eeabb3dde03fb371925264ce4277934d63bb1f70499",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-165"
+  ]
+}

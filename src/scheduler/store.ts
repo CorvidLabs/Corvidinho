@@ -390,17 +390,34 @@ export class ScheduleStore {
    * and an attempt that throws (SQLITE_BUSY) changes nothing, so the
    * scheduler can retry it without counting a failure twice. The cached
    * run/schedule are updated only after the write succeeds.
+   *
+   * `autoPause` (REQ-discord-353, AUTONOMY-2): when this failure makes
+   * `autoPause.at` or more failures in a row — counted in the same
+   * transaction, so every writer agrees — the run row stores
+   * `autoPause.ask` instead of `result.ask`, so the ask about the pause is
+   * pending as soon as the outcome is.
    */
   markRunFinished(
     schedule: Schedule,
     run: ScheduleRun,
-    result: { ok: boolean; summary?: string; error?: string; ask?: HumanAsk },
+    result: {
+      ok: boolean;
+      summary?: string;
+      error?: string;
+      ask?: HumanAsk;
+      autoPause?: { at: number; ask: HumanAsk };
+    },
     now = Date.now(),
   ): void {
     const status: ScheduleRunStatus = result.ok ? "completed" : "failed";
     let failures = result.ok ? 0 : schedule.consecutiveFailures + 1;
     // AUTONOMY-2 / AUTONOMOUS-7: the ask stays pending until a bridge posts it.
-    const ask = result.ask ? storedAsk(result.ask) : undefined;
+    const askFor = (count: number): HumanAsk | undefined => {
+      const pausing = !result.ok && result.autoPause && count >= result.autoPause.at;
+      const chosen = pausing ? result.autoPause!.ask : result.ask;
+      return chosen ? storedAsk(chosen) : undefined;
+    };
+    let ask = askFor(failures);
     const db = this.db;
     if (db) {
       failures = db
@@ -416,6 +433,7 @@ export class ScheduleStore {
           const row = db
             .query("SELECT consecutive_failures FROM schedules WHERE id = ?")
             .get(schedule.id) as { consecutive_failures: number } | null;
+          ask = askFor(row ? row.consecutive_failures : failures);
           db.run(
             `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?,
                ask_reason = ?, ask_question = ?, ask_posted_at = NULL

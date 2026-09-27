@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-version-presence-rides-every-gateway-identify-via-the-client-presence-option-and-is-still-set-on-clientready",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "3d8c56d05dbfc4996f6c6265edfaaab78cf2cbd3",
+      "contract_digest": "dcf307eefc33ebc0fcf73bce6e2d576dd594bccfe28e2076222992ec1616663d",
+      "execution_digest": "1e4642f397f31827125bc503afec870f9446e0c1c83a7519cf230aea9e450e80",
+      "workspace_digest": "3249103faaca53a86308958ceab9159d12b03e05f67dbdd7e1625ae86ed0ef7d",
+      "timestamp": 1790532967
+    }
+  ]
+}
