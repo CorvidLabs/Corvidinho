@@ -56,6 +56,16 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - MemoryStore CRUD/ACL/reload fixtures (REQ-discord-021 / MEMORY-1..4 / MEMORY-ACL-1..5).
 - REQ-discord-022: `tests/worktree.test.ts` + `tests/discord.session-worktree.test.ts` cover isolation, park/cleanup, explicit project, schedule project scope.
 
+## Thread sessions per user (REQ-discord-046 / REQ-discord-002, DISCORD-2.a / SESSION-MULTI-1/2)
+
+- `tests/discord.thread-sessions-per-user.test.ts` — `routeMessage` +
+  `SessionStore` (no live Discord): user A starts and continues in a thread,
+  user B @mentions there and gets their own session, and A's next plain
+  message still continues A's (B's continues B's); the same while A has an
+  open button ask (id and expiry unchanged), after B's session ends, and after
+  a SQLite reload; a user with no session there is ignored on a plain message
+  and starts their own on @mention; `getByThread` with and without a user.
+
 ## MEMORY Discord auto-recall inject (REQ-discord-023)
 
 - `tests/discord.memory-inject.test.ts` — format/enrich empty+seeded scope, system prompt rules, richer memory tool argv (no live Discord).
@@ -166,6 +176,32 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and a `startBridge` on the same data dir posts the ask to the owner once;
   the bridge's stop closes the gateway only after a pending-ask post in
   flight resolved. No live Discord.
+
+## Schedule auto-pause and pre-run failures ask the owner (REQ-discord-353, AUTONOMY-2)
+
+- `tests/scheduler.ask-outbox.test.ts` — daemon + bridge on one in-memory DB:
+  the run that makes 5 failures in a row pauses the schedule and stores the
+  stuck `autoPauseAsk` (earlier failures store none); the bridge's next tick
+  posts it once with the owner ping; a stuck 5th run posts the pause line
+  plus `Last failure: <question>`; a bridge-claimed 5th failure posts the
+  pause ask with the ping and the `failed (exit 1)` context (not the run's
+  output) instead of the `❌` line; a pause ask whose in-process post
+  resolves `false` or throws stays pending with no ping key and the next
+  tick posts it once with the ping; a bridge run that throws and makes the
+  5th failure posts the pause ask at once without the error text;
+  creator-refused runs that auto-pause post nothing until the creator is
+  allowed again. With
+  worktrees on: a daemon run whose project cannot be resolved stores the
+  fixed `PROJECT_RESOLVE_FAILED_QUESTION` (full error with the host path
+  on the row only) and the bridge pings the owner once per question; a
+  bridge run whose worktree cannot be created (a `talk` branch blocks
+  `talk/<run>`) posts `WORKTREE_FAILED_QUESTION` at once with the ping,
+  once, without the host path; so does one whose worktree step throws
+  (`WORKTREE_BASE_DIR` under a regular file).
+- `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
+  when the SQL failure count reaches 5 even from a stale cache; a success
+  stores none.
+
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
 - `tests/scheduler.actor-gate.test.ts` — a deny-listed creator's due schedule
