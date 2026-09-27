@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the",
+  "implementation_commit": "54cae1620eccdda55284356c0f4216bc154bd6ea",
+  "implementation_tree": "732edade18494c776e4993c8c6d7de6d29029343",
+  "contract_digest": "7a7c3d5e96b23007c53e547b1e4a85d660c9799a03737e8f6b6b27b8beab5ce3",
+  "workspace_digest": "417da450d71b5288be6591b5478c0cb8ff14cda784b4a8a1ccab0f264f762e46",
+  "closing_digest": "685d77b467b1c8d5f4516adeb7492fc0d39f58bce12590df53d492eccdbe0225",
+  "review_digest": "41f1a7560a227b05fefffd43aa1d827f4521dc4c4f00f50b52da22d39c93b5ef",
+  "finalization_digest": "80cbe2bd439eb3f331dd9540d274c24a036924c6f8f345d7125eddc341f2521e",
+  "timestamp": 1790537684
+}

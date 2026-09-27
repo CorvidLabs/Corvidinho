@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatAskSummary } from "../src/agent/ask.ts";
 import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
-import { extractUsage } from "../src/agent/execute.ts";
+import { extractUsage, loadLlmEnv } from "../src/agent/execute.ts";
 import { createSpendGuard, SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
 import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import { createSpendAlertOutbox } from "../src/agent/spend-outbox.ts";
@@ -894,7 +894,11 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     expect(finals).toHaveLength(1);
     expect(finals[0]!.content).toStartWith(`all good\n\n⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
     expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    expect(finals[0]!.embed).toBeNull();
+    // DISCORD-3.a — the answer keeps a footer-only embed (model).
+    expect(finals[0]!.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: { text: loadLlmEnv(process.env).model },
+    });
     // REQ-discord-215: one short fresh post pings the owner (no answer copy).
     expect(replies).toHaveLength(1);
     expect(replies[0]!.content).toBe(`<@${OWNER_ID}> ↑ needs you`);
@@ -1174,6 +1178,17 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     expect(finals[1]!.content).toStartWith(finals[0]!.content!);
     expect(finals[1]!.content).toMatch(new RegExp(`💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
     expect(finals[1]!.mentionUserIds).toEqual([OWNER_ID]);
+    // DISCORD-3.a (REQ-discord-457): the re-edit keeps the answer's
+    // footer-only embed (model + plumbing, done color like the fallback's
+    // paused status); the plumbing never enters either body.
+    expect(finals[0]!.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: {
+        text: `${loadLlmEnv(process.env).model} | state=blocked verified=false verifySkipped attempts=1`,
+      },
+    });
+    expect(finals[1]!.embed).toStrictEqual(finals[0]!.embed);
+    expect(finals[1]!.content).not.toContain("state=");
     await result.stop();
   });
 
