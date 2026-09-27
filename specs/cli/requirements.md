@@ -346,9 +346,11 @@ warning onto `TaskResult.spendWarning` in `--json` output and the NDJSON
 question. `corvidinho daemon`, which has no Discord, SHALL log a `warn`
 `spend.warning` line for a schedule run that crossed 80% and a `warn`
 `run.needs_human` line with the ask reason for a run that stopped to ask,
-leaving the recorded warning pending for a bridge to deliver. `--help` and
-`.env.example` SHALL list the variable and say it warns at 80% and stops and
-asks at 100%.
+leaving the recorded warning and the ask recorded on the run row pending for
+a bridge to deliver (REQ-discord-347; AUTONOMY-2 / AUTONOMOUS-7). The daemon
+SHALL NOT post or take the ask itself and still needs no Discord token
+(REQ-cli-108). `--help` and `.env.example` SHALL list the variable and say it
+warns at 80% and stops and asks at 100%.
 
 Acceptance Criteria
 - `bun src/cli.ts doctor` without the variable prints `[info] spend: no daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)`.
@@ -356,6 +358,7 @@ Acceptance Criteria
 - Invalid cap, unpriced model, 80% and cap reached yield a `warn` line with `ok: true`.
 - `task run --json` against a localhost mock LLM carries `result.spendWarning` on the crossing run only, and at the cap returns `blocked` with a `spend-cap` ask, the generic summary and exit 0 without calling the mock; `--output text` at the cap prints the summary and the ask question.
 - The daemon logs `spend.warning` (amounts and percent) and `run.needs_human` (`reason` `spend-cap`) as `warn` lines for a schedule run that reports them.
+- A stuck schedule run the daemon claims logs `run.needs_human` (`reason` `stuck`), is recorded with its ask pending, and a Discord bridge started later on the same data dir posts it to the owner once.
 
 ### REQ-cli-085
 
