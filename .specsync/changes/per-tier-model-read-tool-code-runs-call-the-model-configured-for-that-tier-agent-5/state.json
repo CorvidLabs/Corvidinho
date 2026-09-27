@@ -7,10 +7,11 @@
   "title": "Per-tier model: read/tool/code runs call the model configured for that tier (AGENT-5)",
   "description": "Per-tier model: read/tool/code runs call the model configured for that tier (AGENT-5)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
   "created_at": 1790519450,
-  "updated_at": 1790519592,
+  "updated_at": 1790519711,
   "affected_specs": [
     "agent",
     "cli"
