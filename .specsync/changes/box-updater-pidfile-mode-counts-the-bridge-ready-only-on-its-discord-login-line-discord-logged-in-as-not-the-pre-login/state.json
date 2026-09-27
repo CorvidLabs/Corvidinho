@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "box-updater-pidfile-mode-counts-the-bridge-ready-only-on-its-discord-login-line-discord-logged-in-as-not-the-pre-login",
+  "slug": "box-updater-pidfile-mode-counts-the-bridge-ready-only-on-its-discord-login-line-discord-logged-in-as-not-the-pre-login",
+  "title": "Box updater pidfile mode counts the bridge ready only on its Discord login line ([discord] logged in as), not the pre-login protocol version OK line, so a bridge that dies on login rolls back",
+  "description": "Box updater pidfile mode counts the bridge ready only on its Discord login line ([discord] logged in as), not the pre-login protocol version OK line, so a bridge that dies on login rolls back",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "0e6e8d26b983a31b5518bc7013f75d5513fd94ba",
+  "created_at": 1790471550,
+  "updated_at": 1790471564,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "scripts/lib/update-helpers.sh",
+    "scripts/corvidinho-update.sh",
+    "tests/update-helpers.test.ts",
+    "docs/BOX-UPDATE.md",
+    "docs/UPDATE.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "In pidfile mode the updater counts the bridge ready only when the bridge log shows the line the gateway prints on ClientReady ([discord] logged in as <tag>); the pre-login [discord] protocol version N OK line alone is not ready. A bridge that prints protocol OK and then exits (for example DiscordAPIError on login) makes the update roll back and exit 1; a bridge that never logs in within CORVIDINHO_READY_TIMEOUT rolls back with a timeout log line; a bridge that prints the login line passes with exit 0 and no rollback. systemd mode still checks systemctl is-active. docs/BOX-UPDATE.md and docs/UPDATE.md name the login line as the ready signal."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
