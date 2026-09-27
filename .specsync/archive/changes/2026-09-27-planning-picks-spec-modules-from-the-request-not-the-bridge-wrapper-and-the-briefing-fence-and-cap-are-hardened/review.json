@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "08babaffa379b4a0d79ed03a3bc7d6c5af64ef6f",
+  "contract_digest": "1f7d7e92af729b9b3de886facffe844527917d15c970cae1a0f140c473a2e64e",
+  "execution_digest": "db390e5a0e021fe3864473e0e8a7ec18e1b0155603edbab7e453066c8a1d2c48",
+  "workspace_digest": "191aec56f422573f25d2b131d9d8887cd33ea54e3be22fcef5c464293835a1c0",
+  "timestamp": 1790468289
+}

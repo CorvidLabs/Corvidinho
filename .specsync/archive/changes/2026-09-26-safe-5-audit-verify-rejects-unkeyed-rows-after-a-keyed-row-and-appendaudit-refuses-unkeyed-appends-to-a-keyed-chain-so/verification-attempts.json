@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790466199,
+      "commit": "df5c18ba331dc976f40cdf77df030b185c12471a",
+      "contract_digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+      "execution_digest": "d31db5b437243d36ae9360e84770afcbaeb057b41c1cbe5dd189725d444f70dc",
+      "workspace_digest": "de019941c4dc3de062decc87d97886cbe7b25f9c425de18f8e0ede072b63efc1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790466200,
+      "commit": "1a9812a3443f1d912563ff1161b88017727b8594",
+      "contract_digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+      "execution_digest": "d31db5b437243d36ae9360e84770afcbaeb057b41c1cbe5dd189725d444f70dc",
+      "workspace_digest": "de019941c4dc3de062decc87d97886cbe7b25f9c425de18f8e0ede072b63efc1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790466319,
+      "commit": "92432142eee8d36ae4bc894ad1a0542ceefae48a",
+      "contract_digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+      "execution_digest": "d31db5b437243d36ae9360e84770afcbaeb057b41c1cbe5dd189725d444f70dc",
+      "workspace_digest": "216354bb77e4bbcc1b4dc2545da77a70d71769776c2598480ed7f97f6e63ddba",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790466321,
+      "commit": "c05ccbbd40535a2d87a7403908690d92886114dc",
+      "contract_digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+      "execution_digest": "d31db5b437243d36ae9360e84770afcbaeb057b41c1cbe5dd189725d444f70dc",
+      "workspace_digest": "216354bb77e4bbcc1b4dc2545da77a70d71769776c2598480ed7f97f6e63ddba",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790466321,
+      "commit": "508bbc9d5aae40d4c7527eb6bd54c95730ee5307",
+      "contract_digest": "82dc9b6a7afdf68a05c323be80329a84f82413e9dec7d9d7806b8b0390e51a92",
+      "execution_digest": "d31db5b437243d36ae9360e84770afcbaeb057b41c1cbe5dd189725d444f70dc",
+      "workspace_digest": "216354bb77e4bbcc1b4dc2545da77a70d71769776c2598480ed7f97f6e63ddba",
+      "acceptance_input_digest": "950524ca6709f07d5d846d1d3e1a57fbd5b6ee0c1a971b50a1217dd4c38c4aa0",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "specs/plugins/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+            "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/plugins.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "3e51ece4558af5bc143b3a2ee45fabd6385da4a799aea41e5f196df2172a90b3",
+            "entry_digest": "c159972406074c04e7a8e5deec1654f9e492be551b7aed7772f06b904807e2d3",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "3b63c41a9120f6240545f0cf431db880b85a13177787b6ca579847150e6c5374",
+            "entry_digest": "0be5262a5fb19b360e8e36b6263840bfc7d146f7fa7256c2f8449769fd4f8d2e",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+            "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "520b92f0ebf710fac2a799c661ef60939f7b70d140385a44ba59c5f5f912af33",
+            "entry_digest": "d9ff8816da5bbcbce41b0a3fb07693809bc911fcd4e44e5cf216d608b0fc62c3",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "src/audit/log.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "c5cb14a2e17cd4520d53a1726c5d1ff24346cf5eea8c297138684bcc0df85b77",
+            "entry_digest": "2bb9b31586f4d85fccc48a90771b9a02f6fbfbe6cc641f3d87b7d26f2a6b6560",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "tests/audit.keyed-downgrade.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "25db8040f2a67ebbf047ee751a4e09a01fce3e4c9d7fff95aa90626df2e4876f",
+            "entry_digest": "dd6401ca6e26472dfef5e21192ecae383ab28d78d27df1e57d1fab6917ede539",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-095"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "lightly-adopt-agent-3md-ship-guidance-only-agent-3md-plus-corvidlabs-agent3md-dep-and-validate-route-smoke-no-agent-13",
+  "implementation_commit": "d2fb33ad73149932f18010edf5a362ce600cb77f",
+  "implementation_tree": "b4666c112ddf2214bec171c1d91a4455aceb6295",
+  "contract_digest": "4a9526fc6a188841ef9ca58d638a5b426274c6d9c91f005a504eb1a67cedeb11",
+  "workspace_digest": "31b4739b4fe36fbba34bbea7d3eb4fa6791f013292b5aa17735a6b49002abb82",
+  "closing_digest": "ab66aa4a6c2b8daf75fa79563dafa536b8203877ac0a47c6725bbd8273c0f1b1",
+  "review_digest": "fb627c1831f53b051daf3935845c960bbbe2b38f5f91d82a3e6d5883dd1ef47c",
+  "finalization_digest": "7386faf1be2e1c66abcdec739759ce7d95aea419ce5afdafeb561a80c1b1ef4a",
+  "timestamp": 1790471195
+}

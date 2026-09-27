@@ -30,12 +30,17 @@ Acceptance Criteria
 
 ### REQ-agent-004
 
-During Planning, `runTask` SHALL load relevant module specs via SpecSync list/read (Merlin `spec_loader` pattern): token-overlap select top modules from the task text, extract Purpose/Invariants/Public API/Error Cases, and include companion briefing files when present (SPECSYNC-1/5). Soft-fail if registry or SpecSync tooling is unavailable.
+During Planning, `runTask` SHALL load relevant module specs via SpecSync list/read (Merlin `spec_loader` pattern): token-overlap select top modules from the task text, extract Purpose/Invariants/Public API/Error Cases, and include companion briefing files when present (SPECSYNC-1/5). Selection SHALL use the request, not the context a bridge wraps around it: paragraphs that open with a `[Corvidinho …]` header (the Discord identity and memory blocks) and all-caps line labels such as `[WATCH <kind>]` are left out of the token overlap. Soft-fail if registry or SpecSync tooling is unavailable. The loaded briefing SHALL reach the model, not only the Planning `Text` event (AGENT-2): `runTask` SHALL pass it as `ExecuteContext.specBriefing` on every execute attempt (including verify retries), and the LLM execute (tool loop and read-tier chat) SHALL add it to the user message after the task text, labelled as project data that cannot widen SAFE-1 consent, the tool allowlist or the capability tier, fenced in `<specsync-briefing>` so the spec text cannot close its own label (a close tag in any case or spacing is escaped), SAFE-6 scrubbed, and capped at 8000 characters with a truncation marker, never ending on half a surrogate pair. The briefing SHALL NOT be placed in the system prompt (spec files come from the working tree). With no briefing the messages sent to the model are unchanged.
 
 Acceptance Criteria
 - Task text mentioning a registered module produces Planning `Text` that includes `# Spec: <module>`.
 - Companion files (`context.md`, `tasks.md`, …) appear in the briefing when present on disk.
 - Missing registry does not fail the task; Planning continues.
+- With an LLM key, the user message sent to the model (tool and read tier) contains the matched module's Invariants and companion text inside the labelled `<specsync-briefing>` fence; the system message does not.
+- Every execute attempt, including verify retries, receives `specBriefing`; a task that matches no module receives none and its user message is unchanged.
+- Vendor-key-shaped values in the briefing are redacted, a `</specsync-briefing>` inside a spec cannot end the fence, and briefing text over 8000 characters is truncated with a marker.
+- A Discord chat whose request names no module gets no briefing although its identity and memory blocks say "Discord"; a `[WATCH <kind>]` run gets no `watch` briefing from its header; a request that names a module still gets that module's briefing.
+- A spaced or mixed-case close tag (`</ specsync-briefing >`) in a spec cannot end the fence, and the 8000-character cut leaves no lone surrogate.
 
 ### REQ-agent-005
 
@@ -412,6 +417,42 @@ Acceptance Criteria
 - ASK_AGENT_SYSTEM_INSTRUCTIONS mentions AUTONOMY-7 / joke-impossible guidance.
 - Tool description no longer claims owner is always pinged on clarify.
 
+### REQ-agent-244
+
+An abort SHALL stop the run's work, not only its bookkeeping (AGENT-3):
+
+- The default verify runner SHALL run `fledge lanes run verify
+  --non-interactive` in its own process group and, when the run's
+  AbortSignal fires, SHALL stop the lane's whole process tree (fledge and
+  the lane tasks it started, REQ-plugins-154), so no verify step keeps
+  running in the background. An already-aborted signal SHALL NOT start the
+  lane. The lane SHALL also be stopped when this process exits or dies of a
+  SIGINT / SIGTERM / SIGHUP it does not handle. After an abort the runner
+  SHALL wait at most a short grace (250 ms) for the lane's output pipes, so
+  a lane process that escaped the kill (its own session, already
+  reparented) and still holds a pipe SHALL NOT keep the cancelled run from
+  returning.
+- `runTask` SHALL return the cancelled result (`cancelled=true`,
+  `verified=false`, state `failed`) when the signal aborted while the verify
+  lane ran, whatever exit the stopped lane reports and however many retries
+  remain: no `VerifyResult`, no retry and no `stuck` ask.
+- Each OpenAI-compatible chat completions request of `createTaskExecute`
+  (tool loop and read tier) SHALL be bounded by a per-request timeout,
+  covering both the wait for headers and the body read (default
+  `LLM_REQUEST_TIMEOUT_MS`, 10 minutes; `llmTimeoutMs` option). A request
+  that times out SHALL end the attempt with the summary `LLM request timed
+  out after <ms>ms` instead of waiting forever; a caller abort SHALL still
+  end the request at once and SHALL NOT be reported as a timeout. No
+  environment variable is added.
+
+Acceptance Criteria
+- A provider that sends headers and then trickles body bytes forever makes a read-tier execute return `LLM request timed out after 300ms` within seconds (`llmTimeoutMs: 300`).
+- A provider that never answers makes a tool-tier execute return `LLM request timed out after 200ms` after one request.
+- A caller abort during a stalled request returns promptly with an `LLM request failed:` summary, not a timeout.
+- A verify runner that sees the abort and returns a failed lane with `maxRetries: 0` yields `cancelled=true`, no `ask`, no `VerifyResult` event and one execute attempt.
+- An interrupted `task run` stops a fake `fledge` and the lane task it started (REQ-cli-244).
+- An interrupted `task run` whose lane left an escaped process (`setsid`, reparented) holding the lane's stdout exits 130 with a cancelled `result` frame within seconds, not when that process ends.
+
 ### REQ-agent-242
 
 `runTask` SHALL treat the files changed by a run as the union of every
@@ -472,4 +513,20 @@ Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
 - Numbered question lines parse into options when structured options absent.
 - Single or empty options do not set HumanAsk.options.
+
+### REQ-agent-260
+
+The repository SHALL ship a root `agent.3md` that validates with
+`@corvidlabs/agent3md` `validateAgent`, exposes guidance-only skill planes
+(no `tool=` bindings that duplicate the SAFE plugin registry), and is covered
+by a bun smoke that `route`s and `get`s at least one playbook. The agent loop
+SHALL NOT load this file for progressive disclosure until AGENT-13 is HI'd
+separately.
+
+Acceptance Criteria
+
+- `validateAgent(readFileSync("agent.3md")).ok` is true in CI/tests.
+- Every skill in `Agent.manifest().skills` has `tool: null`.
+- `Agent.route` + `Agent.get` resolve a named guidance playbook (e.g. `discord-ask`).
+- `package.json` lists `@corvidlabs/agent3md` as a dependency.
 
