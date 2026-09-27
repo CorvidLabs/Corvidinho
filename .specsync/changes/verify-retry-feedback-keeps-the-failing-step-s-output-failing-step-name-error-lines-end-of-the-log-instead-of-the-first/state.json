@@ -7,10 +7,11 @@
   "title": "Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85)",
   "description": "Verify retry feedback keeps the failing step's output (failing step name, error lines, end of the log) instead of the first 4000 chars of the lane log (AGENT-4.a, #85)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "fbaa84b7cda1bf2b462baea44cad20ef93e0df4f",
   "created_at": 1790530072,
-  "updated_at": 1790530082,
+  "updated_at": 1790530327,
   "affected_specs": [
     "agent"
   ],

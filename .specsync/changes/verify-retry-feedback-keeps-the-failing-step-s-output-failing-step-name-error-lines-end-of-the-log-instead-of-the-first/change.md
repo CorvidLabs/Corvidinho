@@ -1,6 +1,6 @@
 ---
 id: verify-retry-feedback-keeps-the-failing-step-s-output-failing-step-name-error-lines-end-of-the-log-instead-of-the-first
-state: draft
+state: implementing
 type: bug_fix
 base_commit: fbaa84b7cda1bf2b462baea44cad20ef93e0df4f
 ---
