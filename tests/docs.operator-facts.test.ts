@@ -242,10 +242,11 @@ describe("store, WATCH and doctor facts", () => {
   });
 
   test("docs/BOX-UPDATE.md lists every doctor check that can fail an update", () => {
-    const cli = read("src/cli.ts");
+    // Doctor checks live in src/cli.ts and src/doctor.ts (#225).
+    const src = `${read("src/cli.ts")}\n${read("src/doctor.ts")}`;
     const box = read("docs/BOX-UPDATE.md");
-    for (const name of ["discord", "github", "github-watch", "fledge", "specsync", "plugins", "allowlist-file"]) {
-      expect(cli).toContain(`name: "${name}"`);
+    for (const name of ["discord", "github", "github-watch", "fledge", "specsync", "plugins", "allowlist-file", "data-dir"]) {
+      expect(src.includes(`name: "${name}"`) || src.includes(`const name = "${name}"`)).toBe(true);
       expect(box).toContain(`\`${name}\``);
     }
   });

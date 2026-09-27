@@ -1,0 +1,37 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790475637,
+      "digest": "2487c3b6707902350654e5b06558304466d5b4cc1e31fdf2089bb9ca69807042",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "docs-and-the-doctor-docs-facts-test-follow-225-doctor-reads-the-allowlist-file-checks-data-dir-and-llm-and-its-checks",
+        "title": "Docs and the doctor docs-facts test follow #225: doctor reads the allowlist file, checks data-dir and llm, and its checks live in src/doctor.ts",
+        "description": "docs and the doctor docs-facts test follow #225: doctor reads the allowlist file, checks data-dir and llm, and its checks live in src/doctor.ts",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "docs/BOX-UPDATE.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "tests/docs.operator-facts.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Docs-only merge follow-up: #225 changed doctor behaviour and moved checks into src/doctor.ts; the docs and the docs-facts test catch up. No spec or source change.",
+        "acceptance_criteria": [
+          "docs/BOX-UPDATE.md and docs/DISCORD-GO-LIVE.md describe doctor as merged with #225 (allowlist file + env for discord and github-watch, deny wins, data-dir, llm warn, allowlist-file parse failure) and keep the refresh's .env note; tests/docs.operator-facts.test.ts finds every doctor check name in src/cli.ts or src/doctor.ts, including data-dir, and passes."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
