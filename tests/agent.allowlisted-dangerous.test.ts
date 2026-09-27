@@ -30,8 +30,10 @@ const GITHUB_WRITES = [
   "github-pr-review",
 ];
 const MEMORY_DESTRUCTIVE = ["memory-forget", "memory-override"];
-/** Shell + language runners: not offered from the allowlist until SAFE-3 is decided. */
-const SAFE3_PENDING = ["shell-exec", "node-exec", "python-exec", "cargo-exec"];
+/** Fledge core runs (PLUGIN-1): a lane or task runs the project's own commands. */
+const FLEDGE_CORE_RUNS = ["fledge-lanes-run", "fledge-run"];
+/** Shell + language runners + Fledge core runs: not offered from the allowlist until SAFE-3 is decided. */
+const SAFE3_PENDING = ["shell-exec", "node-exec", "python-exec", "cargo-exec", ...FLEDGE_CORE_RUNS];
 
 const OWNER = "181969874455756800";
 
@@ -165,12 +167,19 @@ describe("task-run catalog offers allowlisted dangerous tools (REQ-agent-501, CL
     expect(names({ tier: "tool", allowlist: allow }).has("files-delete")).toBe(false);
   });
 
-  test("shell-exec and the node/python/cargo runners are never offered from the allowlist (SAFE-3 pending)", () => {
+  test("shell-exec, the node/python/cargo runners and the Fledge core runs are never offered from the allowlist (SAFE-3 pending)", () => {
     expect([...(tools.SAFE3_PENDING_TOOLS ?? [])].sort()).toEqual([...SAFE3_PENDING].sort());
     const allow = new Set([...SAFE3_PENDING, "files-delete"]);
     const offered = names({ tier: "code", allowlist: allow });
     for (const n of SAFE3_PENDING) expect(offered.has(n)).toBe(false);
     expect(offered.has("files-delete")).toBe(true);
+    // The Fledge core runs are always registered, dangerous and code tier: only the hold-out keeps them out.
+    const seam = names({ tier: "code", includeDangerous: true });
+    for (const n of FLEDGE_CORE_RUNS) {
+      expect(get(n)?.dangerous).toBe(true);
+      expect(seam.has(n)).toBe(true);
+      expect(tools.editsFilesUnreported(n)).toBe(true);
+    }
   });
 
   test("a non-ADMIN role session gets no dangerous or mutating tool, whatever the allowlist (ROLES-CHAT-2)", () => {
@@ -355,6 +364,33 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
     expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
     expect(existsSync(join(fake.bin, "other.log"))).toBe(false);
     expect(existsSync(join(fake.bin, "runs.log"))).toBe(false);
+  });
+
+  test("allowlisted Fledge core builtins: the runs stay out until SAFE-3 and no core name starts discovery (REQ-agent-501)", async () => {
+    const fake = makeFledge();
+    const { fetchImpl, seen } = fakeProvider([{ name: "fledge-run", argv: ["test"] }]);
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: fake.project,
+      env: fake.env,
+      fetchImpl,
+      tier: "code",
+      nonInteractive: true,
+      allowlist: [...FLEDGE_CORE_READS, ...FLEDGE_CORE_RUNS],
+      autonomous: false,
+      projectInstructions: false,
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 2,
+    });
+    const result = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(seen.offered.filter((n) => n.startsWith("fledge-")).sort()).toEqual(FLEDGE_CORE_READS);
+    const r = toolResults(events).find((e) => (e.detail ?? "").includes('"fledge-run"'));
+    expect(r?.success).toBe(false);
+    expect(r?.detail ?? "").toContain("not offered");
+    expect(result.unreportedEditTools).toBeUndefined();
+    expect(get("fledge-hello")).toBeUndefined();
+    expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
   });
 
   async function roleSessionRun(isAdmin: "0" | "1") {
