@@ -1,6 +1,6 @@
 ---
 id: release-0-0-33-discord-8-acting-user-post-check-open-asks-scrubbed-at-rest-and-re-scrubbed-watch-comment-rate-limit
-state: implementing
+state: archived
 type: operations
 base_commit: a4069596b4f4e0278cdb179d74cff2927261d9aa
 ---
