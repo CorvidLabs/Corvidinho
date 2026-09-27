@@ -1,6 +1,6 @@
 ---
 id: clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or
-state: verifying
+state: archived
 type: bug_fix
 base_commit: bf9a5b20b2a13f77eb503567428ff5551321bc9c
 ---
