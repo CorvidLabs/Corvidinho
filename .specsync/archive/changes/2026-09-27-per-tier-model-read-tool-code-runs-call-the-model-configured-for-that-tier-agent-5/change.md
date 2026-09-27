@@ -1,6 +1,6 @@
 ---
 id: per-tier-model-read-tool-code-runs-call-the-model-configured-for-that-tier-agent-5
-state: verifying
+state: archived
 type: feature
 base_commit: fc0ed8da6e47dc1db452ee51044cde096db4e8bc
 ---
