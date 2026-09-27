@@ -351,9 +351,10 @@ export class SchedulerService {
    * newest finished run stopped with an ask nobody posted — a run the
    * daemon claimed — post it to the schedule's channel like an in-process
    * run would (owner / creator ping, once-per-question and once-per-episode
-   * rules, pending 80% warning). A channel the allowlist refuses is skipped;
-   * the ask is claimed atomically first and handed back when its post does
-   * not go out, so the next tick retries it. The claim re-checks that the
+   * rules, pending 80% warning). A schedule whose creator or channel the
+   * live allowlist refuses (DISCORD-SCHEDULE-3) is skipped and its ask stays
+   * pending; the ask is claimed atomically first and handed back when its
+   * post does not go out, so the next tick retries it. The claim re-checks that the
    * ask is still its schedule's newest, so one a later run made moot while
    * this pass was posting is skipped; after `stop()` no further ask is
    * taken. One pass at a time; never rejects.
@@ -365,7 +366,8 @@ export class SchedulerService {
         if (this.stopped) break;
         const schedule = this.store.get(pending.scheduleId);
         if (!schedule?.channelId) continue;
-        if (!checkChannel(schedule.channelId, this.allowlist).ok) continue;
+        // DISCORD-SCHEDULE-3: creator and channel re-checked live before posting.
+        if (!this.gateTick(schedule).ok) continue;
         if (!this.store.claimRunAsk(pending.runId, this.nowFn())) continue;
         let posted = false;
         try {

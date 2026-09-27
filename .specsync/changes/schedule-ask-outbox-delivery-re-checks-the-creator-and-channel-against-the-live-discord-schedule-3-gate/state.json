@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "schedule-ask-outbox-delivery-re-checks-the-creator-and-channel-against-the-live-discord-schedule-3-gate",
+  "slug": "schedule-ask-outbox-delivery-re-checks-the-creator-and-channel-against-the-live-discord-schedule-3-gate",
+  "title": "Schedule ask outbox delivery re-checks the creator and channel against the live DISCORD-SCHEDULE-3 gate",
+  "description": "Schedule ask outbox delivery re-checks the creator and channel against the live DISCORD-SCHEDULE-3 gate",
+  "kind": "bug_fix",
+  "state": "draft",
+  "base_commit": "c8988b98e0d872847a16f711cde337277a027b66",
+  "created_at": 1790524398,
+  "updated_at": 1790524443,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/scheduler/service.ts",
+    "tests/scheduler.ask-outbox.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A daemon-claimed schedule ask is delivered only while the creator and channel pass the live DISCORD-SCHEDULE-3 gate; a refused one stays pending and posts once allowed again; regression test fails with the channel-only check"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

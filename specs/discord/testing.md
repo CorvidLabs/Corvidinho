@@ -133,7 +133,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   the schedule creator; spend-cap pings the owner once per episode with the
   pending 80% warning and no reply hint; the same question pings once and
   only the newest of two pending asks posts; a later finished run or a
-  deleted schedule leaves nothing; a refused channel posts nothing; a post
+  deleted schedule leaves nothing; a refused channel posts nothing; a creator
+  the live allowlist no longer lists (or deny-lists) gets no post until the
+  shared allowlist lets them back, then one post with the ping; a post
   that resolves `false` or throws is retried with its ping; a run the bridge
   posted itself is never posted again and two bridge tickers post a pending
   ask once; a v10 DB migrates to v11; the question is scrubbed at rest and

@@ -99,6 +99,7 @@ function pair(
   opts: {
     db?: Database;
     bridgeChannels?: string[];
+    bridgeAllowlist?: ReturnType<typeof allow>;
     post?: (p: Post) => Promise<void | boolean>;
     spendAlerts?: SpendAlertOutbox;
   } = {},
@@ -132,7 +133,7 @@ function pair(
   const bridge = new SchedulerService({
     store: bridgeStore,
     agent: stepAgent(steps),
-    allowlist: allow(opts.bridgeChannels ?? [CHANNEL]),
+    allowlist: opts.bridgeAllowlist ?? allow(opts.bridgeChannels ?? [CHANNEL]),
     manual: true,
     useWorktrees: false,
     owner: OWNER,
@@ -327,6 +328,28 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect(h.posts).toHaveLength(0);
     expect(h.lastRun().ask_posted_at).toBeNull();
     expect(h.pingKeyRow()).toBeNull();
+  });
+
+  test("a creator the live allowlist no longer lists gets no post; the ask stays pending until they are back (DISCORD-SCHEDULE-3)", async () => {
+    const live = allow([CHANNEL]);
+    live.discord.users = ["someone-else"];
+    const h = pair({ bridgeAllowlist: live });
+    await h.daemonRun(STUCK);
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(0);
+    expect(h.lastRun().ask_posted_at).toBeNull();
+    // Deny wins even for a listed creator.
+    live.discord.users = [CREATOR_ID];
+    live.discord.denyUsers = [CREATOR_ID];
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(0);
+    expect(h.lastRun().ask_posted_at).toBeNull();
+    // `/admin` edits the shared allowlist in place: the next tick posts it.
+    live.discord.denyUsers = [];
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+    expect(pinged(h.posts[0]!, OWNER_ID)).toBe(true);
+    expect(h.lastRun().ask_posted_at).not.toBeNull();
   });
 
   test("a post that does not go out (false, or throws) is handed back and retried with its ping on the next tick", async () => {
