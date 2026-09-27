@@ -7,10 +7,10 @@
   "title": "Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401",
   "description": "Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "approved",
   "base_commit": "bf9a5b20b2a13f77eb503567428ff5551321bc9c",
   "created_at": 1790471458,
-  "updated_at": 1790471459,
+  "updated_at": 1790471474,
   "affected_specs": [
     "cli",
     "discord",

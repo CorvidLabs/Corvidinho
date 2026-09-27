@@ -1,4 +1,55 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790471474,
+      "digest": "f007bc1b16d867640bf26caef9c045cbfb8f447e05b7bdfee935ac0aa2ba56c3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or",
+        "title": "Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401",
+        "description": "Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          "specs/cli/cli.spec.md",
+          "specs/discord/discord.spec.md",
+          "specs/watch/watch.spec.md",
+          "src/cli.ts",
+          "src/discord/bridge.ts",
+          "src/store/scrub.ts",
+          "src/watch/index.ts",
+          "src/watch/poller.ts",
+          "tests/cli.clean-errors.test.ts",
+          "tests/discord.login-failure.test.ts",
+          "tests/fixtures/fake-http-401.ts",
+          "tests/store.scrub.test.ts",
+          "tests/watch.auth-stop.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "plugins run with an unknown name (also fledge-*), a plugin handler that throws, discord bridge with an unusable data dir, and anything else main throws print one SAFE-6 scrubbed line plus a hint and exit non-zero (the error's own exitCode or 1), with no stack frame, code frame, Bun crash footer, library object dump or token value; --json keeps the {ok:false,error} shape on stdout; discord bridge whose gateway login is rejected exits 1 with 'discord login failed (401|403): check DISCORD_TOKEN'; discord register-commands failure is one line with the HTTP status; github watch stops with exit 1 and one clear line on a GitHub 401 instead of polling forever, other poll errors print one scrubbed line, and a 403 rate-limit still backs off (WATCH-RELIABILITY-3)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "74b47c0b08846e53fee32b52f46fc7535b0c62738539b8dd78c572c8c1589153",
+        "discord": "3e4a400dca4c56f5c85f8cfc2b68cea1989df05f4339aa2682663785b43b9c17",
+        "watch": "1d27206148c43f0bfa0c01f331a3149247c79de72ad9804c27b1837d3c692a06"
+      }
+    }
+  ],
   "reopenings": []
 }
