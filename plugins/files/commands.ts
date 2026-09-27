@@ -12,22 +12,20 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { Glob } from "bun";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import {
   isProtectedPath,
   isSecretPath,
   protectedRefuseMessage,
+  secretPathsRefused,
   secretRefuseMessage,
 } from "./protectedPaths.ts";
 import {
-  resolveActingIsAdmin,
-  roleSessionActive,
-} from "../../src/plugins/roles.ts";
-import {
   assertExistingFile,
   PathEscapeError,
+  realRoot,
   resolveProjectPath,
 } from "./resolvePath.ts";
 import { ArgvError, parseArgv } from "./argv.ts";
@@ -102,8 +100,7 @@ export const filesCommands: PluginCommand[] = [
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         // ROLES-CHAT-8: community sessions cannot read secret-looking paths.
         if (
-          roleSessionActive() &&
-          !(await resolveActingIsAdmin()) &&
+          (await secretPathsRefused()) &&
           (isSecretPath(pathArg) || isSecretPath(abs))
         ) {
           return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
@@ -280,7 +277,10 @@ export const filesCommands: PluginCommand[] = [
         }
         const glob = new Glob(pattern);
         const matches: string[] = [];
+        // ROLES-CHAT-8: non-ADMIN role sessions do not see secret paths.
+        const hideSecrets = await secretPathsRefused();
         for await (const m of glob.scan({ cwd: ctx.cwd, onlyFiles: true, dot: true })) {
+          if (hideSecrets && isSecretPath(m)) continue;
           try {
             resolveProjectPath(ctx.cwd, m);
             matches.push(m);
@@ -313,11 +313,22 @@ export const filesCommands: PluginCommand[] = [
         const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
         const pathArg = argv.values.get("--path") ?? argv.positional[0] ?? ".";
         const abs = resolveProjectPath(ctx.cwd, pathArg);
+        // ROLES-CHAT-8: non-ADMIN role sessions cannot list a secret dir
+        // (.ssh, keystores; also through a symlink) nor see secret entries.
+        const hideSecrets = await secretPathsRefused();
+        if (
+          hideSecrets &&
+          (isSecretPath(pathArg) || isSecretPath(relative(realRoot(ctx.cwd), abs)))
+        ) {
+          return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
+        }
         if (!existsSync(abs) || !statSync(abs).isDirectory()) {
           return { ok: false, error: `Not a directory: ${pathArg}`, exitCode: 1 };
         }
         const showHidden = argv.flags.has("--show-hidden");
-        const names = readdirSync(abs).filter((n) => showHidden || !n.startsWith("."));
+        const names = readdirSync(abs).filter(
+          (n) => (showHidden || !n.startsWith(".")) && !(hideSecrets && isSecretPath(n)),
+        );
         const entries = names.map((name) => {
           const full = join(abs, name);
           let type: "file" | "dir" | "symlink" | "other" = "other";

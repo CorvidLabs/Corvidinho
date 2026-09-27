@@ -15,6 +15,7 @@ files:
   - tests/github.public.community.test.ts
   - tests/github.gate-allowlist-file.test.ts
   - tests/files.secret-path.test.ts
+  - tests/search.secret-path.test.ts
   - src/audit/log.ts
   - src/audit/index.ts
   - tests/audit.log.test.ts
@@ -257,7 +258,11 @@ call GitHub read tools against any *public* repository after deny-list checks
 sessions keep the GITHUB-6 allowlist gate.
 
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
-files) for non-ADMIN role sessions via `isSecretPath`.
+files) for non-ADMIN role sessions via `isSecretPath`. `search-grep` and
+`files-list` refuse an explicit secret path the same way (also through a
+symlink), and `search-grep`, `files-glob` and `files-list` leave secret paths
+out of their results, whatever `--include` or glob is passed
+(REQ-plugins-267). ADMIN and the local CLI keep the access `files-read` gives.
 
 ## Behavioral Examples
 
@@ -332,6 +337,12 @@ files) for non-ADMIN role sessions via `isSecretPath`.
 - **Given** `CORVIDINHO_ACTING_IS_ADMIN=1` and the acting user is the configured owner
 - **When** the agent runs `files-write` under non-interactive
 - **Then** the write succeeds (mutating but not dangerous); SAFE-2 protected paths still refuse
+
+### Scenario: non-ADMIN search-grep never returns secret lines (ROLES-CHAT-8)
+
+- **Given** `CORVIDINHO_ACTING_IS_ADMIN=0` and a project with `.env` holding a key
+- **When** the agent runs `search-grep OPENAI_API_KEY .env`, or `search-grep <pattern>` over the project with any `--include`
+- **Then** the explicit path is refused with exit 2 like `files-read`, and the recursive search returns no line from `.env*`, `.ssh`, key or keystore files
 
 ## Error Cases
 

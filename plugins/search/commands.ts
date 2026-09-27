@@ -4,12 +4,41 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { statSync } from "node:fs";
+import { relative } from "node:path";
 import type { PluginCommand } from "../../src/plugins/types.ts";
 import {
+  isSecretPath,
+  SECRET_GREP_EXCLUDES,
+  secretPathsRefused,
+  secretRefuseMessage,
+} from "../files/protectedPaths.ts";
+import {
   PathEscapeError,
+  realRoot,
   resolveProjectPath,
 } from "../files/resolvePath.ts";
 import { ArgvError, parseArgv } from "../files/argv.ts";
+
+/**
+ * Split `grep -Z` output of a recursive search into `file:line:text` lines,
+ * returning the file of each. The NUL after the name keeps a name with
+ * `:N:` or a newline in it from being misread.
+ */
+function splitNulRecords(stdout: string): { file: string; line: string }[] {
+  const out: { file: string; line: string }[] = [];
+  let pos = 0;
+  while (pos < stdout.length) {
+    const nul = stdout.indexOf("\0", pos);
+    if (nul < 0) break;
+    const end = stdout.indexOf("\n", nul + 1);
+    const stop = end < 0 ? stdout.length : end;
+    const file = stdout.slice(pos, nul);
+    out.push({ file, line: `${file}:${stdout.slice(nul + 1, stop)}` });
+    pos = stop + 1;
+  }
+  return out;
+}
 
 export const searchCommands: PluginCommand[] = [
   {
@@ -38,10 +67,22 @@ export const searchCommands: PluginCommand[] = [
         const include = argv.values.get("--include") ?? "";
 
         const absPath = resolveProjectPath(ctx.cwd, pathArg);
+        const root = realRoot(ctx.cwd);
+        // ROLES-CHAT-8: non-ADMIN role sessions cannot search a secret path
+        // (also through a symlink), same gate as files-read.
+        const hideSecrets = await secretPathsRefused();
+        if (
+          hideSecrets &&
+          (isSecretPath(pathArg) || isSecretPath(relative(root, absPath)))
+        ) {
+          return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
+        }
+        const isDir = statSync(absPath, { throwIfNoEntry: false })?.isDirectory() ?? false;
 
         const grepArgs = [
           "-rn",
           "-I",
+          "-Z",
           "--exclude-dir=target",
           "--exclude-dir=node_modules",
           "--exclude-dir=.git",
@@ -55,6 +96,8 @@ export const searchCommands: PluginCommand[] = [
           .filter(Boolean)) {
           grepArgs.push(`--include=*.${ext}`);
         }
+        // After --include: when both match a file, grep lets the last one win.
+        if (hideSecrets) grepArgs.push(...SECRET_GREP_EXCLUDES);
         grepArgs.push("-e", pattern, "--", absPath);
 
         const result = spawnSync("grep", grepArgs, {
@@ -68,7 +111,13 @@ export const searchCommands: PluginCommand[] = [
           return { ok: false, error: `grep failed: ${detail}`, exitCode: 1 };
         }
         const stdout = result.stdout ?? "";
-        const lines = stdout.split("\n").filter((l) => l.length > 0);
+        // A directory search names each file (NUL-terminated by -Z); a single
+        // file operand prints no name, and that file was checked above.
+        const lines = isDir
+          ? splitNulRecords(stdout)
+              .filter((r) => !(hideSecrets && isSecretPath(relative(root, r.file))))
+              .map((r) => r.line)
+          : stdout.split("\n").filter((l) => l.length > 0);
         const matches = lines.map((line) => {
           // file:line:text — file may contain colons on some systems; take first two splits
           const m = line.match(/^(.*?):(\d+):(.*)$/);
