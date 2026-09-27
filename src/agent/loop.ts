@@ -14,7 +14,11 @@ import {
 } from "./ask.ts";
 import { loadAgentConfig } from "./config.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
-import { defaultVerifyRunner } from "./verify.ts";
+import {
+  defaultVerifyRunner,
+  VERIFY_FEEDBACK_MAX_CHARS,
+  verifyFeedbackExcerpt,
+} from "./verify.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.ts";
 import type {
   AgentEvent,
@@ -26,6 +30,10 @@ import type {
 
 /** Changed paths named in the gate's Text note before "…". */
 const UNREPORTED_PREVIEW = 5;
+
+/** Start of the feedback a retry gets after a failed verify (AGENT-4.a). */
+const VERIFY_FEEDBACK_HEAD =
+  "Verification failed. Fix these errors and try again:\n\n";
 
 function emit(
   onEvent: ((e: AgentEvent) => void) | undefined,
@@ -320,7 +328,13 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       type: "Text",
       text: `Verify retry ${retries}/${maxRetries}…`,
     });
-    verifyFeedback = `Verification failed. Fix these errors and try again:\n\n${result.output}`;
+    // AGENT-4.a: the retry gets the failing step's output. Passing steps
+    // (typecheck, a --help smoke) can fill the cap before a failing test, so
+    // a long log keeps the failing step and the end, never its first chars.
+    verifyFeedback = `${VERIFY_FEEDBACK_HEAD}${verifyFeedbackExcerpt(
+      result.output,
+      VERIFY_FEEDBACK_MAX_CHARS - VERIFY_FEEDBACK_HEAD.length,
+    )}`;
     // loop → Executing
   }
 }
