@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "task-run-offers-allowlisted-dangerous-tools-to-the-model-a-dangerous-plugin-enters-the-catalog-only-when-corvidinho",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "6438e6fa85a070d699903f5d58cf08bbac3b3a26",
+      "contract_digest": "7090f90801f460d203d1a8940f0153ea1837527f148dfac8f91e490fa19ee2ee",
+      "execution_digest": "b92a00dde34c242854178f9e6cd76b446d0faf6cabe1626d28e6ef234ddb2c04",
+      "workspace_digest": "d24631c8f7997592d5a21dcf853c8670bae327804375df1bb2b5f5dbd5826696",
+      "timestamp": 1790538250
+    }
+  ]
+}

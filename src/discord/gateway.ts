@@ -42,6 +42,10 @@ export type ComponentInteraction = {
    * or when resume finishes (discord.js deleteReply after update/reply).
    */
   deleteReply?: () => Promise<void>;
+  /** Presser's Discord display name when known (IDENTITY-4). */
+  userDisplayName?: string;
+  /** Presser's Discord username when known (IDENTITY-4). */
+  userUsername?: string;
 };
 
 export type GatewayHandlers = {
@@ -687,7 +691,7 @@ function adaptComponent(interaction: {
   reply: (opts: unknown) => Promise<unknown>;
   update: (opts: unknown) => Promise<unknown>;
   deleteReply?: () => Promise<unknown>;
-}): ComponentInteraction {
+} & ComponentActorSource): ComponentInteraction {
   return {
     id: interaction.id,
     customId: interaction.customId,
@@ -722,7 +726,42 @@ function adaptComponent(interaction: {
         await interaction.deleteReply();
       }
     },
+    // IDENTITY-4 — the presser's names, so a button-pick resume injects them
+    // like a chat message (REQ-discord-446).
+    ...componentActorNames(interaction),
   };
+}
+
+/** Fixture-friendly subset of a discord.js component interaction's presser. */
+export type ComponentActorSource = {
+  user: {
+    id: string;
+    username?: string | null;
+    globalName?: string | null;
+    displayName?: string | null;
+  };
+  member?: {
+    displayName?: string | null;
+    nickname?: string | null;
+  } | null;
+};
+
+/**
+ * IDENTITY-4 / REQ-discord-446 — the presser's Discord display name (guild
+ * member display, then nickname, then global name, then user display, as for
+ * slash) and username, trimmed; a blank or missing name stays undefined.
+ */
+export function componentActorNames(
+  interaction: ComponentActorSource,
+): Pick<ComponentInteraction, "userDisplayName" | "userUsername"> {
+  const display =
+    (interaction.member?.displayName ??
+      interaction.member?.nickname ??
+      interaction.user.globalName ??
+      interaction.user.displayName ??
+      undefined)?.trim() || undefined;
+  const username = interaction.user.username?.trim() || undefined;
+  return { userDisplayName: display, userUsername: username };
 }
 
 /** Discord autocomplete deadline is 3s; skip stale replies (corvid-agent pattern). */

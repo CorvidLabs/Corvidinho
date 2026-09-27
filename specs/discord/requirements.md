@@ -991,6 +991,23 @@ continue the conversation WITHOUT clearing pending; only button pick, cancel,
 or expiry SHALL clear it. Clarify asks SHALL mention the requester; stuck
 asks SHALL mention the configured owner.
 
+Pending asks SHALL be keyed by askId, not one per session (SESSION-MULTI-3).
+When a later run of the same session asks again (a chat message sent while a
+button ask is open, or the run a pick resumes), the new ask SHALL become the
+session's `pendingAsk` (the one a thin-ack continue restates and a free-text
+reply answers) and every earlier button ask SHALL stay open, so its Choose and
+option buttons keep working until pressed or expired; a superseded free-text
+ask is replaced. A button press SHALL be matched to the session's open ask
+with that askId, whichever of its open asks it is. A pick, a late press or a
+free-text answer SHALL clear only that ask, and the newest remaining open ask
+that has not timed out SHALL become `pendingAsk` (earlier asks already past
+their timeout are dropped then, never promoted, so a thin-ack continue never
+restates expired buttons); an explicit cancel SHALL clear every open ask of
+the session. Open asks SHALL persist in `discord_sessions.pending_ask` with
+no schema change (one JSON object when one ask is open, as before; a JSON
+array, oldest first, when several are) and reload with the session. No new
+env var, config key, slash command, table or column.
+
 A `/work` or `/session start` run that stopped with a clarify or stuck ask
 SHALL store that ask as its session's pending ask, and `/work` SHALL record
 the task `blocked` (a stuck ask stays `failed`), never `completed`
@@ -1034,6 +1051,12 @@ Acceptance Criteria
 - The stub's message id is recorded only while its ask is still the pending ask of a live session: a pick that already took the ask is not undone, and a session ended before the stub went out is not written back to the DB.
 - The live gateway adapter forwards the Choose button on the deferred-reply edit and on a plain reply.
 - A spend-cap stop never becomes a button ask, even with options.
+- While Choose ask A is open, a chat message whose run asks again with Choose ask B makes B the pending ask and keeps A open: a thin reply restates B, A's Choose button opens A's choices, and a pick of A resumes the session with A's question and the chosen label while B stays pending; a re-press of A is a no-op; B's pick then resumes with B's question.
+- While Choose ask A is open, a run that asks a free-text question F makes F the pending ask; a substantive reply answers F (prior-question context) and clears only F, so A is pending again and its buttons still resume the session.
+- A late press on an earlier open ask gets `ASK_CHOICE_EXPIRED` and clears only that ask; the newer ask stays open.
+- When the newest ask is picked while an earlier open ask has timed out, the earlier ask is dropped, not promoted: the session has no pending ask, a thin reply runs the agent, and a press on the dropped ask is a no-op.
+- `cancel` with several open asks clears all of them with the short ack and no agent run; a later press on any of them is a no-op.
+- `SessionStore`: one open ask persists as one JSON object; two persist as an array and reload as `pendingAsk` plus `openAsks` after a reopen; re-storing a held askId updates it in place; `findPendingAsk` finds an earlier open ask; clearing the newest promotes the earlier one; a new ask replaces a free-text ask but never a button ask; `null` clears all.
 
 ### REQ-discord-045
 
@@ -1286,6 +1309,27 @@ Acceptance Criteria
 - Pick update includes empty components (buttons gone) and clears pendingAsk before resume.
 - Re-press after clear does not spawn a second resume.
 - Ephemeral ack is deleted (or thin-updated without buttons) after resume completes when deleteReply is available.
+
+### REQ-discord-457
+
+When the bridge edits the thinking progress message into the final answer
+(DISCORD-ASK-7: an @mention or reply, the answer to a run a button pick
+resumed, `/session start`, `/work`), the edit SHALL keep one footer-only embed
+(no description) whose footer text is the LLM model and the run's plumbing
+(`state=… verified=… [verifySkipped] [cancelled] attempts=…`) joined by
+` | `, so both stay visible without entering the answer body (DISCORD-3.a).
+The embed SHALL be colored like the done or error status the fallback would
+show. A Choose stub (the edit that carries buttons) SHALL carry no embed
+(DISCORD-ASK-6, REQ-discord-047). The answer body SHALL remain human text only.
+
+Acceptance Criteria
+- Mention answer collapsed into the thinking message: `content` is the summary and `embed` is `{ color, footer: { text: "<model> | state=… verified=… [verifySkipped] attempts=…" } }` with no description; no `✅ Done` embed edit.
+- Button pick: the Choose stub edit has `embed: null`; the answer of the run the pick resumed, edited into that stub, carries the footer-only embed.
+- `/session start` and `/work` collapsed answers carry the same footer-only embed; the body never contains `state=` or `attempts=`.
+- Color: success unless the fallback would mark the status failed (a failed run without a question, or a stuck ask), then error.
+- A later re-edit of the collapsed answer (SAFE-8 owner notice appended) keeps the same footer and color.
+- With neither a model nor plumbing known the answer carries no embed; the fallback without `editMessage` is unchanged (done/error embed with the plumbing + separate reply).
+- No new env vars, config keys, slash commands or schema changes.
 
 ### REQ-discord-311
 
@@ -1760,4 +1804,33 @@ Acceptance Criteria
 - With no owner configured, every caller gets `[]`.
 - `respondChannelAutocomplete` answers exactly once and answers `[]` when `mayAutocompleteChannels` is unset, returns false or throws. The gate receives `commandName`, `channelId`, `userId` and member `roleIds`.
 - Fixture tests only; no live Discord token or network.
+
+### REQ-discord-446
+
+Every interactive Discord agent run (an @mention / reply / thread chat
+message, an ask button pick resume, `/session start` and `/work`) SHALL
+prepend the IDENTITY-4 acting-user block to the spawn prompt: the acting
+user's Discord id and, when one is known, a display name. The display name SHALL be the
+configured owner's display when the acting user is the owner and it is set,
+else the Discord display name on that message or interaction, else its
+Discord username; when none is known the block SHALL carry the id only and
+SHALL NOT invent a name (IDENTITY-4). An ask button pick resume SHALL take
+the names from the press itself: the live gateway SHALL set
+`ComponentInteraction.userDisplayName` (guild member display, then member
+nickname, then user global name, then user display) and
+`ComponentInteraction.userUsername`, trimmed, blank as absent, and the
+bridge SHALL pass them to `enrichPromptWithIdentity` as the chat path passes
+the message author's. The presser is the session's user (another user's
+press never resumes), so the names describe the acting user. No new slash
+command, env var, config key, table or column.
+
+Acceptance Criteria
+- A non-owner's button-pick resume prompt has `display_name` from the press's Discord display name, or from its username when there is no display name.
+- The owner's button-pick resume keeps the owner map display and the `role: owner (ADMIN)` line; the Discord names do not replace the owner display.
+- A button pick with no names known injects the Discord id only, with no `display_name` line.
+- `componentActorNames` resolves member display → member nickname → user global name → user display for the display name and trims the username; blank or missing values are `undefined`.
+- A discord.js button press through the live gateway's InteractionCreate listener reaches `onComponent` with the presser's `userDisplayName` and `userUsername`, and with neither when no name is known.
+- The chat path, `/session start` and `/work` keep their identity inject unchanged.
+- No new slash command, env var, config key, table or column; SQLite schema version unchanged.
+- Regression tests in `tests/discord.identity-pick.test.ts` fail on `main` and pass after.
 
