@@ -7,10 +7,11 @@
   "title": "The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a)",
   "description": "The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "0940db343de30fdb4d79d83cfa44b95c5a247681",
   "created_at": 1790535213,
-  "updated_at": 1790535224,
+  "updated_at": 1790535649,
   "affected_specs": [
     "discord"
   ],
