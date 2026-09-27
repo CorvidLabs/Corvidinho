@@ -1293,6 +1293,27 @@ Acceptance Criteria
 - Re-press after clear does not spawn a second resume.
 - Ephemeral ack is deleted (or thin-updated without buttons) after resume completes when deleteReply is available.
 
+### REQ-discord-457
+
+When the bridge edits the thinking progress message into the final answer
+(DISCORD-ASK-7: an @mention or reply, the answer to a run a button pick
+resumed, `/session start`, `/work`), the edit SHALL keep one footer-only embed
+(no description) whose footer text is the LLM model and the run's plumbing
+(`state=… verified=… [verifySkipped] [cancelled] attempts=…`) joined by
+` | `, so both stay visible without entering the answer body (DISCORD-3.a).
+The embed SHALL be colored like the done or error status the fallback would
+show. A Choose stub (the edit that carries buttons) SHALL carry no embed
+(DISCORD-ASK-6, REQ-discord-047). The answer body SHALL remain human text only.
+
+Acceptance Criteria
+- Mention answer collapsed into the thinking message: `content` is the summary and `embed` is `{ color, footer: { text: "<model> | state=… verified=… [verifySkipped] attempts=…" } }` with no description; no `✅ Done` embed edit.
+- Button pick: the Choose stub edit has `embed: null`; the answer of the run the pick resumed, edited into that stub, carries the footer-only embed.
+- `/session start` and `/work` collapsed answers carry the same footer-only embed; the body never contains `state=` or `attempts=`.
+- Color: success unless the fallback would mark the status failed (a failed run without a question, or a stuck ask), then error.
+- A later re-edit of the collapsed answer (SAFE-8 owner notice appended) keeps the same footer and color.
+- With neither a model nor plumbing known the answer carries no embed; the fallback without `editMessage` is unchanged (done/error embed with the plumbing + separate reply).
+- No new env vars, config keys, slash commands or schema changes.
+
 ### REQ-discord-311
 
 While the bridge works on a reply to a Discord message, or on the run a
@@ -1766,4 +1787,33 @@ Acceptance Criteria
 - With no owner configured, every caller gets `[]`.
 - `respondChannelAutocomplete` answers exactly once and answers `[]` when `mayAutocompleteChannels` is unset, returns false or throws. The gate receives `commandName`, `channelId`, `userId` and member `roleIds`.
 - Fixture tests only; no live Discord token or network.
+
+### REQ-discord-446
+
+Every interactive Discord agent run (an @mention / reply / thread chat
+message, an ask button pick resume, `/session start` and `/work`) SHALL
+prepend the IDENTITY-4 acting-user block to the spawn prompt: the acting
+user's Discord id and, when one is known, a display name. The display name SHALL be the
+configured owner's display when the acting user is the owner and it is set,
+else the Discord display name on that message or interaction, else its
+Discord username; when none is known the block SHALL carry the id only and
+SHALL NOT invent a name (IDENTITY-4). An ask button pick resume SHALL take
+the names from the press itself: the live gateway SHALL set
+`ComponentInteraction.userDisplayName` (guild member display, then member
+nickname, then user global name, then user display) and
+`ComponentInteraction.userUsername`, trimmed, blank as absent, and the
+bridge SHALL pass them to `enrichPromptWithIdentity` as the chat path passes
+the message author's. The presser is the session's user (another user's
+press never resumes), so the names describe the acting user. No new slash
+command, env var, config key, table or column.
+
+Acceptance Criteria
+- A non-owner's button-pick resume prompt has `display_name` from the press's Discord display name, or from its username when there is no display name.
+- The owner's button-pick resume keeps the owner map display and the `role: owner (ADMIN)` line; the Discord names do not replace the owner display.
+- A button pick with no names known injects the Discord id only, with no `display_name` line.
+- `componentActorNames` resolves member display → member nickname → user global name → user display for the display name and trims the username; blank or missing values are `undefined`.
+- A discord.js button press through the live gateway's InteractionCreate listener reaches `onComponent` with the presser's `userDisplayName` and `userUsername`, and with neither when no name is known.
+- The chat path, `/session start` and `/work` keep their identity inject unchanged.
+- No new slash command, env var, config key, table or column; SQLite schema version unchanged.
+- Regression tests in `tests/discord.identity-pick.test.ts` fail on `main` and pass after.
 

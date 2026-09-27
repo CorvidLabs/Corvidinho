@@ -11,6 +11,7 @@ files:
   - tests/discord.memory-inject.test.ts
   - src/discord/identity-inject.ts
   - tests/discord.identity-inject.test.ts
+  - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
   - src/identity/index.ts
@@ -299,11 +300,21 @@ worktree first, then passes `attachmentCacheDir(store.cwdFor(session))` as the
 `identity-inject.ts` formats/enriches the spawn prompt with acting Discord
 user id + resolved display (owner map wins for owner). Gateway fills
 `authorDisplayName` / `authorUsername` (and slash `userDisplayName` /
-`userUsername`). Bridge and slash handlers inject identity before memory.
+`userUsername`, and `ComponentInteraction.userDisplayName` / `userUsername`
+from `componentActorNames`). Bridge (chat and button-pick resume) and slash
+handlers inject identity before memory (IDENTITY-4 / REQ-discord-446).
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
 Final chat reply content remains human text only (DISCORD-3.a).
+`ThinkingStatus.finalizeContent` takes optional `extras` (`plumbing`, `model`)
+and `failed`: a final answer (no `components`) keeps a footer-only embed from
+`buildAnswerFooterEmbed` (`model | plumbing`, done or error color; null when
+neither is known), a Choose stub (`components`) carries none, and a later
+re-edit keeps the first footer and outcome (REQ-discord-457). The bridge chat
+and button-pick paths and `finishSlashWithThinking` pass the run's
+`thinkExtras` and the same failed/done outcome as their fallback status.
+`DiscordEmbedPayload.description` is optional (omitted on that embed).
 
 Listing scope (REQ-discord-418, SESSION-MULTI-1 / IDENTITY-2/3):
 `src/discord/list-scope.ts` exports `actorIsAdmin` (the acting user resolves
@@ -572,3 +583,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin: SAFE-5: /schedule delete appends audit rows before deleting a schedule and its run history, and fails closed like /admin when the audit trail is unavailable |
 | 2026-09-27 | discord-channel-autocomplete-for-admin-and-announce-returns-no-choices-unless-the-invoker-is-admin-in-an-allowlisted: Discord channel autocomplete for /admin and /announce returns no choices unless the invoker is ADMIN in an allowlisted channel |
 | 2026-09-27 | discord-keeps-an-open-choose-button-ask-when-a-later-chat-run-asks-again-pending-asks-are-keyed-by-askid-not-one-per: Discord keeps an open Choose button ask when a later chat run asks again: pending asks are keyed by askId, not one per session (SESSION-MULTI-3) |
+| 2026-09-27 | discord-button-pick-resume-injects-the-presser-s-display-name-and-username-like-a-chat-message-identity-4: Discord button-pick resume injects the presser's display name and username like a chat message (IDENTITY-4) |
+| 2026-09-27 | the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the: The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a) |
