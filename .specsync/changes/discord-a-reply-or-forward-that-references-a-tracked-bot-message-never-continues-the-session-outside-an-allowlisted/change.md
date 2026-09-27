@@ -1,6 +1,6 @@
 ---
 id: discord-a-reply-or-forward-that-references-a-tracked-bot-message-never-continues-the-session-outside-an-allowlisted
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: dc65cf70d4a46d59c35f80acd91822df3eddf3f1
 ---
