@@ -1,6 +1,6 @@
 ---
 id: discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: cf8c6768df9330074f41c2ceba29d70208e9518e
 ---
