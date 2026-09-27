@@ -29,7 +29,7 @@ export const specsyncCommands: PluginCommand[] = [
   {
     name: "specsync-list",
     description:
-      "List spec module names from .specsync/registry.toml (SPECSYNC-1). Call first when you don't know the module name.",
+      "List spec module names from .specsync/registry.toml, or from specs/<name>/<name>.spec.md when there is no registry (SPECSYNC-1). Call first when you don't know the module name.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
