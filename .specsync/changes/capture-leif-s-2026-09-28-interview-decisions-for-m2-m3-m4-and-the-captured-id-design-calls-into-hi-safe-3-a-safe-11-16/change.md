@@ -1,6 +1,6 @@
 ---
 id: capture-leif-s-2026-09-28-interview-decisions-for-m2-m3-m4-and-the-captured-id-design-calls-into-hi-safe-3-a-safe-11-16
-state: approved
+state: implementing
 type: documentation
 base_commit: daef9891d6ce222b26b3307d84f908554e1df58e
 ---
