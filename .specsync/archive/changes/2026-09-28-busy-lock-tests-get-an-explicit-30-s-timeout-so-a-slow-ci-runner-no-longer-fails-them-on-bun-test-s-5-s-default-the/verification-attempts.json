@@ -384,6 +384,38 @@
         }
       ],
       "requirement_ids": []
+    },
+    {
+      "timestamp": 1790603680,
+      "commit": "6232019289110d01daf8eb91fb2ef0a271fd06e5",
+      "contract_digest": "253b8ee6edb741f356cc10203896085302be6b2f53bcba397f5f246430fc482a",
+      "execution_digest": "8f7ebd14376b03eb27e4884b4431538721d398770f001dee5fa03b3280e008e0",
+      "workspace_digest": "d2275f320d0600eb6b2122640bef1314a1286a8144f0ff9f07aee02f9cdfd10e",
+      "acceptance_input_digest": "429a49530393329df3df3b2404cb915a22d0b59ba26050647eff5312d97c18f8",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "tests/store.busy-lock.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "76b6cf18f0fe5b2da91646b17ab8c99a8f81667e3da9bdf9b883fe9ad15485fc",
+            "entry_digest": "1569258b2cbbf9b50434da7804e628511773125f5a468f1f2f65a58f9b956862",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
     }
   ]
 }

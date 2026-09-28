@@ -396,6 +396,110 @@
       "requirement_ids": [
         "REQ-plugins-087"
       ]
+    },
+    {
+      "timestamp": 1790603696,
+      "commit": "6232019289110d01daf8eb91fb2ef0a271fd06e5",
+      "contract_digest": "bd9b7216fa0bb680307a4aa5f128bcf93cb2a81a348f9f05a2e9474ab4d0f997",
+      "execution_digest": "57f9e2595d9f6188574e83dabd791dae7d751ad0daa6685fa6532ae7a1afd9fe",
+      "workspace_digest": "d2275f320d0600eb6b2122640bef1314a1286a8144f0ff9f07aee02f9cdfd10e",
+      "acceptance_input_digest": "aabb2a34bceaf88d41a500f9fa2ed99dab3d67be93cdeba69f5352f0f17a31bc",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "plugins/shell/clamp.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "c18b0dd19a5431c7e5972f8839d9edf9a59901a8a0ac66ed23d72bce75be8cb0",
+            "entry_digest": "a97bbc17e410abfe0041fb5f9640f5a0f5ae3d2da0c496cefe3ea1b96da97b0f",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+            "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/plugins.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "9494c99ac0dc9ebc16fa4c5d741dc1edc23ec37819e72123e03bad2ea1c5d91c",
+            "entry_digest": "20506cb0ea1ea856eebbf0b6007be2f4b1c5552060eb3f746db2e4ee4552a8b4",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "fe631c8f13eeff24f4dc786254e70ad77239f908fba3bd3f987d8ed9269efb8b",
+            "entry_digest": "db49090acb03c08da428b0f45a66242dd700386a429aecc201e344ec0cb9b9f3",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "4fbcf0b7f5af3942f58ab90d5f38ebb0cf4fcd9d77112db6011bc147a6c45bcd",
+            "entry_digest": "c304de7eefe1a9a16d20288d10416125717ec528ef4ddc52ecbf82108e53e9ca",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "475f87c6766461e7573d11bbfda46032755f3f765f35c5770045cb3d8dd3cec7",
+            "entry_digest": "7c8854ecf182a6f49d765dfc5428c3dbb61e4d731854bdd87f0c86c3e230a3ee",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "tests/shell.clamp-quoting.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "80d2a8b3e208680fc3507d3fdda86b5e64972e6b6e5a82ec847055064e06a39b",
+            "entry_digest": "6195c3e699b448dc7615b322afeeed28966c10fd25f3c0ea0ddfdf3c726e8442",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/shell.clamp-scripts.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "20fd6735df0ed582bfe853ddf12c8f5bc783e8b83a3431339c0560062172422d",
+            "entry_digest": "1a8413902a8df507691ffb7385ac150ea942509c2603c6a74b32d0d7f0356b3e",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-087"
+      ]
     }
   ]
 }

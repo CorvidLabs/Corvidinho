@@ -1,6 +1,6 @@
 ---
 id: safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or
-state: implementing
+state: archived
 type: bug_fix
 base_commit: cfbcd0c705ff32a4c88d65978bdfbab7a76583ed
 ---
