@@ -1,6 +1,6 @@
 ---
 id: discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 24bba834d5780191bd40ee751eb5409eb2b84ba2
 ---
