@@ -11,13 +11,14 @@
   "canonical_applied": true,
   "base_commit": "544fe131ad199fa46e0ff7ea573b83a920db0bbf",
   "created_at": 1790462263,
-  "updated_at": 1790603557,
+  "updated_at": 1790603658,
   "affected_specs": [
     "cli"
   ],
   "affected_paths": [
     "src/cli.ts",
-    "tests/cli.plugins-run-argv.test.ts"
+    "tests/cli.plugins-run-argv.test.ts",
+    "tests/cli.project-path.test.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,

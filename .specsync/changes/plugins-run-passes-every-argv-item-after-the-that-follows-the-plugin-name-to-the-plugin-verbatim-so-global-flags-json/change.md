@@ -1,6 +1,6 @@
 ---
 id: plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 544fe131ad199fa46e0ff7ea573b83a920db0bbf
 ---

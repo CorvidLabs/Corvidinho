@@ -22,3 +22,6 @@ Repros: `plugins run search-grep --json -- --no-verify src` searched for `src`;
 Existing callers already put global flags before `--`
 (`tests/github.live.optional.test.ts`, `tests/fledge.cli.test.ts`), and
 `--task` must keep taking the next token verbatim (REQ-cli-143).
+
+Main later added a global `--project <path>` (CLI-5, #257) that is read only
+before any `--`; the passthrough keeps that rule and runs before it.

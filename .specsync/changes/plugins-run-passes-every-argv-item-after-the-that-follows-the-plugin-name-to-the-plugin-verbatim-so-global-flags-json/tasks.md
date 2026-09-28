@@ -9,3 +9,5 @@ artifact: tasks
 - [x] `parseGlobalFlags` returns verbatim `pluginArgs` after `plugins run <name> --`.
 - [x] `main()` uses `pluginArgs`; `splitRunArgs` removed; help read from `rest`.
 - [x] Spec delta REQ-cli-186; cli.spec.md invariant + example.
+- [x] After merging main's `--project` (CLI-5): passthrough check runs first;
+      tests/cli.project-path.test.ts expects plugin args in `pluginArgs`.

@@ -15,5 +15,8 @@ tests/cli.plugins-run-argv.test.ts:
   `-- ls -h --json number` runs the plugin in text mode; `--help` before `--`
   still prints help; `task run --task -h` runs the task.
 
+tests/cli.project-path.test.ts: `--project` after `plugins run x --` is still
+never taken, and now comes back in `pluginArgs` rather than `rest`.
+
 6 of 9 fail before the fix (help printed, args eaten), all pass after. Plus
 `bun test`, `bunx tsc --noEmit`, `specsync check`, fledge verify.
