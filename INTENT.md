@@ -6,7 +6,7 @@
 ## Features
 
 <!-- hi:index -->
-- [admin](hi/admin.md): ADMIN (4 criteria)
+- [admin](hi/admin.md): ADMIN (5 criteria)
 - [agent](hi/agent.md): AGENT (10 criteria)
 - [allow](hi/allow.md): ALLOW, WALLET (9 criteria)
 - [autonomous](hi/autonomous.md): AUTONOMOUS (9 criteria)
@@ -15,7 +15,7 @@
 - [discord](hi/discord.md): DISCORD (14 criteria)
 - [fledge](hi/fledge.md): FLEDGE (7 criteria)
 - [github](hi/github.md): GITHUB (6 criteria)
-- [identity](hi/identity.md): IDENTITY (5 criteria)
+- [identity](hi/identity.md): IDENTITY (9 criteria)
 - [memory](hi/memory.md): MEMORY (4 criteria)
 - [plugin](hi/plugin.md): PLUGIN (6 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
