@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6",
+  "slug": "discord-project-option-stays-inside-the-bridge-project-root-or-an-allowlisted-sibling-repo-checkout-allow-2-allow-6",
+  "title": "Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3)",
+  "description": "Discord project option stays inside the bridge project root or an allowlisted sibling repo checkout (ALLOW-2, ALLOW-6, SAFE-3, DISCORD-SCHEDULE-3)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "65cff62fdae8cb0413d92adfe8acb29455fc127f",
+  "created_at": 1790459296,
+  "updated_at": 1790459702,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/worktree/manager.ts",
+    "src/discord/session-store.ts",
+    "src/discord/bridge.ts",
+    "src/scheduler/service.ts",
+    "src/discord/command-handlers/schedule.ts",
+    "tests/worktree.project-scope.test.ts",
+    "tests/discord.session-worktree.test.ts",
+    "tests/discord.schedule.test.ts",
+    "specs/discord"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A /work, /session start or /schedule project that is an absolute path, ../ traversal or symlink outside the bridge project root is refused with not authorized before any worktree, talk branch or agent run; a sibling checkout runs only when its origin OWNER/REPO passes the GitHub repo allowlist (deny wins, empty = deny); schedule ticks re-check the same rule"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "6830514555bd0426ceea77ebff63c333c3ba6cc2",
+  "contract_digest": "6814fa325baac400d42b40a0ab0a68c39f8c85a6a5f7ec460e85e87cb04c74b7",
+  "execution_digest": "7c8de9956c3cec855aea0449f2afa9a81f6d24619d9be8058a4cb5376565f0f3",
+  "workspace_digest": "5cada751ff1807957d25ee99fc63ddf2f0db8a717d03153fe8a8af6d7c92f1f9",
+  "timestamp": 1790467769
+}

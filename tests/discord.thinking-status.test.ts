@@ -15,6 +15,12 @@ function mockOutbound() {
     [];
   const edits: Array<{ messageId: string; embed: ReturnType<typeof buildThinkingEmbed> }> =
     [];
+  const contentEdits: Array<{
+    messageId: string;
+    content?: string | null;
+    embed?: unknown;
+    components?: unknown[] | null;
+  }> = [];
   let n = 0;
   const outbound: ThinkingOutbound = {
     async sendEmbed({ embed }) {
@@ -27,8 +33,20 @@ function mockOutbound() {
       edits.push({ messageId, embed });
       return true;
     },
+    async editMessage(opts) {
+      contentEdits.push({
+        messageId: opts.messageId,
+        content: opts.content,
+        embed: opts.embed,
+        components: opts.components,
+      });
+      if (opts.embed) {
+        edits.push({ messageId: opts.messageId, embed: opts.embed });
+      }
+      return true;
+    },
   };
-  return { outbound, sends, edits };
+  return { outbound, sends, edits, contentEdits };
 }
 
 describe("thinking-status builders (DISCORD-3)", () => {
@@ -166,5 +184,134 @@ describe("ThinkingStatus controller", () => {
     await status.fail("❌ boom");
     expect(edits.at(-1)!.embed.color).toBe(THINKING_COLORS.error);
     expect(edits.at(-1)!.embed.description).toContain("boom");
+  });
+});
+
+describe("DISCORD-ASK-6/7 finalizeContent", () => {
+  test("finalizeContent clears embed and writes content + components", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_test1234",
+      debounceMs: 0,
+      tickMs: 60_000,
+    });
+    await status.start();
+    const collapsed = await status.finalizeContent({
+      content: "❓ Choose",
+      components: [{ type: 1, components: [] }],
+    });
+    expect(collapsed?.messageId).toBe("msg_1");
+    expect(contentEdits).toHaveLength(1);
+    expect(contentEdits[0]!.content).toContain("Choose");
+    expect(contentEdits[0]!.embed).toBeNull();
+    expect(contentEdits[0]!.components).toBeDefined();
+  });
+
+  test("start with existingMessageId reuses stub via editMessage", async () => {
+    const { outbound, sends, contentEdits } = mockOutbound();
+    const status = new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_test1234",
+      existingMessageId: "stub_9",
+      debounceMs: 0,
+      tickMs: 60_000,
+    });
+    await status.start({ description: "Working on your request..." });
+    expect(sends).toHaveLength(0);
+    expect(status.progressMessageId).toBe("stub_9");
+    expect(contentEdits[0]!.messageId).toBe("stub_9");
+    expect(contentEdits[0]!.content).toBeNull();
+    expect(contentEdits[0]!.embed).toBeDefined();
+    status.dispose();
+  });
+});
+
+describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
+  const PLUMBING = "state=done verified=true attempts=1";
+
+  function statusWith(outbound: ThinkingOutbound, model?: string) {
+    return new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_test1234",
+      ...(model ? { model } : {}),
+      debounceMs: 0,
+      tickMs: 60_000,
+    });
+  }
+
+  test("the final answer keeps one footer-only embed (model | plumbing, no description); the body stays as given", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = statusWith(outbound, "gpt-test");
+    await status.start();
+    const collapsed = await status.finalizeContent({
+      content: "Shipped it.",
+      extras: { plumbing: PLUMBING },
+    });
+    expect(collapsed?.messageId).toBe("msg_1");
+    expect(contentEdits).toHaveLength(1);
+    expect(contentEdits[0]!.content).toBe("Shipped it.");
+    expect(contentEdits[0]!.components).toBeNull();
+    expect(contentEdits[0]!.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: { text: `gpt-test | ${PLUMBING}` },
+    });
+  });
+
+  test("a failed answer's footer is error-colored and carries verifySkipped / attempts", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = statusWith(outbound, "gpt-test");
+    await status.start();
+    await status.finalizeContent({
+      content: "failed (exit 1)",
+      extras: { plumbing: "state=failed verified=false verifySkipped attempts=3" },
+      failed: true,
+    });
+    expect(contentEdits[0]!.embed).toStrictEqual({
+      color: THINKING_COLORS.error,
+      footer: { text: "gpt-test | state=failed verified=false verifySkipped attempts=3" },
+    });
+    expect(contentEdits[0]!.content).not.toContain("state=");
+  });
+
+  test("a later re-edit of the answer (appended notice) keeps the footer and its outcome", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = statusWith(outbound, "gpt-test");
+    await status.start();
+    await status.finalizeContent({
+      content: "stuck",
+      extras: { plumbing: "state=failed verified=false attempts=2" },
+      failed: true,
+    });
+    await status.finalizeContent({ content: "stuck\n\n⚠️ owner notice" });
+    expect(contentEdits).toHaveLength(2);
+    expect(contentEdits[1]!.embed).toStrictEqual(contentEdits[0]!.embed);
+    expect(contentEdits[1]!.embed).toStrictEqual({
+      color: THINKING_COLORS.error,
+      footer: { text: "gpt-test | state=failed verified=false attempts=2" },
+    });
+  });
+
+  test("a Choose stub (buttons) carries no embed even when model and plumbing are known", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = statusWith(outbound, "gpt-test");
+    await status.start();
+    await status.finalizeContent({
+      content: "❓ Choose",
+      components: [{ type: 1, components: [] }],
+      extras: { plumbing: "state=blocked verified=false attempts=1" },
+    });
+    expect(contentEdits[0]!.embed).toBeNull();
+  });
+
+  test("with neither model nor plumbing the answer carries no embed", async () => {
+    const { outbound, contentEdits } = mockOutbound();
+    const status = statusWith(outbound);
+    await status.start();
+    await status.finalizeContent({ content: "hi" });
+    expect(contentEdits[0]!.embed).toBeNull();
   });
 });

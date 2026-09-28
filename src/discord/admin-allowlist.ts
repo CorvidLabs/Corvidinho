@@ -23,9 +23,11 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   renameSync,
   statSync,
@@ -37,8 +39,11 @@ import { basename, dirname, join } from "node:path";
 import {
   defaultAllowlistPaths,
   discordFromEnv,
+  isJsonAllowlistPath,
+  parseAllowlistText,
   parseSimpleToml,
   resolveAllowlistPath,
+  scanSimpleToml,
 } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 
@@ -85,8 +90,6 @@ export type AdminListPlanResult =
   | { ok: true; plan: AdminListPlan }
   | { ok: false; path: string; error: string };
 
-const SECTION_RE = /^\[([^\]]+)\]$/;
-const KV_RE = /^([A-Za-z0-9_]+)\s*=\s*(.*)$/;
 
 function lowerDedupe(list: readonly string[]): string[] {
   return [...new Set(list.map((s) => s.trim().toLowerCase()).filter(Boolean))];
@@ -106,8 +109,35 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return b.every((x) => s.has(x));
 }
 
+/** Same rule as the loader (`isJsonAllowlistPath`), so edits match what loads. */
 export function allowlistFileFormat(path: string): AllowlistFileFormat {
-  return path.toLowerCase().endsWith(".json") ? "json" : "toml";
+  return isJsonAllowlistPath(path) ? "json" : "toml";
+}
+
+/**
+ * When `path` is a symlink whose target does not resolve (dangling, or a
+ * loop), the error to refuse with; else null. The loader reads such a path
+ * as "no file", and a write there would replace the operator's link with a
+ * regular file, so `/admin` refuses instead.
+ */
+export function danglingSymlinkError(path: string): string | null {
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return null;
+  } catch {
+    return null;
+  }
+  try {
+    realpathSync(path);
+    return null;
+  } catch {
+    let dest = "?";
+    try {
+      dest = readlinkSync(path);
+    } catch {
+      /* keep "?" */
+    }
+    return `allowlist file is a symlink to ${dest}, which does not resolve (dangling or looping); fix or remove the link on the VM`;
+  }
 }
 
 /**
@@ -194,10 +224,31 @@ export function formatTomlList(values: readonly string[]): string {
   return `[${values.map(tomlString).join(", ")}]`;
 }
 
+/** Column of the `#` that starts a comment on `line` (quote-aware), or -1. */
+function commentColumn(line: string): number {
+  let q = "";
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]!;
+    if (q) {
+      if (q === '"' && c === "\\") i++;
+      else if (c === q) q = "";
+      continue;
+    }
+    if (c === '"' || c === "'") q = c;
+    else if (c === "#") return i;
+  }
+  return -1;
+}
+
 /**
- * Set `[discord].<key>` in TOML text. Rewrites every `<key> = …` line inside
- * `[discord]` (single- or multi-line array); keeps indentation, trailing
- * comments and every other line. Adds the key (or the section) when missing.
+ * Set `[discord].<key>` in TOML text. Lines are located with the loader's own
+ * reader (`scanSimpleToml`), so a multi-line array — the key's own or any
+ * other — is always handled whole. Every `<key> = …` inside `[discord]`
+ * (single- or multi-line) becomes one line; indentation and the comment on
+ * its first line are kept (comments on the lines of a collapsed multi-line
+ * array are not). A missing key goes after the last value in the first
+ * `[discord]` (after its closing `]`), or a `[discord]` section is appended.
+ * Every other line is kept verbatim. Throws on text the loader would refuse.
  */
 export function setTomlDiscordList(
   text: string,
@@ -206,68 +257,48 @@ export function setTomlDiscordList(
 ): string {
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.length > 0 ? text.split(/\r?\n/) : [];
-  const out: string[] = [];
-  let section = "";
-  let seenDiscord = false;
-  let inFirstDiscord = false;
-  let insertAfter = -1;
-  let replaced = false;
+  const scan = scanSimpleToml(text);
+  const list = formatTomlList(values);
+  const targets = scan.entries.filter((e) => e.section === "discord" && e.key === key);
 
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]!;
-    const stripped = raw.replace(/#.*$/, "").trim();
-    const sec = stripped.match(SECTION_RE);
-    if (sec) {
-      section = sec[1]!.trim().toLowerCase();
-      inFirstDiscord = section === "discord" && !seenDiscord;
-      if (inFirstDiscord) {
-        seenDiscord = true;
-        out.push(raw);
-        insertAfter = out.length - 1;
-        continue;
-      }
-      out.push(raw);
-      continue;
-    }
-    const kv = section === "discord" ? stripped.match(KV_RE) : null;
-    if (kv && kv[1]!.toLowerCase() === key) {
-      const indent = raw.match(/^\s*/)?.[0] ?? "";
-      const hashAt = raw.indexOf("#");
+  if (targets.length > 0) {
+    const out: string[] = [];
+    let next = 0;
+    for (const t of targets) {
+      out.push(...lines.slice(next, t.row));
+      const first = lines[t.row]!;
+      const name = first.match(/^\s*([A-Za-z0-9_]+)/)?.[1] ?? key;
+      const indent = first.match(/^\s*/)?.[0] ?? "";
+      const hashAt = commentColumn(first);
       let comment = "";
       if (hashAt >= 0) {
-        const gap = raw.slice(0, hashAt).match(/\s*$/)?.[0] ?? "";
-        comment = `${gap || " "}${raw.slice(hashAt)}`;
+        const gap = first.slice(0, hashAt).match(/\s*$/)?.[0] ?? "";
+        comment = `${gap || " "}${first.slice(hashAt)}`;
       }
-      const value = kv[2]!.trim();
-      if (value.startsWith("[") && !value.includes("]")) {
-        // Multi-line array: drop continuation lines up to the closing "]".
-        while (i + 1 < lines.length) {
-          const next = lines[i + 1]!.replace(/#.*$/, "").trim();
-          if (SECTION_RE.test(next) || KV_RE.test(next)) break;
-          i++;
-          if (next.includes("]")) break;
-        }
-      }
-      out.push(`${indent}${kv[1]} = ${formatTomlList(values)}${comment}`);
-      replaced = true;
-      if (inFirstDiscord) insertAfter = out.length - 1;
-      continue;
+      out.push(`${indent}${name} = ${list}${comment}`);
+      next = t.endRow + 1;
     }
-    out.push(raw);
-    if (kv && inFirstDiscord) insertAfter = out.length - 1;
+    out.push(...lines.slice(next));
+    return out.join(eol);
   }
 
-  const line = `${key} = ${formatTomlList(values)}`;
-  if (!replaced) {
-    if (seenDiscord) {
-      out.splice(insertAfter + 1, 0, line);
-    } else {
-      const trailing = out.length > 0 && out[out.length - 1] === "";
-      if (trailing) out.pop();
-      if (out.length > 0) out.push("");
-      out.push("[discord]", line, "");
-    }
+  const line = `${key} = ${list}`;
+  const discord = scan.headers.find((h) => h.section === "discord");
+  if (discord) {
+    const end = scan.headers.find((h) => h.row > discord.row)?.row ?? lines.length;
+    const inBlock = scan.entries.filter(
+      (e) => e.section === "discord" && e.row > discord.row && e.row < end,
+    );
+    const after = inBlock.length > 0 ? inBlock[inBlock.length - 1]!.endRow : discord.row;
+    const out = [...lines];
+    out.splice(after + 1, 0, line);
+    return out.join(eol);
   }
+  const out = [...lines];
+  const trailing = out.length > 0 && out[out.length - 1] === "";
+  if (trailing) out.pop();
+  if (out.length > 0) out.push("");
+  out.push("[discord]", line, "");
   return out.join(eol);
 }
 
@@ -291,6 +322,54 @@ export function setJsonDiscordList(
   return `${JSON.stringify(raw, null, 2)}\n`;
 }
 
+/**
+ * Safety net before any write: re-read the new text exactly as the loader
+ * will after a restart. It must load; `[discord].<key>` must read back as
+ * `fileAfter`; every other allow/deny list the loader reads must be
+ * unchanged, and (TOML) so must every other key of every section, `[owner]`
+ * included. Returns what is wrong, or null.
+ */
+function rewriteProblem(o: {
+  path: string;
+  format: AllowlistFileFormat;
+  key: AdminListKey;
+  before: string;
+  after: string;
+  fileAfter: readonly string[];
+}): string | null {
+  let after: ReturnType<typeof parseAllowlistText>;
+  try {
+    after = parseAllowlistText(o.after, o.path);
+  } catch (e) {
+    return `the rewritten file would not load (${e instanceof Error ? e.message : String(e)})`;
+  }
+  const before = o.before.trim()
+    ? parseAllowlistText(o.before, o.path)
+    : parseAllowlistText(o.format === "json" ? "{}" : "", o.path);
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  if (!same(after.discord[o.key], o.fileAfter.map((x) => x.trim().toLowerCase()).filter(Boolean))) {
+    return `[discord].${o.key} would not read back as intended`;
+  }
+  for (const k of Object.keys(before.github) as Array<keyof typeof before.github>) {
+    if (!same(before.github[k], after.github[k])) return `it would change [github] ${k}`;
+  }
+  for (const k of Object.keys(before.discord) as Array<keyof typeof before.discord>) {
+    if (k !== o.key && !same(before.discord[k], after.discord[k])) return `it would change [discord] ${k}`;
+  }
+  if (o.format === "toml") {
+    const b = parseSimpleToml(o.before);
+    const a = parseSimpleToml(o.after);
+    for (const sec of new Set([...Object.keys(b), ...Object.keys(a)])) {
+      const keys = new Set([...Object.keys(b[sec] ?? {}), ...Object.keys(a[sec] ?? {})]);
+      for (const k of keys) {
+        if (sec === "discord" && k === o.key) continue;
+        if (!same(b[sec]?.[k], a[sec]?.[k])) return `it would change [${sec}] ${k}`;
+      }
+    }
+  }
+  return null;
+}
+
 const NEW_TOML_HEADER =
   "# Corvidinho allowlist (ALLOW-4). Created by /admin (ADMIN-1/2); see allowlist.example.toml.\n# Default-deny: empty allow lists refuse. Deny overrides always win.\n";
 
@@ -310,6 +389,8 @@ export function planAdminListChange(opts: {
   const path = resolveAdminAllowlistPath(opts.allowlist, env, opts.home);
   const format = allowlistFileFormat(path);
   const id = opts.id.trim().toLowerCase();
+  const dangling = danglingSymlinkError(path);
+  if (dangling) return { ok: false, path, error: dangling };
   let exists = false;
   let text = "";
   try {
@@ -338,6 +419,10 @@ export function planAdminListChange(opts: {
         format === "json"
           ? setJsonDiscordList(text, opts.key, fileAfter)
           : setTomlDiscordList(exists ? text : NEW_TOML_HEADER, opts.key, fileAfter);
+      const problem = rewriteProblem({ path, format, key: opts.key, before: text, after: newText, fileAfter });
+      if (problem) {
+        return { ok: false, path, error: `refusing to write the allowlist file: ${problem}` };
+      }
     }
     return {
       ok: true,
@@ -369,9 +454,13 @@ export function planAdminListChange(opts: {
 /**
  * Atomic write: temp file in the target's directory (same filesystem),
  * fsync, then rename over the target. Keeps the target's mode (new files
- * 0600, new dirs 0700). Symlinked targets are resolved first.
+ * 0600, new dirs 0700). Symlinked targets are resolved first; a dangling or
+ * looping symlink is refused (throws) and left in place, never replaced by a
+ * regular file.
  */
 export function writeFileAtomic(path: string, text: string): void {
+  const dangling = danglingSymlinkError(path);
+  if (dangling) throw new Error(dangling);
   const target = existsSync(path) ? realpathSync(path) : path;
   const dir = dirname(target);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -436,6 +525,8 @@ export function readAdminFileView(
   | { ok: false; path: string; error: string } {
   const path = resolveAdminAllowlistPath(allowlist, env, home);
   const format = allowlistFileFormat(path);
+  const dangling = danglingSymlinkError(path);
+  if (dangling) return { ok: false, path, error: dangling };
   try {
     const exists = existsSync(path);
     const text = exists ? readFileSync(path, "utf8") : "";

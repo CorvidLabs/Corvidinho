@@ -18,7 +18,7 @@ cannot make the bot ping a role, @everyone, @here or a user (DISCORD-8)
 
 ## Acceptance Criteria
 
-- No bridge outbound path (chat mention / reply-continue, /session start and /work replies, other slash replies, schedule and announce posts, thinking embeds, agent discord-post-message) can produce a role, @everyone, @here or user mention from model text: every payload sends allowedMentions.parse = [] (plus a client-wide default), @everyone / @here are defanged in the text, replies still ping the replied-to author, and the AUTONOMY-2 ask keeps its explicit owner-only allowance; fixture tests prove each path.
+- No bridge outbound path (chat mention / reply-continue, /session start and /work replies, other slash replies, ask-button replies and collapse edits, schedule and announce posts, thinking embeds, agent discord-post-message) can produce a role, @everyone, @here or user mention from model text: every payload sends allowedMentions.parse = [] (plus a client-wide default), @everyone / @here are defanged in the text, replies still ping the replied-to author, and an ask keeps only the users it names (requester or owner, REQ-discord-044); fixture tests prove each path.
 
 ## No-spec Rationale
 

@@ -153,6 +153,7 @@ describe("ask-human in the tool catalog", () => {
     const names = (bodies[0]!.tools ?? []).map((t) => t.function.name);
     expect(names).toContain(ASK_TOOL_NAME);
     expect(bodies[0]!.messages[0]!.content).toContain(ASK_AGENT_SYSTEM_INSTRUCTIONS.trim());
+    expect(bodies[0]!.messages[0]!.content).toContain("AUTONOMY-7");
     expect(events.filter((e) => e.type === "ToolCall")).toEqual([
       { type: "ToolCall", name: ASK_TOOL_NAME, args: '{"question":"Postgres or SQLite?"}' },
     ]);

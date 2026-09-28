@@ -6,7 +6,7 @@ import { emptyConfig } from "../src/allowlist/types.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
-import { SchedulerService } from "../src/scheduler/service.ts";
+import { autoPauseAsk, FAILURE_AUTO_PAUSE, SchedulerService } from "../src/scheduler/service.ts";
 
 function allowCfg(channels: string[] = ["chan-allowed"]) {
   const cfg = emptyConfig();
@@ -48,6 +48,52 @@ describe("ScheduleStore durable", () => {
     store.delete(s.id);
     expect(store.list()).toHaveLength(0);
     void db2;
+  });
+});
+
+describe("ScheduleStore auto-pause ask (REQ-discord-353, AUTONOMY-2)", () => {
+  test("the failure that reaches the pause stores the pause ask, counted in SQL even from a stale cache", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const store = new ScheduleStore({ db });
+    const now = Date.parse("2026-09-27T10:00:00Z");
+    const s = store.create({
+      name: "flaky",
+      cronExpression: "0 * * * *",
+      project: "p",
+      prompt: "x",
+      createdByUserId: "owner",
+      channelId: "chan-allowed",
+      now,
+    });
+    const pause = autoPauseAsk();
+    const autoPause = { at: FAILURE_AUTO_PAUSE, ask: pause };
+    const own = { reason: "stuck" as const, question: "Verification still fails. How should I proceed?" };
+    const askRow = (id: string) =>
+      db.query("SELECT ask_reason, ask_question FROM schedule_runs WHERE id = ?").get(id) as {
+        ask_reason: string | null;
+        ask_question: string | null;
+      };
+
+    const run1 = store.claimRun(s, now)!;
+    // Another process recorded failures meanwhile; this cache still says 0.
+    db.run("UPDATE schedules SET consecutive_failures = ? WHERE id = ?", [FAILURE_AUTO_PAUSE - 2, s.id]);
+    store.markRunFinished(s, run1, { ok: false, error: "boom", ask: own, autoPause });
+    expect(s.consecutiveFailures).toBe(FAILURE_AUTO_PAUSE - 1);
+    expect(run1.ask).toEqual(own);
+    expect(askRow(run1.id)).toEqual({ ask_reason: "stuck", ask_question: own.question });
+
+    const run2 = store.claimRun(s, now + 3_600_000)!;
+    store.markRunFinished(s, run2, { ok: false, error: "boom", ask: own, autoPause });
+    expect(s.consecutiveFailures).toBe(FAILURE_AUTO_PAUSE);
+    expect(run2.ask).toEqual(pause);
+    expect(askRow(run2.id)).toEqual({ ask_reason: "stuck", ask_question: pause.question });
+
+    // A run that succeeds never stores the pause ask, and resets the count.
+    const run3 = store.claimRun(s, now + 7_200_000)!;
+    store.markRunFinished(s, run3, { ok: true, summary: "done", autoPause });
+    expect(s.consecutiveFailures).toBe(0);
+    expect(run3.ask).toBeUndefined();
+    expect(askRow(run3.id)).toEqual({ ask_reason: null, ask_question: null });
   });
 });
 

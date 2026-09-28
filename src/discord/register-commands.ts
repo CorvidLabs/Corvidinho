@@ -4,6 +4,7 @@
  * Steal PUT+clear-globals only — do NOT port archive buildCommands() lists.
  */
 
+import { formatErrorLine } from "../store/scrub.ts";
 import {
   buildSlashCommandBodies,
   type SlashCommandBody,
@@ -137,4 +138,32 @@ export async function registerSlashCommandsLive(
     bodies: opts.bodies,
     put,
   });
+}
+
+/** HTTP status on a thrown discord.js REST error (`status` or `response.status`). */
+function httpStatusOf(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { status?: unknown; response?: { status?: unknown } };
+  const s = e.status ?? e.response?.status;
+  return typeof s === "number" && s >= 100 && s <= 599 ? s : undefined;
+}
+
+/**
+ * REQ-cli-419 / REQ-discord-417: one SAFE-6 line for a failed slash-command
+ * registration, never the DiscordAPIError dump (stack, `rawError`,
+ * `requestBody`). `what` names the caller (`corvidinho discord
+ * register-commands` or the bridge's registration on ready); `guildHint`
+ * names where the guild id came from (`--guild-id` / `DISCORD_GUILD_ID`).
+ */
+export function formatRegisterCommandsFailure(
+  err: unknown,
+  opts: { what?: string; guildHint?: string; env?: NodeJS.ProcessEnv } = {},
+): string {
+  const what = opts.what ?? "register-commands failed";
+  const status = httpStatusOf(err);
+  const hint =
+    status === 401 || status === 403
+      ? ` — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and ${opts.guildHint ?? "--guild-id"}`
+      : "";
+  return `[discord] ${what}${status ? ` (${status})` : ""}: ${formatErrorLine(err, { env: opts.env })}${hint}`;
 }

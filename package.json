@@ -1,6 +1,6 @@
 {
   "name": "corvidinho",
-  "version": "0.0.19",
+  "version": "0.0.33",
   "private": true,
   "description": "Linux-first Bun/TS agent runner (Fledge + SpecSync citizen) \u2014 CorvidLabs bootstrap",
   "type": "module",
@@ -24,6 +24,7 @@
     "bun": ">=1.2.0"
   },
   "dependencies": {
+    "@corvidlabs/agent3md": "^1.0.0",
     "@octokit/rest": "^22.0.1",
     "discord.js": "^14.16.0"
   }

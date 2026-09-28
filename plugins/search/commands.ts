@@ -4,34 +4,39 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { statSync } from "node:fs";
+import { relative } from "node:path";
 import type { PluginCommand } from "../../src/plugins/types.ts";
 import {
+  isSecretPath,
+  SECRET_GREP_EXCLUDES,
+  secretPathsRefused,
+  secretRefuseMessage,
+} from "../files/protectedPaths.ts";
+import {
   PathEscapeError,
+  realRoot,
   resolveProjectPath,
 } from "../files/resolvePath.ts";
+import { ArgvError, parseArgv } from "../files/argv.ts";
 
-function flagValue(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name);
-  if (idx < 0) return undefined;
-  const v = args[idx + 1];
-  return v != null && !v.startsWith("--") ? v : undefined;
-}
-
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name);
-}
-
-function positional(args: string[], valueFlags: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (valueFlags.includes(a)) {
-      i++;
-      continue;
-    }
-    if (a === "--json") continue;
-    if (a.startsWith("--")) continue;
-    out.push(a);
+/**
+ * Split `grep -Z` output of a recursive search into records: the file, the
+ * `N:text` after it, and the `file:N:text` display line. The NUL after the
+ * name keeps a name with `:N:` or a newline in it from being misread.
+ */
+function splitNulRecords(stdout: string): { file: string; rest: string; line: string }[] {
+  const out: { file: string; rest: string; line: string }[] = [];
+  let pos = 0;
+  while (pos < stdout.length) {
+    const nul = stdout.indexOf("\0", pos);
+    if (nul < 0) break;
+    const end = stdout.indexOf("\n", nul + 1);
+    const stop = end < 0 ? stdout.length : end;
+    const file = stdout.slice(pos, nul);
+    const rest = stdout.slice(nul + 1, stop);
+    out.push({ file, rest, line: `${file}:${rest}` });
+    pos = stop + 1;
   }
   return out;
 }
@@ -40,30 +45,45 @@ export const searchCommands: PluginCommand[] = [
   {
     name: "search-grep",
     description:
-      "Recursive grep under project cwd; skips binaries and build dirs. Args: <pattern> [path] [--include rs,ts] [--json]",
+      "Recursive grep under project cwd; skips binaries and build dirs. Args: <pattern> [path] [--include rs,ts] [--json]. A pattern may start with '--'.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
       try {
-        const pos = positional(ctx.args, [
-          "--pattern",
-          "--path",
-          "--include",
-        ]);
-        const pattern = flagValue(ctx.args, "--pattern") ?? pos[0];
+        const argv = parseArgv(
+          ctx.args,
+          ["--pattern", "--path", "--include"],
+          ["--json"],
+        );
+        const flaggedPattern = argv.values.get("--pattern");
+        const pattern = flaggedPattern ?? argv.positional[0];
         if (!pattern) {
           return { ok: false, error: "missing pattern", exitCode: 1 };
         }
+        // Positional path follows the pattern (or comes first when --pattern is used).
+        const posPath = argv.positional[flaggedPattern != null ? 0 : 1];
         const pathArg =
-          flagValue(ctx.args, "--path") ??
-          (pos[1] && pos[1].length > 0 ? pos[1] : ".");
-        const include = flagValue(ctx.args, "--include") ?? "";
+          argv.values.get("--path") ??
+          (posPath && posPath.length > 0 ? posPath : ".");
+        const include = argv.values.get("--include") ?? "";
 
         const absPath = resolveProjectPath(ctx.cwd, pathArg);
+        const root = realRoot(ctx.cwd);
+        // ROLES-CHAT-8: non-ADMIN role sessions cannot search a secret path
+        // (also through a symlink), same gate as files-read.
+        const hideSecrets = await secretPathsRefused();
+        if (
+          hideSecrets &&
+          (isSecretPath(pathArg) || isSecretPath(relative(root, absPath)))
+        ) {
+          return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
+        }
+        const isDir = statSync(absPath, { throwIfNoEntry: false })?.isDirectory() ?? false;
 
         const grepArgs = [
           "-rn",
           "-I",
+          "-Z",
           "--exclude-dir=target",
           "--exclude-dir=node_modules",
           "--exclude-dir=.git",
@@ -77,6 +97,8 @@ export const searchCommands: PluginCommand[] = [
           .filter(Boolean)) {
           grepArgs.push(`--include=*.${ext}`);
         }
+        // After --include: when both match a file, grep lets the last one win.
+        if (hideSecrets) grepArgs.push(...SECRET_GREP_EXCLUDES);
         grepArgs.push("-e", pattern, "--", absPath);
 
         const result = spawnSync("grep", grepArgs, {
@@ -90,15 +112,31 @@ export const searchCommands: PluginCommand[] = [
           return { ok: false, error: `grep failed: ${detail}`, exitCode: 1 };
         }
         const stdout = result.stdout ?? "";
-        const lines = stdout.split("\n").filter((l) => l.length > 0);
-        const matches = lines.map((line) => {
-          // file:line:text — file may contain colons on some systems; take first two splits
-          const m = line.match(/^(.*?):(\d+):(.*)$/);
-          if (!m) return { file: line, line: 0, text: "" };
-          return { file: m[1]!, line: Number(m[2]), text: m[3]! };
-        });
+        // A directory search names each file (NUL-terminated by -Z); a single
+        // file operand prints no name, and that file was checked above.
+        const records = isDir
+          ? splitNulRecords(stdout).filter(
+              (r) => !(hideSecrets && isSecretPath(relative(root, r.file))),
+            )
+          : null;
+        const lines = records
+          ? records.map((r) => r.line)
+          : stdout.split("\n").filter((l) => l.length > 0);
+        const matches = records
+          ? records.map((r) => {
+              const m = r.rest.match(/^(\d+):(.*)$/s);
+              return m
+                ? { file: r.file, line: Number(m[1]), text: m[2]! }
+                : { file: r.file, line: 0, text: r.rest };
+            })
+          : lines.map((line) => {
+              // file:line:text — file may contain colons on some systems; take first two splits
+              const m = line.match(/^(.*?):(\d+):(.*)$/);
+              if (!m) return { file: line, line: 0, text: "" };
+              return { file: m[1]!, line: Number(m[2]), text: m[3]! };
+            });
         const data = { count: matches.length, matches };
-        if (ctx.json || hasFlag(ctx.args, "--json")) {
+        if (ctx.json || argv.flags.has("--json")) {
           return {
             ok: true,
             data,
@@ -110,7 +148,7 @@ export const searchCommands: PluginCommand[] = [
           (lines.length ? lines.join("\n") + "\n" : "");
         return { ok: true, data, message };
       } catch (err) {
-        if (err instanceof PathEscapeError) {
+        if (err instanceof PathEscapeError || err instanceof ArgvError) {
           return { ok: false, error: err.message, exitCode: 1 };
         }
         return {

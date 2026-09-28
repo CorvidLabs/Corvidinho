@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "daemon-claimed-schedule-asks-reach-discord-the-run-row-records-the-ask-and-the-bridge-s-scheduler-tick-posts-it-once",
+  "implementation_commit": "f87742bd25e9f03845c4f78e3e829cbb949bf707",
+  "implementation_tree": "a743c3154c04b07d13ac048db97b65c08215651d",
+  "contract_digest": "5f1935421a32c671166f51a5411cf2241f21b4eb4a88d6cbf8f97052dd33ed85",
+  "workspace_digest": "f936280d06906ecd3873198cc200d3a0e8efe85c10a6e6910bf8d4e2eda87083",
+  "closing_digest": "29eea5751414c36f89f4c7d54c56fa4314797ec834cda24956dea64e04363d99",
+  "review_digest": "5971a55dc0fb157796cd302362cdb4e7feb51a4620df484f46484715e23d5289",
+  "finalization_digest": "553094cec445937334b0e33f4573ad561fdea8b10fcc192116a6b433f676ce38",
+  "timestamp": 1790523814
+}

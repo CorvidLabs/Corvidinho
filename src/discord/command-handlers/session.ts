@@ -9,29 +9,53 @@ import {
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
+import { actorIsAdmin, projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import { buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
+import { answerTurnText } from "../session-thread.ts";
+import {
+  askNeedsOwner,
+  askPingOwner,
+  finishSlashWithOwnerNotice,
+  slashOwnerNotice,
+} from "../spend-post.ts";
 
-function formatSessionLine(s: {
-  id: string;
-  channelId: string;
-  userId: string;
-  topic?: string;
-  project?: string;
-  lastActivityAt: number;
-}): string {
+function formatSessionLine(
+  s: {
+    id: string;
+    channelId: string;
+    userId: string;
+    topic?: string;
+    project?: string;
+    lastActivityAt: number;
+  },
+  opts: { fullProjectPath: boolean },
+): string {
   const ageSec = Math.max(0, Math.floor((Date.now() - s.lastActivityAt) / 1000));
   const topic = s.topic ? ` — ${s.topic.slice(0, 60)}` : "";
-  const project = s.project ? ` · \`${s.project}\`` : "";
+  // REQ-discord-418: only ADMIN sees the absolute host path.
+  const shown = opts.fullProjectPath ? s.project : projectLabel(s.project);
+  const project = shown ? ` · \`${shown}\`` : "";
   return `• \`${s.id}\` <#${s.channelId}> <@${s.userId}>${topic}${project} (${ageSec}s ago)`;
 }
 
+/**
+ * REQ-discord-418 (SESSION-MULTI-1, IDENTITY-2/3): ADMIN (owner) lists every
+ * session; anyone else lists only sessions they own, without host paths.
+ */
 export async function handleSessionList(
   ctx: SlashContext,
   interaction: SlashInteraction,
 ): Promise<void> {
-  const sessions = ctx.store.list();
+  const isAdmin = actorIsAdmin(ctx, interaction);
+  const all = ctx.store.list();
+  const sessions = isAdmin
+    ? all
+    : all.filter((s) => s.userId === interaction.userId);
   if (sessions.length === 0) {
     await interaction.reply({
       content: "No active sessions.",
@@ -39,7 +63,9 @@ export async function handleSessionList(
     });
     return;
   }
-  const lines = sessions.slice(0, 20).map(formatSessionLine);
+  const lines = sessions
+    .slice(0, 20)
+    .map((s) => formatSessionLine(s, { fullProjectPath: isAdmin }));
   const more =
     sessions.length > 20 ? `\n…and ${sessions.length - 20} more` : "";
   await interaction.reply({
@@ -112,6 +138,9 @@ export async function handleSessionStart(
     owner: ctx.owner,
   });
   const prompt = idInject.prompt;
+  // AGENT-6 (REQ-discord-072): the topic opens the session's thread as the
+  // run starts, so a reply to this answer carries it (even after a failure).
+  ctx.store.recordTurn(session, "human", topic);
 
   let result;
   try {
@@ -147,13 +176,19 @@ export async function handleSessionStart(
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "agent error";
-    await thinking?.fail(`❌ ${msg}`, { model: llmModel });
     const body = `Session \`${session.id}\` failed: ${msg}`;
-    if (interaction.editReply) {
-      await interaction.editReply({ content: body });
-    } else {
-      await interaction.reply({ content: body });
-    }
+    ctx.store.recordTurn(session, "agent", body);
+    // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
+    await finishSlashWithThinking({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras: { model: llmModel },
+      ok: false,
+      failStatus: `❌ ${msg}`,
+    });
     return;
   }
 
@@ -167,25 +202,97 @@ export async function handleSessionStart(
       })
     : undefined;
   const thinkExtras = { plumbing, model: llmModel };
-  if (result.ok) {
-    await thinking?.done("✅ Done", thinkExtras);
-  } else {
-    await thinking?.fail(`❌ exit ${result.exitCode}`, thinkExtras);
+  // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
+  // is not "Done"; the owner is pinged (once per cap episode).
+  const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
+  // DISCORD-ASK-1/4 (REQ-discord-044): choices that fit a short list get the
+  // chat's public Choose stub (the question and options open ephemerally for
+  // the requester); free text only when they cannot be listed.
+  const choice = result.ask
+    ? buttonAskFor({ ask: result.ask, requesterDiscordId: interaction.userId })
+    : null;
+  // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
+  // pinged in a separate post (below) for stuck and spend-cap.
+  const ask = choice
+    ? choice.stub
+    : result.ask
+    ? formatAskReply({
+        ask: result.ask,
+        owner: null,
+        requesterDiscordId: interaction.userId,
+        context: result.summary,
+      })
+    : null;
+  // The status (ask, not "✅ Done") is set when the answer goes out below.
+  if (ask && result.ask && askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
+    console.warn(ASK_NO_OWNER_WARNING);
+  }
+  // AUTONOMY-5/6 (REQ-discord-044): the session waits on this ask like a
+  // chat ask — a button ask with its options, else free text, as the answer
+  // shows it. A SAFE-8 spend-cap stop is never pending: a reply cannot lift
+  // the cap.
+  if (result.ask && result.ask.reason !== "spend-cap") {
+    ctx.store.setPendingAsk(
+      session,
+      choice?.pending ??
+        toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
+    );
   }
 
-  const summary = result.ok
-    ? result.summary.slice(0, 1500)
-    : `failed (exit ${result.exitCode})`;
+  const summary = ask
+    ? ask.content
+    : result.ok
+      ? result.summary.slice(0, 1500)
+      : `failed (exit ${result.exitCode})`;
+  // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
+  // its question and choices); a spend-cap stop records no answer
+  // (REQ-discord-098).
+  ctx.store.recordTurn(
+    session,
+    "agent",
+    answerTurnText(
+      summary,
+      choice?.pending ??
+        (result.ask ? { reason: result.ask.reason, question: result.ask.question } : null),
+    ),
+  );
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
   const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
 
-  if (interaction.editReply) {
-    await interaction.editReply({ content: body });
-  } else {
-    await interaction.reply({ content: body });
-  }
+  // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
+  // reply); the owner ping for the ask and the pending SAFE-8 80% warning go
+  // out as a fresh post (an edit does not notify), claims handed back when
+  // nothing carried them.
+  const notice = slashOwnerNotice({
+    owner: ctx.owner,
+    outbox: ctx.spendAlerts,
+    ask: result.ask,
+    askOwner,
+    spendWarning: result.spendWarning,
+    label: `/session \`${session.id}\``,
+  });
+  await finishSlashWithOwnerNotice({
+    thinking,
+    body,
+    interaction,
+    sessionId: session.id,
+    trackBotMessage: ctx.trackBotMessage,
+    thinkExtras,
+    ok: result.ok,
+    failStatus: `❌ exit ${result.exitCode}`,
+    ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+    ...(choice
+      ? {
+          components: choice.components,
+          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+            recordSlashStub(ctx.store, session, choice.pending, messageId),
+        }
+      : {}),
+    notice,
+    post: ctx.post,
+  });
 }
 
 export async function handleSessionCommand(

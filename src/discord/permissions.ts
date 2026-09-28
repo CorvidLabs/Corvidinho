@@ -94,6 +94,12 @@ export type RateLimitConfig = {
 
 export type RateLimitState = {
   userMessageTimestamps: Map<string, number[]>;
+  /**
+   * DISCORD-6 — when each user last got a public MessageCreate refusal
+   * notice (MUTED / RATE_LIMITED). Created on first use; see
+   * `claimRefusalNotice`.
+   */
+  refusalNoticeAt?: Map<string, number>;
 };
 
 export function defaultRateLimitConfig(
@@ -211,6 +217,30 @@ export function checkRateLimit(
   }
   recent.push(nowMs);
   state.userMessageTimestamps.set(userId, recent);
+  return true;
+}
+
+/**
+ * DISCORD-6 — MessageCreate has no ephemeral, so a muted or rate-limited
+ * user gets at most one public refusal notice per rate-limit window; a
+ * spammer cannot make the bot post once per spam message. Returns true (and
+ * records `nowMs`) when this refusal may post its notice; false when the user
+ * already got one less than `windowMs` ago. Expired entries are dropped.
+ * Slash refusals do not use this: they stay ephemeral on every call.
+ */
+export function claimRefusalNotice(
+  state: RateLimitState,
+  userId: string,
+  windowMs: number,
+  nowMs: number = Date.now(),
+): boolean {
+  const notices = (state.refusalNoticeAt ??= new Map<string, number>());
+  const last = notices.get(userId);
+  if (last !== undefined && nowMs - last < windowMs) return false;
+  for (const [id, at] of notices) {
+    if (nowMs - at >= windowMs) notices.delete(id);
+  }
+  notices.set(userId, nowMs);
   return true;
 }
 

@@ -6,7 +6,8 @@
  * protocol lockstep (DISCORD-10).
  */
 
-import type { HumanAsk } from "../agent/types.ts";
+import type { HumanAsk, SpendWarning } from "../agent/types.ts";
+import type { PendingAsk } from "./ask-buttons.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 
@@ -63,6 +64,20 @@ export type SessionStub = {
   worktreeBranch?: string;
   /** active | parked | removed */
   worktreeState?: "active" | "parked" | "removed";
+  /**
+   * Newest pending human ask while the session is blocked (AUTONOMY-5/6 /
+   * DISCORD-ASK): the one a thin reply restates and a free-text reply answers.
+   * Cleared on button pick, free-text answer (no options), explicit cancel, or expiry.
+   * Button asks are NOT cleared by ordinary chat (SESSION-MULTI-3).
+   */
+  pendingAsk?: PendingAsk | null;
+  /**
+   * Earlier button asks still open under a newer `pendingAsk`, oldest first,
+   * one per askId (SESSION-MULTI-3 / REQ-discord-044): a later run that asks
+   * again never replaces them, so their buttons work until press or timeout.
+   * Set only through `SessionStore.setPendingAsk` / `clearPendingAsk`.
+   */
+  openAsks?: PendingAsk[];
   createdAt: number;
   lastActivityAt: number;
 };
@@ -123,6 +138,8 @@ export type AgentSpawnResult = {
   exitCode: number;
   /** The run needs a human (AUTONOMY-1/2): question + owner ping. */
   ask?: HumanAsk;
+  /** SAFE-8: this run crossed 80% of the daily spend cap (validated amounts). */
+  spendWarning?: SpendWarning;
   /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).

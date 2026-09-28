@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "docs-operator-guide-for-shipped-go-live-knobs-in-discord-go-live-md-owner-only-admin-protocol-2-restart-together-safe-1",
+  "slug": "docs-operator-guide-for-shipped-go-live-knobs-in-discord-go-live-md-owner-only-admin-protocol-2-restart-together-safe-1",
+  "title": "Docs: operator guide for shipped go-live knobs in DISCORD-GO-LIVE.md (owner-only ADMIN, protocol 2 restart-together, SAFE-1 CORVIDINHO_ALLOWLIST entries with registry flags, daemon under systemd, AUTONOMOUS-1 gate, ROLES-CHAT for non-owners, audit and spawn log locations) plus stale-fact fixes in BOX-UPDATE.md and .env.example (issue #5)",
+  "description": "Docs: operator guide for shipped go-live knobs in DISCORD-GO-LIVE.md (owner-only ADMIN, protocol 2 restart-together, SAFE-1 CORVIDINHO_ALLOWLIST entries with registry flags, daemon under systemd, AUTONOMOUS-1 gate, ROLES-CHAT for non-owners, audit and spawn log locations) plus stale-fact fixes in BOX-UPDATE.md and .env.example (issue #5)",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
+  "created_at": 1790460125,
+  "updated_at": 1790462503,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/DISCORD-GO-LIVE.md",
+    "docs/BOX-UPDATE.md",
+    ".env.example"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Operator documentation only: describes behavior already shipped on main and verified against the code; no requirement, public contract, or source file changes.",
+  "acceptance_criteria": [
+    "docs/DISCORD-GO-LIVE.md has an operator guide section covering owner-only ADMIN, protocol 2 restart-together, the SAFE-1 CORVIDINHO_ALLOWLIST entries with dangerous/minTier/mutating flags printed from the plugin registry, corvidinho daemon under systemd, the AUTONOMOUS-1 fledge.toml gate, ROLES-CHAT behavior for non-owner users, and where the audit log and spawn logs live; every command, env var and config key named exists in code on main; docs/BOX-UPDATE.md and .env.example no longer state stale facts (slash count and names, schema version, admin wording, restart modes); no source file changes"
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

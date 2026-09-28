@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "agent-loop-provider-error-summary-still-says-plainly-that-an-earlier-verify-failed-agent-4-a-run-that-ends-failed-on-a",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "35a3a49c82b8842f22cd99b5f08d95d3c2e05985",
+      "contract_digest": "770d731d721c9b2bd47ee53e49df97a88aa15aeb8ee4958415ed0f03492d4888",
+      "execution_digest": "502d203485abec73e511a72c1660c6ef7119676e985b9c986f7d949016c796a8",
+      "workspace_digest": "fa401aa9740245a53ad2fe8709ce6ea11b4b9549f6131e911aa4dbea92e4f5be",
+      "timestamp": 1790468272
+    }
+  ]
+}

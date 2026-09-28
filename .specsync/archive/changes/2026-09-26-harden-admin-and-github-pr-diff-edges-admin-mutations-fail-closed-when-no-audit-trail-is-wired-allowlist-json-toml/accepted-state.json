@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml",
+  "slug": "harden-admin-and-github-pr-diff-edges-admin-mutations-fail-closed-when-no-audit-trail-is-wired-allowlist-json-toml",
+  "title": "Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines",
+  "description": "Harden /admin and github-pr-diff edges: /admin mutations fail closed when no audit trail is wired, allowlist JSON/TOML detection shares the loader rule, dangling allowlist symlinks are refused not replaced, empty --file is a usage error, pure rename/copy/mode changes say content unchanged and copies get copy from/to lines",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "c69e0e2fefdf11d506f55c528035d422973e4f1a",
+  "created_at": 1790459394,
+  "updated_at": 1790462482,
+  "affected_specs": [
+    "discord",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/discord/command-handlers/admin.ts",
+    "src/discord/admin-allowlist.ts",
+    "src/discord/slash-types.ts",
+    "src/allowlist/load.ts",
+    "plugins/github/review.ts",
+    "tests/discord.admin-slash.test.ts",
+    "tests/github.review.plugin.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With no audit trail wired (no DB) /admin users/channels mutations reply 'Refused: audit log unavailable (SAFE-5)' and write nothing; /admin and the allowlist loader use one shared case-sensitive .json rule (isJsonAllowlistPath) so allowlist.JSON is edited as TOML; a dangling or looping allowlist symlink is refused by plan, write and config show and is never replaced by a regular file; github-pr-diff --file that is empty after normalization (./, whitespace) is a usage error with no API call; a pure rename/copy/mode change with no patch and 0 line changes says content unchanged instead of binary or too large, and copied files get copy from/to lines; fixture regression tests for each"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

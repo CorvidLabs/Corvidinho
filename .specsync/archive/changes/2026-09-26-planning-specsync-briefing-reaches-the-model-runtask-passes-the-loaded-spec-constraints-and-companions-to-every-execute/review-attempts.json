@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "planning-specsync-briefing-reaches-the-model-runtask-passes-the-loaded-spec-constraints-and-companions-to-every-execute",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "b29aba3e62d2ca3eebb0d29ce9cdac59e632c0c6",
+      "contract_digest": "b2fcc481877cc903500e5011d9c7ffb6b3e0a1992cad6b5066e400c23b75d859",
+      "execution_digest": "06976f020c91885bb90fbcfc9d8cc5af0ae9a1112acd9a0e2442a9401992b2a9",
+      "workspace_digest": "462e11717f18ca9cde850c2089c1a0026bb22b9aa626d26621607d5fac13cf4d",
+      "timestamp": 1790464604
+    }
+  ]
+}

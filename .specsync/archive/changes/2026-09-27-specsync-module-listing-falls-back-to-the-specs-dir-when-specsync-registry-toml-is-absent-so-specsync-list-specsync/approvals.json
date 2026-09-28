@@ -1,0 +1,90 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790530846,
+      "digest": "7efaf5f67005771e229651c76a662a9bdeba373f79baaf188a0dee3af19eaa97",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync",
+        "title": "SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5)",
+        "description": "SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/specsync/api.ts",
+          "plugins/specsync/commands.ts",
+          "specs/agent/agent.spec.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "tests/specsync.registry-fallback.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With no .specsync/registry.toml in a project whose .specsync/ is a dir (the layout specsync init + specsync scaffold <name> leave), specsync-list and corvidinho specsync list return, sorted, each module with a specs/<name>/<name>.spec.md that specsync-read reads (plain module name, spec a file resolving inside the real specs/ dir); a listed name reads with specsync-read / specsync-brief, and the Planning spec briefing (loadRelevantSpecs) includes that module's constraint sections and its context.md / tasks.md companions (SPECSYNC-1, SPECSYNC-5). A registry.toml that exists stays the only source (one naming no module lists nothing). No .specsync/ dir, no specs/ dir, or a specs/ dir resolving outside the project lists nothing; a legacy flat specs/<name>.md, a dir without its spec, a spec that is a dir, a non-plain name, and a spec or module dir that links outside specs/ are not listed and never reach the briefing. No slash command, env var or config key is added; the SQLite schema is unchanged. Regression tests fail on main and pass on the branch; tsc, bun test, specsync check --require-coverage 100 and the verify lane are green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "bab5e4a57bec67512854e5e2c70f6440977f997ac2bb436e42091ee8d4c444d3"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790532370,
+      "digest": "4a9e168bdf42a63375e8c7e1e6d94d6610a6a6cb756a2efa5d6fc5507b5ffb81",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync",
+        "title": "SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5)",
+        "description": "SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/specsync/api.ts",
+          "plugins/specsync/commands.ts",
+          "specs/agent/agent.spec.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "tests/specsync.registry-fallback.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With no .specsync/registry.toml in a project whose .specsync/ is a dir (the layout specsync init + specsync scaffold <name> leave), specsync-list and corvidinho specsync list return, sorted, each module with a specs/<name>/<name>.spec.md that specsync-read reads (plain module name, spec a file resolving inside the real specs/ dir); a listed name reads with specsync-read / specsync-brief, and the Planning spec briefing (loadRelevantSpecs) includes that module's constraint sections and its context.md / tasks.md companions (SPECSYNC-1, SPECSYNC-5). A registry.toml that exists adds its [specs] names to those specs/ modules (sorted, each once), so a module scaffolded after specsync init-registry, which the registry does not name, is still listed and briefed. No .specsync/ dir, no specs/ dir, or a specs/ dir resolving outside the project lists nothing from specs/; a legacy flat specs/<name>.md, a dir without its spec, a spec that is a dir, a non-plain name, and a spec or module dir that links outside specs/ are not listed from specs/ and never reach the briefing. No slash command, env var or config key is added; the SQLite schema is unchanged. Regression tests fail on main and pass on the branch; tsc, bun test, specsync check --require-coverage 100 and the verify lane are green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "5a9a75e016c38604523004016476d1e86d27d4352dc3a9ea051b14134e8c588c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790533542,
+      "digest": "80b95b55fbeb0e0427d80343b4d977814faa3e7824755edff579fb550e99c075",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

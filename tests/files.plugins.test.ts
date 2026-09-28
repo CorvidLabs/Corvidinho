@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { afterEach, describe, expect, test, beforeEach } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +15,10 @@ import { clearRegistry, list } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { isProtectedPath } from "../plugins/files/protectedPaths.ts";
+import {
+  MAX_IMAGE_SIZE_BYTES,
+  sniffImageMediaType,
+} from "../plugins/files/image.ts";
 
 describe("files plugins (REQ-plugins-081..083)", () => {
   beforeEach(() => {
@@ -60,6 +65,37 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     expect(isProtectedPath("docs/bunfig.md")).toBe(false);
     expect(isProtectedPath("src/cli.ts")).toBe(false);
     expect(isProtectedPath("README.md")).toBe(false);
+  });
+
+  test("SAFE-2: any keystore path component and .specsync/ state are protected (REQ-plugins-083)", () => {
+    expect(isProtectedPath("keystore/key.json")).toBe(true);
+    expect(isProtectedPath("keystore/UTC--2026-09-27T00-00-00Z--abc")).toBe(true);
+    expect(isProtectedPath("config/Keystore/a.json")).toBe(true);
+    expect(isProtectedPath("wallets/my-keystore-dir/nested/k.json")).toBe(true);
+    expect(isProtectedPath(".specsync/config.toml")).toBe(true);
+    expect(isProtectedPath(".specsync/registry.toml")).toBe(true);
+    expect(isProtectedPath(".SpecSync/version")).toBe(true);
+    expect(isProtectedPath(".specsync/archive/changes/x/approvals.json")).toBe(true);
+    // Active change folders stay writable (SPECSYNC-4).
+    expect(isProtectedPath(".specsync/changes/x/tasks.md")).toBe(false);
+    expect(isProtectedPath(".specsync/changes/x/deltas/plugins.md")).toBe(false);
+    expect(isProtectedPath("docs/specsync.md")).toBe(false);
+    // ...but not a file planted where SpecSync needs the folders.
+    expect(isProtectedPath(".specsync/changes")).toBe(true);
+    expect(isProtectedPath(".specsync/changes/x")).toBe(true);
+    expect(isProtectedPath(".specsync/changes/.gitkeep")).toBe(true);
+    // A change id is a slug of its title, not a keystore: a change about
+    // keystores stays writable; a keystore inside a change folder does not.
+    expect(isProtectedPath(".specsync/changes/fix-keystore-dirs/tasks.md")).toBe(false);
+    expect(isProtectedPath(".specsync/changes/fix-keystore-dirs/keystore/UTC--a")).toBe(true);
+    expect(isProtectedPath(".specsync/changes/wallet-keystore.json")).toBe(true);
+    expect(isProtectedPath(".specsync/archive/changes/2026-09-27-fix-keystore-dirs/tasks.md")).toBe(true);
+    // With the project root, only components below it count for keystore.
+    const root = "/home/u/keystore-tools";
+    expect(isProtectedPath(`${root}/src/a.ts`, root)).toBe(false);
+    expect(isProtectedPath(`${root}/keystore/k.json`, root)).toBe(true);
+    expect(isProtectedPath(`${root}/.specsync/config.toml`, root)).toBe(true);
+    expect(isProtectedPath("/elsewhere/keystore/k.json", root)).toBe(true);
   });
 
   test("happy path read/write/edit/glob/list", async () => {
@@ -113,6 +149,34 @@ describe("files plugins (REQ-plugins-081..083)", () => {
       });
       expect(listed.ok).toBe(true);
       expect((listed.data as { count: number }).count).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("files-edit writes --new literally; $ replacement patterns are not expanded (REQ-plugins-237)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-files-dollar-"));
+    try {
+      const newStr = "echo $$HOME and $' tail $& $` $1 $<n>";
+      writeFileSync(join(dir, "Makefile"), "run:\n\techo OLD\n");
+      const single = await runPlugin({
+        name: "files-edit",
+        args: ["Makefile", "--old", "echo OLD", "--new", newStr],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(single.ok).toBe(true);
+      expect(readFileSync(join(dir, "Makefile"), "utf8")).toBe(`run:\n\t${newStr}\n`);
+
+      writeFileSync(join(dir, "twice.sh"), "echo OLD\necho OLD\n");
+      const all = await runPlugin({
+        name: "files-edit",
+        args: ["twice.sh", "--old", "echo OLD", "--new", newStr, "--replace-all"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(all.ok).toBe(true);
+      expect(readFileSync(join(dir, "twice.sh"), "utf8")).toBe(`${newStr}\n${newStr}\n`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -201,6 +265,157 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     }
   });
 
+  test("SAFE-2: write/edit/delete refuse files in a keystore directory and .specsync/ state (REQ-plugins-083)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe2-dirs-"));
+    try {
+      const protectedFiles = [
+        "keystore/UTC--2026-09-27--abc.json",
+        "config/Keystore/wallet.json",
+        ".specsync/config.toml",
+        ".specsync/registry.toml",
+        ".specsync/archive/changes/old/approvals.json",
+      ];
+      for (const rel of protectedFiles) {
+        mkdirSync(join(dir, rel, ".."), { recursive: true });
+        writeFileSync(join(dir, rel), "ORIGINAL\n");
+      }
+      mkdirSync(join(dir, ".specsync", "changes", "open"), { recursive: true });
+      writeFileSync(join(dir, ".specsync", "changes", "open", "tasks.md"), "- [ ] a\n");
+
+      for (const target of [...protectedFiles, "keystore/new.json", ".specsync/new.toml"]) {
+        const w = await runPlugin({
+          name: "files-write",
+          args: [target, "HACKED"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        expect(w.ok).toBe(false);
+        expect(w.exitCode).toBe(2);
+        expect(w.error).toContain("SAFE-2");
+      }
+      expect(existsSync(join(dir, "keystore", "new.json"))).toBe(false);
+      expect(existsSync(join(dir, ".specsync", "new.toml"))).toBe(false);
+
+      for (const target of protectedFiles) {
+        const e = await runPlugin({
+          name: "files-edit",
+          args: [target, "--old", "ORIGINAL", "--new", "HACKED"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        expect(e.ok).toBe(false);
+        expect(e.exitCode).toBe(2);
+        expect(e.error).toContain("SAFE-2");
+
+        const d = await runPlugin({
+          name: "files-delete",
+          args: [target],
+          cwd: dir,
+          nonInteractive: true,
+          allowlist: ["files-delete"],
+        });
+        expect(d.ok).toBe(false);
+        expect(d.exitCode).toBe(2);
+        expect(d.error).toContain("SAFE-2");
+        expect(readFileSync(join(dir, target), "utf8")).toBe("ORIGINAL\n");
+      }
+
+      // An active SpecSync change folder stays writable (SPECSYNC-4).
+      const tasks = await runPlugin({
+        name: "files-write",
+        args: [".specsync/changes/open/tasks.md", "- [x] a\n"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(tasks.ok).toBe(true);
+      expect(readFileSync(join(dir, ".specsync", "changes", "open", "tasks.md"), "utf8")).toBe("- [x] a\n");
+
+      // So does a change whose id (a slug of its title) mentions keystores.
+      const ksChange = ".specsync/changes/safe-2-refuse-keystore-dirs/tasks.md";
+      const ksTasks = await runPlugin({
+        name: "files-write",
+        args: [ksChange, "- [x] b\n"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(ksTasks.error).toBeUndefined();
+      expect(ksTasks.ok).toBe(true);
+      expect(readFileSync(join(dir, ksChange), "utf8")).toBe("- [x] b\n");
+
+      // A file cannot take the place of the change folders themselves.
+      const other = mkdtempSync(join(tmpdir(), "corvidinho-safe2-nochanges-"));
+      try {
+        mkdirSync(join(other, ".specsync"));
+        for (const target of [".specsync/changes", ".specsync/changes/next"]) {
+          const w = await runPlugin({
+            name: "files-write",
+            args: [target, "X"],
+            cwd: other,
+            nonInteractive: true,
+          });
+          expect(w.ok).toBe(false);
+          expect(w.exitCode).toBe(2);
+          expect(w.error).toContain("SAFE-2");
+        }
+        expect(existsSync(join(other, ".specsync", "changes"))).toBe(false);
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
+
+      // A symlink into a keystore directory is refused by its target path.
+      symlinkSync(join(dir, "keystore", "UTC--2026-09-27--abc.json"), join(dir, "alias.json"));
+      const viaLink = await runPlugin({
+        name: "files-write",
+        args: ["alias.json", "HACKED"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(viaLink.ok).toBe(false);
+      expect(viaLink.exitCode).toBe(2);
+      expect(readFileSync(join(dir, "keystore", "UTC--2026-09-27--abc.json"), "utf8")).toBe("ORIGINAL\n");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("SAFE-2: a project under a keystore-named directory stays writable outside its own keystores", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-keystore-tools-"));
+    try {
+      mkdirSync(join(dir, "src"));
+      writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
+      for (const target of ["src/a.ts", join(dir, "src", "a.ts"), "notes.md"]) {
+        const w = await runPlugin({
+          name: "files-write",
+          args: [target, "export const a = 2;\n"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        expect(w.error).toBeUndefined();
+        expect(w.ok).toBe(true);
+      }
+      const edited = await runPlugin({
+        name: "files-edit",
+        args: ["src/a.ts", "--old", "a = 2", "--new", "a = 3"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(edited.ok).toBe(true);
+      expect(readFileSync(join(dir, "src", "a.ts"), "utf8")).toBe("export const a = 3;\n");
+
+      const ks = await runPlugin({
+        name: "files-write",
+        args: ["keystore/k.json", "{}"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(ks.ok).toBe(false);
+      expect(ks.exitCode).toBe(2);
+      expect(existsSync(join(dir, "keystore", "k.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("path escape and symlink escape refused", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-escape-"));
     const outside = mkdtempSync(join(tmpdir(), "corvidinho-outside-"));
@@ -248,5 +463,132 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/** A real 1x1 PNG. */
+const PNG_BYTES = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+describe("files-read image mode (DISCORD-9 / REQ-plugins-427)", () => {
+  const prevAdmin = process.env.CORVIDINHO_ACTING_IS_ADMIN;
+  const prevActor = process.env.CORVIDINHO_ACTING_DISCORD_USER_ID;
+  let dir = "";
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    dir = mkdtempSync(join(tmpdir(), "corvidinho-files-img-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    if (prevAdmin === undefined) delete process.env.CORVIDINHO_ACTING_IS_ADMIN;
+    else process.env.CORVIDINHO_ACTING_IS_ADMIN = prevAdmin;
+    if (prevActor === undefined) delete process.env.CORVIDINHO_ACTING_DISCORD_USER_ID;
+    else process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = prevActor;
+  });
+
+  const read = (path: string) =>
+    runPlugin({ name: "files-read", args: [path], cwd: dir, json: true, nonInteractive: true });
+
+  test("files-read on a PNG returns image metadata, not UTF-8 content", async () => {
+    mkdirSync(join(dir, ".corvidinho", "attachments"), { recursive: true });
+    const rel = ".corvidinho/attachments/m-0.png";
+    writeFileSync(join(dir, rel), PNG_BYTES);
+
+    const r = await read(rel);
+    expect(r.ok).toBe(true);
+    expect(r.data).toEqual({
+      path: rel,
+      bytes: PNG_BYTES.length,
+      mediaType: "image/png",
+      image: true,
+    });
+    expect((r.data as Record<string, unknown>).content).toBeUndefined();
+    expect(r.message).toBe(
+      `image ${rel} (image/png, ${PNG_BYTES.length} bytes) opened for viewing`,
+    );
+    // The pixels ride result.image only; they round-trip to the file bytes.
+    expect(r.image?.mediaType).toBe("image/png");
+    expect(r.image?.path).toBe(rel);
+    expect(Buffer.from(r.image!.base64, "base64").equals(PNG_BYTES)).toBe(true);
+    // What reaches tool text / CLI output is small and has no decode garbage.
+    const text = JSON.stringify({ ok: r.ok, message: r.message, data: r.data });
+    expect(text).not.toContain("\uFFFD");
+    expect(text).not.toContain(r.image!.base64);
+    expect(text.length).toBeLessThan(1024);
+  });
+
+  test("images are told apart by magic bytes, not by name", async () => {
+    writeFileSync(join(dir, "photo.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]));
+    writeFileSync(join(dir, "anim.gif"), Buffer.from("GIF89a\x01\x00\x01\x00", "latin1"));
+    writeFileSync(join(dir, "pic.webp"), Buffer.concat([Buffer.from("RIFF"), Buffer.from([4, 0, 0, 0]), Buffer.from("WEBPVP8 ")]));
+    writeFileSync(join(dir, "screenshot.txt"), PNG_BYTES);
+    writeFileSync(join(dir, "notes.png"), "just text in a .png name\n");
+
+    expect((await read("photo.jpg")).image?.mediaType).toBe("image/jpeg");
+    expect((await read("anim.gif")).image?.mediaType).toBe("image/gif");
+    expect((await read("pic.webp")).image?.mediaType).toBe("image/webp");
+    expect((await read("screenshot.txt")).image?.mediaType).toBe("image/png");
+
+    const text = await read("notes.png");
+    expect(text.ok).toBe(true);
+    expect(text.image).toBeUndefined();
+    expect((text.data as { content?: string }).content).toBe("just text in a .png name\n");
+
+    expect(sniffImageMediaType(new Uint8Array([0x89, 0x50, 0x4e]))).toBeNull();
+    expect(sniffImageMediaType(Buffer.from("RIFF\0\0\0\0WAVE", "latin1"))).toBeNull();
+    expect(sniffImageMediaType(new Uint8Array())).toBeNull();
+  });
+
+  test("files-read refuses an image over 20MB", async () => {
+    const big = join(dir, "huge.png");
+    writeFileSync(big, PNG_BYTES);
+    truncateSync(big, MAX_IMAGE_SIZE_BYTES + 1); // sparse: cheap on disk
+    const r = await read("huge.png");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("refused: image 'huge.png'");
+    expect(r.error).toContain("20MB");
+    expect(r.image).toBeUndefined();
+    expect(r.data).toBeUndefined();
+
+    // Exactly at the cap is still an image.
+    truncateSync(big, MAX_IMAGE_SIZE_BYTES);
+    const atCap = await read("huge.png");
+    expect(atCap.ok).toBe(true);
+    expect(atCap.image?.mediaType).toBe("image/png");
+  });
+
+  test("a text file reads exactly as before", async () => {
+    writeFileSync(join(dir, "hello.txt"), "héllo wörld\n");
+    const r = await read("hello.txt");
+    expect(r).toEqual({
+      ok: true,
+      data: { path: "hello.txt", bytes: Buffer.byteLength("héllo wörld\n"), content: "héllo wörld\n" },
+      message: "héllo wörld\n",
+    });
+  });
+
+  test("the path clamp and the ROLES-CHAT-8 secret gate still run first", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "corvidinho-files-img-out-"));
+    try {
+      writeFileSync(join(outside, "x.png"), PNG_BYTES);
+      const escaped = await read(join(outside, "x.png"));
+      expect(escaped.ok).toBe(false);
+      expect(escaped.image).toBeUndefined();
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+
+    mkdirSync(join(dir, ".ssh"));
+    writeFileSync(join(dir, ".ssh", "shot.png"), PNG_BYTES);
+    process.env.CORVIDINHO_ACTING_IS_ADMIN = "0";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = "999999999999999999";
+    const secret = await read(".ssh/shot.png");
+    expect(secret.ok).toBe(false);
+    expect(secret.exitCode).toBe(2);
+    expect(secret.error).toContain("ROLES-CHAT-8");
+    expect(secret.image).toBeUndefined();
   });
 });

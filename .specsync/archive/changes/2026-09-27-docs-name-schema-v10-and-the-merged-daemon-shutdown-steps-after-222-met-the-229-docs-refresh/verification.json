@@ -1,0 +1,42 @@
+{
+  "timestamp": 1790476365,
+  "commit": "ebb1706c60f285e95ba76b7dc9c1e01500464e02",
+  "contract_digest": "e7d52772193b546ca548386fb1ec38402655d9b6a7a5f0befcd87f6550563f42",
+  "execution_digest": "3ccb3f84f212aa282907c5ec5dabb2c1eced44a99a6bdabf66bc5ca0ac27d34b",
+  "workspace_digest": "b05a4d2c659f241638f09e39414b70ce9de7cdf6cdcf8b166d9268ad0a621a8f",
+  "acceptance_input_digest": "e8cc6a60649c309efa1bd4e0f59babd1af77f7926363632e76e50ef3d548f098",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "docs/BOX-UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "796e3cc839a2284db194dc7b2173b1c81d7d061f2ee5d8823d0fac55c0d1176f",
+        "entry_digest": "a8fd4dea8ae9c96c5bdbbb78bc8e1dcc5c7c501a854998e9f98c89e1ce9a8914",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/DAEMON.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "85804b54f8e439b121f1e440d1d30a38c7b00852b4d225e37360b716c4defd38",
+        "entry_digest": "2d8e65ef329c3712d2ffd261001bbe9aa1c90b96b5073ea9c88b313652b6fe75",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

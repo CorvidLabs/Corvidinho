@@ -1,0 +1,89 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790469510,
+      "digest": "8306a2a6a493bca19d7ed4d9d7df5e0806bf64a1431663eb0271ea160389cc89",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message",
+        "title": "A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending",
+        "description": "A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/discord/",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "tests/discord.slash-pending-ask.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A /work or /session start run whose agent stopped with a clarify or stuck ask stores that ask as the session's pending ask (free text, like the answer shows it) and /work records the task blocked, not completed (stuck stays failed). The slash answer message (the thinking message edited into the answer) is tracked so a plain reply to it continues the session. A thin reply (ok, k, ...) to it restates the question and does not run the agent; cancel clears the pending ask with the short ack and does not run the agent; a substantive reply resumes the same session with the prior question as context and clears the pending ask. A SAFE-8 spend-cap stop is never stored as pending: a later ok runs the agent with no cap text. A finished run stores no pending ask and its answer still continues the session. Without an editable thinking message the pending ask is still stored, so an @mention ok restates it. Fixture tests only; no new slash command, env var or schema change."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "83cbec016f0d56e08e988a9e5c27482ff26d1f24ac1f5e81f425e4bda9aaa92b"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790470242,
+      "digest": "e97aacf3db05c1e7a74b39e7f39d874f7482c192c2844b0e8d0b45b48dded14f",
+      "note": "Review of #216: added tests (session start with options, /work stuck owner-only pings, another user's reply) and updated docs/discord.md ask paragraph",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-work-or-session-start-run-that-stopped-to-ask-keeps-the-ask-as-the-session-s-pending-ask-and-its-answer-message",
+        "title": "A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending",
+        "description": "A /work or /session start run that stopped to ask keeps the ask as the session's pending ask and its answer message continues the session, so a thin reply restates the question, cancel clears it and a substantive reply resumes with the question as context (AUTONOMY-1/5/6, REQ-discord-044); a spend-cap stop is never pending",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "tests/discord.slash-pending-ask.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A /work or /session start run whose agent stopped with a clarify or stuck ask stores that ask as the session's pending ask (free text, like the answer shows it) and /work records the task blocked, not completed (stuck stays failed). The slash answer message (the thinking message edited into the answer) is tracked so a plain reply to it continues the session. A thin reply (ok, k, ...) to it restates the question and does not run the agent; cancel clears the pending ask with the short ack and does not run the agent; a substantive reply resumes the same session with the prior question as context and clears the pending ask. A SAFE-8 spend-cap stop is never stored as pending: a later ok runs the agent with no cap text. A finished run stores no pending ask and its answer still continues the session. Without an editable thinking message the pending ask is still stored, so an @mention ok restates it. Fixture tests only; no new slash command, env var or schema change."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "dadfa7d13281152bf9dc94c3636d0de93d1d8196ead3975e93fdd86ff6e89d43"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790470989,
+      "digest": "46af3d8fdabf7fa295f9995bd28257da28cd9b33089df71ecb94eeb6c51c559e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

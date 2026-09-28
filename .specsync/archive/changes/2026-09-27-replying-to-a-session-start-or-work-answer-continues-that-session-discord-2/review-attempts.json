@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "replying-to-a-session-start-or-work-answer-continues-that-session-discord-2",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "115a88ae273788f1fee5579d7d2b99f29faaa3b4",
+      "contract_digest": "48c9ed88f55a21a68a71d0add637adb765926cb1aa28b5923f71f83f1f95811b",
+      "execution_digest": "8db997b29a83107fd460c657337cf88529219042489ffb7ed6a9962234f3f1c7",
+      "workspace_digest": "9f9a5f1b4a5fd6a778b57cd20966b47020e09cf124f0c2d493a5300aa6295fe4",
+      "timestamp": 1790475168
+    }
+  ]
+}

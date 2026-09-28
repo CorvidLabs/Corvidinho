@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-refresh-after-audit-operator-docs-env-allowlist-templates-and-the-status-roadmap-match-shipped-code-actor-gate",
+  "implementation_commit": "f3cab7e909caccf7ab46b7ca761bef0eb920ce23",
+  "implementation_tree": "12df0d5d00c123825b162e229bdd76475813e157",
+  "contract_digest": "6c760af93d724a3314f3c875aaffab7dbe19e93910e047d12a0760f207290970",
+  "workspace_digest": "9ab37be6381324b76e5327824c02668d8fe9ae292387f88f922d35add3833de8",
+  "closing_digest": "1086c811cf55464f30234422b3ce3bda4ab6470b959c3a035bfaaccc9d29c8f4",
+  "review_digest": "30116665b12376584f591aa91c62c337b62468289f9fd1887c3e7a26cf917b98",
+  "finalization_digest": "f8884bea89faf1d4a9ecb42933b16eb676fe25cd1bd8a941513962a0e946ee12",
+  "timestamp": 1790475168
+}

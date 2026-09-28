@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "project-files-preflight-shared-by-doctor-and-a-report-only-init-doctor-and-a-new-report-only-corvidinho-init-name-a",
+  "implementation_commit": "fa5ed30efc792179ef990c8e9ba47e04a774e480",
+  "implementation_tree": "bdd7c6416af7a9e601453db78fec53c12f0015f1",
+  "contract_digest": "e98a4d939f65640b039d722e44482b94f7384d1a103f063736ac9d5f1f5c968b",
+  "workspace_digest": "53e19081dafcdcb97a58a06693d49b48bdbaef43b790b03c57f2914154c42015",
+  "closing_digest": "37162ec57a1839e43f702be78f1894b3ecd84111cf2551b947c0954a2c999b12",
+  "review_digest": "6c4a8ad8eaee612838c9ddc186f3a34b2b2644dda7cb865d8e6a1c8d9b344fb3",
+  "finalization_digest": "3cee6a7e6ba89736cd2f3cabdf06a9d7dc493eeacf3882008c3b325408030a9e",
+  "timestamp": 1790538951
+}

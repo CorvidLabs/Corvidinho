@@ -11,6 +11,7 @@
 import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
 import {
   createEchoAgentClient,
   createSpawnAgentClient,
@@ -22,17 +23,14 @@ import {
   createOctokitAckClient,
   maybePostWatchAck,
   type AckClient,
+  type AckCommentResult,
 } from "./ack.ts";
 import {
   goLiveChecklist,
   loadWatchConfig,
   type ConfigResult,
 } from "./config.ts";
-import {
-  dedupeByIssue,
-  filterNewEvents,
-  ProcessedIdStore,
-} from "./dedup.ts";
+import { dedupeByIssue, ProcessedIdStore } from "./dedup.ts";
 import {
   isGithubUserAllowed,
   isRepoAllowed,
@@ -95,9 +93,26 @@ export type StartWatchResult =
       pollOnce: () => Promise<PollCycleResult>;
       /** Earliest time the next poll may run (rate-limit backoff). */
       getBackoffUntilMs: () => number;
+      /**
+       * Settles once when the poll loop stops itself because polling cannot
+       * recover (GitHub 401: bad or revoked token). Never settles otherwise.
+       * The CLI then calls stop() and exits with `exitCode` (REQ-watch-418).
+       */
+      fatal: Promise<WatchFatal>;
       stop: () => Promise<void>;
     }
   | { ok: false; exitCode: number; message: string };
+
+/** Why the poll loop stopped itself (REQ-watch-418). */
+export type WatchFatal = { exitCode: number; message: string };
+
+/** HTTP status on a thrown Octokit error (`status` or `response.status`). */
+function githubStatusOf(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { status?: unknown; response?: { status?: unknown } };
+  const s = e.status ?? e.response?.status;
+  return typeof s === "number" ? s : undefined;
+}
 
 export type PollCycleResult = {
   fetched: number;
@@ -195,9 +210,14 @@ export async function startWatchPoller(
       db,
       ttlMs: opts.sessionTtlMs ?? resolveSessionTtlMs(env),
     });
-  const processed = new ProcessedIdStore();
-  const acked = new AckedIdStore();
-  const summarized = new SummarizedIdStore();
+  // REQ-watch-247: handled ids live in the same DB as the sessions, so a
+  // restart never re-runs, re-acks or re-summarizes an event id.
+  const processed = new ProcessedIdStore({ db });
+  const acked = new AckedIdStore({ db });
+  const summarized = new SummarizedIdStore({ db });
+  // Denied ids stay apart and in-memory: a stranger's flood can only evict
+  // other denied ids (refused again, quietly), never a handled trusted id.
+  const deniedIds = new ProcessedIdStore();
   const successfulAcks = new SuccessfulAckStore();
   const searchClient =
     opts.searchClient ?? createOctokitSearchClient(config.token);
@@ -222,10 +242,12 @@ export async function startWatchPoller(
           path: defaultSpawnLogPath({ env: opts.env }),
         }));
   const log = opts.log ?? ((msg: string) => console.log(msg));
+  // REQ-watch-418: the default sink prints one scrubbed line per error,
+  // never the thrown object (an Octokit HttpError dump every poll).
   const logError =
     opts.logError ??
     ((msg: string, err?: unknown) => {
-      if (err !== undefined) console.error(msg, err);
+      if (err !== undefined) console.error(`${msg}: ${formatErrorLine(err, { env })}`);
       else console.error(msg);
     });
   const now = opts.now ?? (() => Date.now());
@@ -242,6 +264,25 @@ export async function startWatchPoller(
   let timer: ReturnType<typeof setTimeout> | null = null;
   let running = true;
   let backoffUntilMs = 0;
+  let resolveFatal: (f: WatchFatal) => void = () => {};
+  const fatal = new Promise<WatchFatal>((r) => {
+    resolveFatal = r;
+  });
+
+  // REQ-watch-418: GitHub 401 means the token is bad or revoked; every later
+  // poll would fail the same way, so stop the loop instead of polling forever.
+  const haltOnAuthFailure = (err: unknown): void => {
+    running = false;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const message =
+      `[watch] github auth failed (401): ${formatErrorLine(err, { env })} — ` +
+      "check GITHUB_TOKEN / GH_TOKEN; watch stopped";
+    logError(message);
+    resolveFatal({ exitCode: 1, message });
+  };
 
   const applyRateLimitBackoff = (err: unknown): number | null => {
     const parsed = parseGithubRateLimit(
@@ -278,6 +319,21 @@ export async function startWatchPoller(
       return result;
     }
 
+    // WATCH-RELIABILITY-3: a 403/429 rate limit on the auto-ack or run-summary
+    // comment sets the same backoff as a rate-limited fetch, so the next poll
+    // cycle waits it out. A plain failure stays an `ack failed` /
+    // `summary failed` line only.
+    const backoffOnCommentFailure = (res: AckCommentResult): void => {
+      const waitMs = applyRateLimitBackoff({
+        status: res.status,
+        message: res.error,
+        headers: res.headers,
+      });
+      if (waitMs === null) return;
+      result.rateLimited = true;
+      result.backoffMs = Math.max(result.backoffMs ?? 0, waitMs);
+    };
+
     let events: DetectedEvent[];
     try {
       events = opts.fetchEvents
@@ -300,13 +356,15 @@ export async function startWatchPoller(
 
     result.fetched = events.length;
 
-    const fresh = filterNewEvents(events, processed.list());
+    const fresh = events.filter(
+      (e) => !processed.has(e.id) && !deniedIds.has(e.id),
+    );
     result.newEvents = fresh.length;
     const { eligible, denied } = preferAllowlisted(fresh, config.allowlist);
 
-    // Mark denied ids processed so we do not re-poll them forever (ALLOW-5 quiet).
+    // Mark denied ids seen so we do not re-poll them forever (ALLOW-5 quiet).
     for (const d of denied) {
-      processed.add(d.id);
+      deniedIds.add(d.id);
       result.refused += 1;
       opts.onAction?.({ kind: "refuse", event: d });
     }
@@ -331,13 +389,19 @@ export async function startWatchPoller(
         )
         .map((e) => e.id);
       const relatedIds = related.length > 0 ? related : [event.id];
+      // routed: routeEvent returned, so a throw after it came from the id
+      // write or later. marked: the ids are durably recorded.
+      let routed = false;
+      let marked = false;
 
       try {
         const action = routeEvent(event, {
           store,
           allowlist: config.allowlist,
         });
+        routed = true;
         processed.addMany(relatedIds);
+        marked = true;
 
         if (action.kind === "refuse" || action.kind === "ignore") {
           result.refused += 1;
@@ -357,6 +421,7 @@ export async function startWatchPoller(
           ackClient,
           acked,
           log,
+          onPostFailed: backoffOnCommentFailure,
         });
         if (ackResult.posted) {
           successfulAcks.add(event.id);
@@ -415,7 +480,8 @@ export async function startWatchPoller(
           exitCode: spawnExit,
           errorClass: classifySpawnError(spawnOk, spawnExit, threw),
           durationMs: Math.max(0, finishedAtMs - startedAtMs),
-          summaryPreview: spawnSummary.slice(0, 240),
+          // SAFE-6 (REQ-watch-231): scrub before clipping and persisting.
+          summaryPreview: scrubSecrets(spawnSummary).slice(0, 240),
         };
         spawnOutcomes.append(outcome);
         log(formatSpawnOutcomeLog(outcome));
@@ -433,13 +499,27 @@ export async function startWatchPoller(
           successfulAcks,
           summarized,
           log,
+          onPostFailed: backoffOnCommentFailure,
         });
       } catch (err) {
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
         // retried forever ahead of later events: log, mark processed, move on.
-        processed.addMany(relatedIds);
+        // Marking is a DB write (REQ-watch-247). Ids are marked before any
+        // ack or spawn, so if the id write itself failed nothing ran for this
+        // event: leave it for the next cycle, never mark it here (a retry that
+        // succeeds would drop a request that never ran). Only a routing
+        // failure (before the id write) is marked, as before.
+        if (!marked && !routed) {
+          try {
+            processed.addMany(relatedIds);
+            marked = true;
+          } catch {
+            // DB still failing: leave the event for the next cycle.
+          }
+        }
         logError(
-          `[watch] event ${event.repo}#${event.number} (${event.id}) failed; marked processed`,
+          `[watch] event ${event.repo}#${event.number} (${event.id}) failed; ` +
+            (marked ? "marked processed" : "not marked, retried next cycle"),
           err,
         );
       }
@@ -478,6 +558,10 @@ export async function startWatchPoller(
           if (!running) return;
           await pollOnce();
         } catch (err) {
+          if (githubStatusOf(err) === 401) {
+            haltOnAuthFailure(err);
+            return;
+          }
           const waitMs = applyRateLimitBackoff(err);
           if (waitMs === null) {
             logError("[watch] pollOnce error", err);
@@ -511,6 +595,7 @@ export async function startWatchPoller(
     spawnOutcomes,
     pollOnce,
     getBackoffUntilMs: () => backoffUntilMs,
+    fatal,
     stop: async () => {
       running = false;
       if (timer) {

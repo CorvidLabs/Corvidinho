@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the",
+  "implementation_commit": "7438bce5125332e7d8ea711a868681b696744557",
+  "implementation_tree": "13679e5a5517cf872dda97b5dc7d682a67c08b45",
+  "contract_digest": "995fb9d4fd13727e2f73f16ed85140f416705d12dc3f71911d95c706f513c984",
+  "workspace_digest": "22ff165eab4d92ec52b7882dc4c4b7fb96555385941cc33c06bbc52e3fff15fb",
+  "closing_digest": "c8ac9a110fc5277bf69019baf8223d9e377a025b22ad952d169bc9205dc23a8f",
+  "review_digest": "9b1bb3519ff1a99817e9af3dd9dc0266642804d46da06c72256e9ea5511792a1",
+  "finalization_digest": "dcbd9caa0e84ad313c903ce5f6a98c882a281a0d359363c295f4985dc788c046",
+  "timestamp": 1790541362
+}

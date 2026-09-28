@@ -7,6 +7,7 @@ import {
   listRegisteredModules,
   readCompanions,
   readModuleSpec,
+  refuseRootArg,
   runSpecCheck,
   spawnSpecsync,
 } from "./api.ts";
@@ -28,7 +29,7 @@ export const specsyncCommands: PluginCommand[] = [
   {
     name: "specsync-list",
     description:
-      "List spec module names from .specsync/registry.toml (SPECSYNC-1). Call first when you don't know the module name.",
+      "List spec module names: each specs/<name>/<name>.spec.md plus the names in .specsync/registry.toml (SPECSYNC-1). Call first when you don't know the module name.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -60,11 +61,11 @@ export const specsyncCommands: PluginCommand[] = [
   {
     name: "specsync-check",
     description:
-      "Run project spec-check (fledge run spec-check → specsync check). Failures block done (SPECSYNC-2/7).",
+      "Run the project spec check (its Fledge spec-check task if defined, else specsync check). Failures block done (SPECSYNC-2/7).",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
-      const result = await runSpecCheck(ctx.cwd);
+      const result = await runSpecCheck(ctx.cwd, ctx.signal);
       if (!result.success) {
         return {
           ok: false,
@@ -86,7 +87,9 @@ export const specsyncCommands: PluginCommand[] = [
       const name = ctx.args[0]?.replace(/^name=/, "");
       if (!name) return fail("missing module name (usage: specsync-brief <module>)");
       const spec = readModuleSpec(ctx.cwd, name);
+      if (!spec.ok && spec.refused) return fail(spec.error);
       const companions = readCompanions(ctx.cwd, name);
+      if (companions.error) return fail(companions.error);
       if (!spec.ok && companions.files.length === 0) {
         return fail(`no spec or companions found for module '${name}'`);
       }
@@ -116,9 +119,27 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
       const result = await spawnSpecsync(ctx.cwd, ["coverage", ...ctx.args]);
       if (!result.success) {
         return fail(result.output || "specsync coverage failed", result.code || 1);
+      }
+      return ok(ctx, { output: result.output }, result.output);
+    },
+  },
+  {
+    name: "specsync-score",
+    description:
+      "Show SpecSync spec score report, 0-100 per spec (SPECSYNC-3). Optional args: module names, --explain. Local binary only.",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
+      const result = await spawnSpecsync(ctx.cwd, ["score", ...ctx.args], ctx.signal);
+      if (!result.success) {
+        return fail(result.output || "specsync score failed", result.code || 1);
       }
       return ok(ctx, { output: result.output }, result.output);
     },
@@ -129,6 +150,8 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
       const result = await spawnSpecsync(ctx.cwd, ["change", "list", ...ctx.args]);
       if (!result.success) {
         return fail(result.output || "specsync change list failed", result.code || 1);
@@ -142,6 +165,8 @@ export const specsyncCommands: PluginCommand[] = [
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
+      const rootRefused = refuseRootArg(ctx.args);
+      if (rootRefused) return fail(rootRefused);
       const result = await spawnSpecsync(ctx.cwd, [
         "change",
         "ship-status",

@@ -12,60 +12,45 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { Glob } from "bun";
-import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
+import type {
+  PluginCommand,
+  PluginHandlerResult,
+  PluginImage,
+} from "../../src/plugins/types.ts";
+import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
 import {
   isProtectedPath,
   isSecretPath,
   protectedRefuseMessage,
+  secretPathsRefused,
   secretRefuseMessage,
 } from "./protectedPaths.ts";
 import {
-  resolveActingIsAdmin,
-  roleSessionActive,
-} from "../../src/plugins/roles.ts";
-import {
   assertExistingFile,
   PathEscapeError,
+  realRoot,
   resolveProjectPath,
 } from "./resolvePath.ts";
+import { ArgvError, parseArgv } from "./argv.ts";
 
-function flagValue(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name);
-  if (idx < 0) return undefined;
-  const v = args[idx + 1];
-  return v != null && !v.startsWith("--") ? v : undefined;
-}
+/** Boolean flags any files-* command understands; everything else is data. */
+const BOOL_FLAGS = [
+  "--json",
+  "--replace-all",
+  "--show-hidden",
+  "--allow-large",
+  "--allow-empty",
+] as const;
 
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name);
-}
-
-function positional(args: string[], skipFlags: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (skipFlags.includes(a)) {
-      i++;
-      continue;
-    }
-    if (
-      a === "--json" ||
-      a === "--replace-all" ||
-      a === "--show-hidden" ||
-      a === "--allow-large"
-    ) {
-      continue;
-    }
-    if (a.startsWith("--")) continue;
-    out.push(a);
-  }
-  return out;
-}
-
-function refuseProtected(userPath: string, absPath: string): PluginHandlerResult | null {
-  if (isProtectedPath(userPath) || isProtectedPath(absPath)) {
+function refuseProtected(
+  userPath: string,
+  absPath: string,
+  cwd: string,
+): PluginHandlerResult | null {
+  const root = realRoot(cwd);
+  if (isProtectedPath(userPath, root) || isProtectedPath(absPath, root)) {
     return {
       ok: false,
       error: protectedRefuseMessage(userPath),
@@ -76,13 +61,42 @@ function refuseProtected(userPath: string, absPath: string): PluginHandlerResult
 }
 
 function errResult(err: unknown): PluginHandlerResult {
-  if (err instanceof PathEscapeError) {
+  if (err instanceof PathEscapeError || err instanceof ArgvError) {
     return { ok: false, error: err.message, exitCode: 1 };
   }
   return {
     ok: false,
     error: err instanceof Error ? err.message : String(err),
     exitCode: 1,
+  };
+}
+
+/**
+ * files-read of a PNG / JPEG / GIF / WebP (REQ-plugins-427): metadata in
+ * `data` and `message`, the bytes only on `image`. Over the 20MB image cap
+ * is refused.
+ */
+function readImage(
+  pathArg: string,
+  abs: string,
+  mediaType: PluginImage["mediaType"],
+  size: number,
+): PluginHandlerResult {
+  const overCap = (n: number): PluginHandlerResult => ({
+    ok: false,
+    error:
+      `refused: image '${pathArg}' is ${n} bytes, over the ` +
+      `${MAX_IMAGE_SIZE_BYTES / (1024 * 1024)}MB image limit`,
+    exitCode: 1,
+  });
+  if (size > MAX_IMAGE_SIZE_BYTES) return overCap(size);
+  const buf = readFileSync(abs);
+  if (buf.length > MAX_IMAGE_SIZE_BYTES) return overCap(buf.length);
+  return {
+    ok: true,
+    data: { path: pathArg, bytes: buf.length, mediaType, image: true },
+    message: `image ${pathArg} (${mediaType}, ${buf.length} bytes) opened for viewing`,
+    image: { path: pathArg, mediaType, base64: buf.toString("base64") },
   };
 }
 
@@ -112,29 +126,32 @@ export const filesCommands: PluginCommand[] = [
   {
     name: "files-read",
     description:
-      "Read file contents under the project cwd. Args: <path> [--json]",
+      "Read file contents under the project cwd. A PNG/JPEG/GIF/WebP image (up to 20MB) is shown to you as a picture. Args: <path> [--json]",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
       try {
-        const pos = positional(ctx.args, []);
-        const pathArg = flagValue(ctx.args, "--path") ?? pos[0];
+        const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
+        const pathArg = argv.values.get("--path") ?? argv.positional[0];
         if (!pathArg) {
           return { ok: false, error: "missing path", exitCode: 1 };
         }
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         // ROLES-CHAT-8: community sessions cannot read secret-looking paths.
         if (
-          roleSessionActive() &&
-          !(await resolveActingIsAdmin()) &&
+          (await secretPathsRefused()) &&
           (isSecretPath(pathArg) || isSecretPath(abs))
         ) {
           return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
         }
         assertExistingFile(abs);
+        // DISCORD-9 (REQ-plugins-427): an image goes to the model as pixels
+        // (result.image, never serialized), not as a lossy UTF-8 decode.
+        const img = sniffImageFile(abs);
+        if (img) return readImage(pathArg, abs, img.mediaType, img.size);
         const content = readFileSync(abs, "utf8");
         const data = { path: pathArg, bytes: Buffer.byteLength(content), content };
-        if (ctx.json || hasFlag(ctx.args, "--json")) {
+        if (ctx.json || argv.flags.has("--json")) {
           return { ok: true, data, message: content };
         }
         return { ok: true, data, message: content };
@@ -146,31 +163,43 @@ export const filesCommands: PluginCommand[] = [
   {
     name: "files-write",
     description:
-      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large]. SAFE-2 protected paths refused. Mutating (ROLES-CHAT-5).",
+      "Write content to a file (overwrite). minTier=code. Args: <path> <content|--content ...> [--allow-large] [--allow-empty]. Content may start with '--'. Emptying a non-empty file needs --allow-empty. SAFE-2 protected paths refused. Mutating (ROLES-CHAT-5).",
     dangerous: false,
     mutating: true,
     minTier: 2,
     async handler(ctx) {
       try {
-        const pathArg = flagValue(ctx.args, "--path") ?? positional(ctx.args, ["--content", "--path"])[0];
+        const argv = parseArgv(ctx.args, ["--content", "--path"], BOOL_FLAGS);
+        const flaggedPath = argv.values.get("--path");
+        const pathArg = flaggedPath ?? argv.positional[0];
         if (!pathArg) {
           return { ok: false, error: "missing path", exitCode: 1 };
         }
-        let content = flagValue(ctx.args, "--content");
-        if (content == null) {
-          const pos = positional(ctx.args, ["--content", "--path"]);
-          // path is first positional; content is rest joined
-          content = pos.slice(1).join(" ");
-        }
-        if (content == null) content = "";
+        // Content: --content, else the positionals after the path, joined.
+        const content =
+          argv.values.get("--content") ??
+          argv.positional.slice(flaggedPath != null ? 0 : 1).join(" ");
 
         const abs = resolveProjectPath(ctx.cwd, pathArg);
-        const blocked = refuseProtected(pathArg, abs);
+        const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
 
-        const allowLarge = hasFlag(ctx.args, "--allow-large");
+        const allowLarge = argv.flags.has("--allow-large");
         if (existsSync(abs)) {
           const originalLen = statSync(abs).size;
+          if (
+            originalLen > 0 &&
+            content.length === 0 &&
+            !argv.flags.has("--allow-empty")
+          ) {
+            return {
+              ok: false,
+              error:
+                `refused: write to '${pathArg}' would empty it (${originalLen} bytes to 0; ` +
+                `content is empty or missing). Pass --allow-empty to override if intentional.`,
+              exitCode: 1,
+            };
+          }
           const boom = checkSizeExplosion(
             pathArg,
             originalLen,
@@ -201,11 +230,14 @@ export const filesCommands: PluginCommand[] = [
     minTier: 2,
     async handler(ctx) {
       try {
-        const pathArg =
-          flagValue(ctx.args, "--path") ??
-          positional(ctx.args, ["--old", "--new", "--path", "--content"])[0];
-        const oldStr = flagValue(ctx.args, "--old");
-        const newStr = flagValue(ctx.args, "--new");
+        const argv = parseArgv(
+          ctx.args,
+          ["--old", "--new", "--path", "--content"],
+          BOOL_FLAGS,
+        );
+        const pathArg = argv.values.get("--path") ?? argv.positional[0];
+        const oldStr = argv.values.get("--old");
+        const newStr = argv.values.get("--new");
         if (!pathArg || oldStr == null || newStr == null) {
           return {
             ok: false,
@@ -214,12 +246,12 @@ export const filesCommands: PluginCommand[] = [
           };
         }
         const abs = resolveProjectPath(ctx.cwd, pathArg);
-        const blocked = refuseProtected(pathArg, abs);
+        const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
         assertExistingFile(abs);
 
         const original = readFileSync(abs, "utf8");
-        const replaceAll = hasFlag(ctx.args, "--replace-all");
+        const replaceAll = argv.flags.has("--replace-all");
         if (!original.includes(oldStr)) {
           return {
             ok: false,
@@ -240,11 +272,13 @@ export const filesCommands: PluginCommand[] = [
             };
           }
         }
+        // Function replacer: --new is literal data, so `$$`, `$&`, `$'`, `` $` ``
+        // are never expanded as String.replace patterns (matches --replace-all).
         const next = replaceAll
           ? original.split(oldStr).join(newStr)
-          : original.replace(oldStr, newStr);
+          : original.replace(oldStr, () => newStr);
 
-        const allowLarge = hasFlag(ctx.args, "--allow-large");
+        const allowLarge = argv.flags.has("--allow-large");
         const boom = checkSizeExplosion(
           pathArg,
           Buffer.byteLength(original),
@@ -271,9 +305,8 @@ export const filesCommands: PluginCommand[] = [
     minTier: 0,
     async handler(ctx) {
       try {
-        const pattern =
-          flagValue(ctx.args, "--pattern") ??
-          positional(ctx.args, ["--pattern"])[0];
+        const argv = parseArgv(ctx.args, ["--pattern"], BOOL_FLAGS);
+        const pattern = argv.values.get("--pattern") ?? argv.positional[0];
         if (!pattern) {
           return { ok: false, error: "missing glob pattern", exitCode: 1 };
         }
@@ -287,9 +320,16 @@ export const filesCommands: PluginCommand[] = [
         }
         const glob = new Glob(pattern);
         const matches: string[] = [];
+        // ROLES-CHAT-8: non-ADMIN role sessions do not see secret paths.
+        const hideSecrets = await secretPathsRefused();
+        const root = realRoot(ctx.cwd);
         for await (const m of glob.scan({ cwd: ctx.cwd, onlyFiles: true, dot: true })) {
+          if (hideSecrets && isSecretPath(m)) continue;
           try {
-            resolveProjectPath(ctx.cwd, m);
+            const abs = resolveProjectPath(ctx.cwd, m);
+            // A pattern naming a symlinked dir (`notes/*`, notes -> .ssh)
+            // walks into it; judge the resolved path too.
+            if (hideSecrets && isSecretPath(relative(root, abs))) continue;
             matches.push(m);
           } catch {
             // skip escapes
@@ -317,16 +357,25 @@ export const filesCommands: PluginCommand[] = [
     minTier: 0,
     async handler(ctx) {
       try {
-        const pathArg =
-          flagValue(ctx.args, "--path") ??
-          positional(ctx.args, ["--path"])[0] ??
-          ".";
+        const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
+        const pathArg = argv.values.get("--path") ?? argv.positional[0] ?? ".";
         const abs = resolveProjectPath(ctx.cwd, pathArg);
+        // ROLES-CHAT-8: non-ADMIN role sessions cannot list a secret dir
+        // (.ssh, keystores; also through a symlink) nor see secret entries.
+        const hideSecrets = await secretPathsRefused();
+        if (
+          hideSecrets &&
+          (isSecretPath(pathArg) || isSecretPath(relative(realRoot(ctx.cwd), abs)))
+        ) {
+          return { ok: false, error: secretRefuseMessage(pathArg), exitCode: 2 };
+        }
         if (!existsSync(abs) || !statSync(abs).isDirectory()) {
           return { ok: false, error: `Not a directory: ${pathArg}`, exitCode: 1 };
         }
-        const showHidden = hasFlag(ctx.args, "--show-hidden");
-        const names = readdirSync(abs).filter((n) => showHidden || !n.startsWith("."));
+        const showHidden = argv.flags.has("--show-hidden");
+        const names = readdirSync(abs).filter(
+          (n) => (showHidden || !n.startsWith(".")) && !(hideSecrets && isSecretPath(n)),
+        );
         const entries = names.map((name) => {
           const full = join(abs, name);
           let type: "file" | "dir" | "symlink" | "other" = "other";
@@ -346,7 +395,7 @@ export const filesCommands: PluginCommand[] = [
           return prefix + e.name;
         });
         const data = { path: pathArg, count: entries.length, entries };
-        if (ctx.json || hasFlag(ctx.args, "--json")) {
+        if (ctx.json || argv.flags.has("--json")) {
           return { ok: true, data, message: JSON.stringify(data, null, 2) };
         }
         return {
@@ -367,14 +416,13 @@ export const filesCommands: PluginCommand[] = [
     minTier: 2,
     async handler(ctx) {
       try {
-        const pathArg =
-          flagValue(ctx.args, "--path") ??
-          positional(ctx.args, ["--path"])[0];
+        const argv = parseArgv(ctx.args, ["--path"], BOOL_FLAGS);
+        const pathArg = argv.values.get("--path") ?? argv.positional[0];
         if (!pathArg) {
           return { ok: false, error: "missing path", exitCode: 1 };
         }
         const abs = resolveProjectPath(ctx.cwd, pathArg);
-        const blocked = refuseProtected(pathArg, abs);
+        const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
         assertExistingFile(abs);
         rmSync(abs);

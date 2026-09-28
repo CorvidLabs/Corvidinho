@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-version-presence-rides-every-gateway-identify-via-the-client-presence-option-and-is-still-set-on-clientready",
+  "implementation_commit": "3d8c56d05dbfc4996f6c6265edfaaab78cf2cbd3",
+  "implementation_tree": "ce0632f66f5f21c981daa37d34f1fb6d8c49d926",
+  "contract_digest": "dcf307eefc33ebc0fcf73bce6e2d576dd594bccfe28e2076222992ec1616663d",
+  "workspace_digest": "3249103faaca53a86308958ceab9159d12b03e05f67dbdd7e1625ae86ed0ef7d",
+  "closing_digest": "d8d5392cba893328c4f0288925e811cf7575e6c83a61502ca69d5a8c99af36e2",
+  "review_digest": "f8630d048216ba5a92c4ad1f6ed5739603a7e2cddf62fb805529860d701b2653",
+  "finalization_digest": "abcc40f00605c9f6977f5e0e64aecf412fd069d79a5ca695034e296beea8eefd",
+  "timestamp": 1790532980
+}

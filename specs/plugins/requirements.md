@@ -66,9 +66,38 @@ Acceptance Criteria
 
 Allowlists SHALL load from bot-VM config file (`CORVIDINHO_ALLOWLIST_FILE` or `~/.config/corvidinho/allowlist.toml|json`) with env overlays (ALLOW-4). Secrets stay in env.
 
+The TOML file SHALL be read as a minimal subset: `[section]` headers and
+`key = value`, where a value is an array of quoted strings or bare words that
+MAY span lines, with a trailing comma and `#` comments between items, or a
+one-line `"a,b"` / `a b` list. Any Unicode whitespace (a pasted U+00A0
+included) SHALL separate tokens. Single-line allow/deny lists SHALL read as
+before. In `[github]`, `[discord]` and the top level, any line or value
+outside that subset (unterminated or malformed array or string, unsupported
+key or escape) SHALL be a load error that names the line and key but no
+values. So SHALL a header that names github or discord in a form the reader
+does not support (`[[github]]`, `["discord"]`, `[github`), any other
+malformed header (unbalanced brackets, a stray array line), and a `deny…`
+key anywhere outside `[github]` / `[discord]`, where the loader would ignore
+it. Other sections — `[owner]`, and loosely written headers such as
+`[my notes]` or `[[rules]]` — SHALL stay lenient and SHALL NOT stop a load.
+A file that exists but cannot be read or parsed (TOML or JSON) SHALL make
+`loadAllowlist` throw instead of falling back to env overlays alone, so a
+deny list in the file can never be dropped while an env allow admits the
+target (fail closed; GITHUB-6, ALLOW-1..6). Action gates (`git-push`,
+`discord-post-message`, the GitHub repo gate) SHALL turn that into a normal
+refusal with exit 3 naming the file problem (path, line and key, never list
+values), never a thrown error, and `corvidinho doctor` SHALL report it as a
+failing `allowlist-file` check with the same error. A missing file SHALL
+still mean env overlays only.
+
 Acceptance Criteria
 - File path env and default home config paths are consulted.
 - Env overlays (e.g. `CORVIDINHO_GITHUB_ALLOW_REPOS`) merge over file.
+- `orgs` / `repos` / `deny_repos` / `deny_orgs` arrays spanning lines (trailing comma, `#` comments) load every item; a multi-line file `deny_repos` refuses the repo at the gate and in `git-push` (exit 3) while an env allow admits its org.
+- Single-line files parse to the same result as the previous reader (corpus includes `allowlist.example.toml`).
+- An unterminated or malformed array or string, a bad key or a bad header in an allow/deny section throws; `loadAllowlist` rejects for a malformed TOML or JSON file.
+- A pasted U+00A0 between tokens parses; `[my notes]`, `[[rules]]` and `['x']` sections do not stop a load; a `deny_*` key at the top level or in another section, `[[discord]]`, `["github"]`, a stray `["a", "b"]` line and unbalanced brackets throw.
+- With a malformed file, `git-push` (nothing pushed) and `discord-post-message` refuse with exit 3 and the line/key error, without the list values; `corvidinho doctor` shows `[fail] allowlist-file` with the parse error, `[ok]` for a file that loads and `[info]` when there is none.
 
 ### REQ-plugins-007
 
@@ -81,15 +110,29 @@ Acceptance Criteria
 
 ### REQ-plugins-008
 
-Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
+Built-ins SHALL register SpecSync agent tools `specsync-list`, `specsync-read`, `specsync-check`, `specsync-brief`, plus cheap `specsync-coverage`, `specsync-score`, `specsync-change-list`, `specsync-ship-status` that use the local SpecSync binary / project files only (SPECSYNC-1/2/3/6; Merlin fledge-plugin-specsync steal). No SpecSync API key.
+
+`specsync-check` SHALL run `fledge run spec-check` only when `fledge` is on PATH and the project's own `fledge.toml` defines a `spec-check` task; otherwise it SHALL run the local `specsync check` (SPECSYNC-2/7). A `fledge.toml` that cannot be read or parsed SHALL keep the Fledge path (fail closed). `specsync-score` SHALL be read-only (tier 0, not dangerous) and return the local `specsync score` report with the forwarded args (SPECSYNC-3).
+
+The tools SHALL stay inside the project: they read this repo's `specs/` and the companions next to a spec, using project files only (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6), as typed plugin commands (PLUGIN-1). `specsync-read` and `specsync-brief` SHALL accept only a plain module name (letters, digits, `_` or `-`, the form `.specsync/registry.toml` names use; an optional `name=` prefix is stripped first) and SHALL refuse any other name before reading anything. Every file they read (the module spec, the legacy flat spec and each companion) SHALL resolve, with symlinks followed, inside the real path of the project's `specs/` dir, which SHALL itself resolve inside the real project root. `specsync-coverage`, `specsync-score`, `specsync-change-list` and `specsync-ship-status` SHALL refuse a forwarded `--root` argument before spawning `specsync`.
 
 Acceptance Criteria
-- `plugins list` includes the SpecSync command names.
+- `plugins list` includes the SpecSync command names, `specsync-score` among them.
 - `specsync-list` returns registered module names from `.specsync/registry.toml`.
+- With no `.specsync/registry.toml` in a project whose `.specsync/` is a dir (the layout `specsync init` + `specsync scaffold <name>` leave), `specsync-list` and `corvidinho specsync list` return, sorted, each module name with a `specs/<name>/<name>.spec.md` (a plain module name; the spec a file resolving inside the real `specs/` dir); a listed name reads with `specsync-read` / `specsync-brief`, and the Planning spec briefing (`loadRelevantSpecs`) includes that module's constraint sections and its `context.md` / `tasks.md` companions (SPECSYNC-1 / SPECSYNC-5).
+- When `.specsync/registry.toml` exists its `[specs]` names are listed together with those `specs/` modules (sorted, each once), so a module scaffolded after `specsync init-registry`, which the registry does not name, is still listed and briefed. With no `.specsync/` dir, no `specs/` dir, or a `specs/` dir resolving outside the project, no name is listed from `specs/`; a legacy flat `specs/<name>.md`, a dir without its spec, a spec that is a dir, a name that is not a plain module name, and a spec or module dir that links outside `specs/` are not listed from `specs/` and never reach the Planning briefing.
 - `specsync-read <module>` returns `specs/<module>/<module>.spec.md` contents.
 - `specsync-check` runs project `spec-check` (fledge task or `specsync check` fallback) and fails non-zero on drift.
+- With fledge on PATH and a project `fledge.toml` that has no `spec-check` task, or no `fledge.toml`, `specsync-check` runs `specsync check` and returns its result (no `Unknown task 'spec-check'` failure); with the task defined it runs `fledge run spec-check` and a failing task fails `specsync-check` (exit 1, `spec check failed`).
+- `projectDefinesSpecCheckTask` is true for a `fledge.toml` that cannot be parsed, false for one without the task or no file.
+- `specsync-score [args]` spawns the local `specsync score [args]` (e.g. `cli --explain`, `--format json`) and returns its report; a non-zero `specsync score` exit (e.g. `--min-score`) passes through with the report. It is offered in the default tool-tier catalog.
 - `specsync-brief <module>` returns companion files when present.
-
+- `specsync-read` / `specsync-brief` with a name that is not a plain module name — a relative traversal (`../../<outside>/outside`, `../../../..<abs>`), an absolute path, `.` / `..`, a path separator (`/` or `\`), a NUL byte or any other character — fail with exit 1 and a one-line `invalid spec module name` error (the name JSON-escaped, never a raw NUL) and read nothing.
+- A module spec, legacy flat spec, module dir or companion that is a symlink resolving outside the project's `specs/` dir, or a `specs/` dir that resolves outside the project root, is refused with exit 1 and a `resolves outside` error naming only the in-project path; a refused companion fails the whole brief; no outside content is returned.
+- Symlinks that stay inside `specs/` still read, and a missing module still reports `spec '<name>' not found`.
+- `specsync-coverage`, `specsync-score`, `specsync-change-list` and `specsync-ship-status` given `--root <dir>` or `--root=<dir>` fail with exit 1 (`refused: --root is not allowed; SpecSync tools run on this project only`) and `specsync` is not spawned.
+- A tool-loop `specsync-read` call with a traversal name returns the refusal to the model, not the outside file.
+- The Planning spec briefing (`loadRelevantSpecs`), which reads through the same helpers, leaves out a registered module whose spec or module dir resolves outside `specs/` and never includes a companion that does.
 
 ### REQ-plugins-009
 
@@ -196,12 +239,25 @@ Acceptance Criteria
 project infra with no override (SAFE-2): `.env` / `.env.*`, `.git` components,
 basename `fledge.toml`, basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
 config whose `preload` would run code in spawned agents), paths under `specs/`
-or ending in `.spec.md`, and keystore-like basenames (`*keystore*`,
-`wallet-keystore.json`).
+or ending in `.spec.md`, SpecSync state under `.specsync/` (config, registry,
+version, archive, and `.specsync/changes` / `.specsync/changes/<id>`
+themselves) except the files inside an active change folder
+`.specsync/changes/<id>/` (which stay writable so change artifacts can be
+filled, SPECSYNC-4), and any path component inside the project containing
+`keystore` (a keystore file such as `wallet-keystore.json` or any file under a
+keystore directory such as `keystore/UTC--…`). Components of the project
+root's own absolute path SHALL NOT be matched against `keystore`, so a project
+checked out under a keystore-named directory keeps its ordinary files
+writable; nor SHALL a SpecSync change folder's name (`.specsync/changes/<id>/`,
+`.specsync/archive/changes/<id>/`), which is a slug of the change title.
 
 Acceptance Criteria
 - Protected write/edit/delete tests refuse; target file unchanged after refuse.
 - files-write of `bunfig.toml` / `.bunfig.toml` (any directory) is refused and no file is created.
+- files-write, files-edit and files-delete of a file under a keystore directory (`keystore/UTC--…`, `config/Keystore/wallet.json`), a new file there, or a symlink resolving into one are refused with SAFE-2 (exit 2) and the file is unchanged / not created.
+- files-write, files-edit and files-delete of `.specsync/config.toml`, `.specsync/registry.toml`, a new `.specsync/` top-level file or a `.specsync/archive/` file are refused with SAFE-2 (exit 2); a file under `.specsync/changes/<id>/` is still written, also when `<id>` contains `keystore`; files-write of `.specsync/changes` or `.specsync/changes/<id>` itself is refused and nothing is created.
+- In a project whose root directory name contains `keystore`, files-write (relative or absolute path) and files-edit of ordinary files succeed, and `keystore/…` inside it is still refused.
+- git-commit refuses to stage the deletion of `.specsync/config.toml` (exit 2, SAFE-2) and stages the deletion of a `.specsync/changes/<id>/` file.
 
 ### REQ-plugins-084
 
@@ -280,12 +336,22 @@ The chain SHALL be HMAC-SHA256 keyed by `CORVIDINHO_AUDIT_HMAC_KEY` from the
 bot-VM environment (never stored in the DB); without a key it is a SHA-256
 integrity chain reported as unkeyed. `verifyAudit` SHALL recompute the chain
 and report the first tampered row; keyed rows are unverifiable without the key.
+Once the chain holds a keyed row it SHALL stay keyed: `appendAudit` without a
+key SHALL refuse to append after a keyed row, and `verifyAudit` SHALL report
+an unkeyed row that follows a keyed row as the first tampered row, so a keyed
+row cannot be rewritten and relinked as a plain SHA-256 link while a keyed row
+before it stays. An unkeyed prefix followed by keyed rows (key set later)
+SHALL still verify. Rewriting every keyed row, from the first keyed row on, as
+unkeyed links, or dropping the newest rows, is not detectable from the DB
+alone; catching it needs an anchor kept outside the DB.
 
 Acceptance Criteria
 - Allowed dangerous run appends started + ok rows; raw args are not stored.
 - Non-interactive denial appends a denied row; safe plugins append nothing.
 - A dangerous run is refused when its started row cannot be written.
 - Tampering is detected at the first bad row; wrong/missing key fails verify.
+- A keyed row that follows a keyed row, edited and relinked with the rows after it as unkeyed SHA-256 links, fails verify with the key at that row (`chain BROKEN at #N`).
+- Without the key, appending after a keyed row is refused, so a keyless dangerous run fails closed and the chain stays keyed; an unkeyed prefix followed by keyed rows still verifies (`mixed keyed/unkeyed`).
 
 ### REQ-plugins-042
 
@@ -325,8 +391,9 @@ files-plugin clamp (escapes and symlink escapes refused) and be passed after
 
 `git-commit` SHALL require a message and stage explicit file paths only
 (no directories, no `--all`, no `--amend`), SHALL refuse staging the deletion
-of SAFE-2 protected paths (`isProtectedPath`) and any `.env*`, keystore or
-`.git` path, SHALL commit only the named paths, and SHALL report the
+of SAFE-2 protected paths (`isProtectedPath`) and any `.env*`, keystore (any
+path component containing `keystore`, with the REQ-plugins-083 SpecSync change
+folder exception) or `.git` path, SHALL commit only the named paths, and SHALL report the
 committed paths as `filesChanged`. `git-branch-create` SHALL validate the name
 and never reset an existing branch; when it switches it SHALL NOT overwrite
 ignored local files such as `.env*` or keystores (`--no-overwrite-ignore`;
@@ -345,6 +412,7 @@ Acceptance Criteria
 - git-status JSON reports branch, staged, unstaged and untracked entries from a temp repo, listing each new file in a new directory (which git-commit then accepts); git-diff worktree vs --staged differ and a small --max-bytes truncates.
 - git-log returns N oneline commits; git-branch-list marks the current branch; git-branch-create creates and switches, refusing an existing name and option-like names; `--from` a start point that tracks an ignored local .env / keystore is refused (exit 2) and the local files and HEAD are unchanged.
 - git-commit without a message or with only a directory is refused; it commits only named paths, reports filesChanged, refuses path escapes, .env, and staging a deleted protected path.
+- git-commit of a file under a keystore directory (`keystore/UTC--…`, `config/Keystore/wallet.json`) is refused (exit 2) and nothing is staged; a SpecSync change whose id contains `keystore` is still committed and archived (the deletion under `.specsync/changes/<id>/` and the new `.specsync/archive/changes/…` copy).
 - A plugin cwd that is a subdirectory of a repository (not the top level) is refused; unknown flags are refused.
 - Hooks in `.git/hooks` or a repo-local `core.hooksPath` never run on git-commit / git-push; git-status and git-commit work at the top level of a linked worktree (`.git` is a file).
 - git-push to a local bare remote is refused when OWNER/REPO is not allowlisted or is denied (exit 3) and succeeds when allowlisted; force/refspec args are refused (exit 2); a non-fast-forward push is rejected without force and the remote ref is unchanged; detached HEAD is refused.
@@ -366,11 +434,67 @@ Acceptance Criteria
 whose lexically-resolved `cd` or `pushd` target would land outside that root
 (SAFE-3). Refusals include absolute paths outside the root, `..` chains that
 escape, `~` / `~user`, `$VAR` references, and bare `cd` (home). Relative `cd`
-that stays under root and absolute `cd` under root SHALL be allowed.
+that stays under root and absolute `cd` under root SHALL be allowed. The clamp
+SHALL be fail-closed: any command it cannot resolve to an in-root target
+refuses.
+
+The clamp SHALL tokenize the way the shell reads a command. Quotes and
+backslash escapes SHALL join text into one word — a quoted or escaped space
+never splits a target, so `cd "sub dir"` is checked as `sub dir` — and SHALL be
+removed from a word before it is checked. A separator (`;`, `&`, `|`, newline,
+`(`, `)`) inside single or double quotes or escaped with `\` is not a
+separator. A backslash-newline outside single quotes SHALL be a line
+continuation, and an escaped backslash before a newline SHALL NOT be one. `#`
+at the start of a word SHALL start a comment that runs to the end of the line.
+The end of a `$(…)` SHALL be found by these same rules. dash reads the lines
+after `<<` / `<<-` as a here-doc body — data up to the exact delimiter line
+(the delimiter word itself is not expanded, so a `$(` or backtick in it is
+literal), apart from the `$(…)` and backtick substitutions of an unquoted
+body — while
+bash may read them as commands (`(( x << 2 ))` is arithmetic there), so a
+command containing `<<` SHALL be checked under both readings and SHALL refuse
+if either refuses, and so SHALL the re-parsed argument of `eval`; a quote
+inside a here-doc body therefore cannot hide the commands after it. bash reads
+`$'…'` as ANSI-C quoting, where `\` escapes even a `'`, while dash reads a `$`
+then a single-quoted string, so a command containing `$'` SHALL also be
+checked as bash reads it; a `$'…'` word holding a backslash escape counts as
+an expansion. A `cd` or
+`pushd` command that the text leaves open — an unterminated quote or a
+trailing backslash — SHALL refuse, and so SHALL a command nested too deeply
+to check. It SHALL find
+a `cd` or `pushd` behind prefix words (`{`, `}`, `!`, `if`, `then`, `else`,
+`elif`, `do`, `while`, `until`, `time`, `builtin`, `command`, `function NAME`)
+and `NAME=value` / `NAME+=value` assignments. It SHALL drop redirections
+(`>`, `>>`, `>&`, `>|`, `<`, `<>`, `<&`, `&>`, an `fd` prefix such as `2>&1`)
+together with their targets wherever they appear in the command, SHALL NOT
+treat the `&` of a redirection as a command separator, and SHALL skip
+`cd` / `pushd` options (`-P`, `-L`, `-e`, `-@`, `-n`, `--`) to reach the real
+target.
+
+It SHALL refuse `-` (OLDPWD); a target containing `$`, a backtick, a glob or a
+brace; a command word that the shell would expand (a command word containing
+`$`, `$(…)` or a backtick); an `eval` whose argument would expand; and a write
+to `DIRSTACK`. It SHALL re-parse the literal argument of `eval` as a command,
+and likewise the `-c` string of a shell (`sh`, `bash`, `dash`, `zsh`, `ksh`,
+`mksh`, `ash`, `yash`, `posh`, named by name or path anywhere in a simple
+command, so also behind `env`, `exec`, `nohup`, `timeout`, `xargs` or
+`find -exec`), refusing a `-c` string that would expand; and it SHALL analyse the body of each command substitution (`$(…)` and backticks)
+as a command, refusing an escaping `cd`/`pushd` found inside. The spawned shell
+SHALL run `CDPATH=; readonly CDPATH` before the command and SHALL NOT inherit
+`CDPATH` or `OLDPWD` from the bot's environment, so a `CDPATH` set anywhere in
+the command (including one built dynamically) cannot redirect a relative `cd`
+outside the root; `CDPATH` is therefore NOT refused lexically.
 
 Acceptance Criteria
 - Unit fixtures cover allow/refuse cases above.
 - Integration: `cd /tmp && …` and `cd ..` from root refuse with exit 2 and SAFE-3 message; `cd sub && …` inside project succeeds when allowlisted.
+- Redirection-hidden targets refuse: `>/dev/null cd /etc`, `cd >/dev/null /etc`, `cd</dev/null /etc`, `cd 2>&1 /etc`, `cd -P >/dev/null /etc`; an in-root `cd sub >/dev/null` and `cd 2>&1 sub` stay allowed.
+- Quote-aware forms refuse: `X="a b" cd /etc`, `X=';' cd /etc`, `cd "x /../.."`, `cd 'sub dir/../..'`; a backslash-newline `cd` (`c\`+newline+`d /etc`, `cd sub/\`+newline+`../..`) refuses; `cd "sub dir"` and `X=';' cd sub` stay allowed.
+- Quoting is read as the shell reads it: `mkdir -p "a b" && cd "a b/../.."`, `cd "zz q/../.."`, `cd a\ b/../..`, `cd 'a b'/../..` and `cd sub/..\`+newline+`/..` refuse; so does a `cd /etc` after an escaped backslash and a newline (`echo a\\`+newline), after a `#` comment holding a quote, after a here-doc body holding a lone quote (`<<EOF`, `<<'EOF'`, `<<-EOF`), or after a `$(…)` whose comment or here-doc holds a `)`; an escaping `cd` in a `$(…)` or backtick of an unquoted here-doc body refuses, also when the delimiter holds a backtick (`cat <<`+backtick+`x`+newline+`#' $(cd ..)`); `(( x = 1 << 2 ))`+newline+`cd /etc` refuses, also inside `eval` when quote removal forms the `<<`; `cd "sub`, `cd 'sub` and `cd sub\` refuse; `$(`-nesting too deep to check refuses instead of throwing; `cd sub # comment`, `cd sub \`+newline+`&& ls`, and an in-root `cd sub` after a here-doc whose body holds a stray quote or apostrophe stay allowed; `eval "cd /; ls"` refuses `/`. End to end each refused form returns exit 2 with SAFE-3 and nothing is spawned.
+- bash `$'…'` is read as bash reads it: `echo $'\''; cd /etc #'` refuses, and so do `cd $'\x2e\x2e'` and `$'\x63d' /etc`. A shell's `-c` string is checked like an `eval` argument: `sh -c 'cd /etc'`, `/bin/sh -ec 'cd /etc'`, `bash --norc -o pipefail -c 'cd ..'`, `env X=1 sh -c 'cd /etc'`, `timeout 5 sh -c 'cd /etc'`, `xargs sh -c 'cd /etc'`, `find . -exec sh -c 'cd /etc' \;` and `sh -c "cd $X"` refuse; `sh -c 'cd sub && ls'`, `bash -lc 'echo hi'` and `bash scripts/build.sh` stay allowed.
+- Expansion forms refuse: `$(echo cd) /etc`, `` `echo cd` /etc ``, `x=cd; $x /etc`, `cd${IFS}/etc`, `eval $(printf 'cd /etc')`, `echo` `` `cd /etc` `` and `echo $(cd /etc && cat x)`; `echo $(cd sub && ls)` and `eval 'cd sub'` stay allowed.
+- Bash `X+=1 cd /etc` refuses; a `DIRSTACK[...]=` write refuses.
+- With `OLDPWD` set outside the root in the bot's environment, `cd -` is refused before spawn; with `CDPATH` set outside the root, `cd sub && pwd` prints the in-root `sub`; a command that sets `CDPATH` to an outside dir and then runs a relative `cd sub` does not print the outside path.
 
 ### REQ-plugins-088
 
@@ -462,6 +586,40 @@ Acceptance Criteria
 - Output is fenced as untrusted data, control characters are stripped and vendor-key-looking secrets are redacted; a hostile title, Content-Type or status text never appears outside the fence.
 - HTML-to-text tag stripping repeats to a capped fixpoint, so split or nested tags never reassemble into markup and deeply nested hostile markup stays linear.
 
+### REQ-plugins-118
+
+The `council` command SHALL be registered from `plugins/autonomous/` with
+`dangerous: false`, `mutating: true` (a council runs workers, ROLES-CHAT-5),
+`minTier: 2` and `autonomous: true`. It is therefore hidden from the tool
+catalog unless the session is allowed (REQ-agent-117 / SAFE-9), and it is
+never offered to or run for a non-ADMIN role session (ROLES-CHAT-2/3/6). Its
+handler SHALL, in order: parse `[--voices N] [--tier read|tool] --question
+TEXT` (or positional text; `--question` takes the next item even when it
+starts with `-`; N is clamped to 2..5, default 3; the question is at most
+4000 chars) and exit 1 on a usage error or an unknown tier; refuse with exit
+2 and without spawning when the cwd's project has not enabled autonomous mode
+(AUTONOMOUS-1), when the run is not a top-level lead (a delegation depth
+other than 0: a delegated worker never convenes a council, so no voice can
+outlive a worker its lead stops, SAFE-9), when the lead's
+tier (the handler `tier`, else `CORVIDINHO_LLM_TIER`, default `tool`) is
+below code, or when the council budget is spent (one council at a time, at
+most 2 per lead process); otherwise run a council (REQ-agent-118) in the
+plugin cwd with the lead's abort signal. Every voice SHALL get an empty
+allowlist and a non-ADMIN role env, whatever the lead's allowlist or role.
+The result data SHALL carry `voices` (plus `voicesRequested` when clamped),
+`tier`, `tierClamped`, `depth`, `state`, `decision`, `phases`, `transcript`
+(the chair's text replaced by a pointer to `decision`), `filesChanged`,
+`elapsedMs` and, when present, `totalTokens`, `timedOut` and `aborted`. The
+result SHALL be ok (exit 0) only when the chair decided; otherwise it SHALL
+be ok=false with exit 130 when cancelled and exit 1 when failed.
+
+Acceptance Criteria
+- `council` is registered with dangerous=false, mutating=true, minTier=2 and autonomous=true, and is listed in `plugins list`.
+- The default catalog omits `council` at every tier. An allowed code-tier CLI / ADMIN session gets it; tool tier and non-ADMIN sessions do not.
+- Autonomous off, depth 1 (a delegated worker), depth 2, tool tier, an omitted tier with the default env tier, and a spent council budget are refused with exit 2 and spawn nothing. The depth 1 refusal names the top-level-lead rule and spends no council budget. A missing question and an unknown tier exit 1.
+- Against a fake bin, 3 voices make 7 worker runs. Each is `task run --non-interactive --tier read --output ndjson` with `--task` last and no `--no-verify`. Each env has depth 1, tier read, non-interactive, an empty `CORVIDINHO_ALLOWLIST` (even when the lead allowlists dangerous tools), `CORVIDINHO_ACTING_IS_ADMIN=0`, and no GitHub / Discord token or audit key. The data carries the decision and a 7-entry transcript.
+- `--tier code` is clamped to tool. A failed chair gives ok=false, exit 1, with the transcript. The council time cap gives exit 130 and state cancelled. The limiter allows one council at a time and 2 per run. A non-ADMIN role session's `runPlugin council` is refused with "not allowed for your role" and spawns nothing.
+
 ### REQ-plugins-093
 
 The system SHALL register read-only typed plugins `github-pr-diff` and
@@ -475,7 +633,16 @@ exit 3).
 unified diff, capped at 200 KiB of UTF-8 cut on a line boundary, with a clear
 `[corvidinho: diff truncated …]` marker when capped. `--file PATH` SHALL return
 only that file's diff section (matching the new or previous path) and SHALL
-fail with a clear error when the file is not in the PR.
+fail with a clear error when the file is not in the PR. The `--file` value
+SHALL be trimmed and stripped of leading `./`; a `--file` that is empty after
+that (for example `./` or whitespace) SHALL be a usage error (exit 1, no API
+call), never a fallback to the whole-PR diff. A file section rebuilt from
+`pulls.listFiles` SHALL carry `rename from`/`rename to` lines for a renamed
+file and `copy from`/`copy to` lines for a copied file. When GitHub returns no
+patch and reports no changed lines for a renamed, copied, or mode/type-changed
+(`changed`) file, the section SHALL say the content is unchanged (a pure
+rename, copy, or mode change; for rename/copy, unless the file is binary) and
+SHALL NOT describe it as a binary file or a diff that is too large.
 
 `github-pr-files <number> --repo OWNER/REPO [--limit N]` SHALL list changed
 files with status, additions and deletions (and the previous name for
@@ -494,6 +661,8 @@ Acceptance Criteria
 - `plugins list` shows `github-pr-diff` and `github-pr-files` with dangerous=false and minTier=0.
 - Empty or deny-listed repo refuses with exit 3 before any Octokit call.
 - A diff over 200 KiB returns at most 200 KiB plus the truncation marker; `--file` returns one file's section.
+- `--file ./`, `--file "   "`, `--file=./` and `--file " ././ "` each fail with a usage error and make no API call.
+- A pure rename, pure copy, or `changed` (mode) entry with no patch and 0 lines says content unchanged, not binary or too large; a copied file's section has `copy from`/`copy to` lines; entries with line changes but no patch keep the binary/too-large note.
 - `github-pr-files` pages `pulls.listFiles`, honours `--limit`, and sets `truncated`.
 - Vendor-token-looking strings in diff text are redacted, including one straddling the cap.
 - A hostile diff far over the cap (many private-key openers, no closer) returns quickly; a private key split by the hard cut is not returned.
@@ -520,32 +689,54 @@ SHALL be skipped with a reason. A missing fledge binary, non-zero exit,
 unexpected JSON, oversized output or timeout SHALL degrade to zero Fledge
 commands with a reason and SHALL NOT affect builtins.
 
+Each registered Fledge command SHALL be bound to the project root (resolved
+cwd) it was discovered for. Loading another root SHALL rebind same-named
+Fledge commands to that root's plugin (origin, tier and danger from it) and
+SHALL remove Fledge commands that root does not offer, including when its
+discovery fails; a cached load SHALL be reused only while every Fledge
+command in the registry is still bound to that root; a forced reload SHALL
+pick up a changed plugin version. A bound command called with any other cwd
+SHALL be refused with exit 2 without starting fledge, so a long-running
+process never runs one project's plugin under another project's name.
+
 Acceptance Criteria
 - Fake fledge fixture: list + audit rows register `fledge-hello`, `fledge-bye`, `fledge-tz`, `fledge-runner`, all dangerous; native → minTier 2, wasm without exec → 1, wasm with exec → 2, audit unavailable → 2.
 - Invalid or overlong command names are skipped with a warning; duplicate names across plugins are skipped with a reason.
 - Missing fledge, exit 3, bad JSON and a 200 ms timeout each return ok=false with a reason and leave the builtin list unchanged.
 - The description names the plugin, version, trust tier and sandbox and never the source path.
+- Two roots with different plugins behind `fledge-hello`: after loading the second, origin and minTier come from its plugin, the first root's other commands are gone, a call from the first root's cwd is refused with exit 2 and runs nothing, and loading the first root again rebinds it.
+- A root whose discovery fails leaves no other root's Fledge command registered; builtins stay.
 
 ### REQ-plugins-113
 
 Running `fledge-<command>` SHALL execute
-`fledge --non-interactive plugins run <command> <argv...>` as an argv array
-(no shell interpolation) with cwd pinned to the plugin cwd (project root /
-task worktree), stdin closed, and a child env that drops `CORVIDINHO_*`,
+`fledge --non-interactive plugins run <command> -- <argv...>` as an argv array
+(no shell interpolation) with cwd pinned to the bound project root, stdin
+closed, and a child env that drops `CORVIDINHO_*`,
 `DISCORD_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`,
 keeps the rest (including GitHub tokens for GitHub-backed Fledge plugins), and
-sets `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`. Output SHALL be
+sets `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`. The `--` SHALL
+end fledge's own options so model-supplied argv such as `--help`, `--json`
+or `--ni` reach the plugin verbatim (fledge 1.8 passes everything after one
+`--` to the plugin). Output SHALL be
 secret-scrubbed with `scrubSecrets` (SAFE-6) and capped per stream; a run
-SHALL time out (default 120 s) and be killed with exit 124; a non-zero exit
+SHALL time out (default 120 s) and be killed with exit 124; the calling run's
+abort signal (AGENT-3) SHALL stop it with exit 130 (`aborted`), and an
+already-aborted call SHALL not start fledge. Fledge SHALL run in its own
+process group and a timeout or abort SHALL stop its whole process tree
+(REQ-plugins-154), including a grandchild left holding the output pipes after
+the plugin exited. A non-zero exit
 SHALL be a failed result carrying that exit code; a binary that cannot start
 SHALL fail with exit 127 instead of throwing. SAFE-1 SHALL deny the command in
 non-interactive mode unless `fledge-<command>` is allowlisted, and SAFE-5
 audit rows SHALL be recorded as for any dangerous plugin.
 
 Acceptance Criteria
-- Non-interactive without allowlist → exit 2 with SAFE-1; allowlisted → fake fledge sees `plugins run hello` and each argv item verbatim (spaces, `$(…)`, `;` not interpreted), cwd = project root.
+- Non-interactive without allowlist → exit 2 with SAFE-1; allowlisted → argv is `plugins run hello -- <argv...>` and the fake plugin sees each argv item verbatim (spaces, `$(…)`, `;` not interpreted), cwd = project root.
+- `--help`, `--json`, `--ni` and a literal `--` as argv reach the plugin in order, and fledge's own help is never printed.
 - The child env lacks Discord / Corvidinho LLM / audit keys, keeps `GITHUB_TOKEN`, and has `FLEDGE_NON_INTERACTIVE=1`.
 - Exit 7 → ok=false exitCode 7; sleep past a 200 ms timeout → exitCode 124; missing binary → 127.
+- A timeout kills a same-group and a `setsid` grandchild, and a background grandchild left after the plugin exited; an abort returns exit 130 with `aborted` and kills the tree.
 - A `ghp_…` token in plugin output is redacted and output past the cap is truncated with a marker.
 
 ### REQ-plugins-114
@@ -601,4 +792,302 @@ Acceptance Criteria
 - A permission 403 on statuses gives a check-runs-only verdict plus a warning; a rate-limit or SSO 403 fails the command; the warning also shows for verdict `none`.
 - Rows keep `name/state/bucket/link` and add `kind/status/conclusion`; `plugins list` still shows dangerous=false minTier=0; missing or denied `--repo` still exits 3.
 - Tests use a mocked Octokit / stubbed transport only (no network, no real token).
+
+### REQ-plugins-154
+
+A bounded child process SHALL NOT outlive its limit (AGENT-3).
+`src/plugins/proc-group.ts` SHALL provide the Linux process-tree stop used by
+Fledge runs, delegate workers and spawned schedule/chat runs, which SHALL be
+spawned with `detached: true` (their own session and process group).
+Stopping a child SHALL signal every process group led by a member of its
+tree, including the child's own group after the child exited, and every
+descendant found by walking `/proc` parent links, so a grandchild that moved
+to its own group or session is reached while its parent lives. A hard kill
+SHALL freeze the tree with SIGSTOP, re-read `/proc` until no new member
+appears, then SIGKILL. A graceful stop MAY first send SIGTERM and return the
+members it saw, so a later hard kill still reaches grandchildren orphaned
+meanwhile. Pid reuse SHALL be guarded: the root pid is used only while it is
+still this process's child or matches a remembered start time, and a group
+whose leader exited only through a remembered member still in it or a
+snapshot taken as the leader exited. This process, its own process group and
+pid 1 SHALL never be signalled, and the helpers SHALL never throw.
+
+A tracked child SHALL be stopped with its tree when this process exits, and
+when SIGINT, SIGTERM or SIGHUP arrives while no other listener handles that
+signal; the signal SHALL then be re-raised with its default action. The hook
+SHALL run before other listeners and count them, so a process that handles
+the signal itself (the bridge's `once` handler, the daemon's grace) keeps its
+own shutdown, and the exit hook stops what is left. A signal this process
+started with ignored (the `SigIgn` mask in `/proc/self/status` at load, for
+example SIGHUP under `nohup` or SIGINT in a background job) SHALL NOT be
+hooked, so it stays ignored while a child is tracked and after the last one
+is untracked. A caller MAY give the tracker its latest snapshot of the tree
+(taken as the child exited); the exit and signal hooks SHALL use it, so what
+the child left in its group is still stopped after the child is gone.
+Signal and exit hooks SHALL be removed once no child is tracked.
+
+Acceptance Criteria
+- Real `sh` trees: a hard kill stops the child, a same-group grandchild and a `setsid` grandchild.
+- A SIGTERM-ignoring grandchild orphaned by the child's exit is killed by a later hard kill given the SIGTERM snapshot.
+- Synthetic `/proc` tables: descendants in any group and orphans in the root's group are members; unrelated processes, a recycled root pid (not our child), a recycled known pid (start time differs), this process and pid 1 are not.
+- A parent that exits, or dies of SIGTERM with no other handler (exit by SIGTERM), leaves no tracked tree behind; a parent with its own SIGTERM or `once` SIGINT handler registered first keeps its grace and its tree dies at exit.
+- Untracking the last child removes the signal hooks.
+- A parent with no other handler dies by SIGHUP after its tracked tree is killed; a parent started with SIGHUP ignored survives SIGHUP while a child is tracked and after it is untracked (SIGHUP still ignored in its `SigIgn`), and SIGTERM still stops its tree.
+- `SigIgn` parsing maps bit n-1 to signal n (SIGHUP, SIGINT, SIGTERM) and treats a missing mask as none.
+- A parent tracking a child with its exit snapshot kills the grandchild that child left in its group when the parent exits.
+
+### REQ-plugins-243
+
+The `files-*`, `search-grep` and `shell-exec` builtins SHALL NOT silently
+drop an argv token because it starts with `--`. A value flag (`--content`,
+`--path`, `--old`, `--new`, `--pattern`, `--include`, `--command`)
+SHALL take the next token verbatim, even one that starts with `--`, or an
+inline `--flag=value`; a value flag with no value SHALL be an error. For
+`files-*` and `search-grep` a token that is not a known flag SHALL stay
+positional, and a bare `--` SHALL end option parsing. `shell-exec` SHALL
+treat only leading `--json`, `--command`, `--cwd` and `--` as its own
+options; every later token SHALL be part of the command verbatim, and words
+left after `--command` SHALL be refused rather than dropped. `files-write`
+SHALL refuse (exit 1, file unchanged) to replace a non-empty file with empty or
+missing content unless `--allow-empty` is passed.
+
+Acceptance Criteria
+- `files-write` with `--content` or positional content that starts with `--` (YAML front matter, SQL comment) writes it verbatim; unknown `--` words in positional content are kept; `--content=value` works; with `--path` every positional is content.
+- `files-write` with missing, empty or dangling `--content` over a non-empty file is refused and the file is unchanged; `--allow-empty` empties it.
+- `files-edit --old / --new` accept values that start with `--`.
+- `shell-exec echo git push --dry-run origin main` runs with `--dry-run` intact; a trailing `--json` stays in the command; leading `--json`/`--command`/`--command=` still work; `--command X --dry-run` is refused before spawn.
+- `search-grep --no-verify src` searches for `--no-verify` under `src`; `--pattern` takes a `--` value, `--path=` works, and with `--pattern` the first positional is the path.
+
+### REQ-plugins-253
+
+The GITHUB-6 repo gate used by every GitHub plugin (plugins/github commands
+and review reads) SHALL build its allowlist with the ALLOW-4 loader
+(`loadAllowlist`: the allowlist file — `CORVIDINHO_ALLOWLIST_FILE` or
+~/.config/corvidinho/allowlist.toml|json — plus env overlays), the same
+loader WATCH ingress uses, and SHALL NOT fall back to env overlays alone.
+`deny_repos` / `deny_orgs` from the file SHALL win over an allow list from env
+(and over the community public-repo path), and an allow list only in the file
+SHALL admit matching repos. A missing allowlist file SHALL contribute nothing
+while env overlays still apply, so with no env allow list the gate refuses
+(default-deny). A malformed or unreadable allowlist file SHALL make the gate
+refuse every repo — even one an env allow list admits, since the file's deny
+lists are unknown — with exit 3 and a GITHUB-6 error naming the file problem
+(path, line and key, never list values), not a thrown error
+(REQ-plugins-006). `checkRepoGateAsync` SHALL expose the same file + env gate
+to other callers. The test suite SHALL NOT read the operator's allowlist file:
+the bun test preload points `CORVIDINHO_ALLOWLIST_FILE` at a missing file,
+and tests that hand a custom env object to a loader pass a missing file too.
+No new env var, config key, slash command or plugin.
+
+Acceptance Criteria
+- With deny lists only in the file and the allow list only in env, github-issue-create, github-issue-comment, github-pr-create, github-pr-review and the review reads refuse the denied repo or org with exit 3 and a GITHUB-6 error; nothing is posted.
+- With the allow list only in the file, allowed repos pass and unlisted repos are still refused.
+- A non-admin role session is refused for a file-denied repo even when it is public.
+- `corvidinho plugins run` with ~/.config/corvidinho/allowlist.toml honors its deny lists.
+- With a malformed (truncated JSON, or a TOML deny list missing its `]`) or unreadable (a directory) allowlist file, the gate and github-issue-create refuse every repo with exit 3 and a `GITHUB-6: refused — allowlist file unreadable or malformed` error, with or without env `CORVIDINHO_GITHUB_ALLOW_ORGS`; the TOML error names the line and key, not the values.
+- With an operator allowlist file admitting corvidlabs (via `CORVIDINHO_ALLOWLIST_FILE` or ~/.config/corvidinho/allowlist.toml), `bun test` has no failures and no test sends a request to api.github.com while a GitHub token is set.
+
+### REQ-plugins-237
+
+`files-edit` SHALL write the `--new` string byte-for-byte in place of the
+`--old` match in both single-occurrence and `--replace-all` modes.
+JavaScript replacement patterns in `--new` (`$$`, `$&`, `$'`, `` $` ``,
+`$1`, `$<name>`) SHALL NOT be expanded; `--new` is literal data.
+
+Acceptance Criteria
+- A single-occurrence edit whose `--new` contains `$$`, `$'`, `$&`, `` $` ``, `$1` and `$<n>` leaves exactly that text in the file.
+- A `--replace-all` edit with the same `--new` writes the same literal text at every match.
+
+### REQ-plugins-267
+
+In a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN` set and the acting
+user is not ADMIN), the read-ish file and git tools SHALL apply the
+ROLES-CHAT-8 secret-path gate `files-read` applies (`isSecretPath`: `.env*`,
+`.ssh`, key files, keystores, credentials). `search-grep`, `files-list` and
+`git-diff` SHALL refuse an explicit secret path, given positionally, with
+`--path`, as `./`, `..` or absolute spellings, or through a symlink that
+resolves to one, with exit 2 and the ROLES-CHAT-8 refusal message, before
+reading anything. A recursive `search-grep` SHALL NOT return a line from a
+secret file whatever `--include` is passed, `git-diff` (worktree or
+`--staged`) SHALL NOT list or print a tracked secret file, and `files-glob`
+and `files-list` SHALL leave secret paths out of their results, also when a
+glob walks a symlink into a secret directory. ADMIN sessions and the local
+CLI (no role session) SHALL keep the access `files-read` gives them. The
+gate SHALL be re-checked on each call (ROLES-CHAT-6). No new plugin, flag,
+env var or config key.
+
+Acceptance Criteria
+- Non-ADMIN `search-grep` over the project returns no line from `.env`, `.env.local`, `.ssh/*`, `*.pem`, `*keystore*`, `credentials.json` or a case variant such as `sub/.ENV`, and still returns lines from ordinary files.
+- Non-ADMIN `search-grep <pattern> .env` (also `./.env`, `src/../.env`, the absolute path, `--path .env`, `--path=.env`, `--pattern X .env`) and `search-grep` of `.ssh`, a `.pem`, a keystore or a credentials file is refused with exit 2 and a ROLES-CHAT-8 error, like `files-read .env`.
+- Non-ADMIN `search-grep` with `--include=.env`, `--include env`, `--include=*.pem`, `--include pem,ts` or `--include *` returns no secret line.
+- Non-ADMIN `search-grep` or `files-list` of a symlink to `.env` or `.ssh` is refused with exit 2; a recursive search does not follow such a symlink.
+- Non-ADMIN `files-glob` (`**/*`, `.env*`, `**/*.pem`, `.ssh/*`, and `notes/*` where `notes` links to `.ssh`) and `files-list --show-hidden` return no secret path; `files-list .ssh` is refused with exit 2.
+- Non-ADMIN `git-diff`, `git-diff .` and `git-diff --staged` list and print no tracked secret file (`.env*`, `.ssh/*`, `*.pem`, keystores, credentials, key files, case variants such as `sub/.ENV`) and still show ordinary files; `git-diff .env` (also `./.env`, `src/../.env`, the absolute path, `.ssh`, a `.pem`, a keystore dir or a symlink to a secret) is refused with exit 2; user paths stay literal pathspecs.
+- ADMIN and the local CLI still read `.env` with `files-read`, grep it explicitly and recursively, see secret paths in `files-glob` / `files-list`, and see tracked secret files in `git-diff`.
+
+### REQ-plugins-287
+
+`appendAudit` SHALL take the shared DB write lock before it reads the
+previous chain hash (BEGIN IMMEDIATE), so a concurrent writer in another
+process is waited for under the DB busy_timeout instead of failing at once
+with "database is locked", and the new row links to the latest committed row.
+A SAFE-5 row for a dangerous run SHALL NOT be lost only because another
+process was writing the shared DB. When the lock is not free within
+busy_timeout the append still fails, and `runPlugin` still refuses a run
+whose `started` row cannot be written (REQ-plugins-095). No new env var,
+config key, pragma, slash command or plugin.
+
+Acceptance Criteria
+- While another process holds the write lock and then commits, `appendAudit` waits and succeeds; its `prev_hash` is the other writer's row hash and the chain verifies.
+- Concurrent appenders in several processes lose no rows.
+- Several processes that each open the shared DB file, append one row and close it (as dangerous plugin runs do), all at once, get every append in and the chain verifies.
+
+### REQ-plugins-312
+
+The system SHALL register a read-only plugin `discord-user-lookup` (not dangerous, not mutating) that resolves a Discord guild member by snowflake user id (`--user-id`) or name query (`--query`) via the Discord REST API, scoped to the configured `DISCORD_GUILD_ID` only (IDENTITY-5 / DISCORD-13). A `--guild` that does not match the configured guild SHALL be refused. Empty `DISCORD_GUILD_ID` SHALL refuse. Arbitrary other guilds SHALL NOT be looked up. Dry-run (`CORVIDINHO_DISCORD_DRY_RUN=1`) SHALL succeed without a live call.
+
+Acceptance Criteria
+- `plugins list` shows `discord-user-lookup` with dangerous=false.
+- Missing guild / wrong `--guild` → refuse exit 3 without REST.
+- Dry-run by id or query succeeds with `dryRun: true`.
+- Mocked REST returns display name / username / id; 404 → clean not-a-member error.
+- Fixture: `tests/discord.user-lookup.test.ts`.
+
+### REQ-plugins-313
+
+When `node`, `python3` (else `python`) or `cargo` resolves on an absolute
+PATH entry at builtin load, the system SHALL register `node-exec`,
+`python-exec` or `cargo-exec` respectively (PLUGIN-4), bound to the absolute
+binary found. A relative PATH entry SHALL NOT be used to resolve a runner, and
+a hit whose real path is the running Bun binary (the `node` shim `bun run` puts
+on PATH) SHALL NOT count as the toolchain; resolution continues on PATH. Each
+runner SHALL be `dangerous: true` and `minTier: 2` (PLUGIN-2), so a
+non-interactive run that has not allowlisted it is denied (SAFE-1), every run
+is audited (SAFE-5), non-ADMIN role sessions never see or run it
+(ROLES-CHAT-2/3), and the tool catalog offers it only at code tier with
+dangerous tools included. A runner SHALL spawn `[bin, ...argv]` with the
+caller's argv verbatim (no shell, no expansion, its own flags kept) and SHALL
+pin the child's cwd to the plugin cwd (project root / task worktree), with no
+cwd option. The child SHALL get the verify lane's scrubbed env (no Discord
+config, GitHub tokens, audit key, acting identity or LLM keys) without
+`CDPATH` / `OLDPWD`, stdin closed, a timeout (exit 124), per-stream output
+caps, and its process group killed on timeout or the calling run's abort (exit
+130); output SHALL be secret-scrubbed (SAFE-6). A non-zero exit SHALL return
+ok=false with that exit code; empty argv SHALL be a usage error (exit 1) that
+spawns nothing. `shell-exec` is unchanged. No new slash command, env var or
+config key.
+
+Acceptance Criteria
+- With stub `node`, `python3` and `cargo` on PATH, `node-exec`, `python-exec` and `cargo-exec` are registered with dangerous=true, mutating=true, minTier=2; a second load keeps the same commands.
+- `python-exec` binds `python3` when both `python3` and `python` exist and `python` when only it exists; a toolchain only on a relative PATH entry is not resolved.
+- A `node` that is a symlink to the running Bun binary is skipped: with only it on PATH `node-exec` is not loaded (`node not found on PATH`), with a real `node` later on PATH that one is bound; `bun run corvidinho plugins list` without node lists no `node-exec`.
+- `python-exec` with `` ["-c","x","$(id)","--json","a b","*","--","`id`"] `` reaches the binary as exactly those argv words, with cwd = the project root; a stub exit 3 returns ok=false, exitCode 3.
+- The child env has no `GITHUB_TOKEN`, `DISCORD_TOKEN`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_ACTING_*`, `CDPATH` or `OLDPWD`, and `CORVIDINHO_PROJECT_ROOT` is the project root.
+- Non-interactive with an empty allowlist each runner is denied (exit 2, SAFE-1) and nothing is spawned; allowlisted, it runs.
+- `buildOpenAiTools` lists the runners at code tier with dangerous tools for ADMIN only; not at tool tier, not without dangerous tools, not for a non-ADMIN session.
+- An aborted calling run returns exit 130 and kills the runner's process tree; a run past the timeout returns exit 124 and kills the tree.
+- Where real `node` / `python3` / `cargo` are installed, `node-exec -e 'console.log(process.cwd())'` and `python-exec -c 'import os; print(os.getcwd())'` print the project root and `cargo-exec --version` succeeds.
+
+### REQ-plugins-314
+
+A language runner whose toolchain is missing SHALL degrade cleanly (PLUGIN-4):
+it SHALL NOT be registered, so it is never offered to the model and never
+listed as a command; `corvidinho plugins list` SHALL still exit 0 and SHALL
+print one line per missing runner naming the missing tool (`<name> not loaded:
+<tool> not found on PATH`) next to the runners that loaded and their binary;
+every other builtin (`shell-exec`, `files-*`, …) SHALL load unchanged. A
+registered runner whose binary can no longer start SHALL return ok=false with
+exit 127 and the reason instead of throwing.
+
+Acceptance Criteria
+- With an empty PATH (or no PATH) none of the three runners is registered, the load report lists each as missing, and `runnerStatusLines` prints `Language runners (PLUGIN-4): none loaded` and `node-exec not loaded: node not found on PATH`, `python-exec not loaded: python3 / python not found on PATH`, `cargo-exec not loaded: cargo not found on PATH`; `buildOpenAiTools({tier:"code",includeDangerous:true})` has no runner.
+- With only `python3` on PATH, only `python-exec` loads and the other two are reported not loaded.
+- `loadBuiltins()` with PATH lacking the toolchains still registers `shell-exec` and `files-*`; with only `node` on PATH it also registers `node-exec` alone.
+- After a registered stub binary is deleted, calling the runner returns ok=false, exit 127 with `<name>: <tool> could not start`, and the promise does not reject.
+- `corvidinho plugins list` with no toolchain on PATH exits 0, lists `shell-exec`, prints the `none loaded` and per-runner `not loaded` lines and lists no runner command; with only `cargo` on PATH it lists `cargo-exec  [dangerous, tier>=2]` and `cargo-exec (<bin>)`.
+### REQ-plugins-427
+
+`files-read` SHALL recognise a PNG, JPEG, GIF or WebP file by its leading
+magic bytes (not its name) and, after the path clamp (REQ-plugins-082), the
+ROLES-CHAT-8 secret-path gate and the existing-file check, SHALL return it as
+an image the model can look at (DISCORD-9): `data` `{path, bytes, mediaType,
+image: true}` and the message `image <path> (<mime>, N bytes) opened for
+viewing`, with no UTF-8 `content`. The file's bytes SHALL travel base64 only on
+`PluginHandlerResult.image` `{path, mediaType, base64}`, which is never
+serialized into tool text, events, ndjson or CLI output; the agent tool loop
+sends it to the model as an image part (REQ-agent-428). An image over 20 MB
+(`MAX_IMAGE_SIZE_BYTES`, the Discord attachment cap) SHALL be refused with a
+clear error and no bytes. Any other file SHALL read exactly as before. No new
+env var, flag or command.
+
+Acceptance Criteria
+- files-read of a real PNG under `<cwd>/.corvidinho/attachments/` returns `data.image` true, `mediaType` `image/png` and no `data.content`; `image.base64` round-trips to the file bytes; `{ok, message, data}` stringified is under 1 KB with no U+FFFD and no base64.
+- JPEG / GIF / WebP heads are images whatever the name; a text file named `.png` reads as text; a PNG named `.txt` is an image.
+- An image over 20 MB is refused (`refused: image '<path>' is N bytes, over the 20MB image limit`); an image of exactly 20 MB is still read.
+- A text file read still returns `{path, bytes, content}` with the content as the message.
+- A PNG outside the root, or at a secret path in a non-ADMIN role session, is refused with no `image`.
+- Fixture: `tests/files.plugins.test.ts` ("files-read image mode"), no network.
+
+### REQ-plugins-461
+
+Fledge itself SHALL be available as typed builtin plugin commands (PLUGIN-1),
+registered by `loadBuiltins` whether or not fledge is installed, next to the
+Fledge plugin bridge (`fledge-<command>`, REQ-plugins-112..113):
+`fledge-lanes-list` and `fledge-lanes-validate` SHALL be `dangerous: false`
+with `minTier` 0 (they only read the project's lane sources, `fledge.toml`
+and `.fledge/lanes/*.toml`), and
+`fledge-lanes-run` and `fledge-run` SHALL be `dangerous: true` with
+`minTier` 2 (they run the project's own commands), so a non-interactive run
+that has not allowlisted them is denied (SAFE-1), every run is audited
+(SAFE-5), non-ADMIN role sessions never see or run them (ROLES-CHAT-2/3), and
+the tool catalog offers them only at code tier with dangerous tools included
+(PLUGIN-2). Each SHALL run the fledge binary found, when the command runs, on
+the absolute PATH entries only, as an argv array (no shell) with cwd pinned to
+the plugin cwd (project root / task worktree): `fledge --non-interactive lanes
+list --json` (no args accepted); `fledge --non-interactive lanes validate
+--json`, plus `--strict` when that is the only arg (no path or other arg
+accepted); `fledge --non-interactive lanes run <lane>` (exactly one lane
+name); `fledge --non-interactive run <task>`, plus `-- <args…>` verbatim when
+args follow the task. A lane or task name SHALL match
+`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$` (no leading `-`), so model argv never
+becomes a fledge option; a refused name or arg SHALL be a usage error (exit 1)
+that spawns nothing. `fledge-lanes-list` SHALL return typed lanes (name,
+description, step count, fail-fast, trust tier) and `fledge-lanes-validate`
+typed results (valid, strict, lane count, errors, warnings; ok=false when
+fledge reports an error, or a warning under `--strict`); fledge's absolute
+path is not passed on and parsed text SHALL be cleaned of control characters
+and length-capped. A lane or task run SHALL return ok only on exit 0, else
+ok=false with fledge's exit code and output. The child SHALL get the verify
+lane's scrubbed env (no Discord config, GitHub tokens, audit key, acting
+identity or LLM keys) without `CDPATH` / `OLDPWD`, with
+`FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`, stdin closed, a
+timeout (30 s for list / validate, 10 minutes for a run; exit 124),
+per-stream output caps, and its process group killed on timeout or the
+calling run's abort (exit 130); output SHALL be secret-scrubbed (SAFE-6).
+Fledge missing from every absolute PATH entry SHALL return ok=false, exit
+127, never a throw. Because fledge prints the offending line of a lane source
+it cannot parse, before `fledge-lanes-list` or `fledge-lanes-validate` starts
+fledge each lane source that exists SHALL resolve (symlinks followed) to a
+regular file inside the real project root (`.fledge/lanes` to a directory
+there) whose path, as named and as resolved, is not a secret path (`.env*`,
+`.ssh`, keys, keystores), else the call SHALL be refused (exit 2, fledge not
+started) with the project-relative path and never the link target
+(ROLES-CHAT-8, as `files-read`); the lane and task runs are not clamped. A Fledge plugin command named `run`, `lanes-list`,
+`lanes-validate` or `lanes-run` SHALL be skipped by the Fledge plugin load
+with a reason (REQ-plugins-112) and the builtin SHALL keep the name. No new
+slash command, env var or config key.
+
+Acceptance Criteria
+- After `loadBuiltins()`, `fledge-lanes-list` and `fledge-lanes-validate` are listed with dangerous=false, mutating=false, minTier=0 and `fledge-lanes-run` and `fledge-run` with dangerous=true, mutating=true, minTier=2, origin builtin.
+- `buildOpenAiTools`: tool tier offers the two reads and not the runs; code tier offers the runs only with dangerous tools; a non-ADMIN session gets the reads and never the runs; read tier gets nothing.
+- With a fake fledge, `fledge-lanes-list` runs `--non-interactive lanes list --json` in the project root and returns `{count, lanes}` typed, control characters cleaned; any arg is a usage error and nothing is spawned; a fledge error (no fledge.toml) or non-JSON output is ok=false with the reason.
+- `fledge-lanes-validate` runs `lanes validate --json` (`--strict` passed through); valid lanes are ok with `{valid:true, laneCount, errors:[], warnings:[]}`; lanes with errors are ok=false, exit 1, with each error and warning and without fledge's path; a path or any other arg is a usage error and nothing is spawned.
+- Non-interactive with an empty allowlist `fledge-lanes-run` and `fledge-run` are denied (exit 2, SAFE-1) and fledge never starts; allowlisted, `fledge-lanes-run verify` runs `--non-interactive lanes run verify` in the project root with no GitHub / Discord / LLM / audit / acting keys, no CDPATH / OLDPWD, `FLEDGE_NON_INTERACTIVE=1`, `CORVIDINHO_PROJECT_ROOT` = the root and other keys kept.
+- `fledge-run` with `["test","--bail","a b","$(id)","--","; rm -rf /"]` reaches fledge as `run test -- --bail "a b" "$(id)" -- "; rm -rf /"` word for word; with only a task name no `--` is added.
+- Lane or task names `--init`, `-l`, `--list`, `--lang`, `--dry-run`, `a b`, `../x`, `x/y` and empty, and extra `fledge-lanes-run` args, are usage errors and fledge never starts.
+- A lane or task exiting 3 returns ok=false, exitCode 3 with fledge's output; a `sk-ant-…` key in the output is redacted; a run past a 200 ms timeout returns 124; an aborted calling run returns 130.
+- With no fledge on an absolute PATH entry each command returns ok=false, exit 127 `<name>: fledge not on PATH`; a relative PATH entry that leads to a fledge is not used.
+- A discovered Fledge plugin with commands `run`, `lanes-list` and `hello` registers only `fledge-hello`; `fledge-run` and `fledge-lanes-list` are skipped with `name already registered by builtin` and `plugins list` prints the skip line.
+- `fledge.toml`, a `.fledge/lanes/*.toml` file or the `.fledge/lanes` dir linked outside the project, `fledge.toml` linked to `.env`, a `.fledge/lanes/.env.toml` and a `fledge.toml` directory are each refused by both reads (exit 2, `refused: <name>: <relative path> …`, neither the file's contents nor the link target in the result) and fledge never starts; links that stay inside the project, a non-`.toml` entry linked outside and a missing `fledge.toml` still reach fledge; the lane and task runs are not clamped.
+- Where fledge is installed: a real project's lanes are listed, validated (a lane naming an undefined task is reported) and run, `fledge-run pwd` prints the project root, an unknown task is ok=false with fledge's error, a `.fledge/lanes/y.toml` linked to a file outside the project is refused by both reads without its contents in the result, and `corvidinho plugins run fledge-lanes-list --json` in this repo lists the `verify` lane.
 

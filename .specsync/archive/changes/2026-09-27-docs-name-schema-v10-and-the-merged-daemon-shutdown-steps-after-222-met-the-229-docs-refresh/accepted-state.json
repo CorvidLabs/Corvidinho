@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "docs-name-schema-v10-and-the-merged-daemon-shutdown-steps-after-222-met-the-229-docs-refresh",
+  "slug": "docs-name-schema-v10-and-the-merged-daemon-shutdown-steps-after-222-met-the-229-docs-refresh",
+  "title": "Docs name schema v10 and the merged daemon shutdown steps after #222 met the #229 docs refresh",
+  "description": "docs name schema v10 and the merged daemon shutdown steps after #222 met the #229 docs refresh",
+  "kind": "documentation",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "c2dcbc8bc284cf2de74f5c782f7c175f67c7cedb",
+  "created_at": 1790476104,
+  "updated_at": 1790476537,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/BOX-UPDATE.md",
+    "docs/DAEMON.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Docs-only merge follow-up: #222 added schema v10 (schedule_runs.runner) and a 3 s worktree grace; #229's refreshed docs predate it. No spec or source change.",
+  "acceptance_criteria": [
+    "docs/BOX-UPDATE.md names schema v10 (SCHEMA_VERSION in src/store/db.ts) and tests/docs.operator-facts.test.ts passes; docs/DAEMON.md shutdown steps list both the process-group kill with daemon.abandoned and the 3 s worktree cleanup grace."
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790462617,
+      "digest": "c31a2678798bed07f81576efcd6134ada45dac91e3924e2318dea6e2ceb98cf0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log",
+        "title": "WATCH run summary is secret-scrubbed before the thread comment and spawn log",
+        "description": "WATCH run summary is secret-scrubbed before the thread comment and spawn log",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "watch"
+        ],
+        "affected_paths": [
+          "src/watch/poller.ts",
+          "src/watch/summary.ts",
+          "tests/watch.summary-scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "a WATCH run whose agent summary, stderr fallback or spawn error contains a vendor token (e.g. ghp_) posts a summary comment on the GitHub thread and appends a spawn-log JSONL line that hold [redacted:<kind>] and never the raw token or a clipped token prefix; token-free summaries are posted and logged unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "watch": "fd758b3987c19c8c7b60c53b1548a9e0e2b7bdd12b1cc1441676712bd6130a24"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790462809,
+      "digest": "00a4aab429b538737753ef4d38a033ee89dec0e8b69ae3af8f8b721eaac396df",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

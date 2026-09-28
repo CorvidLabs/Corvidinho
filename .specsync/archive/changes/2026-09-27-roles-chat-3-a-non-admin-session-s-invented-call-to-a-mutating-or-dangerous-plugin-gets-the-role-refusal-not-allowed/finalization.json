@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "roles-chat-3-a-non-admin-session-s-invented-call-to-a-mutating-or-dangerous-plugin-gets-the-role-refusal-not-allowed",
+  "implementation_commit": "882b54342ac42ea1d517c505d8c519972ad9beca",
+  "implementation_tree": "f123b572b1940687ea1f18e8b38eadc99359b29e",
+  "contract_digest": "9d58dfdaedb2ac2be995ebfeb04eee60c85f56f4acc1db6074ffbe599024e025",
+  "workspace_digest": "652048bd3081f5f10d837becd8e629ff958b95e572950a82b744aea2f2d19404",
+  "closing_digest": "210c9d0698e35a181a78663094098e2eba1cc1403c89cd62c3ec69bb0ab5d6e7",
+  "review_digest": "7fa2ad9ac1cbfb817c8b9646380c007e92ff733cd7512ed58dd71e9c51837471",
+  "finalization_digest": "ea571be83185ab4c3d640b0a5bb4f55aea414e14cff3d93ae4c70b7b84abf0df",
+  "timestamp": 1790538894
+}

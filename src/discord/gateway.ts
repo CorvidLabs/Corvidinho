@@ -2,11 +2,12 @@
  * Thin Discord gateway (discord.js). Live connect only when token present.
  * Tests inject InboundMessage / SlashInteraction — no ProcessManager.
  *
- * Every outbound post (channel send, reply, embed edit, slash reply/editReply)
- * parses no mentions from its content: the client default and each payload
- * set `allowedMentions.parse = []`, and `@everyone` / `@here` are defanged in
- * the text, so model-written summaries cannot ping a role, `@everyone`,
- * `@here` or a user (DISCORD-8 confused deputy, REQ-discord-205).
+ * Every outbound post (channel send, reply, message/embed edit, slash
+ * reply/editReply, component reply/update) parses no mentions from its
+ * content: the client default and each payload set `allowedMentions.parse =
+ * []`, and `@everyone` / `@here` are defanged in the text, so model-written
+ * summaries cannot ping a role, `@everyone`, `@here` or a user (DISCORD-8
+ * confused deputy, REQ-discord-205).
  */
 
 import type * as DiscordJs from "discord.js";
@@ -19,26 +20,64 @@ import {
   type ChannelCandidate,
 } from "./channel-autocomplete.ts";
 import { buildSlashCommandBodies } from "./slash-commands.ts";
-import { registerSlashCommandsLive } from "./register-commands.ts";
+import {
+  formatRegisterCommandsFailure,
+  registerSlashCommandsLive,
+} from "./register-commands.ts";
 import type {
   SlashInteraction,
   SlashOptionValue,
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
-import { buildVersionPresenceActivity } from "./presence.ts";
+import { buildVersionPresenceData } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
+
+/** Thin MessageComponent interaction (DISCORD-ASK buttons). */
+export type ComponentInteraction = {
+  id: string;
+  customId: string;
+  channelId: string;
+  guildId?: string;
+  userId: string;
+  messageId?: string;
+  /** Reply (or update) — supports ephemeral choice UI. */
+  reply: (opts: {
+    content?: string;
+    ephemeral?: boolean;
+    components?: unknown[];
+    update?: boolean;
+  }) => Promise<void>;
+  /**
+   * DISCORD-ASK-8 — drop the ephemeral choice / "Got it" message after pick
+   * or when resume finishes (discord.js deleteReply after update/reply).
+   */
+  deleteReply?: () => Promise<void>;
+  /** Presser's Discord display name when known (IDENTITY-4). */
+  userDisplayName?: string;
+  /** Presser's Discord username when known (IDENTITY-4). */
+  userUsername?: string;
+};
 
 export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
   /** Slash commands (DISCORD-4). */
   onSlash?: (interaction: SlashInteraction) => void | Promise<void>;
+  /** Button / select component presses (DISCORD-ASK). */
+  onComponent?: (interaction: ComponentInteraction) => void | Promise<void>;
   /**
    * Live allowlisted channel ids for `/admin channels remove` autocomplete.
    * Bridge wires `config.channelIds` (mutated in place by /admin).
    */
   getAllowlistedChannelIds?: () => readonly string[];
+  /**
+   * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431 — may this invoker see channel
+   * autocomplete choices? Asked on every autocomplete request; unset or false
+   * ⇒ empty choices (fail closed). The bridge wires the slash gate order:
+   * channel allowlist → actor gate → ADMIN (owner, not muted).
+   */
+  mayAutocompleteChannels?: (actor: AutocompleteActor) => boolean;
   onReady?: (botUserId: string) => void;
   /**
    * Optional outbound helper used by bridge after agent reply. The live
@@ -50,10 +89,12 @@ export type GatewayHandlers = {
     content: string;
     replyToMessageId?: string;
     /**
-     * Users (besides the replied-to author) this post may ping — used for
-     * the AUTONOMY-2 owner ping. Omitted ⇒ nobody else.
+     * Users (besides the replied-to author) this post may ping — the ask's
+     * requester or owner (AUTONOMY-2/4). Omitted ⇒ nobody else.
      */
     mentionUserIds?: string[];
+    /** Discord ActionRow components (DISCORD-ASK stub buttons). */
+    components?: unknown[];
   }) => Promise<{ messageId: string } | null>;
   /** Progress embeds (DISCORD-3). */
   sendEmbed?: (opts: {
@@ -66,7 +107,47 @@ export type GatewayHandlers = {
     messageId: string;
     embed: DiscordEmbedPayload;
   }) => Promise<boolean>;
+  /** Richer in-place edit (DISCORD-ASK-6/7 collapse). */
+  editMessage?: (opts: {
+    channelId: string;
+    messageId: string;
+    content?: string | null;
+    embed?: DiscordEmbedPayload | null;
+    components?: unknown[] | null;
+    mentionUserIds?: string[];
+  }) => Promise<boolean>;
+  deleteMessage?: (opts: {
+    channelId: string;
+    messageId: string;
+  }) => Promise<boolean>;
 };
+
+/** Who asked for channel autocomplete, and where (REQ-discord-431). */
+export type AutocompleteActor = {
+  commandName: string;
+  channelId: string;
+  userId: string;
+  roleIds: string[];
+};
+
+/** Fixture-friendly subset of a discord.js interaction member. */
+type RawInteractionMember = {
+  roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+} | null;
+
+/**
+ * Member role snowflakes: a cached GuildMember (`roles.cache`) or the raw API
+ * member (`roles: string[]`); none when absent.
+ */
+function memberRoleIds(member: RawInteractionMember | undefined): string[] {
+  const roles = member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return [...roles];
+  if (roles.cache && typeof roles.cache.keys === "function") {
+    return [...roles.cache.keys()];
+  }
+  return [];
+}
 
 export type DiscordGateway = {
   start(): Promise<void>;
@@ -127,6 +208,38 @@ export function flattenSlashOptions(data: readonly RawSlashOption[]): {
 }
 
 /**
+ * Discord `MessageReferenceType.Forward` (discord-api-types v10). Kept as a
+ * plain number so this module does not load discord.js eagerly.
+ */
+export const REFERENCE_TYPE_FORWARD = 1;
+
+/** Fixture-friendly subset of discord.js `Message.reference`. */
+export type RawMessageReference = {
+  messageId?: string | null;
+  channelId?: string | null;
+  type?: number | null;
+};
+
+/**
+ * DISCORD-2 / DISCORD-5 / REQ-discord-212 — the message id a MessageCreate
+ * *replies* to, or undefined. A forward (MessageReferenceType.Forward) points
+ * at a message elsewhere and is never a reply; any reference whose channel is
+ * not the message's own channel (the thread, or its parent) is dropped too,
+ * so a tracked bot message cannot pull its session into another channel.
+ */
+export function replyReferenceMessageId(
+  reference: RawMessageReference | null | undefined,
+  own: { channelId: string; parentId?: string },
+): string | undefined {
+  if (!reference?.messageId) return undefined;
+  if (reference.type === REFERENCE_TYPE_FORWARD) return undefined;
+  const refChannel = reference.channelId;
+  if (!refChannel) return undefined;
+  if (refChannel !== own.channelId && refChannel !== own.parentId) return undefined;
+  return reference.messageId;
+}
+
+/**
  * Live gateway via discord.js. Dynamic import so unit tests need not load it
  * when using the null/fake gateway.
  */
@@ -148,7 +261,7 @@ export async function createLiveGateway(
     GatewayIntentBits,
     Events,
     ChannelType,
-    ActivityType,
+    MessageFlags,
   } = discord;
   const presenceVersion = opts?.version ?? PACKAGE_VERSION;
 
@@ -158,6 +271,10 @@ export async function createLiveGateway(
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
     ],
+    // DISCORD-12: discord.js copies this into the gateway IDENTIFY payload at
+    // login, so the first IDENTIFY and any non-resumable re-identify carry the
+    // version. ClientReady does not fire again after a re-identify.
+    presence: buildVersionPresenceData(presenceVersion),
     // REQ-discord-205: default for any payload that omits allowedMentions.
     allowedMentions: outboundAllowedMentions({ repliedUser: true }),
   });
@@ -190,7 +307,13 @@ export async function createLiveGateway(
         }
       }
     } catch (err) {
-      console.error("[discord] slash command registration failed:", err);
+      // REQ-discord-417: one scrubbed line, never the DiscordAPIError dump.
+      console.error(
+        formatRegisterCommandsFailure(err, {
+          what: "slash command registration failed",
+          guildHint: "DISCORD_GUILD_ID",
+        }),
+      );
     }
   }
 
@@ -218,6 +341,7 @@ export async function createLiveGateway(
     reply: (opts: unknown) => Promise<unknown>;
     deferReply: (opts?: unknown) => Promise<unknown>;
     editReply: (opts: unknown) => Promise<unknown>;
+    deleteReply?: () => Promise<unknown>;
     deferred: boolean;
     replied: boolean;
   }): SlashInteraction {
@@ -257,28 +381,26 @@ export async function createLiveGateway(
           footer: e.footer,
         }));
       }
+      // DISCORD-ASK-1: a slash ask's Choose button rides the answer.
+      if (opts.components !== undefined) payload.components = opts.components;
       if (mode === "reply") {
-        if (opts.ephemeral) payload.ephemeral = true;
+        if (opts.ephemeral) payload.flags = MessageFlags.Ephemeral;
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply(payload);
         } else {
           await interaction.reply(payload);
         }
       } else {
-        await interaction.editReply(payload);
+        // discord.js resolves editReply with the reply Message; its id lets a
+        // fallback slash answer continue the session on reply (DISCORD-2).
+        const sent = await interaction.editReply(payload);
+        const id = (sent as { id?: unknown } | null | undefined)?.id;
+        return typeof id === "string" && id ? { messageId: id } : undefined;
       }
+      return undefined;
     };
 
-    const roleIds: string[] = [];
-    const member = interaction.member;
-    if (member?.roles) {
-      const roles = member.roles;
-      if (Array.isArray(roles)) {
-        roleIds.push(...roles);
-      } else if (roles.cache && typeof roles.cache.keys === "function") {
-        roleIds.push(...roles.cache.keys());
-      }
-    }
+    const roleIds = memberRoleIds(interaction.member);
 
     return {
       id: interaction.id,
@@ -302,11 +424,18 @@ export async function createLiveGateway(
       },
       deferReply: async (opts) => {
         if (!interaction.deferred && !interaction.replied) {
-          await interaction.deferReply({ ephemeral: opts?.ephemeral ?? false });
+          await interaction.deferReply(
+            opts?.ephemeral
+              ? { flags: MessageFlags.Ephemeral }
+              : {},
+          );
         }
       },
-      editReply: async (opts) => {
-        await send(opts, "edit");
+      editReply: (opts) => send(opts, "edit"),
+      deleteReply: async () => {
+        if (typeof interaction.deleteReply === "function") {
+          await interaction.deleteReply();
+        }
       },
     };
   }
@@ -320,18 +449,9 @@ export async function createLiveGateway(
         botUserId = ready.user.id;
         console.log(`[discord] logged in as ${ready.user.tag}`);
         try {
-          const activity = buildVersionPresenceActivity(presenceVersion);
-          ready.user.setPresence({
-            status: "online",
-            activities: [
-              {
-                name: activity.name,
-                state: activity.state,
-                type: ActivityType.Custom,
-              },
-            ],
-          });
-          console.log(`[discord] presence set: ${activity.state}`);
+          const presence = buildVersionPresenceData(presenceVersion);
+          ready.user.setPresence(presence);
+          console.log(`[discord] presence set: ${presence.activities[0].state}`);
         } catch (err) {
           console.warn("[discord] presence set failed:", err);
         }
@@ -377,7 +497,10 @@ export async function createLiveGateway(
           mentionedBot: botUserId
             ? message.mentions.users.has(botUserId)
             : false,
-          referencedMessageId: message.reference?.messageId ?? undefined,
+          referencedMessageId: replyReferenceMessageId(message.reference, {
+            channelId: message.channelId,
+            parentId: isThread ? parentId : undefined,
+          }),
           authorRoleIds: message.member
             ? [...message.member.roles.cache.keys()]
             : [],
@@ -394,6 +517,14 @@ export async function createLiveGateway(
             respondChannelAutocomplete(interaction as never, handlers, ChannelType),
           ).catch((err) => {
             console.error("[discord] autocomplete handler error:", err);
+          });
+          return;
+        }
+        if (interaction.isMessageComponent()) {
+          if (!handlers.onComponent) return;
+          const adapted = adaptComponent(interaction as never);
+          Promise.resolve(handlers.onComponent(adapted)).catch((err) => {
+            console.error("[discord] component handler error:", err);
           });
           return;
         }
@@ -417,19 +548,26 @@ export async function createLiveGateway(
   };
 
   // Attach reply helper for bridge
-  handlers.reply = async ({ channelId, content, replyToMessageId, mentionUserIds }) => {
+  handlers.reply = async ({
+    channelId,
+    content,
+    replyToMessageId,
+    mentionUserIds,
+    components,
+  }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
         return null;
       }
       // REQ-discord-205: never parse mentions from (model-written) content;
-      // only the replied-to author and mentionUserIds (owner ask) may ping.
+      // only the replied-to author and mentionUserIds (an ask) may ping.
       const sent = await channel.send({
         content: defangMassMentions(content).slice(0, 1900),
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        ...(components?.length ? { components: components as never } : {}),
         allowedMentions: outboundAllowedMentions({
           users: mentionUserIds,
           repliedUser: true,
@@ -491,9 +629,170 @@ export async function createLiveGateway(
     }
   };
 
+  handlers.editMessage = async ({
+    channelId,
+    messageId,
+    content,
+    embed,
+    components,
+    mentionUserIds,
+  }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (
+        channel as {
+          messages: {
+            fetch: (id: string) => Promise<{ edit: (p: unknown) => Promise<unknown> }>;
+          };
+        }
+      ).messages;
+      const msg = await messages.fetch(messageId);
+      // REQ-discord-205: an edit parses no mentions either.
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions({
+          users: mentionUserIds,
+          repliedUser: true,
+        }),
+      };
+      if (content === null) payload.content = null;
+      else if (content !== undefined) {
+        payload.content = defangMassMentions(content).slice(0, 1900);
+      }
+      if (embed === null) payload.embeds = [];
+      else if (embed) {
+        payload.embeds = [
+          {
+            description: embed.description,
+            color: embed.color,
+            footer: embed.footer,
+          },
+        ];
+      }
+      if (components === null) payload.components = [];
+      else if (components) payload.components = components;
+      await msg.edit(payload);
+      return true;
+    } catch (err) {
+      console.error("[discord] editMessage failed:", err);
+      return false;
+    }
+  };
+
+  handlers.deleteMessage = async ({ channelId, messageId }) => {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !("messages" in channel)) return false;
+      const messages = (
+        channel as {
+          messages: {
+            fetch: (id: string) => Promise<{ delete: () => Promise<unknown> }>;
+          };
+        }
+      ).messages;
+      const msg = await messages.fetch(messageId);
+      await msg.delete();
+      return true;
+    } catch (err) {
+      console.error("[discord] deleteMessage failed:", err);
+      return false;
+    }
+  };
+
   return gateway;
 }
 
+
+
+function adaptComponent(interaction: {
+  id: string;
+  customId: string;
+  channelId: string;
+  guildId: string | null;
+  user: { id: string };
+  message?: { id?: string };
+  deferred: boolean;
+  replied: boolean;
+  reply: (opts: unknown) => Promise<unknown>;
+  update: (opts: unknown) => Promise<unknown>;
+  deleteReply?: () => Promise<unknown>;
+} & ComponentActorSource): ComponentInteraction {
+  return {
+    id: interaction.id,
+    customId: interaction.customId,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId ?? undefined,
+    userId: interaction.user.id,
+    messageId: interaction.message?.id,
+    reply: async (opts) => {
+      // REQ-discord-205: component replies/updates parse no mentions.
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions(),
+      };
+      if (opts.content !== undefined) {
+        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+      }
+      // Explicit empty array clears buttons (DISCORD-ASK-8); do not use truthiness.
+      if (opts.components !== undefined) {
+        payload.components = opts.components as never;
+      }
+      if (opts.update) {
+        await interaction.update(payload);
+        return;
+      }
+      if (opts.ephemeral) {
+        // MessageFlags.Ephemeral (64) — avoid deprecated ephemeral: true warning.
+        payload.flags = 64;
+      }
+      if (interaction.deferred || interaction.replied) {
+        // Already acknowledged — follow-up style via reply() still works for ephemeral.
+        await interaction.reply(payload);
+      } else {
+        await interaction.reply(payload);
+      }
+    },
+    deleteReply: async () => {
+      if (typeof interaction.deleteReply === "function") {
+        await interaction.deleteReply();
+      }
+    },
+    // IDENTITY-4 — the presser's names, so a button-pick resume injects them
+    // like a chat message (REQ-discord-446).
+    ...componentActorNames(interaction),
+  };
+}
+
+/** Fixture-friendly subset of a discord.js component interaction's presser. */
+export type ComponentActorSource = {
+  user: {
+    id: string;
+    username?: string | null;
+    globalName?: string | null;
+    displayName?: string | null;
+  };
+  member?: {
+    displayName?: string | null;
+    nickname?: string | null;
+  } | null;
+};
+
+/**
+ * IDENTITY-4 / REQ-discord-446 — the presser's Discord display name (guild
+ * member display, then nickname, then global name, then user display, as for
+ * slash) and username, trimmed; a blank or missing name stays undefined.
+ */
+export function componentActorNames(
+  interaction: ComponentActorSource,
+): Pick<ComponentInteraction, "userDisplayName" | "userUsername"> {
+  const display =
+    (interaction.member?.displayName ??
+      interaction.member?.nickname ??
+      interaction.user.globalName ??
+      interaction.user.displayName ??
+      undefined)?.trim() || undefined;
+  const username = interaction.user.username?.trim() || undefined;
+  return { userDisplayName: display, userUsername: username };
+}
 
 /** Discord autocomplete deadline is 3s; skip stale replies (corvid-agent pattern). */
 const AUTOCOMPLETE_DEADLINE_MS = 2500;
@@ -504,11 +803,20 @@ type ChannelTypeEnum = { GuildText: number };
  * Live autocomplete for STRING channel options on /admin channels add|remove
  * and /announce channel. Lists guild text channels from cache (Guilds intent);
  * remove scopes to the live allowlist when provided.
+ *
+ * DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431: Discord shows these options to
+ * every guild member, so each request is re-checked here. Unless
+ * `handlers.mayAutocompleteChannels` says this invoker is ADMIN in an
+ * allowlisted channel, the answer is an empty choice list: no channel names,
+ * ids or allowlist entries leak.
  */
-async function respondChannelAutocomplete(
+export async function respondChannelAutocomplete(
   interaction: {
     commandName: string;
     createdTimestamp: number;
+    channelId: string;
+    user: { id: string };
+    member?: RawInteractionMember;
     guild: {
       channels: {
         cache: { values: () => IterableIterator<{ id: string; name: string; type: number }> };
@@ -525,6 +833,27 @@ async function respondChannelAutocomplete(
   ChannelType: ChannelTypeEnum,
 ): Promise<void> {
   const started = interaction.createdTimestamp;
+  // Fail closed: no gate wired, a refusal or a throwing gate ⇒ no choices.
+  let allowed = false;
+  try {
+    allowed =
+      handlers.mayAutocompleteChannels?.({
+        commandName: interaction.commandName,
+        channelId: interaction.channelId,
+        userId: interaction.user.id,
+        roleIds: memberRoleIds(interaction.member),
+      }) === true;
+  } catch (err) {
+    console.error("[discord] autocomplete gate failed:", err);
+  }
+  if (!allowed) {
+    try {
+      await interaction.respond([]);
+    } catch (err) {
+      console.error("[discord] autocomplete respond failed:", err);
+    }
+    return;
+  }
   let choices: { name: string; value: string }[] = [];
   try {
     const focusedRaw = interaction.options.getFocused(true);

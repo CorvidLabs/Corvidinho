@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the",
+  "slug": "the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the",
+  "title": "The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85)",
+  "description": "The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "fc0ed8da6e47dc1db452ee51044cde096db4e8bc",
+  "created_at": 1790519739,
+  "updated_at": 1790522880,
+  "affected_specs": [
+    "agent",
+    "discord",
+    "watch"
+  ],
+  "affected_paths": [
+    "src/agent/workspace-diff.ts",
+    "src/agent/loop.ts",
+    "src/agent/types.ts",
+    "src/agent/index.ts",
+    "src/discord/agent-client.ts",
+    "src/watch/agent-client.ts",
+    "tests/agent.loop.test.ts",
+    "tests/agent.tool-loop.test.ts",
+    "docs/discord.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With the verify gate on, runTask snapshots the run's git project before the first attempt (HEAD, git status with untracked files, content fingerprints of dirty paths) and after each attempt adds every path that differs from that snapshot to filesChanged, so an edit no tool reported (code-tier shell-exec, a delegate worker, a commit made through a shell, a new untracked file, a deleted file, a further edit to a file already dirty, a first commit on an unborn HEAD) runs the verify lane and the run ends done only on a pass or fails plainly; dirt present before the run and left untouched, gitignored paths, and a non-git cwd keep today's behaviour (tool-reported files only; empty ⇒ verifySkipped=true); a cwd below the repo root reads only its subtree and reports cwd-relative paths; a diff git cannot read after a good snapshot fails closed (verify runs); --no-verify / verify_before_complete=false take no snapshot; git runs read-only (runGit: argv, hooks off, optional locks off, fsmonitor off); no new flags, env vars, config keys or slash commands; no schema or package version change; regression tests fail on main and pass on the branch"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

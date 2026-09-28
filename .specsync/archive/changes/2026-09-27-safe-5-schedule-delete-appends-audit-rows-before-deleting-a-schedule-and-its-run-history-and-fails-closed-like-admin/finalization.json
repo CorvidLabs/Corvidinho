@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-schedule-delete-appends-audit-rows-before-deleting-a-schedule-and-its-run-history-and-fails-closed-like-admin",
+  "implementation_commit": "5af50948696d1b685f1eaa429152b56565067ccc",
+  "implementation_tree": "3b6adc4cefeac3e2bc7fc4070c35ac8e3d33f522",
+  "contract_digest": "1f7d7af6f3d3b02b75c127026fc7f1d5a56216ce06861d2a3f1f9a78a259206e",
+  "workspace_digest": "11e2de674c4e9ff389990daa9666f976a941f764a1ab607e7de77333336b45c2",
+  "closing_digest": "fe30f9e73fe844932b37581047f3a4af834195c3bcc2a468d9b8eddacd11373e",
+  "review_digest": "2a5f03fd8cc56b6d17597bbca9eac7cc25eae76c1fd5a0797f02345beb0202a3",
+  "finalization_digest": "398c1872d158d3d5e890ae7f282b14f5f32f04e2a4c9fe8759e1469a74873494",
+  "timestamp": 1790532454
+}

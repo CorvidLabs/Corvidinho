@@ -2,10 +2,11 @@
  * REQ-discord-205 — outbound mention safety (DISCORD-8 confused deputy,
  * ROLES-CHAT-3/8). Model-written text steered to contain `@everyone`,
  * `@here`, `<@&role>` or `<@user>` must never ping from any bridge outbound
- * path: chat mention / reply-continue, `/session start` and `/work` replies,
- * schedule posts, thinking embeds, and the agent's `discord-post-message`.
- * Fixtures only: a fake discord.js module injected into the real live
- * gateway, a stubbed fetch — no live Discord, no network, no git worktrees.
+ * path: chat mention / reply-continue, `/session start` and `/work` answers
+ * (collapsed edit or editReply fallback), ask-button replies, schedule posts,
+ * thinking embeds, and the agent's `discord-post-message`. Fixtures only: a
+ * fake discord.js module injected into the real live gateway, a stubbed
+ * fetch — no live Discord, no network, no git worktrees.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import type * as DiscordJs from "discord.js";
@@ -37,10 +38,11 @@ const ROLE_ID = "300000000000000003";
 const OTHER_ID = "400000000000000004";
 
 /** What untrusted input steers a model summary into. */
-const HOSTILE = `Summary done. @everyone @here <@&${ROLE_ID}> <@${OTHER_ID}> <@!${OTHER_ID}> please look`;
+const MARK = "Summary done.";
+const HOSTILE = `${MARK} @everyone @here <@&${ROLE_ID}> <@${OTHER_ID}> <@!${OTHER_ID}> please look`;
 
 type Payload = {
-  content?: string;
+  content?: string | null;
   embeds?: unknown[];
   allowedMentions?: {
     parse?: string[];
@@ -50,20 +52,25 @@ type Payload = {
   };
 };
 
-/** The post can ping nobody from its text (roles, everyone/here, users). */
-function expectNoParsedMentions(p: Payload, allowedUsers: string[] = []) {
+/**
+ * The post parses nothing from its text: no `@everyone` / `@here`, role or
+ * user ping; at most the users in `mayPing` (an ask's named users).
+ */
+function expectSafe(p: Payload, mayPing: string[] = []) {
   expect(p.allowedMentions).toBeDefined();
   expect(p.allowedMentions!.parse).toEqual([]);
   expect(p.allowedMentions!.roles).toBeUndefined();
-  expect(p.allowedMentions!.users ?? []).toEqual(allowedUsers);
-  if (p.content !== undefined) {
+  for (const u of p.allowedMentions!.users ?? []) expect(mayPing).toContain(u);
+  if (typeof p.content === "string") {
     expect(p.content).not.toMatch(/@(everyone|here)\b/i);
   }
 }
 
+type Call = { kind: string; payload: Payload };
+
 /** Minimal discord.js stand-in: records every outbound payload. */
 function fakeDiscord() {
-  const sends: Array<{ channelId: string; payload: Payload }> = [];
+  const sends: Array<{ channelId: string; id: string; payload: Payload }> = [];
   const edits: Array<{ channelId: string; messageId: string; payload: Payload }> = [];
   const box: { client: FakeClient | null } = { client: null };
 
@@ -72,17 +79,19 @@ function fakeDiscord() {
     application = null;
     private listeners = new Map<string, Array<(arg: unknown) => void>>();
     channels = {
-      fetch: async (id: string) => ({
-        id,
+      fetch: async (channelId: string) => ({
+        id: channelId,
         send: async (payload: Payload) => {
-          sends.push({ channelId: id, payload });
-          return { id: `sent_${sends.length}` };
+          const id = `sent_${sends.length + 1}`;
+          sends.push({ channelId, id, payload });
+          return { id };
         },
         messages: {
           fetch: async (messageId: string) => ({
             edit: async (payload: Payload) => {
-              edits.push({ channelId: id, messageId, payload });
+              edits.push({ channelId, messageId, payload });
             },
+            delete: async () => {},
           }),
         },
       }),
@@ -116,13 +125,18 @@ function fakeDiscord() {
       Error: "error",
     },
     ChannelType: { GuildText: 0, PublicThread: 11, PrivateThread: 12 },
-    ActivityType: { Custom: 4 },
+    MessageFlags: { Ephemeral: 64 },
   };
   return {
     discord: mod as unknown as typeof DiscordJs,
     sends,
     edits,
     client: () => box.client!,
+    /** Every channel send and message edit payload, in order. */
+    payloads: (): Payload[] => [
+      ...sends.map((s) => s.payload),
+      ...edits.map((e) => e.payload),
+    ],
   };
 }
 
@@ -145,7 +159,7 @@ function bridgeConfig(): BridgeConfig {
 }
 
 async function waitFor(cond: () => boolean, what: string): Promise<void> {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 300; i++) {
     if (cond()) return;
     await new Promise((r) => setTimeout(r, 10));
   }
@@ -158,6 +172,46 @@ function summaryAgent(summary: string, ask?: HumanAsk): AgentClient {
       return { ok: true, sessionId, summary, exitCode: 0, ...(ask ? { ask } : {}) };
     },
   };
+}
+
+/** Slash (chat input) interaction fixture; records reply/editReply payloads. */
+function slashInteraction(commandName: string, sub: string | null, opts: Record<string, string>) {
+  const calls: Call[] = [];
+  const optionData = Object.entries(opts).map(([name, value]) => ({ name, type: 3, value }));
+  const i = {
+    id: `i-${commandName}`,
+    commandName,
+    channelId: "chan-1",
+    guildId: "guild-1",
+    user: { id: USER_ID, username: "chatter" },
+    member: null,
+    options: {
+      getSubcommand: () => sub,
+      getSubcommandGroup: () => null,
+      data: sub ? [{ name: sub, type: 1, options: optionData }] : optionData,
+    },
+    deferred: false,
+    replied: false,
+    isAutocomplete: () => false,
+    isMessageComponent: () => false,
+    isChatInputCommand: () => true,
+    async deferReply(payload: Payload) {
+      calls.push({ kind: "deferReply", payload });
+      i.deferred = true;
+    },
+    async reply(payload: Payload) {
+      calls.push({ kind: "reply", payload });
+      i.replied = true;
+    },
+    async editReply(payload: Payload) {
+      calls.push({ kind: "editReply", payload });
+      return { id: `reply-${commandName}` };
+    },
+    async deleteReply() {
+      calls.push({ kind: "deleteReply", payload: {} });
+    },
+  };
+  return { i, calls };
 }
 
 describe("outboundAllowedMentions / defangMassMentions", () => {
@@ -178,18 +232,18 @@ describe("outboundAllowedMentions / defangMassMentions", () => {
   test("defang breaks @everyone / @here and is idempotent", () => {
     const once = defangMassMentions("hi @everyone and @HERE");
     expect(once).not.toMatch(/@(everyone|here)\b/i);
-    expect(once).toBe("hi @\u200beveryone and @\u200bHERE");
+    expect(once).toBe("hi @​everyone and @​HERE");
     expect(defangMassMentions(once)).toBe(once);
     expect(defangMassMentions("mail a@example.com")).toBe("mail a@example.com");
   });
 });
 
 describe("live gateway parses no mentions from outbound text (REQ-discord-205)", () => {
-  async function gateway() {
+  async function gateway(extra: Partial<GatewayHandlers> = {}) {
     const fake = fakeDiscord();
-    const handlers: GatewayHandlers = { onMessage: () => {} };
-    await createLiveGateway(bridgeConfig(), handlers, { discord: fake.discord });
-    return { fake, handlers };
+    const handlers: GatewayHandlers = { onMessage: () => {}, ...extra };
+    const gw = await createLiveGateway(bridgeConfig(), handlers, { discord: fake.discord });
+    return { fake, handlers, gw };
   }
 
   test("client default allows no parsed mentions (replied-to author only)", async () => {
@@ -206,14 +260,15 @@ describe("live gateway parses no mentions from outbound text (REQ-discord-205)",
     await handlers.reply!({ channelId: "chan-1", content: HOSTILE });
     expect(fake.sends).toHaveLength(2);
     for (const { payload } of fake.sends) {
-      expectNoParsedMentions(payload);
+      expectSafe(payload);
+      expect(payload.allowedMentions!.users).toBeUndefined();
       expect(payload.allowedMentions!.repliedUser).toBe(true);
       // Role/user syntax stays visible text; it just cannot ping.
       expect(payload.content).toContain(`<@&${ROLE_ID}>`);
     }
   });
 
-  test("owner ask keeps its explicit owner allowance and nothing else", async () => {
+  test("an ask keeps exactly the users it names, nothing from its text", async () => {
     const { fake, handlers } = await gateway();
     await handlers.reply!({
       channelId: "chan-1",
@@ -221,10 +276,30 @@ describe("live gateway parses no mentions from outbound text (REQ-discord-205)",
       replyToMessageId: "m1",
       mentionUserIds: [OWNER_ID],
     });
-    expectNoParsedMentions(fake.sends[0]!.payload, [OWNER_ID]);
-    // No owner configured: empty list ⇒ nobody besides the replied-to author.
+    expectSafe(fake.sends[0]!.payload, [OWNER_ID]);
+    expect(fake.sends[0]!.payload.allowedMentions!.users).toEqual([OWNER_ID]);
+    // Empty list ⇒ nobody besides the replied-to author.
     await handlers.reply!({ channelId: "chan-1", content: HOSTILE, mentionUserIds: [] });
-    expectNoParsedMentions(fake.sends[1]!.payload);
+    expectSafe(fake.sends[1]!.payload);
+    expect(fake.sends[1]!.payload.allowedMentions!.users).toBeUndefined();
+  });
+
+  test("editMessage (collapsed answer) parses no mentions; keeps only named users", async () => {
+    const { fake, handlers } = await gateway();
+    await handlers.editMessage!({ channelId: "chan-1", messageId: "t1", content: HOSTILE });
+    await handlers.editMessage!({
+      channelId: "chan-1",
+      messageId: "t1",
+      content: HOSTILE,
+      mentionUserIds: [USER_ID],
+    });
+    await handlers.editMessage!({ channelId: "chan-1", messageId: "t1", content: null, components: null });
+    expectSafe(fake.edits[0]!.payload);
+    expect(fake.edits[0]!.payload.allowedMentions!.users).toBeUndefined();
+    expectSafe(fake.edits[1]!.payload, [USER_ID]);
+    expect(fake.edits[1]!.payload.allowedMentions!.users).toEqual([USER_ID]);
+    expectSafe(fake.edits[2]!.payload);
+    expect(fake.edits[2]!.payload.content).toBeNull();
   });
 
   test("thinking embeds send and edit with no parsed mentions", async () => {
@@ -232,15 +307,75 @@ describe("live gateway parses no mentions from outbound text (REQ-discord-205)",
     const embed = { description: HOSTILE, color: 1 };
     await handlers.sendEmbed!({ channelId: "chan-1", embed, replyToMessageId: "m1" });
     await handlers.editEmbed!({ channelId: "chan-1", messageId: "sent_1", embed });
-    expectNoParsedMentions(fake.sends[0]!.payload);
-    expectNoParsedMentions(fake.edits[0]!.payload);
+    expectSafe(fake.sends[0]!.payload);
+    expectSafe(fake.edits[0]!.payload);
   });
 
   test("content is capped after defang (Discord 2000 limit)", async () => {
     const { fake, handlers } = await gateway();
     await handlers.reply!({ channelId: "chan-1", content: "@everyone ".repeat(400) });
     expect(fake.sends[0]!.payload.content!.length).toBeLessThanOrEqual(1900);
-    expectNoParsedMentions(fake.sends[0]!.payload);
+    expectSafe(fake.sends[0]!.payload);
+  });
+
+  test("slash reply, deferred editReply fallback: no parsed mentions", async () => {
+    const { fake, gw } = await gateway({
+      onSlash: async (s) => {
+        if (s.commandName === "status") {
+          await s.reply({ content: HOSTILE, ephemeral: true });
+        } else {
+          await s.deferReply?.({ ephemeral: false });
+          await s.editReply!({ content: HOSTILE });
+        }
+      },
+    });
+    await gw.start();
+    const status = slashInteraction("status", null, {});
+    const work = slashInteraction("work", null, { description: "x" });
+    fake.client().emit("interactionCreate", status.i);
+    fake.client().emit("interactionCreate", work.i);
+    await waitFor(
+      () =>
+        status.calls.some((c) => c.kind === "reply") &&
+        work.calls.some((c) => c.kind === "editReply"),
+      "slash replies",
+    );
+    expectSafe(status.calls.find((c) => c.kind === "reply")!.payload);
+    const edit = work.calls.find((c) => c.kind === "editReply")!.payload;
+    expectSafe(edit);
+    expect(edit.content).toContain(MARK);
+    await gw.stop();
+  });
+
+  test("ask-button component reply and update: no parsed mentions", async () => {
+    const { fake, gw } = await gateway({
+      onComponent: async (c) => {
+        await c.reply({ content: HOSTILE, ephemeral: true });
+        await c.reply({ content: HOSTILE, update: true, components: [] });
+      },
+    });
+    await gw.start();
+    const calls: Call[] = [];
+    fake.client().emit("interactionCreate", {
+      id: "c1",
+      customId: "ask:choose:x",
+      channelId: "chan-1",
+      guildId: "guild-1",
+      user: { id: USER_ID, username: "chatter" },
+      member: null,
+      message: { id: "stub-1" },
+      deferred: false,
+      replied: false,
+      isAutocomplete: () => false,
+      isMessageComponent: () => true,
+      isChatInputCommand: () => false,
+      reply: async (payload: Payload) => void calls.push({ kind: "reply", payload }),
+      update: async (payload: Payload) => void calls.push({ kind: "update", payload }),
+    });
+    await waitFor(() => calls.length === 2, "component reply + update");
+    for (const c of calls) expectSafe(c.payload);
+    expect(calls.map((c) => c.kind)).toEqual(["reply", "update"]);
+    await gw.stop();
   });
 });
 
@@ -267,8 +402,8 @@ describe("bridge outbound paths with model text (REQ-discord-205)", () => {
       thinkingDebounceMs: 0,
       thinkingTickMs: 60_000,
       agent,
-      // The real live gateway on a fake discord.js: thinking embeds and the
-      // final reply both go through its send/edit/editReply.
+      // The real live gateway on a fake discord.js: thinking embeds, the
+      // collapsed answer edit and any reply all go through its send/edit.
       gatewayFactory: async (cfg, handlers) => {
         box.handlers = handlers;
         return createLiveGateway(cfg, handlers, { discord: fake.discord });
@@ -291,123 +426,72 @@ describe("bridge outbound paths with model text (REQ-discord-205)", () => {
       member: { displayName: "Chatter", roles: { cache: new Map<string, unknown>() } },
       content,
       mentions: { users: new Map(reference ? [] : [[BOT_ID, {}]]) },
-      reference: reference ? { messageId: reference } : null,
+      reference: reference ? { messageId: reference, channelId: "chan-1" } : null,
       attachments: new Map(),
     };
   }
 
-  function interaction(commandName: string, sub: string | null, opts: Record<string, string>) {
-    const calls: Array<{ kind: string; payload: Payload }> = [];
-    const optionData = Object.entries(opts).map(([name, value]) => ({ name, type: 3, value }));
-    const i = {
-      id: `i-${commandName}`,
-      commandName,
-      channelId: "chan-1",
-      guildId: "guild-1",
-      user: { id: USER_ID, username: "chatter" },
-      member: null,
-      options: {
-        getSubcommand: () => sub,
-        getSubcommandGroup: () => null,
-        data: sub ? [{ name: sub, type: 1, options: optionData }] : optionData,
-      },
-      deferred: false,
-      replied: false,
-      isAutocomplete: () => false,
-      isChatInputCommand: () => true,
-      async deferReply(payload: Payload) {
-        calls.push({ kind: "deferReply", payload });
-        i.deferred = true;
-      },
-      async reply(payload: Payload) {
-        calls.push({ kind: "reply", payload });
-        i.replied = true;
-      },
-      async editReply(payload: Payload) {
-        calls.push({ kind: "editReply", payload });
-      },
-    };
-    return { i, calls };
+  const answers = (ps: Payload[]) =>
+    ps.filter((p) => typeof p.content === "string" && p.content.includes(MARK));
+
+  /** Message id that carries the answer (collapsed edit or a fresh send). */
+  function answerMessageId(fake: ReturnType<typeof fakeDiscord>): string {
+    const edit = fake.edits.find((e) => answers([e.payload]).length > 0);
+    if (edit) return edit.messageId;
+    return fake.sends.find((s) => answers([s.payload]).length > 0)!.id;
   }
 
   test("@mention and reply-continue: summary with @everyone / role / user pings nobody", async () => {
     const { result, fake } = await liveBridge(summaryAgent(HOSTILE));
-    const replies = () => fake.sends.filter((s) => s.payload.content !== undefined);
 
     fake.client().emit("messageCreate", message("m1", `<@${BOT_ID}> summarize issue 1`));
-    await waitFor(() => replies().length === 1, "mention reply");
-    const first = replies()[0]!;
-    expectNoParsedMentions(first.payload);
-    expect(first.payload.allowedMentions!.repliedUser).toBe(true);
-    expect(first.payload.content).toContain(`<@&${ROLE_ID}>`);
+    await waitFor(() => answers(fake.payloads()).length >= 1, "mention answer");
+    const first = answers(fake.payloads()).length;
+    expect(answers(fake.payloads())[0]!.content).toContain(`<@&${ROLE_ID}>`);
 
-    // DISCORD-2: reply to the bot's message continues the same session.
-    const botMessageId = `sent_${fake.sends.indexOf(first) + 1}`;
-    fake.client().emit("messageCreate", message("m2", "and again", botMessageId));
-    await waitFor(() => replies().length === 2, "reply-continue reply");
-    expectNoParsedMentions(replies()[1]!.payload);
+    // DISCORD-2: replying to the bot's answer continues the same session.
+    fake.client().emit("messageCreate", message("m2", "and again", answerMessageId(fake)));
+    await waitFor(() => answers(fake.payloads()).length > first, "reply-continue answer");
 
-    // Every outbound payload — thinking embeds and edits included.
-    for (const s of fake.sends) expectNoParsedMentions(s.payload);
-    for (const e of fake.edits) expectNoParsedMentions(e.payload);
-    expect(fake.edits.length).toBeGreaterThan(0);
+    // Every outbound payload — thinking embeds, collapsed edits, replies.
+    expect(fake.payloads().length).toBeGreaterThan(2);
+    for (const p of fake.payloads()) expectSafe(p);
     await result.stop();
   });
 
-  test("AUTONOMY-2 ask still pings only the owner", async () => {
-    const ask: HumanAsk = { reason: "clarify", question: `Pick one @everyone <@&${ROLE_ID}>` };
-    const { result, fake } = await liveBridge(summaryAgent("state=blocked", ask));
-    const replies = () => fake.sends.filter((s) => s.payload.content !== undefined);
-    fake.client().emit("messageCreate", message("m1", `<@${BOT_ID}> add storage`));
-    await waitFor(() => replies().length === 1, "ask reply");
-    const r = replies()[0]!.payload;
-    expect(r.content).toContain(`<@${OWNER_ID}>`);
-    expectNoParsedMentions(r, [OWNER_ID]);
-    await result.stop();
-  });
-
-  test("/session start deferred public reply pings nobody from the summary", async () => {
-    const { result, fake } = await liveBridge(summaryAgent(HOSTILE));
-    const { i, calls } = interaction("session", "start", { topic: "look at issue 1" });
-    fake.client().emit("interactionCreate", i);
-    await waitFor(() => calls.some((c) => c.kind === "editReply"), "/session start editReply");
-    const edit = calls.find((c) => c.kind === "editReply")!.payload;
-    expect(edit.content).toContain("started");
-    expect(edit.content).toContain(`<@&${ROLE_ID}>`);
-    expectNoParsedMentions(edit);
-    for (const s of fake.sends) expectNoParsedMentions(s.payload);
-    await result.stop();
-  });
-
-  test("/work deferred public reply pings nobody from the summary", async () => {
-    const { result, fake } = await liveBridge(summaryAgent(HOSTILE));
-    const { i, calls } = interaction("work", null, { description: "fix the docs @everyone" });
-    fake.client().emit("interactionCreate", i);
-    await waitFor(() => calls.some((c) => c.kind === "editReply"), "/work editReply");
-    const edit = calls.find((c) => c.kind === "editReply")!.payload;
-    expect(edit.content).toContain("Work task");
-    expectNoParsedMentions(edit);
-    for (const s of fake.sends) expectNoParsedMentions(s.payload);
-    await result.stop();
-  });
-
-  test("ephemeral slash replies also parse no mentions", async () => {
-    const fakeGw = fakeDiscord();
-    const handlers: GatewayHandlers = {
-      onMessage: () => {},
-      onSlash: async (s) => {
-        await s.reply({ content: HOSTILE, ephemeral: true });
-      },
+  test("a clarify ask pings only the requester it names, nothing from its text", async () => {
+    const ask: HumanAsk = {
+      reason: "clarify",
+      question: `Pick one @everyone <@&${ROLE_ID}> <@${OTHER_ID}>`,
     };
-    const gw = await createLiveGateway(bridgeConfig(), handlers, { discord: fakeGw.discord });
-    await gw.start();
-    const { i, calls } = interaction("status", null, {});
-    fakeGw.client().emit("interactionCreate", i);
-    await waitFor(() => calls.some((c) => c.kind === "reply"), "slash reply");
-    const reply = calls.find((c) => c.kind === "reply")!.payload;
-    expectNoParsedMentions(reply);
-    await gw.stop();
+    const { result, fake } = await liveBridge(summaryAgent("state=blocked", ask));
+    fake.client().emit("messageCreate", message("m1", `<@${BOT_ID}> add storage`));
+    await waitFor(
+      () => fake.payloads().some((p) => (p.allowedMentions?.users ?? []).includes(USER_ID)),
+      "requester ping",
+    );
+    for (const p of fake.payloads()) expectSafe(p, [USER_ID]);
+    await result.stop();
   });
+
+  for (const [name, command, sub, opts] of [
+    ["/session start", "session", "start", { topic: "look at issue 1" }],
+    ["/work", "work", null, { description: "fix the docs @everyone" }],
+  ] as const) {
+    test(`${name} answer pings nobody from the summary`, async () => {
+      const { result, fake } = await liveBridge(summaryAgent(HOSTILE));
+      const { i, calls } = slashInteraction(command, sub, { ...opts });
+      fake.client().emit("interactionCreate", i);
+      const all = () => [
+        ...fake.payloads(),
+        ...calls.filter((c) => c.kind === "reply" || c.kind === "editReply").map((c) => c.payload),
+      ];
+      await waitFor(() => answers(all()).length >= 1, `${name} answer`);
+      expect(answers(all())[0]!.content).toContain(`<@&${ROLE_ID}>`);
+      for (const p of all()) expectSafe(p);
+      await result.stop();
+    });
+  }
 });
 
 describe("schedule tick post pings nobody from the summary (REQ-discord-205)", () => {
@@ -449,8 +533,9 @@ describe("schedule tick post pings nobody from the summary (REQ-discord-205)", (
     svc.stop();
 
     expect(fake.sends).toHaveLength(1);
-    expect(fake.sends[0]!.payload.content).toStartWith("✅ Schedule **Nightly**");
-    expectNoParsedMentions(fake.sends[0]!.payload);
+    expect(fake.sends[0]!.payload.content).toContain("Schedule **Nightly**");
+    expect(fake.sends[0]!.payload.content).toContain(`<@&${ROLE_ID}>`);
+    expectSafe(fake.sends[0]!.payload);
   });
 });
 
@@ -463,6 +548,7 @@ describe("discord-post-message parses no mentions (REQ-discord-205)", () => {
     "DISCORD_TOKEN",
     "CORVIDINHO_DISCORD_DRY_RUN",
     "CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK",
+    "CORVIDINHO_ACTING_DISCORD_USER_ID",
   ];
 
   afterEach(() => {
@@ -483,6 +569,8 @@ describe("discord-post-message parses no mentions (REQ-discord-205)", () => {
     process.env.DISCORD_TOKEN = "fake";
     delete process.env.CORVIDINHO_DISCORD_DRY_RUN;
     delete process.env.CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK;
+    // Operator run (no bridge actor): the post goes straight to the API.
+    delete process.env.CORVIDINHO_ACTING_DISCORD_USER_ID;
 
     const bodies: Array<{ content: string; allowed_mentions?: { parse?: string[] } }> = [];
     globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {

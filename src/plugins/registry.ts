@@ -12,6 +12,15 @@ export function register(command: PluginCommand): void {
   commands.set(command.name, command);
 }
 
+/**
+ * Remove `name` only while it is still exactly `command` (Fledge project
+ * scoping rebinds its own commands). Returns whether it was removed.
+ */
+export function unregister(name: string, command: PluginCommand): boolean {
+  if (commands.get(name) !== command) return false;
+  return commands.delete(name);
+}
+
 export function get(name: string): PluginCommand | undefined {
   return commands.get(name);
 }

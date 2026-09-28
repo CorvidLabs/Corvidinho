@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners",
+  "slug": "scope-session-list-to-the-acting-member-and-hide-host-paths-from-non-owners",
+  "title": "Scope /session list to the acting member and hide host paths from non-owners",
+  "description": "Scope /session list to the acting member and hide host paths from non-owners",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "3cdbb5c7cc469fe3d9fbaae991f58d69326da9dd",
+  "created_at": 1790469808,
+  "updated_at": 1790473061,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/command-handlers/session.ts",
+    "src/discord/command-handlers/schedule.ts",
+    "src/discord/list-scope.ts",
+    "tests/discord.session-list-scope.test.ts",
+    "specs/discord/discord.spec.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A non-ADMIN member's /session list shows only sessions whose owner user id matches the acting user (SESSION-MULTI-1); no other user's session id, mention or topic; project shown as name, never an absolute host path. The owner (ADMIN, IDENTITY-2) keeps the full list with every session and its full project path. No owner configured means nobody is ADMIN, so everyone sees only their own (IDENTITY-3). /schedule list shows a member the project name only; /status stays counts-only. Regression tests fail on main and pass after."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

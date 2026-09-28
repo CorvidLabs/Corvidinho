@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no",
+  "implementation_commit": "105a7bdf4045974dacefabb95a45a9fc192c7c1b",
+  "implementation_tree": "8553e46c0019c665cb1177f664141e4cc3c6bfe9",
+  "contract_digest": "d138a01d3ea88ad4bc4b445f94d71b36298572127671029143b087c0942b7e0b",
+  "workspace_digest": "4e836ebb9572218a90831f8ca880e9b047d7647be9b54b4d7b06eeabe1c8eaf4",
+  "closing_digest": "d0677989ed40af7060ae5cb19f4fcc4d4ef08b2515ad1a3f0b0515bdfe7329f4",
+  "review_digest": "e653a0ea50cedfb1f1ad682161f328ad47809aed6712421ce58a5b89f14873a8",
+  "finalization_digest": "fc4fc4f043b244334582db7b3b0285f3bc53a035ceca0afb0e3c6707754d0709",
+  "timestamp": 1790540028
+}

@@ -17,9 +17,10 @@ Captured HI met (no new criteria invented; no `hi/` edits):
   an action; a non-owner's prompt can no longer cause one through the reply.
 - **ROLES-CHAT-8** (hi/roles.md): community sessions read any public GitHub.
   That content is untrusted and can no longer turn into a ping.
-- **AUTONOMY-2** / **IDENTITY-3**: the owner ping on an ask is unchanged
-  (owner only; no owner means nobody).
+- **AUTONOMY-2** / **AUTONOMY-4** / **SAFE-8**: ask pings are unchanged (the
+  requester on a clarify ask, the owner on a stuck ask or spend-cap stop);
+  they are the only pings besides the replied-to author.
 
-Canonical requirements changed (see delta): **REQ-discord-044** (Modified:
-the "no mention restriction" criterion for ordinary replies), and
-**REQ-discord-205** (Added: outbound mention safety).
+Canonical requirements changed (see delta): **REQ-discord-205** (Added:
+outbound mention safety). REQ-discord-044 is not modified: its ask mention
+rules already hold, and it no longer has an ordinary-reply criterion.

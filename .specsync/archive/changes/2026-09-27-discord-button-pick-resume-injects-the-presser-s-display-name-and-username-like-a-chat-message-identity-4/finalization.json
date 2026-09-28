@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-button-pick-resume-injects-the-presser-s-display-name-and-username-like-a-chat-message-identity-4",
+  "implementation_commit": "af257c71d8652e87ae491a23e0e24ce66f7a3fa9",
+  "implementation_tree": "a5157237df3d68b04988d74547290bba6a4abf76",
+  "contract_digest": "dbe6c27e92f46f9b0aabacebf3e6936453ab31a88224f1c1a41b08f87d37f5de",
+  "workspace_digest": "b133f2f225bccba7f7cfaaffdc2abd079c9ecd0e6d26a58eaf140d6c07b245a7",
+  "closing_digest": "8f4938701bacd8350a7767937e44ecd749ddfc8a5625a7769714270c6fb4931e",
+  "review_digest": "02e6ab18ce72bc200b567a9218002de9234c306095bbf68d395bc99d7ae85b6e",
+  "finalization_digest": "89710b1a4311b7132b8044086a3fb83858028cd5a9ca5488721378a375fd11fa",
+  "timestamp": 1790537689
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a",
+  "slug": "test-suite-never-reads-the-operator-allowlist-file-preload-and-custom-env-tests-point-corvidinho-allowlist-file-at-a",
+  "title": "Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file contributes nothing at the GitHub plugin gate (REQ-plugins-253)",
+  "description": "Test suite never reads the operator allowlist file (preload and custom-env tests point CORVIDINHO_ALLOWLIST_FILE at a missing file) and a malformed allowlist file contributes nothing at the GitHub plugin gate (REQ-plugins-253)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "8129f4d1f055ea6ee19bfd9a013797fe5b140c53",
+  "created_at": 1790464133,
+  "updated_at": 1790464977,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "tests/preload.ts",
+    "tests/github.review.plugin.test.ts",
+    "tests/github.write.plugin.test.ts",
+    "tests/github.deny.cli.test.ts",
+    "tests/github.gate-allowlist-file.test.ts",
+    "tests/discord.image-attachments.test.ts",
+    "tests/discord.session-worktree.test.ts",
+    "tests/discord.thinking-bridge.test.ts",
+    "tests/discord.work-store.recovery.test.ts",
+    "tests/discord.bridge.cli.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With an operator allowlist file admitting corvidlabs (via CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml) bun test has 0 failures and no test reaches api.github.com with a GitHub token set; at the GitHub plugin gate a malformed or unreadable allowlist file contributes nothing (its deny and allow entries are dropped) while env overlays still apply, and with no env allow the gate refuses"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
