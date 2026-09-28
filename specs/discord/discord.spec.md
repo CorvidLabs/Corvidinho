@@ -42,6 +42,7 @@ files:
   - src/discord/message-router.ts
   - tests/discord.actor-gate.test.ts
   - tests/discord.forward-channel.test.ts
+  - tests/discord.ask-button-gates.test.ts
   - tests/discord.thread-sessions-per-user.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
@@ -361,10 +362,13 @@ ADMIN every session with its full project path and anyone else only their own
 sessions with the project name; `/schedule list` shows a non-ADMIN member the
 project name, never an absolute host path. `/status` stays counts-only.
 
-`src/discord/permissions.ts` exports `gateActor` (the chat + slash actor gate:
-deny lists win, non-empty user/role allowlist must match or be the owner);
-`RouterDeps.owner` passes the configured owner to `routeMessage`
-(REQ-discord-201).
+`src/discord/permissions.ts` exports `gateActor` (the chat + slash + ask
+button actor gate: deny lists win, non-empty user/role allowlist must match or
+be the owner); `RouterDeps.owner` passes the configured owner to
+`routeMessage` (REQ-discord-201). `interactionRoleIds` and `RawMemberRoles`
+(`gateway.ts`) read an interaction member's role ids for slash and
+`ComponentInteraction.roleIds` (set by `adaptComponent`), so an ask button press is gated by role
+allow/deny too (REQ-discord-201).
 `replyReferenceMessageId`, `REFERENCE_TYPE_FORWARD` and
 `RawMessageReference` (`gateway.ts`) turn a MessageCreate `reference` into
 `InboundMessage.referencedMessageId` only for a same-channel reply
@@ -406,6 +410,7 @@ the live discord.js Client is built with the short Custom Status from the shared
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
 every MessageCreate is processed only when its own channel (thread parent or the thread itself) is allowlisted — a reply or forward that references a tracked bot message never continues the session in another channel, and the gateway keeps a reference only for a same-channel reply (never a forward); an ask button press resumes only in an allowlisted channel (or the session's thread under an allowlisted parent) while the session's own channel is still allowlisted, else an ephemeral tip (admin) or zero-width ack with no resume (DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-212);
 every @mention/reply/thread message and every slash command also passes `gateActor` after the channel gate: deny-listed users/roles are refused, and when the user or role allowlist is non-empty only listed users, allowed roles or the owner pass; empty user+role lists keep the channel-only path; refusal is silent on MessageCreate and a zero-width ephemeral ack on slash (ALLOW-3/5 / DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-201);
+an ask button press (open or pick) passes channel → `gateActor` (with the press's role ids) → mute/rate (shared per-user state, presser's resolved level) before it opens choices or resumes; a refusal is ephemeral only — zero-width ack for an actor deny, `MUTED` / `RATE_LIMITED` for mute/rate — with no agent run, nothing sent or edited, and the pending ask kept (DISCORD-6 / DISCORD-DENY-3 / REQ-discord-201 / REQ-discord-010);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
 every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
@@ -649,3 +654,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the: The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a) |
 | 2026-09-27 | open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks: Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6) |
 | 2026-09-27 | discord-post-message-checks-the-acting-discord-user-the-bridge-set-not-only-a-model-supplied-id-discord-8: Discord-post-message checks the acting Discord user the bridge set, not only a model-supplied id (DISCORD-8) |
+| 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |
