@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened",
+  "slug": "planning-picks-spec-modules-from-the-request-not-the-bridge-wrapper-and-the-briefing-fence-and-cap-are-hardened",
+  "title": "Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened",
+  "description": "Planning picks spec modules from the request not the bridge wrapper, and the briefing fence and cap are hardened",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "984332fba8490435d9d3da4fcdb29a10e42d857e",
+  "created_at": 1790467726,
+  "updated_at": 1790468297,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/specLoader.ts",
+    "src/agent/execute.ts",
+    "tests/agent.execute.test.ts",
+    "tests/specLoader.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A Discord chat whose request names no module gets no SpecSync briefing even though the identity and memory blocks say Discord, and a WATCH run whose header says WATCH gets no watch briefing; a request that names a module still gets its briefing; a spaced close tag such as </ specsync-briefing > in a spec cannot end the fence; the 8000-char cap never leaves half a surrogate pair"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}

@@ -26,6 +26,9 @@ const FLAG_LOOKING = [
   "--max-retries",
   "9",
   "--max-retries=9",
+  "--project",
+  "p",
+  "--project=q",
   "--help",
   "-h",
   "--",
@@ -43,6 +46,7 @@ describe("parseGlobalFlags: plugins run passthrough (REQ-cli-186)", () => {
     expect(r.taskText).toBeUndefined();
     expect(r.tier).toBeUndefined();
     expect(r.maxRetries).toBeUndefined();
+    expect(r.project).toBeUndefined();
   });
 
   test("global flags and --json before the `--` still apply", () => {
@@ -98,6 +102,7 @@ case "$1 $2" in
   "plugins run")
     shift 2
     echo "cmd=$1"; shift
+    [ "$1" = "--" ] && shift
     for a in "$@"; do printf 'arg=[%s]\\n' "$a"; done
     ;;
   *) exit 2 ;;

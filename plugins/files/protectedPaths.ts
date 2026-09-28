@@ -3,28 +3,81 @@
  * No in-band override (Merlin files-delete pattern).
  */
 
-import { basename } from "node:path";
+import { basename, isAbsolute, relative } from "node:path";
+import {
+  resolveActingIsAdmin,
+  roleSessionActive,
+} from "../../src/plugins/roles.ts";
 
-/** True when path looks like protected project infrastructure (SAFE-2). */
-export function isProtectedPath(filePath: string): boolean {
+function pathParts(p: string): string[] {
+  return p.split("/").filter((part) => part.length > 0 && part !== ".");
+}
+
+/**
+ * True when a path component contains `keystore`: a keystore file, or any
+ * file under a keystore directory (the component rule isSecretPath uses).
+ * A SpecSync change folder's name (`.specsync/changes/<id>/`,
+ * `.specsync/archive/changes/<id>/`) is a slug of the change title, not a
+ * keystore, so it does not count; the components below it still do.
+ */
+export function hasKeystoreComponent(parts: readonly string[]): boolean {
+  const lower = parts.map((p) => p.toLowerCase());
+  return lower.some((part, i) => {
+    if (!part.includes("keystore")) return false;
+    const changeFolder =
+      i < lower.length - 1 &&
+      lower[i - 1] === "changes" &&
+      (lower[i - 2] === ".specsync" ||
+        (lower[i - 2] === "archive" && lower[i - 3] === ".specsync"));
+    return !changeFolder;
+  });
+}
+
+/**
+ * True when path looks like protected project infrastructure (SAFE-2).
+ *
+ * Pass the project `root` with an absolute path: the keystore rule then reads
+ * only the components below the root, so a project checked out under a
+ * directory such as `~/keystore-tools/` does not become read-only as a whole.
+ * The exact-name rules (.git / .env* / specs / .specsync) read the whole path.
+ */
+export function isProtectedPath(filePath: string, root?: string): boolean {
   const normalized = filePath.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter((p) => p.length > 0 && p !== ".");
+  const parts = pathParts(normalized);
 
-  for (const part of parts) {
-    const lower = part.toLowerCase();
+  for (let i = 0; i < parts.length; i++) {
+    const lower = parts[i]!.toLowerCase();
     if (lower === ".git") return true;
     if (lower === ".env" || lower.startsWith(".env.")) return true;
     if (lower === "specs") return true;
+    // SpecSync config, registry and archived changes. Files inside an active
+    // change folder (`.specsync/changes/<id>/…`) stay writable so the agent
+    // can fill change artifacts (SPECSYNC-4); `.specsync/changes` and
+    // `.specsync/changes/<id>` themselves do not, so a file planted where
+    // SpecSync needs a folder cannot switch the change machinery off.
+    if (
+      lower === ".specsync" &&
+      (parts[i + 1]?.toLowerCase() !== "changes" || parts.length < i + 4)
+    ) {
+      return true;
+    }
   }
 
-  const base = basename(normalized);
-  const baseLower = base.toLowerCase();
+  // Any keystore file or directory (`keystore/UTC--…`, `my.keystore`).
+  let inProject = parts;
+  if (root && isAbsolute(filePath)) {
+    const rel = relative(root, filePath).replace(/\\/g, "/");
+    if (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel)) {
+      inProject = pathParts(rel);
+    }
+  }
+  if (hasKeystoreComponent(inProject)) return true;
+
+  const baseLower = basename(normalized).toLowerCase();
   if (baseLower === "fledge.toml") return true;
   // Bun runtime config: a planted `preload` runs code in every spawned agent.
   if (baseLower === "bunfig.toml" || baseLower === ".bunfig.toml") return true;
   if (baseLower.endsWith(".spec.md")) return true;
-  if (baseLower.includes("keystore")) return true;
-  if (baseLower === "wallet-keystore.json") return true;
 
   return false;
 }
@@ -32,7 +85,7 @@ export function isProtectedPath(filePath: string): boolean {
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +
-    `(.env* / .git / fledge.toml / bunfig.toml / specs / *.spec.md / keystores). ` +
+    `(.env* / .git / fledge.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
     `There is NO override — edit via SpecSync or outside the agent file tools.`
   );
 }
@@ -55,6 +108,58 @@ export function isSecretPath(filePath: string): boolean {
   if (base === "id_rsa" || base === "id_ed25519" || base.endsWith(".pem")) return true;
   if (base === "wallet-keystore.json") return true;
   return false;
+}
+
+/**
+ * grep globs mirroring isSecretPath, so a recursive search never opens a
+ * secret file (ROLES-CHAT-8). grep globs are case-sensitive and isSecretPath
+ * is not, so callers still drop result lines whose file isSecretPath matches.
+ */
+export const SECRET_GREP_EXCLUDES: readonly string[] = [
+  "--exclude=.env",
+  "--exclude=.env.*",
+  "--exclude=*keystore*",
+  "--exclude=credentials",
+  "--exclude=credentials.json",
+  "--exclude=id_rsa",
+  "--exclude=id_ed25519",
+  "--exclude=*.pem",
+  "--exclude-dir=.env",
+  "--exclude-dir=.env.*",
+  "--exclude-dir=.ssh",
+  "--exclude-dir=*keystore*",
+];
+
+/**
+ * git exclude pathspecs mirroring isSecretPath (any `.env` / `.env.*` / `.ssh`
+ * / `*keystore*` component; key, `*.pem` and credentials basenames), so a
+ * non-ADMIN `git-diff` never prints a tracked secret file (ROLES-CHAT-8).
+ * `icase` matches isSecretPath's case folding; `**` / `/**` match any depth.
+ */
+export const SECRET_GIT_EXCLUDE_PATHSPECS: readonly string[] = [
+  "**/.env",
+  "**/.env/**",
+  "**/.env.*",
+  "**/.env.*/**",
+  "**/.ssh",
+  "**/.ssh/**",
+  "**/*keystore*",
+  "**/*keystore*/**",
+  "**/credentials",
+  "**/credentials.json",
+  "**/id_rsa",
+  "**/id_ed25519",
+  "**/*.pem",
+].map((glob) => `:(exclude,glob,icase)${glob}`);
+
+/**
+ * ROLES-CHAT-8: true when this call runs in a non-ADMIN role session, so the
+ * read-ish file tools refuse an explicit secret path and leave secret paths
+ * out of listings and searches. ADMIN and the local CLI (no role session) keep
+ * full access. Re-checked each call (ROLES-CHAT-6).
+ */
+export async function secretPathsRefused(): Promise<boolean> {
+  return roleSessionActive() && !(await resolveActingIsAdmin());
 }
 
 export function secretRefuseMessage(path: string): string {

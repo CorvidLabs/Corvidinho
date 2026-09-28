@@ -27,7 +27,7 @@ import { defaultVerifyRunner } from "../agent/verify.ts";
 import type { VerifyRunner } from "../agent/types.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
-import { checkRepoGate, type RepoGateResult } from "../plugins/githubDeny.ts";
+import { checkRepoGateAsync, type RepoGateResult } from "../plugins/githubDeny.ts";
 import { runPlugin, type RunOptions } from "../plugins/run.ts";
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
@@ -99,7 +99,7 @@ export type OpenWorkPrDeps = {
   git?: (cwd: string, args: string[]) => Promise<GitRun>;
   verify?: VerifyRunner;
   allowlist?: ReadonlySet<string>;
-  repoGate?: (repo: string) => RepoGateResult;
+  repoGate?: (repo: string) => RepoGateResult | Promise<RepoGateResult>;
   /** Remote to push to (default `origin`). */
   remote?: string;
 };
@@ -228,7 +228,7 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
   if (!slug) {
     return skip("no-repo", `not opened — cannot tell the GitHub OWNER/REPO from remote \`${remote}\`.`);
   }
-  const gate = (deps.repoGate ?? ((r: string) => checkRepoGate(r)))(slug);
+  const gate = await (deps.repoGate ?? checkRepoGateAsync)(slug);
   if (!gate.ok) {
     return skip("repo-denied", `not opened — ${gate.error}`);
   }

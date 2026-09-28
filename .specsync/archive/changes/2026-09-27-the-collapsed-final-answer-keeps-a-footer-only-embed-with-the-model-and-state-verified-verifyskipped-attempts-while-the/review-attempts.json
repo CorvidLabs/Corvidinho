@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "54cae1620eccdda55284356c0f4216bc154bd6ea",
+      "contract_digest": "7a7c3d5e96b23007c53e547b1e4a85d660c9799a03737e8f6b6b27b8beab5ce3",
+      "execution_digest": "375e1c19bc592b30ffdecd9ea384cd428225cd6c5fd002af706f337ff8c0b69d",
+      "workspace_digest": "417da450d71b5288be6591b5478c0cb8ff14cda784b4a8a1ccab0f264f762e46",
+      "timestamp": 1790537672
+    }
+  ]
+}

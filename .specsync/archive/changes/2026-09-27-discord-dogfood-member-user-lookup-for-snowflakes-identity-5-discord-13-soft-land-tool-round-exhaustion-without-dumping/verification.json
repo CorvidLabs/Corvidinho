@@ -1,0 +1,1846 @@
+{
+  "timestamp": 1790471245,
+  "commit": "55c3a5b490e6f232a4034b3b677b1204604e0180",
+  "contract_digest": "3da28ede25112786faa99d4d64327599ad91e47a40e7f2a29b8268aa64e3d7fc",
+  "execution_digest": "b473da6c35d6fdf2b285356f15c01111f552ab981223856baaf701b16080e5e9",
+  "workspace_digest": "eec4281379307cb4b4336798381512cd9a7652183160a4620898834207c903a7",
+  "acceptance_input_digest": "16a8d63d678e7fda30206bde6b9f7e90bbf87c99c2cffe246f1b215527fd9526",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "CHANGELOG.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c378086c0f51d3041a3004cea72529025a128d4301852b6f187b1b897fb24390",
+        "entry_digest": "08ae5cc1f9e6c31423805a181d659e202d3980c2a295e43330a8b79207a0eb3c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/discord.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4bab2a3d6d3d1e8923614f98a10fb5b43b44cce6c4b6a1794d52e89be4ad6a73",
+        "entry_digest": "0dd1875c60552c8b21595c22b756f39cc9ec660df3df0fa02e8f1b33153cb2d6",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/AGENTS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "47d814098350959a88d360eabc9881b92c5f3197b5cd79e04657a3f8f53fe4cb",
+        "entry_digest": "b8606f805356713aeb09fe682b184c7b38962d505603f5c184f85e91227b176c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/CLAUDE.md",
+        "kind": "symlink",
+        "mode": 40960,
+        "payload_digest": "a54ff182c7e8acf56acfd6e4b9c3ff41e2c41a31c9b211b2deb9df75d9a478f9",
+        "entry_digest": "6bac39e51004c5be485ded7a7ff03e4b93c05e727c7f86944c27b3ea4dd9672f",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/admin.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6c04d12da1905bec1f13a89d7179609b3c661530f433a0ca4dcdb03011f76ee2",
+        "entry_digest": "2d5ff03a833bd40b109888f4e2680f9f19987448ec78c9a60ee572229f8f66ea",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/agent.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5df49f9b191b156d35043797bbb1ff97bddb018ced9dafe07442136fde5afe56",
+        "entry_digest": "21c897b7bbe20454075ec5d4e4a8afbd74c475346ece8a417b341a7a3e880456",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/allow.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "099925131e6a92fa95e12d825f12a740c4f1f71683449b503e12abe36e894ba0",
+        "entry_digest": "621593ac1bff0f179f5494d8af0b1cfe58cfcf03e652582622eef9f837cf95f9",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/autonomous.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "09c7b1822c543323fefb6205a25aae6ba54a4e94ad8f85e6b69604b7c682dd19",
+        "entry_digest": "35a99fb6d9b176e510895078807d4d891c98a5b6b6a2267e5f65c382643b6c20",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/autonomy.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "58c07d8ff415e8dfcdc8f36b36e735bde289459fa73b74e45ccb8be280cf0b79",
+        "entry_digest": "8eebe693fa71c393ee3329b34457015736ad2b3c816c20fbb312fbd6c9c41928",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/cli.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b2511c90dec25e364a7a43cf90a6dd3b681c65a0e4aab30e672f4bcd974c2b33",
+        "entry_digest": "595828805805fb83f3ed4a659ae76c695d8906d7f557e038e8206c016de77183",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/discord.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f845ee767f8f4ff8ac454a9b62f0aa646e227ed1391e0b0f9f67319a67cf1661",
+        "entry_digest": "668bfff818db4adba82af5ed546a834a174ca0593d77a8c48b3972c84f7621a1",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/fledge.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c71e2440a353b0db4091ba84065b40103bf6efe7b59d051e58b290aeff92e3fe",
+        "entry_digest": "9fc7db5e1206beb8ba3526088aa186bdf98e57a18ea4ce99ff339eb6464feae6",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/github.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5e2c07763eaa89444060dabe7b350e9e6620c9ad10e34201f5b93ca22cdaf375",
+        "entry_digest": "65bda3a2ebcdbf368c1a602dd5a6fa6ccb4fabf274cae4feb3876bd0b7718c85",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/identity.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "df0aba75e6369c6b3a0605e775d9e9fb25c58ec9b33a37f40a248fa93e135c6e",
+        "entry_digest": "544b9dfa6b87cf5ae920f7a3180a2a8a6ba097d913aafebe6e9b8bfc67e3dd56",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/memory.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "fb82fc69f71e6afc6c26336f392123f861fd1fa87fabc5a1404678abe4b6c10b",
+        "entry_digest": "dbf66656a227e9c5da1c43ed0c60114818f1b7792422fd0dad39292c529eb2f3",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/plugin.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1d12fde012047f86b69e86fd142ffa7b2569ace76550ff7f5702b8fce9d33eff",
+        "entry_digest": "6cea98186c9c559cbebb8c866b5c39c3d1de75c8034fbe7e053eae7765c7056c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/roles.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "058777ca3d4824652017b3756e9c2d20f55d2b714be0a467162448dc17a61695",
+        "entry_digest": "43bb63dd976e6cdb35c869e3002f42dfba646a80a0228b0b92850e807263ea88",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/safe.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "47cc56970c79bf4e34aa3350317187641f0d211d4fa4f4567d1ac5ba59e79503",
+        "entry_digest": "2dd154ea9d11fd9e7385804732d4187660ee9f7866506a54fe61cf96ee920d43",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/session.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1d5dd9ef346f6f0ad6ddcaafbd9c6c4c0de17070b4283d9f0d813af5acb8005a",
+        "entry_digest": "9f1240dd6c4ee8a90c5fb6cebe51f18828e7778955d3c41fbc5459cab6bda626",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/specsync.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "809a0b43ab055bb3b13a7be1bb470057daf067cd0507ea69818c38a9e8e3f815",
+        "entry_digest": "63a7a561eb32d7ce2b33b1ca85d719cab0465d9ab32cf6454bb4cb6f0f111f68",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/watch.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "faea85aa07a4d2d6d51de114a1b2c236af96519d733e645476d83048e5c1d346",
+        "entry_digest": "81e003a2794313deb9aa93744c4bf385d4cbee049ce24754371195766ea3fbaa",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "package.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f3d35cc6d6d9afcda1e419f7740d4ade71fd8ebd4d356c6650af87191cee21f0",
+        "entry_digest": "4edc46c01b0f5b6234cc78a21a50b9a1f2318e38f448d524192f9de155be430b",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "plugins/discord/index.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "eeea3036bcf211a1da493a073473bd32c5b23c84eafbaaa753340642db437ba0",
+        "entry_digest": "dc699250ec7834754cce52dd2cbc23d5a3556ec0952f1ad55183bb782bf2fb65",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "plugins/discord/user-lookup.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b25919934b73c6593985d008d8a192e75ae61249cb67b84843eb5659d6d9f974",
+        "entry_digest": "4a077e1fe9b4052a2f40a15ccd3abccc4fa17668ca08110cfd1e0ea6e827e6ea",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/agent/agent.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "36743fbd73eaa9db8128738497306429b054c74d618f57ed62fd822ce6cdb7cc",
+        "entry_digest": "7ef4ff1f1dbdbd0eb300af1feb959878112b45c7023ca6dfd8bce60f8acdf9b0",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+        "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bad23aa1d212cf328556c0c4112a9c0cf895507028993fe860f48f49d430658b",
+        "entry_digest": "428f18e0cd190d9a65d9f3d38239ee882970bd9a82e65c6dc638ac74cc6e72e8",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+        "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "94cef5cedfad1fece2bd060050ce0a1ad355450612fc476d9aed003531deb995",
+        "entry_digest": "a9a58942b5ff3b0af175de1cdb803be418e6591fe78bf94b757b148cce9db169",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/cli/cli.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8a3360cc317de6974fab3a47779717cd5a06263ab11fef1496f9c994e724a7da",
+        "entry_digest": "f932ce34168a7712b97c3edd48e7ffb271f740f81b0c4883c4545cde012c825c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "30c4bb67bae0b0c55b7e4814964472d129473160f738d37282ac0e4f35e44215",
+        "entry_digest": "c7ed9b7e95da5de92400b51ea7fd88d43c84ff2074f32f4af404731fc28f1262",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c0d47c6a1838efb57600560de3ef9ab3e116a4d6fecf401885439f6f5ecd6533",
+        "entry_digest": "30fd9617fbcee336fcb435413f30faebc5a8ac2fcf41fa59a588b676526b6e04",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d885ef8812ae1d26402a1ad5c21afd2b0a6e23613adf12bd8c90099fc0ca2be9",
+        "entry_digest": "53296b4ad13365ae83bfd03b5aa5a28e2e0d02e885d6a6dc4481484d558bb26c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c9babf10933836dd51e98b4ddc3cc7adcd4aa50e1124368f93c3f04fa03c86db",
+        "entry_digest": "182e1e8fc11c9dd3bae69a8af2db5ed9268411e0d534977e452e2abb85b8edc3",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/discord/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5959c58aadca03abe655cb690afcfb4232b04aa13ca3ca6fd3554d0ac2a8fd86",
+        "entry_digest": "d1eabe30183c4e345a24f6caf77b870adb27336be5c4bc83ee8cb7b2eeda3cef",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/discord.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "838ad8fbb220aa24ee5cfa03ab7837b9078cc2aa4749ff8da633fe265d619b19",
+        "entry_digest": "d19463644f21146fd875ec516e8cdef7db888ba7f1e68d0396061b4b69bd81df",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b919f039890153379416bc2a3b30d61ab5e428b4c77645d054fb7310f524ce54",
+        "entry_digest": "81c95ac1f8e0c91eca6971e316a1d60fc03c0045fd8d23755a5b790e309a31f8",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0aa872cdc0f53390df90aede6279472e6356621550d2182db507584ee6d688bf",
+        "entry_digest": "fa9dbcfff2896ff46f933c60a877f0d68ff98c548e637557238ff93217dc7138",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "629ad738726ad2eb3e9406eb806fa23d4bdef44424d2e65f256f6f6ced0bbdd8",
+        "entry_digest": "cd1a3ed3550f69552e839231d295094d90cf87990ac692df9615bf14f4ff2df9",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/plugins/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+        "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/plugins.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6e595e1ff31f6a15b5d97e381471456a8b4c3a06d74f643d981aa62a44605874",
+        "entry_digest": "75cf97428439593c4abba987cfb1dbdd3aea5b2c2018282d2e2266fc3f287e7d",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "eed082e71c0ac14d6ab11195609c1384a2c18424466a7058471fd8d441d102ed",
+        "entry_digest": "5d4423c232129fb26ffbe68bd52ea924ef6bbc7a89071c2f851e34ca124ee178",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "732663df50c0588eaa26bfafecac9d5e9338c319701e345313cc6c0b03be6362",
+        "entry_digest": "01680ab9b9c67ccbe966338c9c564a847c69eceb94885f8af5dea11e34b4ccaf",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "56ea5f2735a98985d3ab3235cca97a5341bf879284aa5d86016c7919e0b01364",
+        "entry_digest": "1de26c156dc04a2972eeb18cb53b6f352412d7842e3e78479bde13719ab33b0b",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/watch/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+        "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/watch/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "cb56ee5daf348d8e94b03893f7e7bd021ef9e0a471d4b0bb19d148ede88af3e5",
+        "entry_digest": "2ad403ceb9f3fefb5d4360d5bf293f384b5332e37e660b2afcff07de7d9e3648",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/watch/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "16212d01b8757063fa74fe1f55645d5b8b9bc2c3e87a38518903e559cbe5a909",
+        "entry_digest": "c59ec320f62bd51b82ea8a4a802867dbfa86d720287f768253f83286519c2393",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/watch/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "535b50afb38a7f32e4948ec00ad007515a87fec1665f9536300a9bd95d9ad249",
+        "entry_digest": "629480189affa94d7e2fe3edf85f1633efb8e4bed7425bf79abdb02da9fa7f01",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/watch/watch.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "565d319a6c44262225ce81807db1594cb840ac5ddd63eb4434bd591fda07e9c6",
+        "entry_digest": "1c5fae64697b61dc3e7f6f681a9c0dbd5b1c5e14fff41e90e7dbcb2975b9d843",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "src/agent/execute.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1085753a8d14a1254d0cbeab727b5c745fdf536fdf5ad22bb0f95f1ecf758fc4",
+        "entry_digest": "644f877e650f3165935eca6db08b505ed6b46c8141f877240adfc08f688e1b3c",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/agent/index.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "de33c0c85c30eb77300c2dd064808691bc60162d606a9dad0278a0e6a7e92908",
+        "entry_digest": "4352912910521271280373002d490c3a6db70094d910897a594dba9f81ac6ebe",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/agent/task-summary.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4f0738a17cc846bc60601c676e9f3afe6b07c8f5b4584761f1c9be8216e3a6ff",
+        "entry_digest": "2f66c78c7c1c38efd5433e6d863795abe01b1e3b517509df64dfba755e24eced",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/discord/message-router.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "60423cdf635f5311151bed94b9727aa29f5db5dd9c78fa134b8f3d1e72d3901a",
+        "entry_digest": "60922b5eb0afb6b6a5c8dac3d20221b9003815da97f054b209cf2a71f59a978f",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "tests/agent-client.tree.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9cd4a77f9436ee01c1ee06cd99fc41f9abed682a1f0aacf311ee2f1b1c051363",
+        "entry_digest": "5ec62ce8c8ae6959ae373d8dbbf8b1aa446d6e3eade4921f12e8fc015110d173",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.ask.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8ba390f60b1bda2d5cdcf95e2a9241214f78dd4a94bc5045021dbb48dcd549c6",
+        "entry_digest": "167b64f05e65f9bfb993a0b66cc69c67f9f332dcc270991b17285629d5fd0d31",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "10b0b9e17e226fa9262260b7dbbe5f0ed69e9a67adffb0c1ffb87237584ddc58",
+        "entry_digest": "459edf7ea79476292e425c1fb1f4e19b4d1c6fdd9cefc1ae2d862ca161b5e0da",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.config.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6c381fccc746074e46055b0ca2e06280d3f8169c0041b65dd1933df9a22cc84b",
+        "entry_digest": "abbedc34afe9b2e2b7de3cf642d785bd6d6c8f510b3e483a159d0c144cae1e04",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.events-ndjson.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "eb4c8af848ce74d627f5e8955b0dc066dea5246e17c307a797a40a21d96582ca",
+        "entry_digest": "66b010d35a708537a5b0df053a61e85f49fbaa1cc7f482f5452417f038c7daf9",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.execute.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f45b754ce02029cf80275afd0d508f54d5e773906f4fbb2b84489529f4df87bc",
+        "entry_digest": "d6f5a22d4a485a4f755d9bff55a0f70351dd629f3ef56a9005f8b8c519e7054b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.loop.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "910d56408056b8fb32ecf800eaf15f103fc09a67b4eb682038504b1ac0058304",
+        "entry_digest": "f65c3232802f2de2c81482d95e7603e4c777502caa83579e8af1d7c6ca9025c1",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.ndjson-spawn.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f00290b29414600461295ca2c93f0d0d680d0b536c34a94be218f068969d6ffe",
+        "entry_digest": "187b65d6ac77277bc582d996bc8812594ef5dbbe6fcf80ae79cef8c208764094",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.project-instructions.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bd147be019c7632e5277753e3bb282d20803d79b53b2a972f3bb4381001d0a14",
+        "entry_digest": "c8db48029c53ef970fe9783ab5c8d75099a204c148e56b87f282e4794cede3ba",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.soft-land.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "23218957dc888af7950ffb5b31b042ea73cb291ba6e308f677860e9ba5f62942",
+        "entry_digest": "e9c0d9478c518b44572d755b41018767e77e96f8887eaeec22dd120b4c2d76b1",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.spend-ask.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "da899678e75585a29ff04ca1c0298b901433f7d3d4344d9226c32354e4136286",
+        "entry_digest": "7821eb6e41b7a7b654387d1e0c8e61bf9589bbcd334dccc67de2b49bbbdfabe2",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.spend.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8d0aacbf0db761778b397ddb03f11802720c7c216647e06d9c7a71efa010cefb",
+        "entry_digest": "eb1c9df1a71d80ce796988cb118d2cf95310434ad929c7435c8bf043a3077ae2",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.summary-scrub.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c14da3c7994fb34c447a33dee688d5d574c99a1612c8fa2a6aadb33dd25c562c",
+        "entry_digest": "2894477185ec6f63b51606c4518afd0983cb637ddf10089d20af33479e42b933",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/agent.tool-loop.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "05037a0d046eb07369e1975db2b6860b409be1d89f89ebc8c923dbcf926841e2",
+        "entry_digest": "b58f83fb9e25fd380fbd2eef24905467d0bf420de5ccb133fadcd7347fb19c4f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/allowlist.default-deny.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8e3197460d5e3fdcb1908e930639409de5cd6c4f49b3542bcc202a25d4d278fb",
+        "entry_digest": "5988434464c7151380bc36128c417ce48266059250ab51322a784baf9f6e811b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/allowlist.toml-multiline.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "27fdcaf67e9b6976966c03d236c67b410c5db7747fa81df292fd0350a329998d",
+        "entry_digest": "7e594cc17600352bd1110f6585485508063063b566c2f601c6cc82e15d1fe307",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/attribution.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7cfc39667930cc9251eca2b2b46ec3c72852f123245446b38ae89b2675c92fd7",
+        "entry_digest": "3671553e784c13478c315aff0669e7729fea5e11a9fa02813da75b38c331063f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/audit.keyed-downgrade.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ca044e6c6529ad40c53c7f366a60d03fe4afc3f420db2cea1bec5d8927de8f03",
+        "entry_digest": "32b532c79fc113437031fb16b3d1cf5a9e85cf97251719b0cd1edb5278644d87",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/audit.log.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0a3f71a5eabd3649e9d11cc07330786c650c6611ccf2547fdc32a21eb2b4af5e",
+        "entry_digest": "c91008dd24d35390005707a737ff416e9df89d36f15943d7221842fd89a253e1",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/autonomous.council.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "dfe0344af72c11499d6a423a52f9cf08b265127c7d2de75f030fad1670afed1f",
+        "entry_digest": "abed427fa79bfb96efb052e95ccdb0e2368fe586a731e452c9c8476eb8c45a2e",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/autonomous.delegate.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "df3ea95ffacf5de9102b37c1c6f40b5cca2eac68b919e511bfdbf11ce378977f",
+        "entry_digest": "0e74fd7bc1f68a0d608a135d318d93e41f340ade471e00d584097cf7224ab77d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/autonomous.enabled.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6c77439ed4624acf9883c920d4d9b34b13a1357cbcd2c397605a281cf4e0c511",
+        "entry_digest": "9cb22a7b69f76eca148b0fe003c449e8230fc1e9ab03b139f888bbc0b05e0b77",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/cli.smoke.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bfe6d21708d3fe78a140e75f21b9529fae4d5bea44065abc5cc6c78a5ecd2c53",
+        "entry_digest": "615aebbb86670986de715e26b09b537af012ffa36034998a032e7484a003bfbb",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/cli.task-argv.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "654f2b95d30eeb882c4ab03dca7ff60da5bd95cc73f8884efaceb7189259a52c",
+        "entry_digest": "b9e39dfa5b0bf1ad85c3f20bc490d0d52110a5e2d5f509fcae0dd3c0baa5e78c",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/daemon.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7918d5426d05d09e9fcb98dac600c69eb4e76d87f2f1023917aa871f5b0d106c",
+        "entry_digest": "d0ee3f47ff711526a904c6a0e020aae05230b1649776e3eec049efb7b10b7bef",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/daemon.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "72dfbe4372c7c21198645504d5df822d2f3df2064ffc56935d614637ddc79f31",
+        "entry_digest": "eef2179b0bf6d32128e815f6fc490ddb5c20efa19e7ab7f7dcce0ffd4a789c56",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.actor-gate.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6f4b58a52d5c6cadeda58648520cffed96b4573244992a910a69ae8bd0f6c0bb",
+        "entry_digest": "6a357ad10703c18f7ba10d474bdf7a7dd66d6468c78a6fa06f750a6638ef5cda",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.admin-reauth.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "774ee5f6cb971ca427b6be0f2641f2e06ad81df51e984c6df91f84231bb5c3a2",
+        "entry_digest": "a3a8903afd0fa9f9d3db3727740cee411229f2c9390b8aaf986958b4268baca9",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.admin-slash.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0d8f7473b0edf2c8bcfddfaf9e473ac65807192badf39b2c29f048d81e30c133",
+        "entry_digest": "6df2cacb374d5366caba96f142a734c000396cd9f1cf99cfdbeaf23803d85ff5",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.announce.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a65f933751eb5e67bc18c832d32cbdbbbf7525f7045c58eda53de5090045d118",
+        "entry_digest": "08898e2151df2759b9dbc30a1c79e157f7740475e9b4052b755967c8cd4024a4",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.ask-buttons.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f0cf30219cbebe4d64807119b92a8a401741fe4afcf66ec919d6712ded788f7f",
+        "entry_digest": "d3f32ee29d15addf09b5e58ba9609e5238612907d0824549734842a61e25aad9",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.ask-ephemeral.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "14dc4f1f33255cf549c7c648aa75d6e54eb31d29a7df81202705bdcadc4558e2",
+        "entry_digest": "722bfeca7450a0e16e96e189af858fbcb7c789d9dcb7e2b865749a78eb310dce",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.ask-ping.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3fab822b1a367c96589016d6cc142beaf8b5e7ad066788d99a05840aee2b455c",
+        "entry_digest": "64ce23dceb8f216a234cf4737bedd68b2dd910acb61be682c0f7d183235d4a88",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.bridge.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a4c879e4935475a8870ef6b7f872d1ef0e96a98b440d4e4b5933c4a7db4fd2f5",
+        "entry_digest": "c0f2c3bf8dc55d8da7e1daf36641f7e0fbb157c77d0da8a900a3065911dccc94",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.channel-autocomplete.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4795509f396c3501258fe6ffeabe42153658da147dd994d6d9172961aeb9fa41",
+        "entry_digest": "5b2934af85700d3af341169bca5dda6f0566c842092b9800da20c2bc2fffcc7b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.config.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "69c6ecdbe83a6aab9ff502932ccc0a72941db02d6ed273010642678f9b293b46",
+        "entry_digest": "39698ad42b615068002a692ccac678f0dc5722c34f956e6bcc62c3e6fe859040",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.identity-inject.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3047408d865d31a0c553013dff627f87a3036e958f0d078a1ab60b55514a2889",
+        "entry_digest": "d4022118acef02615775ee64609250be2dce22f44f35edc7b2d98288e8a43149",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.image-attachments.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "981e25ed1778fe151138757b8826905023b591f3a717cb51c95fbffdff75cda0",
+        "entry_digest": "4b371e1afff804a58c9d204b8d505d90b741e35d950533b046e0047393cb0fd7",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.inflight-replies.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b94ab487095ba08319d8b7640e12719bda784fb1f8c97d6dcbbee8e6880e5794",
+        "entry_digest": "7cb78977ea248d4a07cf367d3e475bb491e6649c0a153aadf3ebd7959c201879",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.memory-inject.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6b500c5fe00cb13834baf76a23a8c767874f12939da6243f681293b811e35173",
+        "entry_digest": "011aabbdf249669021ac65ecae170bd4126fe79e8bd5584c19e0d9a392dc9fdf",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.owner.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "30d3905609ab93999487d75eb2006126774a4de8a427bd72cf2e53d76efcbc4f",
+        "entry_digest": "a3d6182e3a4c22c9c91eb02f398d950ac790615b1dab3cbc5d7a7a63a17038bb",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.post.plugin.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7ea8664ead4f7807d8a44af884f184ed2c13d162ca18990fd1d33c4695790fc6",
+        "entry_digest": "afee93fd48f3a1af7882ff6eea5894890405d5ff987bb3b4ebc424d201962b18",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.presence.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "79edbf4c9d2b4289ca90526261e4b5921244b5d1613ff69ffd7d7ed5e8c13444",
+        "entry_digest": "a1ca7be8e6fd0f863539248e68155f469d10f5a44b19bdda09b1d20b0d5ee240",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.protocol-version.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b4ed40ae95d733df00e0c4eb3973b71c50e2666a8db24c44e7c8f7310b68a6c9",
+        "entry_digest": "c95560c88101a25a72aeb1731b567e49e525a71e99e294897a4e480c20886cb0",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.rate-mute.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9fd557bf23dc5230394dca49298d260fcf6dc55fa0328d05914573dbb78abe82",
+        "entry_digest": "592b57357e5cc48ba8ca78e75dfd5a0f515b8bc0b84097e710feb1532b4f7f6d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.register-commands.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "42a588712a8277f3cd0e4e5d5dbb2a1a43d871ec1c833e6122b4f735b1bbb81f",
+        "entry_digest": "6eb74715e9870bfd49939c1863062be781490d7b961da0a3367f87bb5f3dcf2f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.requester-perms.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d14992197dfaf2c8b303bd232d45d304edf5c2cb3c5153902c5f169f43eeb8e7",
+        "entry_digest": "153264bbe7db02fac75f425a35b50a01b543caf4259e5d106bb6f629b3d5cb52",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.router.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4373d73cc0351d509bd2b05e84983c8e5901c8e3a9d18e935ce8d256bf6a93b6",
+        "entry_digest": "447db8187f37e5d0ce90fc3a9a96331734eba9c9677bd6d44ad2ff6a292779f7",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.schedule.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d8ffa6f38bc1aa6896816b3e071a0d9a49e0532cced29c4115122e430c3f6d39",
+        "entry_digest": "04e35dde9946f6a967980ae310c937f2b6f27c6f370aca44c90b0d5f8113145e",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.session-store.durable.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9baf2a1cf36afbdfd17dc0203d169adf87a3d4227e6c082502fa2f54ebd08b85",
+        "entry_digest": "d742b57361bd4164eb816ca68baff02ef543a71b8e09d0a4f06682669040e314",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.session-worktree.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "73f60c08a465931766d6cd2dab4f10fafad054019fcceb777e19808d71f76f88",
+        "entry_digest": "6720396d95f0aa269924a70231b636a63aeca63cf71b63ee51cf1e94ff339103",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.slash-ask7.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3a4dae9e88c9dc4f3e06a292777eeeb53a1ad0114167ddce21998526ea23663b",
+        "entry_digest": "b6b43da8fe7b2083b9381222e941ed749a58e370ad143b58a22b1c862cc43e22",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.slash.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8f8fd4a77d32f5eeefd8f088cdb5ec37c179b6a76d3e4a0b15b8dd74f11245c4",
+        "entry_digest": "beb7d9331213c9acab367ad2541314928f96d2dbb98b5b458d3c3b74d04f0962",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.spend.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1a69b8593a60b8e1d4971085963311d24f034ec0c51a4e16580e65abe683fdfa",
+        "entry_digest": "5f71a6b5008761743c6c43602342682119e29c6ba9f5603608fe908ff58e9e2a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.thin-ack.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1c0943787b9e20b33729bed4c2b55db11c4ffbbbafd4cd6817c7213ba0510104",
+        "entry_digest": "7220ca7ed6225d1d6d457ef84117a06c81171447949b0d267fc742acfaadc649",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.thinking-bridge.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0b8d559be960c60c0407ee41e2f6dcf70a68168b21f071baf092a632123c774c",
+        "entry_digest": "08ef1f14942c09d97392b641195405cd6be747b2a9ee7853b143bed8c730634d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.thinking-status.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2a9e0bb1af069264e94c1bf1f798ef6d71dfae8e68bbd816464ab228c2888549",
+        "entry_digest": "e20c93603b841f3dd2d3750fae3b16429b0c9e7a3ff31114129fa2eb7269df66",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.user-lookup.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8e03e56af5d1b97c5c8cd059d67cb04e9972dda4dce2fab50c69fa7bf096c523",
+        "entry_digest": "4df15da8a9076df7eabd21524835451f263ff9d58e180dae0d41480ba47a3419",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.work-store.recovery.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5151c7a840f21bada450ec0abc0bf6c72b4f879ccaaedba33a4685bbc27f6a7e",
+        "entry_digest": "0c3647cb3e9d8321e404d4f32a228b5402187a7fdf1aa22b25c611abf1325dbc",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/files.dangling-symlink.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4cdaee15cc319b2d74857df6db37a31878b91f53c6d213472d29f198624c09c1",
+        "entry_digest": "7b4e69b5db49d58a656e4a0eb0aeaff8f1cf27c47241343185baf0c1180e7808",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/files.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "fd2da7f38960f4b9e4b93d360a0bc93d81144b135cdae0d519baa0672a906a76",
+        "entry_digest": "f5feaaaa671e5fd84bd36ac4f61d2e973398f18be2b886e2060690bf53a94c76",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/files.secret-path.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "63329f15e3c8ece9eb5c02e05c6426c3c0d7e819b85ed496e637d7b3759e8e0c",
+        "entry_digest": "0f73ee52fbbecceffdb675a86d651242c2f9ec37f331861ead954938bf0d0c5f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/ci-status.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6168c526a65a9e31014953299992da52a7c3600c012d4b845bc7fc7fa8d7bd01",
+        "entry_digest": "8f8931cb79c29047a53a267b98350a053fb7875c75ebba6f0911f0b8e0dddc7e",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/issue-comment.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "516be672d587b754d88de3568eca1110d19dbe2ea444bda7b7ea58f4bc969f32",
+        "entry_digest": "6efdbc1f6d9009413ee16bf0f1364685b4b74de745e6bc64f83170eb0d3e0e52",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/issue-create.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "340ec57071f0644aec4316756093bf7da2109c417ebb358d56411781eeae8b04",
+        "entry_digest": "5f6e6950246eae7ff3e2827b9cd2bb839a6f27824d8aea6c51c679422ad73e1a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/issue-list.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4b62f69c13a47f4eee1d8514d3e876763f0ad3b3ac074ed909f5e4d74ab9ccb2",
+        "entry_digest": "4b16b69872023c78a46f6639796db016c995a3dfd068337026c9bebb184eb478",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-create.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bf86de626d7195f48a6dadfd5407f52ba1440571b8680d0d93a2259ee69432be",
+        "entry_digest": "dbfe71950db811e7bd6e5f8fe7e727f53a44b7ee225030be65f6639c58d40aed",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-list.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "539953257b056cf21cf14d23d3760d100dade8e1d34e1f9dda329f1ea5f38611",
+        "entry_digest": "a80ae5b4b6464a52d611b60a878a6e8fc8c13e34d33ab81a18fcf0deefde3b14",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-review.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0d986837e1c59c40f3f2ff1f72a29388abb96e127db2cfe8bb500abcb9cd719f",
+        "entry_digest": "d97649657ad8ff944212c222daea04b6108f99894f12609f9b71ff9a42ada111",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/github/pr-status.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6d6c83b9970cd264e7e0b3bcc79a33e87be354d7c98c4228eec382e87d948f70",
+        "entry_digest": "1fe3629a802629b96e5bc6c92e301c7b7d6d9cd6b174ab8909b482bbf956b401",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/watch/mentions.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5833556a18602feba8386430eecd6aed9bcd114f36cf80a12df3563ec9d59e4a",
+        "entry_digest": "070db2300493332833376859c018df116c2c4e74876301490c5e6bb6b6c93074",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fledge.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7ff6cb817ba934bc020ddce05a4bbfb5141072e110ceaf0d18aeba6d06f2a201",
+        "entry_digest": "b046fb9c4be3ce81b9a31d27b1c2fb036157cc68da95139664e26a3a3350f58d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fledge.hardening.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5566c77ac6ae4898ca5c629dd14b6f3ffcacd5277dfb2a39847f72e12c00a3b4",
+        "entry_digest": "7df93bd41633c0d5e455624c586a719a4581acda3341f5cb2da425742730449a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fledge.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9f494a146cdcb919c9f98227fdec58f6ac6cd78cf38cf5a577fd65532382f2fb",
+        "entry_digest": "7ba381152f7d9f9ed5512998333f67a5117073a9d61c753e463a4ce858af15ff",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/git.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4e415f5916e122e990b00be0fa1ee8bf62a00ad75a47eac07e0a74a5b243f25c",
+        "entry_digest": "1d6d0ff1eb5711436dc9eb47d241cb9465e2f850ec2b2b51378fc8658068ff92",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.ci-status.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "dab25c69efe7dd6d5b43045a8c96ebd24f46b16e79886f9ce371072ce0648978",
+        "entry_digest": "e8219585e99fc772e229efc87af4bc6488ce797f2f3a10b1f29ec68000dbae2b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.deny.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d46f66767b8cb9bd458d65eeae61f546fa76428d93809be94e6f449e490b872b",
+        "entry_digest": "c0b24973a01de03d1062a9cdda0619096b8db4563d395573bfd9f706b6f85b1a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.deny.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a93f631b9901d44b0532aaa6b93baaea1ed9fe5d33a1cf00877961d0a76d64c8",
+        "entry_digest": "a35ca75548c6d9cf7df8f944c48364f92484fd6489116241e6fd53ba64a6ec18",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.fixture.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "51a8554588f7d9fdf2be7cd41982b5093c619fed57e633e77ddb41aa8e433c85",
+        "entry_digest": "812b7fa549f341b88d630c662676f52d1c5eeedb2434eaba00b9975a5f7ad680",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.gate-allowlist-file.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "cd7b70e17ff93e68e4c9cee729c00113387474e18de13e893e310b3cdf117029",
+        "entry_digest": "cf5c73826c514e10c284e4826ce4331af8df53872cb5da17a68e5fdb1387de65",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.live.optional.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e11f5f18bb139f31f9d22a5e4eebf84025136dccd29d36193f5bdca6562a6ab7",
+        "entry_digest": "e58f0b4315caf11637413a34205a6cb3b8a679abdf4f3992d690b6b0c1facc4b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.public.community.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e1c016c297b21cc27990274c058632f07b8ed200a8c429052f9a761252c19579",
+        "entry_digest": "69ae2f610ad3708715b73031a0e38adfe9632d3d49cce9c81084f0039902c652",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.review.plugin.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6f04d3e20977e506c51d33eb8e29bdc5158a8b6293d0ac9cd3fd6e2c9077ea20",
+        "entry_digest": "171a43d4255e48b064472e265ebc82b5ecf538e19d6fc57d44af0a9990d99a3b",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/github.write.plugin.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d00a7a5471462bd28d18a545daa7f2e183263ca0b54d5d0067eec1b30bcf655e",
+        "entry_digest": "19dfdb6dd7ee9b8a9044b918f57723df7e4bc68138a0999860f692f23372e0c7",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/identity.owner.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6385ffc706617426e7dad356dbb26be0258a260e82b6847ed1d8a9eacd693297",
+        "entry_digest": "0ef60fa66f64321fe723ea598da591e381ec1c889d6a1d1e0d80aecfa47d9240",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/memory.confirm.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "154040580dd6264cc677f6f929d86a5bcfaa2dbfffcd657257314fe33db533d5",
+        "entry_digest": "4bb05a7c91a1079fa3d89111ce7a1f1c1f68742a835c57143cbf8667ed163bcf",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/memory.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c7f380c0d80651124b4f9be2cd4f3023971f6d75e2830d19761b84d72c533a4d",
+        "entry_digest": "19f3aaecb788e5b539d80219afa818c4765b767fd06bc7b9673160e0731a8a56",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/memory.spawn-env.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "fe820eda352156e9dbce8cc32223e86059782f128e4112a7b73bc6ec439d7d06",
+        "entry_digest": "769089c73ee2c70297ef0cb3dbce285c65947b7888b30a048260ac9d594a81bb",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/memory.store.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bffc0b95b0934da18c4927f0d9171e6e2d295ab53174d826ecca24cf85665454",
+        "entry_digest": "d223cbefb41eb9df669b87f225d56e0cf7d690699edebe2c7335544c62a2a187",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/plugins.argv-dashes.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b731c875721bcd12a7a2ddf80283458f47879badaf3fd615f6c013175135a1a6",
+        "entry_digest": "08352e66a72634eadb5f9c6a253423eb57e43538b69537070674302120006d37",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/plugins.deny.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "dcba91b2ef455c3b6f49ccd8d6e5e143acd89f527c48865c45542ba56193c750",
+        "entry_digest": "2719f1a00b17084368ecc411d16afa6d14b95340d34d44f78904fec6058d7a55",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/plugins.deny.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5553422105a89b065211679491fcecfc8cb30547e89a656147a041adb656368a",
+        "entry_digest": "2580207dfbedac66a6f1857d663e1ba9a0e67fb8a3b2f60d1b8ff6bcf02aea34",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/plugins.list.smoke.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9ad67cbb13ed18ab53c4b6b9102d39b9db575f6fbef7436a5aced987da134236",
+        "entry_digest": "834ee6c038ab6a537ed1a60ed71f2d2aaff3bf30f7396f786e2656fcd6c846f1",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/preload.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "20a5f6a551122abfb0b493f6e257407026a3ec9054d1591923f6d22699f94ab1",
+        "entry_digest": "33de322fb9370e56a46047fe19bcf0d2035e4214d222d74849180df80235dd51",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/proc-group.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3a3c1e8bc1df6109f4681367a1904da435629ec1286b19b27e7325266f0008e1",
+        "entry_digest": "159be067a93246728cd789cb0d690ed7617d2de51eee88166c991737754b439a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/roles.chat.gates.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0e1de5ad0dc2027d549318d93862531dfd8cbae4593db779759420aeb58c1756",
+        "entry_digest": "e341ba606d603e0692fc7a8dca4f08cf14fb0d851aac010c5ffec14a5e81ad54",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/scheduler.claim.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e8bcd13c3bfc9961b626c574845e6d7a0f6dc23849f7c5f547a882cdaca92034",
+        "entry_digest": "07d5121627de21a6c79c11edc76086030a5df0b7430c57ac57528b74cbb54517",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/scheduler.cron.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "14cf34cb1918489200bbe24b007ab52dc83bb665150d7db51cd643b2b9adf0ff",
+        "entry_digest": "5be69e1dbfbac2bf7408f31e7ab235f32020c4e546950c46c24f48bb81d2dd14",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/scheduler.service.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c2658e6127e7409a3c020744b83e7234f20382a81de64035a6d7525c94526020",
+        "entry_digest": "83ef91eb0fb9576198ae2e01347c553f69b0e5d0be88f71e8a9098894f547fe7",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/scheduler.tick-errors.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "430ba1d04d8fa4d7cad486e67e22577ba254e1dbff81eaa34cb5dff525789187",
+        "entry_digest": "337cdf43a628ff9830f5621aca630ba1ace5bd21e5ec2a16faef015351748329",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/scheduler.worktree.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6b0a23852449fac3f5cb44bbd3e7f0798d55179513c254a4ed7167d2b95df559",
+        "entry_digest": "47588db483c1521415d2eeef7c9baa937f781699da3ecfe845e113591418eed2",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/search.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3a4f502662784154066c20ec080f3398298ff230cffd4be882887d5917ed0523",
+        "entry_digest": "e8907735754c3ad270c99f54fd8391e583819b9c3c8d1570e652fedef38bffed",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/shell.clamp-bypass.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "df7711cefe50f8a1d682801b9662012557e42177a88000212f028506fa6c52de",
+        "entry_digest": "538b7bbac40d8a45fcc97177dfc63c41acba39df624c5d763027777bde61ad9d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/shell.clamp-failclosed.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ceb4a2cd649ee95b5be3f75ff92e0e6d1a3e45ffa00f7e0d2c8651d902376023",
+        "entry_digest": "45ca8a2ad2d7eada4cfb0b236e03feb731794babbe3b6faf8c9426d8ae1143bb",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/shell.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e60b7c51c3e4c6dee0ccfb81c8806d608c6852dc14ba006a99bdcefd6eb1ad2d",
+        "entry_digest": "427c8e73eef21360e91cc00ead605fc0588b0945f11d02813ff60179f9c11097",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/spawn.argv.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "80b6bede1b2e76eb03e4bbe9270a778175b147c778ecf80fd6cb86fdbd227bd6",
+        "entry_digest": "c91fd1fa7afe72df1763ed2e9851bbb2cf4104ba56316064e8f264ec07b56201",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/specLoader.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2217841698c88f01d1e082a599218da5623e917aae103279070a068c91efb685",
+        "entry_digest": "daca6bfca73ca825b7a439f10d37a1ead7344ac72902383a4149e48f1c927cf4",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/specsync.plugins.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bcc77f6cb6572b944638af39386866d17c3a570dc3ae962f195a37002cd90579",
+        "entry_digest": "451322cde86f53b429af7db976863f91081def1b4c3afe5ac7f5a3b9fa4f4185",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/store.busy-lock.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e887e51929a6e0b019ffeeadca7db5ef21cb297c8f2b62161c86d8f598982638",
+        "entry_digest": "ae18d4a7b8510cbd702effe6328b26d157d9e736fda120bb2152eaf4ed8f05a2",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/store.paths.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "681b3ddc44a104e19e13b2c77dd7fc83f29a5ea8b39bc72a08829e27216e6039",
+        "entry_digest": "6e759c180e5af5a83b6fa522528d580a0b550505b32fb0f86de2f19274b388dc",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/store.scrub.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "34c06d6f93b3f998c23b93dab5d5ba0f328547fc3adfa6ef893a426bc43dbb47",
+        "entry_digest": "18ad49569ed99eab7c638ff555ab248d4dc02b54aa551ade3493c57216bf12fe",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/store.session-ttl.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "140b52142bfcde07f209c1ffa0e7f1b0a93ca7d0f42613f8c7df449a2e8ddb09",
+        "entry_digest": "6fe771ce6c589e3f2c6ad59ea72a3e55fdee0dcd6607f56f3dc8fa12c373b298",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/update-helpers.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "eefffe97122356d163bbfc07356f4b86897f4452ecdefc1b653ec95a644035dc",
+        "entry_digest": "fd1cd289471c73387497222dab8f56f0a386d8251d9407fc2e3b960cfdb59d40",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/version.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d04b04a9dee2e18f4171b2ff025480135035e86ea147e33d451962b3b4a198a1",
+        "entry_digest": "40471dc4faeefdae2cd2cb85ff8cf598e1a38458beb2eb9487714f17728fa097",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.ack.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9dc7500bd9acdf65024a9004e8ded7a7335a26d5b8f523e675c3279645766436",
+        "entry_digest": "c6bb78cd71bec6ba88ca1b4a1a35f7da9bbb0ae0881fa2195ac8e7a83dd6e263",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.cli.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0a675d9762be8529e2ff5bb91bf55e575dc8b2276c4d9e5e6eab82a02f9edeeb",
+        "entry_digest": "0d87860fbe613c9f154379a39ab4daadf7da27fba2ee60d86e5918aa1c68caab",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.comments-pagination.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c6a03e12cb1a2cf1b600c9bff25d49c982ac7d2c13e3d7646447d5402c96b23b",
+        "entry_digest": "632b88d3ce4f2ed49818b41d21cd203c300755abe7458a7750cc2a6cf86502cd",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.config.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f726dc17edcaf69dc9a5e66190f8d62b0bec1fe055f15aaef8e05bd0e58090dd",
+        "entry_digest": "79ddeb6110b88e659751d1ed42817c281a6c5e77b84e1400ca04f95c34ca21b0",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.dedup-durable.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "44b56ef10da0c073b18c31801e0a368a75bd8f9ee158307bb8a08fca27b7b5ff",
+        "entry_digest": "53d553f3da1a10a9c75cdbe70e6470741b2630557be9a28913b8567feafdd12d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.poller.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "86f8f7aa733514a7d52cea53cdf14fea8bf31ff8572d7752e9102a558e999d3b",
+        "entry_digest": "a47e04a796cd138e647f1a6b66a47b73200bda4719c7f6c2400a4a570679324f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.reliability.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b772586c59a13bef321d1775415a2343188d5155dd4ea01b43bf17dc5baee653",
+        "entry_digest": "8ffd342d75a7ab528d3678e42ddc0536fb6782370eff2b2a9c59f5e514a8a09d",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.router.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "fd7a98adf0d33e477c8bb72c54ebb88beaf2f81ae64e25ff011e4d9ab1360948",
+        "entry_digest": "494dda1d39ae46557b01a181e7a03b53f1c41d589a6f6706598f0b8f76809a3a",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.session-store.durable.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3918001b90e4a6f747c35f1a5501b8bb6ce3118352c129f777f11c183fb06dd4",
+        "entry_digest": "90a3401b8e43d6c4c7fe681fd2045db7b6abd5dc85706aa9d86066b47b2821df",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.summary-scrub.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2efbf2aeb5ebc1512a61c60e047e69a37af9994e6ace7f7e778511c4cc9d9785",
+        "entry_digest": "e0c26d6a00f09aa93df1b1c75eddb46c9f939193bfd322a6a035632bd75e08cc",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/web.fetch.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4dd3179721a6f990ef477fffc6af6176691dc4ed1ab730be4d59340a4790d663",
+        "entry_digest": "cf40ac1ab4aa7907aa2fafb59435d76962efb494fd44f501abe91a99f0911ba4",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/web.transport.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "18f01a6aca4e3b104e71e8cd044e3d5729bbf5b7788bd173a5a3d33bc1bfac0c",
+        "entry_digest": "c8abe068b0107a83cc4b2fc48da884f7dd7bdd7c9963e597a11bb5202553bdef",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/work.pr.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "ce5be25140e02169eda06e98410436386d63a565a610d1189e6b875923cfb822",
+        "entry_digest": "27a462e100ac83e1941a2a055384bbb92c135a53a28313e70b7d4e319135bec2",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/worktree.project-scope.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d6828bea73e60e6f6a0090b03d021c3301765145dd4830e072c134d69ebd7d04",
+        "entry_digest": "75136daef8d100936bea237474d18cbe4dec56a2500b363f111ec062f48b4107",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/worktree.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3a56ed52d9308acd0bda562b9f10bfa136c68e768345cdf697ae70a1847aa7fd",
+        "entry_digest": "0528fe5bc433f660e7ac7cd34ef17aa8b72c66f103648204bfe760626711c679",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent --spec discord --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-312",
+    "REQ-discord-312",
+    "REQ-plugins-312"
+  ]
+}

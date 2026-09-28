@@ -1,0 +1,91 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790531064,
+      "digest": "32d0926fa8ad2e80b4899498ef832c415a0a1e1030ae9fe2cf75a8a7fc673ae2",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-version-presence-rides-every-gateway-identify-via-the-client-presence-option-and-is-still-set-on-clientready",
+        "title": "Discord version presence rides every gateway IDENTIFY via the Client presence option and is still set on ClientReady (DISCORD-12)",
+        "description": "Discord version presence rides every gateway IDENTIFY via the Client presence option and is still set on ClientReady (DISCORD-12)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/discord/gateway.ts",
+          "src/discord/presence.ts",
+          "tests/discord.presence.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "The live discord.js Client is constructed with the version Custom Status (type 4, state vX.Y.Z from the shared package version, same as /status) as its presence option, so the presence discord.js copies into the gateway IDENTIFY payload at login carries it on the first IDENTIFY and on any non-resumable re-identify after an invalid or expired session, not an empty activity list. ClientReady still sets the same presence; a failure there is logged and does not abort slash registration or the bridge. No new slash command, env var, config key or allowlist change. Regression tests fail on main and pass after."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "c2482b32e814cf3358fb51e33922fddf5414b2f69bab6e05b81baea1ad86e46b"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790532195,
+      "digest": "dcf307eefc33ebc0fcf73bce6e2d576dd594bccfe28e2076222992ec1616663d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-version-presence-rides-every-gateway-identify-via-the-client-presence-option-and-is-still-set-on-clientready",
+        "title": "Discord version presence rides every gateway IDENTIFY via the Client presence option and is still set on ClientReady (DISCORD-12)",
+        "description": "Discord version presence rides every gateway IDENTIFY via the Client presence option and is still set on ClientReady (DISCORD-12)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/discord/gateway.ts",
+          "src/discord/presence.ts",
+          "src/discord/requester-perms.ts",
+          "tests/discord.presence.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "The live discord.js Client is constructed with the version Custom Status (type 4, state vX.Y.Z from the shared package version, same as /status) as its presence option, so the presence discord.js copies into the gateway IDENTIFY payload at login carries it on the first IDENTIFY and on any non-resumable re-identify after an invalid or expired session, not an empty activity list. The short-lived DISCORD-8 requester-check Client that logs in with the same bot token identifies with the same presence. ClientReady still sets the same presence; a failure there is logged and does not abort slash registration or the bridge. No new slash command, env var, config key or allowlist change. Regression tests fail on main and pass after."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "fc9a0473f43004e0c4a31096103bfaa71a13a9565fd34fd0f013f87c07339040"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790532980,
+      "digest": "d8d5392cba893328c4f0288925e811cf7575e6c83a61502ca69d5a8c99af36e2",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

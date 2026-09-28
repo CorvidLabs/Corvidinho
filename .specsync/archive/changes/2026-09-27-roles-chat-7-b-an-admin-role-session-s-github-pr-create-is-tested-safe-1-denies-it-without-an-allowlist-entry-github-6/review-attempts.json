@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "roles-chat-7-b-an-admin-role-session-s-github-pr-create-is-tested-safe-1-denies-it-without-an-allowlist-entry-github-6",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "6752c9dd2a96abc56ceb1ac5df703c1683853b51",
+      "contract_digest": "8999c175bcee65fbb9b63100d18f23978c24d7786133f6a8b19ad027e0a77668",
+      "execution_digest": "c010f8b7824d7e968cb10812ebf34f5cdc579ff5df8e9749f571dd951d36dd16",
+      "workspace_digest": "1c7ec2ea7c681adb303054de64fd3d4086cdf5e63667fe2539249eeac00e102d",
+      "timestamp": 1790532979
+    }
+  ]
+}

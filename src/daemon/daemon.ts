@@ -3,17 +3,23 @@
  *
  * Ticks the SQLite schedules table on the 60s poll without Discord, so
  * recurring work keeps moving with no REPL and no bridge. Same gates as the
- * bridge ticker: channel allowlist re-check (DISCORD-SCHEDULE-3), per-run
- * worktree (SESSION-WORKTREE), non-interactive spawns (SAFE-1). One daemon per
+ * bridge ticker: creator + channel allowlist re-check (DISCORD-SCHEDULE-3)
+ * against the allowlist re-read before every tick (a tick is skipped while
+ * the file cannot be loaded), per-run worktree (SESSION-WORKTREE),
+ * non-interactive spawns (SAFE-1). One daemon per
  * data dir (lock file); SIGTERM/SIGINT stop ticking, wait a bounded grace for
- * in-flight runs, record stragglers as failed, release the lock, exit 0.
+ * in-flight runs, then kill each straggler's process tree and record it
+ * failed (AGENT-3), let it park its worktree (short bounded grace), release
+ * the lock, exit 0. Start first recovers runs and worktrees a dead process
+ * left (REQ-discord-346).
  *
  * Supervision/restart is systemd's job (docs/DAEMON.md); heartbeat, crash DMs
  * and running the bridge/watch inside the daemon are not built here.
  */
 
 import type { Database } from "bun:sqlite";
-import { loadAllowlist } from "../allowlist/load.ts";
+import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "../agent/spend-notice.ts";
+import { loadAllowlist, tryLoadAllowlist } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import {
   createSpawnAgentClient,
@@ -24,7 +30,9 @@ import {
   CORVIDINHO_PROTOCOL_VERSION,
   checkProtocolVersion,
 } from "../discord/protocol-version.ts";
+import { loadOwnerConfig, type OwnerRecord } from "../identity/owner.ts";
 import {
+  ABANDONED_SETTLE_MS,
   DEFAULT_POLL_INTERVAL_MS,
   ScheduleStore,
   SchedulerService,
@@ -83,6 +91,17 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Same channel gate as the bridge (allowlist ∪ DISCORD_CHANNEL_IDS). */
+function daemonGate(allowlist: AllowlistConfig, env: NodeJS.ProcessEnv): AllowlistConfig {
+  return {
+    ...allowlist,
+    discord: {
+      ...allowlist.discord,
+      channels: mergeChannelIds(allowlist, env),
+    },
+  };
+}
+
 /**
  * Start the headless ticker. Never throws for operator errors: returns
  * `{ ok: false, exitCode, message }` after logging a structured error line.
@@ -117,6 +136,7 @@ export async function startDaemon(
 
   let store: ScheduleStore;
   let gate: AllowlistConfig;
+  let owner: OwnerRecord | null;
   let agent: AgentClient;
   let allowlistSource: string;
   try {
@@ -124,14 +144,9 @@ export async function startDaemon(
     store = new ScheduleStore({ db });
     const allowlist = await loadAllowlist({ env });
     allowlistSource = allowlist.sourcePath ?? "env";
-    // Same channel gate as the bridge (allowlist ∪ DISCORD_CHANNEL_IDS).
-    gate = {
-      ...allowlist,
-      discord: {
-        ...allowlist.discord,
-        channels: mergeChannelIds(allowlist, env),
-      },
-    };
+    gate = daemonGate(allowlist, env);
+    // The owner passes the creator gate like live ingress (REQ-discord-201).
+    owner = (await loadOwnerConfig({ env })).owner;
     const bin = resolveCorvidinhoBin(env, projectRoot);
     if (!opts.agent && !opts.skipProtocolCheck) {
       const hs = await checkProtocolVersion(bin);
@@ -154,6 +169,7 @@ export async function startDaemon(
     store,
     agent,
     allowlist: gate,
+    owner,
     defaultProjectRoot: projectRoot,
     useWorktrees: opts.useWorktrees,
     // The daemon owns the interval so it can log each tick.
@@ -166,11 +182,51 @@ export async function startDaemon(
         ...(e.error ? { error: e.error.slice(0, 500) } : {}),
         ...(e.autoPaused ? { autoPaused: true } : {}),
       });
+      // SAFE-8 / AUTONOMY-2 / AUTONOMOUS-7: the daemon has no Discord, so the
+      // operator hears about the spend cap and a run that needs a human here;
+      // the warning row and the ask recorded on the run row (REQ-discord-347)
+      // stay pending, and a bridge's next scheduler tick posts them.
+      if (e.spendWarning) {
+        log("warn", "spend.warning", {
+          scheduleId: e.scheduleId,
+          runId: e.runId,
+          spentMicroUsd: e.spendWarning.spentMicroUsd,
+          capMicroUsd: e.spendWarning.capMicroUsd,
+          percent: e.spendWarning.percent,
+          message: formatSpendWarningLine(e.spendWarning),
+        });
+      }
+      if (e.askReason) {
+        log("warn", "run.needs_human", {
+          scheduleId: e.scheduleId,
+          runId: e.runId,
+          reason: e.askReason,
+          ...(e.askReason === "spend-cap" ? { message: SPEND_CAP_SUMMARY } : {}),
+        });
+      }
     },
   });
 
+  // Set when stop begins. A tick still reading the allowlist then claims no
+  // run: stop's drain only waits for runs already claimed.
+  let stopRequested = false;
+
   const tick = async () => {
     try {
+      // DISCORD-SCHEDULE-3: tick against the allowlist as it is now (the
+      // bridge's /admin rewrites the file), updated in place so in-flight
+      // runs re-check it too. A file that cannot be loaded skips the tick
+      // (fail closed); due schedules stay due.
+      const loaded = await tryLoadAllowlist({ env });
+      if (stopRequested) return { started: [], skipped: [] };
+      if (!loaded.ok) {
+        log("error", "tick.allowlist_failed", { error: loaded.error });
+        return { started: [], skipped: [] };
+      }
+      const live = daemonGate(loaded.config, env);
+      gate.sourcePath = live.sourcePath;
+      gate.github = live.github;
+      gate.discord = live.discord;
       const r = await scheduler.tick();
       if (r.started.length > 0 || r.skipped.length > 0) {
         log("info", "tick", {
@@ -185,6 +241,10 @@ export async function startDaemon(
       return { started: [], skipped: [] };
     }
   };
+
+  // REQ-discord-346: before the first tick, fail runs a dead process left
+  // "running" and remove leftover schedule-run worktrees.
+  const recovered = await scheduler.recoverAbandoned();
 
   const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   // Ref'd on purpose: this interval is what keeps the daemon process alive.
@@ -205,6 +265,12 @@ export async function startDaemon(
     schedulesActive: all.filter((s) => s.status === "active").length,
     schedulesPaused: all.filter((s) => s.status === "paused").length,
   });
+  if (recovered.runs.length > 0 || recovered.worktrees.length > 0) {
+    log("warn", "daemon.recovered", {
+      runs: recovered.runs.map((r) => r.id),
+      worktrees: recovered.worktrees.length,
+    });
+  }
 
   let forceResolve: (() => void) | undefined;
   const forced = new Promise<false>((resolve) => {
@@ -215,6 +281,7 @@ export async function startDaemon(
 
   const stop = (reason = "stop"): Promise<DaemonStopSummary> => {
     if (stopping) return stopping;
+    stopRequested = true;
     stopping = (async () => {
       clearInterval(timer);
       scheduler.stop();
@@ -229,6 +296,8 @@ export async function startDaemon(
         : scheduler.abandonInFlight(`interrupted: daemon shutdown (${reason})`);
       if (abandoned.length > 0) {
         log("warn", "daemon.abandoned", { scheduleIds: abandoned });
+        // Let the killed runs park their worktree before we exit.
+        await scheduler.settleAbandoned(ABANDONED_SETTLE_MS);
       }
       if (ownsDb) db?.close();
       lock.release();

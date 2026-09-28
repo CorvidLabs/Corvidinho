@@ -4,7 +4,7 @@ Linux-only Bun/TypeScript agent runner. CLI-first. No Windows target. No Trust r
 
 ## HI-first
 
-Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, discord, github, watch, fledge, specsync, cli, plugin, safe, autonomous, memory, identity, admin, autonomy, session, roles). Also DISCORD-SCHEDULE / SESSION-WORKTREE / MEMORY-ACL / DISCORD-DENY / ROLES-CHAT compound ids in those files. Capture confirmed wants with `hi`.
+Before product decisions, read `hi/`. Criteria live in `hi/*.md` (agent, allow, discord, github, watch, fledge, specsync, cli, plugin, safe, autonomous, memory, identity, admin, autonomy, session, roles). Also DISCORD-SCHEDULE / DISCORD-ANNOUNCE / DISCORD-ASK / DISCORD-DENY / SESSION-WORKTREE / SESSION-MULTI / MEMORY-ACL / ROLES-CHAT / WATCH-RELIABILITY compound ids in those files. Capture confirmed wants with `hi`.
 
 **Do not invent** ACCESS, bounty, or MainNet product surfaces. Do not invent acceptance criteria that are not in `hi/` or that Leif has not confirmed.
 
@@ -44,13 +44,17 @@ Secrets stay out of the repo and out of chat logs (`hi/safe.md`, SAFE-6). Use en
 ```
 bun install
 bun src/cli.ts --help
-bun src/cli.ts doctor
+bun src/cli.ts doctor           # exits 1 until the Discord, GitHub and WATCH checks pass (they read the allowlist file + env, like the bridge and watch)
 bun src/cli.ts version
 bun src/cli.ts --protocol-version
+bun src/cli.ts attribution
 bun src/cli.ts plugins list
 bun src/cli.ts specsync list
-bun src/cli.ts task run --task "touch agent loop" --no-verify --json
-bun src/cli.ts discord bridge   # needs DISCORD_TOKEN + non-empty channel allowlist
+bun src/cli.ts task run --task "touch agent loop" --no-verify --json   # demo stub unless CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY is set
+bun src/cli.ts discord bridge   # needs DISCORD_TOKEN + non-empty channel allowlist; a malformed allowlist file refuses start
+bun src/cli.ts discord register-commands   # guild PUT of the 9 slash commands + clear globals with DISCORD_GUILD_ID or --guild-id (without one: global register + a warning)
+bun src/cli.ts github watch     # needs GITHUB_TOKEN + CORVIDINHO_WATCH_USERNAME + non-empty GitHub repo/org allowlist
+bun src/cli.ts daemon           # headless schedule ticker (docs/DAEMON.md)
 bun test
 hi check
 fledge lanes run verify --non-interactive

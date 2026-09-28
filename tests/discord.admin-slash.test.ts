@@ -19,11 +19,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadAllowlist } from "../src/allowlist/load.ts";
+import { isJsonAllowlistPath, loadAllowlist } from "../src/allowlist/load.ts";
 import { emptyConfig, type AllowlistConfig } from "../src/allowlist/types.ts";
 import { appendAudit, verifyAudit } from "../src/audit/index.ts";
 import { loadOwnerConfig, type OwnerRecord } from "../src/identity/owner.ts";
 import {
+  allowlistFileFormat,
+  danglingSymlinkError,
   planAdminListChange,
   resolveAdminAllowlistPath,
   setJsonDiscordList,
@@ -108,6 +110,11 @@ async function fixture(opts: {
   env?: NodeJS.ProcessEnv;
   owner?: OwnerRecord | null;
   recordAudit?: SlashContext["recordAudit"];
+  /**
+   * The file is malformed: the bridge would refuse to start on it, so model a
+   * file that broke after start (the bridge keeps the view it started with).
+   */
+  brokenAfterStart?: boolean;
 } = {}): Promise<Fixture> {
   const dir = tmp();
   const path = join(dir, opts.fileName ?? "allowlist.toml");
@@ -118,7 +125,13 @@ async function fixture(opts: {
     ...(opts.env ?? {}),
   };
   // Load exactly as the bridge does: file ∪ env, then DISCORD_CHANNEL_IDS.
-  const loaded = await loadAllowlist({ env, home: dir });
+  let loaded: AllowlistConfig;
+  if (opts.brokenAfterStart) {
+    await expect(loadAllowlist({ env, home: dir })).rejects.toThrow(/allowlist file/);
+    loaded = await loadAllowlist({ env, home: dir, filePath: null });
+  } else {
+    loaded = await loadAllowlist({ env, home: dir });
+  }
   const channelIds = [
     ...new Set([
       ...loaded.discord.channels,
@@ -367,6 +380,30 @@ describe("/admin users add (ADMIN-1)", () => {
     expect(readFileSync(f.path, "utf8")).toBe(SAMPLE_TOML);
     expect(f.ctx.allowlist.discord.users).toEqual([]);
   });
+
+  test("no audit trail wired (bridge without a DB) ⇒ same fail-closed refusal, nothing written", async () => {
+    const f = await fixture();
+    f.ctx.recordAudit = undefined;
+    const i = ix({ subcommandGroup: "users", subcommand: "add", options: { user: OTHER_ID } });
+    await handleAdminCommand(f.ctx, i);
+    expect(i.replies[0]?.ephemeral).toBe(true);
+    expect(i.replies[0]?.content).toContain("Refused: audit log unavailable (SAFE-5)");
+    expect(i.replies[0]?.content).toContain("Nothing changed");
+    expect(readFileSync(f.path, "utf8")).toBe(SAMPLE_TOML);
+    expect(f.ctx.allowlist.discord.users).toEqual([]);
+
+    // Channel mutations fail closed the same way; the live list is untouched.
+    const add = ix({ subcommandGroup: "channels", subcommand: "add", options: { channel: CHAN_B } });
+    await handleAdminCommand(f.ctx, add);
+    expect(add.replies[0]?.content).toContain("audit log unavailable (SAFE-5)");
+    expect(f.ctx.allowlist.discord.channels).toEqual([CHAN_A]);
+    expect(readFileSync(f.path, "utf8")).toBe(SAMPLE_TOML);
+
+    // Read-only config show still works without a trail.
+    const show = ix({ subcommandGroup: "config", subcommand: "show" });
+    await handleAdminCommand(f.ctx, show);
+    expect(show.replies[0]?.content).toContain("/admin config");
+  });
 });
 
 describe("/admin channels add|remove (ADMIN-2)", () => {
@@ -550,6 +587,74 @@ describe("allowlist file writer", () => {
     expect(readdirSync(dir).sort()).toEqual(["allowlist.toml", "real.toml"]);
   });
 
+  test("a dangling or looping symlink is refused, never replaced by a regular file", async () => {
+    const dir = tmp();
+    const link = join(dir, "allowlist.toml");
+    symlinkSync(join(dir, "missing.toml"), link);
+    expect(danglingSymlinkError(link)).toContain("does not resolve");
+    expect(() => writeFileAtomic(link, "[discord]\nusers = [\"1\"]\n")).toThrow("does not resolve");
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(existsSync(join(dir, "missing.toml"))).toBe(false);
+    expect(readdirSync(dir)).toEqual(["allowlist.toml"]);
+
+    const loopA = join(dir, "a.toml");
+    const loopB = join(dir, "b.toml");
+    symlinkSync(loopB, loopA);
+    symlinkSync(loopA, loopB);
+    expect(() => writeFileAtomic(loopA, "x")).toThrow("does not resolve");
+    expect(lstatSync(loopA).isSymbolicLink()).toBe(true);
+
+    // A regular path, a missing path and a resolving link are not "dangling".
+    const real = join(dir, "real.toml");
+    writeFileSync(real, "");
+    symlinkSync(real, join(dir, "ok.toml"));
+    expect(danglingSymlinkError(real)).toBeNull();
+    expect(danglingSymlinkError(join(dir, "nope.toml"))).toBeNull();
+    expect(danglingSymlinkError(join(dir, "ok.toml"))).toBeNull();
+
+    // /admin via CORVIDINHO_ALLOWLIST_FILE → dangling link: refused before
+    // the write (no "started" row), link kept; config show names the problem.
+    const f = await fixture({ text: null });
+    rmSync(f.path, { force: true });
+    symlinkSync(join(f.dir, "gone", "allowlist.toml"), f.path);
+    f.ctx.allowlist.discord.channels.push(CHAN_A);
+    const i = ix({ subcommandGroup: "users", subcommand: "add", options: { user: OTHER_ID } });
+    await handleAdminCommand(f.ctx, i);
+    expect(i.replies[0]?.content).toContain("Refused:");
+    expect(i.replies[0]?.content).toContain("does not resolve");
+    expect(lstatSync(f.path).isSymbolicLink()).toBe(true);
+    expect(existsSync(join(f.dir, "gone"))).toBe(false);
+    expect(f.ctx.allowlist.discord.users).toEqual([]);
+    expect(auditRows(f.db).map((r) => r.outcome)).toEqual(["error"]);
+    const show = ix({ subcommandGroup: "config", subcommand: "show" });
+    await handleAdminCommand(f.ctx, show);
+    expect(show.replies[0]?.content).toContain("unreadable");
+    expect(show.replies[0]?.content).toContain("does not resolve");
+  });
+
+  test("JSON vs TOML detection is the loader's own rule (case-sensitive .json)", async () => {
+    expect(allowlistFileFormat("/x/allowlist.json")).toBe("json");
+    for (const p of ["/x/allowlist.JSON", "/x/allowlist.Json", "/x/allowlist.toml", "/x/allowlist"]) {
+      expect(allowlistFileFormat(p)).toBe(isJsonAllowlistPath(p) ? "json" : "toml");
+      expect(allowlistFileFormat(p)).toBe("toml");
+    }
+
+    // The loader reads allowlist.JSON as TOML, so /admin must edit it as TOML
+    // (previously it parsed it as JSON and refused, or wrote JSON the loader
+    // could not read back).
+    const f = await fixture({ fileName: "allowlist.JSON" });
+    expect(f.ctx.allowlist.discord.channels).toEqual([CHAN_A]);
+    const i = ix({ subcommandGroup: "users", subcommand: "add", options: { user: OTHER_ID } });
+    await handleAdminCommand(f.ctx, i);
+    expect(i.replies[0]?.content).toContain(`approved <@${OTHER_ID}>`);
+    expect(readFileSync(f.path, "utf8")).toBe(SAMPLE_TOML.replace("users = []", `users = ["${OTHER_ID}"]`));
+    const reloaded = await loadAllowlist({ env: f.ctx.env, home: f.dir });
+    expect(reloaded.discord.users).toEqual([OTHER_ID]);
+    const show = ix({ subcommandGroup: "config", subcommand: "show" });
+    await handleAdminCommand(f.ctx, show);
+    expect(show.replies[0]?.content).toContain("(toml)");
+  });
+
   test("TOML: multi-line array collapses, missing key/section added, CRLF kept", () => {
     const multi = "[discord]\nchannels = [\n  \"1\",\n  \"2\",\n]\nroles = []\n";
     expect(setTomlDiscordList(multi, "channels", ["1", "2", "3"])).toBe(
@@ -591,7 +696,7 @@ describe("allowlist file writer", () => {
     expect(j.replies[0]?.content).toContain("lose precision");
     expect(readFileSync(g.path, "utf8")).toBe(lossy);
 
-    const h = await fixture({ fileName: "allowlist.json", text: "{ not json" });
+    const h = await fixture({ fileName: "allowlist.json", text: "{ not json", brokenAfterStart: true });
     h.ctx.allowlist.discord.channels.push(CHAN_A);
     const k = ix({ subcommandGroup: "users", subcommand: "add", options: { user: OTHER_ID } });
     await handleAdminCommand(h.ctx, k);

@@ -5,6 +5,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HumanAsk } from "../src/agent/types.ts";
+import { pickCustomId, toPendingAsk } from "../src/discord/ask-buttons.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { buildSlashCommandBodies } from "../src/discord/slash-commands.ts";
@@ -115,11 +117,19 @@ describe("session worktree binding (SESSION-WORKTREE-1..4)", () => {
       const other = join(root, "other");
       initGitRepo(def);
       initGitRepo(other);
+      // A sibling project must be an allowlisted checkout (REQ-discord-202).
+      Bun.spawnSync(
+        ["git", "remote", "add", "origin", "https://github.com/acme/other.git"],
+        { cwd: other },
+      );
+      const allowlist = emptyConfig();
+      allowlist.github.repos = ["acme/other"];
       process.env.WORKTREE_BASE_DIR = join(root, "wts");
 
       const store = new SessionStore({
         db: openCorvidinhoDb({ memory: true }),
         defaultProjectRoot: def,
+        allowlist,
       });
       const created = await store.createWithWorktree({
         channelId: "c",
@@ -387,6 +397,8 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
           DISCORD_BOT_TOKEN: "fake",
           DISCORD_CHANNEL_IDS: "chan-1",
           CORVIDINHO_DISCORD_DRY_RUN: "1",
+          // Missing file: never read the operator's allowlist (ALLOW-4).
+          CORVIDINHO_ALLOWLIST_FILE: join(project, "no-allowlist.toml"),
         },
         projectRoot: project,
         skipProtocolCheck: true,
@@ -411,8 +423,8 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
       });
       expect(seen.midRunDirKept).toBe(true);
       expect(seen.midRunFileKept).toBe(true);
-      // A reply to the bot still continues the same live session.
-      const session = store.getByBotMessage("bot_1");
+      // Session tracked via collapsed thinking message (ASK-7); list is enough here.
+      const session = store.list()[0];
       expect(session?.worktreePath).toBe(seen.cwd);
       await store.endSession(session!);
       await started.stop();
@@ -435,5 +447,318 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
       await Bun.sleep(50);
       expect(existsSync(wt)).toBe(false);
     });
+  });
+});
+
+describe("a crash between park and row delete never leaves a dead cwd (SESSION-WORKTREE-3 / REQ-discord-357)", () => {
+  const TTL = 45 * 60 * 1000;
+  type Db = ReturnType<typeof openCorvidinhoDb>;
+
+  /**
+   * Temp git repo + DB file + temp worktree base (talk/* branches live only
+   * there). `reopen()` is a bridge restart: a fresh store on the same file.
+   */
+  async function withDurable(
+    prefix: string,
+    fn: (project: string, reopen: () => { db: Db; store: SessionStore }) => Promise<void>,
+  ): Promise<void> {
+    const root = mkdtempSync(join(tmpdir(), prefix));
+    const opened: Db[] = [];
+    try {
+      const project = join(root, "proj");
+      initGitRepo(project);
+      process.env.WORKTREE_BASE_DIR = join(root, "wts");
+      const dbPath = join(root, "corvidinho.db");
+      await fn(project, () => {
+        const db = openCorvidinhoDb({ path: dbPath });
+        opened.push(db);
+        return { db, store: new SessionStore({ db, ttlMs: TTL, defaultProjectRoot: project }) };
+      });
+    } finally {
+      for (const db of opened) db.close();
+      delete process.env.WORKTREE_BASE_DIR;
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  /** Bridge over a reopened store; records each agent run's cwd. */
+  async function restartBridge(project: string, db: Db, store: SessionStore) {
+    const runs: Array<{ cwd?: string; existed: boolean }> = [];
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const started = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: "chan-1",
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        // Missing file: never read the operator's allowlist (ALLOW-4).
+        CORVIDINHO_ALLOWLIST_FILE: join(project, "no-allowlist.toml"),
+      },
+      projectRoot: project,
+      db,
+      sessionStore: store,
+      workStore: new WorkStore({ db }),
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      agent: {
+        runChat: async ({ sessionId, cwd }) => {
+          runs.push({ cwd, existed: cwd ? existsSync(cwd) : false });
+          return { ok: true, sessionId, summary: "ok", exitCode: 0 };
+        },
+      },
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        handlers.reply = async () => ({ messageId: "bot_2" });
+        return createNullGateway();
+      },
+    });
+    if (started.ok !== true || !box.handlers) throw new Error("bridge failed to start");
+    return { started, handlers: box.handlers, runs };
+  }
+
+  function rowOf(db: Db, id: string) {
+    return db
+      .query(`SELECT worktree_state, worktree_path FROM discord_sessions WHERE id = ?`)
+      .get(id) as { worktree_state: string | null; worktree_path: string | null } | null;
+  }
+
+  test("parking records the parked state before removal; after a crash the talk re-binds a fresh worktree", async () => {
+    await withDurable("corvidinho-park-crash-", async (project, reopen) => {
+      const first = reopen();
+      const created = await first.store.createWithWorktree({ channelId: "c", userId: "u", threadId: "t1" });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const id = created.session.id;
+      const wt = created.session.worktreePath!;
+
+      // endSession's first step. The row stops saying `active` before any
+      // removal side effect completes, so a crash from here on never
+      // restarts into a removed directory.
+      const parking = first.store.parkSessionWorktree(created.session);
+      expect(rowOf(first.db, id)?.worktree_state).toBe("parked");
+      await parking;
+      expect(existsSync(wt)).toBe(false);
+      expect(rowOf(first.db, id)?.worktree_state).not.toBe("active");
+      // Crash here: endSession's row delete never ran.
+
+      const { store } = reopen();
+      const revived = store.getByThread("t1")!;
+      expect(revived.id).toBe(id);
+      expect(revived.worktreeState).not.toBe("active");
+      const bound = await store.bindWorktree(revived);
+      expect(bound.ok).toBe(true);
+      const cwd = store.cwdFor(revived)!;
+      expect(existsSync(cwd)).toBe(true);
+      expect(cwd).not.toBe(project);
+      expect(revived.worktreeState).toBe("active");
+      await store.endSession(revived);
+      expect(existsSync(cwd)).toBe(false);
+    });
+  });
+
+  test("a park cut short before removal is finished when the talk ends after restart", async () => {
+    await withDurable("corvidinho-park-retry-", async (_project, reopen) => {
+      const first = reopen();
+      const created = await first.store.createWithWorktree({ channelId: "c", userId: "u" });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const id = created.session.id;
+      const wt = created.session.worktreePath!;
+      // Crash right after the parked marker was written, before any removal.
+      first.db.run(`UPDATE discord_sessions SET worktree_state = 'parked' WHERE id = ?`, [id]);
+      expect(existsSync(wt)).toBe(true);
+
+      const { db, store } = reopen();
+      const revived = store.get(id)!;
+      expect(revived.worktreeState).toBe("parked");
+      expect(revived.worktreePath).toBe(wt);
+      await store.endSession(revived);
+      expect(existsSync(wt)).toBe(false);
+      expect(rowOf(db, id)).toBeNull();
+    });
+  });
+
+  test("bind re-creates a recorded active worktree whose directory is gone (same project, never the repo root)", async () => {
+    await withDurable("corvidinho-dead-wt-", async (project, reopen) => {
+      const first = reopen();
+      const created = await first.store.createWithWorktree({ channelId: "c", userId: "u" });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const id = created.session.id;
+      const wt = created.session.worktreePath!;
+      // Pre-fix crash row: the directory is removed, the row still says active.
+      await parkWorktree(project, wt, { kind: "worktree", branchName: created.session.worktreeBranch });
+      expect(existsSync(wt)).toBe(false);
+      expect(rowOf(first.db, id)?.worktree_state).toBe("active");
+
+      const { db, store } = reopen();
+      const revived = store.get(id)!;
+      expect(revived.worktreeState).toBe("active");
+      expect(revived.worktreePath).toBe(wt);
+
+      // A different project is still refused on a stale binding (SESSION-WORKTREE-4).
+      mkdirSync(join(project, "sub"));
+      const switched = await store.bindWorktree(revived, { project: join(project, "sub") });
+      expect(switched.ok).toBe(false);
+
+      const bound = await store.bindWorktree(revived);
+      expect(bound.ok).toBe(true);
+      if (!bound.ok) return;
+      const cwd = store.cwdFor(revived)!;
+      expect(cwd).toBe(bound.workspace.workDir);
+      expect(existsSync(cwd)).toBe(true);
+      expect(cwd).not.toBe(project);
+      expect(revived.project).toBe(project);
+      expect(rowOf(db, id)).toEqual({ worktree_state: "active", worktree_path: cwd });
+      await store.endSession(revived);
+      expect(existsSync(cwd)).toBe(false);
+    });
+  });
+
+  test("bridge: a thread continue after restart never spawns in a removed worktree", async () => {
+    await withDurable("corvidinho-dead-bridge-", async (project, reopen) => {
+      const first = reopen();
+      const created = await first.store.createWithWorktree({
+        channelId: "chan-1",
+        userId: "u1",
+        threadId: "thr-1",
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const wt = created.session.worktreePath!;
+      await parkWorktree(project, wt, { kind: "worktree", branchName: created.session.worktreeBranch });
+      expect(existsSync(wt)).toBe(false);
+
+      const { db, store } = reopen();
+      const { started, handlers, runs } = await restartBridge(project, db, store);
+      await handlers.onMessage({
+        id: "m2",
+        channelId: "chan-1",
+        threadId: "thr-1",
+        authorId: "u1",
+        authorBot: false,
+        content: "keep going",
+        mentionedBot: false,
+      });
+      expect(runs.length).toBe(1);
+      expect(runs[0]!.existed).toBe(true);
+      expect(runs[0]!.cwd).not.toBe(project);
+      const session = store.getByThread("thr-1");
+      expect(session?.worktreePath).toBe(runs[0]!.cwd);
+      await store.endSession(session!);
+      await started.stop();
+    });
+  });
+
+  test("bridge: a button pick after restart never runs in the repo root or a parked worktree", async () => {
+    await withDurable("corvidinho-parked-button-", async (project, reopen) => {
+      const first = reopen();
+      const created = await first.store.createWithWorktree({
+        channelId: "chan-1",
+        userId: "u1",
+        threadId: "thr-1",
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const id = created.session.id;
+      const ask: HumanAsk = {
+        reason: "clarify",
+        question: "Which DB?",
+        options: [
+          { id: "1", label: "Postgres" },
+          { id: "2", label: "SQLite" },
+        ],
+      };
+      first.store.setPendingAsk(created.session, toPendingAsk(ask, { askId: "ask1" }));
+      // Crash right after the parked marker was written (endSession cut short).
+      first.db.run(`UPDATE discord_sessions SET worktree_state = 'parked' WHERE id = ?`, [id]);
+
+      const { db, store } = reopen();
+      expect(store.get(id)?.worktreeState).toBe("parked");
+      const { started, handlers, runs } = await restartBridge(project, db, store);
+      await handlers.onComponent!({
+        id: "ix-pick",
+        customId: pickCustomId("ask1", "1"),
+        channelId: "thr-1",
+        userId: "u1",
+        messageId: "bot_1",
+        reply: async () => {},
+      });
+      expect(runs.length).toBe(1);
+      expect(runs[0]!.existed).toBe(true);
+      expect(runs[0]!.cwd).not.toBe(project);
+      const session = store.get(id)!;
+      expect(session.worktreeState).toBe("active");
+      expect(session.worktreePath).toBe(runs[0]!.cwd);
+      expect(rowOf(db, id)).toEqual({ worktree_state: "active", worktree_path: runs[0]!.cwd! });
+      await store.endSession(session);
+      await started.stop();
+    });
+  });
+});
+
+describe("default talk names carry a digest of the full session id (REQ-discord-241)", () => {
+  test("after upgrade, a talk stored with a prefix-only name keeps it, and a new talk sharing that prefix never wipes it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "corvidinho-wt-upgrade-"));
+    const opened: Array<ReturnType<typeof openCorvidinhoDb>> = [];
+    try {
+      const project = join(root, "proj");
+      initGitRepo(project);
+      process.env.WORKTREE_BASE_DIR = join(root, "wts");
+      const dbPath = join(root, "corvidinho.db");
+      const reopen = () => {
+        const db = openCorvidinhoDb({ path: dbPath });
+        opened.push(db);
+        return { db, store: new SessionStore({ db, ttlMs: 45 * 60 * 1000, defaultProjectRoot: project }) };
+      };
+      // Discord-shaped ids (`sess_` + 16 hex) that share their first 16 chars.
+      const idA = "sess_0123456789a11111";
+      const idB = "sess_0123456789a22222";
+      // A live talk as the pre-digest bridge stored it: its default names
+      // were only the 16-char prefix of the id.
+      const oldPart = idA.slice(0, 16);
+      const oldA = await ensureTalkWorkspace({
+        projectWorkingDir: project,
+        sessionId: idA,
+        worktreeId: `talk-${oldPart}`,
+        branchName: `talk/${oldPart}`,
+      });
+      expect(oldA.ok).toBe(true);
+      if (!oldA.ok) return;
+      const wtA = oldA.workspace.workDir;
+      writeFileSync(join(wtA, "a-wip.txt"), "wip");
+      const first = reopen();
+      first.store.create({ id: idA, channelId: "c", userId: "u1", threadId: "t-a", ensureWorktree: false });
+      first.db.run(
+        `UPDATE discord_sessions SET project = ?, worktree_path = ?, worktree_branch = ?, worktree_state = 'active' WHERE id = ?`,
+        [project, wtA, `talk/${oldPart}`, idA],
+      );
+
+      // Restart onto the new code.
+      const { store } = reopen();
+      const a = store.get(idA)!;
+      const boundA = await store.bindWorktree(a);
+      expect(boundA.ok).toBe(true);
+      if (!boundA.ok) return;
+      // Stored names are used as given.
+      expect(boundA.workspace.workDir).toBe(wtA);
+      expect(boundA.workspace.branchName).toBe(`talk/${oldPart}`);
+
+      const b = await store.createWithWorktree({ id: idB, channelId: "c", userId: "u2", threadId: "t-b" });
+      expect(b.ok).toBe(true);
+      if (!b.ok) return;
+      expect(b.session.worktreePath).not.toBe(wtA);
+      expect(b.session.worktreeBranch).not.toBe(`talk/${oldPart}`);
+      // A's live worktree, branch and uncommitted edit survive B's setup.
+      expect(existsSync(join(wtA, "a-wip.txt"))).toBe(true);
+      const branchA = Bun.spawnSync(["git", "branch", "--show-current"], { cwd: wtA, stdout: "pipe" });
+      expect(new TextDecoder().decode(branchA.stdout).trim()).toBe(`talk/${oldPart}`);
+      expect(store.cwdFor(a)).toBe(wtA);
+      await store.endSession(b.session);
+      await store.endSession(a);
+    } finally {
+      for (const db of opened) db.close();
+      delete process.env.WORKTREE_BASE_DIR;
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

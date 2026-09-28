@@ -18,6 +18,14 @@ export type PluginHandlerArgs = {
   signal?: AbortSignal;
 };
 
+/** An image a plugin opened for the model to look at (DISCORD-9). */
+export type PluginImage = {
+  /** The path as the caller gave it. */
+  path: string;
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  base64: string;
+};
+
 export type PluginHandlerResult = {
   ok: boolean;
   /** Structured payload for --json or further tooling. */
@@ -26,6 +34,12 @@ export type PluginHandlerResult = {
   message?: string;
   error?: string;
   exitCode?: number;
+  /**
+   * Image bytes the agent tool loop sends the model as an image part
+   * (REQ-plugins-427 / REQ-agent-428). Kept off `data` and `message` so the
+   * base64 never reaches tool text, events, ndjson or CLI output.
+   */
+  image?: PluginImage;
 };
 
 export type PluginCommand = {

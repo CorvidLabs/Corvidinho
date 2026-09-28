@@ -1,8 +1,15 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createTaskExecute,
+  DEFAULT_LLM_MODEL,
   loadLlmEnv,
+  modelForTier,
   parseCapabilityTier,
+  TIER_MODEL_ENV,
+  type CapabilityTier,
   tierAllowsPlugin,
   buildOpenAiTools,
   argvFromToolArguments,
@@ -12,6 +19,21 @@ import {
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { register } from "../src/plugins/registry.ts";
+import { runTask } from "../src/agent/loop.ts";
+import { createNdjsonWriter } from "../src/agent/events-ndjson.ts";
+import { readSpendSnapshot, spendDoctorCheck } from "../src/agent/spend.ts";
+import { formatSpendStatusLine } from "../src/agent/spend-notice.ts";
+import { modelKeyForTier, perTierModels } from "../src/agent/tier.ts";
+import { openCorvidinhoDb } from "../src/store/db.ts";
+import {
+  failingLaneLog,
+  HELP_HEAD,
+  LANE_FAILED_LINE,
+  noisyFailingLaneLog,
+} from "./fixtures/verify-lane-log.ts";
+
+/** The model-facing verify feedback cap (`VERIFY_FEEDBACK_MAX_CHARS`, AGENT-4.a). */
+const FEEDBACK_CAP = 4000;
 
 describe("capability tier (AGENT-5)", () => {
   test("parseCapabilityTier", () => {
@@ -396,7 +418,12 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
     loadBuiltins();
   });
 
-  test("a registered but not-offered dangerous tool is refused, not run", async () => {
+  /** One tool call to `name`, then a plain reply; ToolResult events land in `events`. */
+  async function callOnce(
+    name: string,
+    args: string,
+    opts: Partial<Parameters<typeof createTaskExecute>[0]>,
+  ): Promise<{ success: boolean; detail: string } | undefined> {
     let call = 0;
     const fetchImpl = async () => {
       call += 1;
@@ -405,9 +432,7 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
           ? {
               role: "assistant",
               content: null,
-              tool_calls: [
-                { id: "c1", type: "function", function: { name: "danger-ping", arguments: "{}" } },
-              ],
+              tool_calls: [{ id: "c1", type: "function", function: { name, arguments: args } }],
             }
           : { role: "assistant", content: "done" };
       return new Response(JSON.stringify({ choices: [{ message }] }), {
@@ -424,18 +449,861 @@ describe("tool loop dispatches only offered tools (SAFE-1 / REQ-agent-128)", () 
         CORVIDINHO_LLM_MODEL: "test-model",
       },
       fetchImpl,
-      tier: "tool",
-      // Interactive + allowlisted would have let runPlugin run it before.
-      nonInteractive: false,
-      allowlist: ["danger-ping"],
       onEvent: (e) => events.push(e),
       maxToolRounds: 3,
+      projectInstructions: false,
+      ...opts,
     });
     await exec({ attempt: 1, signal: new AbortController().signal });
-    const res = events.find((e) => e.type === "ToolResult") as
+    return events.find((e) => e.type === "ToolResult") as
       | { success: boolean; detail: string }
       | undefined;
+  }
+
+  test("a registered but not-offered dangerous tool is refused, not run", async () => {
+    // Interactive: runPlugin alone would run it. Not allowlisted ⇒ not offered.
+    const res = await callOnce("danger-ping", "{}", {
+      tier: "tool",
+      nonInteractive: false,
+      allowlist: [],
+    });
     expect(res?.success).toBe(false);
     expect(res?.detail).toContain("not offered");
+  });
+
+  test("an allowlisted SAFE-3-pending tool (shell-exec) is not offered: refused, not run, even interactive", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe3-pending-"));
+    try {
+      const res = await callOnce(
+        "shell-exec",
+        JSON.stringify({ argv: ["--command", "printf x > ran.txt"] }),
+        { tier: "code", cwd: dir, nonInteractive: false, allowlist: ["shell-exec"], autonomous: false },
+      );
+      expect(res?.success).toBe(false);
+      expect(res?.detail).toContain("not offered");
+      expect(existsSync(join(dir, "ran.txt"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", () => {
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  const reply = (message: Record<string, unknown>) =>
+    new Response(JSON.stringify({ choices: [{ message }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  beforeEach(() => {
+    clearRegistry();
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("tool loop: HTTP 503 → error flag; a normal reply has none", async () => {
+    let status = 200;
+    const fetchImpl = async () =>
+      status === 200
+        ? reply({ role: "assistant", content: "all good" })
+        : new Response("upstream overloaded", { status });
+    const exec = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const ok = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(ok.summary).toBe("all good");
+    expect(ok.error).toBeUndefined();
+
+    status = 503;
+    const bad = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(bad.error).toBe(true);
+    expect(bad.summary).toContain("LLM HTTP 503");
+  });
+
+  test("tool loop: network failure → error flag", async () => {
+    const fetchImpl = async (): Promise<Response> => {
+      throw new Error("connect ECONNREFUSED");
+    };
+    const exec = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "code",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const r = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(r.error).toBe(true);
+    expect(r.summary).toContain("LLM request failed");
+  });
+
+  test("read tier: HTTP 401 → error flag", async () => {
+    const fetchImpl = async () => new Response("bad key", { status: 401 });
+    const exec = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "read",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const r = await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(r.error).toBe(true);
+    expect(r.summary).toContain("LLM HTTP 401");
+  });
+
+  test("runTask: broken write, failed verify, then 503 on retry → failed (bug agent-loop-2)", async () => {
+    register({
+      name: "touch-marker",
+      description: "test helper that reports filesChanged",
+      dangerous: false,
+      minTier: 0,
+      async handler() {
+        return {
+          ok: true,
+          data: { filesChanged: ["app.ts"] },
+          message: "touched",
+          exitCode: 0,
+        };
+      },
+    });
+    let llmCalls = 0;
+    const fetchImpl = async () => {
+      llmCalls += 1;
+      if (llmCalls === 1) {
+        return reply({
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            { id: "t1", type: "function", function: { name: "touch-marker", arguments: "{}" } },
+          ],
+        });
+      }
+      if (llmCalls === 2) return reply({ role: "assistant", content: "wrote app.ts" });
+      return new Response("upstream overloaded", { status: 503 });
+    };
+    const execute = createTaskExecute({
+      taskText: "write app.ts",
+      env,
+      fetchImpl,
+      tier: "code",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    let verifyRuns = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 2,
+      verifyRunner: async () => {
+        verifyRuns += 1;
+        return { success: false, output: "app.ts: syntax error" };
+      },
+      execute,
+    });
+    expect(llmCalls).toBe(3);
+    expect(verifyRuns).toBe(1);
+    expect(result.attempts).toBe(2);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.summary).toContain("LLM HTTP 503");
+    expect(result.summary).toContain("Verification failed on an earlier attempt");
+    expect(result.summary).toContain("app.ts: syntax error");
+  });
+});
+
+describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGENT-4, REQ-agent-085)", () => {
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  const reply = (message: Record<string, unknown>) =>
+    new Response(JSON.stringify({ choices: [{ message }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  let dir = "";
+
+  function g(cwd: string, ...args: string[]): void {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (v !== undefined && !k.startsWith("GIT_")) clean[k] = v;
+    }
+    const r = Bun.spawnSync(["git", ...args], { cwd, env: clean, stdout: "pipe", stderr: "pipe" });
+    if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  }
+
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    dir = mkdtempSync(join(tmpdir(), "corvidinho-shell-diff-"));
+    g(dir, "init", "-q", "-b", "main");
+    g(dir, "config", "user.name", "Fixture Bot");
+    g(dir, "config", "user.email", "fixture@example.invalid");
+    g(dir, "config", "commit.gpgsign", "false");
+    writeFileSync(join(dir, "app.ts"), "export const x = 1;\n");
+    g(dir, "add", "app.ts");
+    g(dir, "commit", "-q", "-m", "init");
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("shell-exec `printf broken > app.ts` reports no filesChanged, yet verify runs and the run is never done", async () => {
+    let llmCalls = 0;
+    const fetchImpl = async () => {
+      llmCalls += 1;
+      if (llmCalls === 1) {
+        return reply({
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "s1",
+              type: "function",
+              function: {
+                name: "shell-exec",
+                arguments: JSON.stringify({ argv: ["--command", "printf broken > app.ts"] }),
+              },
+            },
+          ],
+        });
+      }
+      return reply({ role: "assistant", content: "wrote app.ts" });
+    };
+    const events: AgentEvent[] = [];
+    const execute = createTaskExecute({
+      taskText: "write app.ts",
+      cwd: dir,
+      env,
+      fetchImpl,
+      tier: "code",
+      includeDangerous: true,
+      nonInteractive: true,
+      allowlist: ["shell-exec"],
+      loadPlugins: false,
+      projectInstructions: false,
+      autonomous: false,
+      onEvent: (e) => events.push(e),
+    });
+    const verifyCwds: string[] = [];
+    const result = await runTask({
+      cwd: dir,
+      verifyBeforeComplete: true,
+      maxRetries: 0,
+      onEvent: (e) => events.push(e),
+      verifyRunner: async (cwd) => {
+        verifyCwds.push(cwd);
+        return { success: false, output: "app.ts: syntax error" };
+      },
+      execute,
+    });
+    const toolResult = events.find(
+      (e): e is Extract<AgentEvent, { type: "ToolResult" }> =>
+        e.type === "ToolResult" && e.name === "shell-exec",
+    );
+    expect(toolResult?.success).toBe(true);
+    expect(readFileSync(join(dir, "app.ts"), "utf8")).toBe("broken");
+    expect(llmCalls).toBe(2);
+    expect(verifyCwds).toEqual([dir]);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
+    expect(result.summary).toContain("app.ts: syntax error");
+    expect(events.some((e) => e.type === "StateChanged" && e.state === "done")).toBe(false);
+  });
+});
+
+describe("verify retry feedback reaches the model as the failing step's output (AGENT-4.a, REQ-agent-002)", () => {
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  type Body = { messages: { role: string; content: unknown }[] };
+  const bodies: Body[] = [];
+  const fetchImpl = async (_i: string | URL | Request, init?: RequestInit) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Body);
+    return new Response(
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "fixed it" } }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  /** The user message's verify feedback block, between its label and "Attempt N". */
+  function feedbackSent(body: Body | undefined): string {
+    const user = body?.messages.find((m) => m.role === "user")?.content;
+    const text = typeof user === "string" ? user : "";
+    const label = "Previous verification feedback:\n";
+    const at = text.indexOf(label);
+    if (at === -1) return "";
+    const end = text.indexOf("\n\nAttempt ", at);
+    return text.slice(at + label.length, end === -1 ? undefined : end);
+  }
+
+  beforeEach(() => {
+    clearRegistry();
+    bodies.length = 0;
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("tool loop: after a lane whose --help smoke fills the first 4000 chars, the retry request carries the failing test", async () => {
+    const execute = createTaskExecute({
+      taskText: "fix the sum",
+      env,
+      fetchImpl,
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    const { log } = failingLaneLog();
+    let verifyN = 0;
+    const result = await runTask({
+      cwd: "/tmp",
+      verifyBeforeComplete: true,
+      maxRetries: 2,
+      verifyRunner: async () => {
+        verifyN += 1;
+        return verifyN === 1 ? { success: false, output: log } : { success: true, output: "ok" };
+      },
+      // The model's edit is not the point here: report one so verify runs.
+      execute: async (ctx) => ({ ...(await execute(ctx)), filesChanged: ["src/sum.ts"] }),
+    });
+    expect(result.state).toBe("done");
+    expect(bodies).toHaveLength(2);
+    expect(feedbackSent(bodies[0])).toBe("");
+    const sent = feedbackSent(bodies[1]);
+    expect(sent.length).toBeLessThanOrEqual(FEEDBACK_CAP);
+    expect(sent).toContain("Verification failed. Fix these errors and try again:");
+    expect(sent).toContain("Failing step: test (step 3 of lane 'verify')");
+    expect(sent).toContain("error: expect(received).toBe(expected)");
+    expect(sent).toContain("Expected: 7\nReceived: 6");
+    expect(sent).toContain("(fail) sum of three");
+    expect(sent).toContain(LANE_FAILED_LINE);
+    expect(sent).not.toContain(HELP_HEAD);
+  });
+
+  test("read tier: a raw feedback over the cap is cut to the failing step and the end, not its first 4000 chars", async () => {
+    const execute = createTaskExecute({
+      taskText: "why did verify fail?",
+      env,
+      fetchImpl,
+      tier: "read",
+      projectInstructions: false,
+    });
+    await execute({
+      attempt: 2,
+      verifyFeedback: noisyFailingLaneLog(),
+      signal: new AbortController().signal,
+    });
+    const sent = feedbackSent(bodies[0]);
+    expect(sent.length).toBeLessThanOrEqual(FEEDBACK_CAP);
+    expect(sent).toContain("Failing step: test (step 3 of lane 'verify')");
+    expect(sent).toContain("FIRST-FAILURE");
+    expect(sent).toContain("SECOND-FAILURE");
+    expect(sent).toContain(LANE_FAILED_LINE);
+    expect(sent).not.toContain(HELP_HEAD);
+  });
+
+  test("a feedback within the cap is sent whole", async () => {
+    const execute = createTaskExecute({
+      taskText: "x",
+      env,
+      fetchImpl,
+      tier: "read",
+      projectInstructions: false,
+    });
+    const feedback = "Verification failed. Fix these errors and try again:\n\nlint boom";
+    await execute({ attempt: 2, verifyFeedback: feedback, signal: new AbortController().signal });
+    expect(feedbackSent(bodies[0])).toBe(feedback);
+  });
+});
+
+describe("files-read images reach the model as image parts (DISCORD-9 / REQ-agent-428)", () => {
+  /** A real 1x1 PNG. */
+  const PNG_B64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const DATA_URL = `data:image/png;base64,${PNG_B64}`;
+  const env = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "test-model",
+  };
+  type Msg = { role: string; content: unknown; tool_call_id?: string };
+  const readCall = (id: string, path: string) => ({
+    role: "assistant",
+    content: null,
+    tool_calls: [
+      {
+        id,
+        type: "function",
+        function: { name: "files-read", arguments: JSON.stringify({ argv: [path] }) },
+      },
+    ],
+  });
+  const ok = (message: Record<string, unknown>) =>
+    new Response(JSON.stringify({ choices: [{ message }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  let dir = "";
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    dir = mkdtempSync(join(tmpdir(), "corvidinho-loop-img-"));
+    writeFileSync(join(dir, "shot.png"), Buffer.from(PNG_B64, "base64"));
+    writeFileSync(join(dir, "second.png"), Buffer.from(PNG_B64, "base64"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** Script the provider: `reply(n, body)` answers request n (1-based). */
+  function run(reply: (n: number, body: { messages: Msg[] }) => Response) {
+    const bodies: { messages: Msg[] }[] = [];
+    const events: AgentEvent[] = [];
+    const fetchImpl = async (_i: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      bodies.push(body);
+      return reply(bodies.length, body);
+    };
+    const exec = createTaskExecute({
+      taskText: "what is in shot.png?",
+      env,
+      cwd: dir,
+      fetchImpl,
+      tier: "tool",
+      projectInstructions: false,
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 4,
+    });
+    return {
+      bodies,
+      events,
+      result: exec({ attempt: 1, signal: new AbortController().signal }),
+    };
+  }
+  const hasImagePart = (body: { messages: Msg[] }) =>
+    body.messages.some(
+      (m) => Array.isArray(m.content) && m.content.some((p) => p?.type === "image_url"),
+    );
+
+  test("files-read of an image sends an image_url part on the next request", async () => {
+    const r = run((n) =>
+      n === 1 ? ok(readCall("c1", "shot.png")) : ok({ role: "assistant", content: "a red pixel" }),
+    );
+    const result = await r.result;
+    expect(result.summary).toBe("a red pixel");
+    expect(result.error).toBeUndefined();
+    expect(r.bodies).toHaveLength(2);
+    expect(hasImagePart(r.bodies[0]!)).toBe(false);
+
+    const msgs = r.bodies[1]!.messages;
+    const toolIdx = msgs.findIndex((m) => m.role === "tool" && m.tool_call_id === "c1");
+    expect(toolIdx).toBeGreaterThan(0);
+    expect(msgs[toolIdx - 1]!.role).toBe("assistant");
+    // The tool message is small metadata: no base64, no decode garbage.
+    const toolText = String(msgs[toolIdx]!.content);
+    expect(toolText).not.toContain(PNG_B64);
+    expect(toolText).not.toContain("\uFFFD");
+    expect(toolText.length).toBeLessThan(1024);
+    expect(JSON.parse(toolText).data).toMatchObject({ mediaType: "image/png", image: true });
+
+    // Right after the round's tool messages: one user message with the pixels.
+    const user = msgs[toolIdx + 1]!;
+    expect(user.role).toBe("user");
+    expect(user.content).toEqual([
+      { type: "text", text: "Image(s) opened with files-read: shot.png" },
+      { type: "image_url", image_url: { url: DATA_URL } },
+    ]);
+    expect(msgs).toHaveLength(toolIdx + 2);
+  });
+
+  test("two images in one round ride one user message after both tool messages", async () => {
+    const r = run((n) =>
+      n === 1
+        ? ok({
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              ...readCall("c1", "shot.png").tool_calls,
+              ...readCall("c2", "second.png").tool_calls,
+            ],
+          })
+        : ok({ role: "assistant", content: "two pixels" }),
+    );
+    await r.result;
+    const msgs = r.bodies[1]!.messages;
+    const roles = msgs.slice(-4).map((m) => m.role);
+    expect(roles).toEqual(["assistant", "tool", "tool", "user"]);
+    const parts = msgs.at(-1)!.content as { type: string }[];
+    expect(parts.map((p) => p.type)).toEqual(["text", "image_url", "image_url"]);
+  });
+
+  test("ToolResult event detail and ndjson never carry image base64", async () => {
+    const r = run((n) =>
+      n === 1 ? ok(readCall("c1", "shot.png")) : ok({ role: "assistant", content: "seen" }),
+    );
+    await r.result;
+    const res = r.events.find((e) => e.type === "ToolResult") as
+      | { name: string; success: boolean; detail: string }
+      | undefined;
+    expect(res).toMatchObject({ name: "files-read", success: true });
+    expect(res!.detail).toContain("image/png");
+    const lines: string[] = [];
+    const nd = createNdjsonWriter((l) => lines.push(l));
+    for (const e of r.events) nd.event(e);
+    const everything = JSON.stringify(r.events) + lines.join("\n");
+    expect(everything).not.toContain(PNG_B64);
+    expect(everything).not.toContain(PNG_B64.slice(0, 24));
+  });
+
+  /** The retried request's tool message for `id`, parsed. */
+  const toolPayload = (body: { messages: Msg[] }, id: string) =>
+    JSON.parse(String(body.messages.find((m) => m.role === "tool" && m.tool_call_id === id)!.content));
+  /** True when some user message comes right after a tool message. */
+  const userAfterTool = (body: { messages: Msg[] }) =>
+    body.messages.some((m, i) => m.role === "user" && body.messages[i - 1]?.role === "tool");
+
+  test("HTTP 400 on the image round retries once with a text note and completes", async () => {
+    const r = run((n, body) =>
+      n === 1
+        ? ok(readCall("c1", "shot.png"))
+        : hasImagePart(body)
+          ? new Response('{"error":"image input is not supported by this model"}', { status: 400 })
+          : ok({ role: "assistant", content: "cannot see it, sorry" }),
+    );
+    const result = await r.result;
+    expect(result.error).toBeUndefined();
+    expect(result.summary).toBe("cannot see it, sorry");
+    expect(r.bodies).toHaveLength(3);
+    expect(hasImagePart(r.bodies[1]!)).toBe(true);
+    expect(hasImagePart(r.bodies[2]!)).toBe(false);
+    // The retry has the shape of a run without images: the note sits in the
+    // image's tool message and no user message follows the tool messages.
+    const retry = r.bodies[2]!.messages;
+    expect(retry.slice(-2).map((m) => m.role)).toEqual(["assistant", "tool"]);
+    expect(userAfterTool(r.bodies[2]!)).toBe(false);
+    const payload = toolPayload(r.bodies[2]!, "c1");
+    expect(payload.message).toBe("[image shot.png could not be shown to this model]");
+    expect(payload.data).toMatchObject({ path: "shot.png", mediaType: "image/png", image: true });
+    expect(JSON.stringify(r.bodies[2])).not.toContain(PNG_B64);
+    const texts = r.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(texts).toContain(
+      "[operator] the model refused image input (HTTP 400); retried once with a text note",
+    );
+  });
+
+  test("a provider that rejects a user turn right after tool results still completes", async () => {
+    // Some OpenAI-compatible APIs (e.g. Mistral) 400 on role order, not on images.
+    const r = run((n, body) =>
+      n === 1
+        ? ok(readCall("c1", "shot.png"))
+        : userAfterTool(body)
+          ? new Response("Unexpected role 'user' after role 'tool'", { status: 400 })
+          : ok({ role: "assistant", content: "answered without the picture" }),
+    );
+    const result = await r.result;
+    expect(result.error).toBeUndefined();
+    expect(result.summary).toBe("answered without the picture");
+    expect(r.bodies).toHaveLength(3);
+    expect(userAfterTool(r.bodies[2]!)).toBe(false);
+  });
+
+  test("404 / 413 / 415 / 422 on the image request also fall back; 401 / 429 / 500 do not", async () => {
+    for (const status of [404, 413, 415, 422]) {
+      const r = run((n, body) =>
+        n === 1
+          ? ok(readCall("c1", "shot.png"))
+          : hasImagePart(body)
+            ? new Response("No endpoints found that support image input", { status })
+            : ok({ role: "assistant", content: `fell back after ${status}` }),
+      );
+      const result = await r.result;
+      expect(result.error).toBeUndefined();
+      expect(result.summary).toBe(`fell back after ${status}`);
+      expect(r.bodies).toHaveLength(3);
+      expect(hasImagePart(r.bodies[2]!)).toBe(false);
+    }
+    for (const status of [401, 429, 500]) {
+      const r = run((n) =>
+        n === 1 ? ok(readCall("c1", "shot.png")) : new Response("nope", { status }),
+      );
+      const result = await r.result;
+      expect(result.error).toBe(true);
+      expect(result.summary).toContain(`LLM HTTP ${status}`);
+      expect(r.bodies).toHaveLength(2);
+    }
+  });
+
+  test("a refusal takes out the images of earlier rounds too", async () => {
+    const r = run((n, body) => {
+      if (n === 1) return ok(readCall("c1", "shot.png"));
+      if (n === 2) return ok(readCall("c2", "second.png"));
+      if (hasImagePart(body)) return new Response("too many images", { status: 413 });
+      return ok({ role: "assistant", content: "two notes" });
+    });
+    const result = await r.result;
+    expect(result.summary).toBe("two notes");
+    // 1: read shot, 2: image ok + read second, 3: 413 with both, 4: retry
+    expect(r.bodies).toHaveLength(4);
+    const parts = r.bodies[2]!.messages.filter((m) => Array.isArray(m.content));
+    expect(parts).toHaveLength(2);
+    const retry = r.bodies[3]!;
+    expect(hasImagePart(retry)).toBe(false);
+    expect(retry.messages.some((m) => m.role === "user" && Array.isArray(m.content))).toBe(false);
+    expect(userAfterTool(retry)).toBe(false);
+    expect(toolPayload(retry, "c1").message).toBe("[image shot.png could not be shown to this model]");
+    expect(toolPayload(retry, "c2").message).toBe("[image second.png could not be shown to this model]");
+    expect(JSON.stringify(retry)).not.toContain(PNG_B64);
+  });
+
+  test("after one refusal, a later image goes as a text note with no second retry", async () => {
+    const r = run((n, body) => {
+      if (hasImagePart(body)) {
+        return new Response("no images here", { status: 400 });
+      }
+      if (n === 1) return ok(readCall("c1", "shot.png"));
+      if (n === 3) return ok(readCall("c2", "second.png"));
+      return ok({ role: "assistant", content: "done without eyes" });
+    });
+    const result = await r.result;
+    expect(result.summary).toBe("done without eyes");
+    // 1: read shot, 2: 400 with image, 3: retry with note, 4: note for second.png
+    expect(r.bodies).toHaveLength(4);
+    expect(hasImagePart(r.bodies[3]!)).toBe(false);
+    const last = r.bodies[3]!.messages.at(-1)!;
+    expect(last).toMatchObject({ role: "tool", tool_call_id: "c2" });
+    expect(toolPayload(r.bodies[3]!, "c2").message).toBe(
+      "[image second.png could not be shown to this model]",
+    );
+    expect(userAfterTool(r.bodies[3]!)).toBe(false);
+  });
+
+  test("a 400 on the text retry, or with no image sent, is still an error", async () => {
+    const always400 = run((n) =>
+      n === 1 ? ok(readCall("c1", "shot.png")) : new Response("bad request", { status: 400 }),
+    );
+    const a = await always400.result;
+    expect(a.error).toBe(true);
+    expect(a.summary).toContain("LLM HTTP 400");
+    expect(always400.bodies).toHaveLength(3);
+
+    const noImage = run(() => new Response("bad request", { status: 400 }));
+    const b = await noImage.result;
+    expect(b.error).toBe(true);
+    expect(noImage.bodies).toHaveLength(1);
+  });
+});
+
+describe("per-tier model (AGENT-5, REQ-agent-079)", () => {
+  const base = {
+    CORVIDINHO_LLM_API_KEY: "secret",
+    CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+    CORVIDINHO_LLM_MODEL: "big",
+  };
+
+  /** body.model of every chat request one attempt sends. */
+  async function modelsSent(
+    env: Record<string, string>,
+    tier?: CapabilityTier,
+  ): Promise<string[]> {
+    const models: string[] = [];
+    const fetchImpl = async (_i: string | URL | Request, init?: RequestInit) => {
+      models.push(String(JSON.parse(String(init?.body ?? "{}")).model));
+      return new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    const exec = createTaskExecute({
+      taskText: "summarize",
+      env,
+      fetchImpl,
+      ...(tier ? { tier } : {}),
+      loadPlugins: false,
+      projectInstructions: false,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    return models;
+  }
+
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("loadLlmEnv: the tier's key wins, else CORVIDINHO_LLM_MODEL, else the default", () => {
+    const env = { ...base, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL_READ: " cheap " };
+    expect(loadLlmEnv(env)).toMatchObject({ tier: "read", model: "cheap" });
+    // An explicit tier (e.g. --tier) overrides CORVIDINHO_LLM_TIER and picks its model.
+    expect(loadLlmEnv(env, "code")).toMatchObject({ tier: "code", model: "big" });
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_CODE: "big2" }, "code").model).toBe("big2");
+    expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "tool").model).toBe("mid");
+    // Blank per-tier key falls back; no model at all keeps today's default.
+    expect(loadLlmEnv({ ...base, CORVIDINHO_LLM_MODEL_READ: "  " }, "read").model).toBe("big");
+    expect(loadLlmEnv({ CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "read").model).toBe(DEFAULT_LLM_MODEL);
+    expect(DEFAULT_LLM_MODEL).toBe("gpt-4o-mini");
+    expect(TIER_MODEL_ENV).toEqual({
+      read: "CORVIDINHO_LLM_MODEL_READ",
+      tool: "CORVIDINHO_LLM_MODEL_TOOL",
+      code: "CORVIDINHO_LLM_MODEL_CODE",
+    });
+    // Endpoint and key stay shared.
+    expect(loadLlmEnv(env, "code")).toMatchObject({ apiKey: "secret", baseUrl: "https://llm.test/v1" });
+    expect(modelForTier(env, "read")).toBe("cheap");
+  });
+
+  test("a read-tier run calls the read model; a code-tier run calls the code (else shared) model", async () => {
+    const env = { ...base, CORVIDINHO_LLM_MODEL_READ: "cheap" };
+    expect(await modelsSent(env, "read")).toEqual(["cheap"]);
+    expect(await modelsSent(env, "code")).toEqual(["big"]);
+    expect(await modelsSent(env, "tool")).toEqual(["big"]);
+    const withCode = { ...env, CORVIDINHO_LLM_MODEL_CODE: "big2", CORVIDINHO_LLM_MODEL_TOOL: "mid" };
+    expect(await modelsSent(withCode, "code")).toEqual(["big2"]);
+    expect(await modelsSent(withCode, "tool")).toEqual(["mid"]);
+    expect(await modelsSent(withCode, "read")).toEqual(["cheap"]);
+  });
+
+  test("the --tier override (opts.tier) picks the model, not CORVIDINHO_LLM_TIER", async () => {
+    const env = {
+      ...base,
+      CORVIDINHO_LLM_MODEL_READ: "cheap",
+      CORVIDINHO_LLM_MODEL_CODE: "big2",
+    };
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "code" }, "read")).toEqual(["cheap"]);
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "read" }, "code")).toEqual(["big2"]);
+    // No override: the env tier picks it.
+    expect(await modelsSent({ ...env, CORVIDINHO_LLM_TIER: "read" })).toEqual(["cheap"]);
+  });
+
+  test("no per-tier keys: every tier sends CORVIDINHO_LLM_MODEL, as before", async () => {
+    for (const tier of ["read", "tool", "code"] as const) {
+      expect(await modelsSent(base, tier)).toEqual(["big"]);
+    }
+  });
+
+  test("SAFE-8 pricing follows the tier's model: an unpriced read model stops before the call", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-tier-model-spend-"));
+    try {
+      const env = {
+        ...base,
+        CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+        CORVIDINHO_LLM_MODEL_READ: "local-unpriced-cheap",
+        CORVIDINHO_DATA_DIR: dir,
+        CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
+      };
+      let calls = 0;
+      const exec = createTaskExecute({
+        taskText: "summarize",
+        env,
+        tier: "read",
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
+        },
+        loadPlugins: false,
+        projectInstructions: false,
+      });
+      const r = await exec({ attempt: 1, signal: new AbortController().signal });
+      expect(calls).toBe(0);
+      expect(r.ask?.reason).toBe("spend-cap");
+      expect(r.ask?.question).toContain('model "local-unpriced-cheap" has no known price');
+      // The ask names the key that set the read model, not CORVIDINHO_LLM_MODEL
+      // (already priced here, so switching it would not unblock the run).
+      expect(r.ask?.question).toContain("switches CORVIDINHO_LLM_MODEL_READ to a priced model");
+
+      // A tool-tier run on an unpriced shared model names CORVIDINHO_LLM_MODEL.
+      const tool = createTaskExecute({
+        taskText: "summarize",
+        env: { ...env, CORVIDINHO_LLM_MODEL: "local-unpriced-big" },
+        tier: "tool",
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response("{}");
+        },
+        loadPlugins: false,
+        projectInstructions: false,
+      });
+      const t = await tool({ attempt: 1, signal: new AbortController().signal });
+      expect(calls).toBe(0);
+      expect(t.ask?.question).toContain('model "local-unpriced-big" has no known price');
+      expect(t.ask?.question).toContain("switches CORVIDINHO_LLM_MODEL to a priced model");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("modelKeyForTier / perTierModels", () => {
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: "cheap" }, "read")).toBe("CORVIDINHO_LLM_MODEL_READ");
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: "cheap" }, "code")).toBe("CORVIDINHO_LLM_MODEL");
+    expect(modelKeyForTier({ CORVIDINHO_LLM_MODEL_READ: " " }, "read")).toBe("CORVIDINHO_LLM_MODEL");
+    expect(perTierModels(base)).toBeNull();
+    expect(perTierModels({ ...base, CORVIDINHO_LLM_MODEL_CODE: " " })).toBeNull();
+    expect(perTierModels({ ...base, CORVIDINHO_LLM_MODEL_READ: "cheap" })).toEqual({
+      read: "cheap",
+      tool: "big",
+      code: "big",
+    });
+  });
+
+  test("SAFE-8 doctor and /status flag an unpriced per-tier model with its tier; none set = as before", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const cap = { CORVIDINHO_DAILY_SPEND_CAP_USD: "5" };
+    const now = 1_800_000_000_000;
+    // No per-tier keys: a priced configured model reads [ok] exactly as before.
+    const plain = spendDoctorCheck({ env: { ...cap, CORVIDINHO_LLM_MODEL: "gpt-4o-mini" }, model: "gpt-4o-mini", db, now });
+    expect(plain.mark).toBe("ok");
+    expect(plain.detail).not.toContain("no known price");
+
+    // Priced env-tier model, unpriced read model: warn and name the read tier.
+    const env = { ...cap, CORVIDINHO_LLM_MODEL: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_READ: "local-llama" };
+    const line = spendDoctorCheck({ env, model: "gpt-4o-mini", db, now });
+    expect(line).toMatchObject({ ok: true, mark: "warn" });
+    expect(line.detail).toContain(
+      'model "local-llama" has no known price, so read-tier runs stop and ask before calling the provider',
+    );
+    const snap = readSpendSnapshot({ env, model: "gpt-4o-mini", db, now });
+    expect(snap).toMatchObject({ kind: "cap", model: "local-llama", priced: false, tier: "read" });
+    expect(formatSpendStatusLine(snap)).toContain(
+      "⚠️ read-tier model has no known price, read-tier runs stop and ask",
+    );
+
+    // A read-tier env whose tool tier falls back to an unpriced shared model.
+    const tool = spendDoctorCheck({
+      env: { ...cap, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL: "local-big", CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini" },
+      model: "gpt-4o-mini",
+      db,
+      now,
+    });
+    expect(tool.detail).toContain('model "local-big" has no known price, so tool-tier runs stop and ask');
+
+    // Every tier priced: [ok]. The env tier's own unpriced model reads as before (no tier).
+    const allPriced = { ...env, CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_CODE: "gpt-4o" };
+    expect(spendDoctorCheck({ env: allPriced, model: "gpt-4o-mini", db, now }).mark).toBe("ok");
+    const own = readSpendSnapshot({ env, model: "local-llama", db, now });
+    expect(own).toMatchObject({ kind: "cap", model: "local-llama", priced: false });
+    expect(own).not.toHaveProperty("tier");
+    db.close();
   });
 });

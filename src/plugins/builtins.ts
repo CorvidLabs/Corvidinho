@@ -1,10 +1,12 @@
 import { loadAutonomousPlugins } from "../../plugins/autonomous/index.ts";
 import { loadDiscordPlugins } from "../../plugins/discord/index.ts";
 import { loadFilesPlugins } from "../../plugins/files/index.ts";
+import { loadFledgeCorePlugins } from "../../plugins/fledge/index.ts";
 import { loadGitPlugins } from "../../plugins/git/index.ts";
 import { loadGithubPlugins } from "../../plugins/github/index.ts";
 import { loadMemoryPlugins } from "../../plugins/memory/index.ts";
 import { loadMetaPlugins } from "../../plugins/meta/index.ts";
+import { loadRunnerPlugins } from "../../plugins/runners/index.ts";
 import { loadSearchPlugins } from "../../plugins/search/index.ts";
 import { loadShellPlugins } from "../../plugins/shell/index.ts";
 import { loadSpecsyncPlugins } from "../../plugins/specsync/index.ts";
@@ -24,8 +26,12 @@ export function loadBuiltins(): void {
   loadFilesPlugins();
   loadSearchPlugins();
   loadShellPlugins();
+  // PLUGIN-4: node/python/cargo runners only when their toolchain is on PATH.
+  loadRunnerPlugins();
   loadWebPlugins();
   loadGitPlugins();
+  // PLUGIN-1: Fledge itself (lanes list/validate/run, run <task>) as typed commands.
+  loadFledgeCorePlugins();
   loadAutonomousPlugins();
   loaded = true;
 }

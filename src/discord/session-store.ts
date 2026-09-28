@@ -1,12 +1,15 @@
 /**
  * Discord session stub maps (DISCORD-1 / 2 / 2.a) with optional SQLite
- * durability + soft TTL (SESSION-1..4 / REQ-discord-019) and per-talk
- * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022).
+ * durability + soft TTL (SESSION-1..4 / REQ-discord-019), per-talk
+ * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022) and the
+ * session's thread of turns (AGENT-6 / REQ-discord-072).
  * No ProcessManager.
  */
 
 import type { Database } from "bun:sqlite";
-import { scrubOpt } from "../store/scrub.ts";
+import { existsSync } from "node:fs";
+import type { AllowlistConfig } from "../allowlist/types.ts";
+import { formatErrorLine, scrubOpt, scrubSecrets } from "../store/scrub.ts";
 import {
   isSessionExpired,
   resolveSessionTtlMs,
@@ -18,7 +21,122 @@ import {
   resolveProjectDir,
   type TalkWorkspace,
 } from "../worktree/index.ts";
+import { askFromUnknown } from "../agent/ask.ts";
+import type { HumanAsk } from "../agent/types.ts";
+import { isAskExpired, type PendingAsk } from "./ask-buttons.ts";
+import {
+  clipTurnText,
+  ensureSessionTurns,
+  SESSION_THREAD_MAX_TURNS,
+  type SessionTurn,
+  type SessionTurnRole,
+} from "./session-thread.ts";
 import type { SessionStub } from "./types.ts";
+
+/**
+ * One open ask as stored. The question and option labels are model-written
+ * text, so they are secret-scrubbed like every stored text (SAFE-6). Option
+ * ids are scrubbed too, as a backstop: `normalizeAskOptions` already swaps a
+ * secret-looking id for its position, so for every ask it made the scrub is a
+ * no-op and askId, expiresAt, option ids and stubMessageId are stored as they
+ * are, so open buttons keep working.
+ */
+function pendingAskBody(ask: PendingAsk): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    reason: ask.reason,
+    question: scrubSecrets(ask.question),
+    askId: ask.askId,
+    expiresAt: ask.expiresAt,
+  };
+  if (ask.options?.length) {
+    body.options = ask.options.map((o) => ({
+      ...o,
+      id: scrubSecrets(o.id),
+      label: scrubSecrets(o.label),
+    }));
+  }
+  if (ask.stubMessageId) body.stubMessageId = ask.stubMessageId;
+  return body;
+}
+
+/**
+ * The session's open asks for `discord_sessions.pending_ask`: one object (as
+ * before) when only `pendingAsk` is open, else a JSON array, oldest first and
+ * `pendingAsk` last (SESSION-MULTI-3). Same column, no schema bump.
+ */
+function serializePendingAsks(session: SessionStub): string | null {
+  const open = [...(session.openAsks ?? [])];
+  if (session.pendingAsk) open.push(session.pendingAsk);
+  if (open.length === 0) return null;
+  if (open.length === 1) return JSON.stringify(pendingAskBody(open[0]!));
+  return JSON.stringify(open.map(pendingAskBody));
+}
+
+/**
+ * Stored open asks: the newest loads as the session's `pendingAsk`, the
+ * earlier ones as its `openAsks` (SESSION-MULTI-3). A single-object row loads
+ * as that one ask, as before.
+ */
+function parsePendingAsks(
+  raw: string | null | undefined,
+): Pick<SessionStub, "pendingAsk" | "openAsks"> {
+  if (!raw) return { pendingAsk: null };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { pendingAsk: null };
+  }
+  const asks: PendingAsk[] = [];
+  for (const item of Array.isArray(parsed) ? parsed : [parsed]) {
+    const ask = parsePendingAsk(item);
+    if (ask && !asks.some((a) => a.askId === ask.askId)) asks.push(ask);
+  }
+  const pendingAsk = asks.pop() ?? null;
+  return asks.length > 0 ? { pendingAsk, openAsks: asks } : { pendingAsk };
+}
+
+/**
+ * A stored pending ask (AUTONOMY-5/6). A spend-cap stop is never pending —
+ * a reply cannot lift the cap (SAFE-8) — so one persisted by an earlier
+ * build loads as no pending ask.
+ */
+function parsePendingAsk(raw: unknown): PendingAsk | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  try {
+    const parsed = raw as Record<string, unknown>;
+    const base = askFromUnknown(parsed);
+    if (!base || base.reason === "spend-cap") return null;
+    const askId =
+      typeof parsed.askId === "string" && parsed.askId.trim()
+        ? parsed.askId.trim()
+        : "";
+    const expiresAt =
+      typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
+        ? parsed.expiresAt
+        : 0;
+    // Legacy rows (pre-button): synthesize askId/expiresAt so free-text path still works.
+    const pending: PendingAsk = {
+      ...base,
+      askId: askId || `legacy_${base.question.slice(0, 8)}`,
+      expiresAt: expiresAt || Date.now() + 30 * 60 * 1000,
+    };
+    if (typeof parsed.stubMessageId === "string" && parsed.stubMessageId.trim()) {
+      pending.stubMessageId = parsed.stubMessageId.trim();
+    }
+    return pending;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Thread index key: one session per Discord user per thread (DISCORD-2.a /
+ * SESSION-MULTI-1). NUL never appears in a Discord id.
+ */
+function threadUserKey(threadId: string, userId: string): string {
+  return `${threadId}\u0000${userId}`;
+}
 
 function newId(): string {
   return `sess_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -37,6 +155,11 @@ export type SessionStoreOptions = {
    */
   defaultProjectRoot?: string;
   /**
+   * Bridge allowlist: its GitHub repo list gates an explicit project outside
+   * `defaultProjectRoot` (REQ-discord-202). Absent ⇒ such projects refused.
+   */
+  allowlist?: AllowlistConfig;
+  /**
    * When true (default), create an isolated worktree/scoped dir on session
    * create for repo work. Tests may disable.
    */
@@ -46,8 +169,12 @@ export type SessionStoreOptions = {
 export class SessionStore {
   /** bot reply message id → session */
   readonly byBotMessageId = new Map<string, SessionStub>();
-  /** thread id → session */
-  readonly byThreadId = new Map<string, SessionStub>();
+  /**
+   * (thread id, Discord user id) → that user's session in the thread
+   * (DISCORD-2.a per user / SESSION-MULTI-1): a second user in a thread gets
+   * their own entry and never replaces the first user's.
+   */
+  readonly byThreadUser = new Map<string, SessionStub>();
   /** session id → session */
   readonly bySessionId = new Map<string, SessionStub>();
 
@@ -55,17 +182,22 @@ export class SessionStore {
   readonly ttlMs: number;
   private readonly now: () => number;
   readonly defaultProjectRoot: string | undefined;
+  private readonly allowlist: AllowlistConfig | undefined;
   private readonly ensureWorktreeOnCreate: boolean;
   /** session id → number of agent runs in flight (REQ-discord-204). */
   private readonly activeRuns = new Map<string, number>();
+  /** session id → recorded turns, oldest first (REQ-discord-072). */
+  private readonly turns = new Map<string, SessionTurn[]>();
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
     this.ttlMs = opts.ttlMs ?? resolveSessionTtlMs();
     this.now = opts.now ?? (() => Date.now());
     this.defaultProjectRoot = opts.defaultProjectRoot;
+    this.allowlist = opts.allowlist;
     this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
     if (this.db) {
+      ensureSessionTurns(this.db);
       this.loadFromDb();
     }
   }
@@ -96,9 +228,10 @@ export class SessionStore {
 
   private removeLocal(session: SessionStub): void {
     this.bySessionId.delete(session.id);
+    this.turns.delete(session.id);
     if (session.threadId) {
-      const mapped = this.byThreadId.get(session.threadId);
-      if (mapped?.id === session.id) this.byThreadId.delete(session.threadId);
+      const key = threadUserKey(session.threadId, session.userId);
+      if (this.byThreadUser.get(key)?.id === session.id) this.byThreadUser.delete(key);
     }
     for (const [botId, s] of [...this.byBotMessageId.entries()]) {
       if (s.id === session.id) this.byBotMessageId.delete(botId);
@@ -112,7 +245,7 @@ export class SessionStore {
       .query(
         `SELECT id, channel_id, thread_id, user_id, topic, project,
                 worktree_path, worktree_branch, worktree_state,
-                created_at, last_activity_at
+                pending_ask, created_at, last_activity_at
          FROM discord_sessions`,
       )
       .all() as Array<{
@@ -125,6 +258,7 @@ export class SessionStore {
       worktree_path: string | null;
       worktree_branch: string | null;
       worktree_state: string | null;
+      pending_ask: string | null;
       created_at: number;
       last_activity_at: number;
     }>;
@@ -148,6 +282,7 @@ export class SessionStore {
           worktreeBranch: row.worktree_branch ?? undefined,
           worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
             undefined,
+          ...parsePendingAsks(row.pending_ask),
           createdAt: row.created_at,
           lastActivityAt: row.last_activity_at,
         };
@@ -166,12 +301,13 @@ export class SessionStore {
         worktreeBranch: row.worktree_branch ?? undefined,
         worktreeState: (row.worktree_state as SessionStub["worktreeState"]) ??
           undefined,
+        ...parsePendingAsks(row.pending_ask),
         createdAt: row.created_at,
         lastActivityAt: row.last_activity_at,
       };
       this.bySessionId.set(session.id, session);
       if (session.threadId) {
-        this.byThreadId.set(session.threadId, session);
+        this.byThreadUser.set(threadUserKey(session.threadId, session.userId), session);
       }
     }
 
@@ -191,6 +327,32 @@ export class SessionStore {
       }
       this.byBotMessageId.set(row.bot_message_id, session);
     }
+
+    // REQ-discord-072: turns of live sessions only. Rows whose session is gone
+    // (ended or expired by a build that did not delete them) are dropped.
+    this.db.run(
+      `DELETE FROM discord_session_turns
+       WHERE session_id NOT IN (SELECT id FROM discord_sessions)`,
+    );
+    const turnRows = this.db
+      .query(
+        `SELECT session_id, role, content, created_at
+         FROM discord_session_turns ORDER BY id`,
+      )
+      .all() as Array<{
+      session_id: string;
+      role: string;
+      content: string;
+      created_at: number;
+    }>;
+    for (const row of turnRows) {
+      if (!this.bySessionId.has(row.session_id)) continue;
+      const role = row.role;
+      if (role !== "human" && role !== "agent") continue;
+      const list = this.turns.get(row.session_id) ?? [];
+      list.push({ role, content: row.content, createdAt: row.created_at });
+      this.turns.set(row.session_id, list);
+    }
   }
 
   private persistSession(session: SessionStub): void {
@@ -198,9 +360,9 @@ export class SessionStore {
     this.db.run(
       `INSERT INTO discord_sessions
         (id, channel_id, thread_id, user_id, topic, project,
-         worktree_path, worktree_branch, worktree_state,
+         worktree_path, worktree_branch, worktree_state, pending_ask,
          created_at, last_activity_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          channel_id = excluded.channel_id,
          thread_id = excluded.thread_id,
@@ -210,6 +372,7 @@ export class SessionStore {
          worktree_path = excluded.worktree_path,
          worktree_branch = excluded.worktree_branch,
          worktree_state = excluded.worktree_state,
+         pending_ask = excluded.pending_ask,
          created_at = excluded.created_at,
          last_activity_at = excluded.last_activity_at`,
       [
@@ -222,6 +385,7 @@ export class SessionStore {
         session.worktreePath ?? null,
         session.worktreeBranch ?? null,
         session.worktreeState ?? null,
+        serializePendingAsks(session),
         session.createdAt,
         session.lastActivityAt,
       ],
@@ -244,7 +408,29 @@ export class SessionStore {
       `DELETE FROM discord_session_bot_messages WHERE session_id = ?`,
       [sessionId],
     );
+    this.db.run(`DELETE FROM discord_session_turns WHERE session_id = ?`, [
+      sessionId,
+    ]);
     this.db.run(`DELETE FROM discord_sessions WHERE id = ?`, [sessionId]);
+  }
+
+  /**
+   * Write a session row's worktree columns. UPDATE only, so a row already
+   * deleted (ended or TTL-purged talk) is never re-inserted.
+   */
+  private persistWorktreeState(session: SessionStub): void {
+    if (!this.db) return;
+    this.db.run(
+      `UPDATE discord_sessions
+       SET worktree_path = ?, worktree_branch = ?, worktree_state = ?
+       WHERE id = ?`,
+      [
+        session.worktreePath ?? null,
+        session.worktreeBranch ?? null,
+        session.worktreeState ?? null,
+        session.id,
+      ],
+    );
   }
 
   /** Park/remove worktree so another talk cannot reuse it as cwd. */
@@ -253,15 +439,23 @@ export class SessionStore {
       session.worktreeState = "removed";
       return;
     }
-    if (session.worktreeState === "parked" || session.worktreeState === "removed") {
+    // `parked` with a path still recorded is a park cut short (crash before
+    // the removal finished): parking is idempotent, so finish it.
+    if (session.worktreeState === "removed") {
       return;
     }
+    // Record `parked` before any removal side effect: a crash from here on
+    // restarts with a row that bindWorktree re-binds fresh, never one that
+    // still says `active` at a removed directory (SESSION-WORKTREE-3).
+    session.worktreeState = "parked";
+    this.persistWorktreeState(session);
     const state = await parkWorktree(session.project, session.worktreePath, {
       kind: session.worktreeBranch ? "worktree" : "scoped_dir",
       branchName: session.worktreeBranch,
     });
     session.worktreeState = state;
     session.worktreePath = undefined;
+    this.persistWorktreeState(session);
   }
 
   /**
@@ -276,6 +470,9 @@ export class SessionStore {
   /**
    * Bind an isolated workspace onto a session (idempotent if already bound).
    * Never silently switches project mid-conversation (SESSION-WORKTREE-4).
+   * A recorded worktree whose directory is gone (crash mid-park, removed out
+   * of band) is re-created for the same project and session, never handed
+   * out as cwd (SESSION-WORKTREE-3).
    */
   async bindWorktree(
     session: SessionStub,
@@ -286,35 +483,39 @@ export class SessionStore {
       if (opts?.project?.trim()) {
         const resolved = resolveProjectDir(opts.project, {
           defaultProjectRoot: session.project ?? this.defaultProjectRoot ?? process.cwd(),
+          github: this.allowlist?.github,
         });
-        if (
-          resolved.ok &&
-          session.project &&
-          resolved.dir !== session.project
-        ) {
+        if (!resolved.ok) {
+          return { ok: false, error: resolved.error };
+        }
+        if (session.project && resolved.dir !== session.project) {
           return {
             ok: false,
             error: `project already set to ${session.project}; refusing mid-conversation switch`,
           };
         }
       }
-      return {
-        ok: true,
-        workspace: {
-          kind: session.worktreeBranch ? "worktree" : "scoped_dir",
-          workDir: session.worktreePath,
-          projectWorkingDir: session.project ?? session.worktreePath,
-          branchName: session.worktreeBranch,
-          worktreeId: session.id,
-          state: "active",
-        },
-      };
+      if (existsSync(session.worktreePath)) {
+        return {
+          ok: true,
+          workspace: {
+            kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+            workDir: session.worktreePath,
+            projectWorkingDir: session.project ?? session.worktreePath,
+            branchName: session.worktreeBranch,
+            worktreeId: session.id,
+            state: "active",
+          },
+        };
+      }
+      // Recorded worktree is gone: fall through and re-create it below.
     }
 
     const defaultRoot =
       this.defaultProjectRoot ?? session.project ?? process.cwd();
     const resolved = resolveProjectDir(opts?.project ?? session.project, {
       defaultProjectRoot: defaultRoot,
+      github: this.allowlist?.github,
     });
     if (!resolved.ok) {
       return { ok: false, error: resolved.error };
@@ -365,6 +566,7 @@ export class SessionStore {
     if (opts.project?.trim() || this.defaultProjectRoot) {
       const resolved = resolveProjectDir(opts.project, {
         defaultProjectRoot: this.defaultProjectRoot ?? process.cwd(),
+        github: this.allowlist?.github,
       });
       if (resolved.ok) {
         session.project = resolved.dir;
@@ -373,7 +575,7 @@ export class SessionStore {
 
     this.bySessionId.set(session.id, session);
     if (session.threadId) {
-      this.byThreadId.set(session.threadId, session);
+      this.byThreadUser.set(threadUserKey(session.threadId, session.userId), session);
     }
     this.persistSession(session);
 
@@ -433,6 +635,167 @@ export class SessionStore {
     }
   }
 
+  /**
+   * Store a pending human ask on a session, or clear them all (AUTONOMY-5/6).
+   * Asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044): a new ask
+   * becomes the session's `pendingAsk`, and the button ask it supersedes
+   * stays open in `openAsks` until it is picked, pressed late or cancelled
+   * (or, once timed out, until a newer ask is cleared) — a later run that
+   * asks again never takes its buttons away. A superseded
+   * free-text ask is replaced (a reply answers one question). Storing an
+   * askId the session already holds updates that ask in place. `null` clears
+   * every open ask (explicit cancel). Persists when a DB is configured.
+   */
+  setPendingAsk(session: SessionStub, ask: PendingAsk | null): void {
+    if (!ask) {
+      session.pendingAsk = null;
+      delete session.openAsks;
+    } else if (session.pendingAsk?.askId === ask.askId) {
+      session.pendingAsk = ask;
+    } else {
+      const held = session.openAsks?.findIndex((a) => a.askId === ask.askId) ?? -1;
+      if (held >= 0) {
+        session.openAsks![held] = ask;
+      } else {
+        const prev = session.pendingAsk;
+        if (prev?.options?.length) {
+          session.openAsks = [...(session.openAsks ?? []), prev];
+        }
+        session.pendingAsk = ask;
+      }
+    }
+    this.persistSession(session);
+  }
+
+  /**
+   * Clear one open ask by askId — a pick, a late press or a free-text answer
+   * (SESSION-MULTI-3). The session's other open asks stay; when `pendingAsk`
+   * is cleared the newest remaining open ask that has not timed out takes its
+   * place, and earlier asks already past their timeout are dropped then, so a
+   * thin reply never restates buttons that only answer "that choice expired".
+   * No-op when the session does not hold that askId.
+   */
+  clearPendingAsk(session: SessionStub, askId: string): void {
+    const earlier = session.openAsks ?? [];
+    if (session.pendingAsk?.askId === askId) {
+      const nowMs = this.nowMs();
+      const live = earlier.filter((a) => !isAskExpired(a, nowMs));
+      session.pendingAsk = live.at(-1) ?? null;
+      const rest = live.slice(0, -1);
+      if (rest.length > 0) session.openAsks = rest;
+      else delete session.openAsks;
+    } else if (earlier.some((a) => a.askId === askId)) {
+      const rest = earlier.filter((a) => a.askId !== askId);
+      if (rest.length > 0) session.openAsks = rest;
+      else delete session.openAsks;
+    } else {
+      return;
+    }
+    this.persistSession(session);
+  }
+
+  /**
+   * The live session holding open ask `askId` and that ask, whether it is the
+   * session's `pendingAsk` or an earlier open one (DISCORD-ASK-3 /
+   * SESSION-MULTI-3). Expired sessions are purged first, as in `list()`.
+   */
+  findPendingAsk(askId: string): { session: SessionStub; ask: PendingAsk } | undefined {
+    for (const session of this.list()) {
+      if (session.pendingAsk?.askId === askId) {
+        return { session, ask: session.pendingAsk };
+      }
+      const ask = session.openAsks?.find((a) => a.askId === askId);
+      if (ask) return { session, ask };
+    }
+    return undefined;
+  }
+
+  /**
+   * Record one turn of a live session's thread (AGENT-6 / REQ-discord-072):
+   * the human's own words for a run (before memory/identity/image
+   * enrichment), recorded as the run starts so a run that throws or a bridge
+   * that dies mid-run still keeps the request, or the answer the bridge
+   * posted, recorded when the run ends. The text is scrubbed (SAFE-6) and
+   * clipped before it is kept; an empty turn is skipped. Past
+   * SESSION_THREAD_MAX_TURNS the oldest turn after the opening request is
+   * dropped. An ended or expired session is not recorded, so its thread never
+   * comes back (SESSION-3). The DB write is best effort: a failure is logged
+   * and the in-memory thread still holds the turn.
+   */
+  recordTurn(session: SessionStub, role: SessionTurnRole, text: string): void {
+    if (this.bySessionId.get(session.id) !== session) return;
+    // Scrub before clipping, so a cut never leaves half a secret behind.
+    const content = clipTurnText(scrubSecrets(text));
+    if (!content) return;
+    const turn: SessionTurn = { role, content, createdAt: this.nowMs() };
+    const list = this.turns.get(session.id) ?? [];
+    list.push(turn);
+    let dropped = 0;
+    while (list.length > SESSION_THREAD_MAX_TURNS) {
+      list.splice(1, 1);
+      dropped += 1;
+    }
+    this.turns.set(session.id, list);
+    if (!this.db) return;
+    const db = this.db;
+    try {
+      db.transaction(() => {
+        db.run(
+          `INSERT INTO discord_session_turns (session_id, role, content, created_at)
+           VALUES (?, ?, ?, ?)`,
+          [session.id, turn.role, turn.content, turn.createdAt],
+        );
+        if (dropped > 0) {
+          // Keep the opening turn and the newest MAX - 1, as in memory.
+          db.run(
+            `DELETE FROM discord_session_turns
+             WHERE session_id = ?1
+               AND id NOT IN (SELECT id FROM discord_session_turns
+                              WHERE session_id = ?1 ORDER BY id LIMIT 1)
+               AND id NOT IN (SELECT id FROM discord_session_turns
+                              WHERE session_id = ?1 ORDER BY id DESC LIMIT ?2)`,
+            [session.id, SESSION_THREAD_MAX_TURNS - 1],
+          );
+        }
+      })();
+    } catch (err) {
+      console.warn(
+        `[discord] session thread write for ${session.id} failed: ${formatErrorLine(err)}`,
+      );
+    }
+  }
+
+  /** The session's recorded turns, oldest first (a copy; REQ-discord-072). */
+  threadFor(session: SessionStub): SessionTurn[] {
+    return [...(this.turns.get(session.id) ?? [])];
+  }
+
+  /**
+   * Active session for this Discord user in this channel (SESSION-MULTI-1).
+   * Newest non-expired match wins. Thread-scoped talks use threadId as the
+   * channel key when present.
+   */
+  getByUserChannel(
+    userId: string,
+    channelId: string,
+    threadId?: string,
+  ): SessionStub | undefined {
+    let best: SessionStub | undefined;
+    for (const session of this.bySessionId.values()) {
+      if (this.purgeIfExpired(session)) continue;
+      if (session.userId !== userId) continue;
+      if (threadId) {
+        if (session.threadId !== threadId) continue;
+      } else {
+        if (session.channelId !== channelId) continue;
+        // Prefer non-thread sessions when looking up by parent channel.
+        if (session.threadId) continue;
+      }
+      if (!best || session.lastActivityAt > best.lastActivityAt) best = session;
+    }
+    return best;
+  }
+
   /** Bind a bot outbound message id so replies continue the session (DISCORD-2). */
   trackBotMessage(botMessageId: string, session: SessionStub): void {
     this.byBotMessageId.set(botMessageId, session);
@@ -445,10 +808,24 @@ export class SessionStore {
     return session;
   }
 
-  getByThread(threadId: string): SessionStub | undefined {
-    const session = this.byThreadId.get(threadId);
-    if (this.purgeIfExpired(session)) return undefined;
-    return session;
+  /**
+   * With `userId`: that user's live session in the thread (DISCORD-2.a /
+   * SESSION-MULTI-1), never another user's. Without it: the most recently
+   * active live session in the thread, whoever owns it.
+   */
+  getByThread(threadId: string, userId?: string): SessionStub | undefined {
+    if (userId !== undefined) {
+      const session = this.byThreadUser.get(threadUserKey(threadId, userId));
+      if (this.purgeIfExpired(session)) return undefined;
+      return session;
+    }
+    let best: SessionStub | undefined;
+    for (const session of [...this.byThreadUser.values()]) {
+      if (session.threadId !== threadId) continue;
+      if (this.purgeIfExpired(session)) continue;
+      if (!best || session.lastActivityAt > best.lastActivityAt) best = session;
+    }
+    return best;
   }
 
   get(sessionId: string): SessionStub | undefined {
@@ -467,7 +844,11 @@ export class SessionStore {
     return out.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
   }
 
-  /** Agent cwd for a session: worktree when active, else project, else default. */
+  /**
+   * Agent cwd for a session: worktree when active, else project, else default.
+   * Call after bindWorktree, which verifies the recorded worktree directory
+   * and re-creates a missing one.
+   */
   cwdFor(session: SessionStub): string | undefined {
     if (session.worktreePath && session.worktreeState === "active") {
       return session.worktreePath;

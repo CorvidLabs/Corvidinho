@@ -1,0 +1,52 @@
+{
+  "timestamp": 1790462395,
+  "commit": "c8223c5b974c9148665891ab4a7ba782f3285bb7",
+  "contract_digest": "0462ebfb6e9cf56f712ddecc10251fb4246a5fabf4bee7c94ee6a4ad93542fc6",
+  "execution_digest": "1fc51b74e8ca9c983b9ae6cf4dfc2849ae31a5c1a5e546f698e3863bea63f9f3",
+  "workspace_digest": "2e3162583540031aa5f6ca0c45c07044d18a74ffb21a4c9ef11772ef3358bb36",
+  "acceptance_input_digest": "4b1cdf71bc58c75349db694fc7881cfd6cb5e6a36b3c71b380fb6949121bd780",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": ".env.example",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c1823c2cec734922bbe7ffc16f281a1374c7f20398d77317d90e4fe48c0d3c0b",
+        "entry_digest": "ab28f26271b22350411b7efdd0c98359760207d818ba82a06fb0e8f7e287cde6",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/BOX-UPDATE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3e96d1dda3e73c206247fdbaf53103c372f74c5800d18b1db7a1c6860dd1b908",
+        "entry_digest": "309804aba468bb930158b7f930fb437b404e4ac475da34fe9ee674e5f007497e",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/DISCORD-GO-LIVE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "46765b967555538d3bf3a3091b2adb5cc959b25e3c4ff3e709ab786d59a9f902",
+        "entry_digest": "432dced086f6927afe0332d523b8656b2a4f4f0eb9cfcb36fad1992fee3d7468",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

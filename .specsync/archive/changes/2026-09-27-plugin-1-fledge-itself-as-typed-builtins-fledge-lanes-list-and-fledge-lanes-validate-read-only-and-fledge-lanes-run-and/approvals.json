@@ -1,0 +1,94 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790536309,
+      "digest": "e85d98c4b3a55f62588e5a2aedcfe6c75b915d49c4644eb326110115d894ffdd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and",
+        "title": "PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root",
+        "description": "PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "plugins/fledge/core.ts",
+          "plugins/fledge/index.ts",
+          "src/plugins/builtins.ts",
+          "tests/fledge.core.test.ts",
+          "tests/fledge.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PLUGIN-1 (Fledge itself as plugins with typed commands): after builtin load, plugins list and the tool catalog carry fledge-lanes-list and fledge-lanes-validate (dangerous=false, minTier 0: offered at tool and code tier, also to non-ADMIN role sessions) and fledge-lanes-run and fledge-run (dangerous=true, minTier 2: SAFE-1 non-interactive deny unless allowlisted, audited, offered only at code tier with dangerous tools to ADMIN); each runs the local fledge CLI with an argv array (no shell) in the plugin cwd: fledge --non-interactive lanes list --json / lanes validate --json [--strict] / lanes run <lane> / run <task> [-- args verbatim]; lists and validation come back typed (lanes with name, steps, description; lane count, errors, warnings), an invalid fledge.toml is ok=false with fledge's errors, a failing lane or task is ok=false with fledge's exit code and output; a lane or task name must be a plain name (no leading dash) and validate takes no path, so model argv never becomes a fledge option, else a usage error that spawns nothing; fledge is resolved on absolute PATH entries only and missing is exit 127; the child gets the verify lane's scrubbed env without CDPATH/OLDPWD, stdin closed, a timeout (124), output caps, process-tree kill on the calling run's abort (130), and secret-scrubbed output; a Fledge plugin command named run, lanes-list, lanes-validate or lanes-run is skipped (plugins list says why) and the builtin keeps the name; no new slash command, env var, config key, schema or package version; regression tests fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "7c50e329c0d50755f8dfe39f351f766aa63686c91e0bbde3acc813d87e97a3ef",
+        "plugins": "7f4d2699fb4c00a35c03b0fb70c40ffcb14a686dc653085ec65268cd2b3dc6cd"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790537290,
+      "digest": "e85d98c4b3a55f62588e5a2aedcfe6c75b915d49c4644eb326110115d894ffdd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and",
+        "title": "PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root",
+        "description": "PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "plugins/fledge/core.ts",
+          "plugins/fledge/index.ts",
+          "src/plugins/builtins.ts",
+          "tests/fledge.core.test.ts",
+          "tests/fledge.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PLUGIN-1 (Fledge itself as plugins with typed commands): after builtin load, plugins list and the tool catalog carry fledge-lanes-list and fledge-lanes-validate (dangerous=false, minTier 0: offered at tool and code tier, also to non-ADMIN role sessions) and fledge-lanes-run and fledge-run (dangerous=true, minTier 2: SAFE-1 non-interactive deny unless allowlisted, audited, offered only at code tier with dangerous tools to ADMIN); each runs the local fledge CLI with an argv array (no shell) in the plugin cwd: fledge --non-interactive lanes list --json / lanes validate --json [--strict] / lanes run <lane> / run <task> [-- args verbatim]; lists and validation come back typed (lanes with name, steps, description; lane count, errors, warnings), an invalid fledge.toml is ok=false with fledge's errors, a failing lane or task is ok=false with fledge's exit code and output; a lane or task name must be a plain name (no leading dash) and validate takes no path, so model argv never becomes a fledge option, else a usage error that spawns nothing; fledge is resolved on absolute PATH entries only and missing is exit 127; the child gets the verify lane's scrubbed env without CDPATH/OLDPWD, stdin closed, a timeout (124), output caps, process-tree kill on the calling run's abort (130), and secret-scrubbed output; a Fledge plugin command named run, lanes-list, lanes-validate or lanes-run is skipped (plugins list says why) and the builtin keeps the name; no new slash command, env var, config key, schema or package version; regression tests fail on main and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "7c50e329c0d50755f8dfe39f351f766aa63686c91e0bbde3acc813d87e97a3ef",
+        "plugins": "a90e75eecd096018d4f24438d7800c48aba469809561fb2c09a8c3b828d5212e"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790538982,
+      "digest": "730978eca204eb2e5e4c90e9dea0a384eb01c8c10be76566647bad4419b1b66c",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

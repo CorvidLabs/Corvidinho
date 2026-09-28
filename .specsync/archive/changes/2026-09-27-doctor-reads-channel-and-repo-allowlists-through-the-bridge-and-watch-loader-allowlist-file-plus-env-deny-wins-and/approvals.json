@@ -1,0 +1,129 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790471124,
+      "digest": "e9ada9609ddae8a8b9def4aa0a3b00f0ea6e0e4cf0a697312c04051000572516",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and",
+        "title": "Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable",
+        "description": "Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "docs/BOX-UPDATE.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "specs/cli/cli.spec.md",
+          "src/cli.ts",
+          "src/doctor.ts",
+          "tests/cli.doctor-truth.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "corvidinho doctor loads the Discord channel and GitHub repo allowlists through the same loader as the bridge and watch (allowlist file plus env overlays; a channel or repo that is also deny-listed does not count, deny wins): channels and repos only in the allowlist file give [ok] discord and [ok] github-watch naming the source (file, env or file + env) and exit 0 when everything else is set; every allowlisted entry deny-listed, or an allowlist file that does not load, gives [missing] with exit 1. Doctor prints [warn] llm naming the demo stub when neither CORVIDINHO_LLM_API_KEY nor OPENAI_API_KEY is set (exit code unchanged) and [ok] llm when one is. Doctor prints a data-dir line: [ok] when the data dir exists and is writable, [info] when it does not exist yet but can be created (doctor does not create it), [fail] with exit 1 when it is not a directory, cannot be created or is not writable. No token, key, channel id or repo name is printed. tests/cli.doctor-truth.test.ts covers each case, fails on main and passes with the fix."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "232930c6dc21b69bb0119fa0292b509bea31b36ad9ba274e7bbf075254d0a30a"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790471292,
+      "digest": "e9ada9609ddae8a8b9def4aa0a3b00f0ea6e0e4cf0a697312c04051000572516",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and",
+        "title": "Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable",
+        "description": "Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "docs/BOX-UPDATE.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "specs/cli/cli.spec.md",
+          "src/cli.ts",
+          "src/doctor.ts",
+          "tests/cli.doctor-truth.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "corvidinho doctor loads the Discord channel and GitHub repo allowlists through the same loader as the bridge and watch (allowlist file plus env overlays; a channel or repo that is also deny-listed does not count, deny wins): channels and repos only in the allowlist file give [ok] discord and [ok] github-watch naming the source (file, env or file + env) and exit 0 when everything else is set; every allowlisted entry deny-listed, or an allowlist file that does not load, gives [missing] with exit 1. Doctor prints [warn] llm naming the demo stub when neither CORVIDINHO_LLM_API_KEY nor OPENAI_API_KEY is set (exit code unchanged) and [ok] llm when one is. Doctor prints a data-dir line: [ok] when the data dir exists and is writable, [info] when it does not exist yet but can be created (doctor does not create it), [fail] with exit 1 when it is not a directory, cannot be created or is not writable. No token, key, channel id or repo name is printed. tests/cli.doctor-truth.test.ts covers each case, fails on main and passes with the fix."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "232930c6dc21b69bb0119fa0292b509bea31b36ad9ba274e7bbf075254d0a30a"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790474364,
+      "digest": "e9ada9609ddae8a8b9def4aa0a3b00f0ea6e0e4cf0a697312c04051000572516",
+      "note": "Review of #225: blank-token trim, bare-repo message, symlink data dir, single allowlist read; REQ-cli-003 delta updated",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "doctor-reads-channel-and-repo-allowlists-through-the-bridge-and-watch-loader-allowlist-file-plus-env-deny-wins-and",
+        "title": "Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable",
+        "description": "Doctor reads channel and repo allowlists through the bridge and watch loader (allowlist file plus env, deny wins) and names the source, warns when no LLM key is set (task run uses the demo stub) and checks the data dir is writable",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "docs/BOX-UPDATE.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "specs/cli/cli.spec.md",
+          "src/cli.ts",
+          "src/doctor.ts",
+          "tests/cli.doctor-truth.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "corvidinho doctor loads the Discord channel and GitHub repo allowlists through the same loader as the bridge and watch (allowlist file plus env overlays; a channel or repo that is also deny-listed does not count, deny wins): channels and repos only in the allowlist file give [ok] discord and [ok] github-watch naming the source (file, env or file + env) and exit 0 when everything else is set; every allowlisted entry deny-listed, or an allowlist file that does not load, gives [missing] with exit 1. Doctor prints [warn] llm naming the demo stub when neither CORVIDINHO_LLM_API_KEY nor OPENAI_API_KEY is set (exit code unchanged) and [ok] llm when one is. Doctor prints a data-dir line: [ok] when the data dir exists and is writable, [info] when it does not exist yet but can be created (doctor does not create it), [fail] with exit 1 when it is not a directory, cannot be created or is not writable. No token, key, channel id or repo name is printed. tests/cli.doctor-truth.test.ts covers each case, fails on main and passes with the fix."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "4c22a0aafde40d7681ca3ae0060646df184ee41c54e921e67477581e78ec5606"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790475161,
+      "digest": "cafc89dafd0550f4c0f4cc45c8c6d80341a9db704a3b479f40b26bd1d0e71ac6",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

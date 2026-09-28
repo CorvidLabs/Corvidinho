@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "fix-discordembedpayload-title-access-in-slash-ask-7-fixture-for-tsc",
+  "implementation_commit": "30290e1c70b0b100a1ba7d72c659150bd1722e6f",
+  "implementation_tree": "120898790ea0778b4f5e727625deaf90cc3d0b7d",
+  "contract_digest": "7a514ae06475b429e9b1c6c065c59659b50b1256835c2fbe07d87848959cd23e",
+  "workspace_digest": "b69e1bda9b02355f78523e7bbbb5d71139b1a74e74cc5d277f9c624697f452a1",
+  "closing_digest": "2de2d2912618cc971ccdb6a793297d0a7f6948c8cb3c401afbbbce5f06c3429c",
+  "review_digest": "e05bfedc47c336d3061ed1df3ff29d3b98f2e2554ce5a80e8b486caa5e9237f0",
+  "finalization_digest": "813fd975f00aa352cbf75151d881510b42c0aa097f646672c6770d15582ba1b7",
+  "timestamp": 1790466771
+}

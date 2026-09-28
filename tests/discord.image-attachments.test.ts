@@ -61,6 +61,22 @@ function mockFetchSuccess() {
   ) as unknown as typeof fetch;
 }
 
+/** A real 1x1 PNG, for paths the agent opens (REQ-discord-013 / DISCORD-9). */
+const REAL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+function mockFetchRealPng() {
+  globalThis.fetch = mock(
+    async () =>
+      new Response(REAL_PNG, {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      }),
+  ) as unknown as typeof fetch;
+}
+
 function mockFetchFailure(status = 404) {
   globalThis.fetch = mock(
     async () => new Response(null, { status }),
@@ -276,14 +292,14 @@ function initGitRepo(dir: string): void {
 
 describe("bridge writes attachments inside the session workspace (DISCORD-9 / REQ-discord-013)", () => {
   const prevBase = process.env.WORKTREE_BASE_DIR;
-  beforeEach(() => mockFetchSuccess());
+  beforeEach(() => mockFetchRealPng());
   afterEach(() => {
     globalThis.fetch = originalFetch;
     if (prevBase === undefined) delete process.env.WORKTREE_BASE_DIR;
     else process.env.WORKTREE_BASE_DIR = prevBase;
   });
 
-  test("agent files-read opens the image under the session cwd; git ignores it; session end deletes it", async () => {
+  test("agent files-read opens the image under the session cwd as an image part; git ignores it; session end deletes it", async () => {
     const root = mkdtempSync(join(tmpdir(), "corvidinho-img-bridge-"));
     const project = join(root, "proj");
     initGitRepo(project);
@@ -296,6 +312,8 @@ describe("bridge writes attachments inside the session workspace (DISCORD-9 / RE
         DISCORD_BOT_TOKEN: "fake",
         DISCORD_CHANNEL_IDS: "chan-1",
         CORVIDINHO_DISCORD_DRY_RUN: "1",
+        // Missing file: never read the operator's allowlist (ALLOW-4).
+        CORVIDINHO_ALLOWLIST_FILE: join(root, "no-allowlist.toml"),
       },
       projectRoot: project,
       skipProtocolCheck: true,
@@ -352,6 +370,11 @@ describe("bridge writes attachments inside the session workspace (DISCORD-9 / RE
       });
       expect(read.error).toBeUndefined();
       expect(read.ok).toBe(true);
+      // DISCORD-9: the model gets the image itself, not decoded bytes.
+      expect(read.data).toMatchObject({ mediaType: "image/png", image: true });
+      expect(read.image?.mediaType).toBe("image/png");
+      expect(Buffer.from(read.image!.base64, "base64").equals(REAL_PNG)).toBe(true);
+      expect(readFileSync(imagePath).equals(REAL_PNG)).toBe(true);
       expect(
         imagePath.startsWith(join(cwd, ".corvidinho", "attachments") + sep),
       ).toBe(true);

@@ -1,6 +1,6 @@
 # Corvidinho
 
-Linux-first Bun/TypeScript agent runner from CorvidLabs. Plans to **support Fledge + SpecSync as products**. Bootstrap captures human intent (`hi/`) and a minimal CLI stub so follow-on PRs have a place to land.
+Linux-first Bun/TypeScript agent runner from CorvidLabs — a headless agent CLI with a Discord bridge (HEAR), GitHub poll ingress (WATCH), a schedule daemon, typed plugin tools and a prove-before-done LLM tool loop. First-class Fledge + SpecSync citizen; human intent lives in `hi/`. Version: `bun src/cli.ts version`; per-version notes: [`CHANGELOG.md`](CHANGELOG.md).
 
 **Status:** see [`STATUS.md`](STATUS.md). Intent: [`hi/`](hi/). Steal/defer notes (not AC): [`docs/CORVIDINHO-FEATURE-STEAL.md`](docs/CORVIDINHO-FEATURE-STEAL.md).
 
@@ -13,9 +13,11 @@ Read the full story (honoring ancestors): [`docs/ORIGIN.md`](docs/ORIGIN.md).
 
 ## Requirements
 
-- Linux
+- Linux, `git` (session worktrees and the git tools)
 - [Bun](https://bun.sh) ≥ 1.2
-- Optional on `PATH`: `hi`, `gh`, `fledge`, `specsync` (reported by `corvidinho doctor`)
+- `fledge` + `specsync` on `PATH` (`corvidinho doctor` fails without them; the verify lane needs both)
+- In the project dir: `fledge.toml` with a `verify` lane that runs spec-check, `.specsync/` and `specs/` (`corvidinho doctor` names each one that is missing; `corvidinho init` reports the same project checks plus the LLM key, Fledge and SpecSync, and creates nothing)
+- Optional: `hi` (`hi check`), `gh` (human convenience only; Corvidinho itself reads `GITHUB_TOKEN` / `GH_TOKEN`)
 
 ## Quick start
 
@@ -24,12 +26,31 @@ bun install
 bun src/cli.ts --help
 bun src/cli.ts version
 bun src/cli.ts doctor
+bun src/cli.ts init    # report only: what this project is missing (CLI-4)
 bun src/cli.ts --protocol-version
 bun test
 hi check
 ```
 
-Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, GitHub via `gh auth`) stay in the environment — never in the repo or chat logs.
+Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN` / `GH_TOKEN`) stay in the environment — never in the repo or chat logs.
+
+### Another project without `cd` (CLI-5)
+
+```bash
+bun src/cli.ts --project ~/code/other task run --task "…" --json
+bun src/cli.ts doctor --project=../other
+```
+
+`--project <path>` (any command, before a `--`) runs the CLI as if it had been started in
+`<path>`: it reads that project's `fledge.toml`, specs and files, and its `.env` files as Bun
+loads them there (`.env`, `.env.<NODE_ENV>`, `.env.local`; variables already set in the
+environment win; a CLI run with `bun --no-env-file` loads none). The start directory's `.env`
+values do not carry over, to this process or to the tools it starts (`specsync`, `fledge`, git),
+and the project's `bunfig.toml` is never read. Spawned agents still run with `--no-env-file`.
+`discord bridge`, `github watch` and `daemon` take `<path>` as their project root, so their agent
+binary defaults to `<path>/src/cli.ts` as when started there; set `CORVIDINHO_BIN` when `<path>`
+is not a Corvidinho checkout. A path that does not exist or is not a directory stops with one
+error line (exit 1).
 
 ## Discord HEAR (thin)
 
@@ -37,10 +58,11 @@ Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, GitHub via `gh auth`) stay in th
 # Go-live on the bot VM (never commit secrets):
 export DISCORD_TOKEN=…          # or DISCORD_BOT_TOKEN
 export DISCORD_CHANNEL_IDS=…    # non-empty; or CORVIDINHO_DISCORD_ALLOW_CHANNELS / allowlist file
+export CORVIDINHO_OWNER_DISCORD_ID=…   # the only ADMIN (/admin, /mute, /announce channel, /schedule mutations); no owner = nobody is ADMIN
 bun src/cli.ts discord bridge
 ```
 
-Empty channel allowlists **refuse start** (default-deny; not Merlin BASIC). Without a token the CLI exits cleanly with a checklist — see [`STATUS.md`](STATUS.md). Soft later: issues #10–#14. Templates: [`.env.example`](.env.example), [`allowlist.example.toml`](allowlist.example.toml). Full checklist: [`docs/DISCORD-GO-LIVE.md`](docs/DISCORD-GO-LIVE.md). Slash/outbound/deny UX: [`docs/discord.md`](docs/discord.md). Box updates: [`docs/UPDATE.md`](docs/UPDATE.md). **READY-FOR-SECRETS** → request token via CoS/Leif secure room only (never chat paste).
+Empty channel allowlists **refuse start** (default-deny; not Merlin BASIC), and so does an allowlist file the loader cannot parse. Without a token the CLI exits cleanly with a checklist — see [`STATUS.md`](STATUS.md). Thinking status, slash commands, rate limits/mutes, admin re-auth and image attachments (#10–#14) shipped in #25–#29. Templates: [`.env.example`](.env.example), [`allowlist.example.toml`](allowlist.example.toml). Full checklist: [`docs/DISCORD-GO-LIVE.md`](docs/DISCORD-GO-LIVE.md). Slash/outbound/deny UX: [`docs/discord.md`](docs/discord.md). Box updates: [`docs/UPDATE.md`](docs/UPDATE.md). **READY-FOR-SECRETS** → request token via CoS/Leif secure room only (never chat paste).
 
 
 ## GitHub WATCH (poll-first)
@@ -78,10 +100,13 @@ for now.
 ## SpecSync
 
 - `.specsync/` — config, registry, version, `sdd.json` (**SDD change workflow ON**)
-- `specs/cli/` — draft stub for the CLI module + companions
+- `specs/{agent,cli,discord,plugins,watch}/` — module specs (all `draft`) + companions
 - CI: `.github/workflows/spec-sync.yml` uses `CorvidLabs/spec-sync@v6` (version `6.0.0`)
 
-Run `specsync check` locally. Open changes with `specsync change` before
+Run `fledge run spec-check` locally: it is `specsync check --require-coverage 100`,
+the CI Spec Sync strictness, and it is a step of the verify lane.
+`corvidinho specsync coverage` / `score` print SpecSync's coverage and score
+reports. Open changes with `specsync change` before
 meaningful edits. Promote draft specs to `active` when behavior stabilizes.
 Do not invent ACCESS/bounty/MainNet surfaces.
 
@@ -92,7 +117,7 @@ See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, secrets out of
 
 ## Allowlists (bot VM)
 
-Corvidinho is **default-deny**: empty/missing allowlists refuse targeted GitHub plugin runs and Discord listen/post checks. Deny always wins. Do not copy Merlin’s empty-permissions → BASIC allow-by-default.
+Corvidinho is **default-deny**: empty/missing allowlists refuse targeted GitHub plugin runs and Discord listen/post checks. Deny always wins. Do not copy Merlin’s empty-permissions → BASIC allow-by-default. An allowlist file that exists but cannot be read or parsed **fails closed**: the bridge, `github watch` and `daemon` refuse to start and the gates refuse, never falling back to env-only lists (`corvidinho doctor` names the line and key).
 
 On the bot VM:
 
@@ -103,7 +128,7 @@ mkdir -p ~/.config/corvidinho
 # env overlays: CORVIDINHO_GITHUB_ALLOW_REPOS, CORVIDINHO_DISCORD_ALLOW_CHANNELS, …
 ```
 
-See [`STATUS.md`](STATUS.md) for the full shape. AlgoChat / wallet ACT is **deferred** until a wallet allowlist exists (`hi/allow.md` WALLET-*). HEAR thin (#5) is in-tree; live @bot still needs token + non-empty Discord allowlists on the VM.
+See [`STATUS.md`](STATUS.md) for the full shape. AlgoChat / wallet ACT is **deferred** until a wallet allowlist exists (`hi/allow.md` WALLET-*). HEAR (#5) is in-tree; live @bot still needs token + non-empty Discord allowlists on the VM.
 
 ## License
 

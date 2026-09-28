@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-30-session-threads-images-to-the-model-real-diff-verify-per-tier-models-creator-gated-schedule-ticks-daemon",
+  "implementation_commit": "db8f2b873f2fee578222388800d48a9ce62239a6",
+  "implementation_tree": "a476f9ce920c0988df9a53eccd0e03f71adfcdfa",
+  "contract_digest": "c088b71c64abf8d753519a79b2656a4abf95f05db4e9100234c72d35f9190210",
+  "workspace_digest": "12e33229e83ea061a4c1b6631e08fbb7a0f193b1d4f0c567d6bdb0abdfd5bb5a",
+  "closing_digest": "2feb8b792647112c3f8ec147a72d7807292ea6425b0d57134f5f5ece924be970",
+  "review_digest": "3096ac892b7b3f2adc8910d010f6ca33e4e5a68f22ca6caaffde93e8e1638018",
+  "finalization_digest": "a9f774fbdaed423013b06ef356fa087e6f2c26c2ef7f5b7406472ee5bf4ad798",
+  "timestamp": 1790525474
+}

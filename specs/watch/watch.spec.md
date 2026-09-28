@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 12
+version: 17
 status: draft
 files:
   - src/watch/types.ts
@@ -16,6 +16,7 @@ files:
   - src/watch/spawn-log.ts
   - src/watch/rate-limit.ts
   - src/watch/index.ts
+  - tests/watch.auth-stop.test.ts
 
 db_tables: []
 depends_on:
@@ -46,23 +47,34 @@ loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
 SessionStore options (`db`, `ttlMs`, `now`; `durable`), startWatchPoller
 `db` / `sessionStore` / `sessionTtlMs` injection,
-agent helpers, createFixtureSearchClient / createOctokitSearchClient,
+ProcessedIdStore / AckedIdStore / SummarizedIdStore options (`db`, `maxSize`;
+`durable`), agent helpers, createFixtureSearchClient / createOctokitSearchClient,
 ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),
 summary helpers (buildSummaryBody, maybePostWatchSummary, SummarizedIdStore,
 SuccessfulAckStore), spawn-log helpers (SpawnOutcomeStore, classifySpawnError),
 rate-limit helpers (parseGithubRateLimit, GithubRateLimitError,
-computeRateLimitBackoffMs).
+computeRateLimitBackoffMs), `StartWatchResult.fatal` / `WatchFatal`
+(REQ-watch-418). A failed `AckCommentResult` carries the HTTP `status` and the
+rate-limit `headers` (`retry-after`, `x-ratelimit-remaining`,
+`x-ratelimit-reset`) of the failed post; `maybePostWatchAck` /
+`maybePostWatchSummary` take an optional `onPostFailed(res)` called after the
+`ack failed` / `summary failed` line (REQ-watch-011).
 
 ## Invariants
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
 allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
-dedup; no ProcessManager; no auto-merge; secrets out of repo; fixture tests
+dedup; with a DB, processed / acked / summarized ids persist per kind in
+`watch_event_ids` so a restart never replays a handled event id, and denied
+ids are kept apart in memory so they never evict a handled id (REQ-watch-247);
+no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 run summary at most once per event id and only after successful auto-ack;
-spawn outcomes logged structurally and appended to durable JSONL; on GitHub
-403 rate-limit back off via Retry-After/reset (default 60s) without tight loop;
+spawn outcomes logged structurally and appended to durable JSONL; on a GitHub
+403/429 rate-limit on the poll fetch, the auto-ack or the run-summary comment
+back off via Retry-After/reset (default 60s) before the next poll cycle without
+tight loop;
 WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
 `CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
 user (REQ-watch-008). With a DB, WATCH sessions reload on restart; a session
@@ -73,6 +85,10 @@ and the next event on that issue starts fresh; one session per
 only after the in-flight cycle ends (REQ-watch-037). Poll cycles are
 single-flight; after stop no further event is routed, acked, or spawned; one
 failing event is logged and marked processed without aborting the cycle.
+A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
+`GITHUB_TOKEN / GH_TOKEN`, and settles `fatal` with exit code 1; the default
+error sink prints one SAFE-6 scrubbed line per error, never the error object
+(REQ-watch-418).
 
 ## Behavioral Examples
 
@@ -82,14 +98,16 @@ empty repos refuse start cleanly; poll cycle logs six counters; mention/comment
 start/continue posts ack unless sender is watch username or already acked;
 own-username comment omitted from events; after successful ack + spawn finish,
 summary comment once per event id; spawn start/outcome log + JSONL row; 403
-rate-limit schedules backoff and skips tight re-poll. Poller restarted on the
+rate-limit on the fetch, the ack or the summary comment schedules backoff and
+skips tight re-poll; a plain 403 on a comment logs the failure only. Poller restarted on the
 same data dir continues the same issue session; issue idle past TTL →
 start_session with a new id.
 
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
-(user/repo); already processed; GitHub 403 rate-limit backoff.
+(user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
+(bad or revoked token) stops the loop with exit 1.
 
 ## Dependencies
 
@@ -110,3 +128,11 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-26 | watch-reliability-1-3-post-run-summary-comment-once-per-event-after-successful-auto-ack-persist-spawn-outcome-logging: WATCH-RELIABILITY-1..3 — post-run summary, spawn outcome JSONL, 403 rate-limit backoff; package 0.0.10 |
 | 2026-09-26 | watch-durable-sessionstore-issue-37-slice-1-session-1-3-watch-sessions-keyed-by-owner-repo-number-persist-in-the-shared: WATCH durable SessionStore (issue #37 slice 1, SESSION-1..3): WATCH sessions keyed by owner/repo#number persist in the shared SQLite DB (schema v6 watch_sessions) with the same soft TTL as Discord; activity keeps the session, idle past TTL starts fresh, sessions reload on restart; github watch opens the shared DB (in-memory for dry-run without a data dir and tests); topic scrubbed per SAFE-6; turn persistence/replay and summaries stay follow-ups |
 | 2026-09-26 | discord-and-watch-spawns-always-run-prove-before-done-agent-4-fledge-2-stop-passing-no-verify-empty-fileschanged-still: Discord and WATCH spawns always run prove-before-done (AGENT-4 / FLEDGE-2): stop passing --no-verify; empty filesChanged still skips verify; CLI --no-verify local opt-out only; package 0.0.13 (#85 slice) |
+| 2026-09-26 | watch-run-summary-is-secret-scrubbed-before-the-thread-comment-and-spawn-log: WATCH run summary is secret-scrubbed before the thread comment and spawn log |
+| 2026-09-26 | watch-handles-each-event-id-at-most-once-across-restarts-processed-acked-and-summarized-ids-persist-in-the-shared-db: WATCH handles each event id at most once across restarts: processed, acked and summarized ids persist in the shared DB and denied ids no longer evict handled ids |
+| 2026-09-26 | watch-never-drops-or-skips-a-trusted-request-when-an-event-id-write-fails: WATCH never drops or skips a trusted request when an event-id write fails |
+| 2026-09-26 | watch-listcomments-fetches-every-comment-inside-the-poll-window-so-an-mention-after-comment-50-on-a-long-issue-or-pr-is: WATCH listComments fetches every comment inside the poll window so an @mention after comment 50 on a long issue or PR is detected |
+| 2026-09-26 | watch-listcomments-reads-page-1-plus-the-newest-pages-up-to-the-10-page-cap-so-a-flood-of-older-comments-cannot-hide: WATCH listComments reads page 1 plus the newest pages up to the 10-page cap so a flood of older comments cannot hide the newest mention |
+| 2026-09-27 | clean-cli-errors-a-failing-command-prints-one-scrubbed-line-plus-a-hint-and-exits-non-zero-instead-of-a-stack-trace-or: Clean CLI errors: a failing command prints one scrubbed line plus a hint and exits non-zero instead of a stack trace or Bun crash footer; discord bridge login failure exits cleanly naming DISCORD_TOKEN; github watch stops with exit 1 on a GitHub 401 |
+| 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
+| 2026-09-27 | a-403-429-github-rate-limit-on-the-watch-auto-ack-or-run-summary-comment-sets-the-backoff-before-the-next-poll-cycle: A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3) |

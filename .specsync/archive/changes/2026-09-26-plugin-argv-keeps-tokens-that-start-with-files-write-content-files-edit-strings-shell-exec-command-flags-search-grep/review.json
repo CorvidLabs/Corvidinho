@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "plugin-argv-keeps-tokens-that-start-with-files-write-content-files-edit-strings-shell-exec-command-flags-search-grep",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "3b6faaa83ef1d5d04bd6d2bdf5d7b4aac9914b66",
+  "contract_digest": "efe20d845c80327096239c2b90c6d98989a95cae62d9303cfabd827eb3083475",
+  "execution_digest": "8fdea8aab96f6ea0b4480cd1fbed319b574c7cbe8b6f31a42097639ed8a3864f",
+  "workspace_digest": "d71fa018ec028f9010b1b80076b6cfb36ad86005c4f0431f3cda5ea43ec6adc8",
+  "timestamp": 1790461548
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks",
+  "implementation_commit": "55e4796c6508f4c62e909f42fa8f1a029c7c6d90",
+  "implementation_tree": "e3802eb716579e15df40f047d004a79568ae8307",
+  "contract_digest": "c975e8160ed1782ae87f8786537cbee795a1b67a7605993c491c0e724aa47731",
+  "workspace_digest": "14b0ed1ce944ae4e1316c0df46ce43b501c6413c49972f22eca9b5cad262fdf2",
+  "closing_digest": "7d2dda64830dabe78a5141aa25c9d5bdf3e8f302b0db4bbe136afa09d2976f92",
+  "review_digest": "9b5d3a7c50922a28157941dd8aa81fa9813f2e673d4fc62f531de161b30ed8c6",
+  "finalization_digest": "5c4eaedd470e600158e6139c9dc075995db91d1b4625ea65480451bdc7681b4c",
+  "timestamp": 1790547589
+}

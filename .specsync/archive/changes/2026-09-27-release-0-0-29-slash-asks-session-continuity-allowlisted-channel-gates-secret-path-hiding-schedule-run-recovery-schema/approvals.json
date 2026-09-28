@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790477077,
+      "digest": "d04db88d81f984ebb5185c57c73532159e6329db90441109277e294796105891",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-29-slash-asks-session-continuity-allowlisted-channel-gates-secret-path-hiding-schedule-run-recovery-schema",
+        "title": "Release 0.0.29: slash asks + session continuity, allowlisted-channel gates, secret-path hiding, schedule-run recovery (schema v10), clean CLI errors, doctor reads the allowlist file",
+        "description": "Release 0.0.29: slash asks + session continuity, allowlisted-channel gates, secret-path hiding, schedule-run recovery (schema v10), clean CLI errors, doctor reads the allowlist file",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "AGENTS.md",
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.29; version prints 0.0.29; CHANGELOG 0.0.29 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "e100369e6d1d5576e5573cc186af4cf2ce8e99813add4ec07a73bec29f6e56c8"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790477091,
+      "digest": "0c6e95ee0efc552898a79128ecde31dfd7bdbaf72844b18a1a2eccbfaf5cf798",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

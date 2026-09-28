@@ -122,3 +122,67 @@ describe("discord message-router (DISCORD-1/2/2.a/5)", () => {
     }
   });
 });
+
+describe("SESSION-MULTI per-user sessions", () => {
+  test("two users in one channel get independent sessions", () => {
+    const store = new SessionStore();
+    const allowlist = allowCfg();
+    const a = routeMessage(baseMsg({ id: "m-a", authorId: "user-a" }), {
+      store,
+      allowlist,
+    });
+    const b = routeMessage(baseMsg({ id: "m-b", authorId: "user-b" }), {
+      store,
+      allowlist,
+    });
+    expect(a.kind).toBe("start_session");
+    expect(b.kind).toBe("start_session");
+    if (a.kind !== "start_session" || b.kind !== "start_session") return;
+    expect(a.session.id).not.toBe(b.session.id);
+    expect(a.session.userId).toBe("user-a");
+    expect(b.session.userId).toBe("user-b");
+  });
+
+  test("other user cannot continue via reply to someone else's bot message", () => {
+    const store = new SessionStore();
+    const allowlist = allowCfg();
+    const start = routeMessage(baseMsg({ id: "m-start", authorId: "user-a" }), {
+      store,
+      allowlist,
+    });
+    expect(start.kind).toBe("start_session");
+    if (start.kind !== "start_session") return;
+    store.trackBotMessage("bot-msg-1", start.session);
+
+    const hijack = routeMessage(
+      baseMsg({
+        id: "m-hijack",
+        authorId: "user-b",
+        mentionedBot: false,
+        content: "steal",
+        referencedMessageId: "bot-msg-1",
+      }),
+      { store, allowlist },
+    );
+    // Without mention, and not owning the session → ignore (no continue).
+    expect(hijack.kind).toBe("ignore");
+  });
+
+  test("same user @mention reuses active session in channel", () => {
+    const store = new SessionStore();
+    const allowlist = allowCfg();
+    const first = routeMessage(baseMsg({ id: "m1", authorId: "user-1" }), {
+      store,
+      allowlist,
+    });
+    expect(first.kind).toBe("start_session");
+    if (first.kind !== "start_session") return;
+    const second = routeMessage(baseMsg({ id: "m2", authorId: "user-1" }), {
+      store,
+      allowlist,
+    });
+    expect(second.kind).toBe("continue_session");
+    if (second.kind !== "continue_session") return;
+    expect(second.session.id).toBe(first.session.id);
+  });
+});

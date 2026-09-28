@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "box-updater-pidfile-mode-counts-the-bridge-ready-only-on-its-discord-login-line-discord-logged-in-as-not-the-pre-login",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "28b13a8d1e9d2772e80343a998090ef616ab7b50",
+  "contract_digest": "3edb1604956cdb5c627275aafed22309b819a87c53ace5b7ad65cafa546fb115",
+  "execution_digest": "74a6a58d8017cc87072e755a88e9396e46c7d76893ad100ad834ecb0a131e7ca",
+  "workspace_digest": "d7043b30cda2f211058261c5dce0f42a3b72b1ba03427bd5818a1146453ea5f4",
+  "timestamp": 1790475515
+}

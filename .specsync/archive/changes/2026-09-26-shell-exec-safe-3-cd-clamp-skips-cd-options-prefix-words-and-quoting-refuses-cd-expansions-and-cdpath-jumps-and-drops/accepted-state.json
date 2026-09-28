@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops",
+  "slug": "shell-exec-safe-3-cd-clamp-skips-cd-options-prefix-words-and-quoting-refuses-cd-expansions-and-cdpath-jumps-and-drops",
+  "title": "Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root",
+  "description": "Shell-exec SAFE-3 cd clamp skips cd options, prefix words and quoting, refuses cd -, expansions and CDPATH jumps, and drops inherited CDPATH/OLDPWD so shell-exec cannot run outside the project root",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "cfcf2b7c6ab71ed46ce4f319969c26bc3c599c0f",
+  "created_at": 1790461690,
+  "updated_at": 1790462183,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "plugins/shell/clamp.ts",
+    "plugins/shell/commands.ts",
+    "tests/shell.clamp-bypass.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "shell-exec refuses (exit 2, SAFE-3, before spawn) cd - / cd -- -, cd -P / (and other option forms), { cd /; }, if/then/else/do/while/! cd /, builtin/command/eval cd /, NAME=value cd /, quoted or backslashed cd heads, quote-concatenated .. targets, targets with $VAR, backticks, globs or braces anywhere, and relative targets when the command sets CDPATH; an inherited CDPATH or OLDPWD is not passed to the child shell, so a relative cd sub stays under the root; in-root forms (cd -P sub, cd -- sub, { cd sub; }, quoted sub dir) still run"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "requirements",
+    "docs",
+    "research",
+    "design",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

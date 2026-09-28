@@ -1,121 +1,134 @@
 name: release
 
-# Create a GitHub Release with verbose notes when a version tag is pushed.
+# Every package version gets a vX.Y.Z tag and a GitHub Release with verbose notes.
+# - Push to main: tag every release version from the oldest existing tag up to main's
+#   package.json version that has no tag yet, oldest first, each at the commit that bumped
+#   it, and create the Releases (a release PR needs no hand-pushed tag; a cancelled or
+#   failed run is caught up by the next push).
+# - Push of a vX.Y.Z tag (by a person): create that tag's Release.
+# - workflow_dispatch on main: tag and release the listed versions (backfill), oldest first.
+# A tag pushed with GITHUB_TOKEN starts no other workflow run, so this job creates the
+# Releases itself. Existing tags and Releases are never moved, edited or deleted (only
+# the Latest mark is set on main's version). GitHub starts no run when more than three
+# tags are pushed at once: use the dispatch for bulk tags.
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "Package versions to tag and release, space-separated (e.g. 0.0.28 0.0.29)"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
+    # Skip tag or branch deletions, and dispatches from any branch but main.
+    if: ${{ !github.event.deleted && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Build verbose release notes
-        id: meta
+      - name: Resolve tags to create or release
+        id: targets
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+          VERSIONS: ${{ inputs.versions }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          PKG_VER="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
-          PREV="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
-          if [ -n "${PREV}" ]; then
-            RANGE="${PREV}..${TAG}"
-            CHANGELOG="$(git log --pretty=format:'- %s (%h)' "${RANGE}")"
-          else
-            RANGE="(initial tag)"
-            CHANGELOG="$(git log --pretty=format:'- %s (%h)' -n 40)"
-          fi
-          TAG_NOTES="$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)"
-          SLASH='/session (list|start) · /status · /agents · /work · /mute · /unmute · /schedule · /announce · /admin'
-          {
-            echo "## Corvidinho ${TAG}"
-            echo
-            echo "**package.json version:** \`${PKG_VER}\`"
-            echo "**Git tag:** \`${TAG}\`"
-            echo "**Commit range:** \`${RANGE}\`"
-            echo
-            if [ -n "${TAG_NOTES}" ]; then
-              echo "### Tag annotation"
-              echo
-              printf '%s\n' "${TAG_NOTES}"
-              echo
+          source scripts/lib/update-helpers.sh
+          git fetch -q --force --tags origin
+          git fetch -q origin "+refs/heads/main:refs/remotes/origin/main"
+          versions="$RUNNER_TEMP/versions.txt"
+          targets="$RUNNER_TEMP/targets.txt"
+          package_version_commits origin/main > "$versions"
+          : > "$targets"
+          if [[ "$EVENT" == "push" && "$REF_TYPE" == "tag" ]]; then
+            if ! is_release_version "${REF_NAME#v}" || [[ "$REF_NAME" != v* ]]; then
+              echo "::notice::${REF_NAME} is not a vX.Y.Z tag; nothing to release."
+            else
+              sha="$(git rev-list -n 1 "${REF_NAME}")"
+              pkg="$(package_version_at "$sha")"
+              [[ "$pkg" == "${REF_NAME#v}" ]] || echo "::warning::${REF_NAME} is on ${sha:0:7}, whose package.json version is '${pkg}'"
+              git merge-base --is-ancestor "$sha" origin/main || echo "::warning::${REF_NAME} (${sha:0:7}) is not on main"
+              echo "${REF_NAME} ${sha}" >> "$targets"
             fi
-            echo "### Commits in this cut"
-            echo
-            printf '%s\n' "${CHANGELOG}"
-            echo
-            echo "### Slash commands (current set — do not invent more here)"
-            echo
-            echo "${SLASH}"
-            echo
-            echo "### Upgrade on the bot box (safe)"
-            echo
-            echo "Prefer the updater so a bad tip rolls back and **does not** Discord-spam:"
-            echo
-            echo '```bash'
-            echo "cd /path/to/Corvidinho"
-            echo "CORVIDINHO_REF=${TAG} ./scripts/corvidinho-update.sh"
-            echo "# optional: CORVIDINHO_BRIDGE_UNIT=corvidinho-bridge"
-            echo "# see docs/BOX-UPDATE.md"
-            echo '```'
-            echo
-            echo "### Operator notes"
-            echo
-            echo "- Secrets stay in VM env/secret store — never in the repo."
-            echo "- Discord sessions are in-memory; restart clears them (durable session DB is a separate ask)."
-            echo "- Updater failure → exit non-zero + rollback when possible; logs only (no Discord panic)."
-            echo "- Confirm with ephemeral Discord \`/status\` (version, uptime, LLM mode, git tip)."
-            echo
-            echo "Made with [Corvidinho](https://github.com/CorvidLabs/Corvidinho)"
-          } > /tmp/corvidinho-release-body.md
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "pkg_version=${PKG_VER}" >> "$GITHUB_OUTPUT"
-          echo "body_path=/tmp/corvidinho-release-body.md" >> "$GITHUB_OUTPUT"
-
-      - name: Idempotency — skip create if release exists
-        id: exists
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          TAG="${{ steps.meta.outputs.tag }}"
-          echo "::group::gh release view ${TAG}"
-          if gh release view "$TAG" --repo "${{ github.repository }}"; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Release ${TAG} already exists — idempotent success."
+          elif [[ "$EVENT" == "push" ]]; then
+            ver="$(package_version_at "$HEAD_SHA")"
+            if ! is_release_version "$ver"; then
+              echo "::notice::package.json version '${ver}' at ${HEAD_SHA:0:7} is not X.Y.Z; not tagging."
+            else
+              release_push_targets "$versions" "$ver" >> "$targets"
+              [[ -s "$targets" ]] || { echo "::error::no main commit carries package version ${ver}"; exit 1; }
+            fi
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No existing release for ${TAG}; will create."
+            release_dispatch_targets "$versions" "$VERSIONS" >> "$targets" || { echo "::error::bad versions input"; exit 1; }
           fi
-          echo "::endgroup::"
+          latest="$(package_version_at origin/main)"
+          is_release_version "$latest" || latest=""
+          echo "::group::targets"; cat "$targets"; echo "::endgroup::"
+          echo "file=${targets}" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
-        if: steps.exists.outputs.exists != 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: Corvidinho ${{ steps.meta.outputs.tag }}
-          body_path: /tmp/corvidinho-release-body.md
-          draft: false
-          prerelease: false
-          generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verbose summary
+      - name: Tag and create Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGETS: ${{ steps.targets.outputs.file }}
+          LATEST: ${{ steps.targets.outputs.latest }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.meta.outputs.tag }}"
-          echo "::group::Final release view"
-          gh release view "$TAG" --repo "${{ github.repository }}"
-          echo "::endgroup::"
-          echo "::notice::release job complete for ${TAG} (exists_was=${{ steps.exists.outputs.exists }})"
+          source scripts/lib/update-helpers.sh
+          git config user.name "Corvid Agent"
+          git config user.email "95454608+corvid-agent@users.noreply.github.com"
+          [[ -s "$TARGETS" ]] || { echo "::notice::nothing to tag or release"; exit 0; }
+          while read -r tag sha <&3; do
+            ver="${tag#v}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              at="$(git rev-list -n 1 "${tag}")"
+              if [[ "$at" == "$sha" ]]; then
+                echo "::notice::${tag} already tagged at ${at:0:7}"
+              else
+                echo "::warning::${tag} is at ${at:0:7}, not bump commit ${sha:0:7}; left as is"
+              fi
+            else
+              git tag -a "${tag}" "${sha}" -m "$(release_tag_subject "${ver}" "${sha}")"
+              if git push origin "refs/tags/${tag}"; then
+                echo "::notice::tagged ${tag} at ${sha:0:7}"
+              else
+                # Someone pushed the same tag meanwhile: keep theirs.
+                git fetch -q --force origin "refs/tags/${tag}:refs/tags/${tag}"
+                echo "::warning::${tag} was created concurrently at $(git rev-list -n 1 "${tag}" | cut -c1-7); kept"
+              fi
+            fi
+            if gh release view "${tag}" >/dev/null 2>&1; then
+              echo "::notice::Release ${tag} already exists (idempotent)"
+              if [[ "$ver" == "$LATEST" && "$(gh api "repos/${GH_REPO}/releases/latest" --jq .tag_name 2>/dev/null || true)" != "${tag}" ]]; then
+                gh release edit "${tag}" --latest
+                echo "::notice::marked ${tag} Latest"
+              fi
+              continue
+            fi
+            notes="$RUNNER_TEMP/notes-${tag}.md"
+            release_notes "${tag}" > "$notes"
+            latest=false
+            [[ "$ver" == "$LATEST" ]] && latest=true
+            gh release create "${tag}" --verify-tag --title "Corvidinho ${tag}" --notes-file "$notes" --latest="${latest}"
+            echo "::notice::created Release ${tag} (latest=${latest})"
+          done 3< "$TARGETS"

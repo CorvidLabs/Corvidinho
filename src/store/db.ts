@@ -174,7 +174,55 @@ CREATE INDEX IF NOT EXISTS idx_watch_sessions_activity
  */
 const SCHEMA_V7_COLUMNS = ["ask_ping_key"] as const;
 
-export const SCHEMA_VERSION = 7;
+/**
+ * v8 — session pending ask (AUTONOMY-5/6): JSON of HumanAsk while blocked,
+ * so thin acks can restate across bridge restarts within TTL.
+ */
+const SCHEMA_V8_COLUMNS = ["pending_ask"] as const;
+
+/**
+ * v9 — in-flight Discord replies (DISCORD-3 / AGENT-3, REQ-discord-311): one
+ * row while the bridge works on a reply, deleted when it finishes, so the
+ * next bridge start can mark a reply a dead process left frozen as
+ * interrupted. Ids and a timestamp only, never message text.
+ */
+const SCHEMA_V9_SQL = `
+CREATE TABLE IF NOT EXISTS discord_inflight_replies (
+  id TEXT PRIMARY KEY NOT NULL,
+  session_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  parent_channel_id TEXT,
+  progress_message_id TEXT,
+  request_message_id TEXT NOT NULL,
+  started_at INTEGER NOT NULL
+);
+`;
+
+/**
+ * v10 — schedule run owner (REQ-discord-346): `<pid>:<proc start>` of the
+ * bridge or daemon running a schedule run, so the next start fails only runs
+ * whose process is gone and never one another live process still owns.
+ */
+const SCHEMA_V10_RUN_COLUMNS = ["runner"] as const;
+
+/**
+ * v11 — needs-human outbox for schedule runs (AUTONOMY-2 / AUTONOMOUS-7,
+ * REQ-discord-347): the ask a run stopped with (reason + SAFE-6 scrubbed
+ * question) and when a bridge took it to post. A run `corvidinho daemon`
+ * claimed (no Discord) keeps its ask pending until a bridge tick posts it.
+ */
+const SCHEMA_V11_RUN_COLUMNS = [
+  ["ask_reason", "TEXT"],
+  ["ask_question", "TEXT"],
+  ["ask_posted_at", "INTEGER"],
+] as const;
+const SCHEMA_V11_SQL = `
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_pending_ask
+  ON schedule_runs(schedule_id)
+  WHERE ask_reason IS NOT NULL AND ask_posted_at IS NULL;
+`;
+
+export const SCHEMA_VERSION = 11;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -243,6 +291,45 @@ export function migrateCorvidinhoDb(db: Database): void {
     }
     db.run("UPDATE schema_meta SET value = '7' WHERE key = 'version'");
     version = 7;
+  }
+  if (version < 8) {
+    for (const col of SCHEMA_V8_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE discord_sessions ADD COLUMN ${col} TEXT`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.run("UPDATE schema_meta SET value = '8' WHERE key = 'version'");
+    version = 8;
+  }
+  if (version < 9) {
+    db.exec(SCHEMA_V9_SQL);
+    db.run("UPDATE schema_meta SET value = '9' WHERE key = 'version'");
+    version = 9;
+  }
+  if (version < 10) {
+    for (const col of SCHEMA_V10_RUN_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedule_runs ADD COLUMN ${col} TEXT`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.run("UPDATE schema_meta SET value = '10' WHERE key = 'version'");
+    version = 10;
+  }
+  if (version < 11) {
+    for (const [col, type] of SCHEMA_V11_RUN_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedule_runs ADD COLUMN ${col} ${type}`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.exec(SCHEMA_V11_SQL);
+    db.run("UPDATE schema_meta SET value = '11' WHERE key = 'version'");
+    version = 11;
   }
 }
 

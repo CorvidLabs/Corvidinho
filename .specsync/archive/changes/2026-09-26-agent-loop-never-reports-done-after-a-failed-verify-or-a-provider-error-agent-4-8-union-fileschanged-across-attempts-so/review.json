@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "agent-loop-never-reports-done-after-a-failed-verify-or-a-provider-error-agent-4-8-union-fileschanged-across-attempts-so",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "d0b908b709f9b2ae7f07e80ba0d7fa50d7d14492",
+  "contract_digest": "c6981a479cb14f0c8f1a9b3f4cdbadab6da5f8649d4c433c2e4df24085ab9e13",
+  "execution_digest": "c87a72107c0a77dca786de03edb7226be04d47f894de3b8db2c4a08b40634c85",
+  "workspace_digest": "fb4e3a5822c6f8f6281e83483190ae9a03c99df753473b34203812f49be5f745",
+  "timestamp": 1790464459
+}

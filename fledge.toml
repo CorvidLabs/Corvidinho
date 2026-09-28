@@ -25,9 +25,13 @@ description = "CLI --help exits 0 (placeholder/smoke)"
 cmd = "hi check"
 description = "Validate hi/ criterion structure (optional if hi not on PATH)"
 
+# Same strictness as the CI Spec Sync Action (.github/workflows/spec-sync.yml:
+# require-coverage "100" → --require-coverage 100; strict false → no --strict),
+# so the verify lane fails on what CI Spec Sync fails on (SPECSYNC-2/7).
+# tests/specsync.check-parity.test.ts fails if the two drift apart.
 [tasks.spec-check]
-cmd = "specsync check"
-description = "SpecSync drift check — also on verify lane; CI Spec Sync Action remains"
+cmd = "specsync check --require-coverage 100"
+description = "SpecSync drift check at CI strictness — also on verify lane; CI Spec Sync Action remains"
 
 [lanes.pre-commit]
 description = "Run before committing"
@@ -46,8 +50,9 @@ steps = ["lint", "smoke", "test", "spec-check"]
 
 # Prove-before-done (AGENT-4 / FLEDGE-2). Merlin field names; Corvidinho section.
 # Discord / WATCH spawns do NOT pass --no-verify (REQ-discord-085 / REQ-watch-085);
-# empty filesChanged still skips the lane inside the agent loop. CLI --no-verify
-# remains for local/operator opt-out only (REQ-cli-085).
+# a run that changed no files (none tool-reported and none in the git working
+# tree) still skips the lane inside the agent loop. CLI --no-verify remains for
+# local/operator opt-out only (REQ-cli-085).
 [corvidinho]
 verify_before_complete = true
 max_retries = 3
@@ -56,6 +61,8 @@ max_retries = 3
 # When on, a code-tier lead may use `delegate` to hand subtasks to worker runs
 # (AUTONOMOUS-5); otherwise the tool stays hidden (SAFE-9). Workers: same or
 # lower tier, non-interactive, max 2 levels deep, 2 at once, 4 per run.
+# It may also use `council` (AUTONOMOUS-6): 2-5 read-tier worker voices
+# propose, critique, then a chair decides; 2 councils per run, 15 min cap.
 # [corvidinho.autonomous]
 # enabled = true
 

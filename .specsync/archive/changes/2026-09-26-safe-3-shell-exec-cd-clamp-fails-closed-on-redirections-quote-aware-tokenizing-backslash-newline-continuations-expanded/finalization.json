@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-3-shell-exec-cd-clamp-fails-closed-on-redirections-quote-aware-tokenizing-backslash-newline-continuations-expanded",
+  "implementation_commit": "4dc2b16b51a58e8ad8996979e42c528217a0d9f0",
+  "implementation_tree": "72a684fd44c7a964ba6ff0fd267dc1ce06738567",
+  "contract_digest": "5e419f71cd65c8b009ed36ad1aaa99dc03cafa93fe8cea8356f3f1e7a8b3a5ac",
+  "workspace_digest": "c231f5f1065abc7e2a53d970bb985353bcab3688da297b9460d5cff74aecde86",
+  "closing_digest": "026462cd1e90f008eb25f049d0c619cdaebc618a1b400978417fa1ad45916e31",
+  "review_digest": "91dc442bd51ceb883e474528c8b30442a88c36d601696be4bc574326d01c9626",
+  "finalization_digest": "5bbbb4183674afd3d1f849870bb5943641a85974e02a328911d7e756e9cb675a",
+  "timestamp": 1790467166
+}

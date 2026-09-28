@@ -4,8 +4,14 @@ A headless process that keeps `/schedule` work ticking on the Linux host
 without Discord and without anyone sitting at a REPL (**CLI-8**,
 **AUTONOMOUS-4**). It runs the same scheduler as the Discord bridge: a 60 s
 poll, at most 2 runs at once, no catch-up, and auto-pause after 5 failures in
-a row. Each run gets its own worktree (SESSION-WORKTREE). A run whose channel
-is not on the allowlist is refused (DISCORD-SCHEDULE-3). Agents it spawns run
+a row. Each run gets its own worktree (SESSION-WORKTREE). Before each tick
+the daemon re-reads the allowlist (file and env), so `/admin` edits made in the
+bridge apply without a restart; while the file cannot be loaded, ticks are
+skipped (`tick.allowlist_failed`). A run whose channel is not on the allowlist,
+or whose creator fails the live-chat actor gate (deny-listed, or, when the user
+or role list is non-empty, not listed by user id and not the configured owner;
+a tick knows no member roles), is refused (DISCORD-SCHEDULE-3). The owner is
+read at start: restart the daemon after changing it. Agents it spawns run
 non-interactive, so dangerous tools stay denied unless allowlisted (SAFE-1).
 
 ```bash
@@ -36,8 +42,22 @@ on the same data dir:
 - Updates write only the columns they own. A run that ends in the daemon
   never undoes a `/schedule pause` made in the bridge.
 - A run the bridge claims is posted to the schedule's channel. A run the
-  daemon claims is only recorded in the run history, because the daemon has
-  no Discord connection.
+  daemon claims is recorded in the run history and not posted, because the
+  daemon has no Discord connection. The exception is a run that needs a
+  human (next point).
+- A daemon run that stops to ask a human (stuck, a clarify question, or the
+  daily spend cap) records its question on the run row and logs
+  `run.needs_human`. So does a run that cannot start (its project cannot be
+  resolved or its worktree cannot be created: a fixed stuck question, the
+  full error stays on the run row and in `run.finished`) and the run whose
+  failure auto-pauses its schedule (a stuck question saying it is paused and
+  to resume it with `/schedule resume`). The bridge's next scheduler tick
+  (within about 60 s) posts that question to the schedule's channel once,
+  with the same pings as a run the bridge claimed: the owner for stuck and
+  spend-cap, the schedule's creator for clarify. Only the newest ask of a
+  schedule is posted, and not at all once a later run of that schedule has
+  finished. With only the daemon running, the question waits until a bridge
+  starts.
 
 ## Configuration
 
@@ -64,15 +84,27 @@ over, so a crash never blocks a restart.
 
 On SIGTERM or SIGINT the daemon:
 
-1. stops ticking;
+1. stops ticking (a tick still re-reading the allowlist starts no run);
 2. waits up to 30 s for in-flight runs;
 3. records any runs still going as failed (`interrupted: daemon shutdown`), so
-   history never shows a run stuck at "running";
-4. removes the lock and exits **0**.
+   history never shows a run stuck at "running", and kills their whole process
+   trees (each spawned `task run` has its own process group), logging
+   `daemon.abandoned`;
+4. waits up to 3 s more for those runs to remove their worktree (a `talk/`
+   branch with commits of its own is kept);
+5. removes the lock and exits **0**.
 
-A second signal skips the rest of the wait. Under systemd the stop signal goes
-to the whole control group, so a spawned `task run` gets it too and usually
-finishes inside the wait.
+A second signal skips the rest of the 30 s wait (not the 3 s worktree
+cleanup). Under systemd the stop signal goes to the whole control group, so a
+spawned `task run` gets it too and usually finishes inside the wait.
+
+On start, before the first tick, the daemon (like the Discord bridge) records
+runs a dead process left "running" (for example after `kill -9`) as failed
+(`interrupted: process restarted`) and removes the leftover worktrees of runs
+its data dir recorded as ended, again keeping any branch with commits. Runs
+that another live bridge or daemon on the same data dir is still running are
+left alone, and a schedule-run worktree whose run this data dir does not know
+(another data dir's run on the same repo) is never touched.
 
 ## Logs
 
@@ -90,7 +122,10 @@ scrubbed for secrets (SAFE-6).
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first. |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
+| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it. |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
+| `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (nothing ran; due schedules stay due). Fix the file; the next tick picks it up |
+| `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |
 | `daemon.stopping` / `daemon.abandoned` / `daemon.stopped` | Shutdown steps |
 
 ```bash

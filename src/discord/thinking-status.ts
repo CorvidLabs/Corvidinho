@@ -40,7 +40,8 @@ export type ThinkingSnapshot = {
 };
 
 export type DiscordEmbedPayload = {
-  description: string;
+  /** Omitted on a footer-only embed (DISCORD-3.a answer footer). */
+  description?: string;
   color: number;
   footer?: { text: string };
 };
@@ -140,6 +141,38 @@ export function buildThinkingEmbed(snap: ThinkingSnapshot): DiscordEmbedPayload 
   };
 }
 
+/**
+ * DISCORD-3.a — footer-only embed kept on a collapsed final answer: the model
+ * and the run's plumbing (`state=… verified=… [verifySkipped] attempts=…`),
+ * so they stay out of the answer body. Null when neither is known (the
+ * answer then carries no embed).
+ */
+export function buildAnswerFooterEmbed(snap: {
+  phase: ThinkingPhase;
+  model?: string;
+  plumbing?: string;
+}): DiscordEmbedPayload | null {
+  const parts = [snap.model?.trim(), snap.plumbing?.trim()].filter(
+    (p): p is string => Boolean(p),
+  );
+  if (!parts.length) return null;
+  return { color: phaseColor(snap.phase), footer: { text: parts.join(" | ") } };
+}
+
+/**
+ * Edit a channel message in place (content / embeds / components).
+ * Pass `null` for content, embed, or components to clear that field.
+ * Used to collapse thinking ↔ Choose stub ↔ final answer (DISCORD-ASK-6/7).
+ */
+export type EditMessageOpts = {
+  channelId: string;
+  messageId: string;
+  content?: string | null;
+  embed?: DiscordEmbedPayload | null;
+  components?: unknown[] | null;
+  mentionUserIds?: string[];
+};
+
 /** Outbound surface for progress send/edit (injected; live or mock). */
 export type ThinkingOutbound = {
   sendEmbed(opts: {
@@ -152,6 +185,16 @@ export type ThinkingOutbound = {
     messageId: string;
     embed: DiscordEmbedPayload;
   }): Promise<boolean>;
+  /**
+   * Optional richer edit (content + clear embeds/components).
+   * When absent, finalizeContent falls back to posting a new reply.
+   */
+  editMessage?: (opts: EditMessageOpts) => Promise<boolean>;
+  /** Optional delete — used to drop a progress message when collapsing fails. */
+  deleteMessage?: (opts: {
+    channelId: string;
+    messageId: string;
+  }) => Promise<boolean>;
 };
 
 export type ThinkingStatusOpts = {
@@ -161,6 +204,11 @@ export type ThinkingStatusOpts = {
   sessionId: string;
   /** LLM model id shown in the footer when known (DISCORD-3.a). */
   model?: string;
+  /**
+   * Reuse an existing channel message (e.g. Choose stub) as the progress
+   * surface instead of posting a new embed (DISCORD-ASK-7 button-pick path).
+   */
+  existingMessageId?: string;
   /** Debounce between edits (ancestor used 3000ms). */
   debounceMs?: number;
   /** Elapsed tick interval while waiting. */
@@ -176,6 +224,7 @@ export class ThinkingStatus {
   private readonly channelId: string;
   private readonly replyToMessageId?: string;
   private readonly sessionId: string;
+  private readonly existingMessageId?: string;
   private readonly debounceMs: number;
   private readonly tickMs: number;
   private readonly now: () => number;
@@ -196,6 +245,7 @@ export class ThinkingStatus {
     this.channelId = opts.channelId;
     this.replyToMessageId = opts.replyToMessageId;
     this.sessionId = opts.sessionId;
+    this.existingMessageId = opts.existingMessageId?.trim() || undefined;
     this.model = opts.model?.trim() || undefined;
     this.debounceMs = opts.debounceMs ?? 3000;
     this.tickMs = opts.tickMs ?? 3000;
@@ -220,7 +270,7 @@ export class ThinkingStatus {
     };
   }
 
-  /** Post the initial progress embed. */
+  /** Post (or adopt) the initial progress embed. */
   async start(initial?: { tool?: string; description?: string }): Promise<void> {
     if (this.closed) return;
     this.phase = "starting";
@@ -228,12 +278,31 @@ export class ThinkingStatus {
     if (initial?.description) this.description = initial.description;
     this.startedAt = this.now();
     const embed = buildThinkingEmbed(this.snapshot());
-    const sent = await this.outbound.sendEmbed({
-      channelId: this.channelId,
-      embed,
-      replyToMessageId: this.replyToMessageId,
-    });
-    this.messageId = sent?.messageId ?? null;
+    if (this.existingMessageId && this.outbound.editMessage) {
+      // DISCORD-ASK-7 — reuse Choose stub as the working surface.
+      const ok = await this.outbound.editMessage({
+        channelId: this.channelId,
+        messageId: this.existingMessageId,
+        content: null,
+        embed,
+        components: null,
+      });
+      this.messageId = ok ? this.existingMessageId : null;
+    } else if (this.existingMessageId) {
+      const ok = await this.outbound.editEmbed({
+        channelId: this.channelId,
+        messageId: this.existingMessageId,
+        embed,
+      });
+      this.messageId = ok ? this.existingMessageId : null;
+    } else {
+      const sent = await this.outbound.sendEmbed({
+        channelId: this.channelId,
+        embed,
+        replyToMessageId: this.replyToMessageId,
+      });
+      this.messageId = sent?.messageId ?? null;
+    }
     this.lastEditAt = this.now();
     this.phase = "working";
     this.startTicker();
@@ -316,6 +385,86 @@ export class ThinkingStatus {
     if (extras?.model != null) this.model = extras.model.trim() || undefined;
     await this.flush(true);
     this.closed = true;
+  }
+
+  /**
+   * DISCORD-ASK-6/7 — turn the progress message into the final channel body
+   * (Choose stub or answer), replacing the thinking embed. A Choose stub
+   * (`components`) carries no embed; a final answer keeps a footer-only
+   * embed with the model and `extras.plumbing` (DISCORD-3.a), colored as a
+   * failure when `failed`. A later call (e.g. appending a notice) keeps the
+   * plumbing and outcome of the first. Returns the message id on success;
+   * null when editMessage is unavailable or edit fails (caller should fall
+   * back to a new reply).
+   */
+  async finalizeContent(opts: {
+    content: string;
+    components?: unknown[];
+    mentionUserIds?: string[];
+    extras?: { plumbing?: string; model?: string };
+    failed?: boolean;
+  }): Promise<{ messageId: string } | null> {
+    if (this.closed && !this.messageId) return null;
+    this.stopTicker();
+    const id = this.messageId;
+    // Only close on success so callers can fall back to done()/fail()+reply
+    // when editMessage is missing or the edit fails (DISCORD-ASK-7).
+    if (!id || !this.outbound.editMessage) return null;
+    if (opts.extras?.plumbing != null) {
+      this.plumbing = opts.extras.plumbing.trim() || undefined;
+    }
+    if (opts.extras?.model != null) this.model = opts.extras.model.trim() || undefined;
+    const phase: ThinkingPhase =
+      (opts.failed ?? this.phase === "error") ? "error" : "done";
+    const embed = opts.components?.length
+      ? null
+      : buildAnswerFooterEmbed({ phase, model: this.model, plumbing: this.plumbing });
+    const ok = await this.outbound.editMessage({
+      channelId: this.channelId,
+      messageId: id,
+      content: opts.content,
+      embed,
+      components: opts.components ?? null,
+      mentionUserIds: opts.mentionUserIds,
+    });
+    if (!ok) return null;
+    this.closed = true;
+    this.phase = phase;
+    return { messageId: id };
+  }
+
+  /**
+   * Drop the progress message when we posted a separate reply instead
+   * (best-effort). Falls back to a blank minimal embed edit.
+   */
+  async discard(): Promise<void> {
+    if (!this.messageId) {
+      this.dispose();
+      return;
+    }
+    this.stopTicker();
+    const id = this.messageId;
+    this.closed = true;
+    if (this.outbound.deleteMessage) {
+      await this.outbound.deleteMessage({
+        channelId: this.channelId,
+        messageId: id,
+      });
+      return;
+    }
+    if (this.outbound.editMessage) {
+      await this.outbound.editMessage({
+        channelId: this.channelId,
+        messageId: id,
+        content: null,
+        embed: {
+          description: "·",
+          color: THINKING_COLORS.working,
+        },
+        components: null,
+      });
+      return;
+    }
   }
 
   /** Stop ticker without a final edit (tests / abort). */

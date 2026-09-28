@@ -9,9 +9,12 @@ export type {
   HumanAsk,
   HumanAskReason,
   RunTaskOptions,
+  SpendWarning,
   TaskResult,
   VerifyResult,
   VerifyRunner,
+  WorkspaceDiffStart,
+  WorkspaceDiffTracker,
 } from "./types.ts";
 export {
   agentConfigDefaults,
@@ -20,6 +23,14 @@ export {
 } from "./config.ts";
 export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";
+export {
+  startWorkspaceDiff,
+  WORKSPACE_DIFF_HASH_BUDGET_BYTES,
+  WORKSPACE_DIFF_HASH_MAX_BYTES,
+  WORKSPACE_DIFF_MAX_FILES,
+  WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
+} from "./workspace-diff.ts";
+export type { WorkspaceDiffLimits } from "./workspace-diff.ts";
 
 export {
   extractConstraintSections,
@@ -35,15 +46,21 @@ export {
   MEMORY_AGENT_SYSTEM_INSTRUCTIONS,
   IDENTITY_AGENT_SYSTEM_INSTRUCTIONS,
   PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS,
+  DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS,
+  TOOL_ROUNDS_EXHAUSTED_CLARIFY,
+  softLandToolRoundExhaustion,
   loadLlmEnv,
   UNKNOWN_TOOL_LABEL,
 } from "./execute.ts";
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
 export {
+  DEFAULT_LLM_MODEL,
   loadTierFromEnv,
+  modelForTier,
   parseCapabilityTier,
   tierAllowsPlugin,
+  TIER_MODEL_ENV,
   TIER_RANK,
 } from "./tier.ts";
 export type { CapabilityTier } from "./tier.ts";
@@ -74,6 +91,7 @@ export {
   chatBodyFromTaskResult,
   chatBodyFromTaskRunOutput,
   formatTaskPlumbing,
+  stripInternalStopReason,
   summarizeTaskResult,
   summarizeTaskRunOutput,
 } from "./task-summary.ts";
@@ -112,6 +130,56 @@ export type {
 } from "./events-ndjson.ts";
 
 export {
+  costMicroUsd,
+  ensureSpendLedger,
+  estimateCallMicroUsd,
+  formatUsd,
+  MODEL_PRICES_USD_PER_MTOK,
+  createSpendGuard,
+  parseSpendCap,
+  priceForModel,
+  readSpendSnapshot,
+  SPEND_CAP_ENV,
+  SPEND_WARN_PERCENT,
+  SPEND_WINDOW_MS,
+  SpendCapRefusal,
+  spendDoctorCheck,
+  SpendLedger,
+  withSpendCap,
+} from "./spend.ts";
+export type {
+  ModelPrice,
+  SpendCap,
+  SpendCapOptions,
+  SpendDoctorLine,
+  SpendGuard,
+  SpendSnapshot,
+  SpendWindow,
+} from "./spend.ts";
+export { createSpendAlertOutbox } from "./spend-outbox.ts";
+export type { SpendAlertOutbox, SpendCapPingClaim, TakenSpendWarning } from "./spend-outbox.ts";
+export {
+  claimSpendCapPing,
+  claimSpendWarnings,
+  ensureSpendAlerts,
+  releaseSpendCapPing,
+  releaseSpendWarnings,
+} from "./spend-alerts.ts";
+export {
+  formatSpendDoctorLine,
+  formatSpendStatusLine,
+  formatSpendWarningLine,
+  SPEND_CAP_SUMMARY,
+  SPEND_REARM_PERCENT,
+  spendCapInvalidAsk,
+  spendCapLedgerAsk,
+  spendCapReachedAsk,
+  spendCapUnpricedAsk,
+  spendPercent,
+  spendWarningFromUnknown,
+} from "./spend-notice.ts";
+
+export {
   describeProjectInstructions,
   findProjectRoot,
   loadProjectInstructions,
@@ -128,3 +196,11 @@ export type {
   ProjectInstructionFile,
   ProjectInstructions,
 } from "./project-instructions.ts";
+
+export {
+  normalizeAskOptions,
+  parseChoicesFromQuestion,
+  resolveAskOptions,
+  ASK_OPTIONS_MAX,
+} from "./ask-options.ts";
+export type { AskOption } from "./types.ts";

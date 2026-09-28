@@ -6,7 +6,56 @@
  * DISCORD-3.a — Discord/chat outbound uses `chatBodyFromTaskResult` (human
  * text only). Plumbing (`state=… verified=…`) belongs on the thinking embed,
  * via `formatTaskPlumbing`, never in the final chat reply body.
+ *
+ * REQ-agent-232 / SAFE-6 — the summary, non-frame stdout and stderr are
+ * secret-scrubbed before they are clipped, so a clip never cuts a secret into
+ * a shape the scrubber misses (a short `ghp_` prefix, a key without its END).
  */
+
+import { ROLE_REFUSED_MESSAGE } from "../plugins/roles.ts";
+import { scrubSecrets } from "../store/scrub.ts";
+
+/**
+ * ROLES-CHAT-3 (REQ-agent-333): the short in-session note a run's summary
+ * ends with once a tool call was refused for the caller's role.
+ */
+export const ROLE_REFUSED_SUMMARY_NOTE = `(${ROLE_REFUSED_MESSAGE})`;
+
+const ROLE_NOTE_TAIL = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+
+/**
+ * Clip already-scrubbed `text` longer than `max` with `clip`, keeping a
+ * closing role note (REQ-agent-333): a long reply loses the end of its body,
+ * never the note. Text within `max` is returned as is.
+ */
+export function clipKeepingRoleNote(
+  text: string,
+  max: number,
+  clip: (head: string, max: number) => string,
+): string {
+  if (text.length <= max) return text;
+  if (!text.endsWith(ROLE_NOTE_TAIL)) return clip(text, max);
+  const head = text.slice(0, text.length - ROLE_NOTE_TAIL.length);
+  return `${clip(head, Math.max(0, max - ROLE_NOTE_TAIL.length)).trimEnd()}${ROLE_NOTE_TAIL}`;
+}
+
+/** Scrub, trim, then clip (SAFE-6: scrub before the clip). */
+function scrubClip(text: string, max: number): string {
+  return scrubSecrets(text).trim().slice(0, max);
+}
+
+/**
+ * AGENT-9 / DISCORD-3.a defense in depth: drop internal tool-round stop lines
+ * from outbound chat bodies even if an older execute path left them in summary.
+ */
+export function stripInternalStopReason(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^Stopped after \d+ tool rounds\b/i.test(line.trim()))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /** Fields of a TaskResult used for the summary (all optional when parsed). */
 export type TaskResultSummaryInput = {
@@ -34,11 +83,13 @@ export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
 
 /**
  * Human chat body only — no `state=` / `verified=` plumbing (DISCORD-3.a).
- * Caps at 1800 chars for Discord outbound.
+ * Caps at 1800 chars for Discord outbound; the cap keeps a closing role note
+ * (ROLES-CHAT-3, REQ-agent-333).
  */
 export function chatBodyFromTaskResult(r: TaskResultSummaryInput): string {
-  const body = typeof r.summary === "string" ? r.summary.trim() : "";
-  return body.slice(0, 1800);
+  if (typeof r.summary !== "string") return "";
+  const text = scrubSecrets(stripInternalStopReason(r.summary)).trim();
+  return clipKeepingRoleNote(text, 1800, (head, max) => head.slice(0, max));
 }
 
 /**
@@ -65,15 +116,15 @@ export function summarizeTaskRunOutput(
       };
       const r = parsed?.result;
       if (r && typeof r === "object") {
-        return (summarizeTaskResult(r) || trimmed).slice(0, 1800);
+        return summarizeTaskResult(r) || scrubClip(trimmed, 1800);
       }
     } catch {
       /* fall through to raw */
     }
   }
   return (
-    trimmed.slice(0, 1800) ||
-    stderr.trim().slice(0, 500) ||
+    scrubClip(trimmed, 1800) ||
+    scrubClip(stderr, 500) ||
     `(exit ${exitCode})`
   );
 }
@@ -102,13 +153,13 @@ export function chatBodyFromTaskRunOutput(
   // No structured result — avoid leaking raw JSON plumbing; prefer stderr/exit.
   if (trimmed.startsWith("{") && trimmed.includes('"result"')) {
     return (
-      stderr.trim().slice(0, 500) ||
+      scrubClip(stderr, 500) ||
       `(exit ${exitCode})`
     );
   }
   return (
-    trimmed.slice(0, 1800) ||
-    stderr.trim().slice(0, 500) ||
+    scrubClip(trimmed, 1800) ||
+    scrubClip(stderr, 500) ||
     `(exit ${exitCode})`
   );
 }

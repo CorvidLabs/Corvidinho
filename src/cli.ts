@@ -1,10 +1,13 @@
 #!/usr/bin/env bun
 /**
  * Corvidinho — Bun/TS CLI (Linux).
- * Surfaces: help, version, doctor, plugins list/run, specsync *, task run (prove-before-done).
+ * Surfaces: help, version, doctor, init (report only), plugins list/run, specsync *,
+ * task run (prove-before-done).
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   createNdjsonWriter,
   createTaskExecute,
@@ -14,12 +17,17 @@ import {
   TASK_OUTPUT_MODES,
   type AgentEvent,
   type CapabilityTier,
+  type SpendWarning,
   type TaskOutputMode,
   type TaskResult,
 } from "./agent/index.ts";
+import { loadLlmEnv } from "./agent/execute.ts";
+import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
+import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
+  formatRegisterCommandsFailure,
   goLiveChecklist,
   registerSlashCommandsLive,
   startBridge,
@@ -29,28 +37,34 @@ import {
   startWatchPoller,
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
+import {
+  dataDirDoctorCheck,
+  discordDoctorCheck,
+  githubWatchDoctorCheck,
+  llmDoctorCheck,
+  loadDoctorAllowlist,
+  projectFilesDoctorChecks,
+  type DoctorCheck,
+} from "./doctor.ts";
+import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
+import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
-import { runPlugin } from "./plugins/run.ts";
+import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
   formatPluginsListText,
   toolSurfaceReport,
   withToolCost,
 } from "./plugins/toolCost.ts";
 import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
+import { loadRunnerPlugins, runnerStatusLines } from "../plugins/runners/index.ts";
+import { DEFAULT_DATA_DIR_REL } from "./store/paths.ts";
+import { formatErrorLine } from "./store/scrub.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
-
-type DoctorCheck = {
-  name: string;
-  ok: boolean;
-  detail: string;
-  /** Printed label override (informational checks never fail doctor). */
-  mark?: string;
-};
 
 function printHelp(): void {
   console.log(`corvidinho ${VERSION}
@@ -63,7 +77,11 @@ Usage:
   corvidinho version                Print version
   corvidinho attribution             Print the canonical attribution footer
   corvidinho --protocol-version     Print wire protocol integer (DISCORD-10)
-  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / plugins
+  corvidinho doctor                 Check Discord / GitHub / Fledge / SpecSync / project files / plugins /
+                                    LLM key / data dir
+  corvidinho init                   Report what this project is missing (LLM key, Fledge, SpecSync, project
+                                    files: fledge.toml, verify lane with spec-check, .specsync/, specs/);
+                                    report only, creates nothing (CLI-4)
   corvidinho discord bridge         Start HEAR Discord bridge (DISCORD-1/2/3/4/5)
   corvidinho discord register-commands
                                     Full-overwrite slash set (guild PUT + clear globals)
@@ -73,7 +91,7 @@ Usage:
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command (args after -- reach it verbatim)
-  corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]
+  corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N]
                     [--output text|json|ndjson] [--json]
@@ -82,6 +100,8 @@ Usage:
                                     for bridges, one versioned frame per line (AGENT-8 / CLI-7)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --no-verify ...        Skip verify gate (local/operator opt-out only)
+  corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
+                                    and .env files, as Bun loads them there (CLI-5)
 
 Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE  same as --non-interactive
@@ -101,6 +121,8 @@ Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
   CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
+  CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
+  CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -127,6 +149,10 @@ function envPresent(name: string): boolean {
  * a message like `--tier=code` or `--no-verify` must stay task text, never
  * become a flag (AGENT-5 / SAFE-1). `--task=TEXT` may span lines.
  *
+ * `--project <path>` / `--project=<path>` (CLI-5) is read only before a `--`
+ * separator, so a plugin argument after `--` is never taken. `project` is ""
+ * when the flag has no path (a missing value or one starting with `-`).
+ *
  * In `plugins run <name>`, the first `--` after the name ends Corvidinho's
  * flags: every later argv item is returned verbatim as `pluginArgs` and
  * never parsed as a global flag, `--json` or help (REQ-cli-186).
@@ -140,6 +166,7 @@ export function parseGlobalFlags(args: string[]): {
   maxRetries: number | undefined;
   taskText: string | undefined;
   tier: CapabilityTier | undefined;
+  project: string | undefined;
 } {
   const rest: string[] = [];
   let pluginArgs: string[] | undefined;
@@ -149,11 +176,27 @@ export function parseGlobalFlags(args: string[]): {
   let maxRetries: number | undefined;
   let taskText: string | undefined;
   let tier: CapabilityTier | undefined;
+  let project: string | undefined;
+  let afterSeparator = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--" && rest.length >= 3 && rest[0] === "plugins" && rest[1] === "run") {
       pluginArgs = args.slice(i + 1);
       break;
+    }
+    if (a === "--") afterSeparator = true;
+    if (!afterSeparator) {
+      if (a === "--project") {
+        const next = args[i + 1];
+        project = next !== undefined && !next.startsWith("-") ? next : "";
+        if (project) i++;
+        continue;
+      }
+      const pf = a.match(/^--project=(.*)$/s);
+      if (pf) {
+        project = pf[1];
+        continue;
+      }
     }
     if (a === "--non-interactive") {
       nonInteractiveFlag = true;
@@ -207,26 +250,210 @@ export function parseGlobalFlags(args: string[]): {
     }
     rest.push(a);
   }
-  return { rest, pluginArgs, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier };
+  return { rest, pluginArgs, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project };
+}
+
+/**
+ * The environment this process was started with, before Bun added the start
+ * directory's `.env*` values (Linux `/proc/self/environ`; Bun never writes
+ * there). Null when it cannot be read.
+ */
+export function readStartEnv(path = "/proc/self/environ"): Record<string, string> | null {
+  try {
+    const env: Record<string, string> = {};
+    for (const entry of readFileSync(path, "utf8").split("\0")) {
+      const eq = entry.indexOf("=");
+      if (eq <= 0) continue;
+      const key = entry.slice(0, eq);
+      if (!(key in env)) env[key] = entry.slice(eq + 1);
+    }
+    return env;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The `.env` flags Bun was started with (`--no-env-file`, `--env-file=<path>`,
+ * `--env-file <path>`), in order, so the `--project` probe loads exactly the
+ * env files a process started in the project with the same flags would: a
+ * process run with `--no-env-file` never loads the project's `.env` either
+ * (CLI-5 / REQ-cli-505).
+ */
+export function envFileFlags(execArgv: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const a = execArgv[i];
+    if (a === "--no-env-file" || a.startsWith("--env-file=")) {
+      out.push(a);
+    } else if (a === "--env-file" && i + 1 < execArgv.length) {
+      out.push(a, execArgv[i + 1]);
+      i++;
+    }
+  }
+  return out;
+}
+
+/** Prints the env a Bun process started in its cwd gets (never logged). */
+const PROJECT_ENV_PROBE = "process.stdout.write(JSON.stringify(process.env))";
+/** Cap on the one-off env probe `--project` runs. */
+export const PROJECT_ENV_TIMEOUT_MS = 15_000;
+
+export type EnterProjectResult =
+  | { ok: true; dir: string }
+  | { ok: false; error: string; hint: string };
+
+/**
+ * CLI-5 / REQ-cli-505: make this process run as if it had been started in
+ * `path` (the top-level process only; spawns keep `--no-env-file`).
+ *
+ * The env is what Bun builds for a process started there: Bun's own `.env*`
+ * loading (`.env`, `.env.<NODE_ENV>`, `.env.local`, `$VAR` expansion; set
+ * variables win; the process's own `--no-env-file` / `--env-file` flags,
+ * {@link envFileFlags}) run once in `path` from `startEnv` (default
+ * {@link readStartEnv}), so the start directory's `.env*` values do not carry
+ * over. The probe pins Bun config to {@link SPAWN_BUN_CONFIG}: the project's
+ * `bunfig.toml` is never read. Then `process.chdir(path)`, so every command
+ * reads that project's `fledge.toml`, specs and files through `process.cwd()`,
+ * and children the CLI starts without an explicit `env` get the new env too
+ * ({@link spawnsInheritProcessEnv}). On any failure nothing is changed.
+ */
+export function enterProject(
+  path: string,
+  opts: { startEnv?: Record<string, string> | null } = {},
+): EnterProjectResult {
+  const fail = (error: string, hint: string): EnterProjectResult => ({ ok: false, error, hint });
+  const usage = "pass --project the path of an existing project directory";
+  if (!path) return fail("--project needs a directory path", usage);
+  const dir = resolve(path);
+  try {
+    if (!statSync(dir).isDirectory()) return fail(`--project ${dir} is not a directory`, usage);
+  } catch (e) {
+    const code = (e as { code?: unknown } | null)?.code;
+    return code === "ENOENT" || code === "ENOTDIR"
+      ? fail(`--project ${dir} does not exist`, usage)
+      : fail(`--project ${dir} cannot be read (${String(code ?? "error")})`, usage);
+  }
+
+  const startEnv = opts.startEnv === undefined ? readStartEnv() : opts.startEnv;
+  const base: Record<string, string> = {};
+  for (const [k, v] of Object.entries(startEnv ?? process.env)) {
+    if (typeof v === "string") base[k] = v;
+  }
+  const envHint = `check that ${dir} can be entered and its .env files read`;
+  let env: Record<string, string>;
+  try {
+    const probe = Bun.spawnSync(
+      [
+        process.execPath,
+        ...envFileFlags(process.execArgv),
+        `--config=${SPAWN_BUN_CONFIG}`,
+        "-e",
+        PROJECT_ENV_PROBE,
+      ],
+      {
+        cwd: dir,
+        env: base,
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: PROJECT_ENV_TIMEOUT_MS,
+      },
+    );
+    if (probe.exitCode !== 0) {
+      return fail(`--project ${dir}: could not load its .env files (bun exit ${probe.exitCode ?? "signal"})`, envHint);
+    }
+    const parsed: unknown = JSON.parse(probe.stdout.toString());
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    env = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string") env[k] = v;
+    }
+    process.chdir(dir);
+  } catch (e) {
+    const code = (e as { code?: unknown } | null)?.code;
+    return fail(
+      `--project ${dir}: could not load its .env files${typeof code === "string" ? ` (${code})` : ""}`,
+      envHint,
+    );
+  }
+  for (const k of Object.keys(process.env)) {
+    if (!(k in env)) delete process.env[k];
+  }
+  Object.assign(process.env, env);
+  spawnsInheritProcessEnv();
+  return { ok: true, dir };
+}
+
+let spawnEnvFollowsProcessEnv = false;
+
+/**
+ * `Bun.spawn` / `Bun.spawnSync` with no `env` pass the environment Bun started
+ * with (the start directory's `.env*` values included), not `process.env` as
+ * {@link enterProject} rewrote it. Default their `env` to the current
+ * `process.env` (what `node:child_process` does), so a child the CLI starts
+ * (`specsync`, `fledge run spec-check`, git) gets the project's env, never the
+ * start directory's `.env*` values (CLI-5 / REQ-cli-505). Idempotent.
+ */
+function spawnsInheritProcessEnv(): void {
+  if (spawnEnvFollowsProcessEnv) return;
+  spawnEnvFollowsProcessEnv = true;
+  type SpawnFn = (...args: unknown[]) => unknown;
+  const withCurrentEnv =
+    (spawn: SpawnFn): SpawnFn =>
+    (...args: unknown[]) => {
+      // Bun.spawn(argv, opts?) or Bun.spawn({ cmd, ...opts }).
+      const i = Array.isArray(args[0]) ? 1 : 0;
+      const opts = (args[i] ?? {}) as { env?: unknown };
+      if (opts.env === undefined) args[i] = { ...opts, env: { ...process.env } };
+      return spawn(...args);
+    };
+  const bun = Bun as unknown as { spawn: SpawnFn; spawnSync: SpawnFn };
+  bun.spawn = withCurrentEnv(bun.spawn);
+  bun.spawnSync = withCurrentEnv(bun.spawnSync);
+}
+
+/** A `--project` path that cannot be used (CLI-5); carries its own hint (REQ-cli-419). */
+export class ProjectDirError extends Error {
+  constructor(
+    message: string,
+    readonly hint: string,
+  ) {
+    super(message);
+    this.name = "ProjectDirError";
+  }
+}
+
+/** `fledge` / `specsync` on PATH (the verify lane needs both). */
+function toolOnPathCheck(bin: "fledge" | "specsync"): DoctorCheck {
+  const path = which(bin);
+  return {
+    name: bin,
+    ok: Boolean(path),
+    detail: path ? `found at ${path}` : `${bin} not on PATH`,
+  };
+}
+
+/** Prints `  [mark] name: detail` lines; true when no check failed. */
+function printChecks(checks: DoctorCheck[]): boolean {
+  let allOk = true;
+  for (const c of checks) {
+    const mark = c.mark ?? (c.ok ? "ok" : "missing");
+    console.log(`  [${mark}] ${c.name}: ${c.detail}`);
+    if (!c.ok) allOk = false;
+  }
+  return allOk;
 }
 
 async function doctor(): Promise<number> {
   loadBuiltins();
   const checks: DoctorCheck[] = [];
 
-  const discordTokenSet = envPresent("DISCORD_TOKEN") || envPresent("DISCORD_BOT_TOKEN");
-  const discordChannels =
-    envPresent("DISCORD_CHANNEL_IDS") ||
-    envPresent("CORVIDINHO_DISCORD_ALLOW_CHANNELS");
-  checks.push({
-    name: "discord",
-    ok: discordTokenSet && discordChannels,
-    detail: discordTokenSet
-      ? discordChannels
-        ? "token + channel allowlist env present (values not shown)"
-        : "token present but channel allowlist empty — set DISCORD_CHANNEL_IDS or CORVIDINHO_DISCORD_ALLOW_CHANNELS"
-      : "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN (go-live: token + non-empty Discord allowlists)",
-  });
+  // CLI-4 / ALLOW-3/4 — channel / repo allowlists through the bridge / WATCH
+  // loader (allowlist file + env overlays, deny wins); source named, values not.
+  const allow = await loadDoctorAllowlist(process.env);
+  const discordCheck = discordDoctorCheck(allow, process.env);
+  checks.push(discordCheck);
 
   const tokenOk = envPresent("GITHUB_TOKEN") || envPresent("GH_TOKEN");
   checks.push({
@@ -237,35 +464,15 @@ async function doctor(): Promise<number> {
       : "missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins",
   });
 
-  const watchUser = envPresent("CORVIDINHO_WATCH_USERNAME") || envPresent("GITHUB_WATCH_USERNAME");
-  const watchRepos =
-    envPresent("CORVIDINHO_GITHUB_ALLOW_REPOS") ||
-    envPresent("CORVIDINHO_GITHUB_ALLOW_ORGS");
-  checks.push({
-    name: "github-watch",
-    ok: tokenOk && watchUser && watchRepos,
-    detail: !tokenOk
-      ? "WATCH needs GITHUB_TOKEN/GH_TOKEN (poll-first; see docs/WATCH.md)"
-      : !watchUser
-        ? "set CORVIDINHO_WATCH_USERNAME (login to listen for)"
-        : !watchRepos
-          ? "set CORVIDINHO_GITHUB_ALLOW_REPOS / ORGS (empty = deny-all)"
-          : "token + username + repo allow env present (values not shown)",
-  });
+  const watchCheck = githubWatchDoctorCheck(allow, process.env);
+  checks.push(watchCheck);
 
-  const fledgePath = which("fledge");
-  checks.push({
-    name: "fledge",
-    ok: Boolean(fledgePath),
-    detail: fledgePath ? `found at ${fledgePath}` : "fledge not on PATH",
-  });
+  checks.push(toolOnPathCheck("fledge"));
+  checks.push(toolOnPathCheck("specsync"));
 
-  const specsyncPath = which("specsync");
-  checks.push({
-    name: "specsync",
-    ok: Boolean(specsyncPath),
-    detail: specsyncPath ? `found at ${specsyncPath}` : "specsync not on PATH",
-  });
+  // CLI-4 — the project files task run's verify gate reads in this dir
+  // (fledge.toml, verify lane with spec-check, .specsync/, specs/).
+  checks.push(...projectFilesDoctorChecks(process.cwd()));
 
   const pluginCount = size();
   checks.push({
@@ -273,6 +480,31 @@ async function doctor(): Promise<number> {
     ok: pluginCount > 0,
     detail: `${pluginCount} command(s) loaded`,
   });
+
+  // ALLOW-4 — an allowlist file that exists but cannot be read or parsed stops
+  // the bridge, watch and daemon (fail closed); say so here, with the loader's
+  // error (path, line and key — never list values).
+  const allowPath = resolveAllowlistPath(process.env);
+  if (allowPath && existsSync(allowPath)) {
+    const loaded = await loadAllowlistFile(allowPath);
+    checks.push({
+      name: "allowlist-file",
+      ok: loaded.ok,
+      mark: loaded.ok ? "ok" : "fail",
+      detail: loaded.ok
+        ? `${allowPath} loads (values not shown)`
+        : `${loaded.error} — bridge, watch and daemon refuse to start and gates refuse until it is fixed`,
+    });
+  } else {
+    checks.push({
+      name: "allowlist-file",
+      ok: true,
+      mark: "info",
+      detail: allowPath
+        ? `${allowPath} not found — env overlays only`
+        : "no allowlist file — env overlays only (CORVIDINHO_ALLOWLIST_FILE or ~/.config/corvidinho/allowlist.toml|json)",
+    });
+  }
 
   // IDENTITY-1 — owner yes/no + display only (never ids/logins/tokens).
   // Optional: a missing owner is informational and never fails doctor.
@@ -297,13 +529,16 @@ async function doctor(): Promise<number> {
     });
   }
 
+  // CLI-4 — task run without a key uses the demo stub (warn, never fails doctor);
+  // the bridge, watch, daemon and memory tools need a writable data dir.
+  checks.push(llmDoctorCheck(process.env));
+  checks.push(dataDirDoctorCheck(process.env));
+
+  // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
+  checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
+
   console.log("corvidinho doctor\n");
-  let allOk = true;
-  for (const c of checks) {
-    const mark = c.mark ?? (c.ok ? "ok" : "missing");
-    console.log(`  [${mark}] ${c.name}: ${c.detail}`);
-    if (!c.ok) allOk = false;
-  }
+  const allOk = printChecks(checks);
   console.log("");
   if (allOk) {
     console.log("All checks passed.");
@@ -312,19 +547,47 @@ async function doctor(): Promise<number> {
   console.log(
     "One or more checks failed. Install/configure the missing pieces; secrets stay out of the repo.",
   );
-  if (!discordTokenSet || !discordChannels) {
+  if (!discordCheck.ok) {
     console.log("");
     console.log(goLiveChecklist());
   }
-  if (!tokenOk || !watchUser || !watchRepos) {
+  if (!watchCheck.ok) {
     console.log("");
     console.log(watchGoLiveChecklist());
   }
   return 1;
 }
 
+/**
+ * `corvidinho init` (CLI-4): report only. Says what this project (the current
+ * dir) is missing before `task run` fails on it mid-task — the LLM key task
+ * run uses, `fledge` / `specsync` on PATH and the project files (the same
+ * lines doctor prints). Creates and changes nothing; exit 1 when an item is
+ * missing (a `[warn]` line, such as no LLM key, does not fail).
+ */
+function init(): number {
+  const checks: DoctorCheck[] = [
+    llmDoctorCheck(process.env),
+    toolOnPathCheck("fledge"),
+    toolOnPathCheck("specsync"),
+    ...projectFilesDoctorChecks(process.cwd()),
+  ];
+  console.log("corvidinho init (report only — creates nothing)\n");
+  const allOk = printChecks(checks);
+  console.log("");
+  console.log(
+    allOk
+      ? "Nothing missing for task run in this project."
+      : "Missing items are listed above; init created nothing. Add them, then run init again.",
+  );
+  console.log("Discord / GitHub keys and allowlists: run `corvidinho doctor`.");
+  return allOk ? 0 : 1;
+}
+
 async function pluginsList(json: boolean): Promise<number> {
   loadBuiltins();
+  // PLUGIN-4: which language runners loaded, and why any did not (idempotent).
+  const runners = loadRunnerPlugins();
   // FLEDGE-4 / PLUGIN-3: project Fledge plugins; failure degrades to builtins only.
   const fledge = await loadFledgePlugins({ cwd: process.cwd() });
   const entries = withToolCost(list());
@@ -333,7 +596,10 @@ async function pluginsList(json: boolean): Promise<number> {
   } else {
     // PLUGIN-6 / FLEDGE-5: per-command schema cost + tool-surface budget.
     console.log(
-      formatPluginsListText(entries, toolSurfaceReport(entries), fledgeStatusLines(fledge)),
+      formatPluginsListText(entries, toolSurfaceReport(entries), [
+        ...runnerStatusLines(runners),
+        ...fledgeStatusLines(fledge),
+      ]),
     );
   }
   return 0;
@@ -352,14 +618,20 @@ async function pluginsRun(
   if (name.startsWith("fledge-") && !get(name)) {
     await loadFledgePlugins({ cwd: process.cwd() });
   }
-  const result = await runPlugin({
-    name,
-    args: passArgs,
-    json: opts.json,
-    nonInteractive: opts.nonInteractive,
-    allowlist: allowlistFromEnv(),
-    cwd: process.cwd(),
-  });
+  let result: Awaited<ReturnType<typeof runPlugin>>;
+  try {
+    result = await runPlugin({
+      name,
+      args: passArgs,
+      json: opts.json,
+      nonInteractive: opts.nonInteractive,
+      allowlist: allowlistFromEnv(),
+      cwd: process.cwd(),
+    });
+  } catch (err) {
+    // REQ-cli-419: an unknown name or a throwing handler is one clean line.
+    return reportCliError(err, { json: opts.json });
+  }
   if (!result.ok) {
     if (opts.json) {
       console.log(JSON.stringify({ ok: false, error: result.error, data: result.data }, null, 2));
@@ -459,21 +731,44 @@ async function taskRun(opts: {
     allowlist: allowlistFromEnv(),
     onEvent: handleEvent,
     onUsage: ndjson ? (u) => ndjson.usage(u) : undefined,
-  });
-  const result: TaskResult = await runTask({
-    cwd,
-    task: opts.taskText,
-    config,
-    verifyBeforeComplete: opts.noVerify ? false : undefined,
-    maxRetries: opts.maxRetries,
-    onEvent: handleEvent,
-    execute: async (ctx) => {
-      if (ctx.verifyFeedback && !quiet) {
-        console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
-      }
-      return execute(ctx);
+    // SAFE-8: the 80% warning rides the result (--json / ndjson) for bridges.
+    onSpendWarning: (w) => {
+      spendWarning = w;
     },
   });
+  let spendWarning: SpendWarning | undefined;
+  // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
+  // and tool loop stop and the cancelled result below is still printed (exit
+  // 130). `once`: a second signal takes the default action. A signal this
+  // process started with ignored (a background job's SIGINT) is not hooked:
+  // a listener would replace SIG_IGN and removing it restores SIG_DFL.
+  const abort = new AbortController();
+  const onSignal = () => abort.abort();
+  const hooked = forwardedSignals().filter(
+    (sig) => sig === "SIGINT" || sig === "SIGTERM",
+  );
+  for (const sig of hooked) process.once(sig, onSignal);
+  let result: TaskResult;
+  try {
+    result = await runTask({
+      cwd,
+      task: opts.taskText,
+      config,
+      verifyBeforeComplete: opts.noVerify ? false : undefined,
+      maxRetries: opts.maxRetries,
+      signal: abort.signal,
+      onEvent: handleEvent,
+      execute: async (ctx) => {
+        if (ctx.verifyFeedback && !quiet) {
+          console.error(`(attempt ${ctx.attempt}) feedback:\n${ctx.verifyFeedback.slice(0, 500)}`);
+        }
+        return execute(ctx);
+      },
+    });
+  } finally {
+    for (const sig of hooked) process.off(sig, onSignal);
+  }
+  if (spendWarning) result.spendWarning = spendWarning;
 
   if (ndjson) {
     ndjson.result(result);
@@ -484,6 +779,10 @@ async function taskRun(opts: {
       `state=${result.state} verified=${result.verified} verifySkipped=${result.verifySkipped} cancelled=${result.cancelled} attempts=${result.attempts}`,
     );
     console.log(result.summary);
+    // SAFE-8: a spend-cap summary is generic; the operator details are in the ask.
+    if (result.ask && !result.summary.includes(result.ask.question)) {
+      console.log(result.ask.question);
+    }
   }
 
   if (result.cancelled) return 130;
@@ -505,12 +804,13 @@ async function specsyncCli(
     check: "specsync-check",
     brief: "specsync-brief",
     coverage: "specsync-coverage",
+    score: "specsync-score",
     "change-list": "specsync-change-list",
     "ship-status": "specsync-ship-status",
   };
   if (!sub || !(sub in map)) {
     console.error(
-      "usage: corvidinho specsync <list|read|check|brief|coverage|change-list|ship-status> [...]",
+      "usage: corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]",
     );
     return 1;
   }
@@ -585,7 +885,8 @@ async function discordRegisterCommands(argv: string[]): Promise<number> {
     }
     return 0;
   } catch (err) {
-    console.error("[discord] register-commands failed:", err);
+    // REQ-cli-419: one scrubbed line, never the raw DiscordAPIError dump.
+    console.error(formatRegisterCommandsFailure(err));
     return 1;
   }
 }
@@ -623,11 +924,11 @@ async function githubWatch(): Promise<number> {
     `[watch] poll-first started for @${result.config.mentionUsername} on ${result.config.repos.join(", ")} every ${result.config.intervalMs}ms` +
       (result.config.dryRun ? " (dry-run)" : ""),
   );
-  await new Promise<void>((resolve) => {
+  return new Promise<number>((resolve) => {
     const stop = async () => {
       console.log("[watch] shutting down...");
       await result.stop();
-      resolve();
+      resolve(0);
     };
     process.once("SIGINT", () => {
       void stop();
@@ -635,8 +936,18 @@ async function githubWatch(): Promise<number> {
     process.once("SIGTERM", () => {
       void stop();
     });
+    // REQ-cli-419: a rejected token (401) stops the poller; exit non-zero.
+    void result.fatal.then(async (f) => {
+      try {
+        await result.stop();
+      } catch {
+        // The poll loop already stopped; a failed DB close must not hang or
+        // crash the exit (the fatal line was printed by the poller).
+      } finally {
+        resolve(f.exitCode);
+      }
+    });
   });
-  return 0;
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -650,7 +961,17 @@ export async function main(argv: string[]): Promise<number> {
     maxRetries,
     taskText,
     tier,
+    project,
   } = parseGlobalFlags(raw);
+  // CLI-5: enter the project before anything reads the cwd or the env.
+  if (project !== undefined) {
+    const entered = enterProject(project);
+    if (!entered.ok) {
+      return reportCliError(new ProjectDirError(entered.error, entered.hint), {
+        json: wantsJson(raw),
+      });
+    }
+  }
   const nonInteractive = isNonInteractive({ nonInteractiveFlag });
 
   // `rest` excludes the `--task` value and plugin args after `--`, so help
@@ -680,6 +1001,9 @@ export async function main(argv: string[]): Promise<number> {
   }
   if (cmd === "doctor") {
     return doctor();
+  }
+  if (cmd === "init") {
+    return init();
   }
   if (cmd === "discord") {
     const sub = rest[1];
@@ -759,7 +1083,75 @@ export async function main(argv: string[]): Promise<number> {
   return 1;
 }
 
+/** One next step for the operator, matched to the error kind (CLI-4). */
+export function cliErrorHint(err: unknown): string {
+  if (err instanceof PluginNotFoundError) {
+    return "run `corvidinho plugins list` for the available commands";
+  }
+  if (err instanceof ProjectDirError) return err.hint;
+  const e = err as { code?: unknown; path?: unknown } | null;
+  const code = e && typeof e === "object" && typeof e.code === "string" ? e.code : "";
+  if (
+    (/^E[A-Z]+$/.test(code) && typeof e?.path === "string") ||
+    // The data dir exists but the DB in it cannot be opened (bun:sqlite).
+    /^SQLITE_(CANTOPEN|READONLY|PERM|NOTADB)$/.test(code)
+  ) {
+    return `check that the path exists and is writable; the data dir is CORVIDINHO_DATA_DIR (default ~/${DEFAULT_DATA_DIR_REL})`;
+  }
+  return "run `corvidinho doctor` to check the environment";
+}
+
+function cliExitCode(err: unknown): number {
+  const c = (err as { exitCode?: unknown } | null)?.exitCode;
+  return typeof c === "number" && Number.isInteger(c) && c >= 1 && c <= 255 ? c : 1;
+}
+
+/**
+ * REQ-cli-419 (CLI-4 / CLI-7 / SAFE-6): report a failed command as one
+ * scrubbed line plus a hint, never a stack or a library dump. Text mode:
+ * `corvidinho: <line>` then `hint: …` on stderr. `--json`: `{ ok: false,
+ * error }` on stdout (the `plugins run --json` error shape), hint on stderr.
+ * Returns the error's own `exitCode` (1–255) or 1.
+ */
+export function reportCliError(err: unknown, opts: { json?: boolean } = {}): number {
+  const line = formatErrorLine(err);
+  if (opts.json) {
+    console.log(JSON.stringify({ ok: false, error: line }, null, 2));
+  } else {
+    console.error(`corvidinho: ${line}`);
+  }
+  console.error(`hint: ${cliErrorHint(err)}`);
+  return cliExitCode(err);
+}
+
+/** True when argv asks for a single JSON result (`--json` / `--output json`). */
+function wantsJson(args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--") break;
+    if (a === "--json" || a === "--output=json") return true;
+    if (a === "--output" && args[i + 1] === "json") return true;
+  }
+  return false;
+}
+
+/**
+ * Top-level CLI error boundary (REQ-cli-419): runs `main` and turns anything
+ * it throws into {@link reportCliError} output and a non-zero exit code, so
+ * no command ends in a stack trace or Bun's crash footer.
+ */
+export async function runCli(
+  argv: string[],
+  run: (argv: string[]) => Promise<number> = main,
+): Promise<number> {
+  try {
+    return await run(argv);
+  } catch (err) {
+    return reportCliError(err, { json: wantsJson(argv.slice(2)) });
+  }
+}
+
 if (import.meta.main) {
-  const code = await main(process.argv);
+  const code = await runCli(process.argv);
   process.exit(code);
 }

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "every-package-version-gets-a-vx-y-z-tag-and-github-release-from-ci-release-yml-tags-each-version-s-bump-commit-on",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "6506a64c213f99a7827ec414de6a6aff341230e9",
+      "contract_digest": "8246e30638c877aaf9eae87816c0ac84f94b03e7d6feec8d205df5a7b5627365",
+      "execution_digest": "24d0427c5193375d7f23c90801be5607865f026b203619c73b4c2c3f68489ca1",
+      "workspace_digest": "340c9090e3f7e8f692019fe5405f9e3519b93ba1f37ec3b48d077b41ed284297",
+      "timestamp": 1790480902
+    }
+  ]
+}

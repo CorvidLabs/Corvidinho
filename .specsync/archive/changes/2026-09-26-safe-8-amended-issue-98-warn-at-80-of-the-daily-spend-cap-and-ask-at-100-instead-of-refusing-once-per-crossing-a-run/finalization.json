@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-8-amended-issue-98-warn-at-80-of-the-daily-spend-cap-and-ask-at-100-instead-of-refusing-once-per-crossing-a-run",
+  "implementation_commit": "09490b0cac74c7292da3581adf57529101ddc50c",
+  "implementation_tree": "b214debe406fbbca1c7417c6af5ce185abb2f035",
+  "contract_digest": "578a389b51654629e42d94b0a96f3acacf32c336b6ce7a39248eebc0856fbf44",
+  "workspace_digest": "50fe74e4ff67832c32f6c41b417cfb383b5e1864ca887f790d19389e4be19a1a",
+  "closing_digest": "605c22b609d62b1a092e77c45a93dcfd15837c7bb80f23b44af5dbacb1ce9bdd",
+  "review_digest": "cfede85673ca15dd8884fb432bafdda9ca6abf8cd112911a724b060473f9162a",
+  "finalization_digest": "4f1cc219618342905dfe27850011f82511226f90c9e67e9809cd42f334d14cd8",
+  "timestamp": 1790464289
+}

@@ -26,7 +26,8 @@ export class PathEscapeError extends Error {
   }
 }
 
-function realRoot(cwd: string): string {
+/** The project root (`cwd` with symlinks resolved) that paths are clamped to. */
+export function realRoot(cwd: string): string {
   try {
     return realpathSync(resolve(cwd));
   } catch {

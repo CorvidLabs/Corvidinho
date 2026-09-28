@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "slash-pending-ask-tests-expect-the-req-discord-215-collapsed-ping-to-the-clarify-requester-after-a-work-or-session",
+  "slug": "slash-pending-ask-tests-expect-the-req-discord-215-collapsed-ping-to-the-clarify-requester-after-a-work-or-session",
+  "title": "Slash pending-ask tests expect the REQ-discord-215 collapsed ping to the clarify requester after a /work or /session start answer",
+  "description": "slash pending-ask tests expect the REQ-discord-215 collapsed ping to the clarify requester after a /work or /session start answer",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "35c9ce1d560a96263f4c30189ba2d0acae3d502b",
+  "created_at": 1790471816,
+  "updated_at": 1790471992,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "tests/discord.slash-pending-ask.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Test-only: #216's slash pending-ask tests predate the REQ-discord-215 collapsed ping; the tests now set that ping aside and assert it, no spec or source behaviour changes.",
+  "acceptance_criteria": [
+    "tests/discord.slash-pending-ask.test.ts passes with #216 and #220 both on main: a clarify /work answer is followed by exactly one '<@requester> ↑ question for you' ping (REQ-discord-215, AUTONOMY-4) and the thin-reply, cancel, other-user and stuck assertions (REQ-discord-044, AUTONOMY-1/5/6, SESSION-MULTI-1) count only replies to the answer."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
