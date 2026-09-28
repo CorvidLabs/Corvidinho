@@ -29,6 +29,8 @@ export type ComponentInteraction = {
   channelId: string;
   guildId?: string;
   userId: string;
+  /** Member role snowflakes, for the actor gate (REQ-discord-201). */
+  roleIds?: string[];
   messageId?: string;
   /** Reply (or update) — supports ephemeral choice UI. */
   reply: (opts: {
@@ -114,24 +116,8 @@ export type AutocompleteActor = {
   roleIds: string[];
 };
 
-/** Fixture-friendly subset of a discord.js interaction member. */
-type RawInteractionMember = {
-  roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
-} | null;
-
-/**
- * Member role snowflakes: a cached GuildMember (`roles.cache`) or the raw API
- * member (`roles: string[]`); none when absent.
- */
-function memberRoleIds(member: RawInteractionMember | undefined): string[] {
-  const roles = member?.roles;
-  if (!roles) return [];
-  if (Array.isArray(roles)) return [...roles];
-  if (roles.cache && typeof roles.cache.keys === "function") {
-    return [...roles.cache.keys()];
-  }
-  return [];
-}
+/** Fixture-friendly subset of a discord.js interaction member (roles via `interactionRoleIds`). */
+type RawInteractionMember = { roles?: RawMemberRoles } | null;
 
 export type DiscordGateway = {
   start(): Promise<void>;
@@ -189,6 +175,27 @@ export function flattenSlashOptions(data: readonly RawSlashOption[]): {
     }
   }
   return { subcommandGroup, subcommand, options };
+}
+
+/** discord.js interaction `member.roles`: a cached manager or raw API ids. */
+export type RawMemberRoles =
+  | { cache?: { keys: () => IterableIterator<string> } }
+  | string[];
+
+/**
+ * Role snowflakes of an interaction's member (slash and components), for
+ * `gateActor` role allow/deny (REQ-discord-201). Empty outside a guild.
+ */
+export function interactionRoleIds(
+  member: { roles?: RawMemberRoles } | null | undefined,
+): string[] {
+  const roles = member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return [...roles];
+  if (roles.cache && typeof roles.cache.keys === "function") {
+    return [...roles.cache.keys()];
+  }
+  return [];
 }
 
 /**
@@ -311,7 +318,7 @@ export async function createLiveGateway(
     member?: {
       displayName?: string | null;
       nickname?: string | null;
-      roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+      roles?: RawMemberRoles;
     } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
@@ -375,7 +382,7 @@ export async function createLiveGateway(
       return undefined;
     };
 
-    const roleIds = memberRoleIds(interaction.member);
+    const roleIds = interactionRoleIds(interaction.member);
 
     return {
       id: interaction.id,
@@ -679,12 +686,14 @@ export async function createLiveGateway(
 
 
 
-function adaptComponent(interaction: {
+/** discord.js MessageComponent interaction → `ComponentInteraction` (DISCORD-ASK). */
+export function adaptComponent(interaction: {
   id: string;
   customId: string;
   channelId: string;
   guildId: string | null;
   user: { id: string };
+  member?: { roles?: RawMemberRoles } | null;
   message?: { id?: string };
   deferred: boolean;
   replied: boolean;
@@ -698,6 +707,7 @@ function adaptComponent(interaction: {
     channelId: interaction.channelId,
     guildId: interaction.guildId ?? undefined,
     userId: interaction.user.id,
+    roleIds: interactionRoleIds(interaction.member),
     messageId: interaction.message?.id,
     reply: async (opts) => {
       const payload: Record<string, unknown> = {};
@@ -811,7 +821,7 @@ export async function respondChannelAutocomplete(
         commandName: interaction.commandName,
         channelId: interaction.channelId,
         userId: interaction.user.id,
-        roleIds: memberRoleIds(interaction.member),
+        roleIds: interactionRoleIds(interaction.member),
       }) === true;
   } catch (err) {
     console.error("[discord] autocomplete gate failed:", err);
