@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 75
+version: 76
 status: draft
 files:
   - src/discord/types.ts
@@ -108,6 +108,8 @@ files:
   - tests/discord.ask-ephemeral.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
+  - src/discord/allowed-mentions.ts
+  - tests/discord.allowed-mentions.test.ts
 
 db_tables: []
 depends_on:
@@ -310,6 +312,16 @@ at the Choose stub it reuses as progress; at start, after the gateway is up, it
 marks each leftover reply interrupted where its channel (or thread parent) is
 still allowlisted.
 
+Outbound mention safety (REQ-discord-205, DISCORD-8):
+`src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
+repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
+`ask-ping.ts`). The live gateway's `Client` defaults `allowedMentions` to
+`{ parse: [], repliedUser: true }` and every `reply` / `editMessage` / embed
+send / embed edit / slash `reply` / `editReply` / component `reply` (and
+`update`) payload sets it explicitly; `reply` and `editMessage` add only
+`mentionUserIds` as `users`. `LiveGatewayOptions.discord` optionally
+injects the discord.js module (tests); default is the dynamic import.
+
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
@@ -380,6 +392,11 @@ secrets out of repo; discord-post-message dangerous; thinking status edits one
 progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms, and in a bridge-started run always for the acting Discord user (`CORVIDINHO_ACTING_DISCORD_USER_ID`): a requesting id naming anyone else refuses and a check that cannot run refuses, nothing posted (REQ-discord-012);
+every outbound Discord post (gateway reply, message and embed sends/edits,
+slash reply/editReply, component reply/update, discord-post-message) parses
+no mentions from its content (`parse: []`,
+`@everyone` / `@here` defanged); only the replied-to author and the users an
+ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
@@ -638,3 +655,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks: Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6) |
 | 2026-09-27 | discord-post-message-checks-the-acting-discord-user-the-bridge-set-not-only-a-model-supplied-id-discord-8: Discord-post-message checks the acting Discord user the bridge set, not only a model-supplied id (DISCORD-8) |
 | 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |
+| 2026-09-28 | discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord: Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8) |

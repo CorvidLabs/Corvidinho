@@ -2,7 +2,8 @@
  * Discord outbound plugins — discord-post-message is dangerous (externally visible write).
  * DISCORD-8: confused-deputy requester check (Merlin-primary). In a run the
  * bridge started, the check is always for the acting Discord user the bridge
- * set (CORVIDINHO_ACTING_DISCORD_USER_ID), never a model-supplied id.
+ * set (CORVIDINHO_ACTING_DISCORD_USER_ID), never a model-supplied id. The
+ * content is model-written, so the post parses no mentions (REQ-discord-205).
  */
 
 import { checkChannel } from "../../src/allowlist/discord.ts";
@@ -10,6 +11,7 @@ import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { formatErrorLine } from "../../src/store/scrub.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
+import { defangMassMentions } from "../../src/discord/allowed-mentions.ts";
 import {
   requesterCheckFix,
   setRequesterPermCheckerForTests,
@@ -212,7 +214,11 @@ const discordPostMessage: PluginCommand = {
             Authorization: `Bot ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ content: content.slice(0, 1900) }),
+          // REQ-discord-205: no @everyone/@here, role or user ping from text.
+          body: JSON.stringify({
+            content: defangMassMentions(content).slice(0, 1900),
+            allowed_mentions: { parse: [] },
+          }),
         },
       );
       if (!res.ok) {
