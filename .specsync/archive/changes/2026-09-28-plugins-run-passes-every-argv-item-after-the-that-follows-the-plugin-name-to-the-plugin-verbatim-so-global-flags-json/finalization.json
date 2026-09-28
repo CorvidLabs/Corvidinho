@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json",
+  "implementation_commit": "4b70e072ba89345d1282e1efd751738f00360ee7",
+  "implementation_tree": "42009bac4fed7a63d9fd823bab705a41a686b802",
+  "contract_digest": "e989430f500217848a85adbda94f0c0144adf546b1e67e3539f822e84d83f115",
+  "workspace_digest": "b893fe6c86b499a44508da6478a9d5de1c7b2b1566599af9de6406b132b732d9",
+  "closing_digest": "f192b9fdf624f7a9b7a56de1c5a4d8f194963441cab04926d28b849bb5ba9eca",
+  "review_digest": "5e5c546799e1e3bd6260ea887dc1fdf75592fb373bb87113873b5b0bfef972cd",
+  "finalization_digest": "4ff3d1ee16cb85759b26bf92589600432eb0ff9db52ad86e784442beb0ae87d8",
+  "timestamp": 1790603936
+}

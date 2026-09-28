@@ -7,11 +7,11 @@
   "title": "Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI",
   "description": "Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "544fe131ad199fa46e0ff7ea573b83a920db0bbf",
   "created_at": 1790462263,
-  "updated_at": 1790603672,
+  "updated_at": 1790603936,
   "affected_specs": [
     "cli"
   ],
