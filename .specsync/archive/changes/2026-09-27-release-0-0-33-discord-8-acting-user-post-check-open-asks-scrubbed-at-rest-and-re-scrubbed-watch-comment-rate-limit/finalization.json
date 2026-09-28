@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-33-discord-8-acting-user-post-check-open-asks-scrubbed-at-rest-and-re-scrubbed-watch-comment-rate-limit",
+  "implementation_commit": "4a8806760d333f86f8b3c6da3bb6e5d2fdad05c9",
+  "implementation_tree": "af01e003f2566ce6c6ee42584733b98968a9a528",
+  "contract_digest": "b2275a23416149962cb585eced9a3d771ff759b2ed73ab8ea944e2558e399d30",
+  "workspace_digest": "4fcc96893516dffa73ccc4376258e727c48954592e4014073e5877f03ad4078d",
+  "closing_digest": "658811cabdff5e81715c808cfb539194faedacb889ee0486c086d08e5353d3e9",
+  "review_digest": "0262c2632e7481ba1691788ac4f980fcab859b05c9365cc486ef167d93c0e4a6",
+  "finalization_digest": "7f71030ea30f90c3836fe4343859583a6198afc47b7a2c3245cf33737b6b8615",
+  "timestamp": 1790548204
+}

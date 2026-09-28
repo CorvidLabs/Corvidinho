@@ -8,7 +8,7 @@
 
 import { attribution } from "../attribution.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import type { AckClient } from "./ack.ts";
+import type { AckClient, AckCommentResult } from "./ack.ts";
 import { isAckableEventType } from "./ack.ts";
 import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
 import type { AgentSpawnResult, DetectedEvent } from "./types.ts";
@@ -77,8 +77,14 @@ export async function maybePostWatchSummary(opts: {
   successfulAcks: SuccessfulAckStore;
   summarized: SummarizedIdStore;
   log?: (msg: string) => void;
+  /**
+   * Called with the failed post result after the `summary failed` line; the
+   * poller uses it for rate-limit backoff (WATCH-RELIABILITY-3).
+   */
+  onPostFailed?: (res: AckCommentResult) => void;
 }): Promise<boolean> {
-  const { event, spawn, ackClient, successfulAcks, summarized, log } = opts;
+  const { event, spawn, ackClient, successfulAcks, summarized, log, onPostFailed } =
+    opts;
 
   if (!isAckableEventType(event.type)) return false;
   if (!successfulAcks.has(event.id)) {
@@ -123,6 +129,7 @@ export async function maybePostWatchSummary(opts: {
     log?.(
       `[watch] summary failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`,
     );
+    onPostFailed?.(res);
   }
   return true;
 }
