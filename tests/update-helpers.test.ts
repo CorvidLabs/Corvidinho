@@ -158,6 +158,15 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section finds 0.0.33", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.33`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Open asks are secret-scrubbed when a session is saved");
+    expect(r.stdout).toContain("now holds the next poll");
+  });
+
   test("extract_changelog_section finds 0.0.32", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.32`,
@@ -880,10 +889,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.32", () => {
+  test("package.json is 0.0.33", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.32");
+    expect(pkg.version).toBe("0.0.33");
   });
 });

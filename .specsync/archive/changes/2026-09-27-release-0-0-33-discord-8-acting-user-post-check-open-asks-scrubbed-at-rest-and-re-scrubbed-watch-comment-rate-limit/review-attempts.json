@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-33-discord-8-acting-user-post-check-open-asks-scrubbed-at-rest-and-re-scrubbed-watch-comment-rate-limit",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "4a8806760d333f86f8b3c6da3bb6e5d2fdad05c9",
+      "contract_digest": "b2275a23416149962cb585eced9a3d771ff759b2ed73ab8ea944e2558e399d30",
+      "execution_digest": "19a3ce3983e973996616fa44c39565c56c589da7c35da2c03f515abbda5701d2",
+      "workspace_digest": "4fcc96893516dffa73ccc4376258e727c48954592e4014073e5877f03ad4078d",
+      "timestamp": 1790548193
+    }
+  ]
+}
