@@ -1,6 +1,6 @@
 ---
 module: discord
-change: discord-outbound-posts-parse-no-mentions-from-model-text-discord-8
+change: discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord
 ---
 
 # Delta: discord (outbound posts parse no mentions from model text, DISCORD-8)

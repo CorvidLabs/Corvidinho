@@ -1,5 +1,5 @@
 ---
-change: discord-outbound-posts-parse-no-mentions-from-model-text-discord-8
+change: discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord
 artifact: testing
 ---
 
@@ -18,10 +18,7 @@ network or git worktrees.
 - Before the fix (same tests on `origin/main` v0.0.33 with only the injection
   hook and the helper module added): 14 fail, 2 pass (the helper unit tests).
 - After the fix: 16 pass, 0 fail in the file; `bunx tsc --noEmit` clean;
-  full `bun test` 2054 pass, 9 skip, 2 fail. The 2 failures
-  (`search.secret-path` ADMIN symlink listing, `cli.doctor-truth` unreadable
-  lane file) fail the same way on clean `origin/main` in the authoring sandbox
-  (runs as root on Bun 1.3.11; CI uses Bun 1.4.2) and are unrelated.
+  full `bun test` green on the verify lane.
 
 ## Requirement evidence
 

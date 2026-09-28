@@ -1,0 +1,47 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790608497,
+      "digest": "0180c527143438e268342bf2cf25edc3430015bb52254de79c32d3def5d99b77",
+      "note": "Definition complete: REQ-discord-205 outbound mention safety (DISCORD-8). Implementation already on branch; proceeding to check/verify/finalize.",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord",
+        "title": "Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8)",
+        "description": "Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "plugins/discord/index.ts",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/discord/allowed-mentions.ts",
+          "src/discord/ask-ping.ts",
+          "src/discord/gateway.ts",
+          "tests/discord.allowed-mentions.test.ts",
+          "tests/discord.ask-ping.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A chat reply (mention and reply-continue) whose summary contains @everyone, @here, <@&id> and <@id> is sent with allowedMentions.parse empty, no roles/users, repliedUser true, and no literal @everyone/@here; /session start and /work deferred public replies and ephemeral slash replies carry parse empty and defanged text; live client default, thinking embeds, editMessage, ask-button replies/updates, and schedule tick posts carry parse []; an ask post allows exactly the users it names; discord-post-message sends allowed_mentions parse [] and defanged text; fixture tests inject fake discord.js into the live gateway and stub fetch for the plugin with no live Discord or network."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "c03b010e36bb8e51a7d543c4da7d8591bb83a1595202764a9b17aceff57ae68e"
+      }
+    }
+  ],
+  "reopenings": []
+}
