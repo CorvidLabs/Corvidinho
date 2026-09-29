@@ -19,7 +19,7 @@ artifact: design
   opening human turn, the summary label and points, the other turns, footer;
   no blank line; the old omitted-marker path as a ceiling safety net) and
   `ConversationStore` over `conversation_threads`.
-- Schema v12: `conversation_threads(id, surface, thread_key, user_id,
+- Schema v13 (after main's v12 `forget_requests`): `conversation_threads(id, surface, thread_key, user_id,
   session_id, project, summary, turns JSON, participants JSON,
   bot_message_ids JSON, updated_at)`, indexes (surface, thread_key, user_id), (session_id),
   (updated_at). `summary` + JSON `turns` in `SCRUB_TARGETS`.

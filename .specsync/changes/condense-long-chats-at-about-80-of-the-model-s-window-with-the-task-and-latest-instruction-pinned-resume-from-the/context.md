@@ -41,7 +41,11 @@ MEMORY-3); owner admins and the team works (no role change here); prefer
 existing tables — none can outlive a session (`discord_session_turns` and
 `discord_session_bot_messages` cascade with it; `memories` soft-deletes
 every update and feeds the memory inject), so one new table by a
-forward-only migration (schema v12) with a test; a new env var only where the
+forward-only migration (schema v13, after main's v12 `forget_requests`) with a test; a new env var only where the
 captured text needs it (the model's window). #232/#233 are landed
 separately and not touched. The forget-me flow itself (#101, MEMORY-ACL-6)
-is not built here: this change exposes the per-person delete it calls.
+is not built here: this change exposes the per-person delete it calls, and
+since #101 landed on main (merged in 2026-09-29) an approved forget-me runs
+it in its transaction and the running bridge drops live summaries too.
+Condensed text keeps main's SAFE-12 rules (#71): replayed turns and summary
+points are quoted as data and a fenced excerpt keeps its fence markers.

@@ -9,13 +9,14 @@ artifact: requirements
   80% of the model's window with the task and latest instruction word for word
   (SESSION-5); the summary stored with the session and picked up after a
   restart or with another window (SESSION-6); each conversation kept 30 days
-  per thread in `conversation_threads` (schema v12, scrubbed) and purged
+  per thread in `conversation_threads` (schema v13, scrubbed) and purged
   (AGENT-6.a); a reply to an expired session's answer or a message in its
   thread starts a new session from it after the channel, actor and mute gates
   (SESSION-3.a), in the conversation's project (SESSION-WORKTREE-4) and from
   the record as stored when the message arrives; `SessionStore.forgetConversations` /
   `forgetConversations(db, person)` for the forget-me flow (AGENT-6.a,
-  MEMORY-ACL-6).
+  MEMORY-ACL-6), which an approved forget-me runs in its transaction; replayed
+  turns and summary points stay data (SAFE-12).
 - Modified **REQ-discord-072**: the fixed 6000-char budget and "No model
   summarising" become the window-based condensed block (32000-char transport
   ceiling kept as a safety net), human turns clipped at 8000, past 200 turns

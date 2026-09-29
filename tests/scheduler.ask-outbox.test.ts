@@ -949,8 +949,9 @@ describe("schema v11 schedule_runs ask columns (REQ-discord-347, SAFE-6)", () =>
   }
 
   test("a v10 DB migrates to v11, keeps its runs and posts none of them", () => {
-    // v12 (retained conversations, REQ-discord-472) builds on v11.
-    expect(SCHEMA_VERSION).toBe(12);
+    // v12 (forget requests, REQ-discord-101) and v13 (retained
+    // conversations, REQ-discord-472) follow; the v11 columns stay.
+    expect(SCHEMA_VERSION).toBe(13);
     const db = new SqliteDatabase(":memory:");
     cleanups.push(() => db.close());
     migrateCorvidinhoDb(db);

@@ -19,15 +19,25 @@
  *
  * `ConversationStore` keeps each thread's summary and last
  * {@link CONVERSATION_KEEP_TURNS} turns (scrubbed) in `conversation_threads`
- * (schema v12) for {@link CONVERSATION_RETENTION_MS} after its last update,
+ * (schema v13) for {@link CONVERSATION_RETENTION_MS} after its last update,
  * then purges it: a Discord session's summary lives there while the session
  * is live and its whole conversation is kept there when it ends or idles out
  * (so a reply after the soft TTL starts a new session from it), and WATCH
  * keeps one per issue or PR. `deleteForPerson` is the per-person delete the
  * forget-me flow (MEMORY-ACL-6) calls.
+ *
+ * SAFE-12: a replayed turn or summary point is data. Invisible characters are
+ * stripped and a line that opens like one of Corvidinho's own blocks
+ * (`[Corvidinho …`, the block footer, `[untrusted …`) or like a turn label
+ * (`Human:`, `You (Corvidinho):`) is marked `(quoted)`. Text a turn held
+ * inside an untrusted-data fence (`fenceUntrustedData`, e.g. a WATCH issue or
+ * comment body) stays inside that fence's markers when the turn is clipped or
+ * condensed into a summary point, so condensing never turns it into plain
+ * text.
  */
 
 import type { Database } from "bun:sqlite";
+import { defangContextMarkers, stripInvisible } from "../agent/untrusted.ts";
 import { scrubSecrets } from "./scrub.ts";
 
 export type ConversationRole = "human" | "agent";
@@ -159,8 +169,47 @@ export function clipTurnForRole(role: ConversationRole, text: string): string {
 /** Blank lines inside a turn, collapsed so the block stays one paragraph. */
 const BLANK_LINES_RE = /\r?\n(?:[ \t]*\r?\n)+/g;
 
+/** A line inside a turn that opens like a turn label (`Human:`, `You (Corvidinho):`). */
+const TURN_LABEL_LINE_RE = /^([ \t]{0,16})((?:human|you[ \t]{0,3}\([ \t]{0,3}corvidinho[ \t]{0,3}\))[ \t]{0,3}:)/gimu;
+
+/**
+ * An untrusted-data fence (SAFE-12, `fenceUntrustedData`) inside stored text:
+ * word, id, source and body, up to its end marker or, when a clip cut that
+ * off, the end of the text. Bounded: no nested quantifiers.
+ */
+const UNTRUSTED_FENCE_RE =
+  /<<<([A-Z][A-Z0-9_]{0,63}) id=([^\s<>]{1,64}) source=([^\s<>]{0,128})>>>([\s\S]*?)(?:<<<END_\1 id=\2>>>|$)/g;
+
+/** A summary point that carries a fenced excerpt (never shortened mid-fence). */
+const FENCE_OPEN_RE = /<<<[A-Z][A-Z0-9_]{0,63} id=[^\s<>]{1,64} source=/;
+
+/**
+ * `text` with the end marker of every fence a clip cut off put back, so the
+ * rest of a replayed block never reads as inside it and its text never reads
+ * as outside one (SAFE-12).
+ */
+function closeOpenFences(text: string): string {
+  let out = text;
+  for (const m of text.matchAll(UNTRUSTED_FENCE_RE)) {
+    if (!m[0].endsWith(`<<<END_${m[1]} id=${m[2]}>>>`)) out += `\n<<<END_${m[1]} id=${m[2]}>>>`;
+  }
+  return out;
+}
+
+/**
+ * SAFE-12 — one line (or turn body) of a replayed block as data: invisible
+ * characters stripped, lines that open like Corvidinho's own blocks or like a
+ * turn label marked `(quoted)`.
+ */
+function quoteAsData(text: string): string {
+  return defangContextMarkers(stripInvisible(text)).replace(TURN_LABEL_LINE_RE, "$1(quoted) $2");
+}
+
 function turnLine(turn: Pick<ConversationTurn, "role" | "content">): string {
-  const text = clipTurnForRole(turn.role, turn.content).replace(BLANK_LINES_RE, "\n");
+  const text = quoteAsData(closeOpenFences(clipTurnForRole(turn.role, turn.content))).replace(
+    BLANK_LINES_RE,
+    "\n",
+  );
   return `${ROLE_LABEL[turn.role]}: ${text}`;
 }
 
@@ -187,7 +236,9 @@ export function formatConversationBlock(
   conversation: { summary?: string; turns: ReadonlyArray<Pick<ConversationTurn, "role" | "content">> },
   opts: { header: string; footer: string; budgetChars?: number },
 ): string {
-  const summaryLines = summaryPoints(conversation.summary ?? "");
+  const summaryLines = summaryPoints(conversation.summary ?? "")
+    .map((l) => quoteAsData(l).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
   const head = summaryLines.length > 0 ? [SUMMARY_LABEL, ...summaryLines] : [];
   const kept = conversation.turns.filter((t) => t.content.trim());
   const lines = kept.map(turnLine);
@@ -245,10 +296,41 @@ function summaryPoints(summary: string): string[] {
     .filter(Boolean);
 }
 
-/** One summary point for a folded turn: its label and its opening words. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * One summary point for a folded turn: its label and its opening words
+ * (at most {@link SUMMARY_POINT_MAX_CHARS} of them). SAFE-12: words the turn
+ * held inside an untrusted-data fence stay inside that fence's own open and
+ * end markers in the point (the markers do not count against its size); a
+ * fence with no room left contributes nothing.
+ */
 export function summaryPoint(turn: Pick<ConversationTurn, "role" | "content">): string {
-  const words = turn.content.replace(/\s+/g, " ").trim();
-  return `- ${ROLE_LABEL[turn.role]}: ${clipTurnText(words, SUMMARY_POINT_MAX_CHARS)}`;
+  const head = `- ${ROLE_LABEL[turn.role]}: `;
+  const fences = [...turn.content.matchAll(UNTRUSTED_FENCE_RE)];
+  if (fences.length === 0) return `${head}${clipTurnText(oneLine(turn.content), SUMMARY_POINT_MAX_CHARS)}`;
+  let room = SUMMARY_POINT_MAX_CHARS;
+  const take = (raw: string): string => {
+    const words = oneLine(raw);
+    if (!words || room <= 1) return "";
+    const kept = clipTurnText(words, room);
+    room -= kept.length + 1;
+    return kept;
+  };
+  const parts: string[] = [];
+  let at = 0;
+  for (const m of fences) {
+    const before = take(turn.content.slice(at, m.index));
+    if (before) parts.push(before);
+    const excerpt = take(m[4] ?? "");
+    if (excerpt) parts.push(`<<<${m[1]} id=${m[2]} source=${m[3]}>>> ${excerpt} <<<END_${m[1]} id=${m[2]}>>>`);
+    at = m.index + m[0].length;
+  }
+  const after = take(turn.content.slice(at));
+  if (after) parts.push(after);
+  return `${head}${parts.join(" ")}`;
 }
 
 /** Summary size cap for a budget: a third of it, within [500, SUMMARY_MAX_CHARS]. */
@@ -274,7 +356,9 @@ export function appendSummary(summary: string, points: readonly string[], capCha
   const render = () =>
     [...(dropped > 0 ? [`(${dropped} earlier point${dropped === 1 ? "" : "s"} left out)`] : []), ...lines].join("\n");
   for (let i = 0; i < lines.length - 1 && render().length > capChars; i += 1) {
-    if (lines[i]!.length > SUMMARY_POINT_MIN_CHARS) {
+    // A point with a fenced excerpt is kept whole or left out, never cut
+    // inside its fence (SAFE-12).
+    if (lines[i]!.length > SUMMARY_POINT_MIN_CHARS && !FENCE_OPEN_RE.test(lines[i]!)) {
       lines[i] = clipTurnText(lines[i]!.replace(/…$/, ""), SUMMARY_POINT_MIN_CHARS);
     }
   }
@@ -358,7 +442,7 @@ export function boundConversation(
 }
 
 // ---------------------------------------------------------------------------
-// Retained conversations (conversation_threads, schema v12)
+// Retained conversations (conversation_threads, schema v13)
 // ---------------------------------------------------------------------------
 
 export type ConversationSurface = "discord" | "watch";

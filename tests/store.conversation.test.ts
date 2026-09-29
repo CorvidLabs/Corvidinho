@@ -1,6 +1,6 @@
 /**
  * AGENT-6.a / SESSION-6 (REQ-discord-472, REQ-watch-472) — retained
- * conversations: schema v12 `conversation_threads` (forward-only migration),
+ * conversations: schema v13 `conversation_threads` (forward-only migration),
  * each thread's condensed summary and last turns kept scrubbed for 30 days
  * after its last update and then purged, and the per-person delete the
  * forget-me flow (MEMORY-ACL-6) calls. Temp / in-memory DBs only.
@@ -20,6 +20,9 @@ import {
   githubParticipant,
   watchThreadKey,
 } from "../src/store/conversation.ts";
+import { buildPeopleDirectory, parsePeopleToml } from "../src/identity/people.ts";
+import { forgetMemoryTargets, forgetTargets } from "../src/memory/forget.ts";
+import { MemoryStore } from "../src/memory/store.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
 import { rescrubDatabase, SCRUB_TARGETS } from "../src/store/scrub.ts";
 
@@ -49,23 +52,28 @@ function tableCount(db: SqliteDatabase): number {
   return (db.query("SELECT COUNT(*) AS n FROM conversation_threads").get() as { n: number }).n;
 }
 
-describe("schema v12 conversation_threads (forward-only migration)", () => {
-  test("a v11 DB migrates to v12, keeps its rows, and a re-run changes nothing", () => {
-    expect(SCHEMA_VERSION).toBe(12);
+describe("schema v13 conversation_threads (forward-only migration)", () => {
+  test("a v12 DB (forget requests) migrates to v13, keeps its rows, and a re-run changes nothing", () => {
+    expect(SCHEMA_VERSION).toBe(13);
     const db = new SqliteDatabase(":memory:");
     cleanups.push(() => db.close());
     migrateCorvidinhoDb(db);
-    // Back to v11 with a live session row from before the upgrade.
+    // Back to v12 (main's forget_requests, shipped) with a live session row
+    // and a pending forget request from before the upgrade.
     db.exec("DROP TABLE conversation_threads");
-    db.run("UPDATE schema_meta SET value = '11' WHERE key = 'version'");
+    db.run("UPDATE schema_meta SET value = '12' WHERE key = 'version'");
     db.run(
       `INSERT INTO discord_sessions (id, channel_id, user_id, created_at, last_activity_at)
        VALUES ('sess_old', 'c', 'u1', 1, 2)`,
     );
+    db.run(
+      `INSERT INTO forget_requests (id, subject_kind, subject_id, requester_user_id, status, created_at, expires_at)
+       VALUES ('fr_old', 'user', 'u1', 'u1', 'pending', 1, 2)`,
+    );
     migrateCorvidinhoDb(db);
     const version = () =>
       (db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value;
-    expect(version()).toBe("12");
+    expect(version()).toBe("13");
     const cols = (db.query("PRAGMA table_info(conversation_threads)").all() as Array<{ name: string }>).map(
       (c) => c.name,
     );
@@ -83,6 +91,7 @@ describe("schema v12 conversation_threads (forward-only migration)", () => {
       "updated_at",
     ]);
     expect(db.query("SELECT id FROM discord_sessions").all()).toEqual([{ id: "sess_old" }]);
+    expect(db.query("SELECT id, status FROM forget_requests").all()).toEqual([{ id: "fr_old", status: "pending" }]);
     new ConversationStore({ db }).save({
       surface: "discord",
       threadKey: "channel:c",
@@ -91,8 +100,29 @@ describe("schema v12 conversation_threads (forward-only migration)", () => {
       turns: turns(2),
     });
     migrateCorvidinhoDb(db);
-    expect(version()).toBe("12");
+    expect(version()).toBe("13");
     expect(tableCount(db)).toBe(1);
+  });
+
+  test("a v11 DB migrates through v12 (forget requests) to v13", () => {
+    const db = new SqliteDatabase(":memory:");
+    cleanups.push(() => db.close());
+    migrateCorvidinhoDb(db);
+    db.exec("DROP TABLE conversation_threads");
+    db.exec("DROP TABLE forget_requests");
+    db.run("UPDATE schema_meta SET value = '11' WHERE key = 'version'");
+    migrateCorvidinhoDb(db);
+    expect((db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value).toBe(
+      "13",
+    );
+    const tables = (
+      db
+        .query(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('forget_requests', 'conversation_threads') ORDER BY name",
+        )
+        .all() as Array<{ name: string }>
+    ).map((r) => r.name);
+    expect(tables).toEqual(["conversation_threads", "forget_requests"]);
   });
 });
 
@@ -296,6 +326,96 @@ describe("SessionStore keeps a conversation past its session (AGENT-6.a / MEMORY
       (db.query("SELECT COUNT(*) AS n FROM conversation_threads WHERE user_id = 'u1'").get() as { n: number })
         .n,
     ).toBe(0);
+    expect(store.threadFor(theirs).map((t) => t.content)).toEqual(["their request"]);
+  });
+});
+
+describe("an approved forget-me deletes kept conversations (MEMORY-ACL-6 / AGENT-6.a)", () => {
+  const TOFU = "200000000000000002";
+  const KYN = "300000000000000003";
+  const dir = buildPeopleDirectory(
+    parsePeopleToml(`[people.tofu]
+display = "Tofu"
+discord_ids = ["${TOFU}"]
+github_logins = ["tofu-dev"]
+`),
+    { discordId: "100000000000000001", display: "Leif" },
+  );
+
+  test("forgetMemoryTargets deletes the person's records by Discord id, declared GitHub login and participation, with their memory, in one go", () => {
+    const db = memDb();
+    const conversations = new ConversationStore({ db });
+    conversations.save({
+      surface: "discord",
+      threadKey: "channel:c",
+      userId: TOFU,
+      summary: "- Human: tofu's earlier point",
+      turns: turns(2),
+      participants: [discordParticipant(TOFU)],
+    });
+    conversations.save({
+      surface: "watch",
+      threadKey: watchThreadKey("o/r", 7),
+      userId: "someone",
+      summary: "",
+      turns: turns(2),
+      participants: [githubParticipant("someone"), githubParticipant("Tofu-Dev")],
+    });
+    conversations.save({
+      surface: "discord",
+      threadKey: "channel:c",
+      userId: KYN,
+      summary: "",
+      turns: turns(2),
+      participants: [discordParticipant(KYN)],
+    });
+    new MemoryStore({ db }).store({ ownerUserId: "person:tofu", category: "preference", key: "tz", content: "TOFU-TZ" });
+
+    const targets = forgetTargets({ subjectKind: "person", subjectId: "tofu", requesterUserId: TOFU }, dir);
+    expect(targets.githubLogins).toEqual(["tofu-dev"]);
+    const done = forgetMemoryTargets(db, targets);
+    expect(done).toEqual({ memories: 1, turns: 0, conversations: 2 });
+    const left = db.query("SELECT user_id FROM conversation_threads").all() as Array<{ user_id: string }>;
+    expect(left).toEqual([{ user_id: KYN }]);
+  });
+
+  test("an undeclared asker's records go by their Discord id only", () => {
+    const db = memDb();
+    const conversations = new ConversationStore({ db });
+    conversations.save({ surface: "discord", threadKey: "channel:c", userId: KYN, summary: "", turns: turns(2) });
+    conversations.save({ surface: "discord", threadKey: "channel:c", userId: TOFU, summary: "", turns: turns(2) });
+    const targets = forgetTargets({ subjectKind: "user", subjectId: KYN, requesterUserId: KYN }, dir);
+    expect(targets.githubLogins).toEqual([]);
+    expect(forgetMemoryTargets(db, targets).conversations).toBe(1);
+    expect(tableCount(db)).toBe(1);
+  });
+
+  test("the running bridge's forgetTurnsOfUsers drops their live summaries and kept records, never another user's", () => {
+    const db = memDb();
+    let now = 5_000_000;
+    const store = new SessionStore({ db, ttlMs: TTL_MS, now: () => now, contextWindowTokens: 1024 });
+    const old = store.create({ channelId: "c", userId: TOFU });
+    store.recordTurn(old, "human", "my old request");
+    now += TTL_MS + 1;
+    expect(store.get(old.id)).toBeUndefined();
+    const live = store.create({ channelId: "c", userId: TOFU });
+    for (let i = 0; i < 12; i += 1) {
+      store.recordTurn(live, "human", `my request ${i} ${"x".repeat(300)}`);
+      store.recordTurn(live, "agent", `my answer ${i} ${"y".repeat(300)}`);
+    }
+    store.threadPrompt(live, "next");
+    expect(store.summaryFor(live)).not.toBe("");
+    const theirs = store.create({ channelId: "c", userId: KYN });
+    store.recordTurn(theirs, "human", "their request");
+
+    expect(store.forgetTurnsOfUsers([TOFU])).toBe(1);
+    expect(store.threadFor(live)).toEqual([]);
+    expect(store.summaryFor(live)).toBe("");
+    expect(
+      (db.query("SELECT COUNT(*) AS n FROM conversation_threads WHERE user_id = ?").get(TOFU) as { n: number }).n,
+    ).toBe(0);
+    // The next run replays nothing and keeps nothing of the forgotten thread.
+    expect(store.threadPrompt(live, "hello again")).toBe("hello again");
     expect(store.threadFor(theirs).map((t) => t.content)).toEqual(["their request"]);
   });
 });

@@ -7,7 +7,8 @@ artifact: tasks
 
 - [x] Confirm SESSION-5, SESSION-6, SESSION-3.a and AGENT-6.a are captured on the stacked base (`grep` in `hi/session.md` / `hi/agent.md`, `hi check` passes); not captured again.
 - [x] `src/store/conversation.ts`: window + 80% budget + 32000-char ceiling, pure fold with pinned task / latest instruction, bounded extractive summary, block renderer, `ConversationStore`, `forgetConversations`.
-- [x] Schema v12 `conversation_threads` (forward-only migration) and its `SCRUB_TARGETS` entry.
+- [x] Schema v13 `conversation_threads` (forward-only migration after main's v12 `forget_requests`) and its `SCRUB_TARGETS` entry.
+- [x] Merge with main: an approved forget-me (`forgetMemoryTargets`, `SessionStore.forgetTurnsOfUsers`) deletes kept conversations and live summaries; SAFE-12 quoting of replayed turns and summary points, fenced excerpts keep their markers; WATCH memory blocks go ahead of the thread block.
 - [x] `SessionStore`: `threadPrompt`, summary stored with the session and loaded on restart, conversation kept on idle-out / end / expired-at-load, turns past 200 folded, `retainedForReply` / `retainedForThread` / `resumeFromRetained`, `forgetConversations`, `purgeExpiredConversations`.
 - [x] Router SESSION-3.a path (reply and thread message, own conversation, same place, gates first, continue a live carrier).
 - [x] Bridge: `threadPrompt` on chat and button-pick runs, window from env, hourly purge timer.

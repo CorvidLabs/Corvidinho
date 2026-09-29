@@ -150,8 +150,12 @@ describe("WATCH follow-ups pick up the thread's conversation (REQ-watch-472)", (
     const follow = w.prompts[1]!;
     const block = follow.slice(0, follow.indexOf("[End of earlier conversation]"));
     expect(w.prompts[0]!.length).toBeGreaterThan(7000);
-    // Word for word (the block's one-paragraph rule only folds blank lines).
-    expect(block).toContain(`Human: ${w.prompts[0]!.replace(/\n\n/g, "\n")}\n`);
+    // Word for word (the block's one-paragraph rule only folds blank lines;
+    // SAFE-12 marks the old fence header `(quoted)`, its markers and the
+    // fenced words are unchanged).
+    const opening = w.prompts[0]!.replace(/\n\n/g, "\n").replace(/^\[untrusted /m, "(quoted) [untrusted ");
+    expect(opening).toContain("(quoted) [untrusted GitHub text");
+    expect(block).toContain(`Human: ${opening}\n`);
     expect(block).toContain("END-OF-TASK");
   });
 

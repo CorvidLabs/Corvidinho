@@ -15,7 +15,7 @@ artifact: docs
 - `docs/WATCH.md`: thread conversation bullet (REQ-watch-472).
 - `docs/DISCORD-GO-LIVE.md` and `.env.example`: the optional
   `CORVIDINHO_LLM_CONTEXT_TOKENS`.
-- `docs/BOX-UPDATE.md`: schema v12 and the kept conversations in
+- `docs/BOX-UPDATE.md`: schema v13 and the kept conversations in
   `corvidinho.db`.
 - `STATUS.md`: the remaining-gaps line no longer says long threads are
   elided and WATCH carries only the newest event.

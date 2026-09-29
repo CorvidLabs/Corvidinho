@@ -30,6 +30,7 @@
 import { join } from "node:path";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { injectionNoticeFromUnknown, type InjectionNotice } from "../agent/untrusted.ts";
 import {
   TIER_RANK,
   parseCapabilityTier,
@@ -340,6 +341,12 @@ export type DelegateChildOutcome = {
   totalTokens?: number;
   timedOut: boolean;
   aborted: boolean;
+  /**
+   * SAFE-13: one of the worker's own tool results looked like a
+   * prompt-injection attempt (validated tool name + reason ids from its
+   * result frame). The lead treats it as its own hit.
+   */
+  injection?: InjectionNotice;
 };
 
 /** After a worker exits (or is killed), how long its pipes may still drain. */
@@ -514,6 +521,8 @@ export async function runDelegateChild(opts: {
       aborted,
     };
     if (typeof r?.verified === "boolean") outcome.verified = r.verified;
+    const injection = injectionNoticeFromUnknown(r?.injection);
+    if (injection) outcome.injection = injection;
     if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
     if (typeof r?.summary === "string") {
       outcome.resultText = scrubSecrets(r.summary).trim().slice(0, DELEGATE_SUMMARY_MAX);

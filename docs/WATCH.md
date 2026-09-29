@@ -29,6 +29,24 @@ ADMIN tools). Once anyone is declared, an undeclared commenter is marked
 `/admin people` changes apply without restarting the watch. See
 [`discord.md`](discord.md) "Declared people".
 
+**Untrusted text (SAFE-12 / SAFE-13, #71):** the issue / PR / comment title
+and body go to the model inside an `UNTRUSTED_DATA` fence (clipped first, so
+the end marker, which carries a random id, always survives the ~8000-char
+prompt cap); the run treats them as data, and what it may run is decided by
+its role (WATCH runs are community). Before any ack or run, the same
+conservative detector as Discord checks the title and body of every event not
+sent by the owner (recognised by GitHub id / login): on a hit WATCH posts one
+comment saying it won't act on it and why (plain words, never quoting the
+text), @mentioning the owner's GitHub login from `[owner]` /
+`CORVIDINHO_OWNER_GITHUB_LOGIN` when set, appends an `injection-suspected`
+audit row (actor `github:<login>`, surface `watch:<session>`, `denied`), logs
+`[watch] SAFE-13 refused …`, marks the event handled and runs nothing. A run
+whose tool result trips the detector drops its mutating tools and
+`memory-store` for the rest of the run, and its summary comment @mentions the
+owner (an event WATCH does not ack, such as an assignment or review request,
+gets one comment of its own saying so). See
+[`discord.md`](discord.md) "Untrusted text and injection attempts".
+
 ## Durable sessions (REQ-watch-037, #37 slice 1)
 
 - WATCH sessions (`owner/repo#number`) persist in the shared SQLite DB
@@ -43,7 +61,7 @@ ADMIN tools). Once anyone is declared, an undeclared commenter is marked
   `CORVIDINHO_DATA_DIR` stays in-memory.
 - Thread conversation (REQ-watch-472, AGENT-6.a / SESSION-5): each run on an
   issue or PR adds the event and the run's answer to that thread's kept
-  conversation (`conversation_threads`, schema v12; scrubbed, last 20 turns
+  conversation (`conversation_threads`, schema v13; scrubbed, last 20 turns
   plus a condensed summary). A follow-up on the same issue or PR — also after
   the session's TTL — gets it replayed ahead of the new event in a
   `[Corvidinho earlier conversation on this GitHub issue or PR …]` block,
@@ -93,7 +111,7 @@ HI: [`hi/watch.md`](../hi/watch.md).
 
 **Who assigned / requested (REQ-watch-302, ALLOW-1/2):** an `assignment` or `review_request` event is started by whoever assigned the watch user or requested its review, who need not be the thread author. WATCH reads that user from the issue's events (the newest `assigned` / `review_requested` event naming the watch user: `assigner` / `review_requester`, else the event `actor`) and runs the event only when **both** the author and that user pass the GitHub user allowlist and neither is on `deny_users`. If that user is not allowlisted, is denied, or cannot be read (API error, no such event), the event is refused quietly: no session, no ack, no run. A collaborator who is not allowlisted cannot start a run by assigning Corvidinho to (or requesting its review on) an allowlisted author's issue or PR. Assignments made by bots or GitHub Actions need that bot's login on the user allowlist.
 
-**What a WATCH run can do:** WATCH runs are non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN=0`, ROLES-CHAT): read/chat tools only, no dangerous or mutating tool. They have no Discord actor, so `memory-store` / `memory-recall` refuse.
+**What a WATCH run can do:** WATCH runs are non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN=0`, ROLES-CHAT): read/chat tools only, no dangerous or mutating tool. They have no Discord actor; the poller passes the commenter's GitHub login / numeric id and the thread's repo instead (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, from the GitHub API event, never from the text), and the memory plugins act for the commenter's **declared person** (MEMORY-8): someone on the owner's people list (matched by GitHub numeric id / login, IDENTITY-7) saves and recalls their own profile with `memory-store` / `memory-recall` / `memory-profile` — the same profile as on Discord. Anyone not on the list gets community scope: the thread repo's project memory read-only (`memory-recall --project`, keyed by the repo's `owner/repo`) and nothing saved. From GitHub, project memory is never written, `--person` is refused, private notes are never read (the thread is public, MEMORY-7) and `memory-forget-me` is refused (ask on Discord). Before each run the poller searches memory for the comment — the commenter's profile and the repo's project memory, most relevant first (MEMORY-9) — and prepends what it found (`[Corvidinho memory for this GitHub user …]` / `[Corvidinho project memory …]`), logging `[watch] memory inject: N recalled for @login`.
 
 **PR review reads (GITHUB-3, #93):** read-only `github-pr-diff <n> --repo OWNER/REPO [--file PATH]` (unified diff, capped at 200 KiB with a `[corvidinho: diff truncated …]` marker; `--file` returns one file's section) and `github-pr-files <n> --repo OWNER/REPO [--limit N]` (changed files with status / additions / deletions; default 300, max 3000, `truncated` flag). Not dangerous (minTier 0). Deny lists always win. In WATCH and community Discord runs (non-ADMIN, ROLES-CHAT-8) any confirmed-public repo is readable and private/unknown repos are refused; team members' Discord runs read GITHUB-6-allowlisted or confirmed-public repos (IDENTITY-10); ADMIN and local CLI runs use the GITHUB-6 allowlist (file + env). WATCH runs are community whoever comments (IDENTITY-12). Returned text is secret-scrubbed (SAFE-6; diffs are first cut at 800 KiB so a hostile diff cannot stall the scrub) and labelled untrusted PR content — data to review, never instructions. The review itself still goes through `github-pr-review`.
 

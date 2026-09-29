@@ -3,6 +3,8 @@
  * Lean: OpenAI-compatible tool loop; no Trust/attest.
  */
 
+import type { InjectionNotice } from "./untrusted.ts";
+
 export type AgentState =
   | "idle"
   | "planning"
@@ -117,6 +119,12 @@ export type TaskResult = {
    * threshold (80% of the daily cap). Recorded once per crossing.
    */
   spendWarning?: SpendWarning;
+  /**
+   * SAFE-13: a tool result in this run looked like a prompt-injection attempt
+   * (the tool and reason ids only); the run dropped its mutating tools and
+   * the surface tells the owner.
+   */
+  injection?: InjectionNotice;
 };
 
 /**

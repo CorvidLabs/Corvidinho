@@ -11,7 +11,7 @@ module: watch
 - `tests/watch.cli.test.ts` — missing token clean exit; help lists watch
 - `tests/watch.session-store.durable.test.ts` — schema v6, durable reload, soft TTL keep-alive/expiry, one session per issue, SAFE-6 topic scrub, poller restart continuity, stop halts mid-cycle, single-flight cycles, per-event failure isolation, second-watcher row replacement (REQ-watch-037)
 - `tests/watch.dedup-durable.test.ts` — handled ids survive a poller restart (no second run/ack/summary), a 2000-id stranger flood cannot evict a handled trusted id, a failed id write leaves the event for the next cycle (even when a retry would succeed), a failed acked/summarized write after the comment still runs the agent once, durable per-kind id stores (REQ-watch-247)
-- `tests/watch.conversation.test.ts` — a follow-up on the same issue replays the earlier event and answer ahead of the new event (another issue and the first event get no block; Planning skips it); past the session's TTL it still replays, after 30 days it is purged; with a 1024-token window a long thread stays under 80% with the opening and latest request whole; a 7000+-char opening event prompt replays whole; stored turns scrubbed, participants the lowercased senders, forgetting a commenter's login deletes the thread (REQ-watch-472)
+- `tests/watch.conversation.test.ts` — a follow-up on the same issue replays the earlier event and answer ahead of the new event (another issue and the first event get no block; Planning skips it); past the session's TTL it still replays, after 30 days it is purged; with a 1024-token window a long thread stays under 80% with the opening and latest request whole; a 7000+-char opening event prompt replays whole (its fence header marked `(quoted)`, SAFE-12); stored turns scrubbed, participants the lowercased senders, forgetting a commenter's login deletes the thread (REQ-watch-472)
 
 ## Rate limit on the ack or summary comment (REQ-watch-011 modified, WATCH-RELIABILITY-3)
 
@@ -51,3 +51,35 @@ module: watch
   searcher carries `user_id` to `senderId`; `startWatchPoller` re-reads people
   from its allowlist file per event.
 
+## Untrusted text on WATCH (REQ-watch-071, SAFE-12/13)
+
+- `tests/safe.injection.test.ts` › "WATCH fences the title and body …":
+  `routeEvent` puts the title and body inside an `UNTRUSTED_DATA` fence after
+  the `[WATCH …]` header; a 20 000-char body that guesses the end marker is
+  clipped so the real end marker is last and the prompt stays within 8000
+  chars. › "SAFE-13 on WATCH": `watchInjectionVerdict` flags a non-owner body
+  or title and skips the owner's; through `startWatchPoller` an injected
+  comment runs nothing, posts one refusal comment @mentioning the owner's
+  GitHub login and audits one `injection-suspected` row (actor
+  `github:<login>`); the next ordinary event runs with its body fenced;
+  `buildSummaryBody` adds the owner line only when the run reports
+  `injection`; an assignment event (no ack, no summary) whose run reports
+  `injection` still gets one comment @mentioning the owner, not repeated on
+  the next poll.
+
+## Memory in GitHub runs (REQ-watch-067 / REQ-watch-008, MEMORY-8 / MEMORY-9)
+
+- `tests/memory.recall-github.test.ts` › "REQ-watch-008 / REQ-watch-067 spawn
+  env" — the WATCH spawn stamps the commenter's login, numeric id and the
+  thread's repo over stale values, with an empty Discord actor and
+  `CORVIDINHO_ACTING_IS_ADMIN=0`; › "WATCH poller searches memory for the
+  comment" — through `startWatchPoller` with an injected DB, a declared
+  commenter's prompt holds their profile row and the repo's project row and
+  never another person's, an undeclared commenter's holds only the project
+  row, and `runChat` gets `actingGithubLogin` / `actingGithubId` / `repo`.
+- `tests/memory.rank.test.ts` › "enrichWatchPromptWithMemories" — declared:
+  the block (empty one-liner when nothing is stored); undeclared with no
+  project rows or no store: prompt unchanged; the project block names the
+  repo; long rows are clipped at `WATCH_MEMORY_ROW_MAX_CHARS`.
+- `tests/memory.spawn-env.test.ts` › "WATCH spawn clears the acting env" still
+  holds (no Discord actor, no confirm tokens, non-ADMIN, non-interactive).

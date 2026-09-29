@@ -7,7 +7,7 @@ artifact: plan
 
 1. Confirm the captured ids on the stacked base (`grep` + `hi check`); no
    capture commit needed.
-2. `src/store/conversation.ts` + schema v12 + `SCRUB_TARGETS`.
+2. `src/store/conversation.ts` + schema v13 + `SCRUB_TARGETS`.
 3. `SessionStore` condensing, keeping, resuming, forgetting; router
    SESSION-3.a path; bridge wiring and purge timer.
 4. WATCH poller replay and record.

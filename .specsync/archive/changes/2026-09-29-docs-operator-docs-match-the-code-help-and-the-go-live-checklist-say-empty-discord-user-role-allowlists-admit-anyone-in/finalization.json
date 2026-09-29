@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in",
+  "implementation_commit": "53f2e5df126fb01632b641ba57f51997aea8660e",
+  "implementation_tree": "6ed47598f334304d9c48d1281a40e2eb5c22f739",
+  "contract_digest": "17f5be9ef1eff28799c184b55b475edcfb510473b4e5e18e490f71db0dbd81b7",
+  "workspace_digest": "6284ba7e1b3363472b53a23506076d7f600396f92395df26888c7b68fef9dfc3",
+  "closing_digest": "201f0e5cb5ec9f43e03e3520c14898a2b67c063b08d47afd162293279ee1782e",
+  "review_digest": "d1e237c3f3d31820e214ce3af917fa172fe707a0ae4222604e5146c3ace9984e",
+  "finalization_digest": "8ff80ffa429e27aa001c78d58664c411a8613209d64fd972820509ca111e8176",
+  "timestamp": 1790711111
+}

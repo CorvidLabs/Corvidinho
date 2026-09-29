@@ -26,7 +26,8 @@ because the prompt reaches the agent as one process argument. The session's
 opening human turn (the current task) and its newest human turn (its latest
 instruction) SHALL never be folded, and the new message SHALL never be
 touched, so all three reach the model word for word (secret-scrubbed,
-SAFE-6). A folded turn SHALL become one summary point
+SAFE-6; in the replay a line that opens like a Corvidinho block or a turn
+label is marked `(quoted)`, SAFE-12). A folded turn SHALL become one summary point
 `- Human: …` / `- You (Corvidinho): …` holding its own opening words
 (at most 160 characters); no model call. The summary SHALL stay within a
 third of the budget (500–6000 characters): past it older points are
@@ -36,9 +37,17 @@ are left and the prompt is still over, the summary gives way, never the
 pinned words. In the block the opening human turn comes first, then the
 label `Condensed summary of earlier turns (…)` and the points, then the
 kept turns; the block keeps its `[Corvidinho …]` header and no blank line.
+Condensed text stays data (SAFE-12, REQ-discord-071): replayed turns and
+summary points SHALL have invisible characters stripped and lines that open
+like a Corvidinho block or a turn label marked `(quoted)`; words a turn held
+inside an untrusted-data fence (`fenceUntrustedData`, e.g. a WATCH issue or
+comment body) SHALL stay inside that fence's own open and end markers in its
+summary point (the markers do not count against the 160 characters) and in
+a clipped turn (its end marker put back), and a summary point holding a fence
+SHALL be left out whole rather than shortened inside it.
 
 Stored with the session (SESSION-6). A fold SHALL store the summary with
-the session — in its `conversation_threads` record (schema v12), scrubbed —
+the session — in its `conversation_threads` record (schema v13), scrubbed —
 and rewrite the session's `discord_session_turns` rows to the kept turns.
 After a bridge restart the live session SHALL load its summary, so its
 next prompt picks up from the summary instead of the folded turns; a run with
@@ -91,15 +100,22 @@ SHALL clear that Discord user's live sessions' turns and summaries (the
 sessions stay open) and delete every retained record that is theirs, and
 `forgetConversations(db, { discordUserIds, githubLogins })`
 (`src/store/conversation.ts`) SHALL delete every record of the person or
-holding their words (WATCH participants, REQ-watch-472). Both are the
-per-person delete the forget-me flow calls once approved; no slash command or
-chat path is added here.
+holding their words (WATCH participants, REQ-watch-472). An approved
+forget-me (MEMORY-ACL-6, REQ-discord-101) SHALL delete, in the approval's
+transaction (`forgetMemoryTargets`), every retained record of the person —
+by their Discord ids and a declared person's linked GitHub logins, as its
+person or a participant — and count them on the owner's card when any went
+(the card names their kept conversations among what Approve deletes); the
+running bridge's `SessionStore.forgetTurnsOfUsers` SHALL also drop their live
+sessions' summaries and retained records, so nothing of theirs is replayed or
+kept again. No slash command or chat path is added here.
 
-Schema v12 (`SCHEMA_VERSION` 12) SHALL add `conversation_threads` by a
-forward-only migration (`id`, `surface`, `thread_key`, `user_id`,
-`session_id`, `project`, `summary`, `turns`, `participants`,
-`bot_message_ids`, `updated_at`; indexes on thread, session and
-`updated_at`), keeping every existing row; re-running it changes nothing.
+Schema v13 (`SCHEMA_VERSION` 13) SHALL add `conversation_threads` by a
+forward-only migration after v12 (`forget_requests`, REQ-discord-101)
+(`id`, `surface`, `thread_key`, `user_id`, `session_id`, `project`,
+`summary`, `turns`, `participants`, `bot_message_ids`, `updated_at`; indexes
+on thread, session and `updated_at`), keeping every existing row (a DB at v12
+keeps its forget requests); re-running it changes nothing.
 
 Acceptance Criteria
 - `CORVIDINHO_LLM_CONTEXT_TOKENS` sets the window (unset or not a positive integer → 8192; below 1024 → 1024); the condense budget is `floor(window × 0.8) × 4` characters, never past 32000.
@@ -113,7 +129,9 @@ Acceptance Criteria
 - A `/session start`-style talk on an explicit project resumes in that project (the bind works there); once the project is gone the resumed session's bind fails rather than working in the default project.
 - 30 days after its last update the record is purged and the reply gets no answer; a session nothing looked up for 30 days after its last activity keeps nothing; a session with nothing said keeps nothing.
 - `forgetConversations` deletes the person's retained records (Discord ids, GitHub logins case-insensitive, participants) and clears their live threads, never another person's; a later reply gets no answer.
-- A v11 DB migrates to v12 keeping its rows; `rescrubDatabase` re-scrubs `conversation_threads.summary` and `turns`.
+- A v12 DB migrates to v13 keeping its rows and its forget requests, and a v11 DB goes through v12 to v13; `rescrubDatabase` re-scrubs `conversation_threads.summary` and `turns`.
+- An approved forget-me deletes the person's retained records (Discord ids, a declared person's GitHub logins, threads they commented on) with their memory, nobody else's; the running bridge's `forgetTurnsOfUsers` drops their live summary and records, and their next prompt replays nothing.
+- A fenced turn folded into a summary point keeps its words between that fence's own markers; a summary over its cap leaves a fenced point out whole; replayed turns and summary points quote fake block lines and turn labels, and a turn clipped inside its fence gets its end marker back.
 
 ## Modified
 

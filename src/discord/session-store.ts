@@ -1204,6 +1204,41 @@ export class SessionStore {
   }
 
   /**
+   * MEMORY-ACL-6: drop the recorded turns of every session of these Discord
+   * users — the in-memory thread the next run replays (REQ-discord-072) as
+   * well as the stored rows — once the owner approved forgetting them. The
+   * sessions themselves stay. Their condensed summaries (in memory) and kept
+   * conversations (`conversation_threads`) go too, so nothing of theirs is
+   * replayed or kept again (AGENT-6.a / REQ-discord-472). Returns how many
+   * sessions had a thread cleared.
+   */
+  forgetTurnsOfUsers(userIds: readonly string[]): number {
+    const ids = new Set(userIds.map((s) => s.trim()).filter(Boolean));
+    if (ids.size === 0) return 0;
+    let cleared = 0;
+    for (const session of this.bySessionId.values()) {
+      if (!ids.has(session.userId)) continue;
+      if (this.turns.delete(session.id)) cleared += 1;
+      this.summaries.delete(session.id);
+      this.conversationIds.delete(session.id);
+      if (!this.db) continue;
+      try {
+        this.db.run(`DELETE FROM discord_session_turns WHERE session_id = ?`, [session.id]);
+      } catch (err) {
+        console.warn(
+          `[discord] forget: session thread delete for ${session.id} failed: ${formatErrorLine(err)}`,
+        );
+      }
+    }
+    if (this.conversations) {
+      this.bestEffort("forget", () =>
+        this.conversations!.deleteForPerson({ discordUserIds: [...ids] }),
+      );
+    }
+    return cleared;
+  }
+
+  /**
    * Active session for this Discord user in this channel (SESSION-MULTI-1).
    * Newest non-expired match wins. Thread-scoped talks use threadId as the
    * channel key when present.

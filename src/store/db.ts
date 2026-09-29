@@ -223,7 +223,39 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_pending_ask
 `;
 
 /**
- * v12 — retained conversations (SESSION-5/6, SESSION-3.a, AGENT-6.a;
+ * v12 — forget requests (MEMORY-ACL-6, #101): anyone may ask to be forgotten;
+ * the owner approves or denies on a DM Approve/Deny card. One row per ask:
+ * ids, status and timestamps only — never memory content or message text
+ * (nothing here to scrub, SAFE-6). At most one pending ask per subject.
+ */
+const SCHEMA_V12_SQL = `
+CREATE TABLE IF NOT EXISTS forget_requests (
+  id TEXT PRIMARY KEY NOT NULL,
+  subject_kind TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  requester_user_id TEXT NOT NULL,
+  origin_channel_id TEXT,
+  origin_parent_channel_id TEXT,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  card_channel_id TEXT,
+  card_message_id TEXT,
+  card_posted_at INTEGER,
+  decided_at INTEGER,
+  decided_by TEXT,
+  forgotten_count INTEGER,
+  notified_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_forget_requests_status
+  ON forget_requests(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_forget_requests_one_pending
+  ON forget_requests(subject_kind, subject_id)
+  WHERE status = 'pending';
+`;
+
+/**
+ * v13 — retained conversations (SESSION-5/6, SESSION-3.a, AGENT-6.a;
  * REQ-discord-472 / REQ-watch-472; src/store/conversation.ts): one row per
  * Discord conversation (a thread, or a channel talk and the sessions resumed
  * from it) or WATCH issue/PR thread, holding its condensed summary and last
@@ -232,7 +264,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_pending_ask
  * `project` is the Discord session's project directory, so a session resumed
  * from it works there again (SESSION-WORKTREE-4).
  */
-const SCHEMA_V12_SQL = `
+const SCHEMA_V13_SQL = `
 CREATE TABLE IF NOT EXISTS conversation_threads (
   id TEXT PRIMARY KEY NOT NULL,
   surface TEXT NOT NULL,
@@ -254,7 +286,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_threads_updated
   ON conversation_threads(updated_at);
 `;
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -367,6 +399,11 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V12_SQL);
     db.run("UPDATE schema_meta SET value = '12' WHERE key = 'version'");
     version = 12;
+  }
+  if (version < 13) {
+    db.exec(SCHEMA_V13_SQL);
+    db.run("UPDATE schema_meta SET value = '13' WHERE key = 'version'");
+    version = 13;
   }
 }
 
