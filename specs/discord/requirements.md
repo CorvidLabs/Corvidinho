@@ -1078,6 +1078,16 @@ reply to it by the requester continues that session and the rules above apply
 (AUTONOMY-5/6). A SAFE-8 spend-cap stop SHALL NOT be stored as the pending
 ask and SHALL NOT get Choose buttons.
 
+A continue that is not an explicit cancel, while the session's `pendingAsk`
+is a button ask past its timeout, SHALL first clear that ask as a late press
+does (`clearPendingAsk`), before the thin-ack rule applies: the newest
+remaining open ask that has not timed out SHALL become `pendingAsk` (earlier
+timed-out asks are dropped), so a thin-ack continue restates that live ask,
+or, with none left, runs the agent, and SHALL NOT restate the timed-out ask's
+stub or its Choose button (DISCORD-ASK-5). A substantive continue then runs
+the agent as before, and an explicit cancel still clears every open ask with
+the short ack and no agent run.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
@@ -1109,6 +1119,10 @@ Acceptance Criteria
 - When the newest ask is picked while an earlier open ask has timed out, the earlier ask is dropped, not promoted: the session has no pending ask, a thin reply runs the agent, and a press on the dropped ask is a no-op.
 - `cancel` with several open asks clears all of them with the short ack and no agent run; a later press on any of them is a no-op.
 - `SessionStore`: one open ask persists as one JSON object; two persist as an array and reload as `pendingAsk` plus `openAsks` after a reopen; re-storing a held askId updates it in place; `findPendingAsk` finds an earlier open ask; clearing the newest promotes the earlier one; a new ask replaces a free-text ask but never a button ask; `null` clears all.
+- A thin reply after the session's only button ask timed out runs the agent (no prior-question block), posts no restated stub or Choose button for that ask, and leaves no pending ask.
+- A thin reply after the newest button ask timed out, while an earlier button ask is still open and not timed out, restates the earlier ask with its Choose button and does not run the agent; the earlier ask is the pending ask and no other ask stays open.
+- A substantive reply after the button ask timed out runs the agent and leaves no pending ask, so a later thin reply runs the agent too.
+- `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 
 ### REQ-discord-045
 
