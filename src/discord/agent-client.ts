@@ -23,6 +23,7 @@ import {
   type ProcEntry,
 } from "../plugins/proc-group.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
+import { DISCORD_ANSWER_MAX } from "./rich-reply.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
 
@@ -98,7 +99,9 @@ export type SpawnAgentClientOpts = {
 /**
  * Spawns: `<bin> task run --task <prompt> --output ndjson` (no --no-verify;
  * REQ-discord-085 / AGENT-4) and reads stdout line by line; the summary comes
- * from the `result` frame (fallback: summarizeTaskRunOutput).
+ * from the `result` frame, uncut up to DISCORD_ANSWER_MAX (DISCORD-16; the
+ * bridge splits it), with the last `usage` frame for the answer footer
+ * (DISCORD-15) (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
  * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
  * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011),
@@ -188,10 +191,13 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         killProcessTree(proc.pid, { known: atExit });
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-      const { exitCode, summary, totalTokens, result } = await collectTaskRunStream({
+      const { exitCode, summary, totalTokens, usage, result } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
+        // DISCORD-16: the whole answer (up to the result frame's cap); the
+        // bridge splits it into ≤2000-char messages instead of cutting at 1800.
+        bodyMax: DISCORD_ANSWER_MAX,
         onProgress: (p) => {
           onStatus?.({
             tool: p.tool,
@@ -229,6 +235,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(ask ? { ask } : {}),
         ...(spendWarning ? { spendWarning } : {}),
         ...(injection ? { injection } : {}),
+        // DISCORD-15: provider-reported usage for the answer footer.
+        ...(usage ? { usage } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {

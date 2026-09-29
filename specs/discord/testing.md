@@ -107,6 +107,23 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   does not, the body has no plumbing), `tests/discord.slash-ask7.test.ts`
   (`/session start` and `/work`); collapse assertions in ask-ping, spend and
   inflight-replies tests expect the footer-only embed (no live Discord).
+- DISCORD-15/15.a/16 rich replies (REQ-discord-075, REQ-discord-457):
+  `tests/discord.rich-reply.unit.test.ts` (fence-safe split, moved and
+  reopened blocks, closed open fence, space / surrogate-safe cuts, role note in
+  the last part, scrub before split, embed only for long plain prose, fresh
+  part mentions (a mention past the first part pings there once), the
+  whole-answer cap, tokens / cost unknown never $0, owner-only spend in the
+  footer) and `tests/discord.rich-replies.test.ts` (bridge chat, fallback
+  reply, button-pick resume, `/work`, `/session start` split with the footer on
+  the last part; a split fallback reply pings the owner on the part holding
+  the SAFE-8 warning line, once; a SAFE-13 injection line keeps the whole
+  split answer, pings the owner once on the part holding it (fallback) or by
+  one ping post (collapsed), with the role note whole in the last part;
+  owner vs non-owner footer and live token use; a free-text ask's Answer
+  button keeps the footer collapsed and on the fallback reply; Discord spawn
+  client passes the whole answer and `usage`, WATCH keeps 1800; live gateway
+  sends 2000 characters with the embed). Footer assertions elsewhere expect the
+  time segment (`model | Ns`).
 
 ## Button-pick resume identity (REQ-discord-446, IDENTITY-4)
 

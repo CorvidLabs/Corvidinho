@@ -49,6 +49,14 @@ import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 
+/** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
+function answerFooterText(before: string, after?: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return expect.stringMatching(
+    new RegExp(`^${esc(before)} \\| \\d+s${after ? ` \\| ${esc(after)}` : ""}$`),
+  );
+}
+
 const OWNER_ID = "111122223333444455";
 const OWNER = { discordId: OWNER_ID, display: "Leif" };
 const WARNING: SpendWarning = { spentMicroUsd: 4_100_000, capMicroUsd: 5_000_000, percent: 82 };
@@ -914,7 +922,7 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     // DISCORD-3.a — the answer keeps a footer-only embed (model).
     expect(finals[0]!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
-      footer: { text: loadLlmEnv(process.env).model },
+      footer: { text: answerFooterText(loadLlmEnv(process.env).model) },
     });
     // REQ-discord-215: one short fresh post pings the owner (no answer copy).
     expect(replies).toHaveLength(1);
@@ -1201,7 +1209,10 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     expect(finals[0]!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
       footer: {
-        text: `${loadLlmEnv(process.env).model} | state=blocked verified=false verifySkipped attempts=1`,
+        text: answerFooterText(
+          loadLlmEnv(process.env).model,
+          "state=blocked verified=false verifySkipped attempts=1",
+        ),
       },
     });
     expect(finals[1]!.embed).toStrictEqual(finals[0]!.embed);

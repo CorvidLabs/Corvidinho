@@ -4,8 +4,10 @@
  * reply, instead of ✅ Done embed + a second interaction reply.
  */
 
-import type { ThinkingStatus } from "./thinking-status.ts";
+import { planAnswerParts, postAnswerParts } from "./rich-reply.ts";
+import type { AnswerExtras, ThinkingStatus } from "./thinking-status.ts";
 import type { SlashInteraction } from "./slash-types.ts";
+import type { ChannelPost } from "./spend-post.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { SessionStub } from "./types.ts";
@@ -16,7 +18,11 @@ export type SlashFinishThinkingOpts = {
   interaction: SlashInteraction;
   sessionId: string;
   trackBotMessage?: (messageId: string, sessionId: string) => void;
-  thinkExtras?: { plumbing?: string; model?: string };
+  /**
+   * Answer footer extras (DISCORD-3.a / DISCORD-15): model, plumbing, and
+   * tokens + cost (`spend`) on the owner's own runs only.
+   */
+  thinkExtras?: AnswerExtras;
   /** When collapse is unavailable, mark thinking done vs fail. */
   ok: boolean;
   failStatus?: string;
@@ -47,6 +53,12 @@ export type SlashFinishThinkingOpts = {
    * id the gateway resolved), e.g. to record a Choose stub's id.
    */
   onDelivered?: (mode: "collapsed" | "fallback", messageId?: string) => void;
+  /**
+   * Fresh channel post for the parts of a long fallback answer after the one
+   * the deferred reply holds (DISCORD-16). Without it only the first part
+   * goes out.
+   */
+  post?: ChannelPost;
 };
 
 /**
@@ -71,8 +83,13 @@ export async function finishSlashWithThinking(
       })
     : null;
   if (collapsed) {
-    opts.trackBotMessage?.(collapsed.messageId, opts.sessionId);
-    opts.onDelivered?.("collapsed", collapsed.messageId);
+    // DISCORD-2: a reply to any part of the answer continues the session.
+    for (const id of collapsed.messageIds) opts.trackBotMessage?.(id, opts.sessionId);
+    // The Choose button rides the last part (a stub is one part).
+    opts.onDelivered?.(
+      "collapsed",
+      opts.components?.length ? collapsed.messageIds.at(-1) : collapsed.messageId,
+    );
     if (opts.interaction.deleteReply) {
       await opts.interaction.deleteReply();
     } else if (opts.interaction.editReply) {
@@ -96,9 +113,28 @@ export async function finishSlashWithThinking(
       );
     }
   }
+  // DISCORD-15/16: the answer carries its footer (on the last part) and is
+  // split at 2000 characters; the deferred reply holds the first part and
+  // `post` sends the rest.
+  const hasComponents = Boolean(opts.components?.length);
+  // A Choose stub carries no footer; an Answer button keeps it (DISCORD-ASK-4.a).
+  const footer =
+    opts.thinking && (!hasComponents || opts.keepFooter)
+      ? opts.thinking.answerFooter({
+          extras: opts.thinkExtras,
+          failed: opts.askStatus ? opts.askStatus.failed : !opts.ok,
+        })
+      : null;
+  const parts = planAnswerParts(opts.body, {
+    footer,
+    allowEmbed: !hasComponents && !opts.mentionUserIds?.length,
+  });
+  const first = parts[0]!;
+  const single = parts.length === 1 || !opts.post;
   const payload = {
-    content: opts.body,
-    ...(opts.components ? { components: opts.components } : {}),
+    ...(first.content !== null ? { content: first.content } : {}),
+    ...(first.embed ? { embeds: [first.embed] } : {}),
+    ...(opts.components && single ? { components: opts.components } : {}),
   };
   let messageId: string | undefined;
   if (opts.interaction.editReply) {
@@ -110,6 +146,19 @@ export async function finishSlashWithThinking(
     }
   } else {
     await opts.interaction.reply(payload);
+  }
+  if (!single && opts.post) {
+    const rest = await postAnswerParts(opts.post, {
+      channelId: opts.interaction.channelId,
+      content: opts.body,
+      footer,
+      mentionUserIds: opts.mentionUserIds,
+      components: opts.components,
+      ...(opts.keepFooter ? { keepFooter: true } : {}),
+      skipFirst: true,
+    });
+    for (const id of rest ?? []) opts.trackBotMessage?.(id, opts.sessionId);
+    if (hasComponents && rest?.length) messageId = rest.at(-1);
   }
   opts.onDelivered?.("fallback", messageId);
   return "fallback";

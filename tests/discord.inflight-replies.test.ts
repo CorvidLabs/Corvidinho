@@ -34,6 +34,14 @@ import {
 import type { InboundMessage } from "../src/discord/types.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
 
+/** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
+function answerFooterText(before: string, after?: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return expect.stringMatching(
+    new RegExp(`^${esc(before)} \\| \\d+s${after ? ` \\| ${esc(after)}` : ""}$`),
+  );
+}
+
 const ENV = {
   DISCORD_BOT_TOKEN: "fake",
   DISCORD_CHANNEL_IDS: "chan-1",
@@ -430,7 +438,7 @@ describe("DISCORD-ASK-6/7 collapsed replies clear the in-flight row (REQ-discord
     // DISCORD-3.a — the answer keeps a footer-only embed (model).
     expect(edit.embed).toStrictEqual({
       color: THINKING_COLORS.success,
-      footer: { text: loadLlmEnv(process.env).model },
+      footer: { text: answerFooterText(loadLlmEnv(process.env).model) },
     });
     expect(calls.replies).toHaveLength(0);
     expect(rowsAtCollapse).toEqual([1]);

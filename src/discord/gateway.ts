@@ -30,6 +30,7 @@ import type {
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
+import { DISCORD_MESSAGE_MAX } from "./rich-reply.ts";
 import type { DiscordModal } from "./ask-buttons.ts";
 import { buildVersionPresenceData } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
@@ -107,6 +108,8 @@ export type GatewayHandlers = {
   reply?: (opts: {
     channelId: string;
     content: string;
+    /** Answer footer or long-prose embed (DISCORD-15/16). */
+    embed?: DiscordEmbedPayload;
     replyToMessageId?: string;
     /**
      * Users (besides the replied-to author) this post may ping — the ask's
@@ -403,11 +406,12 @@ export async function createLiveGateway(
 
     const send = async (opts: SlashReplyPayload, mode: "reply" | "edit") => {
       // REQ-discord-205: /session start and /work carry model-written text.
+      // DISCORD-16: answers may fill Discord's 2000-char limit; splits happen upstream.
       const payload: Record<string, unknown> = {
         allowedMentions: outboundAllowedMentions(),
       };
       if (opts.content !== undefined) {
-        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+        payload.content = defangMassMentions(opts.content).slice(0, DISCORD_MESSAGE_MAX);
       }
       if (opts.embeds?.length) {
         payload.embeds = opts.embeds.map((e) => ({
@@ -595,6 +599,7 @@ export async function createLiveGateway(
   handlers.reply = async ({
     channelId,
     content,
+    embed,
     replyToMessageId,
     mentionUserIds,
     components,
@@ -607,7 +612,15 @@ export async function createLiveGateway(
       // REQ-discord-205: never parse mentions from (model-written) content;
       // only the replied-to author and mentionUserIds (an ask) may ping.
       const sent = await channel.send({
-        content: defangMassMentions(content).slice(0, 1900),
+        // DISCORD-16: answers arrive split to Discord's 2000-char limit.
+        ...(content || !embed ? { content: defangMassMentions(content).slice(0, DISCORD_MESSAGE_MAX) } : {}),
+        ...(embed
+          ? {
+              embeds: [
+                { description: embed.description, color: embed.color, footer: embed.footer },
+              ],
+            }
+          : {}),
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
@@ -701,7 +714,7 @@ export async function createLiveGateway(
       };
       if (content === null) payload.content = null;
       else if (content !== undefined) {
-        payload.content = defangMassMentions(content).slice(0, 1900);
+        payload.content = defangMassMentions(content).slice(0, DISCORD_MESSAGE_MAX);
       }
       if (embed === null) payload.embeds = [];
       else if (embed) {

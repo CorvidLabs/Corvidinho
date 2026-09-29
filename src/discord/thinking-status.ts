@@ -1,7 +1,16 @@
 /**
  * DISCORD-3 live thinking status — thin steal from corvid-agent
  * progress-response / embeds (edit-in-place; no ProcessManager).
+ *
+ * DISCORD-15 / DISCORD-15.a / DISCORD-16 (#75): the final answer's footer
+ * carries the model and time for everyone, plus tokens and cost on the
+ * owner's own runs only (`showUsage`, `AnswerExtras.spend`); a long answer is
+ * split fence-safe into several messages (rich-reply.ts), the footer on the
+ * last one.
  */
+
+import { formatUsd } from "../agent/spend-notice.ts";
+import { planAnswerParts } from "./rich-reply.ts";
 
 export const THINKING_COLORS = {
   working: 0x5865f2, // blurple
@@ -37,6 +46,28 @@ export type ThinkingSnapshot = {
    * the final chat reply body.
    */
   plumbing?: string;
+};
+
+/**
+ * DISCORD-15 — tokens and cost an owner-run answer footer shows. A field
+ * left out is unknown and shows as unknown (never 0 / $0, SAFE-16).
+ */
+export type AnswerSpend = {
+  /** Provider-reported tokens for the run. */
+  totalTokens?: number;
+  /** Run cost in micro-USD from the model's known price. */
+  costMicroUsd?: number;
+};
+
+/** What a final answer's footer shows besides the time (DISCORD-3.a, DISCORD-15). */
+export type AnswerExtras = {
+  plumbing?: string;
+  model?: string;
+  /**
+   * Tokens and cost — pass only for the owner's own runs (DISCORD-15.a,
+   * SAFE-14.a); left out, the footer shows model and time only.
+   */
+  spend?: AnswerSpend;
 };
 
 export type DiscordEmbedPayload = {
@@ -142,21 +173,46 @@ export function buildThinkingEmbed(snap: ThinkingSnapshot): DiscordEmbedPayload 
 }
 
 /**
- * DISCORD-3.a — footer-only embed kept on a collapsed final answer: the model
- * and the run's plumbing (`state=… verified=… [verifySkipped] attempts=…`),
- * so they stay out of the answer body. Null when neither is known (the
- * answer then carries no embed).
+ * DISCORD-15 — the answer footer text: model, then (owner runs only, when
+ * `spend` is given) tokens and cost, then time, then the run's plumbing
+ * (DISCORD-3.a). Unknown tokens / cost print `tokens unknown` /
+ * `cost unknown`, never 0 or $0 (SAFE-16).
+ */
+export function formatAnswerFooter(snap: {
+  model?: string;
+  elapsedMs?: number;
+  plumbing?: string;
+  spend?: AnswerSpend;
+}): string {
+  const parts: string[] = [];
+  if (snap.model?.trim()) parts.push(snap.model.trim());
+  if (snap.spend) {
+    const tokens = snap.spend.totalTokens;
+    parts.push(tokens != null && tokens > 0 ? `${formatTokenCount(tokens)} tokens` : "tokens unknown");
+    const cost = snap.spend.costMicroUsd;
+    parts.push(cost != null && cost > 0 ? formatUsd(cost) : "cost unknown");
+  }
+  if (snap.elapsedMs != null) parts.push(formatElapsed(snap.elapsedMs));
+  if (snap.plumbing?.trim()) parts.push(snap.plumbing.trim());
+  return parts.join(" | ");
+}
+
+/**
+ * DISCORD-3.a / DISCORD-15 — footer-only embed kept on a final answer: the
+ * model, tokens and cost (owner runs only), the time and the run's plumbing
+ * (`state=… verified=… [verifySkipped] attempts=…`), so they stay out of the
+ * answer body. Null when none is known (the answer then carries no embed).
  */
 export function buildAnswerFooterEmbed(snap: {
   phase: ThinkingPhase;
   model?: string;
   plumbing?: string;
+  elapsedMs?: number;
+  spend?: AnswerSpend;
 }): DiscordEmbedPayload | null {
-  const parts = [snap.model?.trim(), snap.plumbing?.trim()].filter(
-    (p): p is string => Boolean(p),
-  );
-  if (!parts.length) return null;
-  return { color: phaseColor(snap.phase), footer: { text: parts.join(" | ") } };
+  const text = formatAnswerFooter(snap);
+  if (!text) return null;
+  return { color: phaseColor(snap.phase), footer: { text } };
 }
 
 /**
@@ -195,6 +251,28 @@ export type ThinkingOutbound = {
     channelId: string;
     messageId: string;
   }) => Promise<boolean>;
+  /**
+   * Optional fresh post (text and/or embed) for the parts of a long answer
+   * after the first (DISCORD-16). Without it an answer that needs more than
+   * one message is not collapsed (the caller falls back to a reply).
+   */
+  sendMessage?: (opts: {
+    channelId: string;
+    content: string;
+    embed?: DiscordEmbedPayload;
+    mentionUserIds?: string[];
+    components?: unknown[];
+  }) => Promise<{ messageId: string } | null>;
+};
+
+/** The messages a final answer went out as (DISCORD-16). */
+export type FinalizedAnswer = {
+  /** The progress message, now the answer's first part. */
+  messageId: string;
+  /** Every part that went out, in order (the first is `messageId`). */
+  messageIds: string[];
+  /** False when a later part could not be edited or posted. */
+  complete: boolean;
 };
 
 export type ThinkingStatusOpts = {
@@ -204,6 +282,11 @@ export type ThinkingStatusOpts = {
   sessionId: string;
   /** LLM model id shown in the footer when known (DISCORD-3.a). */
   model?: string;
+  /**
+   * The acting user is the owner (DISCORD-15.a): only then does the live
+   * status show token use. Default false — non-owner runs never show it.
+   */
+  showUsage?: boolean;
   /**
    * Reuse an existing channel message (e.g. Choose stub) as the progress
    * surface instead of posting a new embed (DISCORD-ASK-7 button-pick path).
@@ -236,6 +319,12 @@ export class ThinkingStatus {
   private description?: string;
   private model?: string;
   private plumbing?: string;
+  private spend?: AnswerSpend;
+  private readonly showUsage: boolean;
+  /** Time the answer footer shows, frozen when the answer first goes out. */
+  private finalElapsedMs?: number;
+  /** The answer's messages after finalizeContent (DISCORD-16), with what each holds. */
+  private answerMessages: Array<{ messageId: string; key: string }> = [];
   private phase: ThinkingPhase = "starting";
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private closed = false;
@@ -247,6 +336,7 @@ export class ThinkingStatus {
     this.sessionId = opts.sessionId;
     this.existingMessageId = opts.existingMessageId?.trim() || undefined;
     this.model = opts.model?.trim() || undefined;
+    this.showUsage = opts.showUsage === true;
     this.debounceMs = opts.debounceMs ?? 3000;
     this.tickMs = opts.tickMs ?? 3000;
     this.now = opts.now ?? (() => Date.now());
@@ -257,12 +347,45 @@ export class ThinkingStatus {
     return this.messageId;
   }
 
+  /**
+   * Time since start for the answer footer (DISCORD-15); frozen once the
+   * answer first went out, so a later re-edit keeps the same footer.
+   */
+  get elapsedMs(): number {
+    return this.finalElapsedMs ?? this.now() - this.startedAt;
+  }
+
+  /**
+   * DISCORD-15 — the answer's footer-only embed for a fallback reply (or the
+   * collapsed answer): model, tokens and cost when `extras.spend` is given
+   * (owner runs), time, plumbing. Records the extras like finalizeContent.
+   */
+  answerFooter(opts: { extras?: AnswerExtras; failed?: boolean }): DiscordEmbedPayload | null {
+    this.applyExtras(opts.extras);
+    const phase: ThinkingPhase = (opts.failed ?? this.phase === "error") ? "error" : "done";
+    this.finalElapsedMs ??= this.now() - this.startedAt;
+    return buildAnswerFooterEmbed({
+      phase,
+      model: this.model,
+      plumbing: this.plumbing,
+      elapsedMs: this.finalElapsedMs,
+      spend: this.spend,
+    });
+  }
+
+  private applyExtras(extras: AnswerExtras | undefined): void {
+    if (extras?.plumbing != null) this.plumbing = extras.plumbing.trim() || undefined;
+    if (extras?.model != null) this.model = extras.model.trim() || undefined;
+    if (extras?.spend) this.spend = extras.spend;
+  }
+
   private snapshot(over: Partial<ThinkingSnapshot> = {}): ThinkingSnapshot {
     return {
       phase: over.phase ?? this.phase,
       tool: over.tool ?? this.tool,
       description: over.description ?? this.description,
-      tokens: over.tokens ?? this.tokens,
+      // DISCORD-15.a: token use shows on the owner's own runs only.
+      tokens: this.showUsage ? (over.tokens ?? this.tokens) : undefined,
       elapsedMs: this.now() - this.startedAt,
       sessionId: this.sessionId,
       model: over.model ?? this.model,
@@ -361,7 +484,7 @@ export class ThinkingStatus {
 
   async done(
     finalDescription?: string,
-    extras?: { plumbing?: string; model?: string },
+    extras?: AnswerExtras,
   ): Promise<void> {
     if (this.closed) return;
     this.stopTicker();
@@ -375,7 +498,7 @@ export class ThinkingStatus {
 
   async fail(
     finalDescription?: string,
-    extras?: { plumbing?: string; model?: string },
+    extras?: AnswerExtras,
   ): Promise<void> {
     if (this.closed) return;
     this.stopTicker();
@@ -391,49 +514,97 @@ export class ThinkingStatus {
    * DISCORD-ASK-6/7 — turn the progress message into the final channel body
    * (Choose stub or answer), replacing the thinking embed. A Choose stub
    * (`components`) carries no embed; a final answer keeps a footer-only
-   * embed with the model and `extras.plumbing` (DISCORD-3.a), colored as a
-   * failure when `failed`. `keepFooter` keeps that embed beside components
-   * that are not a Choose stub: a free-text ask's Answer button
-   * (DISCORD-ASK-4.a), whose post stays the turn's answer. A later call (e.g. appending a notice) keeps the
-   * plumbing and outcome of the first. Returns the message id on success;
-   * null when editMessage is unavailable or edit fails (caller should fall
-   * back to a new reply).
+   * embed with the model, the time, tokens and cost on the owner's runs
+   * (`extras.spend`, DISCORD-15/15.a) and `extras.plumbing` (DISCORD-3.a),
+   * colored as a failure when `failed`. `keepFooter` keeps that embed beside
+   * components that are not a Choose stub: a free-text ask's Answer button
+   * (DISCORD-ASK-4.a), whose post stays the turn's answer. DISCORD-16: an
+   * answer over 2000 characters is split fence-safe (rich-reply.ts) — the
+   * first part is the progress message, later parts are fresh posts
+   * (`sendMessage`, no pings), the footer and any `components` ride the last
+   * part; plain prose that fits one embed goes out as that embed instead. A
+   * later call (e.g. appending a notice) keeps the footer, time and outcome
+   * of the first and edits (or adds) only the parts that changed. Returns the
+   * answer's message ids on success; null when editMessage is unavailable,
+   * the first edit fails, or more parts are needed than `sendMessage` can
+   * post (caller should fall back to a new reply).
    */
   async finalizeContent(opts: {
     content: string;
     components?: unknown[];
     mentionUserIds?: string[];
-    extras?: { plumbing?: string; model?: string };
+    extras?: AnswerExtras;
     failed?: boolean;
     keepFooter?: boolean;
-  }): Promise<{ messageId: string } | null> {
+  }): Promise<FinalizedAnswer | null> {
     if (this.closed && !this.messageId) return null;
     this.stopTicker();
     const id = this.messageId;
     // Only close on success so callers can fall back to done()/fail()+reply
     // when editMessage is missing or the edit fails (DISCORD-ASK-7).
     if (!id || !this.outbound.editMessage) return null;
-    if (opts.extras?.plumbing != null) {
-      this.plumbing = opts.extras.plumbing.trim() || undefined;
-    }
-    if (opts.extras?.model != null) this.model = opts.extras.model.trim() || undefined;
+    const hasComponents = Boolean(opts.components?.length);
     const phase: ThinkingPhase =
       (opts.failed ?? this.phase === "error") ? "error" : "done";
-    const embed = opts.components?.length && !opts.keepFooter
-      ? null
-      : buildAnswerFooterEmbed({ phase, model: this.model, plumbing: this.plumbing });
-    const ok = await this.outbound.editMessage({
-      channelId: this.channelId,
-      messageId: id,
-      content: opts.content,
-      embed,
-      components: opts.components ?? null,
-      mentionUserIds: opts.mentionUserIds,
+    const footer = this.answerFooter({ extras: opts.extras, failed: opts.failed });
+    const parts = planAnswerParts(opts.content, {
+      // A Choose stub carries no footer; a free-text ask's Answer button
+      // keeps it (DISCORD-ASK-4.a) — the post is still the turn's answer.
+      footer: hasComponents && !opts.keepFooter ? null : footer,
+      allowEmbed: !hasComponents && !opts.mentionUserIds?.length,
     });
-    if (!ok) return null;
+    if (parts.length > Math.max(1, this.answerMessages.length) && !this.outbound.sendMessage) {
+      return null;
+    }
+    const messages: Array<{ messageId: string; key: string }> = [];
+    let complete = true;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+      const components = i === parts.length - 1 && hasComponents ? opts.components! : null;
+      const key = JSON.stringify([part.content, part.embed, components]);
+      const prev = i === 0 ? { messageId: id, key: this.answerMessages[0]?.key } : this.answerMessages[i];
+      if (prev) {
+        if (prev.key !== key) {
+          const ok = await this.outbound.editMessage({
+            channelId: this.channelId,
+            messageId: prev.messageId,
+            content: part.content,
+            embed: part.embed,
+            components,
+            ...(i === 0 && opts.mentionUserIds ? { mentionUserIds: opts.mentionUserIds } : {}),
+          });
+          if (!ok) {
+            if (i === 0) return null;
+            complete = false;
+            break;
+          }
+        }
+        messages.push({ messageId: prev.messageId, key });
+        continue;
+      }
+      const sent = await this.outbound.sendMessage!({
+        channelId: this.channelId,
+        content: part.content ?? "",
+        ...(part.embed ? { embed: part.embed } : {}),
+        // Later parts ping nobody: the collapsed-answer ping post does (REQ-discord-215).
+        mentionUserIds: [],
+        ...(components ? { components } : {}),
+      });
+      if (!sent) {
+        console.warn(`[discord] answer part ${i + 1}/${parts.length} for ${this.sessionId} not sent`);
+        complete = false;
+        break;
+      }
+      messages.push({ messageId: sent.messageId, key });
+    }
+    // A shorter re-edit drops the parts it no longer needs.
+    for (const stale of complete ? this.answerMessages.slice(parts.length) : []) {
+      await this.outbound.deleteMessage?.({ channelId: this.channelId, messageId: stale.messageId });
+    }
+    this.answerMessages = messages;
     this.closed = true;
     this.phase = phase;
-    return { messageId: id };
+    return { messageId: id, messageIds: messages.map((m) => m.messageId), complete };
   }
 
   /**
