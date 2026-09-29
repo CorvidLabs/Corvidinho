@@ -37,7 +37,8 @@ Every doctor check must pass there — `discord`, `github`, `github-watch`, `fle
 `verify-lane` that runs spec-check, `.specsync`, `specs`), and `allowlist-file` when an
 allowlist file exists (a file the loader cannot parse fails it) — or the update rolls back. `discord` and `github-watch`
 read the allowlist file and env like the bridge and watch (deny wins); `[warn]` / `[info]`
-lines (for example `llm` without a key) do not fail doctor. The `github-watch` check needs
+lines (for example `llm` without a key, or `backup` when `CORVIDINHO_BACKUP_DIR` is unset,
+unusable or its last nightly backup / restore test failed) do not fail doctor. The `github-watch` check needs
 `GITHUB_TOKEN`/`GH_TOKEN` and `CORVIDINHO_WATCH_USERNAME` in the env plus at least one usable
 allowed repo or org (allowlist file `[github]` or `CORVIDINHO_GITHUB_ALLOW_REPOS`/`_ORGS`),
 even on a box that does not run WATCH. If the env file is missing, the updater's own

@@ -6,6 +6,8 @@
  *   naming where the entries came from (file / env), never the entries.
  * - The LLM key `task run` uses (none ⇒ demo stub).
  * - The shared data dir (exists / can be created, writable).
+ * - The nightly backup (OPS-1/2): off when CORVIDINHO_BACKUP_DIR is unset,
+ *   else the directory, its snapshots and the last backup / restore test.
  * - The project files `task run`'s verify gate reads in the current dir
  *   (`fledge.toml`, its verify lane with spec-check, `.specsync/`, `specs/`),
  *   shared with the report-only `corvidinho init`.
@@ -22,6 +24,7 @@ import {
   statSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { Database } from "bun:sqlite";
 import { loadLlmEnv } from "./agent/execute.ts";
 import { findProjectRoot } from "./agent/project-instructions.ts";
 import { perTierModels } from "./agent/tier.ts";
@@ -34,8 +37,19 @@ import {
   resolveAllowlistPath,
 } from "./allowlist/load.ts";
 import type { AllowlistConfig } from "./allowlist/types.ts";
+import { AnnounceStore } from "./discord/announce-store.ts";
 import { mergeChannelIds } from "./discord/config.ts";
-import { resolveDataDir } from "./store/paths.ts";
+import {
+  BACKUP_DIR_ENV,
+  BACKUP_HOUR,
+  BACKUP_KEEP,
+  backupDirRefusal,
+  listSnapshots,
+  readBackupStatus,
+  resolveBackupConfig,
+  type BackupStatus,
+} from "./store/backup.ts";
+import { defaultDbPath, resolveDataDir } from "./store/paths.ts";
 import { expandWatchRepos } from "./watch/config.ts";
 
 export type DoctorCheck = {
@@ -630,4 +644,153 @@ export function projectFilesDoctorChecks(cwd: string = process.cwd()): DoctorChe
       create: "`specsync generate` scaffolds them",
     }),
   ];
+}
+
+// --- Nightly backup (OPS-1/2) -------------------------------------------------
+
+function utcMinute(ms: number): string {
+  return `${new Date(ms).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/** Nearest existing directory at or above `dir`, or null. */
+function nearestExistingDir(dir: string): string | null {
+  for (let cur = dir; ; ) {
+    try {
+      if (statSync(cur).isDirectory()) return cur;
+      return null;
+    } catch (e) {
+      if (!isMissing(e)) return null;
+    }
+    const parent = dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+
+/**
+ * OPS-1/2 (#68): where the nightly backup goes, or that there is none.
+ * `CORVIDINHO_BACKUP_DIR` unset ⇒ `[warn]` off. A relative path, a directory
+ * inside a git work tree, a path that is not a directory or cannot be
+ * written ⇒ `[warn]` with the reason. Otherwise `[ok]` with the snapshot
+ * count and newest and the last backup / restore test from the shared DB; a
+ * failing backup or restore test is `[warn]` with its stored (scrubbed)
+ * reason and whether the owner has been told. The backup is optional: this
+ * line never fails doctor, so it never blocks a box update's restart
+ * (docs/BOX-UPDATE.md). Creates nothing.
+ */
+export function backupDoctorCheck(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: { db?: Database } = {},
+): DoctorCheck {
+  const name = "backup";
+  const cfg = resolveBackupConfig(env);
+  if (cfg.kind === "off") {
+    return {
+      name,
+      ok: true,
+      mark: "warn",
+      detail: `off — ${BACKUP_DIR_ENV} is not set, so there is no nightly backup (OPS-1); set it to an absolute local directory outside any git repo`,
+    };
+  }
+  // Warn, never fail: the bridge and daemon run fine without a backup.
+  const fail = (detail: string): DoctorCheck => ({ name, ok: true, mark: "warn", detail });
+  if (cfg.kind === "invalid") return fail(`${cfg.error} — no nightly backup until it is fixed`);
+  const dir = cfg.dir;
+  const refusal = backupDirRefusal(dir);
+  if (refusal) return fail(refusal);
+  const probeIn = nearestExistingDir(dir);
+  if (!probeIn) return fail(`${dir} cannot be created (no existing parent directory)`);
+  try {
+    rmdirSync(mkdtempSync(join(probeIn, ".corvidinho-doctor-")));
+  } catch (e) {
+    return fail(
+      probeIn === dir
+        ? `${dir} is not writable (${errCode(e)})`
+        : `${dir} cannot be created (${probeIn} is not writable: ${errCode(e)})`,
+    );
+  }
+  let snapshots: ReturnType<typeof listSnapshots> = [];
+  try {
+    snapshots = listSnapshots(dir);
+  } catch (e) {
+    return fail(`${dir} cannot be listed (${errCode(e)})`);
+  }
+  // History from the shared DB, opened read-only (never created or migrated
+  // here); no DB file yet means no history.
+  let status: BackupStatus | null = null;
+  // OPS-1 "I'm told": a failure notice is posted only to the /announce channel.
+  let announceSet = false;
+  const readState = (db: Database) => {
+    status = readBackupStatus(db);
+    announceSet = new AnnounceStore(db).getChannelId() !== null;
+  };
+  let noDb = false;
+  if (opts.db) {
+    try {
+      readState(opts.db);
+    } catch {
+      status = null;
+    }
+  } else if (!existsSync(defaultDbPath({ env }))) {
+    noDb = true;
+  } else {
+    let ro: Database | undefined;
+    try {
+      ro = new Database(defaultDbPath({ env }), { readonly: true });
+      readState(ro);
+    } catch {
+      status = null;
+    } finally {
+      try {
+        ro?.close();
+      } catch {
+        // already closed
+      }
+    }
+  }
+  const parts = [
+    `${dir}${probeIn === dir ? "" : " (created on the first backup)"}`,
+    `${snapshots.length} snapshot(s)${snapshots[0] ? `, newest ${snapshots[0].name}` : ""}`,
+    `nightly from ${String(BACKUP_HOUR).padStart(2, "0")}:00 local time, keeps ${BACKUP_KEEP}`,
+  ];
+  if (noDb) {
+    parts.push("no backup yet (no corvidinho.db in the data dir yet)");
+    return { name, ok: true, detail: parts.join(" — ") };
+  }
+  // Read into a const: TS does not see the closure assignment above.
+  const st = status as BackupStatus | null;
+  if (!st) {
+    parts.push("backup history unreadable (data dir)");
+    return { name, ok: true, mark: "warn", detail: parts.join(" — ") };
+  }
+  const told = (pending: boolean) =>
+    pending
+      ? "owner not told yet (needs the Discord bridge with an announcements channel set)"
+      : "owner told";
+  let ok = true;
+  const b = st.backup;
+  if (b.failingSince !== null) {
+    ok = false;
+    parts.push(
+      `last backup FAILED (failing since ${utcMinute(b.failingSince)}): ${b.lastError ?? "no reason recorded"}; ${told(b.noticePending)}`,
+    );
+  } else {
+    parts.push(b.lastOkAt !== null ? `last backup ok ${utcMinute(b.lastOkAt)}` : "no backup yet");
+  }
+  const t = st.restoreTest;
+  if (t.failingSince !== null) {
+    ok = false;
+    parts.push(
+      `restore test FAILED (failing since ${utcMinute(t.failingSince)}): ${t.lastError ?? "no reason recorded"}; ${told(t.noticePending)}`,
+    );
+  } else {
+    parts.push(t.lastOkAt !== null ? `restore test ok ${utcMinute(t.lastOkAt)}` : "no restore test yet");
+  }
+  if (!announceSet) {
+    ok = false;
+    parts.push(
+      "no /announce channel set, so a failed backup or restore test is not posted to the owner (set one with `/announce channel`)",
+    );
+  }
+  return ok ? { name, ok: true, detail: parts.join(" — ") } : fail(parts.join(" — "));
 }

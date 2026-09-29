@@ -21,6 +21,9 @@ files:
   - tests/cli.clean-errors.test.ts
   - tests/fixtures/fake-http-401.ts
   - tests/cli.project-path.test.ts
+  - src/store/backup.ts
+  - tests/ops.backup.test.ts
+  - tests/ops.backup-wiring.test.ts
 
 db_tables: []
 depends_on:
@@ -65,6 +68,28 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
+| `backupDoctorCheck` | `env?, opts?: { db? }` | `DoctorCheck` | Doctor `backup` line (OPS-1/2, REQ-cli-680): `[warn]` off / unusable dir / failing job (reason, owner told or not) / no `/announce` channel set, `[ok]` dir + snapshots + last backup and restore test; never fails doctor; creates nothing |
+| `resolveBackupConfig` | `env?` | `BackupConfig` | `CORVIDINHO_BACKUP_DIR`: unset → `off`, relative → `invalid`, absolute → `on` + resolved dir (src/store/backup.ts) |
+| `gitWorkTreeAbove` / `backupDirRefusal` | `dir` | `string or null` | Nearest dir holding `.git`; why a dir cannot hold backups (in a git work tree as given or with symlinks resolved, not a directory, unreadable) |
+| `snapshotName` | `now: number` | `string` | `corvidinho-<YYYYMMDD>T<HHMMSS>Z.db` (UTC) |
+| `listSnapshots` | `dir` | `SnapshotInfo[]` | Snapshot files (name pattern only) newest first; missing dir → [] |
+| `rotateSnapshots` | `dir, keep?` | `string[]` | Delete all but the newest `keep` (≥1, default 7) snapshots; returns deleted names |
+| `currentSchemaTables` | — | `string[]` | Tables of a DB migrated to `SCHEMA_VERSION` (cached in-memory migrate) |
+| `checkDbFile` | `path` | `DbFileCheck` | Read-only open: integrity_check ok, schema version 1..current, current tables at the current version, row counts |
+| `takeSnapshot` | `db, dir, { now, keep? }` | `SnapshotResult` | `VACUUM INTO` temp (umask 077) → check → fsync → rename (0600) → rotate; `ensureScrubbed` first; never throws, no partial file |
+| `processesHolding` | `path` | `number[]` | Pids holding the file or its -journal/-wal/-shm open (`/proc/<pid>/fd`), plus a live `daemon.lock` beside a `corvidinho.db` |
+| `restoreSnapshot` | `RestoreOptions` | `RestoreResult` | Check a named snapshot, refuse a held target (even with `force`) or an existing one without `force`, copy next to the target, fsync, drop old sidecars, rename, re-check |
+| `runRestoreTest` | `dir, { tmpRoot?, expected? }` | `RestoreTestResult` | Restore the newest snapshot into a fresh temp dir with `restoreSnapshot`, compare row counts with `expected` when it names that snapshot, always delete the temp dir |
+| `localDay` | `now` | `string` | Local `YYYY-MM-DD` |
+| `claimBackupNight` | `db, now` | `boolean` | Claim tonight (from 03:00 local, once per local day per data dir; IMMEDIATE transaction on `schema_meta`) |
+| `recordJobFailure` / `recordJobSuccess` | `db, job, now, error?` | `boolean` | Failure: store the scrubbed reason; true (and an owner notice recorded) only when it starts a streak. Success: end the streak; true when one ended |
+| `restoreTestDue` | `db, now` | `boolean` | Never ran, last attempt ≥ 7 days ago, or failing |
+| `readBackupStatus` | `db` | `BackupStatus` | Night, last ok, failing since, last error, notice pending per job |
+| `pendingBackupNotices` / `claimBackupNotice` / `releaseBackupNotice` | `db, notice?` | — | Owner notices recorded and not posted; compare-and-delete take; hand back (a newer one wins) |
+| `formatBackupNotice` | `PendingBackupNotice` | `string` | Fixed owner text with the UTC time, never a path or the error (OPS-1 / OPS-2) |
+| `createBackupTicker` | `{ db, env?, log, notify?, tmpRoot? }` | `BackupTicker` | `tick(now)`: record a run a dead process left unfinished as its job's failure, claim the night, snapshot, restore test when due, record and log, deliver notices through `notify` (one pass at a time; handed back when not sent); `settle(timeoutMs?)` (on a timeout the notice in flight is handed back); `stop()` (take nothing more); never throws |
+| `markBackupRunning` / `clearBackupRunning` / `takeInterruptedBackupRun` | `db, job?, now?` | — / — / `{ job, at } or null` | The night's job in progress (`ops_backup_running`: job, time, pid, process start); cleared when the run ends; taken (compare-and-delete) only when its process is gone |
+| `consoleBackupLog` | `level, event, fields?` | `void` | Bridge log sink: one scrubbed `[backup] <event> {json}` line |
 
 ### Exported Constants
 
@@ -78,6 +103,11 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `DEFAULT_SHUTDOWN_GRACE_MS` | Daemon stop waits this long (30 s) for in-flight runs |
 | `DAEMON_LOCK_FILE` | `daemon.lock` in the data dir |
 | `PROJECT_ENV_TIMEOUT_MS` | Cap (15 s) on the one-off `.env` probe `--project` runs (REQ-cli-505) |
+| `BACKUP_DIR_ENV` | `CORVIDINHO_BACKUP_DIR` (OPS-1, REQ-cli-680) |
+| `BACKUP_KEEP` | Snapshots kept (7) |
+| `BACKUP_HOUR` | Local hour from which the nightly backup is due (3) |
+| `RESTORE_TEST_INTERVAL_MS` | Restore test cadence (7 days) |
+| `SNAPSHOT_RE` | Snapshot file name pattern (`corvidinho-<YYYYMMDD>T<HHMMSS>Z.db`) |
 
 ### Exported Types
 
@@ -91,6 +121,9 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `EnterProjectResult` | `{ ok: true, dir }` or `{ ok: false, error, hint }` from `enterProject` (REQ-cli-505) |
 | `ProjectDirError` | Error class for an unusable `--project`; `hint` is the operator's next step (REQ-cli-505) |
 | `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
+| `BackupConfig` / `SnapshotInfo` / `SnapshotResult` / `DbFileCheck` / `RestoreOptions` / `RestoreResult` / `RestoreTestResult` | Backup config, snapshot, check, restore and restore-test results (REQ-cli-680) |
+| `BackupJob` / `JobStatus` / `BackupStatus` / `PendingBackupNotice` | `backup` / `restore_test` state read from `schema_meta` |
+| `BackupLog` / `BackupLogLevel` / `BackupNotify` / `BackupTicker` | Ticker log sink (daemon logger shape), owner-notice poster, ticker contract |
 
 ## Invariants
 
@@ -102,15 +135,17 @@ doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `disc
 `plugins run <name> [--json] [-- ...args]`: every argv item after the first `--` that follows the name reaches the plugin verbatim; global flags, `--json` and help are read only before it (REQ-cli-186).
 Attribution output uses only the project name and repository link and contains no account handle.
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning and the ask recorded on the run row stay pending, and a bridge's next scheduler tick posts the ask to the schedule's channel (REQ-discord-347; the daemon never posts it).
-`daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Restarts are systemd's job (docs/DAEMON.md).
+`daemon` needs no Discord token, adds no env vars of its own (the nightly backup's optional `CORVIDINHO_BACKUP_DIR`, REQ-cli-680, is shared with the bridge), runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Restarts are systemd's job (docs/DAEMON.md).
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning stays pending for a bridge to deliver.
-`daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Before every tick it re-reads the allowlist (file, env overlays, `DISCORD_CHANNEL_IDS`) into the scheduler's gate in place, so `/admin` edits apply without a restart, and it passes the configured owner so the owner's schedules pass the creator gate (DISCORD-SCHEDULE-3 / REQ-cli-108); a file that does not load skips that tick (`tick.allowlist_failed`), and a tick still re-reading it when stop begins claims no run. Restarts are systemd's job (docs/DAEMON.md).
+`daemon` needs no Discord token, adds no env vars of its own (the nightly backup's optional `CORVIDINHO_BACKUP_DIR`, REQ-cli-680, is shared with the bridge), runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Before every tick it re-reads the allowlist (file, env overlays, `DISCORD_CHANNEL_IDS`) into the scheduler's gate in place, so `/admin` edits apply without a restart, and it passes the configured owner so the owner's schedules pass the creator gate (DISCORD-SCHEDULE-3 / REQ-cli-108); a file that does not load skips that tick's schedules (`tick.allowlist_failed`; the nightly backup, REQ-cli-680, still ticks), and a tick still re-reading it when stop begins claims no run. Restarts are systemd's job (docs/DAEMON.md).
 No command ends in a stack trace, a library object dump or Bun's crash footer (REQ-cli-419, CLI-4 / CLI-7 / SAFE-6): `runCli` sends anything `main` throws, and `plugins run` sends an unknown name or a throwing handler, to `reportCliError`, which prints `corvidinho: <line>` and `hint: …` on stderr (`--json`: `{ "ok": false, "error": <line> }` on stdout, hint on stderr) and exits with the error's own `exitCode` or 1. `<line>` is `formatErrorLine` (first message line, SAFE-6 scrubbed, secret env values redacted, capped). `discord register-commands` failures and `github watch` 401 stops are one line too.
-`daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
+`daemon` needs no Discord token, adds no env vars of its own (the nightly backup's optional `CORVIDINHO_BACKUP_DIR`, REQ-cli-680, is shared with the bridge), runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, releases the lock and exits 0. Restarts are systemd's job (docs/DAEMON.md).
 doctor and the report-only `corvidinho init` check the project files in the current dir through `projectFilesDoctorChecks` (CLI-4, REQ-cli-430), one line each: `fledge.toml` (present and valid TOML), `verify-lane` (`[lanes.verify]` in fledge.toml or a `.fledge/lanes/*.toml` import, read in directory order like fledge, runs spec-check: the defined `spec-check` task, or a step or task `deps` chain that runs `specsync check`; every task its steps and their `deps` name is defined), `.specsync` and `specs` (directories). A missing item is `[missing]` (exit 1), named in plain language with what fails without it and, where Fledge / SpecSync has one, the command that creates it (`fledge run --init`, `specsync init`, `specsync generate`); below a git project root that has the item, the line names that root to run from instead. Only regular files are opened; file contents and parser messages are never printed. `init` prints the `llm`, `fledge` and `specsync` lines plus the project-file lines, creates and changes nothing, and exits 1 only when an item is missing (the `llm` `warn` does not fail); Discord / GitHub keys and allowlists stay in doctor.
 
 `--project <path>` (CLI-5, REQ-cli-505) runs the top-level process as if started in `<path>`: before any command, the env becomes what Bun builds for a process started there (Bun's own `.env*` loading, probed once in `<path>` from `/proc/self/environ` with the CLI's own `--no-env-file` / `--env-file` flags and Bun config pinned to `SPAWN_BUN_CONFIG`; set variables win; the start directory's `.env*` values do not carry over, to this process or to any child it starts: a `Bun.spawn` / `Bun.spawnSync` without `env` gets the new `process.env`), then the process `chdir`s there, so `fledge.toml`, specs and project files are `<path>`'s. A missing, non-directory, unreadable or empty `--project` is one `reportCliError` line (exit 1) and changes nothing. Read only before `--`, never from `--task` text; spawned agents keep `--no-env-file`.
 `bun test` never writes the operator's state (REQ-cli-262, SAFE-5): the preload always points `CORVIDINHO_DATA_DIR` at its own temp dir, unsets `CORVIDINHO_AUDIT_HMAC_KEY`, `CORVIDINHO_WATCH_SPAWN_LOG` and `WORKTREE_BASE_DIR` plus the run settings that change test outcomes (`CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`), and makes `Bun.spawn` / `Bun.spawnSync` without an explicit `env` pass that env to children.
+
+Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_BACKUP_DIR` unset nothing is backed up and doctor prints `[warn] backup: off — …`; a relative path or a directory in a git work tree is never written. The scheduler tick (daemon and bridge) claims the night once per local day per data dir from 03:00 local time, writes a checked `VACUUM INTO` snapshot (umask 077, fsync, rename to `corvidinho-<UTC>Z.db`, 0600; `ensureScrubbed` first; newest 7 kept, other files untouched) and, when due (never ran, ≥7 days, or failing) and a snapshot exists, restores the newest into a temp dir through `restoreSnapshot`, checks integrity / schema version / tables / row counts against the recorded ones, and deletes it. Every run is logged (`backup.ok` / `backup.failed` / `restore_test.ok` / `restore_test.failed` / `restore_test.skipped`; the daemon adds `backup` to `daemon.started`). The first failure of a streak records an owner notice in `schema_meta` (later ones only update the scrubbed reason); the daemon never posts it (REQ-discord-680 delivers it). `backup restore` never overwrites a file a process holds open, even with `--force`; an existing idle target needs `--force`. A snapshot temp file more than an hour old (a crashed run's) is removed before the next snapshot; a backup dir reached through a symlink into a git work tree is refused. The night's job in progress is marked in `schema_meta` (pid + process start); a run whose process died before it finished is recorded as that job's failure (`interrupted: …`) at the next tick with the backup on, so it is told like any failure. The daemon's backup ticks even when its allowlist file fails to load. doctor's `backup` line is `[warn]` while no `/announce` channel is set, since the owner notice goes only there. State is `schema_meta` `ops_*` keys: no table, column or schema version.
 
 ## Behavioral Examples
 
@@ -136,6 +171,18 @@ doctor and the report-only `corvidinho init` check the project files in the curr
 - **Given** `CORVIDINHO_ALLOWLIST=shell-exec`
 - **When** the operator runs `corvidinho plugins run shell-exec --json -- ls -h --json`
 - **Then** the plugin gets `ls -h --json` and the result prints as JSON, not help
+
+### Scenario: The nightly backup fails
+
+- **Given** `CORVIDINHO_BACKUP_DIR` names a path that is a file and the daemon ticks after 03:00 local time
+- **When** the tick claims tonight's backup
+- **Then** it logs `backup.failed` (error level, the reason, `ownerNotice: "recorded"`), records the owner notice for a bridge to post, and the next night's failure is logged with `ownerNotice: "already recorded this failure streak"`
+
+### Scenario: Restoring onto the live DB while the bridge runs
+
+- **Given** the bridge holds `<data dir>/corvidinho.db` open
+- **When** the operator runs `corvidinho backup restore <snapshot> <data dir>/corvidinho.db --force`
+- **Then** it prints `restore refused: … is open in process <pid> …` and exits 1; the live DB is unchanged
 
 ### Scenario: Second daemon on one data dir
 
@@ -171,13 +218,23 @@ doctor and the report-only `corvidinho init` check the project files in the curr
 | Task run started with SIGINT ignored (background job) | SIGINT stays ignored; SIGTERM still cancels (exit 130) |
 | Daemon lock held by a live daemon | `daemon.lock_held` log line; exit 1 |
 | Daemon `CORVIDINHO_BIN` protocol mismatch | `daemon.protocol_mismatch` log line; lock released; exit 1 |
-| Daemon: allowlist file does not load at a tick | `tick.allowlist_failed` log line (loader error, no list values); tick skipped, nothing runs, due schedules stay due; the daemon keeps running |
+| Daemon: allowlist file does not load at a tick | `tick.allowlist_failed` log line (loader error, no list values); tick skipped, no schedule runs, due schedules stay due (the nightly backup still ticks, REQ-cli-680); the daemon keeps running |
+| `backup list` / `backup restore` with `CORVIDINHO_BACKUP_DIR` unset or relative | One line (`… is not set — no nightly backup is configured` / `must be an absolute path`); exit 1 |
+| `backup restore` wrong arg count or unknown subcommand | Usage line; exit 1 |
+| `backup restore` name not a snapshot name, not in the dir, or snapshot fails its check | `restore refused: …`; exit 1; target untouched |
+| `backup restore` target held open by a process (or a live `daemon.lock` beside `corvidinho.db`) | `restore refused: <target> is open in process <pids> …`, even with `--force`; exit 1 |
+| `backup restore` existing target without `--force`, or a directory target | `restore refused: … exists — pass --force …` / `… is a directory …`; exit 1 |
+| Nightly backup: dir unusable (relative, in a git work tree, not a directory, write error) or snapshot check fails | `backup.failed` log (error); no partial file; owner notice recorded once per streak; doctor `[warn] backup` with the reason |
+| Restore test fails (copy, check, row counts, temp dir) | `restore_test.failed` log (error); temp dir removed; owner notice once per streak; retried next night |
+| Nightly backup or restore test interrupted (its process died mid-run) | Next tick with the backup on: `backup.failed` / `restore_test.failed` (error, `interrupted: true`); owner notice once per streak |
+| Doctor: backup off, unusable or failing | `[warn] backup: …`; exit code unchanged (never blocks a box update) |
 
 ## Dependencies
 
 Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
 Consumes agent module for runTask / loadAgentConfig.
 Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), allowlist/config helpers, spawn agent client and protocol check, plus the shared store (`openCorvidinhoDb`, `resolveDataDir`, `scrubSecrets`).
+`src/store/backup.ts` uses the shared store (`migrateCorvidinhoDb`, `SCHEMA_VERSION`, `ensureScrubbed`, `formatErrorLine`, `scrubSecrets`) and the daemon lock helpers (`daemonLockPath`, `isHolderAlive`); the scheduler (`SchedulerServiceOpts.backup`) runs its ticker in the daemon and the bridge.
 
 ## Change Log
 
@@ -223,4 +280,5 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-27 | release-0-0-32-allowlisted-tools-reach-the-model-fledge-core-builtins-choose-asks-on-work-and-session-start-open-asks: Release 0.0.32: allowlisted tools reach the model, Fledge core builtins, Choose asks on work and session start, open asks kept per askId, role-refusal note, --project, doctor and init name project files |
 | 2026-09-27 | release-0-0-33-discord-8-acting-user-post-check-open-asks-scrubbed-at-rest-and-re-scrubbed-watch-comment-rate-limit: Release 0.0.33: DISCORD-8 acting-user post check, open asks scrubbed at rest and re-scrubbed, watch comment rate-limit backoff |
 | 2026-09-26 | plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json: Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI |
+| 2026-09-29 | nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per: Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68) |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
