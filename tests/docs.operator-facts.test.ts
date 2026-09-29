@@ -8,13 +8,14 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
+import { defaultAllowlistPaths, resolveAllowlistPath } from "../src/allowlist/load.ts";
 import { emptyConfig, type AllowlistConfig } from "../src/allowlist/types.ts";
 import {
   COLLAPSED_PING_NEEDS,
   COLLAPSED_PING_QUESTION,
   formatAskReply,
 } from "../src/discord/ask-ping.ts";
-import { loadBridgeConfig } from "../src/discord/config.ts";
+import { goLiveChecklist, loadBridgeConfig } from "../src/discord/config.ts";
 import {
   PermissionLevel,
   resolvePermissionLevel,
@@ -39,6 +40,17 @@ function section(md: string, heading: string): string {
     (l, i) => i > start && /^#+ /.test(l) && l.match(/^#+/)![0].length <= level,
   );
   return lines.slice(start, end < 0 ? undefined : end).join("\n");
+}
+
+/** What `corvidinho --help` prints, as an operator sees it. */
+function helpText(): string {
+  const r = Bun.spawnSync([process.execPath, "src/cli.ts", "--help"], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(r.exitCode).toBe(0);
+  return r.stdout.toString();
 }
 
 function allowlist(discord: Partial<AllowlistConfig["discord"]> = {}): AllowlistConfig {
@@ -171,9 +183,39 @@ describe("Discord user/role allowlists and ADMIN", () => {
   test("no doc says empty user/role lists are deny-all", () => {
     const wrong =
       /empty = deny-all (when user\/role gates apply|when those gates apply|when checked|for those checks)/;
-    for (const p of OPERATOR_DOCS) {
-      expect({ p, hit: read(p).match(wrong)?.[0] ?? null }).toEqual({ p, hit: null });
+    // A line naming the Discord user/role allow env vars that says empty
+    // refuses or denies (the old `--help` row: "... / _ROLES / _USERS   HEAR
+    // allowlists; empty = refuse (deny-all)").
+    const userRoleRow = /DISCORD_ALLOW_[A-Z_ /]*(_USERS|_ROLES)\b.*empty = (refuse|deny-all)/;
+    // Besides the markdown and templates: the go-live checklist that `doctor`
+    // and `discord bridge` print, and `corvidinho --help`.
+    const surfaces: [string, string][] = [
+      ...OPERATOR_DOCS.map((p): [string, string] => [p, read(p)]),
+      ["goLiveChecklist()", goLiveChecklist()],
+      ["--help", helpText()],
+    ];
+    for (const [p, text] of surfaces) {
+      expect({ p, hit: text.match(wrong)?.[0] ?? null }).toEqual({ p, hit: null });
+      const row = text.split("\n").find((l) => userRoleRow.test(l)) ?? null;
+      expect({ p, row }).toEqual({ p, row: null });
     }
+  });
+
+  test("--help and the go-live checklist say what empty user/role lists do (REQ-discord-043)", () => {
+    // Fact from the code (see the STANDARD / BLOCKED test above): both empty
+    // admits any caller in an allowlisted channel; one listed user narrows it.
+    const says =
+      /both empty = anyone in an allowlisted channel; once either is set, only those users, role holders and the owner/i;
+    for (const [p, text] of [
+      ["goLiveChecklist()", goLiveChecklist()],
+      ["--help", helpText()],
+    ] as const) {
+      const flat = text.replace(/\s+/g, " ");
+      expect({ p, says: says.test(flat) }).toEqual({ p, says: true });
+    }
+    expect(helpText().replace(/\s+/g, " ")).toMatch(
+      /CORVIDINHO_DISCORD_ALLOW_CHANNELS HEAR channel allowlist; empty = refuse start/,
+    );
   });
 
   test("no doc keys ADMIN on admin lists instead of the owner", () => {
@@ -194,6 +236,78 @@ describe("Discord user/role allowlists and ADMIN", () => {
     const keys = Object.keys(JSON.parse(json!)).map(Number);
     const reachable: number[] = [PermissionLevel.STANDARD, PermissionLevel.ADMIN];
     for (const k of keys) expect(reachable).toContain(k);
+  });
+});
+
+describe("allowlist file path (.env.example)", () => {
+  test("code: an explicit CORVIDINHO_ALLOWLIST_FILE is used as given, ~ included; unset reads the default paths", () => {
+    expect(
+      resolveAllowlistPath({ CORVIDINHO_ALLOWLIST_FILE: "~/.config/corvidinho/allowlist.toml" }, "/home/op"),
+    ).toBe("~/.config/corvidinho/allowlist.toml");
+    expect(defaultAllowlistPaths("/home/op")).toEqual([
+      "/home/op/.config/corvidinho/allowlist.toml",
+      "/home/op/.config/corvidinho/allowlist.json",
+    ]);
+  });
+
+  test("no doc sets CORVIDINHO_ALLOWLIST_FILE to a ~ path; .env.example says why and names the unset default", () => {
+    for (const p of OPERATOR_DOCS) {
+      for (const m of read(p).matchAll(/CORVIDINHO_ALLOWLIST_FILE=([^\s`'"]+)/g)) {
+        expect({ p, value: m[1], tilde: m[1]!.startsWith("~") }).toEqual({
+          p,
+          value: m[1],
+          tilde: false,
+        });
+      }
+    }
+    const env = read(".env.example");
+    const example = env.match(/^#\s*CORVIDINHO_ALLOWLIST_FILE=(\S+)$/m)?.[1];
+    expect(example?.startsWith("/")).toBe(true);
+    const flat = env.replace(/\n#\s*/g, " ");
+    expect(flat).toContain("~ is not expanded");
+    expect(flat).toContain("Unset already reads ~/.config/corvidinho/allowlist.toml|json");
+  });
+});
+
+describe("docs/DAEMON.md log events", () => {
+  const src = read("src/daemon/daemon.ts");
+  const table = section(read("docs/DAEMON.md"), "Logs")
+    .split("\n")
+    .filter((l) => l.startsWith("| `"));
+  const rowOf = (event: string) =>
+    table.find((l) => [...l.split("|")[1]!.matchAll(/`([a-z_.]+)`/g)].some((m) => m[1] === event));
+
+  test("the Logs table has a row for every event the daemon logs", () => {
+    const events = [
+      ...new Set([...src.matchAll(/"((?:daemon|tick|run|spend)\.[a-z_]+)"/g)].map((m) => m[1]!)),
+    ];
+    expect(src).toContain('log("info", "tick"');
+    events.push("tick");
+    expect(events).toContain("daemon.start_failed");
+    expect(events).toContain("spend.warning");
+    const missing = events.filter((e) => !rowOf(e));
+    expect(missing).toEqual([]);
+  });
+
+  test("daemon.start_failed: start refused, exit 1, the reason in `message`", () => {
+    // Code: the start-setup catch goes through fail(), which logs `message`
+    // and returns exit code 1.
+    expect(src).toContain('return fail("daemon.start_failed", errorText(err));');
+    expect(src).toMatch(/log\("error", event, \{ message \}\);[\s\S]*?exitCode: 1/);
+    const row = rowOf("daemon.start_failed");
+    expect(row).toBeDefined();
+    expect(row!).toContain("Start refused (exit 1)");
+    expect(row!).toContain("`message` gives the reason");
+  });
+
+  test("spend.warning: warn line with amounts and percent", () => {
+    const row = rowOf("spend.warning");
+    expect(row).toBeDefined();
+    expect(row!).toContain("(warn)");
+    for (const f of ["spentMicroUsd", "capMicroUsd", "percent"]) {
+      expect(src).toContain(`${f}: e.spendWarning.${f}`);
+      expect(row!).toContain(`\`${f}\``);
+    }
   });
 });
 
