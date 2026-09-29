@@ -183,7 +183,12 @@ appears in the final chat reply (DISCORD-3.a).
 
 `execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
-in addition to MEMORY instructions.
+in addition to MEMORY instructions. `execute` exports
+`DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS` (DISCORD-17, REQ-agent-476): the
+system prompt carries it only when the run's catalog offers
+`discord-send-file` and its env has a conversation channel
+(`CORVIDINHO_DISCORD_REPLY_CHANNEL_ID`), so the model never says it cannot
+send files or images there and sends a large diff as a `.diff` attachment.
 
 Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `src/agent/ask.ts` exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`,
@@ -385,6 +390,11 @@ message. No new env var, flag or protocol field.
 is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
 model.
+
+The attach instructions (REQ-agent-476, DISCORD-17) are in the system prompt
+exactly when `discord-send-file` is in the run's offered catalog and the run
+env names a conversation channel; a run that does not offer the tool, or has
+no conversation channel, never promises attachments.
 
 ## Behavioral Examples
 

@@ -110,6 +110,8 @@ files:
   - tests/discord.inflight-replies.test.ts
   - src/discord/allowed-mentions.ts
   - tests/discord.allowed-mentions.test.ts
+  - plugins/discord/send-file.ts
+  - tests/discord.send-file.test.ts
 
 db_tables: []
 depends_on:
@@ -322,6 +324,26 @@ send / embed edit / slash `reply` / `editReply` / component `reply` (and
 `mentionUserIds` as `users`. `LiveGatewayOptions.discord` optionally
 injects the discord.js module (tests); default is the dynamic import.
 
+Files and images in replies (REQ-discord-476, DISCORD-17):
+`plugins/discord/send-file.ts` registers `discord-send-file` (dangerous,
+mutating, minTier 1) through `loadDiscordPlugins` and exports
+`DISCORD_SEND_FILE_NAME`, `DISCORD_UPLOAD_MAX_BYTES` (8 MB),
+`REPLY_CHANNEL_ENV` / `REPLY_PARENT_CHANNEL_ENV`,
+`SEND_FILE_ALLOWED_EXTENSIONS`, `SEND_FILE_DESCRIPTION`, `fileAttachment`
+and `gitDiffAttachment`. Args: `<path>` (or `--path`) | `--git-diff
+[--staged]`, plus `--caption <text>`; `--channel` / `-c` is refused.
+`AgentRunChatOpts.replyChannelId` / `replyParentChannelId` carry the
+conversation's channel (the thread and its parent in a thread) and the spawn
+client always writes `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` /
+`CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` (empty when unset). The bridge
+passes them on chat, reply-continue, thread and ask-button runs;
+`/session start` and `/work` pass the command's channel; schedules pass none.
+`verifyRequesterCanSend` takes `attachFiles` (also AttachFiles; the test
+checker gets `{ attachFiles: true }` as a third argument) and
+`requester-perms.ts` exports `RequesterNeeds` and `REQUESTER_CANNOT_ATTACH`.
+`src/store/scrub.ts` exports `redactSecretEnvValues` (the secret env value
+redaction `formatErrorLine` uses).
+
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
@@ -397,6 +419,14 @@ slash reply/editReply, component reply/update, discord-post-message) parses
 no mentions from its content (`parse: []`,
 `@everyone` / `@here` defanged); only the replied-to author and the users an
 ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
+`discord-send-file` attaches only in the channel the bridge set for the run
+(never a model-chosen one; none ⇒ refused), after the channel allowlist (a
+thread through its parent) and the acting user's DISCORD-8 check with Attach
+Files; at most 8 MB, PNG / JPEG / GIF / WebP by magic bytes or UTF-8 txt /
+log / md / diff / patch / json / csv, text secret-scrubbed (SAFE-6), SAFE-2
+protected / `.specsync` / secret paths refused by name and by resolved
+target inside the project root, dry run posts nothing, audited as a dangerous
+plugin (REQ-discord-476);
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
@@ -551,6 +581,8 @@ REQ-discord-044).
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |
+| `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted, SAFE-2 / secret path (by name or link target), path outside the project, type not allowed or bytes not matching, over 8 MB, requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
+| `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
 ## Dependencies
