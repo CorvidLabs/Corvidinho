@@ -29,6 +29,7 @@ files:
   - src/allowlist/discord.ts
   - src/allowlist/index.ts
   - tests/allowlist.toml-multiline.test.ts
+  - tests/allowlist.tilde-path.test.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/ciStatus.ts
@@ -134,6 +135,11 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
+HEAR. `resolveAllowlistPath(env, home)` returns `CORVIDINHO_ALLOWLIST_FILE`
+with a leading `~` or `~/` read as `home` (`~user` and every other value as
+written), else the first default path that exists; the loader, owner loader,
+`/admin` writer and doctor all resolve the file through it. File/search
+plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 HEAR. `isChannelDenied` (`src/allowlist/discord.ts`) reports a `deny_channels`
 hit alone (case-insensitive, trimmed, as `checkChannel` uses it) so a thread
 gate can make a deny on the thread or its parent win (REQ-plugins-005). File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
@@ -752,6 +758,7 @@ and current rows for plugins host evolution.
 | 2026-09-27 | safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and: SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable) |
 | 2026-09-27 | plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and: PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |
+| 2026-09-29 | allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer: Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
