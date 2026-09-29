@@ -447,6 +447,7 @@ Acceptance Criteria
 - Start removes a leftover worktree of a run already recorded as failed and leaves worktrees with other names alone.
 - Start never touches a schedule-run worktree whose run another data dir owns, even when the daemon's project root is that worktree: its uncommitted files and branch stay.
 - The `docs/DAEMON.md` Logs table has a row for every event `src/daemon/daemon.ts` logs, including `daemon.start_failed` (start refused, exit 1, `message` gives the reason) and `spend.warning` (warn, `spentMicroUsd`, `capMicroUsd`, `percent`).
+- The `docs/DAEMON.md` Configuration row for the allowlists says an empty channel list refuses every schedule that has a channel and that users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs (REQ-discord-020); it never says empty means deny-all.
 
 ### REQ-cli-112
 
