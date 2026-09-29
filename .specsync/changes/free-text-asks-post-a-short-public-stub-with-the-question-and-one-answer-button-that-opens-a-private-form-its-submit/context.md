@@ -22,7 +22,7 @@ requester), DISCORD-ASK-3 (answer continues that requester's session, no
 public reply needed), DISCORD-ASK-4, DISCORD-ASK-5 (~30 min expiry, late press
 "that choice expired"), DISCORD-ASK-6/7/8.
 
-On the base (`f1809a5`) a free-text ask posts the quoted question with "Reply
+On the base (`53f2e5d`, as on `f1809a5` where this started) a free-text ask posts the quoted question with "Reply
 to this message to answer." and no component; the only way to answer is a
 public reply. The Choose-ask machinery (`src/discord/ask-buttons.ts`, the
 session store's open asks, `onComponent` gates from #232 / REQ-discord-201 /

@@ -61,8 +61,9 @@ button), `tests/discord.slash-pending-ask.test.ts` (restated `/work` ask has
 the hint), `tests/discord.slash-choose-ask.test.ts` (a `/work` free-text
 answer has one Answer button and its stub id).
 
-Fail-on-base proof (base `f1809a5`; branch sources saved, base swapped in,
-the five files run, branch restored — 83 pass, 0 fail after restore):
+Fail-on-base proof (base `53f2e5d`, current main; the same numbers on
+`f1809a5` before the rebase; base `src/discord` swapped in, the five files
+run, branch restored — 83 pass, 0 fail after restore):
 
 | Source | Result | Failing |
 |---|---|---|
@@ -75,8 +76,8 @@ The 14 that pass with the base bridge are the pure helper / gateway adapter
 tests and the refusals the base press gates already give any `cvask` id
 (another user, deny, off-channel, rate limit) — kept as regression guards.
 
-Full suite on the branch: `bun test` 2325 pass, 0 fail (2327 tests, 166
-files); `bunx tsc --noEmit` clean.
+Full suite on the branch: `bun test` 2363 pass, 2 skip, 0 fail (2365
+tests, 168 files); `bunx tsc --noEmit` clean.
 
 ## Requirement evidence
 
