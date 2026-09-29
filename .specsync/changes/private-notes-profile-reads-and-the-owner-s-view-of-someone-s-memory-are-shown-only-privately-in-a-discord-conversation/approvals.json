@@ -1,4 +1,64 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790726263,
+      "digest": "8b9543c098305ff5d918f26a673149499c43751006e6b6713561c30bb95eb203",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "private-notes-profile-reads-and-the-owner-s-view-of-someone-s-memory-are-shown-only-privately-in-a-discord-conversation",
+        "title": "Private notes, profile reads and the owner's view of someone's memory are shown only privately: in a Discord conversation the memory plugins hand that text past the model (privateText; the model gets a sent-privately placeholder), task run carries it as privateReplies, and the bridge sends it by DM to whoever asked on chat, button pick and Answer form resumes, /session start and /work, with a short sent-privately note in the channel and never the text; refused in schedules and GitHub threads (MEMORY-7.a, #101)",
+        "description": "Private notes, profile reads and the owner's view of someone's memory are shown only privately: in a Discord conversation the memory plugins hand that text past the model (privateText; the model gets a sent-privately placeholder), task run carries it as privateReplies, and the bridge sends it by DM to whoever asked on chat, button pick and Answer form resumes, /session start and /work, with a short sent-privately note in the channel and never the text; refused in schedules and GitHub threads (MEMORY-7.a, #101)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "hi/memory.md",
+          "plugins/memory/commands.ts",
+          "src/agent/execute.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/private-reply.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/types.ts",
+          "src/plugins/types.ts",
+          "tests/memory.private-view.test.ts",
+          "tests/memory.profiles.test.ts",
+          "tests/memory.recall-github.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "In a Discord conversation memory-recall --category private, the owner's memory-recall --person view and memory-profile (own or --person) return their text only in the result's privateText; data and message - all the model, the tool message and the ToolResult events see - are a sent-privately placeholder, so the model can never repeat it; in a schedule run or a GitHub (WATCH) thread those reads are refused (memory-profile on GitHub included); the local CLI with no role session shows them on the operator's terminal as before; the tool loop hands privateText to onPrivateReply, task run puts it on the result's privateReplies (json / ndjson, a retried attempt's repeat kept once), the Discord agent client reads it back validated (non-empty strings, at most 5, each cut to 6000); the bridge sends each private reply to the person who asked by direct message (scrubbed, split under the 1900-character DM cap) on chat, a button pick and an Answer form resume, /session start and /work, and the channel answer gets a short sent-privately note on top - or, when no DM path exists or a part does not go out, a note that it could not be sent - and never the text, which the session thread never records; everyday own recall and the memory inject are unchanged; tests/memory.private-view.test.ts covers each and fails on main"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "fa315e22ab1144629d27e275963924c3a370851b279ad12d15550c604622d909",
+        "cli": "a4c12e9dda5537e338cca00cdf5bb1c37cc945468b529fea7703374b711f4f4d",
+        "discord": "e2afecaa3a61b7ee8cfdfe47af3b566aadb48dcb3fd207fe5aec99974c591267",
+        "plugins": "25ef0e5c4e95b93ec1edfcfb9b4e2ecbed9360a43e5d47ca96b5d4a9b339746d"
+      }
+    }
+  ],
   "reopenings": []
 }
