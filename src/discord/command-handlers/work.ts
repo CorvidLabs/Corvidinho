@@ -6,7 +6,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
-import { enrichPromptWithProjectMemory, memoryInjectOptsFor } from "../memory-inject.ts";
+import { enrichPromptWithProjectMemory, MEMORY_INJECT_LIMIT, memoryInjectOptsFor } from "../memory-inject.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
@@ -114,7 +114,8 @@ export async function handleWorkCommand(
     people,
   });
   // MEMORY-6 (#101): the owner's and team's work starts from what earlier
-  // work learned about this repo (never for community; nothing when empty).
+  // work learned about this repo (never for community; nothing when empty),
+  // searched for the description (MEMORY-9, #67).
   const workCwd = ctx.store.cwdFor(session);
   const projectInject =
     actingRole === "owner" || actingRole === "team"
@@ -122,6 +123,8 @@ export async function handleWorkCommand(
           idInject.prompt,
           ctx.memoryStore,
           memoryInjectOptsFor({ userId: interaction.userId, people, role: actingRole, projectDir: workCwd }).project,
+          MEMORY_INJECT_LIMIT,
+          description,
         )
       : { prompt: idInject.prompt };
   // AGENT-6 (REQ-discord-072): the description opens the session's thread as

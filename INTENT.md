@@ -16,7 +16,7 @@
 - [fledge](hi/fledge.md): FLEDGE (7 criteria)
 - [github](hi/github.md): GITHUB (8 criteria)
 - [identity](hi/identity.md): IDENTITY (14 criteria)
-- [memory](hi/memory.md): MEMORY (7 criteria)
+- [memory](hi/memory.md): MEMORY (9 criteria)
 - [ops](hi/ops.md): OPS (2 criteria)
 - [plugin](hi/plugin.md): PLUGIN (7 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
