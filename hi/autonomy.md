@@ -18,4 +18,9 @@ When Corvidinho is blocked or stuck, it asks clarifying questions in Discord —
 - **AUTONOMY-4**  Clarify asks address the **requester** (message author). Ping the configured owner only for **stuck** (verify/help), or when the requester is the owner.
 - **AUTONOMY-5**  While a session is waiting on an ask, thin replies (`ok`, `k`, `sure`, `hmmm`, emoji-only, and similar) do **not** clear blocked or mark done; restate the pending question once (no vacuous “ready when you are”).
 - **AUTONOMY-6**  Session stays blocked until a substantive answer or an explicit cancel.
+  - **AUTONOMY-6.a**  A scheduled run's question can be answered or cancelled by me or the schedule's creator, and the schedule's next runs wait, with one note, until it is.
 - **AUTONOMY-7**  Impossible / joke “build free energy / dark matter / zero-point generator” style asks: witty public-safe decline or a tiny toy demo — not a long formal MCQ unless they clearly want a real utility.
+- **AUTONOMY-8**  It asks before any spend that would go over a cap.
+- **AUTONOMY-9**  It asks before touching prod or deploys (VPS, secrets, env, DNS); updating itself to a tagged release is not a deploy.
+- **AUTONOMY-10**  It asks before announcements it starts and before its first 20 replies in public threads; GitHub comments and social posts don't need asking.
+- **AUTONOMY-11**  Anything else inside its guardrails, it just does and tells me.

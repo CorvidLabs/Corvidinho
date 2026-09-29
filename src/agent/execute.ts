@@ -121,6 +121,18 @@ export const DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS =
   "(c) Only use SpecSync/git/github/project file tools when the query clearly needs Corvidinho codebase or product data. " +
   "(d) A bare 'bug <snowflake>' in Discord chat is almost always a Discord user id, not a GitHub issue. ";
 
+/**
+ * DISCORD-17 — added to the system prompt only when `discord-send-file` is in
+ * the run's catalog and the bridge gave the run a conversation channel, so
+ * the model never says it cannot send files or images there.
+ */
+export const DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS =
+  "Attachments (DISCORD-17): you can attach files and images (screenshots, logs, diffs, charts) to your reply in this Discord conversation with the discord-send-file tool — never say you cannot send or attach files or images. " +
+  "Send a large diff as a .diff attachment (discord-send-file --git-diff) instead of pasting it. ";
+
+/** Tool whose presence (plus a reply channel) adds the attach instructions. */
+const DISCORD_SEND_FILE_TOOL = "discord-send-file";
+
 /** AGENT-9 — human chat body when the tool-round budget is exhausted. */
 export const TOOL_ROUNDS_EXHAUSTED_CLARIFY =
   "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?";
@@ -570,6 +582,10 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
     PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
     DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS +
+    (offered.has(DISCORD_SEND_FILE_TOOL) &&
+    roleEnv.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID?.trim()
+      ? DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS
+      : "") +
     ASK_AGENT_SYSTEM_INSTRUCTIONS +
     "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
     "Do not claim files were edited unless a tool result reported filesChanged.",

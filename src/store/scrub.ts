@@ -96,6 +96,25 @@ const NAMED_ERRORS = new Set(["TypeError", "RangeError", "ReferenceError", "Synt
 export const ERROR_LINE_MAX = 300;
 
 /**
+ * Replace the literal value of every set secret env var (`DISCORD_TOKEN`,
+ * `GITHUB_TOKEN`, the LLM key, …) with `[redacted:env-secret]`, so text
+ * leaving the box never carries one even when it has no vendor-key shape.
+ */
+export function redactSecretEnvValues(
+  text: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  let out = text;
+  for (const name of SECRET_ENV_NAMES) {
+    const v = env[name]?.trim();
+    if (v && v.length >= MIN_ENV_SECRET_LEN) {
+      out = out.split(v).join("[redacted:env-secret]");
+    }
+  }
+  return out;
+}
+
+/**
  * One SAFE-6 line for an error shown to an operator (CLI-4): the message's
  * first line only (no stack, code frame or library object dump), vendor-key
  * shapes scrubbed, the literal value of any set secret env var redacted, and
@@ -126,13 +145,7 @@ export function formatErrorLine(
     // e.g. String() of a null-prototype object: the report itself must not throw.
     text = "(unprintable error)";
   }
-  const env = opts.env ?? process.env;
-  for (const name of SECRET_ENV_NAMES) {
-    const v = env[name]?.trim();
-    if (v && v.length >= MIN_ENV_SECRET_LEN) {
-      text = text.split(v).join("[redacted:env-secret]");
-    }
-  }
+  text = redactSecretEnvValues(text, opts.env ?? process.env);
   let line = scrubSecrets(text.trim()).split(/\r?\n/)[0]?.trim() ?? "";
   if (!line) line = "unknown error";
   const max = opts.max ?? ERROR_LINE_MAX;

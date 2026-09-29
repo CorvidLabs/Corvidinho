@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790692963,
+      "digest": "a46cc549e92bfbe04bb3702324cde21b9343f045529b3e4ec168e2f303f47679",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "docs-discord-md-criteria-line-cites-discord-1-17-and-autonomy-1-11-after-the-2026-09-28-hi-capture",
+        "title": "Docs/discord.md criteria line cites DISCORD-1..17 and AUTONOMY-1..11 after the 2026-09-28 hi capture",
+        "description": "docs/discord.md criteria line cites DISCORD-1..17 and AUTONOMY-1..11 after the 2026-09-28 hi capture",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "docs/discord.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "one docs line that lists the captured id ranges; tests/docs.operator-facts.test.ts checks it against hi/discord.md",
+        "acceptance_criteria": [
+          "docs/discord.md's criteria line cites DISCORD-1..17 (the highest captured DISCORD-N) and AUTONOMY-1..11; tests/docs.operator-facts.test.ts passes."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790692983,
+      "digest": "59f1540e82652c99bc2509438c77a6cca7b2aafc9088c7fd16803edf2fd52205",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
