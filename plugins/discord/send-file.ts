@@ -7,14 +7,16 @@
  * - The channel is the one the bridge set for this run
  *   (`CORVIDINHO_DISCORD_REPLY_CHANNEL_ID`, the thread when the talk is in
  *   one); the model cannot name another. No channel ⇒ refused.
- * - DISCORD-5: the channel allowlist gates first (a thread by its parent),
- *   on the bridge's channel set: allowlist file / env ∪ DISCORD_CHANNEL_IDS
- *   (REQ-discord-004), deny lists first.
+ * - DISCORD-5: the bridge's own channel gate runs first, on its channel set
+ *   (allowlist file / env ∪ DISCORD_CHANNEL_IDS, REQ-discord-004): a thread
+ *   passes as itself or through its parent, as the router serves it
+ *   (REQ-discord-212), and a deny on the thread or its parent wins.
  * - DISCORD-8: the acting user the bridge set must be able to view, send and
  *   attach files there too; a check that cannot run refuses.
- * - Caps: Discord's upload limit (8 MB) and a type allowlist (PNG / JPEG /
- *   GIF / WebP by magic bytes; UTF-8 txt / log / md / diff / patch / json /
- *   csv). Text is secret-scrubbed (SAFE-6) before upload.
+ * - Caps: Discord's upload limit (8 MB, on the size and on the bytes read)
+ *   and a type allowlist (PNG / JPEG / GIF / WebP by magic bytes; UTF-8 txt /
+ *   log / md / diff / patch / json / csv). Text is secret-scrubbed (SAFE-6)
+ *   before upload.
  * - SAFE-2 protected and secret paths are refused, checked on the path as
  *   given and on where it resolves inside the project root (symlinks
  *   followed; an escape is refused).
@@ -27,8 +29,10 @@ import { readFileSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, normalize, relative, resolve } from "node:path";
 import { checkChannel, isChannelDenied } from "../../src/allowlist/discord.ts";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
+import type { AllowlistConfig } from "../../src/allowlist/types.ts";
 import { defangMassMentions } from "../../src/discord/allowed-mentions.ts";
 import { mergeChannelIds } from "../../src/discord/config.ts";
+import { isMonitoredConversation } from "../../src/discord/permissions.ts";
 import {
   requesterCheckFix,
   verifyRequesterCanSend,
@@ -177,6 +181,32 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   return out;
 }
 
+/**
+ * DISCORD-5 for the conversation's channel, judged as the bridge judges where
+ * it talks: on the bridge's channel set (allowlist file +
+ * `CORVIDINHO_DISCORD_ALLOW_CHANNELS` ∪ `DISCORD_CHANNEL_IDS`,
+ * REQ-discord-004) with `isMonitoredConversation`, the router's own check
+ * (REQ-discord-212): a thread passes when it or its parent is allowlisted,
+ * and a deny on the thread or its parent wins (REQ-plugins-005). Null when it
+ * passes, else the refusal (the `checkChannel` "is denied" / "not
+ * allowlisted" error).
+ */
+function conversationChannelRefusal(
+  channelId: string,
+  parentChannelId: string,
+  allowlist: AllowlistConfig,
+  env: NodeJS.ProcessEnv,
+): string | null {
+  const cfg: AllowlistConfig = {
+    ...allowlist,
+    discord: { ...allowlist.discord, channels: mergeChannelIds(allowlist, env) },
+  };
+  if (isMonitoredConversation(channelId, parentChannelId, cfg)) return null;
+  const denied = [channelId, parentChannelId].find((id) => isChannelDenied(id, cfg));
+  const gate = checkChannel(denied ?? (parentChannelId || channelId), cfg);
+  return gate.ok ? `not authorized: Discord channel "${channelId}" is not allowlisted` : gate.error;
+}
+
 /** Discord-safe display name: letters, digits, dot, dash, underscore. */
 function safeFilename(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9._-]/g, "_").replace(/^\.+/, "");
@@ -267,6 +297,8 @@ export function fileAttachment(cwd: string, userPath: string): Attachment {
   const size = statSync(real).size;
   if (size > DISCORD_UPLOAD_MAX_BYTES) throw tooLarge(`'${raw}'`, size);
   const data = new Uint8Array(readFileSync(real));
+  // It may have grown since the stat: the cap holds for the bytes read.
+  if (data.byteLength > DISCORD_UPLOAD_MAX_BYTES) throw tooLarge(`'${raw}'`, data.byteLength);
 
   if (imageType) {
     const sniffed = sniffImageMediaType(data.subarray(0, 12));
@@ -446,23 +478,13 @@ async function handle(ctx: { args: string[]; cwd: string }): Promise<PluginHandl
     );
   }
 
-  // DISCORD-5: a thread is allowlisted through its parent channel, but a
-  // thread on deny_channels is refused even then: deny wins (REQ-plugins-005).
+  // DISCORD-5: the conversation's channel passes the gate the bridge serves
+  // it by (REQ-discord-212).
   const loaded = await tryLoadAllowlist({ env: process.env });
   if (!loaded.ok) return refuse(`not authorized: ${loaded.error}`);
   const parent = process.env[REPLY_PARENT_CHANNEL_ENV]?.trim() ?? "";
-  // REQ-discord-004: the same channel set the bridge listens in (allowlist
-  // file + CORVIDINHO_DISCORD_ALLOW_CHANNELS ∪ DISCORD_CHANNEL_IDS); deny
-  // lists are read first, so a deny still wins. A deny-listed thread is
-  // refused even under an allowlisted parent (REQ-plugins-005).
-  const discordGate = {
-    ...loaded.config.discord,
-    channels: mergeChannelIds(loaded.config, process.env),
-  };
-  const gate = isChannelDenied(channelId, discordGate)
-    ? checkChannel(channelId, discordGate)
-    : checkChannel(parent || channelId, discordGate);
-  if (!gate.ok) return refuse(gate.error);
+  const gateError = conversationChannelRefusal(channelId, parent, loaded.config, process.env);
+  if (gateError !== null) return refuse(gateError);
 
   const attachment = args.gitDiff
     ? await gitDiffAttachment(ctx.cwd, args.staged)
