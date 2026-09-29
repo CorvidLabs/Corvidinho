@@ -1,6 +1,6 @@
 ---
 id: free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit
-state: implementing
+state: verifying
 type: feature
 base_commit: f1809a59b41a4f33506843a5c54a7796f57e626c
 ---
