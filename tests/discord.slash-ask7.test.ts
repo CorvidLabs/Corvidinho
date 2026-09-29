@@ -297,7 +297,7 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
     };
   }
 
-  test("/work answer for a non-owner keeps the closing role note within the 1900 cap (REQ-discord-734)", async () => {
+  test("/work answer for a non-owner keeps the closing role note in the rich answer (REQ-discord-734)", async () => {
     await withRepo(async (_project, store) => {
       const { outbound, contentEdits } = mockOutbound();
       const tracked: string[] = [];
@@ -305,19 +305,18 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       await handleWorkCommand(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
 
       expect(contentEdits.length).toBe(1);
-      const body = contentEdits[0]!.content ?? "";
-      expect(body).toContain("only the owner (ADMIN) can ship /work as a PR");
-      // The head leaves under 1500 chars for the summary: it is cut to fit.
-      expect(body.length - body.indexOf("word")).toBeLessThan(1500);
-      expect(body.length).toBeLessThanOrEqual(1900);
-      expect(body.endsWith(ROLE_TAIL)).toBe(true);
-      expect(body.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
+      const answer = contentEdits[0]!.content ?? contentEdits[0]!.embed?.description ?? "";
+      expect(answer).toContain("only the owner (ADMIN) can ship /work as a PR");
+      // DISCORD-16 may use one prose embed; the closing role note stays whole.
+      expect(answer.length).toBeLessThanOrEqual(4096);
+      expect(answer.endsWith(ROLE_TAIL)).toBe(true);
+      expect(answer.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
       const [session] = store.list();
       if (session) await store.endSession(session);
     });
   });
 
-  test("/session start answer for a non-owner keeps the closing role note within the 1900 cap (REQ-discord-734)", async () => {
+  test("/session start answer for a non-owner keeps the closing role note in the rich answer (REQ-discord-734)", async () => {
     await withRepo(async (_project, store) => {
       const { outbound, contentEdits } = mockOutbound();
       const tracked: string[] = [];
@@ -325,13 +324,11 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       await handleSessionStart(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
 
       expect(contentEdits.length).toBe(1);
-      const body = contentEdits[0]!.content ?? "";
-      expect(body).toContain("started.\nTopic: Fix it");
-      expect(body.length).toBeLessThanOrEqual(1900);
-      expect(body.endsWith(ROLE_TAIL)).toBe(true);
-      expect(body.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
-      // The summary part is capped at 1500 like before, note included.
-      expect(body.slice(body.indexOf("word")).length).toBeLessThanOrEqual(1500);
+      const answer = contentEdits[0]!.content ?? contentEdits[0]!.embed?.description ?? "";
+      expect(answer).toContain("started.\nTopic: Fix it");
+      expect(answer.length).toBeLessThanOrEqual(4096);
+      expect(answer.endsWith(ROLE_TAIL)).toBe(true);
+      expect(answer.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
       const [session] = store.list();
       if (session) await store.endSession(session);
     });
