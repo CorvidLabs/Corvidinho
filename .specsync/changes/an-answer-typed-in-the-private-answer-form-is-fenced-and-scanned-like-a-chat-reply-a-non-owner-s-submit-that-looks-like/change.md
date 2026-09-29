@@ -1,0 +1,24 @@
+---
+id: an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like
+state: approved
+type: bug_fix
+base_commit: 20a0f5841256109511825c70604b552b3ca4b062
+---
+
+# An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a)
+
+## Intent
+
+An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a)
+
+## Affected Canonical Specs
+
+- `discord`
+
+## Acceptance Criteria
+
+- Through startBridge with a memory DB (the SAFE-11/12/13 bridge harness): a community user's Answer form submit whose text trips the SAFE-13 detector starts no run, leaves the free-text ask pending and the session live, acks the submit privately (ephemeral refusal, never the text), posts one message in the session channel replying to the ask stub that pings only the owner (allowed mentions the owner only), and appends exactly one injection-suspected / denied SAFE-5 row with the user as actor and surface discord:<session>; a declared team member's injected submit is refused the same way; an ordinary community answer resumes the session with the answer inside the UNTRUSTED_DATA fence (role: community, source=ask-answer) after the reply's prior-question block; the owner's own answer (injection-like text included) resumes unfenced and unscanned; humanText, the thread turn and the memory query stay the raw scrubbed answer as for chat; button picks (model-written option labels) are unchanged; refuseInjectedSlash output is unchanged. The new tests fail on main and pass on the branch; no env var, config key, table, column or schema version.
+
+## No-spec Rationale
+
+Not applicable

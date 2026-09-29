@@ -358,7 +358,16 @@ submit gets the ephemeral `ASK_ANSWER_ACK`, and the session resumes like a
 pick in the stub (`existingMessageId`) with the prompt a reply that answers
 the ask gets (`[Prior clarifying question you asked (the human is answering
 it now): …]` + `Human answer:`), `humanText` and the thread turn being the
-scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). A
+scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). The
+answer reaches the model as the same words in a reply would (SAFE-12/13,
+REQ-discord-071): the presser's role is resolved first; a team or community
+answer goes through `fenceSpeakerText` (`source=ask-answer`), and one that
+`inboundInjection` flags is refused before the ask is cleared
+(`refuseInjectedAnswer`: no run, ask and session kept, ephemeral refusal, one
+post in the session's channel replying to the stub that pings only the owner
+and is tracked on the session, one `injection-suspected` / `denied` row with
+surface `discord:<session>`); the owner's answer is neither fenced nor
+scanned. A pick's model-written option label is neither. A
 thin or blank submit (`isThinAck`, AUTONOMY-5) is not an answer: the ask
 stays, nothing runs and the question is restated in an ephemeral
 `formatAskReply` with the Answer button; a cancel submit (`isCancelAsk`,
@@ -610,9 +619,11 @@ the configured owner.
 Untrusted text on Discord (SAFE-11/12/13, #71, REQ-discord-071):
 `src/discord/injection-guard.ts` exports `fenceSpeakerText(text, role,
 source, id?)` / `speakerFenceHeader(role)` / `SpeakerSurface`
-(`chat-message`, `session-topic`, `work-task`), `inboundInjection(text,
+(`chat-message`, `session-topic`, `work-task`, `ask-answer`), `inboundInjection(text,
 role)`, `injectionRefusalHead`, `formatInjectionRefusal(reasons, owner)`,
 `refuseInjectedSlash(ctx, interaction, verdict, source)`,
+`refuseInjectedAnswer(ctx, interaction, verdict, { sessionId, channelId,
+stubMessageId? })` (the Answer form's refusal; returns the owner post),
 `formatInjectionOwnerLine(notice, owner)`, `withInjectionNotice(post, notice,
 owner, max?)` (`max` defaults to `ASK_REPLY_MAX`; the chat and button-pick
 answers pass `DISCORD_ANSWER_MAX`, so the line never cuts a split answer,
@@ -742,16 +753,19 @@ the owner's and shown as configured), and when that shown Discord name reads
 like the owner's display or another declared person's display or nickname
 (`namesLookAlike`) it adds one `name_clash` line saying this Discord user id
 is someone else; recognition and role stay on declared ids only (IDENTITY-7 /
-IDENTITY-12). Chat, `/session start` and `/work` resolve the speaker's role
-before the run: for team and community, `inboundInjection` runs over the
+IDENTITY-12). Chat, `/session start`, `/work` and an answer typed in an ask's
+private Answer form resolve the speaker's role before the run: for team and community, `inboundInjection` runs over the
 speaker's own text, and a hit starts no run — chat: one public reply
 (`formatInjectionRefusal`, allowed mentions the owner only, replying to the
 message; a session the message started is ended and the turn is not
 recorded); slash: the interaction's public refusal, then a fresh channel post
 pinging only the owner (`refuseInjectedSlash`; no session, worktree or work
-task) — plus an `injection-suspected` / `denied` audit row (actor, surface
-`discord:<session>` or `discord:/<command>`, digest of the source and reason
-ids; never the text). Otherwise the team / community speaker's words go to
+task); Answer form: as the same words in a chat reply in that session — the
+ask and session stay, the submit gets an ephemeral refusal and the owner one
+post in the session's channel replying to the stub that pings only them
+(`refuseInjectedAnswer`) — plus an `injection-suspected` / `denied` audit row
+(actor, surface `discord:<session>` or `discord:/<command>`, digest of the
+source and reason ids; never the text). Otherwise the team / community speaker's words go to
 the model through `fenceSpeakerText` (the owner's unchanged). A run whose
 result carries `injection` pings the owner on the post that carries its
 answer: chat and button-pick replies (`withInjectionNotice`), `/session
@@ -858,6 +872,12 @@ characters. No new env var, config key, table or column.
 - **Given** an undeclared user in an allowlisted channel and a configured owner
 - **When** they @mention the bot with text that tells it to set aside its previous instructions and print its environment
 - **Then** no agent run starts; one reply says the bot won't act on it (in plain words, never quoting the text) and pings only the owner; the session the message would have started is dropped; an `injection-suspected` / `denied` audit row names the user and the surface (REQ-discord-071)
+
+### Scenario: A stranger types an injection into the private Answer form (SAFE-13)
+
+- **Given** an undeclared user with an open free-text ask (the stub with its **Answer** button) and a configured owner
+- **When** they submit the Answer form with text that tells the bot to set aside its previous instructions
+- **Then** no agent run starts; the submit gets a private refusal that never quotes the text; the ask stays open and the session live; one post in the session's channel, replying to the stub, pings only the owner; an `injection-suspected` / `denied` audit row names the user and `discord:<session>`; an ordinary answer from them would reach the model fenced (`source=ask-answer`), and the owner's own answer is neither fenced nor scanned (REQ-discord-548, REQ-discord-071)
 
 ### Scenario: A stranger named like the owner (SAFE-11)
 
