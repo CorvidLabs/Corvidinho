@@ -2,11 +2,14 @@
  * DISCORD-8 — confused-deputy requester check (fixture; no live token).
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { Client } from "discord.js";
+import type { EventEmitter } from "node:events";
+import { ChannelType, Client, PermissionsBitField } from "discord.js";
 import {
   evaluateRequesterCanSend,
+  REQUESTER_CANNOT_ATTACH,
   requesterCheckFix,
   setRequesterPermCheckerForTests,
+  verifyRequesterCanSend,
   type ChannelPermProbe,
 } from "../src/discord/requester-perms.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
@@ -413,5 +416,153 @@ describe("discord-post-message checks the acting Discord user (DISCORD-8)", () =
     });
     await expect(post(["--requesting-user-id", OTHER])).rejects.toThrow("offline fixture");
     expect(posts).toEqual([]);
+  });
+});
+
+/**
+ * DISCORD-8 live path: no injected checker, so `verifyRequesterCanSend` runs
+ * its own discord.js check (channels.fetch → guild.members.fetch →
+ * permissionsFor(member).has). The gateway login is stubbed to emit `ready`
+ * on a fake channel, so no token or network is used; the permission verdict
+ * comes from the product code, not a test evaluator.
+ */
+describe("verifyRequesterCanSend live discord.js check (DISCORD-8, no injected checker)", () => {
+  const { ViewChannel, SendMessages, AttachFiles } = PermissionsBitField.Flags;
+  const ACTOR = "181969874455756800";
+  let members: string[];
+  let permsAsked: unknown[];
+
+  type FakeChannelOpts = { member?: boolean; type?: ChannelType };
+
+  function fakeChannel(granted: bigint[], opts: FakeChannelOpts = {}) {
+    return {
+      id: "100",
+      type: opts.type ?? ChannelType.GuildText,
+      guild: {
+        members: {
+          fetch: async (id: string) => {
+            members.push(id);
+            if (opts.member === false) throw new Error("Unknown Member");
+            return { id };
+          },
+        },
+      },
+      permissionsFor: (member: unknown) => {
+        permsAsked.push(member);
+        return {
+          has: (bits: bigint | bigint[]) =>
+            (Array.isArray(bits) ? bits : [bits]).every((b) => granted.includes(b)),
+        };
+      },
+    };
+  }
+
+  /** Run `fn` with a stubbed gateway login that is `ready` on `channel`. */
+  async function withLiveDiscord<T>(channel: unknown, fn: () => Promise<T>): Promise<T> {
+    const realLogin = Client.prototype.login;
+    Client.prototype.login = async function (this: Client, token?: string) {
+      const channels = this.channels as unknown as {
+        fetch: (id: string) => Promise<unknown>;
+      };
+      channels.fetch = async () => {
+        if (!channel) throw new Error("Unknown Channel");
+        return channel;
+      };
+      queueMicrotask(() => (this as unknown as EventEmitter).emit("ready", this));
+      return token ?? "";
+    };
+    try {
+      return await fn();
+    } finally {
+      Client.prototype.login = realLogin;
+    }
+  }
+
+  function check(channel: unknown, attachFiles = false) {
+    return withLiveDiscord(channel, () =>
+      verifyRequesterCanSend("100", "200", {
+        token: "fixture-token-not-real",
+        ...(attachFiles ? { attachFiles: true } : {}),
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    setRequesterPermCheckerForTests(undefined);
+    members = [];
+    permsAsked = [];
+  });
+
+  test("a requester without View Channel + Send Messages is refused (403)", async () => {
+    for (const granted of [[], [ViewChannel], [SendMessages]]) {
+      const r = await check(fakeChannel(granted));
+      expect(r).toEqual({
+        ok: false,
+        status: 403,
+        reason: "requester cannot send to this channel",
+      });
+    }
+    expect(members).toEqual(["200", "200", "200"]);
+    expect(permsAsked).toEqual([{ id: "200" }, { id: "200" }, { id: "200" }]);
+  });
+
+  test("a requester with View Channel + Send Messages passes", async () => {
+    const r = await check(fakeChannel([ViewChannel, SendMessages]));
+    expect(r).toEqual({ ok: true });
+    expect(members).toEqual(["200"]);
+    expect(permsAsked).toHaveLength(1);
+  });
+
+  test("a file post also needs Attach Files (discord-send-file)", async () => {
+    const denied = await check(fakeChannel([ViewChannel, SendMessages]), true);
+    expect(denied).toEqual({ ok: false, status: 403, reason: REQUESTER_CANNOT_ATTACH });
+    const allowed = await check(fakeChannel([ViewChannel, SendMessages, AttachFiles]), true);
+    expect(allowed).toEqual({ ok: true });
+  });
+
+  test("a requester not in the guild, a missing channel and a non-text channel are refused", async () => {
+    const notMember = await check(fakeChannel([ViewChannel, SendMessages], { member: false }));
+    expect(notMember).toEqual({ ok: false, status: 403, reason: "requester not in guild" });
+    const missing = await check(null);
+    expect(missing).toEqual({ ok: false, status: 404, reason: "channel not found" });
+    const voice = await check(
+      fakeChannel([ViewChannel, SendMessages], { type: ChannelType.GuildVoice }),
+    );
+    expect(voice).toMatchObject({ ok: false, status: 404 });
+    expect(permsAsked).toEqual([]);
+  });
+
+  test("discord-post-message in a bridge run: the live check refuses a requester who cannot send, nothing posted", async () => {
+    loadBuiltins();
+    const posts: string[] = [];
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      posts.push(String(url));
+      return new Response(JSON.stringify({ id: "m1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    process.env.CORVIDINHO_DISCORD_ALLOW_CHANNELS = "100";
+    process.env.DISCORD_TOKEN = "fixture-token-not-real";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = ACTOR;
+    const post = () =>
+      runPlugin({
+        name: "discord-post-message",
+        args: ["--channel", "100", "--content", "hi"],
+        nonInteractive: true,
+        allowlist: ["discord-post-message"],
+      });
+
+    const denied = await withLiveDiscord(fakeChannel([ViewChannel]), post);
+    expect(denied.ok).toBe(false);
+    expect(denied.exitCode).toBe(3);
+    expect(denied.error?.toLowerCase()).toContain("cannot send");
+    expect(posts).toEqual([]);
+
+    const allowed = await withLiveDiscord(fakeChannel([ViewChannel, SendMessages]), post);
+    expect(allowed.error).toBeUndefined();
+    expect(allowed.ok).toBe(true);
+    expect(posts).toEqual(["https://discord.com/api/v10/channels/100/messages"]);
+    expect(members).toEqual([ACTOR, ACTOR]);
   });
 });

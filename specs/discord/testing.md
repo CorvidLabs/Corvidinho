@@ -36,10 +36,26 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   Server Members Intent off); a `fetch` spy proves nothing is posted. With the
   acting env empty or unset the flag / strict behaviour is unchanged
   (REQ-discord-012, no token, no network).
+- Same file, live path with no injected checker: `Client.prototype.login` is
+  stubbed to emit `ready` on a fake guild text channel, so
+  `verifyRequesterCanSend` runs its own `permissionsFor(member).has` check —
+  no View Channel + Send Messages → 403, both → ok, not in guild → 403,
+  missing / non-text channel → 404, a file post without Attach Files → 403;
+  `discord-post-message` in a bridge run posts nothing on a live denial and
+  once when allowed (REQ-discord-012 / REQ-discord-476).
 - `tests/discord.allowed-mentions.test.ts` — REQ-discord-205: fake discord.js
   injected into the live gateway; chat mention/reply-continue, `/session
   start`, `/work`, slash, embeds, schedule tick and `discord-post-message`
   (stubbed fetch) all send `parse: []`; ask keeps owner-only (no live token).
+- `tests/discord.post.plugin.test.ts` — REQ-discord-004 / REQ-plugins-009:
+  with no allowlist file, `CORVIDINHO_DISCORD_ALLOW_CHANNELS` unset and
+  `DISCORD_CHANNEL_IDS=111`, a dry-run `discord-post-message` to `111` posts
+  and one to `222` is refused (not allowlisted);
+  `CORVIDINHO_DISCORD_DENY_CHANNELS=111` on top refuses `111` with exit 3.
+- `tests/discord.send-file.test.ts` — REQ-discord-004 / REQ-discord-476: with
+  no allowlist file and the conversation channel only in `DISCORD_CHANNEL_IDS`,
+  `discord-send-file` attaches there and in a thread under it; a channel in no
+  list is refused (not allowlisted) and a deny on the channel refuses.
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 
@@ -103,6 +119,29 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   trimmed, blank as undefined. A button press emitted on the live gateway's
   client (real `login`, socket connect stubbed) reaches `onComponent` with the
   presser's names, or neither when none is known (no live Discord).
+
+## Deny wins over an allowlisted parent (REQ-discord-212 / REQ-discord-311 / REQ-discord-476, DISCORD-5)
+
+- `tests/discord.thread-deny.test.ts` — `channels = [parent]`,
+  `deny_channels = [thread]`: `routeMessage` refuses the @mention silently and
+  ignores a plain message in the thread; a session started there before the
+  deny is not continued by a thread message, a reply to its bot message or a
+  mention; a deny on the parent wins over an allowlisted thread; the parent and
+  its other threads are still served. `componentChannelAllowlisted` is false
+  for a press in the denied thread, for a session in it pressed from the
+  parent, and for a session under a denied parent. Through `startBridge` (fake
+  gateway, dry run): the owner's @mention there runs no agent and posts
+  nothing; a talk in the thread stops once it is deny-listed; an ask button
+  there gets only the zero-width ack (the tip for an admin) and stays pending.
+  A slash command there gets only the zero-width ack (the tip for the owner),
+  `/schedule create` naming it is refused, and a schedule whose channel is the
+  thread neither runs nor posts at tick (both already gated the thread id;
+  kept as regression locks). Restart recovery edits and replies nothing for a
+  row in the denied thread or under a denied parent and deletes the row, and
+  still recovers a row in another thread under the parent.
+- `tests/discord.send-file.test.ts` — a deny-listed thread under its
+  allowlisted parent is refused `is denied` before any requester check or
+  upload; another thread under that parent still attaches.
 
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
@@ -280,6 +319,21 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   run is in flight gets no post; refused ticks auto-pause the schedule after
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
+
+## Zero cron step never hangs /schedule create (REQ-discord-020, DISCORD-SCHEDULE-4)
+
+- `tests/scheduler.cron.test.ts` — "cron step and range forms never hang":
+  `*/0`, `0-59/0`, `0,*/0` and `/0` in the hour, day, month and weekday fields
+  run in a child bun with a 10 s timeout; `validateAndResolveCadence` and
+  `getNextCronDate` each throw `CadenceError` (`Invalid cron step in "…"`);
+  `5/0` is refused in-process; `0-99999999999 * * * *` is refused by the
+  5-minute rule, a range past 2^53 has no run date, and
+  `0 0-99999999999/2 * * *` resolves to itself with the next run of
+  `0 */2 * * *`; cadences with steps of 1 or more resolve as before.
+- `tests/discord.schedule.test.ts` — the owner's `/schedule create` with
+  `*/0 * * * *` and `0-59/0 * * * *` (child bun, 10 s timeout) gets the
+  ephemeral CadenceError reply, creates nothing, and a following
+  `/schedule list` still answers. No live Discord.
 
 ## /schedule delete audit (REQ-discord-020, SAFE-5)
 
