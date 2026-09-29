@@ -7,10 +7,11 @@
   "title": "Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep",
   "description": "Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "20a0f5841256109511825c70604b552b3ca4b062",
   "created_at": 1790724140,
-  "updated_at": 1790724143,
+  "updated_at": 1790724149,
   "affected_specs": [
     "cli"
   ],

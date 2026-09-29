@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790724145,
+      "digest": "20b17eca4215d381acb43a65a0e3049e502f9264e23e0ee828a31756f933b439",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall",
+        "title": "Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep",
+        "description": "Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.34; version prints 0.0.34; CHANGELOG 0.0.34 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "36683f09ad8046c40fcfafa191dc88c03e7d88bd4a52770ea3e45540696cc59e"
+      }
+    }
+  ],
   "reopenings": []
 }

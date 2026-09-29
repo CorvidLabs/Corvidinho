@@ -905,3 +905,12 @@ Acceptance Criteria
 - A run whose tool result trips the detector reports `{ source, reasons }` once through `onInjection`; the Discord and WATCH spawn clients read it back from the result frame with `injectionNoticeFromUnknown` (tool-name source, known reason ids only) and the bridge / WATCH tests drive the owner notice from it.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 
+### REQ-cli-425
+
+The project SHALL ship package version `0.0.34` (declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep). CLI `version` and Discord presence (DISCORD-12) report `0.0.34` after a restart. CHANGELOG SHALL include verbose 0.0.34 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.34`.
+- CLI `version` prints `0.0.34`.
+- CHANGELOG has a 0.0.34 section that the updater's changelog helper extracts exactly.
+
