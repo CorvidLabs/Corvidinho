@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe",
+  "implementation_commit": "f009b59a919b32d40432a2a4712771a8a1077413",
+  "implementation_tree": "2cefc608a4ed416538b189faf9a9be8dec4a9a07",
+  "contract_digest": "5cf0cd49e97fddbd87f142a88b9cd40c8f5a2e64df492a48dec0c14df20fc6f5",
+  "workspace_digest": "8f2574b00016b4546bdbcbf9ada2ae3366228a04aff0c41dbbe6a847382aaadf",
+  "closing_digest": "840b8979d141a1eb6967dabff92f03443a6dc77a4d32fe518a62cacc084ac12e",
+  "review_digest": "c4fa25c76a195cb99bb40de0275e91da34adea3edcb37a150e524713238ad811",
+  "finalization_digest": "1e6cb6e9867d4c2764db4b5166006502c2a7bb88c54df5f2aceaccf866b47b6a",
+  "timestamp": 1790722038
+}

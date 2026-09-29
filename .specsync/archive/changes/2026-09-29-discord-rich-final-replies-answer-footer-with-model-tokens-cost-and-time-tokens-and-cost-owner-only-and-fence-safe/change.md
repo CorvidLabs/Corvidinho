@@ -1,6 +1,6 @@
 ---
 id: discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe
-state: verifying
+state: archived
 type: feature
 base_commit: d589638c38f27503373601bb256ee6207fb822f9
 ---
