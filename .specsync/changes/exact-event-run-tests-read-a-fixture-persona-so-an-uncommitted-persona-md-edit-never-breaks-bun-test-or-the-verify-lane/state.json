@@ -7,10 +7,11 @@
   "title": "Exact-event run tests read a fixture persona so an uncommitted persona.md edit never breaks bun test or the verify lane (PERSONA-2, #69)",
   "description": "Exact-event run tests read a fixture persona so an uncommitted persona.md edit never breaks bun test or the verify lane (PERSONA-2, #69)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "25924db48661c72bda92c98c6ceb2ea182385b9e",
   "created_at": 1790696900,
-  "updated_at": 1790696932,
+  "updated_at": 1790696944,
   "affected_specs": [],
   "affected_paths": [
     "tests/agent.events-ndjson.test.ts",
