@@ -459,6 +459,11 @@ export async function startBridge(
         mayPost: (channelId, parentChannelId) =>
           isMonitoredChannel(channelId, config.allowlist) ||
           (parentChannelId != null && isMonitoredChannel(parentChannelId, config.allowlist)),
+        // An approved forget also drops the session threads this process
+        // still holds for them, so no later run replays those turns.
+        onForgotten: ({ discordIds }) => {
+          store.forgetTurnsOfUsers(discordIds);
+        },
       })
     : undefined;
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };

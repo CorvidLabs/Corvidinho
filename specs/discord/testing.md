@@ -424,10 +424,11 @@ no actor, outside a conversation, with arguments and with no owner. Through
 (who, count, request id, lapse; no content) with Approve / Deny; a non-owner
 press (even the asker) is refused ephemerally with a `denied` row; the owner's
 Approve deletes every memory row of that person (profile, private, superseded,
-legacy and alt Discord-id scopes) and their session turns, keeps other
-people's and project memory and the people list, writes `started` / `ok`,
-updates the card without buttons and DMs the asker; a second press finds it
-closed. Deny deletes nothing and, when the DM fails, tells the asker in their
+legacy and alt Discord-id scopes) and their session turns, stored and in
+the running bridge's session thread, keeps other people's and project memory
+and the people list, writes `started` / `ok`, answers the press first
+(card without buttons, before any DM), then DMs the asker and marks the card
+told; a second press finds it closed. Deny deletes nothing and, when the DM fails, tells the asker in their
 allowlisted conversation. The chat path delivers the card after the message.
 A keyed audit chain with no key refuses Approve and leaves the ask pending
 (SAFE-5 fail closed). With a fake clock an unanswered ask expires on the pass

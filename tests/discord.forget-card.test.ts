@@ -358,11 +358,26 @@ describe("the owner approves on a DM card; only then is the person forgotten", (
       }
       expect(allContents()).toContain("TOFU-TZ");
 
+      // The bridge holds Tofu's live thread in memory (a next run replays it).
+      const tofuSession = b.result.store.get("sess-tofu")!;
+      const kynSession = b.result.store.get("sess-kyn")!;
+      expect(b.result.store.threadFor(tofuSession).map((t) => t.content)).toEqual(["TOFU-TURN"]);
+
       const r = await b.press(OWNER_ID, card.approve);
       expect(r).toHaveLength(1);
+      // The press is answered first (Discord's ~3 s window), before any DM.
       expect(r[0]!.update).toBe(true);
       expect(r[0]!.components).toEqual([]);
-      expect(r[0]!.content).toContain("Approved by you — forgot 6 memories and 1 conversation turns. They have been told.");
+      expect(r[0]!.content).toContain("Approved by you — forgot 6 memories and 1 conversation turns.");
+      expect(r[0]!.content).not.toContain("told");
+      // Then the card says whether the asker was told.
+      const cardEdit = b.edits.at(-1)!;
+      expect(cardEdit.channelId).toBe(`dm-${OWNER_ID}`);
+      expect(cardEdit.content).toContain("Approved by you — forgot 6 memories and 1 conversation turns. They have been told.");
+      expect(cardEdit.components).toEqual([]);
+      // Forgotten from the running bridge too: no later run replays Tofu's turns.
+      expect(b.result.store.threadFor(tofuSession)).toEqual([]);
+      expect(b.result.store.threadFor(kynSession).map((t) => t.content)).toEqual(["KYN-TURN"]);
 
       const left = allContents();
       for (const gone of ["TOFU-TZ", "TOFU-PRIVATE", "TOFU-DECISION-OLD", "TOFU-DECISION-NEW", "TOFU-LEGACY", "TOFU-ALT"]) {
@@ -403,7 +418,8 @@ describe("the owner approves on a DM card; only then is the person forgotten", (
       await b.result.deliverForgetCards!();
       const card = cardFor(b.dms);
       const r = await b.press(OWNER_ID, card.deny);
-      expect(r[0]!.content).toContain("Denied by you — nothing was forgotten. They have been told.");
+      expect(r[0]!.content).toContain("Denied by you — nothing was forgotten.");
+      expect(b.edits.at(-1)!.content).toContain("Denied by you — nothing was forgotten. They have been told.");
       expect(allContents()).toContain("KYN-TZ");
       expect(b.posts).toHaveLength(1);
       expect(b.posts[0]!.channelId).toBe(CHAN);

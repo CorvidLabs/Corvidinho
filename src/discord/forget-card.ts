@@ -74,6 +74,12 @@ export type ForgetCardDeps = {
   post?: (opts: { channelId: string; content: string; mentionUserIds?: string[] }) => Promise<boolean>;
   /** May the fallback post go to this conversation (still allowlisted)? */
   mayPost?: (channelId: string, parentChannelId?: string) => boolean;
+  /**
+   * After an approved forget is committed: drop what the running bridge still
+   * holds of these Discord users' conversations (the session threads a next
+   * run would replay). Best effort; a throw is logged.
+   */
+  onForgotten?: (targets: { discordIds: readonly string[] }) => void;
   now?: () => number;
 };
 
@@ -104,8 +110,8 @@ export function forgetCardText(req: ForgetRequest, dir: PeopleDirectory | null, 
     title: FORGET_CARD_TITLE,
     lines: [
       `Who: ${who(req, dir)} — asked by <@${req.requesterUserId}>${where}`,
-      `Approve deletes, for good, everything I remember about them: their profile (projects, preferences, history), notes and private notes${stored === null ? "" : ` (${stored} stored)`}, and the turns of their open Discord sessions`,
-      "Kept: their entry on your people list (only you edit it) and the audit trail",
+      `Approve deletes, for good, their memory: their profile (projects, preferences, history), notes and private notes${stored === null ? "" : ` (${stored} stored)`}, and the turns of their open Discord sessions`,
+      "Kept: their entry on your people list (only you edit it), project memory, what others stored in their own memory, their schedules and /work records, and the audit trail",
       `Request: ${req.id}`,
     ],
     expiresAt: req.expiresAt,
@@ -115,7 +121,7 @@ export function forgetCardText(req: ForgetRequest, dir: PeopleDirectory | null, 
 /** The asker's outcome notice. */
 export function forgetOutcomeText(req: ForgetRequest): string {
   if (req.status === "approved") {
-    return `Your forget request (${req.id}) was approved: I deleted everything I remembered about you (${req.forgottenCount ?? 0} memories and your stored conversation turns).`;
+    return `Your forget request (${req.id}) was approved: I deleted your memory (${req.forgottenCount ?? 0} stored memories) and the turns of your open conversations with me.`;
   }
   if (req.status === "denied") {
     return `The owner did not approve your forget request (${req.id}), so nothing was forgotten.`;
@@ -254,6 +260,33 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
       }
       const update = (content: string) => interaction.reply({ content, components: [], update: true });
       const cardNow = () => forgetCardText(req, deps.people(), null);
+      /**
+       * A decided ask: answer the press first (Discord allows ~3 s for it),
+       * then tell the asker, then put whether they were told on the card.
+       */
+      const settle = async (outcome: string) => {
+        const text = (tail: string) => formatDecidedCard(cardNow(), `${outcome}${tail}`);
+        try {
+          await update(text(""));
+        } catch (err) {
+          console.error(`[discord] forget card: press answer failed: ${err instanceof Error ? err.message : err}`);
+        }
+        const closed = store.get(req.id);
+        const told = closed ? await notifyAndMark(closed) : false;
+        const channelId = req.cardChannelId ?? interaction.channelId;
+        const messageId = req.cardMessageId ?? interaction.messageId;
+        if (!deps.editMessage || !channelId || !messageId) return;
+        try {
+          await deps.editMessage({
+            channelId,
+            messageId,
+            content: text(told ? " They have been told." : " They could not be told yet; I keep trying for a day."),
+            components: [],
+          });
+        } catch {
+          /* the card already shows the outcome */
+        }
+      };
       if (req.status !== "pending") {
         await update(formatDecidedCard(cardNow(), `Already closed (${req.status}).`));
         return;
@@ -274,11 +307,7 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
           return;
         }
         auditBestEffort("memory-forget-deny", actor, req, "ok");
-        const closed = store.get(req.id)!;
-        const told = await notifyAndMark(closed);
-        await update(
-          formatDecidedCard(cardNow(), `Denied by you — nothing was forgotten.${told ? " They have been told." : " They could not be told yet."}`),
-        );
+        await settle("Denied by you — nothing was forgotten.");
         return;
       }
       // Approve: SAFE-5 started row first; no row ⇒ nothing is deleted.
@@ -292,8 +321,10 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
         return;
       }
       let deleted: { memories: number; turns: number } | null = null;
+      let forgotIds: readonly string[] = [];
       try {
         const targets = forgetTargets(req, deps.people());
+        forgotIds = targets.discordIds;
         deps.db
           .transaction(() => {
             if (!store.decide(req.id, "approved", { by: actor })) return;
@@ -316,14 +347,13 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
       }
       const done: { memories: number; turns: number } = deleted;
       auditBestEffort("memory-forget-approve", actor, req, "ok");
-      const closed = store.get(req.id)!;
-      const told = await notifyAndMark(closed);
-      await update(
-        formatDecidedCard(
-          cardNow(),
-          `Approved by you — forgot ${done.memories} memories and ${done.turns} conversation turns.${told ? " They have been told." : " They could not be told yet."}`,
-        ),
-      );
+      // What the running bridge still holds of their conversations goes too.
+      try {
+        deps.onForgotten?.({ discordIds: forgotIds });
+      } catch (err) {
+        console.error(`[discord] forget card: could not drop live session turns: ${err instanceof Error ? err.message : err}`);
+      }
+      await settle(`Approved by you — forgot ${done.memories} memories and ${done.turns} conversation turns.`);
     },
   };
 }

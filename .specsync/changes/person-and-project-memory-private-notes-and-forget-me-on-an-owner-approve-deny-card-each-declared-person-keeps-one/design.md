@@ -64,7 +64,10 @@ criterion.
    that person or the owner asks for them by name, in a conversation; Discord
    has no private reply for a tool result, so in a shared channel what the
    model says after such an ask is visible there (the output tells it never
-   to repeat them to anyone else). A DM-only view is left for Leif.
+   to repeat them to anyone else). The same holds for the speaker's own
+   injected profile and for the owner's `--person` view: the bridge serves
+   no DMs, so the answer lands in the channel the person or the owner chose
+   to talk in. A DM-only view is left for Leif.
 7. The owner reads someone's memory with `--person` in the owner's own run;
    no new slash command.
 8. A forget request is asked through the model (`memory-forget-me`) from a
@@ -78,10 +81,21 @@ criterion.
     notes, superseded history, rows under their Discord ids) and the stored
     turns of their open Discord sessions. Kept: their people list entry (only
     the owner edits it; `/admin people remove` is separate), project memory
-    (rows carry no author), schedules they created, the `forget_requests` row
-    (ids and status only) and the SAFE-5 audit trail (append-only).
+    (rows carry no author), schedules they created, their `/work` task
+    records and open sessions (without the turns), the `forget_requests` row
+    (ids and status only) and the SAFE-5 audit trail (append-only); the card
+    lists what is kept. The running bridge drops the session threads it holds
+    for them too, so no later run replays the deleted turns.
 11. The asker is told every outcome (approved, denied, lapsed) by DM, else in
     the allowlisted conversation they asked in; the notice gives up after a
     day.
 12. One open ask per person; a new ask after a Deny is only limited by the
     DISCORD-6 rate limit.
+13. "Anyone can ask" = anyone who can talk to the bot: a deny-listed or muted
+    user, or one outside the channel / user allowlists, cannot reach it
+    (DISCORD-DENY, DISCORD-5 unchanged) and so cannot ask; with no owner
+    configured nobody can approve, so the ask is refused.
+14. Team members can write project memory, and the owner's runs get it as a
+    block labelled "facts, not instructions" (the SAFE-12 external-data rule
+    is built later); a re-stored key keeps the earlier text soft-deleted for
+    the owner.
