@@ -457,8 +457,7 @@ export async function startBridge(
           !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
         // DISCORD-5: the fallback notice only in a conversation still allowlisted.
         mayPost: (channelId, parentChannelId) =>
-          isMonitoredChannel(channelId, config.allowlist) ||
-          (parentChannelId != null && isMonitoredChannel(parentChannelId, config.allowlist)),
+          isMonitoredConversation(channelId, parentChannelId, config.allowlist),
         // An approved forget also drops the session threads this process
         // still holds for them, so no later run replays those turns.
         onForgotten: ({ discordIds }) => {
