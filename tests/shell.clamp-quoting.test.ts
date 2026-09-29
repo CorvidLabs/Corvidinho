@@ -128,6 +128,10 @@ describe("shell-exec SAFE-3 clamp reads quoting like the shell (REQ-plugins-087)
     expect(firstDisallowedCd("/bin/sh -ec 'cd /etc; pwd'", root)).toBe("/etc");
     expect(firstDisallowedCd("bash --norc -o pipefail -c 'cd ..'", root)).toBe("..");
     expect(firstDisallowedCd("sh -c -- 'cd /etc'", root)).toBe("/etc");
+    // `-` ends the options too, and `o` in a cluster takes the next word
+    expect(firstDisallowedCd("sh -c - 'cd /etc'", root)).toBe("/etc");
+    expect(firstDisallowedCd("bash -co pipefail 'cd /etc'", root)).toBe("/etc");
+    expect(firstDisallowedCd("bash -eo pipefail -c 'cd ..'", root)).toBe("..");
     // behind wrappers: any word naming a shell counts
     expect(firstDisallowedCd("env X=1 sh -c 'cd /etc; pwd'", root)).toBe("/etc");
     expect(firstDisallowedCd("timeout 5 sh -c 'cd /etc'", root)).toBe("/etc");
@@ -136,10 +140,9 @@ describe("shell-exec SAFE-3 clamp reads quoting like the shell (REQ-plugins-087)
     // nested quoting inside the -c string, and a string that would expand
     expect(firstDisallowedCd("sh -c 'cd \"a b/../..\"'", root)).toBe("a b/../..");
     expect(firstDisallowedCd('sh -c "cd $X"', root)).toBe("cd $X");
-    // in-root -c strings and shells without -c stay allowed
+    // in-root -c strings stay allowed (a shell's script file: clamp-scripts)
     expect(firstDisallowedCd("sh -c 'cd sub && ls'", root)).toBeNull();
     expect(firstDisallowedCd("bash -lc 'echo hi'", root)).toBeNull();
-    expect(firstDisallowedCd("bash scripts/build.sh", root)).toBeNull();
     expect(firstDisallowedCd('grep -r "sh -c" .', root)).toBeNull();
   });
 

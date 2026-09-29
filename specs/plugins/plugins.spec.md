@@ -70,6 +70,7 @@ files:
   - plugins/runners/index.ts
   - plugins/runners/commands.ts
   - tests/runners.plugins.test.ts
+  - tests/shell.clamp-scripts.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -288,10 +289,27 @@ dash reads it (the here-doc body is data; only an unquoted one's `$(…)` /
 backticks are analysed) and as bash may read it (`(( x << 2 ))` is arithmetic,
 so the lines after it are commands), and refuses if either does; a command
 with `$'` is also checked with `$'…'` read as bash's ANSI-C quoting (a
-backslash escape in it counts as an expansion). Each `eval` argument, and the
+backslash escape in it counts as an expansion). Each `eval` argument and `trap` action, and the
 `-c` string of a shell (`sh bash dash zsh ksh mksh ash yash posh`, by name or
 path, anywhere in the command: behind `env`, `timeout`, `xargs`, `find -exec`
-…), is checked the same way as a command. A `cd` / `pushd` left open by an unterminated quote or a
+…; `-` ends its options like `--`, and `o` in a cluster such as `-co pipefail`
+takes the next word), is checked the same way as a command. So is each script
+the command runs in a shell, read from the root and every in-root `cd` target
+before it: a file sourced with `.` / `source`, named by `BASH_ENV=` or a
+shell's `--rcfile` / `--init-file`; a file a shell runs as its operand or reads
+through `<` / `<>`; a here-doc (an unquoted body as the shell expands it) or
+here-string a shell reads; and a file run by path (a command word holding `/`,
+also behind the wrappers above) whose `#!` names a shell or that has no `#!`
+and is text. An offending target names the script (`/etc (in ./x.sh)`). A
+script that cannot be checked refuses: a path that would expand, a sourced or
+shell-run file that does not exist, more than 1 MiB of script text or more than
+32 scripts or directories to place them in, a script the command writes (an
+output redirection target or an argument of a command that is not read-only,
+whatever the order), shell input that would expand, and a shell reading
+commands from anything else (a pipe, its inherited standard input, a process
+substitution). A file run by path that does not exist yet (a program the
+command builds) or is not a shell script (a binary, a `#!` for another
+interpreter) is not read. Alias definitions refuse. A `cd` / `pushd` left open by an unterminated quote or a
 trailing `\` refuses, as does a command nested too deeply to check. It looks past prefix words (`{ } ! if
 then else elif do while until time builtin command`, `function NAME`) and
 `NAME=value` / `NAME+=value` assignments, drops redirections (with their
@@ -303,6 +321,15 @@ substitution (`$(…)` / backticks), and `DIRSTACK` writes. CDPATH is not refuse
 lexically: the child shell runs `CDPATH=; readonly CDPATH` and does not inherit
 `CDPATH` or `OLDPWD`, so a `CDPATH` set (even dynamically) in the command cannot
 redirect a relative `cd`. SAFE-1 non-interactive deny applies unless allowlisted.
+The clamp is lexical, so some routes stay out of its reach and are residual
+risk rather than refusals: a directory change made by another interpreter
+(`python3 -c`, `node -e`, `perl -e`, a `#!` script for one) or by a tool that
+runs its own shell strings (`make`, `npm run`, `watch`, `flock -c`, `su -c`,
+`ssh`); a script written by a command that does not name it (`tar x`,
+`unzip`, `git checkout`, `cp -r`, a generator) or changed after the check; and
+a script found through a `PATH` or `hash -p` the command changes. Scripts that
+`cd` through a variable (`cd "$(dirname "$0")"`, `cd "$SCRIPT_DIR"`) refuse
+like the same `cd` typed directly.
 
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
@@ -473,6 +500,12 @@ command line.
 - **When** the agent runs `cd "a b/../.."`, `cd a\ b/../..`, `X="a b" cd /etc`, a `cd /etc` after an escaped `\` and a newline, after a `#` comment or here-doc body holding a lone quote, or a `cd "sub` left open
 - **Then** the run fails with exit 2 and a SAFE-3 refuse message; no spawn; `cd "sub dir"` and `cd sub # comment` still run
 
+### Scenario: SAFE-3 clamp checks the scripts a command runs
+
+- **Given** builtins loaded, `shell-exec` allowlisted, and `bad.sh` in the root holding `cd /etc`
+- **When** the agent runs `./bad.sh`, `sh bad.sh`, `. ./bad.sh`, `sh < bad.sh`, a here-doc `cd /etc` fed to `sh`, `cat bad.sh | sh`, `trap 'cd /etc' EXIT`, `alias c=cd`, or writes a script and runs it in the same command
+- **Then** the run fails with exit 2 and a SAFE-3 refuse message naming the script; no spawn; an in-root `./ok.sh`, `sh okcd.sh` (`cd sub`) or `bash scripts/build.sh` still runs
+
 ### Scenario: SAFE-3 CDPATH cannot redirect a relative cd
 
 - **Given** `shell-exec` allowlisted
@@ -606,6 +639,8 @@ command line.
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
+| shell-exec runs a script (sourced, `BASH_ENV` / `--rcfile`, shell operand or input, here-doc / here-string, run by path) whose cd/pushd escapes, or a `trap` action that does, or defines an alias | Refuse (exit 2, SAFE-3) naming the script; no spawn |
+| shell-exec runs a script the clamp cannot check: path would expand, sourced / shell-run file missing, over 1 MiB of script text or 32 scripts, written by the same command, shell input that would expand, or a shell reading a pipe / inherited stdin / process substitution | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec sets CDPATH (literal or dynamic) then runs a relative cd | Child shell `readonly CDPATH` + dropped env keep the cd in-root (SAFE-3) |
 | Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
 | web-fetch to a non-public target (literal, DNS answer or redirect hop) | Refuse before connecting (exit 2, SAFE-7) |
@@ -714,3 +749,4 @@ and current rows for plugins host evolution.
 | 2026-09-27 | specsync-module-listing-falls-back-to-the-specs-dir-when-specsync-registry-toml-is-absent-so-specsync-list-specsync: SpecSync module listing falls back to the specs dir when .specsync/registry.toml is absent, so specsync-list, specsync-read and the Planning spec briefing (with companions) work in a standard SpecSync project (SPECSYNC-1, SPECSYNC-5); a registry.toml that exists adds its names to the specs-dir modules instead of hiding modules scaffolded after it |
 | 2026-09-27 | safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and: SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable) |
 | 2026-09-27 | plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and: PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root |
+| 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |
