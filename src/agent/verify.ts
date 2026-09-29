@@ -249,7 +249,9 @@ export function verifyFeedbackExcerpt(
   // log order.
   const tailBudget = Math.ceil(body / 2);
   const room = body - tailBudget;
-  const scanEnd = Math.max(sectionStart, log.length - tailBudget);
+  let scanEnd = Math.max(sectionStart, log.length - tailBudget);
+  // Never end the scanned lines on half a surrogate pair.
+  if (scanEnd > sectionStart && isLowSurrogate(log.charCodeAt(scanEnd))) scanEnd -= 1;
   const seen = new Set<string>();
   const found: { at: number; line: string; failure: boolean }[] = [];
   const lines = log.slice(sectionStart, scanEnd).split("\n");

@@ -29,6 +29,9 @@ import {
 import { createTaskExecute, type AgentEvent } from "../src/agent/index.ts";
 import { filesCommands } from "../plugins/files/commands.ts";
 
+/** Plain persona folder: a clean load, so no `Persona: …` note joins a run's exact events (PERSONA-2). */
+const PERSONA_FIXTURE = join(import.meta.dir, "fixtures", "persona");
+
 let base: string;
 
 beforeEach(() => {
@@ -484,6 +487,7 @@ describe("createTaskExecute uses project instructions (AGENT-1)", () => {
         tier,
         fetchImpl: captureFetch(systems),
         loadPlugins: false,
+        personaRoot: PERSONA_FIXTURE,
         onEvent: (e) => events.push(e),
       });
       const signal = new AbortController().signal;
@@ -514,6 +518,7 @@ describe("createTaskExecute uses project instructions (AGENT-1)", () => {
       tier: "read",
       fetchImpl: captureFetch(systems),
       loadPlugins: false,
+      personaRoot: PERSONA_FIXTURE,
       onEvent: (e) => events.push(e),
     });
     const signal = new AbortController().signal;
@@ -544,6 +549,7 @@ describe("createTaskExecute uses project instructions (AGENT-1)", () => {
       tier: "read",
       fetchImpl: captureFetch(systems),
       loadPlugins: false,
+      personaRoot: PERSONA_FIXTURE,
       onEvent: (e) => events.push(e),
     });
     const signal = new AbortController().signal;
@@ -590,6 +596,7 @@ describe("createTaskExecute uses project instructions (AGENT-1)", () => {
       tier: "read",
       fetchImpl: captureFetch(systems),
       loadPlugins: false,
+      personaRoot: PERSONA_FIXTURE,
       onEvent: (e) => events.push(e),
     });
     await exec({ attempt: 1, signal: new AbortController().signal });

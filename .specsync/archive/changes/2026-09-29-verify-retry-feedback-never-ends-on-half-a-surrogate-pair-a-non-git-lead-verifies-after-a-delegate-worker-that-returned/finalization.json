@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned",
+  "implementation_commit": "9fd712626f697631f3b7a2645b0c9554e58ab397",
+  "implementation_tree": "bb369a5756b4372635264227cd61b79f8d6f2a12",
+  "contract_digest": "26be939fec6a5ca44f5bc4a44ec37e8a61ec8843e7ea87ce8e461384cdf359ee",
+  "workspace_digest": "3d74e8d6c3883480135506ea11ee2d673564111a9ea67d273efa71e643711feb",
+  "closing_digest": "6e4f7a1eb73c6609ddc78db5923d40f0f91215e803a025b8af0bd908f11308e5",
+  "review_digest": "ab76359ce17bf5179684ebb070e0441d773d167a2cddb16b32b617a46ab18600",
+  "finalization_digest": "faffb35b990eeed5dfe83edea83365d369239f3ba00657aec2bc6c6e4b53505b",
+  "timestamp": 1790719107
+}

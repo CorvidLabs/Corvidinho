@@ -57,7 +57,10 @@ does). In a non-git project a Fledge edit no tool reported runs verify and
 fails (allowlisted, and with `includeDangerous`), a GitHub-only run still
 skips verify, and the gate off stays done; a `delegate` call whose worker
 failed its own verify makes the lead verify and fail when the allowlist names
-`fledge-hello`, and skip verify when it names no `fledge-*` command.
+`fledge-hello`, and skip verify when it names no `fledge-*` command; a worker
+that writes `app.ts` and exits 137 before any result frame makes the lead
+verify once and fail (never `done` with verify skipped) with an empty
+allowlist, and the note names `delegate`.
 `tests/agent.tool-loop.test.ts` "tool loop dispatches only offered tools":
 an unlisted `danger-ping` in an interactive run and an allowlisted
 `shell-exec` at code tier are refused as not offered (REQ-agent-128).
@@ -75,7 +78,9 @@ stderr report) does not crowd out the failure's own lines; colour escapes are
 dropped and hide no marker; a failing parallel step is named whole and kept
 from its `Running parallel:` line; a log with no fledge markers keeps its end
 and is not called a failing step's output; output within the cap is
-unchanged; never over the cap and never half a surrogate pair. `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
+unchanged; never over the cap and never half a surrogate pair, including an
+emoji `error:` line that the end of the error-line scan cuts (61 noise counts
+after it, at 4000 and at runTask's 3946 cap). `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
 names the failing test within 4000 chars; a short output arrives whole.
 `tests/agent.tool-loop.test.ts`: the tool loop's retry request and the
 read-tier chat carry the failing step, not the first 4000 chars.
@@ -162,6 +167,30 @@ only the searches not yet run, refusals or nothing ⇒ null).
   already-unique options normalize byte-identically (again and again); an
   ask-human call with one id twice gives buttons with distinct `custom_id`s.
 
+
+## Persona file (REQ-agent-069, PERSONA-1..3)
+
+`tests/agent.persona.test.ts`: `loadPersona` / `renderPersona` in temp git
+checkouts (committed file loads with no note; no file → no block and one
+note, a parent checkout's `persona.md` never read; a plain root inside a git
+parent reads its own file; working-tree edit not loaded; untracked refused;
+token scrubbed and `</persona>` / `</ Persona >` escaped; over-cap cut; empty
+→ no persona). `createTaskExecute` with a mock provider on the tool loop and
+read tier over two attempts: persona block first, the PERSONA-3 rules and
+"You are Corvidinho" after it, project AGENTS.md after the rules, the
+finishing rule says "never a flat changelog"; a committed edit shows on the
+next run; no file keeps the rules and emits one note; by default the persona
+comes from Corvidinho's checkout, never a decoy in the cwd. The shipped
+`persona.md` loads whole, passes `scrubSecrets` unchanged and carries the
+persona shape and voice. End to end against a 127.0.0.1 fake provider:
+`corvidinho task run`, the Discord spawn client, the WATCH spawn client and
+a delegate worker each send the shipped persona first and the rules after it.
+A Discord run offered `discord-send-file` keeps the attach block after the
+persona, and the PERSONA-3 one-message rule allows an attachment. Tests that
+assert a run's exact events (project instructions, spend warning, NDJSON
+running totals) pass `personaRoot` = `tests/fixtures/persona` (a plain
+folder, a clean load), so an uncommitted edit to the checkout's `persona.md`
+never breaks them or the verify lane.
 ## Untrusted text in the task run (REQ-agent-071, SAFE-11/12/13)
 
 `tests/safe.injection.test.ts` — `cleanDisplayName` drops mention markup,
