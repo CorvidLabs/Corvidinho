@@ -24,7 +24,9 @@ import type { SpendAlertOutbox, TakenSpendWarning } from "../agent/spend-outbox.
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { appendPostLine, formatCollapsedPing, formatSpendWarningReply } from "./ask-ping.ts";
+import { DISCORD_ANSWER_MAX, DISCORD_MESSAGE_MAX } from "./rich-reply.ts";
 import { finishSlashWithThinking, type SlashFinishThinkingOpts } from "./slash-finish.ts";
+import type { DiscordEmbedPayload } from "./thinking-status.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 import { formatInjectionOwnerLine } from "./injection-guard.ts";
 
@@ -75,9 +77,12 @@ export function takeSpendWarning(
 export type ChannelPost = (p: {
   channelId: string;
   content: string;
+  /** Answer footer or long-prose embed of an answer part (DISCORD-15/16). */
+  embed?: DiscordEmbedPayload;
   /** Reply to this message (e.g. the collapsed answer a ping points at). */
   replyToMessageId?: string;
   mentionUserIds?: string[];
+  components?: unknown[];
 }) => Promise<{ messageId: string } | null>;
 
 /**
@@ -217,7 +222,8 @@ export async function finishSlashWithOwnerNotice(
     post?: ChannelPost;
   },
 ): Promise<void> {
-  const { notice, post, ...finish } = opts;
+  const { notice, ...finish } = opts;
+  const { post } = opts;
   const body: { mode: "collapsed" | "fallback" | null } = { mode: null };
   const onDelivered = (mode: "collapsed" | "fallback", messageId?: string) => {
     body.mode = mode;
@@ -249,7 +255,9 @@ export async function finishSlashWithOwnerNotice(
     }
     return;
   }
-  const withNotice = appendPostLine(opts.body, notice.content);
+  // DISCORD-16: the answer is split into messages, so the notice line never
+  // cuts it down to one message.
+  const withNotice = appendPostLine(opts.body, notice.content, DISCORD_ANSWER_MAX);
   const mentions = [...new Set([...(opts.mentionUserIds ?? []), ...notice.mentionUserIds])];
   let delivered = false;
   const failure: { failed: boolean; err?: unknown } = { failed: false };
@@ -291,21 +299,33 @@ export async function finishSlashWithOwnerNotice(
         // Append to the collapsed answer (edits it again, keeping any
         // Choose button of a slash ask).
         try {
+          // A split answer (DISCORD-16) gets the notice on its last part.
           delivered =
-            (await opts.thinking.finalizeContent({
-              content: withNotice,
-              ...(opts.components ? { components: opts.components } : {}),
-              ...(opts.keepFooter ? { keepFooter: true } : {}),
-              mentionUserIds: mentions,
-            })) !== null;
+            (
+              await opts.thinking.finalizeContent({
+                content: withNotice,
+                ...(opts.components ? { components: opts.components } : {}),
+                ...(opts.keepFooter ? { keepFooter: true } : {}),
+                mentionUserIds: mentions,
+              })
+            )?.complete === true;
         } catch {
           delivered = false;
         }
         if (delivered) collapsedMentions = mentions;
-      } else if (!delivered && body.mode === "fallback") {
+      } else if (
+        !delivered &&
+        body.mode === "fallback" &&
+        // The deferred reply holds only the first part of a split answer
+        // (DISCORD-16): re-edit it only when the answer was one message.
+        opts.body.length <= DISCORD_MESSAGE_MAX
+      ) {
         const { interaction } = opts;
         const payload = {
-          content: withNotice,
+          content:
+            withNotice.length <= DISCORD_MESSAGE_MAX
+              ? withNotice
+              : appendPostLine(opts.body, notice.content),
           ...(opts.components ? { components: opts.components } : {}),
         };
         try {

@@ -90,7 +90,11 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
-totals; `extractUsage` reads OpenAI-compatible `usage`.
+totals; `extractUsage` reads OpenAI-compatible `usage`. `collectTaskRunStream`
+returns the last `usage` frame as `usage` (the Discord answer footer prices
+it, DISCORD-15) and takes an optional `bodyMax` for the result-frame chat body
+(default `CHAT_BODY_MAX`, 1800; the Discord spawn client passes a larger cap
+and splits the answer itself, DISCORD-16).
 
 Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
 `TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`),
@@ -212,7 +216,8 @@ prompts as persona block, then Corvidinho's rules with
 `persona.md` at the repo root uses corvid-agent's persona shape (Archetype,
 Personality traits, Background, Communication style, Example messages).
 
-`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
+`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult` (optional
+`max`, default `CHAT_BODY_MAX` 1800), and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
 `ROLE_REFUSED_SUMMARY_NOTE` and `clipKeepingRoleNote` (REQ-agent-333). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
@@ -681,3 +686,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-29 | persona-one-editable-persona-md-in-corvid-agent-s-voice-loaded-into-the-system-prompt-on-every-turn-and-every-surface: Persona: one editable persona.md in corvid-agent's voice loaded into the system prompt on every turn and every surface, with the rules after it and winning (PERSONA-1..3, #69) |
 | 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
+| 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |

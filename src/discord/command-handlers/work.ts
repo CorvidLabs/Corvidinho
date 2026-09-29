@@ -10,13 +10,15 @@ import { enrichPromptWithProjectMemory, MEMORY_INJECT_LIMIT, memoryInjectOptsFor
 import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
+import { answerSpendFor } from "../rich-reply.ts";
+import { isOwnerDiscord } from "../../identity/owner.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
-import { ASK_NO_OWNER_WARNING, clipPostSummary, formatAskReply } from "../ask-ping.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
 import { answerAskFor, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
@@ -98,6 +100,8 @@ export async function handleWorkCommand(
   ctx.workStore.setStatus(task, "running");
 
   const llmModel = loadLlmEnv(process.env).model;
+  // DISCORD-15.a: tokens and cost show on the owner's own runs only.
+  const ownerRun = isOwnerDiscord(ctx.owner, interaction.userId);
   const outbound = ctx.thinkingOutbound;
   const thinking = outbound
     ? new ThinkingStatus({
@@ -105,6 +109,7 @@ export async function handleWorkCommand(
         channelId: interaction.channelId,
         sessionId: session.id,
         model: llmModel,
+        showUsage: ownerRun,
         debounceMs: ctx.thinkingDebounceMs,
         tickMs: ctx.thinkingTickMs,
       })
@@ -181,9 +186,10 @@ export async function handleWorkCommand(
       interaction,
       sessionId: session.id,
       trackBotMessage: ctx.trackBotMessage,
-      thinkExtras: { model: llmModel },
+      thinkExtras: { model: llmModel, ...(ownerRun ? { spend: {} } : {}) },
       ok: false,
       failStatus: `❌ ${msg}`,
+      post: ctx.post,
     });
     return;
   }
@@ -197,7 +203,12 @@ export async function handleWorkCommand(
         cancelled: result.task.cancelled,
       })
     : undefined;
-  const thinkExtras = { plumbing, model: llmModel };
+  // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.
+  const thinkExtras = {
+    plumbing,
+    model: llmModel,
+    ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel) } : {}),
+  };
   // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
   // is blocked, not done; the owner is pinged (once per cap episode).
   const askOwner = result.ask ? askPingOwner(result.ask, ctx.owner, ctx.spendAlerts) : null;
@@ -252,11 +263,12 @@ export async function handleWorkCommand(
     );
   }
 
-  // ROLES-CHAT-3 (REQ-discord-734): the cap keeps a closing role note.
+  // DISCORD-16: the whole answer; it is split into messages when long.
+  // ROLES-CHAT-3: splits keep a closing role note instead of clipping it.
   const summary = ask
     ? ask.content
     : result.ok
-      ? clipPostSummary(result.summary)
+      ? result.summary
       : `failed (exit ${result.exitCode})`;
   // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
   // its question and choices); a spend-cap stop records no answer
@@ -311,9 +323,8 @@ export async function handleWorkCommand(
     "",
     "",
   ].join("\n");
-  // REQ-discord-734: the summary fits after the head, so the gateway's 1900
-  // cut never drops its closing role note.
-  const body = `${head}${ask ? summary : clipPostSummary(summary, head.length)}`;
+  // DISCORD-16: post the whole answer; the gateway splits at 2000.
+  const body = `${head}${summary}`;
 
   // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
   // reply); the owner ping for the ask and the pending SAFE-8 80% warning go

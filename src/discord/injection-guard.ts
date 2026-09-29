@@ -31,7 +31,7 @@ import {
 } from "../agent/untrusted.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import type { PersonRole } from "../identity/people.ts";
-import { appendPostLine } from "./ask-ping.ts";
+import { ASK_REPLY_MAX, appendPostLine } from "./ask-ping.ts";
 import type { SlashContext, SlashInteraction } from "./slash-types.ts";
 
 /** Bridge log line when a SAFE-13 refusal has no owner to ping. */
@@ -169,19 +169,22 @@ export function formatInjectionOwnerLine(
 
 /**
  * A post with the SAFE-13 owner line appended (owner added to the allowed
- * mentions). Returns `post` unchanged when the run reported no injection.
+ * mentions), the post kept within `max` (an answer that is split into
+ * messages passes DISCORD_ANSWER_MAX, DISCORD-16). Returns `post` unchanged
+ * when the run reported no injection.
  */
 export function withInjectionNotice<T extends { content: string; mentionUserIds?: string[] }>(
   post: T,
   notice: InjectionNotice | undefined,
   owner: OwnerRecord | null | undefined,
+  max: number = ASK_REPLY_MAX,
 ): T {
   if (!notice) return post;
   const n = formatInjectionOwnerLine(notice, owner);
   const ids = [...new Set([...(post.mentionUserIds ?? []), ...n.mentionUserIds])];
   return {
     ...post,
-    content: appendPostLine(post.content, n.line),
+    content: appendPostLine(post.content, n.line, max),
     ...(ids.length ? { mentionUserIds: ids } : {}),
   };
 }

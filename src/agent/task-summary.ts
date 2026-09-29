@@ -81,15 +81,22 @@ export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
   return bits.join(" ");
 }
 
+/** Default chat body cap (WATCH comments, delegate / schedule callers). */
+export const CHAT_BODY_MAX = 1800;
+
 /**
  * Human chat body only — no `state=` / `verified=` plumbing (DISCORD-3.a).
- * Caps at 1800 chars for Discord outbound; the cap keeps a closing role note
- * (ROLES-CHAT-3, REQ-agent-333).
+ * Caps at `max` chars (default 1800, CHAT_BODY_MAX); the cap keeps a closing
+ * role note (ROLES-CHAT-3, REQ-agent-333). The Discord bridge passes a larger
+ * `max` and splits the body into messages itself (DISCORD-16).
  */
-export function chatBodyFromTaskResult(r: TaskResultSummaryInput): string {
+export function chatBodyFromTaskResult(
+  r: TaskResultSummaryInput,
+  max: number = CHAT_BODY_MAX,
+): string {
   if (typeof r.summary !== "string") return "";
   const text = scrubSecrets(stripInternalStopReason(r.summary)).trim();
-  return clipKeepingRoleNote(text, 1800, (head, max) => head.slice(0, max));
+  return clipKeepingRoleNote(text, max, (head, n) => head.slice(0, n));
 }
 
 /**
