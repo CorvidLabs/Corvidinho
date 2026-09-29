@@ -671,6 +671,7 @@ Acceptance Criteria
 - A `pending_ask` value that is not JSON is scrubbed as text and counted (`jsonUnparsed`); the warning names the column and count, never the stored text.
 - A model-chosen option id that looks like a secret is replaced by its position when the ask is made, so neither the button nor the stored row carries it; an id that reaches the row another way is stored redacted, and an older row's secret-looking option id is redacted by the re-scrub while its other ids stay byte-identical.
 - Fixture tests use runtime-built fake secrets only.
+- A fake vendor key written raw, before the current rules, into any one of the listed text columns — session topic, work task description and summary, schedule name, description and prompt, schedule run summary and error, memory key and content — reads `[redacted:<kind>]` after the next open that re-scrubs; `SCRUB_TARGETS` lists each of these columns.
 
 ### REQ-discord-024
 
@@ -759,6 +760,7 @@ Acceptance Criteria
 - Fresh and upgraded DBs reach schema 5 with `audit_log` and its triggers.
 - UPDATE/DELETE on `audit_log` raise an append-only error.
 - `/status` includes the audit line when the bridge has a DB.
+- At start the bridge logs the chain line that `verifyAudit` computes over the bridge's own DB with `CORVIDINHO_AUDIT_HMAC_KEY` from the bridge env (two keyed rows: `Audit: 2 entries · chain OK (keyed)`), and `/status` shows the same line computed at the time of the call, so a row tampered after start shows `chain BROKEN at #n`; without the key the keyed rows show as unverifiable (`cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`) at start and in `/status`.
 
 ### REQ-discord-043
 

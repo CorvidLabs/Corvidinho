@@ -1,6 +1,6 @@
 ---
 id: safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re
-state: approved
+state: implementing
 type: feature
 base_commit: 0f2e2c2774635d1dcbdff599cba92dbecf8eebd9
 ---
