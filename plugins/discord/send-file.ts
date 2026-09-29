@@ -7,7 +7,9 @@
  * - The channel is the one the bridge set for this run
  *   (`CORVIDINHO_DISCORD_REPLY_CHANNEL_ID`, the thread when the talk is in
  *   one); the model cannot name another. No channel ⇒ refused.
- * - DISCORD-5: the channel allowlist gates first (a thread by its parent).
+ * - DISCORD-5: the channel allowlist gates first (a thread by its parent),
+ *   on the bridge's channel set: allowlist file / env ∪ DISCORD_CHANNEL_IDS
+ *   (REQ-discord-004), deny lists first.
  * - DISCORD-8: the acting user the bridge set must be able to view, send and
  *   attach files there too; a check that cannot run refuses.
  * - Caps: Discord's upload limit (8 MB) and a type allowlist (PNG / JPEG /
@@ -23,9 +25,10 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, normalize, relative, resolve } from "node:path";
-import { checkChannel } from "../../src/allowlist/discord.ts";
+import { checkChannel, isChannelDenied } from "../../src/allowlist/discord.ts";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { defangMassMentions } from "../../src/discord/allowed-mentions.ts";
+import { mergeChannelIds } from "../../src/discord/config.ts";
 import {
   requesterCheckFix,
   verifyRequesterCanSend,
@@ -443,11 +446,22 @@ async function handle(ctx: { args: string[]; cwd: string }): Promise<PluginHandl
     );
   }
 
-  // DISCORD-5: a thread is allowlisted through its parent channel.
+  // DISCORD-5: a thread is allowlisted through its parent channel, but a
+  // thread on deny_channels is refused even then: deny wins (REQ-plugins-005).
   const loaded = await tryLoadAllowlist({ env: process.env });
   if (!loaded.ok) return refuse(`not authorized: ${loaded.error}`);
   const parent = process.env[REPLY_PARENT_CHANNEL_ENV]?.trim() ?? "";
-  const gate = checkChannel(parent || channelId, loaded.config);
+  // REQ-discord-004: the same channel set the bridge listens in (allowlist
+  // file + CORVIDINHO_DISCORD_ALLOW_CHANNELS ∪ DISCORD_CHANNEL_IDS); deny
+  // lists are read first, so a deny still wins. A deny-listed thread is
+  // refused even under an allowlisted parent (REQ-plugins-005).
+  const discordGate = {
+    ...loaded.config.discord,
+    channels: mergeChannelIds(loaded.config, process.env),
+  };
+  const gate = isChannelDenied(channelId, discordGate)
+    ? checkChannel(channelId, discordGate)
+    : checkChannel(parent || channelId, discordGate);
   if (!gate.ok) return refuse(gate.error);
 
   const attachment = args.gitDiff

@@ -17,6 +17,7 @@ import {
   gateInbound,
   gateRateOrMute,
   isMonitoredChannel,
+  isMonitoredConversation,
   resolvePermissionLevel,
   type RateLimitConfig,
   type RateLimitState,
@@ -129,12 +130,13 @@ function silentChannelDeny(): RouteAction {
 
 /**
  * DISCORD-5 / REQ-discord-212 — the channel the message was sent in: the
- * thread's parent (DISCORD-2.a resolution) or the thread itself. The session's
- * recorded channel never stands in for it.
+ * thread's parent (DISCORD-2.a resolution) or the thread itself, unless
+ * either is deny-listed (deny wins, REQ-plugins-005). The session's recorded
+ * channel never stands in for it.
  */
 function ownChannelAllowlisted(msg: InboundMessage, deps: RouterDeps): boolean {
-  if (isMonitoredChannel(msg.channelId, deps.allowlist)) return true;
-  return msg.threadId !== undefined && isMonitoredChannel(msg.threadId, deps.allowlist);
+  if (msg.threadId === undefined) return isMonitoredChannel(msg.channelId, deps.allowlist);
+  return isMonitoredConversation(msg.threadId, msg.channelId, deps.allowlist);
 }
 
 /**
@@ -142,7 +144,8 @@ function ownChannelAllowlisted(msg: InboundMessage, deps: RouterDeps): boolean {
  * `session`? The press channel must be allowlisted, or be the session's thread
  * under an allowlisted parent (DISCORD-2.a); and the session's own channel
  * (parent or thread), where the resumed run posts, must still be allowlisted.
- * With no session only the press channel is checked.
+ * A deny on the press channel, the session's channel or its thread always
+ * wins (REQ-plugins-005). With no session only the press channel is checked.
  */
 export function componentChannelAllowlisted(
   channelId: string,
@@ -151,8 +154,9 @@ export function componentChannelAllowlisted(
 ): boolean {
   if (session) {
     const sessionOk =
-      isMonitoredChannel(session.channelId, allowlist) ||
-      (session.threadId !== undefined && isMonitoredChannel(session.threadId, allowlist));
+      session.threadId === undefined
+        ? isMonitoredChannel(session.channelId, allowlist)
+        : isMonitoredConversation(session.threadId, session.channelId, allowlist);
     if (!sessionOk) return false;
   }
   if (isMonitoredChannel(channelId, allowlist)) return true;
