@@ -18,6 +18,7 @@
  * A /work or /session start answer is tracked too, so its ask is answered
  * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
+ * a press passes channel → actor → mute/rate first (REQ-discord-212/201/010);
  * SESSION-MULTI: per-user sessions.
  * AGENT-6: each run is recorded with its session and a continued run gets the
  * earlier turns replayed ahead of the new message (session-thread.ts).
@@ -79,6 +80,7 @@ import {
   defaultRateLimitConfig,
   gateActor,
   gateChannel,
+  gateRateOrMute,
   isMonitoredChannel,
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
@@ -974,6 +976,42 @@ export async function startBridge(
           content: admin ? ALLOWLIST_DENY_TIP : EPHEMERAL_SILENT_ACK,
           ephemeral: true,
         });
+        return;
+      }
+
+      // REQ-discord-201 / REQ-discord-010 — then the actor and mute/rate gates
+      // chat and slash run (ALLOW-5 / DISCORD-6), on open and pick alike, so a
+      // deny-listed, unlisted or muted user cannot keep a session going by
+      // buttons. A press needs an ack, so every refusal is ephemeral: the
+      // zero-width ack for an actor deny (DISCORD-DENY-3), MUTED /
+      // RATE_LIMITED for mute/rate. The pending ask is left as it was.
+      const actorGate = gateActor({
+        userId: interaction.userId,
+        roleIds: interaction.roleIds,
+        allowlist: config.allowlist,
+        owner: config.owner ?? null,
+      });
+      if (!actorGate.ok) {
+        await interaction.reply({ content: EPHEMERAL_SILENT_ACK, ephemeral: true });
+        return;
+      }
+      const rateGate = gateRateOrMute({
+        userId: interaction.userId,
+        mutedUsers,
+        rateLimit: {
+          state: rateLimitState,
+          config: rateLimitConfig,
+          // rateLimitByLevel keys on the presser's level (mute is checked first).
+          permLevel: resolvePermissionLevel({
+            userId: interaction.userId,
+            roleIds: interaction.roleIds,
+            allowlist: config.allowlist,
+            owner: config.owner ?? null,
+          }),
+        },
+      });
+      if (!rateGate.ok) {
+        await interaction.reply({ content: rateGate.reply, ephemeral: true });
         return;
       }
 

@@ -36,6 +36,10 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   Server Members Intent off); a `fetch` spy proves nothing is posted. With the
   acting env empty or unset the flag / strict behaviour is unchanged
   (REQ-discord-012, no token, no network).
+- `tests/discord.allowed-mentions.test.ts` — REQ-discord-205: fake discord.js
+  injected into the live gateway; chat mention/reply-continue, `/session
+  start`, `/work`, slash, embeds, schedule tick and `discord-post-message`
+  (stubbed fetch) all send `parse: []`; ask keeps owner-only (no live token).
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 

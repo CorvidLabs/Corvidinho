@@ -1,8 +1,20 @@
 /**
  * Thin Discord gateway (discord.js). Live connect only when token present.
  * Tests inject InboundMessage / SlashInteraction — no ProcessManager.
+ *
+ * Every outbound post (channel send, reply, message/embed edit, slash
+ * reply/editReply, component reply/update) parses no mentions from its
+ * content: the client default and each payload set `allowedMentions.parse =
+ * []`, and `@everyone` / `@here` are defanged in the text, so model-written
+ * summaries cannot ping a role, `@everyone`, `@here` or a user (DISCORD-8
+ * confused deputy, REQ-discord-205).
  */
 
+import type * as DiscordJs from "discord.js";
+import {
+  defangMassMentions,
+  outboundAllowedMentions,
+} from "./allowed-mentions.ts";
 import {
   buildChannelAutocompleteChoices,
   type ChannelCandidate,
@@ -29,6 +41,8 @@ export type ComponentInteraction = {
   channelId: string;
   guildId?: string;
   userId: string;
+  /** Member role snowflakes, for the actor gate (REQ-discord-201). */
+  roleIds?: string[];
   messageId?: string;
   /** Reply (or update) — supports ephemeral choice UI. */
   reply: (opts: {
@@ -67,14 +81,18 @@ export type GatewayHandlers = {
    */
   mayAutocompleteChannels?: (actor: AutocompleteActor) => boolean;
   onReady?: (botUserId: string) => void;
-  /** Optional outbound helper used by bridge after agent reply. */
+  /**
+   * Optional outbound helper used by bridge after agent reply. The live
+   * gateway parses no mentions from `content` (REQ-discord-205); only the
+   * replied-to author and `mentionUserIds` may be pinged.
+   */
   reply?: (opts: {
     channelId: string;
     content: string;
     replyToMessageId?: string;
     /**
-     * When set, only these users (plus the replied-to author) may be pinged
-     * by this post — used for the AUTONOMY-2 owner ping.
+     * Users (besides the replied-to author) this post may ping — the ask's
+     * requester or owner (AUTONOMY-2/4). Omitted ⇒ nobody else.
      */
     mentionUserIds?: string[];
     /** Discord ActionRow components (DISCORD-ASK stub buttons). */
@@ -114,24 +132,8 @@ export type AutocompleteActor = {
   roleIds: string[];
 };
 
-/** Fixture-friendly subset of a discord.js interaction member. */
-type RawInteractionMember = {
-  roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
-} | null;
-
-/**
- * Member role snowflakes: a cached GuildMember (`roles.cache`) or the raw API
- * member (`roles: string[]`); none when absent.
- */
-function memberRoleIds(member: RawInteractionMember | undefined): string[] {
-  const roles = member?.roles;
-  if (!roles) return [];
-  if (Array.isArray(roles)) return [...roles];
-  if (roles.cache && typeof roles.cache.keys === "function") {
-    return [...roles.cache.keys()];
-  }
-  return [];
-}
+/** Fixture-friendly subset of a discord.js interaction member (roles via `interactionRoleIds`). */
+type RawInteractionMember = { roles?: RawMemberRoles } | null;
 
 export type DiscordGateway = {
   start(): Promise<void>;
@@ -191,6 +193,27 @@ export function flattenSlashOptions(data: readonly RawSlashOption[]): {
   return { subcommandGroup, subcommand, options };
 }
 
+/** discord.js interaction `member.roles`: a cached manager or raw API ids. */
+export type RawMemberRoles =
+  | { cache?: { keys: () => IterableIterator<string> } }
+  | string[];
+
+/**
+ * Role snowflakes of an interaction's member (slash and components), for
+ * `gateActor` role allow/deny (REQ-discord-201). Empty outside a guild.
+ */
+export function interactionRoleIds(
+  member: { roles?: RawMemberRoles } | null | undefined,
+): string[] {
+  const roles = member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return [...roles];
+  if (roles.cache && typeof roles.cache.keys === "function") {
+    return [...roles.cache.keys()];
+  }
+  return [];
+}
+
 /**
  * Discord `MessageReferenceType.Forward` (discord-api-types v10). Kept as a
  * plain number so this module does not load discord.js eagerly.
@@ -230,6 +253,8 @@ export function replyReferenceMessageId(
 export type LiveGatewayOptions = {
   /** Shared package version for Discord presence (DISCORD-12). */
   version?: string;
+  /** discord.js module override (tests inject a fake; default dynamic import). */
+  discord?: typeof DiscordJs;
 };
 
 export async function createLiveGateway(
@@ -237,7 +262,7 @@ export async function createLiveGateway(
   handlers: GatewayHandlers,
   opts?: LiveGatewayOptions,
 ): Promise<DiscordGateway> {
-  const discord = await import("discord.js");
+  const discord = opts?.discord ?? (await import("discord.js"));
   const {
     Client,
     GatewayIntentBits,
@@ -257,6 +282,8 @@ export async function createLiveGateway(
     // login, so the first IDENTIFY and any non-resumable re-identify carry the
     // version. ClientReady does not fire again after a re-identify.
     presence: buildVersionPresenceData(presenceVersion),
+    // REQ-discord-205: default for any payload that omits allowedMentions.
+    allowedMentions: outboundAllowedMentions({ repliedUser: true }),
   });
 
   let botUserId: string | null = null;
@@ -311,7 +338,7 @@ export async function createLiveGateway(
     member?: {
       displayName?: string | null;
       nickname?: string | null;
-      roles?: { cache?: { keys: () => IterableIterator<string> } } | string[];
+      roles?: RawMemberRoles;
     } | null;
     options: {
       getSubcommand: (required?: boolean) => string | null;
@@ -347,8 +374,13 @@ export async function createLiveGateway(
     subcommandGroup = subcommandGroup ?? flat.subcommandGroup;
 
     const send = async (opts: SlashReplyPayload, mode: "reply" | "edit") => {
-      const payload: Record<string, unknown> = {};
-      if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
+      // REQ-discord-205: /session start and /work carry model-written text.
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions(),
+      };
+      if (opts.content !== undefined) {
+        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+      }
       if (opts.embeds?.length) {
         payload.embeds = opts.embeds.map((e) => ({
           description: e.description,
@@ -375,7 +407,7 @@ export async function createLiveGateway(
       return undefined;
     };
 
-    const roleIds = memberRoleIds(interaction.member);
+    const roleIds = interactionRoleIds(interaction.member);
 
     return {
       id: interaction.id,
@@ -535,21 +567,18 @@ export async function createLiveGateway(
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
         return null;
       }
+      // REQ-discord-205: never parse mentions from (model-written) content;
+      // only the replied-to author and mentionUserIds (an ask) may ping.
       const sent = await channel.send({
-        content: content.slice(0, 1900),
+        content: defangMassMentions(content).slice(0, 1900),
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
         ...(components?.length ? { components: components as never } : {}),
-        ...(mentionUserIds
-          ? {
-              allowedMentions: {
-                parse: [],
-                users: mentionUserIds,
-                repliedUser: true,
-              },
-            }
-          : {}),
+        allowedMentions: outboundAllowedMentions({
+          users: mentionUserIds,
+          repliedUser: true,
+        }),
       });
       return { messageId: sent.id };
     } catch (err) {
@@ -575,6 +604,7 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        allowedMentions: outboundAllowedMentions({ repliedUser: true }),
       });
       return { messageId: sent.id };
     } catch (err) {
@@ -597,6 +627,7 @@ export async function createLiveGateway(
             footer: embed.footer,
           },
         ],
+        allowedMentions: outboundAllowedMentions({ repliedUser: true }),
       });
       return true;
     } catch (err) {
@@ -624,9 +655,17 @@ export async function createLiveGateway(
         }
       ).messages;
       const msg = await messages.fetch(messageId);
-      const payload: Record<string, unknown> = {};
+      // REQ-discord-205: an edit parses no mentions either.
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions({
+          users: mentionUserIds,
+          repliedUser: true,
+        }),
+      };
       if (content === null) payload.content = null;
-      else if (content !== undefined) payload.content = content.slice(0, 1900);
+      else if (content !== undefined) {
+        payload.content = defangMassMentions(content).slice(0, 1900);
+      }
       if (embed === null) payload.embeds = [];
       else if (embed) {
         payload.embeds = [
@@ -639,13 +678,6 @@ export async function createLiveGateway(
       }
       if (components === null) payload.components = [];
       else if (components) payload.components = components;
-      if (mentionUserIds) {
-        payload.allowedMentions = {
-          parse: [],
-          users: mentionUserIds,
-          repliedUser: true,
-        };
-      }
       await msg.edit(payload);
       return true;
     } catch (err) {
@@ -679,12 +711,14 @@ export async function createLiveGateway(
 
 
 
-function adaptComponent(interaction: {
+/** discord.js MessageComponent interaction → `ComponentInteraction` (DISCORD-ASK). */
+export function adaptComponent(interaction: {
   id: string;
   customId: string;
   channelId: string;
   guildId: string | null;
   user: { id: string };
+  member?: { roles?: RawMemberRoles } | null;
   message?: { id?: string };
   deferred: boolean;
   replied: boolean;
@@ -698,10 +732,16 @@ function adaptComponent(interaction: {
     channelId: interaction.channelId,
     guildId: interaction.guildId ?? undefined,
     userId: interaction.user.id,
+    roleIds: interactionRoleIds(interaction.member),
     messageId: interaction.message?.id,
     reply: async (opts) => {
-      const payload: Record<string, unknown> = {};
-      if (opts.content !== undefined) payload.content = opts.content.slice(0, 1900);
+      // REQ-discord-205: component replies/updates parse no mentions.
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions(),
+      };
+      if (opts.content !== undefined) {
+        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+      }
       // Explicit empty array clears buttons (DISCORD-ASK-8); do not use truthiness.
       if (opts.components !== undefined) {
         payload.components = opts.components as never;
@@ -811,7 +851,7 @@ export async function respondChannelAutocomplete(
         commandName: interaction.commandName,
         channelId: interaction.channelId,
         userId: interaction.user.id,
-        roleIds: memberRoleIds(interaction.member),
+        roleIds: interactionRoleIds(interaction.member),
       }) === true;
   } catch (err) {
     console.error("[discord] autocomplete gate failed:", err);

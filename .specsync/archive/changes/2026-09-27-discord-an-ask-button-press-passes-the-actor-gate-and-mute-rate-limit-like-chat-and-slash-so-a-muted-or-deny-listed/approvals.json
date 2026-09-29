@@ -1,0 +1,86 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "claude",
+      "timestamp": 1790474503,
+      "digest": "252bd4f26d12aefa856abe5538447f21fe7069f70c15869d8218bd920cc72628",
+      "note": "Agent definition approval under PROCESS-3 (Corvidinho autonomous merge standing order)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed",
+        "title": "Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5)",
+        "description": "Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/bridge.ts",
+          "src/discord/gateway.ts",
+          "tests/discord.ask-button-gates.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "An ask button press (open or pick) in an allowlisted channel runs, after the channel gate, the same actor gate and mute/rate limit as chat and slash: a deny-listed user or role, or an actor not on a non-empty user/role allowlist (owner excepted), gets only the ephemeral zero-width ack; a muted user gets ephemeral MUTED; a user over the rate limit (shared with chat and slash, keyed on the presser's resolved permission level) gets ephemeral RATE_LIMITED. On every refusal the agent does not run, nothing is sent or edited, and the pending ask stays as it was, so the owner can still answer it once allowed; the gateway passes the presser's role ids so role allow/deny applies, and an allowed press still resumes (DISCORD-ASK-3)."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "65a7f1902734aff1e7ff669137b83b4caaebf5e89ebb06970e4b22fd6e1b1e2a"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "claude",
+      "timestamp": 1790517501,
+      "digest": "252bd4f26d12aefa856abe5538447f21fe7069f70c15869d8218bd920cc72628",
+      "note": "Re-approval after merging main: REQ-discord-010 delta now carries #221's merged text; ask button additions unchanged (PROCESS-3)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed",
+        "title": "Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5)",
+        "description": "Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/bridge.ts",
+          "src/discord/gateway.ts",
+          "tests/discord.ask-button-gates.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "An ask button press (open or pick) in an allowlisted channel runs, after the channel gate, the same actor gate and mute/rate limit as chat and slash: a deny-listed user or role, or an actor not on a non-empty user/role allowlist (owner excepted), gets only the ephemeral zero-width ack; a muted user gets ephemeral MUTED; a user over the rate limit (shared with chat and slash, keyed on the presser's resolved permission level) gets ephemeral RATE_LIMITED. On every refusal the agent does not run, nothing is sent or edited, and the pending ask stays as it was, so the owner can still answer it once allowed; the gateway passes the presser's role ids so role allow/deny applies, and an allowed press still resumes (DISCORD-ASK-3)."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "2ff977613b5a27f73d2829f8a404bbf44883e15aa15a0dcbbc7cbedc176c2e3b"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790518391,
+      "digest": "1dbc580ee4ad2abec2ce413fa937bebf2989f90eaab2a193d806b3f72d25d42f",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

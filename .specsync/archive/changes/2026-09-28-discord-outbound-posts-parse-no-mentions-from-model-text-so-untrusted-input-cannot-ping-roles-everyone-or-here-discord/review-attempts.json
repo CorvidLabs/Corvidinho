@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "31967a88b064710ec58dcbc6a92b28e5ab8a15cc",
+      "contract_digest": "0180c527143438e268342bf2cf25edc3430015bb52254de79c32d3def5d99b77",
+      "execution_digest": "5afad6d1f98622e6696f278db6c40436da654cd9aaaffbe19080cf685cf1bdb5",
+      "workspace_digest": "e82ab52ba9ac8b68b44b8b39d2a4d05a87db20f02c841b041fca9acf57bffadc",
+      "timestamp": 1790608843
+    }
+  ]
+}

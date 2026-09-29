@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord",
+  "implementation_commit": "31967a88b064710ec58dcbc6a92b28e5ab8a15cc",
+  "implementation_tree": "b9fc0f8216d8df17ff9752bd4ba8b82c852eb0c1",
+  "contract_digest": "0180c527143438e268342bf2cf25edc3430015bb52254de79c32d3def5d99b77",
+  "workspace_digest": "e82ab52ba9ac8b68b44b8b39d2a4d05a87db20f02c841b041fca9acf57bffadc",
+  "closing_digest": "6496c98e7f96739b6264cbd1bb5c5f1a747912e2afab85a050e12e3030506a13",
+  "review_digest": "ed12a4415840dbe92bff587c69f29263a80ca6ac733d9f9180efdc57467aad02",
+  "finalization_digest": "e60ba9c129cef23be7620cc3ca42e9e4ae1897c15c9f110fbe36ffa60b6daf72",
+  "timestamp": 1790608856
+}

@@ -36,7 +36,7 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
 
 
-Gate order for every slash: **channel allowlist → actor gate (user/role allowlist + deny lists, REQ-discord-201; ephemeral zero-width ack on refuse) → mute/rate → minPermission → handler**.
+Gate order for every slash: **channel allowlist → actor gate (user/role allowlist + deny lists, REQ-discord-201; ephemeral zero-width ack on refuse) → mute/rate → minPermission → handler**. An ask button press (open or pick) runs the same **channel → actor → mute/rate** gates before it shows choices or resumes the session.
 
 Channel autocomplete (`/admin channels add|remove`, `/announce channel`) is gated too: Discord shows these options to every guild member, so each autocomplete request is re-checked (channel allowlist → actor gate → ADMIN, with mutes) and anyone who is not ADMIN in an allowlisted channel gets an empty list — no channel names, ids or allowlist entries (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431). Autocomplete does not count toward the rate limit.
 
@@ -110,6 +110,10 @@ One embed edited in place: description + color + footer (`sess · phase · elaps
 
 Live source (AGENT-8 / DISCORD-3, #73; AGENT-4 / #85): the bridge spawns `task run --task <prompt> --output ndjson` (no `--no-verify`; verify runs when tools report changed files or the run's git working tree changed, REQ-agent-085, and is skipped only when both are empty) and reads one versioned frame per stdout line as the agent works. The description follows the agent state (`⏳ planning` / `working` / `calling tool <name>` / `verifying` / `done`), the footer shows the current tool, and `~tok` is the provider-reported running total when the LLM returns `usage` (rough estimate otherwise). Tool arguments are never streamed raw. The bridge requires protocol 2 (DISCORD-10): restart the bridge and the corvidinho checkout together after upgrading. If the binary streams another protocol mid-run, its frames are withheld and the reply is a "protocol mismatch — restart the bridge" notice. The final `result.summary` is capped at 4000 characters (Discord shows at most ~1800).
 
+### Mentions in outbound posts (DISCORD-8)
+
+Every post the bridge makes — chat replies, `/session start` and `/work` replies, other slash replies, ask-button replies and collapse edits, schedule and announce posts, thinking embeds — and the agent's `discord-post-message` parses **no** mentions from its text (`allowedMentions.parse = []`, also the discord.js client default). Model text is untrusted (a chatter's prompt, public GitHub content), so `@everyone`, `@here`, `<@&role>` and `<@user>` in a summary never ping; `@everyone` / `@here` are also defanged with a zero-width space. A reply still pings the person it answers. The only other pings are the users a question names (requester or owner, below). Source: `src/discord/allowed-mentions.ts` (REQ-discord-205).
+
 ### Session replies (mention / continue)
 
 After thinking settles: plain `content` (truncated ~1800/1900), reply-referenced to the user message; a collapsed answer also keeps the footer-only embed above (DISCORD-3.a). Summary comes from the stream's final `result` frame (same `result` as `task run --json`), falling back to the raw output summary. No attribution footer on Discord outbound today. A reply cut off by a bridge restart (update, crash) is not left at "working…": at the next start its progress embed is marked interrupted (REQ-discord-311, `src/discord/inflight-replies.ts`).
@@ -120,7 +124,7 @@ A session keeps its thread (AGENT-6, REQ-discord-072, `src/discord/session-threa
 
 ### Questions and owner ping (AUTONOMY-1/2)
 
-In @mention / reply chat, `/work` and `/session start`, when choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..8). Schedules post the question as text (no buttons). The public Choose stub is the single ask surface (thinking "Needs your input" is collapsed into it — DISCORD-ASK-6). On done (mention or after a button pick), the stub/thinking message is edited into the final answer when practical instead of ✅ Done + a second reply (DISCORD-ASK-7). Buttons expire after ~30 minutes. You can keep chatting while your buttons are open; if a later message asks again, the earlier Choose buttons still work until you press them or they expire (SESSION-MULTI-3) — each ask is answered by its own buttons. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
+In @mention / reply chat, `/work` and `/session start`, when choices fit a short list, Corvidinho posts a **Choose** stub and opens an **ephemeral** button UI for the requester only (DISCORD-ASK-1..8). Schedules post the question as text (no buttons). The public Choose stub is the single ask surface (thinking "Needs your input" is collapsed into it — DISCORD-ASK-6). On done (mention or after a button pick), the stub/thinking message is edited into the final answer when practical instead of ✅ Done + a second reply (DISCORD-ASK-7). Buttons expire after ~30 minutes. A press passes the same actor gate and mute/rate limit as chat and slash (REQ-discord-201 / REQ-discord-010): a deny-listed or unlisted presser gets the ephemeral zero-width ack, a muted or rate-limited one the ephemeral `MUTED` / `RATE_LIMITED` reply, and the ask stays pending. You can keep chatting while your buttons are open; if a later message asks again, the earlier Choose buttons still work until you press them or they expire (SESSION-MULTI-3) — each ask is answered by its own buttons. Free-text clarify is used only when options cannot be listed. Concurrent users each have their own session (SESSION-MULTI).
 
 When a run needs a human, the reply is a question instead of a summary. Two cases:
 
@@ -137,10 +141,10 @@ Mostly ephemeral plain text (`/status`, `/agents`, `/session list`, mute/unmute,
 
 ### Rate limits and mutes (DISCORD-6)
 
-- One per-user sliding window (`DISCORD_RATE_LIMIT_WINDOW_MS`, default 60s; `DISCORD_RATE_LIMIT_MAX`, default 10) covers @mention / reply / thread messages and slash commands together.
-- `DISCORD_RATE_LIMIT_BY_LEVEL` (JSON, e.g. `{"3":100}`) overrides the max for the actor's resolved permission level on both paths: 3 = owner (ADMIN), 2 = allowed user or role (or anyone in an allowlisted channel when the user and role lists are empty).
+- One per-user sliding window (`DISCORD_RATE_LIMIT_WINDOW_MS`, default 60s; `DISCORD_RATE_LIMIT_MAX`, default 10) covers @mention / reply / thread messages, slash commands and ask button presses together. Every press counts, open and pick alike (also a press on someone else's or an expired ask), so a full @mention → open → pick round uses 3 slots; a refused message, command or press uses none.
+- `DISCORD_RATE_LIMIT_BY_LEVEL` (JSON, e.g. `{"3":100}`) overrides the max for the actor's resolved permission level on every path: 3 = owner (ADMIN), 2 = allowed user or role (or anyone in an allowlisted channel when the user and role lists are empty).
 - `/mute` refuses yourself and the configured owner with an ephemeral message: a muted owner is not ADMIN, so `/unmute` would be refused until the bridge restarts. Mutes are in memory (seed: `DISCORD_MUTED_USER_IDS`).
-- A muted or rate-limited user's chat message gets at most **one** public notice ("You do not have permission…" / "Slow down!") per user per rate-limit window; later messages in that window are refused silently. Slash refusals stay ephemeral on every call.
+- A muted or rate-limited user's chat message gets at most **one** public notice ("You do not have permission…" / "Slow down!") per user per rate-limit window; later messages in that window are refused silently. Slash and ask button refusals stay ephemeral on every call.
 
 ### Posts to another channel (DISCORD-8)
 
@@ -209,6 +213,7 @@ flowchart TD
 - Durable sessions / `/work` tasks: `src/discord/session-store.ts`, `work-store.ts`; interrupted replies: `inflight-replies.ts`
 - `/session list` / `/schedule list` scope (REQ-discord-418): `src/discord/list-scope.ts`
 - User lookup (IDENTITY-5 / DISCORD-13): `plugins/discord/user-lookup.ts`
+- Outbound mention safety: `src/discord/allowed-mentions.ts`
 
 
 ## Session worktrees (SESSION-WORKTREE-1..5)

@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 63
+version: 64
 status: draft
 files:
   - src/cli.ts
@@ -99,6 +99,7 @@ plugins list/run load builtins and honor non-interactive deny; doctor reports pl
 `specsync <list|read|check|brief|coverage|score|change-list|ship-status>` runs the matching `specsync-*` plugin through `plugins run`; `score` is `specsync-score`, the local `specsync score` report (SPECSYNC-3, REQ-cli-089).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count. The `plugins list` text view also prints which PLUGIN-4 language runners loaded (with their binary) and one `<name> not loaded: <tool> not found on PATH` line per missing toolchain, and still exits 0 (REQ-cli-112).
 doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `discord` and `github-watch` checks load allowlists through the bridge / WATCH loader (allowlist file + env overlays, `mergeChannelIds` / `expandWatchRepos`), drop deny-listed entries (deny wins) and entries the gate cannot use (a repo that is not OWNER/REPO; the line names deny wins only when every entry is deny-listed), count a token / watch login only when not blank (as the bridge / WATCH trim), and name the source (`file`, `env`, `file + env`) and count, never ids, repos or tokens; a file that does not load fails both. The `llm` line is `ok` with `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (value not shown) and `warn` (task run uses the demo stub) without, never changing the exit code. The `data-dir` line probes the shared data dir with a temp dir it removes: `ok` exists + writable, `info` missing but creatable (not created), `fail` otherwise, including a symlink to nothing (exit 1).
+`plugins run <name> [--json] [-- ...args]`: every argv item after the first `--` that follows the name reaches the plugin verbatim; global flags, `--json` and help are read only before it (REQ-cli-186).
 Attribution output uses only the project name and repository link and contains no account handle.
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning and the ask recorded on the run row stay pending, and a bridge's next scheduler tick posts the ask to the schedule's channel (REQ-discord-347; the daemon never posts it).
 `daemon` needs no Discord token, adds no env vars, runs at most one instance per data dir, logs scrubbed JSON lines, and on SIGTERM/SIGINT drains (≤30 s), records stragglers failed, gives them ≤3 s to park their worktree, releases the lock and exits 0. Before its first tick it fails runs a dead process left "running" and removes leftover worktrees of its data dir's ended schedule runs, never another data dir's (`daemon.recovered`, REQ-discord-346). Restarts are systemd's job (docs/DAEMON.md).
@@ -129,6 +130,12 @@ doctor and the report-only `corvidinho init` check the project files in the curr
 - **Given** the operator's shell is in directory A and project P has its own `fledge.toml`, specs and `.env`
 - **When** the operator runs `corvidinho --project P task run --task "…"`
 - **Then** the run uses P's `fledge.toml`, plans with P's specs and has P's `.env` values (not A's), exactly as when started in P
+
+### Scenario: Plugin args that look like Corvidinho flags
+
+- **Given** `CORVIDINHO_ALLOWLIST=shell-exec`
+- **When** the operator runs `corvidinho plugins run shell-exec --json -- ls -h --json`
+- **Then** the plugin gets `ls -h --json` and the result prints as JSON, not help
 
 ### Scenario: Second daemon on one data dir
 
@@ -215,3 +222,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-27 | global-project-path-flag-runs-the-cli-as-if-started-in-that-directory-that-project-s-fledge-toml-specs-and-env-files-as: Global --project <path> flag runs the CLI as if started in that directory: that project's fledge.toml, specs and .env files as Bun loads them there, never the start directory's (CLI-5) |
 | 2026-09-27 | release-0-0-32-allowlisted-tools-reach-the-model-fledge-core-builtins-choose-asks-on-work-and-session-start-open-asks: Release 0.0.32: allowlisted tools reach the model, Fledge core builtins, Choose asks on work and session start, open asks kept per askId, role-refusal note, --project, doctor and init name project files |
 | 2026-09-27 | release-0-0-33-discord-8-acting-user-post-check-open-asks-scrubbed-at-rest-and-re-scrubbed-watch-comment-rate-limit: Release 0.0.33: DISCORD-8 acting-user post check, open asks scrubbed at rest and re-scrubbed, watch comment rate-limit backoff |
+| 2026-09-26 | plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json: Plugins run passes every argv item after the -- that follows the plugin name to the plugin verbatim, so global flags, --json and -h there are never taken by the Corvidinho CLI |

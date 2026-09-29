@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "plugins-run-passes-every-argv-item-after-the-that-follows-the-plugin-name-to-the-plugin-verbatim-so-global-flags-json",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "0d322af415e8151050d5a08c9910d775b03608d5",
+  "contract_digest": "e989430f500217848a85adbda94f0c0144adf546b1e67e3539f822e84d83f115",
+  "execution_digest": "ca48edf06f5a597a7528a8d49b4f2ec54d3363f515dfd3b59957ba1ea944a300",
+  "workspace_digest": "b893fe6c86b499a44508da6478a9d5de1c7b2b1566599af9de6406b132b732d9",
+  "timestamp": 1790603678
+}
