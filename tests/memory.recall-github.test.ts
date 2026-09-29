@@ -239,9 +239,11 @@ describe("MEMORY-8 memory in GitHub (WATCH) runs, by the commenter's declared pe
     expect(saved.error).toBeUndefined();
     expect((saved.data as Row).ownerUserId).toBe("person:tofu");
     expect(contents(await run("memory-recall", ["--query", "which editor"]))).toEqual(["uses helix"]);
+    // MEMORY-7.a: a profile is shown only privately — never in a GitHub thread.
     const profile = await run("memory-profile", []);
-    expect(profile.ok).toBe(true);
-    expect((profile.data as { id: string }).id).toBe("tofu");
+    expect(profile.ok).toBe(false);
+    expect(profile.error).toContain("MEMORY-7.a");
+    expect(JSON.stringify(profile)).not.toContain("uses helix");
 
     discord(TOFU, "team");
     expect(contents(await run("memory-recall", []))).toEqual(["uses helix"]);

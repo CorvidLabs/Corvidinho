@@ -243,6 +243,16 @@ reads the thread repo's project memory, nothing is saved; from GitHub project
 memory is never written and `--person`, private notes and `memory-forget-me`
 are refused. `memory-recall --query` is ranked by relevance, then recency
 (MEMORY-9).
+Private reads are shown only privately (MEMORY-7.a / REQ-plugins-710): in a
+Discord conversation (a role session with the bridge's reply channel set) the
+text of `memory-recall --category private`, of the owner's `--person` view and
+of `memory-profile` (own or `--person`) comes back only in the result's
+`privateText`; `data` (`{ sentPrivately: true, what }`) and `message` (the
+`SENT_PRIVATELY_MESSAGE` placeholder) — all the tool loop gives the model —
+never hold it. Where there is no private place to show it (a schedule or other
+run with no conversation, a GitHub thread) those reads are refused, including
+`memory-profile` on GitHub; the local CLI (no role session) shows them on the
+operator's terminal as before.
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.

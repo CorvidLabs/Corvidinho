@@ -23,6 +23,7 @@ import {
   type ProcEntry,
 } from "../plugins/proc-group.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
+import { privateRepliesFromUnknown } from "./private-reply.ts";
 import { DISCORD_ANSWER_MAX } from "./rich-reply.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
@@ -110,7 +111,8 @@ export type SpawnAgentClientOpts = {
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
  * REQ-discord-476). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
- * MEMORY-8) are always cleared.
+ * MEMORY-8) are always cleared. A result frame's `privateReplies`
+ * (MEMORY-7.a) come back validated for the bridge to send by DM only.
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
@@ -227,6 +229,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const spendWarning = spendWarningFromUnknown(result?.spendWarning);
       // SAFE-13: a tool result looked like an injection (tool + reason ids only).
       const injection = injectionNoticeFromUnknown(result?.injection);
+      // MEMORY-7.a: text for the asker's eyes only, sent by DM (validated).
+      const privateReplies = privateRepliesFromUnknown(result?.privateReplies);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -235,6 +239,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(ask ? { ask } : {}),
         ...(spendWarning ? { spendWarning } : {}),
         ...(injection ? { injection } : {}),
+        ...(privateReplies ? { privateReplies } : {}),
         // DISCORD-15: provider-reported usage for the answer footer.
         ...(usage ? { usage } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).

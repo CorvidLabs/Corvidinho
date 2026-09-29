@@ -32,3 +32,11 @@ the tool and reason ids once, which `task run` copies to
 `TaskResult.injection`; the Discord and WATCH spawn clients read it back with
 `injectionNoticeFromUnknown` (tool-name source, known reasons only), and the
 bridge / WATCH tests drive the owner notice from it.
+
+## Private replies on the task-run result (REQ-cli-710)
+
+`tests/memory.private-view.test.ts` — the Discord agent client spawns the
+real `task run --output ndjson` against a local fake LLM that calls
+`memory-profile` and `memory-recall --category private`; the result frame's
+`privateReplies` holds both texts, the summary and every model request lack
+them.

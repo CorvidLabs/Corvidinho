@@ -75,6 +75,12 @@ the task, no `memory-recall` call for it), makes the loop run the missing
 through the plugin gates — nothing found, the reply stands with no extra
 model call; facts found go back to the model once for one more reply, which
 uses no tool round.
+A tool result's `privateText` (MEMORY-7.a, REQ-agent-710: private notes, a
+profile, the owner's view of someone's memory) never reaches the model: the
+tool message and the `ToolResult` event are built from `data` / `message`
+only (the "sent privately" placeholder), and the loop hands the text to
+`onPrivateReply` for the run result; the prompt tells the model it only gets a
+"sent privately" result for those reads and to point the person to their DMs.
 
 ## Public API
 

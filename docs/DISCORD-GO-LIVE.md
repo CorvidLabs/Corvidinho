@@ -125,7 +125,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
   memory forget/override (from the owner's chat once `CORVIDINHO_ALLOWLIST` names them, E.3, or
   `corvidinho plugins run` with the acting env set; see [`discord.md`](discord.md) Memory),
-  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7),
+  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7; the owner
+  gets it by direct message, never in the channel, MEMORY-7.a),
   mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
 - Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them; the bridge sends the
@@ -133,6 +134,11 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
   no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
+- Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
+  view of someone's memory are sent to whoever asked by **direct message**; the channel gets only a
+  short "sent privately" note. Same DM rule as above: the person must share a server with the bot
+  and accept DMs from its members, or the note says it could not be sent (it is never posted in
+  the channel instead).
 - When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
   stop (SAFE-8) ping the owner. With no owner a stuck or spend-cap question still posts and the

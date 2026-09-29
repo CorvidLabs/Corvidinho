@@ -22,6 +22,8 @@
  * ASK-4.a: a free-text ask's Answer button opens a private form whose submit
  * takes the same gates and resumes like a reply (a reply still works);
  * SESSION-MULTI: per-user sessions.
+ * MEMORY-7.a: a run's private replies (private notes, a profile, the owner's
+ * view of someone's memory) go to the asker by DM only (private-reply.ts).
  * AGENT-6: each run is recorded with its session and a continued run gets the
  * earlier turns replayed ahead of the new message (session-thread.ts),
  * condensed at about 80% of the model's window (SESSION-5/6); an expired
@@ -91,6 +93,7 @@ import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
 import { parseApproveCardCustomId } from "./approve-card.ts";
 import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
+import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
 import {
   DISCORD_ANSWER_MAX,
   answerSpendFor,
@@ -571,6 +574,8 @@ export async function startBridge(
       spendLine,
       spendAlerts,
       ...(replyRef.fn ? { post: replyRef.fn } : {}),
+      // MEMORY-7.a: /session start and /work send private replies by DM.
+      ...(sendDmRef.fn ? { sendDm: sendDmRef.fn } : {}),
       recordAudit,
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
@@ -1036,13 +1041,24 @@ export async function startBridge(
           console.warn(ASK_NO_OWNER_WARNING);
         }
 
+        // MEMORY-7.a (REQ-discord-710): the run's private replies (private
+        // notes, a profile, the owner's view of someone) go to the asker by
+        // DM only; the channel gets the "sent privately" note, never the text.
+        const privateOutcome = await deliverPrivateReplies({
+          replies: result.privateReplies,
+          userId: msg.authorId,
+          sendDm: sendDmRef.fn,
+        });
         // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
-        const body = askBody
-          ? askBody.content
-          : result.ok
-            ? // DISCORD-16: the whole answer; it is split into messages when long.
-              result.summary
-            : `session ${session.id} failed (exit ${result.exitCode})`;
+        const body = withPrivateNote(
+          askBody
+            ? askBody.content
+            : result.ok
+              ? // DISCORD-16: the whole answer; it is split into messages when long.
+                result.summary
+              : `session ${session.id} failed (exit ${result.exitCode})`,
+          privateOutcome,
+        );
         // AGENT-6: the answer as posted joins the thread (a spend-cap stop
         // records no answer, REQ-discord-098).
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
@@ -1601,12 +1617,22 @@ export async function startBridge(
           store.setPendingAsk(session, pendingToStore);
         }
 
-        const body = askBody
-          ? askBody.content
-          : result.ok
-            ? // DISCORD-16: the whole answer; it is split into messages when long.
-              result.summary
-            : `session ${session.id} failed (exit ${result.exitCode})`;
+        // MEMORY-7.a (REQ-discord-710): as on a chat reply — private replies
+        // go to the presser (the session's own user) by DM only.
+        const privateOutcome = await deliverPrivateReplies({
+          replies: result.privateReplies,
+          userId: interaction.userId,
+          sendDm: sendDmRef.fn,
+        });
+        const body = withPrivateNote(
+          askBody
+            ? askBody.content
+            : result.ok
+              ? // DISCORD-16: the whole answer; it is split into messages when long.
+                result.summary
+              : `session ${session.id} failed (exit ${result.exitCode})`,
+          privateOutcome,
+        );
         // AGENT-6: the answer to the pick joins the session's thread.
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
 

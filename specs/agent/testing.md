@@ -220,3 +220,10 @@ no `files-write`, `memory-store` or worker tool, both calls are refused and
 never run, `onInjection` gets the worker's notice once, the summary ends with
 the note and one row is audited; at delegation depth 1 an injected issue
 title is reported but records no row.
+
+## Private text kept from the model (REQ-agent-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — a fake-LLM run whose model calls
+`memory-profile` and `memory-recall --category private` hands both texts to
+`onPrivateReply`; no request body, event or the result holds them and the
+model gets the "sent privately" placeholder; the prompt names the rule.

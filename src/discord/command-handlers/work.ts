@@ -11,6 +11,7 @@ import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../inje
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { answerSpendFor } from "../rich-reply.ts";
+import { deliverPrivateReplies, withPrivateNote } from "../private-reply.ts";
 import { isOwnerDiscord } from "../../identity/owner.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
@@ -263,13 +264,23 @@ export async function handleWorkCommand(
     );
   }
 
+  // MEMORY-7.a (REQ-discord-710): the run's private replies go to the
+  // invoker by DM only; the channel gets the "sent privately" note.
+  const privateOutcome = await deliverPrivateReplies({
+    replies: result.privateReplies,
+    userId: interaction.userId,
+    sendDm: ctx.sendDm,
+  });
   // DISCORD-16: the whole answer; it is split into messages when long.
   // ROLES-CHAT-3: splits keep a closing role note instead of clipping it.
-  const summary = ask
-    ? ask.content
-    : result.ok
-      ? result.summary
-      : `failed (exit ${result.exitCode})`;
+  const summary = withPrivateNote(
+    ask
+      ? ask.content
+      : result.ok
+        ? result.summary
+        : `failed (exit ${result.exitCode})`,
+    privateOutcome,
+  );
   // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
   // its question and choices); a spend-cap stop records no answer
   // (REQ-discord-098).

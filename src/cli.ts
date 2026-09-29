@@ -818,9 +818,16 @@ async function taskRun(opts: {
     onInjection: (n) => {
       injection = n;
     },
+    // MEMORY-7.a (REQ-cli-710): text shown only privately rides the result
+    // (--json / ndjson) for the bridge to send by direct message; the model
+    // never saw it. A retried attempt's repeat read is kept once.
+    onPrivateReply: (text) => {
+      if (!privateReplies.includes(text)) privateReplies.push(text);
+    },
   });
   let spendWarning: SpendWarning | undefined;
   let injection: InjectionNotice | undefined;
+  const privateReplies: string[] = [];
   // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
   // and tool loop stop and the cancelled result below is still printed (exit
   // 130). `once`: a second signal takes the default action. A signal this
@@ -854,6 +861,7 @@ async function taskRun(opts: {
   }
   if (spendWarning) result.spendWarning = spendWarning;
   if (injection) result.injection = injection;
+  if (privateReplies.length > 0) result.privateReplies = privateReplies;
 
   if (ndjson) {
     ndjson.result(result);

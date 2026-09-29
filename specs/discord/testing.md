@@ -746,3 +746,14 @@ question-words-only query matching as one substring, `recallRelevantThenRecent`,
 `memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
 undeclared-under-`[people]` owner on their Discord id) and
 `projectScopeForRepo`.
+
+## Private replies by DM only (REQ-discord-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — `privateRepliesFromUnknown` (strings
+only, at most 5, cut to 6000), `deliverPrivateReplies` (DM parts ≤1900,
+scrubbed, header first; "failed" with no DM path, a null or a throwing send)
+and `withPrivateNote`; through the bridge a chat reply, a button pick and an
+Answer form submit DM the text to whoever asked while the channel gets only
+the "sent privately" note (the "couldn't DM it" note when the DM fails) and
+the session thread never holds it; `/session start` and `/work` do the same
+through `SlashContext.sendDm`.
