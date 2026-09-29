@@ -24,11 +24,17 @@ function takeFlag(args: string[], name: string): { value: string | undefined; re
   return { value, rest: out };
 }
 
+/**
+ * `--repo` through the acting role's repo gate (GITHUB-6 / ROLES-CHAT-8);
+ * `write` marks a write command: team reviews and comments need an
+ * allowlisted repo (IDENTITY-10).
+ */
 async function requireRepo(
   ctx: PluginHandlerArgs,
+  write = false,
 ): Promise<PluginHandlerResult | { repo: string; owner: string; name: string }> {
   const repo = extractRepoFromArgs(ctx.args);
-  const gate = await checkRepoGateForActingRole(repo);
+  const gate = await checkRepoGateForActingRole(repo, { write });
   if (!gate.ok) {
     return { ok: false, error: gate.error, exitCode: 3 };
   }
@@ -289,7 +295,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -342,7 +348,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -396,7 +402,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -472,7 +478,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);

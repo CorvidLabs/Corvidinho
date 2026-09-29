@@ -176,10 +176,15 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 (`command-handlers/admin.ts`); `planPeopleChange`, `commitPeopleChange`,
 `setTomlPerson`, `setJsonPerson`, `renderPersonTomlLines`, `samePerson`,
 `formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
-(`admin-people.ts`, the only writer of people). Declared people
+(`admin-people.ts`, the only writer of people and roles; `op: "role"` sets
+team / community, ADMIN-3.b). Declared people
 (IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
 githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
-(the one resolver; stable ids only), `loadDeclaredPeople({ allowlist, owner })`
+(the one resolver; stable ids only; `role` is `owner` for the configured
+owner, else the declared `team` / `community`), `roleOfPerson` (effective
+role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
+`normalizePersonRole`, `PersonRole` / `DeclarableRole`, `PERSON_ROLES`,
+`DECLARABLE_ROLES`, `DEFAULT_PERSON_ROLE`, `loadDeclaredPeople({ allowlist, owner })`
 (re-reads `allowlist.sourcePath`, never throws), `buildPeopleDirectory`,
 `loadPeopleDirectory`, `readPeopleFile`, `parsePeopleToml` /
 `parsePeopleJson` / `parsePeopleText`, `normalizePersonLink`,
@@ -391,6 +396,22 @@ the acting Discord user id only (`resolveActingPerson`); once anyone is
 declared an undeclared non-owner gets `declared_person: none`; an undeclared
 owner's block and every block with nobody declared are unchanged
 (IDENTITY-14 / IDENTITY-7, REQ-discord-036).
+
+Roles (IDENTITY-8..12, REQ-discord-065): `resolveDiscordActingRole`
+(`permissions.ts`) gives a Discord run's spawn role — `owner` when the caller
+resolves to ADMIN, else `team` when the people list declares the caller's
+Discord id team, else `community` (blocked callers too). The bridge (chat and
+button-pick resume), `/session start` and `/work` pass it as
+`AgentRunChatOpts.actingRole`, `/work` also `workTask: true`; the spawn client
+always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
+`team` only when asked, else `community` — schedules pass none) and
+`CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
+on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
+it. `/work` ships its PR for the owner or a team member (re-resolved after the
+run); community keeps the branch. `/admin people role person:<id>
+role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
+SAFE-5 audited like the other people mutations; `/admin people list` shows
+each role and `config show` counts them.
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).

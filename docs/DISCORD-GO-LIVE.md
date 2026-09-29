@@ -112,6 +112,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   [`allowlist.example.toml`](../allowlist.example.toml)) or use `/admin people add|link|unlink|remove`
   (owner-only, SAFE-5 audited). Matched on Discord / GitHub ids only, never names (IDENTITY-7);
   never changed through chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
+- Roles (IDENTITY-8..12): give each declared person `role = "team"` or `role = "community"`
+  (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
+  is always owner; anyone undeclared is community. See E.6.
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -180,12 +183,13 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
-| `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively |
+| `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
-Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6):
+Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
+that a team member's `/work` run gets `files-write` / `files-edit`, IDENTITY-10):
 `files-write` (minTier 2), `files-edit` (minTier 2), `delegate` and `council` (minTier 2, autonomous extras, E.5).
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
@@ -268,13 +272,27 @@ counts; a missing file, section or key, or any other value, means off.
 - WATCH and scheduled runs are never ADMIN, so they never get `delegate` or `council`.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
-### E.6 Non-owner users: ROLES-CHAT
+### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
 
 Who is who in an allowlisted channel:
 
-- Owner ⇒ ADMIN (unless muted or on `deny_users`).
-- Everyone else ⇒ non-ADMIN. Muted users are refused (the mute and rate gate runs on chat and
-  on every slash command).
+- Owner ⇒ ADMIN (unless muted or on `deny_users`): every tool, still behind SAFE and the
+  allowlists (IDENTITY-9).
+- A declared person with `role = "team"` ⇒ **team** (IDENTITY-10), in Discord chat, button picks,
+  `/session start` and `/work`: the read tools below plus `github-issue-comment` and
+  `github-pr-review` (still allowlisted in `CORVIDINHO_ALLOWLIST`, and only on repos the
+  GITHUB-6 `[github]` allowlist admits), plus `files-write` / `files-edit` in their `/work`
+  run's own worktree; their `/work` can open the draft PR like the owner's. Memory stays their
+  own (`memory-store` / `-recall`; forget/override stay owner-only). No shell, runners, git
+  writes, other GitHub writes, Discord posts, `web-fetch`, `delegate` or `council`. Briefings
+  (#102) do not exist yet.
+- Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
+  muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
+  chat and on every slash command).
+- WATCH runs, scheduled runs and `delegate` / `council` workers are community whoever triggered
+  them.
+- The role is re-read from the people list on every tool call (IDENTITY-12): a
+  `/admin people role` change or a VM edit applies to the next call, no restart.
 - `[discord].users` / `.roles` / `deny_users` / `deny_roles` gate every @mention, reply-to-bot,
   thread continuation and slash command, after the channel gate. A user on `deny_users` or
   holding a `deny_roles` role is refused (deny always wins). Once `users` or `roles` has
@@ -283,7 +301,7 @@ Who is who in an allowlisted channel:
   chat. A refused chat message gets no reply, session or run; a refused slash command gets only
   an ephemeral zero-width ack.
 
-Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled runs):
+Community sessions (every non-owner who is not team, plus all WATCH and scheduled runs):
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
@@ -305,11 +323,19 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
   paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
   refused when named to `files-read`, `files-list`, `search-grep` or `git-diff`, and left out
   of `files-glob` / `files-list` results, recursive `search-grep` output and `git-diff`.
-- `/session start` and `/work` run for non-owners too, as non-ADMIN sessions. `/work` never
-  opens a PR for a non-owner.
+  Team sessions get the same secret-path refusals.
+- **Site and roadmap (ROLES-CHAT-8.a):** only the public repo docs (README, `docs/`, STATUS,
+  CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
+  of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
+  source (`web-fetch` is never offered to community).
+- `/session start` and `/work` run for community too, as read-only sessions. `/work` never
+  opens a PR for community.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
-  there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs.
+  there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and
+  the Discord bridge `CORVIDINHO_ACTING_ROLE` (`owner` / `team` / `community`, the most that
+  surface allows) and `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`); both are internal and
+  always overwritten, and the tool layer never trusts them to raise a role.
 
 ### E.7 Where the logs and the audit trail live
 

@@ -1,5 +1,5 @@
 /**
- * ADMIN-3.a / IDENTITY-6 — owner-only edits of the declared people
+ * ADMIN-3.a / ADMIN-3.b / IDENTITY-6 / IDENTITY-8 — owner-only edits of the declared people
  * (IDENTITY-13) in the allowlist file the bridge already reads (ALLOW-4):
  * `[people.<id>]` sections (TOML) or the `people` object (JSON). No second
  * store; the only writer is `/admin people` (command-handlers/admin.ts),
@@ -20,6 +20,10 @@
  * - Fail closed: a person whose entry cannot be read is not edited (fix it on
  *   the VM); a stable id (Discord id, GitHub login, GitHub id) linked to
  *   another person is refused, because it would then match nobody.
+ * - Roles (ADMIN-3.b / IDENTITY-8): `role` sets a declared person's one role,
+ *   team or community, written as the `role` key. The owner role is never
+ *   set here (it is `[owner]` / env, IDENTITY-1), and the owner's own person
+ *   (the one holding the owner's Discord id) keeps owner.
  * - Plan and commit are synchronous, so two admin commands in one bridge
  *   process cannot interleave a read-modify-write.
  */
@@ -39,6 +43,9 @@ import {
 import {
   buildPeopleDirectory,
   cleanPersonLabel,
+  DECLARABLE_ROLES,
+  DEFAULT_PERSON_ROLE,
+  normalizePersonRole,
   emptyPerson,
   LINK_FIELD,
   normalizePersonLink,
@@ -46,9 +53,11 @@ import {
   parsePeopleText,
   PERSON_ID_RE,
   PERSON_KEYS,
+  type DeclarableRole,
   type DeclaredPerson,
   type PeopleParseResult,
   type PersonLinkKind,
+  type PersonRole,
 } from "../identity/people.ts";
 import {
   allowlistFileFormat,
@@ -59,7 +68,7 @@ import {
   type AllowlistFileFormat,
 } from "./admin-allowlist.ts";
 
-export type PeopleAdminOp = "add" | "link" | "unlink" | "remove";
+export type PeopleAdminOp = "add" | "link" | "unlink" | "remove" | "role";
 
 export type PersonLink = { kind: PersonLinkKind; value: string };
 
@@ -71,6 +80,8 @@ export type PeopleAdminRequest = {
   display?: string;
   /** `link` / `unlink`: raw values, normalized by the plan. */
   links?: Array<{ kind: PersonLinkKind; value: string }>;
+  /** `role`: team or community (ADMIN-3.b); normalized by the plan. */
+  role?: string;
 };
 
 export type PeopleAdminPlan = {
@@ -88,6 +99,9 @@ export type PeopleAdminPlan = {
   /** Links asked for that were already there (link) or not there (unlink). */
   unchanged: PersonLink[];
   displayChanged: boolean;
+  /** `role`: the person's effective role before / after (IDENTITY-8). */
+  roleBefore?: PersonRole;
+  roleAfter?: DeclarableRole;
   /** Declared people in the file before / after. */
   countBefore: number;
   countAfter: number;
@@ -124,6 +138,7 @@ function copyPerson(p: DeclaredPerson): DeclaredPerson {
     githubIds: [...p.githubIds],
   };
   if (p.display !== undefined) c.display = p.display;
+  if (p.role !== undefined) c.role = p.role;
   return c;
 }
 
@@ -135,6 +150,7 @@ export function samePerson(a: DeclaredPerson | null, b: DeclaredPerson | null): 
   return (
     a.id === b.id &&
     (a.display ?? null) === (b.display ?? null) &&
+    (a.role ?? null) === (b.role ?? null) &&
     eq(a.nicknames, b.nicknames) &&
     eq(a.discordIds, b.discordIds) &&
     eq(a.githubLogins, b.githubLogins) &&
@@ -164,6 +180,7 @@ function tomlArray(values: readonly string[]): string {
 export function renderPersonTomlLines(p: DeclaredPerson): string[] {
   const lines: string[] = [];
   if (p.display) lines.push(`display = ${tomlQuoted(p.display)}`);
+  if (p.role) lines.push(`role = ${tomlQuoted(p.role)}`);
   if (p.nicknames.length) lines.push(`nicknames = ${tomlArray(p.nicknames)}`);
   if (p.discordIds.length) lines.push(`discord_ids = ${tomlArray(p.discordIds)}`);
   if (p.githubLogins.length) lines.push(`github_logins = ${tomlArray(p.githubLogins)}`);
@@ -238,6 +255,7 @@ export function setTomlPerson(text: string, id: string, person: DeclaredPerson |
 function renderPersonJson(p: DeclaredPerson): Record<string, unknown> {
   const o: Record<string, unknown> = {};
   if (p.display) o.display = p.display;
+  if (p.role) o.role = p.role;
   if (p.nicknames.length) o.nicknames = [...p.nicknames];
   if (p.discordIds.length) o.discord_ids = [...p.discordIds];
   if (p.githubLogins.length) o.github_logins = [...p.githubLogins];
@@ -400,8 +418,28 @@ export function planPeopleChange(opts: {
   const changed: PersonLink[] = [];
   const unchanged: PersonLink[] = [];
   let displayChanged = false;
+  let roleBefore: PersonRole | undefined;
+  let roleAfter: DeclarableRole | undefined;
 
-  if (req.op === "add") {
+  if (req.op === "role") {
+    // ADMIN-3.b / IDENTITY-8: one role per declared person, set by the owner.
+    const want = normalizePersonRole(req.role);
+    if (want === "owner") {
+      return refuse(
+        "the owner role comes only from [owner] / env on the VM (IDENTITY-1) — /admin people role sets team or community",
+      );
+    }
+    if (!want) return refuse(`role must be one of ${DECLARABLE_ROLES.join(" or ")}`);
+    if (!before || !after) {
+      return refuse(`person "${id}" is not declared — /admin people add person:${id} first`);
+    }
+    if (opts.owner && before.discordIds.includes(opts.owner.discordId)) {
+      return refuse(`person "${id}" holds the owner's Discord id, so its role is always owner (IDENTITY-1)`);
+    }
+    roleBefore = before.role === "team" || before.role === "community" ? before.role : DEFAULT_PERSON_ROLE;
+    roleAfter = want;
+    after.role = want;
+  } else if (req.op === "add") {
     const display = req.display === undefined ? undefined : cleanPersonLabel(req.display);
     if (req.display !== undefined && !display) return refuse("display must be a non-empty name");
     if (!after) {
@@ -479,6 +517,7 @@ export function planPeopleChange(opts: {
     changed,
     unchanged,
     displayChanged,
+    ...(roleAfter ? { roleBefore, roleAfter } : {}),
     countBefore,
     countAfter,
     fileChanged,

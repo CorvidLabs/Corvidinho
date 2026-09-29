@@ -36,6 +36,8 @@ files:
   - plugins/github/index.ts
   - plugins/github/review.ts
   - tests/github.review.plugin.test.ts
+  - plugins/github/public-docs.ts
+  - tests/github.public-docs.test.ts
   - plugins/meta/index.ts
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
@@ -102,6 +104,7 @@ files:
   - src/plugins/proc-group.ts
   - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
+  - tests/roles.team.test.ts
 
 db_tables: []
 depends_on: []
@@ -334,14 +337,40 @@ like the same `cd` typed directly.
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
 When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
-non-ADMIN callers are refused for every mutating plugin at run time with a
-"not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
-for dangerous tools. Role is re-checked via owner config each call.
+the acting role (IDENTITY-8..12, REQ-plugins-065) is resolved at every call by
+`resolveActingRole` (`src/plugins/roles.ts`): `owner` (the ADMIN re-check:
+bridge bit + configured owner, not muted or deny-listed) runs every mutating
+plugin, still behind SAFE-1 for dangerous tools (ROLES-CHAT-4 / IDENTITY-9);
+`team` — only when the spawning surface stamped `CORVIDINHO_ACTING_ROLE=team`
+(Discord chat, slash, buttons) and the owner's people list, re-read now,
+declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
+(`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
+(`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
+`files-edit`); `community` (everyone else: undeclared, declared community,
+WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
+(IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+`roleAllowsPlugin(role, cmd, workTask)` is the one rule for `runPlugin` and
+the catalog (REQ-agent-065); with no stamp the ADMIN bit alone caps at owner
+(`actingRoleCap`), and a stamp never raises the role.
 
-Non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN` set and not admin) may
-call GitHub read tools against any *public* repository after deny-list checks
-(ROLES-CHAT-8). Private or unknown visibility is refused. ADMIN / non-role
+Community role sessions may call GitHub read tools against any *public*
+repository after deny-list checks (ROLES-CHAT-8). Private or unknown
+visibility is refused. Team reads pass on a GITHUB-6-allowlisted or confirmed
+public repo; GitHub writes (`checkRepoGateForActingRole(repo, { write: true
+})`: issue create/comment, PR create/review) pass for team only on an
+allowlisted repo and are refused for community (IDENTITY-10). Owner / non-role
 sessions keep the GITHUB-6 allowlist gate.
+
+ROLES-CHAT-8.a (REQ-plugins-066, `plugins/github/public-docs.ts`): the
+community site / roadmap sources are the public repo docs and the public
+issues and milestones of allowed public repos, read with
+`github-docs-read` (README by default, a root `STATUS*` / `CHANGELOG*` file or
+anything under `docs/`, a directory listed; any other path refused with exit
+2 for every role before GitHub is called, `publicDocPath`; text SAFE-6
+scrubbed, capped at 64 KiB, labelled untrusted) and `github-milestone-list`
+(`issues.listMilestones`, `--state`, `--limit` ≤100) — both read-only,
+minTier 0, behind the acting role's repo gate. `web-fetch` stays dangerous,
+so no site URL is a community source.
 
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
@@ -627,6 +656,9 @@ command line.
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
 | Mutating + acting non-ADMIN (ROLES-CHAT-3) | Deny (exit 2, not allowed for your role) |
+| Team role, mutating tool outside its review tools (and work tools in /work) (IDENTITY-10) | Deny (exit 2, not allowed for your role) |
+| Team GitHub write on a repo not on the GITHUB-6 allowlist (IDENTITY-10) | Refuse (exit 3, GITHUB-6) |
+| `github-docs-read` path outside README / docs/ / STATUS / CHANGELOG (ROLES-CHAT-8.a) | Refuse (exit 2) before GitHub is called |
 | Missing token / API fail on github-* | Clear error; non-zero exit |
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |

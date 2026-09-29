@@ -10,7 +10,9 @@ import { isMutatingPlugin } from "./mutating.ts";
 import { get } from "./registry.ts";
 import {
   ROLE_REFUSED_MESSAGE,
-  resolveActingIsAdmin,
+  actingWorkTask,
+  resolveActingRole,
+  roleAllowsPlugin,
   roleSessionActive,
 } from "./roles.ts";
 import type { PluginHandlerArgs, PluginHandlerResult } from "./types.ts";
@@ -69,9 +71,16 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
 
   const args = opts.args ?? [];
 
-  // ROLES-CHAT-3/5/6: non-ADMIN acting sessions cannot run mutating tools
-  // (including files-write/edit marked mutating but not dangerous).
-  if (mutating && roleSessionActive() && !(await resolveActingIsAdmin())) {
+  // ROLES-CHAT-3/5/6 + IDENTITY-9..12: the acting role, re-resolved at this
+  // call from the owner config and the people list, gates mutating tools
+  // (including files-write/edit marked mutating but not dangerous): the owner
+  // runs them all, team only its review tools (and work tools in a /work
+  // run), community none.
+  if (
+    mutating &&
+    roleSessionActive() &&
+    !roleAllowsPlugin(await resolveActingRole(), cmd, actingWorkTask())
+  ) {
     return {
       ok: false,
       error: `Denied: plugin "${cmd.name}" is ${ROLE_REFUSED_MESSAGE} (ROLES-CHAT-3).`,

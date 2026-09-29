@@ -183,7 +183,10 @@ appears in the final chat reply (DISCORD-3.a).
 
 `execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
-in addition to MEMORY instructions. `execute` exports
+in addition to MEMORY instructions; the public Q&A block names the only
+community site / roadmap sources — the public repo docs (README, docs/,
+STATUS, CHANGELOG) and the public issues and milestones of allowed public
+repos — and says nothing else counts (ROLES-CHAT-8.a, REQ-agent-065). `execute` exports
 `DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS` (DISCORD-17, REQ-agent-476): the
 system prompt carries it only when the run's catalog offers
 `discord-send-file` and its env has a conversation channel
@@ -349,10 +352,11 @@ Planning selects modules from the request only (`planningSelectionText`):
 line labels such as `[WATCH <kind>]` do not count, so a bridge wrapper cannot
 pick a module the request never names.
 
-`buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
+`buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); given `actingRole` (IDENTITY-9..12, REQ-agent-065) it keeps exactly what `roleAllowsPlugin(actingRole, entry, workTask)` allows — owner (or `null`, no role session): every tool; team: read tools plus `github-issue-comment` / `github-pr-review` (plus `files-write` / `files-edit` when `workTask`); community: read tools only. `createTaskExecute` resolves the role from env via `resolveActingRole` on every attempt (null outside a role session) and passes it with `workTask` (`CORVIDINHO_ACTING_WORK_TASK`); only the owner or no role session discovers Fledge plugin commands.
 
-When the caller is not ADMIN at the call (a role session, re-checked per call
-like `runPlugin`, ROLES-CHAT-6), the tool loop answers a not-offered registered
+When the caller's role does not allow the plugin at the call (a role session,
+re-checked per call like `runPlugin`, ROLES-CHAT-6 / IDENTITY-12), the tool
+loop answers a not-offered registered
 mutating / dangerous plugin with the role refusal `runPlugin` gives (`Denied:
 plugin "<name>" is not allowed for your role (ROLES-CHAT-3).`, exit 2) instead
 of the catalog refusal, and never runs it; an unregistered name keeps the

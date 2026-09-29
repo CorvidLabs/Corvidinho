@@ -113,3 +113,18 @@ refusal with no note; a summary that already says it gets no second note.
   say you cannot send or attach files or images" and the `--git-diff` hint;
   not allowlisted, or no conversation channel, the prompt has no attach
   block.
+
+## Catalog by role (REQ-agent-065, IDENTITY-9..12 / ROLES-CHAT-8.a)
+
+`tests/roles.team.test.ts` ("the catalog by role") — `buildOpenAiTools` with
+every dangerous plugin allowlisted: `actingRole: "owner"` and `null` equal the
+old ADMIN catalog, `community` equals the old non-ADMIN one (no mutating tool);
+team offers the read tools plus `github-issue-comment` / `github-pr-review`
+and nothing else mutating, plus exactly `files-write` / `files-edit` with
+`workTask`; an unallowlisted review tool is not offered. Through
+`createTaskExecute` with a scripted provider: a team chat run offers the
+review tools and not `files-write` or `github-pr-create`; a team `/work` run
+adds the file tools; a team member on a community-stamped surface and an
+undeclared actor with a team stamp get read tools only.
+`tests/github.public-docs.test.ts` checks the public Q&A prompt names the
+ROLES-CHAT-8.a sources and says nothing else counts.
