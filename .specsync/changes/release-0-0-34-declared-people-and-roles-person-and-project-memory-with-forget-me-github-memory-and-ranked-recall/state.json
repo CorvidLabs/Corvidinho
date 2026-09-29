@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall",
+  "slug": "release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall",
+  "title": "Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep",
+  "description": "Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep",
+  "kind": "operations",
+  "state": "draft",
+  "base_commit": "20a0f5841256109511825c70604b552b3ca4b062",
+  "created_at": 1790724140,
+  "updated_at": 1790724143,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.34; version prints 0.0.34; CHANGELOG 0.0.34 extractable; STATUS rows"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
