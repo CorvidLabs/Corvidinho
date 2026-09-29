@@ -378,7 +378,12 @@ append after a keyed row (a dangerous run is then refused, fail closed), and
 break. An unkeyed prefix followed by keyed rows still verifies as mixed.
 Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
 the newest rows is not detectable from the DB alone; it needs an anchor kept
-outside the DB.
+outside the DB. `formatAuditLine` (the bridge start log and `/status`) reads
+`chain BROKEN at #N` for any break verify finds with the key, and also
+without the key when the break comes before any keyed row (`keyedRows` is
+counted up to the break, so it is 0): a tampered unkeyed row needs no key to
+be seen. Only a verify that stops at a keyed row without the key reads
+`cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
 
 SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
 PLUGIN-1, REQ-plugins-008).

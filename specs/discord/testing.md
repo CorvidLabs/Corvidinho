@@ -337,6 +337,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
   when the SQL failure count reaches 5 even from a stale cache; a success
   stores none.
+- `tests/scheduler.ask-outbox.test.ts` — a schedule on an absolute project
+  names the project, never the host path: a daemon run whose absolute
+  sibling project cannot be resolved keeps the full error with the path on
+  the row and the first line of the bridge's stuck ask names `gone`, without
+  the temp dir; on `/srv/host-only/acme/Widget` the
+  `✅` and `❌` result posts, a bridge clarify and stuck ask and a
+  daemon-claimed stuck ask all name `Widget` and never `/srv/host-only`,
+  while the model's prompt keeps `on project: /srv/host-only/acme/Widget`.
+  Against the base without the fix: both fail.
 
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
