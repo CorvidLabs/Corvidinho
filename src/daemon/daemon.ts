@@ -13,6 +13,10 @@
  * the lock, exit 0. Start first recovers runs and worktrees a dead process
  * left (REQ-discord-346).
  *
+ * OPS-1/2 (#68): with CORVIDINHO_BACKUP_DIR set, the same tick takes the
+ * nightly SQLite backup and the weekly restore test (src/store/backup.ts)
+ * and logs each run; a failure's owner notice stays pending for a bridge.
+ *
  * Supervision/restart is systemd's job (docs/DAEMON.md); heartbeat, crash DMs
  * and running the bridge/watch inside the daemon are not built here.
  */
@@ -37,6 +41,7 @@ import {
   ScheduleStore,
   SchedulerService,
 } from "../scheduler/index.ts";
+import { createBackupTicker, resolveBackupConfig } from "../store/backup.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { resolveDataDir } from "../store/paths.ts";
 import { VERSION } from "../version.ts";
@@ -62,6 +67,8 @@ export type StartDaemonOptions = {
   useWorktrees?: boolean;
   skipProtocolCheck?: boolean;
   lock?: Omit<AcquireDaemonLockOptions, "dataDir">;
+  /** Injectable clock for the scheduler and the nightly backup (tests). */
+  now?: () => number;
 };
 
 export type DaemonStopSummary = {
@@ -135,12 +142,14 @@ export async function startDaemon(
   };
 
   let store: ScheduleStore;
+  let database: Database;
   let gate: AllowlistConfig;
   let owner: OwnerRecord | null;
   let agent: AgentClient;
   let allowlistSource: string;
   try {
     db = opts.db ?? openCorvidinhoDb({ env });
+    database = db;
     store = new ScheduleStore({ db });
     const allowlist = await loadAllowlist({ env });
     allowlistSource = allowlist.sourcePath ?? "env";
@@ -172,6 +181,10 @@ export async function startDaemon(
     owner,
     defaultProjectRoot: projectRoot,
     useWorktrees: opts.useWorktrees,
+    ...(opts.now ? { now: opts.now } : {}),
+    // OPS-1/2: nightly backup + restore test on this tick, logged here. No
+    // Discord: a failure's owner notice waits for a bridge tick to post it.
+    backup: createBackupTicker({ db: database, env, log }),
     // The daemon owns the interval so it can log each tick.
     manual: true,
     onRunFinished: (e) => {
@@ -253,6 +266,7 @@ export async function startDaemon(
   }, pollIntervalMs);
 
   const all = store.list();
+  const backupCfg = resolveBackupConfig(env);
   log("info", "daemon.started", {
     pid: process.pid,
     version: VERSION,
@@ -264,6 +278,8 @@ export async function startDaemon(
     discordChannels: gate.discord.channels.length,
     schedulesActive: all.filter((s) => s.status === "active").length,
     schedulesPaused: all.filter((s) => s.status === "paused").length,
+    // OPS-1: where the nightly backup goes, or why there is none.
+    backup: backupCfg.kind === "on" ? backupCfg.dir : backupCfg.kind === "off" ? "off" : backupCfg.error,
   });
   if (recovered.runs.length > 0 || recovered.worktrees.length > 0) {
     log("warn", "daemon.recovered", {

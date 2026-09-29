@@ -47,6 +47,8 @@ Dedicated **ops/dev** announcements channel for version bumps, bridge restarts, 
 
 On ClientReady (after every successful bridge restart), if configured, Corvidinho posts a short `bridge live **vX.Y.Z**` note plus ≤5 bullets from the matching `CHANGELOG.md` section (fallback: package description or tip) **only** to that channel — never to general allowlisted chat by default (DISCORD-ANNOUNCE-4 / REQ-discord-025).
 
+The same channel carries the nightly backup's failure notice (OPS-1/2, REQ-discord-680): when `CORVIDINHO_BACKUP_DIR` is set and a nightly backup or restore test fails (the bridge's or the daemon's tick), the bridge's next scheduler tick posts one fixed-text line — `⚠️ The nightly backup failed (<UTC time>)…` or `⚠️ The restore test failed (<UTC time>)…`, pointing at `corvidinho doctor`, never a host path or error text — with only the owner pinged. Once per failure streak: later failures are logged only, until a backup succeeds. With no announcements channel set nothing is posted anywhere else; the notice waits (one `[backup] …owner_not_told` log line, `doctor` says `owner not told yet`) and goes out on the first tick after `/announce channel` sets one. See [`DAEMON.md`](DAEMON.md#nightly-backup-ops-12).
+
 ```mermaid
 flowchart TD
   A[Bridge ClientReady / version bump] --> B{Announce channel configured?}
@@ -112,7 +114,7 @@ Live source (AGENT-8 / DISCORD-3, #73; AGENT-4 / #85): the bridge spawns `task r
 
 ### Mentions in outbound posts (DISCORD-8)
 
-Every post the bridge makes — chat replies, `/session start` and `/work` replies, other slash replies, ask-button replies and collapse edits, schedule and announce posts, thinking embeds — and the agent's `discord-post-message` and `discord-send-file` caption parse **no** mentions from its text (`allowedMentions.parse = []`, also the discord.js client default). Model text is untrusted (a chatter's prompt, public GitHub content), so `@everyone`, `@here`, `<@&role>` and `<@user>` in a summary never ping; `@everyone` / `@here` are also defanged with a zero-width space. A reply still pings the person it answers. The only other pings are the users a question names (requester or owner, below). Source: `src/discord/allowed-mentions.ts` (REQ-discord-205).
+Every post the bridge makes — chat replies, `/session start` and `/work` replies, other slash replies, ask-button replies and collapse edits, schedule and announce posts, thinking embeds — and the agent's `discord-post-message` and `discord-send-file` caption parse **no** mentions from its text (`allowedMentions.parse = []`, also the discord.js client default). Model text is untrusted (a chatter's prompt, public GitHub content), so `@everyone`, `@here`, `<@&role>` and `<@user>` in a summary never ping; `@everyone` / `@here` are also defanged with a zero-width space. A reply still pings the person it answers. The only other pings are the users a question names (requester or owner, below) and the owner on a nightly backup failure notice (Announcements, above). Source: `src/discord/allowed-mentions.ts` (REQ-discord-205).
 
 ### Session replies (mention / continue)
 

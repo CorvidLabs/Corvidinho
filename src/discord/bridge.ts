@@ -110,6 +110,7 @@ import {
   recoverInterruptedReplies,
   type InflightReply,
 } from "./inflight-replies.ts";
+import { consoleBackupLog, createBackupTicker } from "../store/backup.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
 import {
@@ -197,6 +198,8 @@ export type StartBridgeOptions = {
   disableScheduler?: boolean;
   /** Scheduler poll interval override (tests). */
   schedulerPollIntervalMs?: number;
+  /** Scheduler (and nightly backup) clock override (tests). */
+  schedulerNow?: () => number;
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
@@ -1416,14 +1419,39 @@ export async function startBridge(
 
   let scheduler: SchedulerService | null = null;
   if (!opts.disableScheduler) {
+    // OPS-1/2 (#68): nightly backup + restore test on the scheduler tick
+    // (CORVIDINHO_BACKUP_DIR; off when unset). A failure tells the owner once
+    // per failure streak: fixed text in the announcements channel
+    // (DISCORD-ANNOUNCE) with only the owner pinged; with no channel set the
+    // notice waits (logged once, shown by doctor) and is retried every tick.
+    const backup = db
+      ? createBackupTicker({
+          db,
+          env,
+          log: consoleBackupLog,
+          notify: async ({ content }) => {
+            const channelId = announceStore?.getChannelId();
+            if (!channelId || !replyRef.fn) return false;
+            const ownerId = config.owner?.discordId;
+            const sent = await replyRef.fn({
+              channelId,
+              content: ownerId ? `<@${ownerId}> ${content}` : content,
+              ...(ownerId ? { mentionUserIds: [ownerId] } : {}),
+            });
+            return sent !== null;
+          },
+        })
+      : undefined;
     scheduler = new SchedulerService({
       store: scheduleStore,
       agent,
       allowlist: config.allowlist,
       pollIntervalMs: opts.schedulerPollIntervalMs,
+      ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
       spendAlerts,
+      backup,
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
           if (!replyRef.fn) return false;

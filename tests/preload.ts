@@ -26,6 +26,9 @@ process.env.CORVIDINHO_ALLOWLIST_FILE = join(scratch, "no-allowlist.toml");
 delete process.env.CORVIDINHO_AUDIT_HMAC_KEY;
 delete process.env.CORVIDINHO_WATCH_SPAWN_LOG;
 delete process.env.WORKTREE_BASE_DIR;
+// OPS-1: an operator's backup dir must never receive test snapshots (the
+// bridge / daemon tests tick the nightly backup); tests set their own.
+delete process.env.CORVIDINHO_BACKUP_DIR;
 
 // Run and operator settings that change test outcomes: every Discord / WATCH /
 // daemon task run sets CORVIDINHO_NON_INTERACTIVE=1, and its verify lane runs
