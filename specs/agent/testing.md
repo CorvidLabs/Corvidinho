@@ -128,3 +128,11 @@ adds the file tools; a team member on a community-stamped surface and an
 undeclared actor with a team stamp get read tools only.
 `tests/github.public-docs.test.ts` checks the public Q&A prompt names the
 ROLES-CHAT-8.a sources and says nothing else counts.
+## Unique ask option ids (REQ-agent-045, DISCORD-ASK-1/3)
+
+- `tests/discord.ask-buttons.test.ts` › "ask option ids are unique
+  (DISCORD-ASK-1/3 / REQ-agent-045)": a repeated explicit id, a position
+  fallback equal to an earlier id and two ids equal once cut to 32 chars each
+  take the first unused position number; a dropped empty option holds no id;
+  already-unique options normalize byte-identically (again and again); an
+  ask-human call with one id twice gives buttons with distinct `custom_id`s.

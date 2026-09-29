@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-leif-confirmed-identity-13-14-6-7-and-admin-3-a-declared-people-36-into-hi-from-the-2026-09-28-interview",
+  "implementation_commit": "89a19b1217f1c36498dc140005bbf6ed896b0379",
+  "implementation_tree": "16a9c59f82f11a17becd5b67b855478b17a0bea7",
+  "contract_digest": "831ad7a30b39079db97ae5e5ff643d82e979ed91bfd39deb67918ea1d0c3896a",
+  "workspace_digest": "90b66591b200378b6a73acbdeaa345abc139e3b08338d1422fc9e3c3ede05e39",
+  "closing_digest": "2c5090a83a8e5d617bb6c3aecb688d9aa21addddc5d3d70061eae4dc7240e6f7",
+  "review_digest": "ab1a6fbb9e1f2ac30183df6781d0c80fd51b06bd020172030b2c2932d56e7f2a",
+  "finalization_digest": "df82752d8e3bec8c472ac8b634209ca8c0594ac13e05e26b8dbf7aae2e7b4138",
+  "timestamp": 1790704635
+}

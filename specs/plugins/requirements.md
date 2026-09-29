@@ -52,15 +52,22 @@ Acceptance Criteria
 - Empty allowlist + any repo ⇒ deny (not authorized).
 - Denied repo exits with code 3 and clear error.
 - Allow-listed repo/org match ⇒ ok unless also denied.
+- `git-push` with `CORVIDINHO_GITHUB_ALLOW_REPOS` naming the remote's repo and `CORVIDINHO_GITHUB_DENY_ORGS` naming its owner is refused with exit 3 and an org-denied error, and the remote ref is not created (the test fails with the `deny_orgs` check removed from `isRepoAllowed`).
 
 ### REQ-plugins-005
 
 Allowlists SHALL default-deny: empty or missing allow entries refuse targeted GitHub plugin runs and Discord channel/role/user checks (ALLOW-1..5, GITHUB-6, DISCORD-5). Deny overrides always win. Empty lists MUST NOT map to allow-all or Merlin BASIC.
 
+`isChannelDenied` (`src/allowlist/discord.ts`) SHALL report a
+`deny_channels` hit alone, case-insensitively and trimmed like
+`checkChannel` (which uses it), so a thread gate can make a deny on the
+thread or its parent win over the other being allowlisted (REQ-discord-212).
+
 Acceptance Criteria
 - Empty/missing allowlist refuses GH `--repo` targets (exit 3 / not authorized).
 - Discord stub `checkChannel`/`checkRole`/`checkUser` refuse when allow lists empty.
 - Regression: empty allow never permits a target (Merlin empty→BASIC forbidden).
+- `isChannelDenied` is true for a deny-listed id (any case, surrounding space trimmed) and false for allowlisted, unlisted, empty or missing ids; `checkChannel` reports that id as denied.
 
 ### REQ-plugins-006
 
@@ -90,6 +97,16 @@ values), never a thrown error, and `corvidinho doctor` SHALL report it as a
 failing `allowlist-file` check with the same error. A missing file SHALL
 still mean env overlays only.
 
+A `CORVIDINHO_ALLOWLIST_FILE` value (trimmed) that is `~` or starts with `~/`
+SHALL resolve against the HOME the loader uses for the default path, so the
+documented `.env.example` value `~/.config/corvidinho/allowlist.toml` — which
+dotenv loaders, Bun's included, keep literally — reads the same file as the
+default path instead of a cwd-relative `~/…` that is never found (which
+silently dropped the file's deny lists and `[owner]`). `~user` and every other
+value SHALL be used as written. The allowlist loader, the owner loader, the
+`/admin` write target and `corvidinho doctor` SHALL all resolve the file this
+way. No new env var or config key.
+
 Acceptance Criteria
 - File path env and default home config paths are consulted.
 - Env overlays (e.g. `CORVIDINHO_GITHUB_ALLOW_REPOS`) merge over file.
@@ -98,6 +115,8 @@ Acceptance Criteria
 - An unterminated or malformed array or string, a bad key or a bad header in an allow/deny section throws; `loadAllowlist` rejects for a malformed TOML or JSON file.
 - A pasted U+00A0 between tokens parses; `[my notes]`, `[[rules]]` and `['x']` sections do not stop a load; a `deny_*` key at the top level or in another section, `[[discord]]`, `["github"]`, a stray `["a", "b"]` line and unbalanced brackets throw.
 - With a malformed file, `git-push` (nothing pushed) and `discord-post-message` refuse with exit 3 and the line/key error, without the list values; `corvidinho doctor` shows `[fail] allowlist-file` with the parse error, `[ok]` for a file that loads and `[info]` when there is none.
+- `CORVIDINHO_ALLOWLIST_FILE=~/.config/corvidinho/allowlist.toml` (the `.env.example` line, uncommented in a project `.env`) loads the file under HOME: its `deny_repos` refuses the repo at the GITHUB-6 gate while an env allow admits its org, and its `deny_users` / `[owner]` load; doctor and the `/admin` write target use the same path; a malformed file there fails closed and a missing one still means env overlays only.
+- A bare `~` resolves to HOME; `~user`, absolute, relative and inner-`~` values are used as written.
 
 ### REQ-plugins-007
 
@@ -138,10 +157,23 @@ Acceptance Criteria
 
 The system SHALL register `discord-post-message` as a **dangerous** plugin (externally visible write). Non-interactive runs SHALL deny unless allowlisted (SAFE-1). Channel target MUST pass Discord channel allowlist (DISCORD-5 / ALLOW-3).
 
+That channel allowlist SHALL be the same set the bridge and daemon gate on
+(REQ-discord-004, `mergeChannelIds`): the allowlist file
+`[discord].channels` plus `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, union
+`DISCORD_CHANNEL_IDS`. So a channel allowlisted only through
+`DISCORD_CHANNEL_IDS` SHALL pass the gate. Deny lists SHALL still win: a
+channel in `CORVIDINHO_DISCORD_DENY_CHANNELS` or the file's
+`deny_channels` SHALL be refused even when it is also in
+`DISCORD_CHANNEL_IDS`. A channel in no list SHALL still be refused, and a
+malformed or unreadable allowlist file SHALL still refuse (fail closed,
+REQ-plugins-006). No env var, flag, config key or command is added.
+
 Acceptance Criteria
 - `plugins list` shows `discord-post-message` with dangerous=true.
 - Non-interactive without allowlist → deny (exit 2).
 - Missing/empty channel allowlist or non-allowlisted channel → not authorized.
+- No allowlist file, `CORVIDINHO_DISCORD_ALLOW_CHANNELS` unset, `DISCORD_CHANNEL_IDS=111`, dry run: a post to `111` succeeds (exit 0); a post to a channel in no list is refused (exit 3, not allowlisted).
+- The same with `CORVIDINHO_DISCORD_DENY_CHANNELS=111` added: the post to `111` is refused (exit 3, denied).
 
 ### REQ-plugins-048
 
@@ -258,6 +290,7 @@ Acceptance Criteria
 - files-write, files-edit and files-delete of `.specsync/config.toml`, `.specsync/registry.toml`, a new `.specsync/` top-level file or a `.specsync/archive/` file are refused with SAFE-2 (exit 2); a file under `.specsync/changes/<id>/` is still written, also when `<id>` contains `keystore`; files-write of `.specsync/changes` or `.specsync/changes/<id>` itself is refused and nothing is created.
 - In a project whose root directory name contains `keystore`, files-write (relative or absolute path) and files-edit of ordinary files succeed, and `keystore/…` inside it is still refused.
 - git-commit refuses to stage the deletion of `.specsync/config.toml` (exit 2, SAFE-2) and stages the deletion of a `.specsync/changes/<id>/` file.
+- files-write, files-edit and files-delete of a file under `specs/` that does not end in `.spec.md` (`specs/agent/requirements.md`, `specs/agent/context.md`) and files-write of a new `specs/notes.md` are refused with SAFE-2 (exit 2); the files are unchanged and the new file is not created (the test fails with the `specs` component rule removed).
 
 ### REQ-plugins-084
 
@@ -345,6 +378,14 @@ SHALL still verify. Rewriting every keyed row, from the first keyed row on, as
 unkeyed links, or dropping the newest rows, is not detectable from the DB
 alone; catching it needs an anchor kept outside the DB.
 
+The one-line chain summary (`formatAuditLine`: the bridge start log and
+`/status`, REQ-discord-095) SHALL read `chain BROKEN at #N` for every break
+`verifyAudit` reports at a row it could check: with the key, and also without
+the key when the first tampered row comes before any keyed row (a tampered
+unkeyed chain, or a tampered unkeyed prefix), since a SHA-256 link needs no key
+to check. Only a verify that stops at a keyed row because no key is set SHALL
+read `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
+
 Acceptance Criteria
 - Allowed dangerous run appends started + ok rows; raw args are not stored.
 - Non-interactive denial appends a denied row; safe plugins append nothing.
@@ -352,6 +393,7 @@ Acceptance Criteria
 - Tampering is detected at the first bad row; wrong/missing key fails verify.
 - A keyed row that follows a keyed row, edited and relinked with the rows after it as unkeyed SHA-256 links, fails verify with the key at that row (`chain BROKEN at #N`).
 - Without the key, appending after a keyed row is refused, so a keyless dangerous run fails closed and the chain stays keyed; an unkeyed prefix followed by keyed rows still verifies (`mixed keyed/unkeyed`).
+- Without `CORVIDINHO_AUDIT_HMAC_KEY`, a tampered unkeyed chain (no keyed rows) reads `Audit: N entries · chain BROKEN at #n` at the first tampered row, the same line as with a key, and so does a tampered unkeyed prefix before keyed rows; an intact unkeyed prefix before keyed rows, or a keyed chain, read without the key still reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
 
 ### REQ-plugins-042
 
@@ -416,6 +458,7 @@ Acceptance Criteria
 - A plugin cwd that is a subdirectory of a repository (not the top level) is refused; unknown flags are refused.
 - Hooks in `.git/hooks` or a repo-local `core.hooksPath` never run on git-commit / git-push; git-status and git-commit work at the top level of a linked worktree (`.git` is a file).
 - git-push to a local bare remote is refused when OWNER/REPO is not allowlisted or is denied (exit 3) and succeeds when allowlisted; force/refspec args are refused (exit 2); a non-fast-forward push is rejected without force and the remote ref is unchanged; detached HEAD is refused.
+- git-commit refuses to stage the deletion of a tracked file under `specs/` that does not end in `.spec.md` (`specs/x/requirements.md`, `specs/notes.md`) with exit 2 and SAFE-2; the path stays in `ls-files` and nothing is staged (the test fails with the `specs` component rule removed).
 
 ### REQ-plugins-086
 
@@ -1200,4 +1243,24 @@ Acceptance Criteria
 - Milestones map state, due date, counts and a 500-char description; `--state` / `--limit` reach the API; bad flags are refused.
 - The community catalog offers both readers and `github-issue-list` and never `web-fetch`, even allowlisted.
 - Regression tests in `tests/github.public-docs.test.ts` fail on the base sources and pass after.
+### REQ-plugins-493
+
+In a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN` set and the acting
+user not the admin owner), the GitHub repo gate (`checkRepoGateForActingRole`,
+used by the GitHub plugins and review reads) SHALL admit a repo only when its
+visibility is confirmed public (ROLES-CHAT-8), after the deny lists. Without
+an injected lookup it SHALL ask GitHub through the Octokit visibility lookup
+(`createOctokitVisibilityLookup`, token from `GITHUB_TOKEN` / `GH_TOKEN`). A
+private repo SHALL be refused with the ROLES-CHAT-8 private-repo error, and a
+repo whose visibility cannot be confirmed (not found, an API error, or no
+token) SHALL be refused as unconfirmed (fail closed); in both cases the plugin
+SHALL make no further GitHub call for that repo. ADMIN and non-role sessions
+keep the GITHUB-6 allowlist gate. No env var, flag, config key or command is
+added.
+
+Acceptance Criteria
+- A community session with no injected lookup and GitHub answering `private: true` for the repo is refused with "private GitHub repos" by `checkRepoGateForActingRole` and by `github-pr-list` (exit 3), and no pulls request is sent.
+- GitHub answering 404, or no GitHub token (no request sent), is refused with "could not confirm the repo is public".
+- GitHub answering `private: false` passes the gate and `github-pr-list` sends its pulls request.
+- Fixture tests stub `fetch` (Octokit's transport); no live token or network. The private-repo test fails when the lookup always answers public.
 

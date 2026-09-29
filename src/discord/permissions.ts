@@ -12,6 +12,7 @@ import {
   checkDiscordAction,
   checkRole,
   checkUser,
+  isChannelDenied,
 } from "../allowlist/discord.ts";
 import type { AllowlistConfig, GateResult } from "../allowlist/types.ts";
 import { isOwnerDiscord, type OwnerRecord } from "../identity/owner.ts";
@@ -144,6 +145,26 @@ export function isMonitoredChannel(
   cfg: AllowlistConfig,
 ): boolean {
   return checkChannel(channelId, cfg).ok;
+}
+
+/**
+ * DISCORD-5 / DISCORD-2.a / REQ-discord-212 — a conversation channel (a
+ * thread with its parent, or a plain channel) is monitored when it or the
+ * parent is allowlisted and neither is on `deny_channels`: deny always wins
+ * over an allowlisted parent or thread (REQ-plugins-005).
+ */
+export function isMonitoredConversation(
+  channelId: string,
+  parentChannelId: string | null | undefined,
+  cfg: AllowlistConfig,
+): boolean {
+  if (isChannelDenied(channelId, cfg) || isChannelDenied(parentChannelId, cfg)) {
+    return false;
+  }
+  return (
+    isMonitoredChannel(channelId, cfg) ||
+    (!!parentChannelId && isMonitoredChannel(parentChannelId, cfg))
+  );
 }
 
 export function gateChannel(

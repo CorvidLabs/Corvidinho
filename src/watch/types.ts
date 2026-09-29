@@ -16,9 +16,16 @@ export type DetectedEvent = {
   id: string;
   type: DetectedEventType;
   body: string;
+  /** Comment / mention author; for assignment and review_request, the thread author. */
   sender: string;
   /** GitHub numeric user id of `sender` when the API gave it (IDENTITY-7 stable id). */
   senderId?: number;
+  /**
+   * assignment / review_request only: the user who assigned the watch user or
+   * requested its review. Both `sender` and `actor` must pass the user
+   * allowlist, and a missing actor is refused (REQ-watch-302).
+   */
+  actor?: string;
   repo: string; // OWNER/REPO
   number: number;
   title: string;

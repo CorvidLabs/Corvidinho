@@ -627,6 +627,25 @@ describe("git-commit", () => {
     expect(g(repo, "ls-files", ".specsync/changes/done/state.json").trim()).toBe("");
   });
 
+  test("SAFE-2: the deletion of any file under specs/ is refused, not only *.spec.md (REQ-plugins-182)", async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, "specs", "x"), { recursive: true });
+    writeFileSync(join(repo, "specs", "x", "requirements.md"), "# reqs\n");
+    writeFileSync(join(repo, "specs", "notes.md"), "n\n");
+    g(repo, "add", "specs");
+    g(repo, "commit", "-q", "-m", "specs");
+
+    for (const rel of ["specs/x/requirements.md", "specs/notes.md"]) {
+      unlinkSync(join(repo, rel));
+      const r = await run("git-commit", ["-m", "drop spec file", rel], repo);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toContain("SAFE-2");
+      expect(g(repo, "ls-files", rel).trim()).toBe(rel);
+    }
+    expect(g(repo, "diff", "--cached", "--name-only").trim()).toBe("");
+  });
+
   test("keystore directories are never staged; a change id that mentions keystores archives (REQ-plugins-182, SPECSYNC-4)", async () => {
     const repo = makeRepo();
     mkdirSync(join(repo, "keystore"));
@@ -691,6 +710,15 @@ describe("git-push (GITHUB-6, never force)", () => {
     expect(denyWins.exitCode).toBe(3);
     expect(denyWins.error).toContain("denied");
     delete process.env.CORVIDINHO_GITHUB_DENY_REPOS;
+
+    // deny_orgs wins over an allow list that names the repo (ALLOW-2).
+    process.env.CORVIDINHO_GITHUB_DENY_ORGS = "acme";
+    const orgDenyWins = await run("git-push", [], repo);
+    expect(orgDenyWins.ok).toBe(false);
+    expect(orgDenyWins.exitCode).toBe(3);
+    expect(orgDenyWins.error).toContain('org "acme" is denied');
+    expect(remoteRef(bare, "feat/push")).toBeNull();
+    delete process.env.CORVIDINHO_GITHUB_DENY_ORGS;
 
     const allowFile = join(base, `allow-${Date.now()}.toml`);
     writeFileSync(allowFile, '[github]\ndeny_repos = ["acme/widget"]\n');

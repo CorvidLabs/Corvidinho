@@ -1,6 +1,7 @@
 /**
  * Event → session stub after allowlist gates (ALLOW-1/2/5).
- * Allowlist BEFORE any session spawn.
+ * Allowlist BEFORE any session spawn. Assignment and review-request events
+ * also gate the user who assigned / requested (REQ-watch-302).
  *
  * IDENTITY-14 / IDENTITY-7: with the owner's declared people, the commenter
  * is recognised by their GitHub numeric id / login (never a display name)
@@ -13,7 +14,7 @@ import {
   isGithubUserAllowed,
   isRepoAllowed,
 } from "../allowlist/github.ts";
-import type { AllowlistConfig } from "../allowlist/types.ts";
+import type { AllowlistConfig, GithubAllowlists } from "../allowlist/types.ts";
 import {
   OWNER_PERSON_ID,
   resolvePerson,
@@ -23,6 +24,7 @@ import type { SessionStore } from "./session-store.ts";
 import {
   NOT_AUTHORIZED,
   type DetectedEvent,
+  type DetectedEventType,
   type RouteAction,
 } from "./types.ts";
 
@@ -89,27 +91,60 @@ function buildPrompt(event: DetectedEvent, people?: PeopleDirectory | null): str
 }
 
 /**
- * Pure router: allowlist repo + user, then start/continue/refuse/ignore.
+ * Event types started by someone acting on the thread (assigning the watch
+ * user, requesting its review), who need not be the thread author.
+ */
+const ACTOR_GATED_TYPES: ReadonlySet<DetectedEventType> = new Set([
+  "assignment",
+  "review_request",
+]);
+
+export type EventGateResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | "repo_not_allowlisted"
+        | "user_not_allowlisted"
+        | "actor_not_allowlisted";
+    };
+
+/**
+ * Repo + user allowlist gates for one event (ALLOW-1/2; deny lists win).
+ * Assignment / review_request events also need the user who assigned or
+ * requested (`actor`) to pass the user gate; no actor → refused (fail closed).
+ */
+export function gateEvent(
+  event: DetectedEvent,
+  github: GithubAllowlists,
+): EventGateResult {
+  if (!isRepoAllowed(event.repo, github).ok) {
+    return { ok: false, reason: "repo_not_allowlisted" };
+  }
+  if (!isGithubUserAllowed(event.sender, github).ok) {
+    return { ok: false, reason: "user_not_allowlisted" };
+  }
+  if (
+    ACTOR_GATED_TYPES.has(event.type) &&
+    !isGithubUserAllowed(event.actor ?? "", github).ok
+  ) {
+    return { ok: false, reason: "actor_not_allowlisted" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Pure router: allowlist repo + user (+ actor), then start/continue/refuse/ignore.
  */
 export function routeEvent(
   event: DetectedEvent,
   deps: RouterDeps,
 ): RouteAction {
-  const repoGate = isRepoAllowed(event.repo, deps.allowlist.github);
-  if (!repoGate.ok) {
+  const gate = gateEvent(event, deps.allowlist.github);
+  if (!gate.ok) {
     return {
       kind: "refuse",
-      reason: "repo_not_allowlisted",
-      reply: NOT_AUTHORIZED,
-      event,
-    };
-  }
-
-  const userGate = isGithubUserAllowed(event.sender, deps.allowlist.github);
-  if (!userGate.ok) {
-    return {
-      kind: "refuse",
-      reason: "user_not_allowlisted",
+      reason: gate.reason,
       reply: NOT_AUTHORIZED,
       event,
     };

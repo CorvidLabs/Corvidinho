@@ -31,6 +31,13 @@ function parseField(field: string, min: number, max: number): CronField {
   for (const part of field.split(",")) {
     const stepMatch = part.match(/^(.+)\/(\d+)$/);
     const step = stepMatch ? parseInt(stepMatch[2]!, 10) : 1;
+    // A zero step never advances the loops below. The bridge parses cadences
+    // synchronously (/schedule create), so refuse it before any loop runs.
+    if (step < 1) {
+      throw new CadenceError(
+        `Invalid cron step in "${part}": the step must be 1 or more.`,
+      );
+    }
     const range = stepMatch ? stepMatch[1]! : part;
     if (range === "*") {
       for (let i = min; i <= max; i += step) values.add(i);
@@ -38,7 +45,11 @@ function parseField(field: string, min: number, max: number): CronField {
       const [startStr, endStr] = range.split("-");
       const start = parseInt(startStr!, 10);
       const end = parseInt(endStr!, 10);
-      for (let i = start; i <= end; i += step) values.add(i);
+      // Values past the field's max never match, so stop there: a huge end
+      // (`0-99999999999`, or past 2^53 where `i += step` no longer moves)
+      // must not spin the bridge.
+      const last = Math.min(end, max);
+      for (let i = start; i <= last; i += step) values.add(i);
     } else {
       values.add(parseInt(range, 10));
     }

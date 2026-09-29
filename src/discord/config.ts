@@ -207,8 +207,9 @@ export function goLiveChecklist(): string {
   1. Set DISCORD_TOKEN or DISCORD_BOT_TOKEN in the VM env/secret store (never commit).
   2. Non-empty channel allowlist: DISCORD_CHANNEL_IDS and/or
      CORVIDINHO_DISCORD_ALLOW_CHANNELS / ~/.config/corvidinho/allowlist.toml [discord].channels
-  3. Optional user/role allowlists (empty = deny-all when those gates apply):
-     CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES (or file [discord].users / .roles)
+  3. Optional user/role allowlists: CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES
+     (or file [discord].users / .roles). Both empty = anyone in an allowlisted
+     channel; once either is set, only those users, role holders and the owner.
   4. Optional rate/mute (DISCORD-6): DISCORD_RATE_LIMIT_WINDOW_MS (default 60000),
      DISCORD_RATE_LIMIT_MAX (default 10), DISCORD_MUTED_USER_IDS (comma snowflakes)
   5. Owner = the only ADMIN (IDENTITY-1/2/3): CORVIDINHO_OWNER_DISCORD_ID
