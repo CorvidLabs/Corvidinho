@@ -29,6 +29,22 @@ ADMIN tools). Once anyone is declared, an undeclared commenter is marked
 `/admin people` changes apply without restarting the watch. See
 [`discord.md`](discord.md) "Declared people".
 
+**Untrusted text (SAFE-12 / SAFE-13, #71):** the issue / PR / comment title
+and body go to the model inside an `UNTRUSTED_DATA` fence (clipped first, so
+the end marker, which carries a random id, always survives the ~8000-char
+prompt cap); the run treats them as data, and what it may run is decided by
+its role (WATCH runs are community). Before any ack or run, the same
+conservative detector as Discord checks the title and body of every event not
+sent by the owner (recognised by GitHub id / login): on a hit WATCH posts one
+comment saying it won't act on it and why (plain words, never quoting the
+text), @mentioning the owner's GitHub login from `[owner]` /
+`CORVIDINHO_OWNER_GITHUB_LOGIN` when set, appends an `injection-suspected`
+audit row (actor `github:<login>`, surface `watch:<session>`, `denied`), logs
+`[watch] SAFE-13 refused …`, marks the event handled and runs nothing. A run
+whose tool result trips the detector drops its mutating tools for the rest of
+the run, and its summary comment @mentions the owner. See
+[`discord.md`](discord.md) "Untrusted text and injection attempts".
+
 ## Durable sessions (REQ-watch-037, #37 slice 1)
 
 - WATCH sessions (`owner/repo#number`) persist in the shared SQLite DB

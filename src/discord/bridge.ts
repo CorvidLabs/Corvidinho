@@ -68,6 +68,14 @@ import {
   enrichPromptWithImages,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
+import {
+  INJECTION_NO_OWNER_WARNING,
+  auditInboundInjection,
+  fenceSpeakerText,
+  formatInjectionRefusal,
+  inboundInjection,
+  withInjectionNotice,
+} from "./injection-guard.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
 import { parseApproveCardCustomId } from "./approve-card.ts";
@@ -660,19 +668,69 @@ export async function startBridge(
         return;
       }
 
+      // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared person's
+      // team role, else community; the tool layer re-checks it on every call.
+      // Resolved before the run: SAFE-12/13 need to know whose words these are.
+      const actingRole = resolveDiscordActingRole({
+        userId: msg.authorId,
+        roleIds: msg.authorRoleIds,
+        allowlist: config.allowlist,
+        adminUserIds: config.adminUserIds,
+        adminRoleIds: config.adminRoleIds,
+        owner: config.owner ?? null,
+        mutedUsers,
+        people: declaredPeople(),
+      });
+      const actingIsAdmin = actingRole === "owner";
+
+      // SAFE-13: a non-owner's message that looks like an injection attempt
+      // never reaches a run. One short reply says so and pings the owner
+      // (allowed mentions: the owner only); an audit row records the actor,
+      // the surface and the reason ids, never the text. A session this
+      // message would have started is dropped; the turn is not recorded.
+      const suspected = inboundInjection(prompt, actingRole);
+      if (suspected) {
+        auditInboundInjection(recordAudit, {
+          actor: msg.authorId,
+          surface: `discord:${session.id}`,
+          source: "chat-message",
+          reasons: suspected.reasons,
+        });
+        const refusal = formatInjectionRefusal(suspected.reasons, config.owner);
+        if (refusal.mentionUserIds.length === 0) console.warn(INJECTION_NO_OWNER_WARNING);
+        const sent = replyRef.fn
+          ? await replyRef.fn({
+              channelId,
+              content: refusal.content,
+              replyToMessageId: msg.id,
+              mentionUserIds: refusal.mentionUserIds,
+            })
+          : null;
+        if (action.kind === "start_session") {
+          await store.endSession(session);
+        } else {
+          store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);
+        }
+        return;
+      }
+
+      // SAFE-12: a non-owner's words go to the model fenced as untrusted data
+      // (their request, never instructions; only their role decides what runs).
+      const spoken = fenceSpeakerText(prompt, actingRole, "chat-message");
+
       // AUTONOMY-6 / SESSION-MULTI-3 / DISCORD-ASK:
       // - free-text pending (no options): substantive continue answers and clears.
       // - button pending (has options): chat continues; buttons stay until pick/timeout.
-      let agentPrompt = prompt;
+      let agentPrompt = spoken;
       if (action.kind === "continue_session" && session.pendingAsk) {
         const pending = session.pendingAsk;
         if (pending.options?.length) {
-          agentPrompt = prompt;
+          agentPrompt = spoken;
         } else {
           const prior = pending.question;
           agentPrompt =
             `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
-            `Human answer:\n${prompt}`;
+            `Human answer:\n${spoken}`;
           // Only the answered ask: earlier open button asks stay (SESSION-MULTI-3).
           store.clearPendingAsk(session, pending.askId);
         }
@@ -762,23 +820,10 @@ export async function startBridge(
             enrichedPrompt = idInject.prompt;
           }
 
-          // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared
-          // person's team role, else community; the tool layer re-checks it.
-          const actingRole = resolveDiscordActingRole({
-            userId: msg.authorId,
-            roleIds: msg.authorRoleIds,
-            allowlist: config.allowlist,
-            adminUserIds: config.adminUserIds,
-            adminRoleIds: config.adminRoleIds,
-            owner: config.owner ?? null,
-            mutedUsers,
-            people,
-          });
-          const actingIsAdmin = actingRole === "owner";
-
           // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user:
           // their profile when declared (MEMORY-5), never private notes
           // (MEMORY-7), and the project's memory for owner / team (MEMORY-6).
+          // actingRole already resolved above for SAFE-12/13.
           const memInject = enrichPromptWithMemories(
             enrichedPrompt,
             memoryStore,
@@ -795,6 +840,8 @@ export async function startBridge(
             );
             enrichedPrompt = memInject.prompt;
           }
+
+
           // Busy while the agent runs: the soft-TTL purge must not park this
           // worktree mid-run (REQ-discord-204).
           result = await store.runActive(session, () =>
@@ -936,12 +983,18 @@ export async function startBridge(
         // whichever message goes out (the collapsed edit or the fallback
         // reply); when neither does, the warning and the cap ping go back.
         const spend = spendAlerts.takeWarning(result.spendWarning);
-        const out = withSpendWarningPost(
-          {
-            content: body,
-            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-          },
-          spend?.warning,
+        // SAFE-13: a tool result that looked like an injection pings the owner
+        // on the same post.
+        const out = withInjectionNotice(
+          withSpendWarningPost(
+            {
+              content: body,
+              ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+            },
+            spend?.warning,
+            config.owner,
+          ),
+          result.injection,
           config.owner,
         );
         let delivered = false;
@@ -1396,12 +1449,18 @@ export async function startBridge(
         // SAFE-8: the pending 80% warning and its owner mention ride whichever
         // message goes out; when neither does, it and the cap ping go back.
         const spend = spendAlerts.takeWarning(result.spendWarning);
-        const out = withSpendWarningPost(
-          {
-            content: body,
-            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-          },
-          spend?.warning,
+        // SAFE-13: a tool result that looked like an injection pings the owner
+        // on the same post.
+        const out = withInjectionNotice(
+          withSpendWarningPost(
+            {
+              content: body,
+              ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+            },
+            spend?.warning,
+            config.owner,
+          ),
+          result.injection,
           config.owner,
         );
         let delivered = false;

@@ -251,7 +251,19 @@ at 15 s; non-text or malformed (not an RFC 6838 `type/subtype` token) content
 types and compressed bodies are refused. Returned text has C0/C1 controls
 stripped (newline and tab kept), is secret-scrubbed and is fenced as untrusted
 data with a per-call random marker id; the page title is a `Title:` line
-inside the fence, never a separate field. Errors never echo the reason phrase
+inside the fence, never a separate field. The fence is the shared
+`fenceUntrustedData` (`src/agent/untrusted.ts`, SAFE-12, REQ-plugins-071)
+with the `UNTRUSTED_WEB_CONTENT` word: bidi, zero-width, BOM, soft hyphen and
+tag characters are stripped too, and a page line that imitates a Corvidinho
+context block (`[Corvidinho …`, `[untrusted …`, the replay footer) is marked
+`(quoted)`.
+`discord-user-lookup` cleans every member name it returns (username, global
+name, nickname, display name) with `cleanDisplayName` before it reaches the
+model (SAFE-11, REQ-plugins-071); a lookup never makes anyone a declared
+person or gives a role. What a plugin may run is decided only by the acting
+role resolved in the tool layer (`resolveActingRole`, REQ-plugins-065): text
+in a task, a body or a tool result that claims the owner's identity widens
+nothing (SAFE-12, REQ-plugins-071). Errors never echo the reason phrase
 or other server-chosen header values and are one line, control-free and at
 most 300 chars. `web-search` is not built (provider not captured).
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
@@ -743,6 +755,8 @@ command line.
 | runner binary gone after load (cannot start) | ok=false, exit 127 with the reason; never throws |
 | runner times out / calling run aborts | exit 124 / 130; runner process tree killed |
 | files-read of a PNG/JPEG/GIF/WebP over 20 MB | refused `refused: image '<path>' is N bytes, over the 20MB image limit` (exit 1), no bytes read into the result (REQ-plugins-427) |
+| discord-user-lookup member names carrying mention markup, invisible / bidi / tag characters or role-like tags / labels | returned cleaned (`cleanDisplayName`); a name that is only a role word is dropped (the username or id stands in) (REQ-plugins-071) |
+| A role session's task text claims the owner and asks for a mutating plugin | not offered; a call gets the role refusal `not allowed for your role`, nothing runs (REQ-plugins-071, REQ-plugins-065) |
 
 ## Dependencies
 

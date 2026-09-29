@@ -37,6 +37,7 @@ import {
   withSpendWarningPost,
 } from "../discord/ask-ping.ts";
 import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
+import { withInjectionNotice } from "../discord/injection-guard.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
@@ -720,12 +721,17 @@ export class SchedulerService {
             const status = result.ok ? "✅" : "❌";
             const head = `${status} ${scheduleTitle(schedule)}:\n`;
             posted = await this.outbound.post(
-              withSpendWarningPost(
-                {
-                  channelId: schedule.channelId,
-                  content: `${head}${clipPostSummary(summary, head.length)}`,
-                },
-                pending?.warning,
+              // SAFE-13: a tool result that looked like an injection tells the owner.
+              withInjectionNotice(
+                withSpendWarningPost(
+                  {
+                    channelId: schedule.channelId,
+                    content: `${head}${clipPostSummary(summary, head.length)}`,
+                  },
+                  pending?.warning,
+                  this.owner,
+                ),
+                result.injection,
                 this.owner,
               ),
             );

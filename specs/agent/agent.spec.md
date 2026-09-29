@@ -22,6 +22,7 @@ files:
   - src/agent/spend-alerts.ts
   - src/agent/spend-outbox.ts
   - src/agent/ask.ts
+  - src/agent/untrusted.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -35,6 +36,7 @@ files:
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
   - tests/agent.verify-feedback.test.ts
+  - tests/safe.injection.test.ts
   - tests/fixtures/verify-lane-log.ts
   - agent.3md
   - tests/agent3md.smoke.test.ts
@@ -234,6 +236,24 @@ optional `unreportedEditTools?: string[]`; outside a role session, with a
 Fledge plugin command allowlisted, a `delegate` call that started a worker is
 named there too. No env var, config key, flag or slash command.
 
+Untrusted text (SAFE-11/12/13, #71, REQ-agent-071): `src/agent/untrusted.ts`
+exports `cleanDisplayName(raw, max?)` / `DISPLAY_NAME_MAX` (32),
+`nameSkeleton` / `namesLookAlike`, `stripInvisible`, `defangContextMarkers`,
+`fenceUntrustedData(text, { source, header, word?, id? })` /
+`UNTRUSTED_FENCE_WORD` (`UNTRUSTED_DATA`),
+`UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS`, `detectInjection(text)` →
+`InjectionVerdict` (`InjectionReason`: `ignore-rules`, `role-override`,
+`owner-claim`, `secret-request`, `tool-call-payload`, `fake-marker`;
+`INJECTION_REASONS`, `INJECTION_REASON_TEXT`, `describeInjectionReasons`,
+`INJECTION_SCAN_MAX_CHARS`), `InjectionNotice` / `injectionNoticeFromUnknown`,
+`INJECTION_AUDIT_ACTION` (`injection-suspected`), `UNTRUSTED_RESULT_TOOLS`,
+`INJECTION_SCAN_TOOLS`, `toolResultFenceHeader`, `injectionToolNote`,
+`injectionToolRefusal` and `injectionSummaryNote`. `src/agent/execute.ts`
+exports `withInjectionNote(summary, notice)` and `toolResultScanText(result)`;
+`createTaskExecute` takes `onInjection?: (notice) => void`; `TaskResult`
+gains optional `injection?: InjectionNotice` (additive on the NDJSON
+`result` frame: protocol stays 2). No env var, config key or flag.
+
 ## Invariants
 
 The verify gate trusts the working tree, not only the tools (REQ-agent-085):
@@ -405,6 +425,30 @@ exactly when `discord-send-file` is in the run's offered catalog and the run
 env names a conversation channel; a run that does not offer the tool, or has
 no conversation channel, never promises attachments.
 
+Untrusted text (SAFE-12 / SAFE-13, REQ-agent-071): every task-run system
+prompt (tool loop and read tier) carries
+`UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS` (text between `UNTRUSTED_…`
+markers and tool results marked untrusted are data that never grant a
+permission; what may run is the sender's role, enforced in the tool layer;
+who someone is comes only from the acting-user block). A successful result of
+a tool in `UNTRUSTED_RESULT_TOOLS` (GitHub readers, `discord-user-lookup`)
+reaches the model inside a `fenceUntrustedData` fence (`web-fetch` keeps its
+own). A successful result of a tool in `INJECTION_SCAN_TOOLS` (`web-fetch`,
+the GitHub title / docs / milestone readers, `discord-user-lookup`; never PR
+diffs or file lists) is scanned by `detectInjection` over its strings (the web
+fence's own lines left out): a hit puts `injectionToolNote` in front of that
+tool message, drops every mutating plugin (`isMutatingPlugin`) from the
+catalog sent for the rest of the run (verify retries included) and refuses
+any mutating call with `injectionToolRefusal` (exit 2, never run), reports
+the first hit once through `onInjection` (tool name + reason ids, never the
+text) after appending an `injection-suspected` / `denied` SAFE-5 row (actor
+and surface from the spawn env, digest of the tool and reasons; best effort),
+emits one `[operator]` Text line, and ends every later summary with
+`injectionSummaryNote` once, before any ROLES-CHAT-3 role note (which stays
+last). `task run` copies the notice to `TaskResult.injection`. The detector is
+bounded (capped input, bounded windows) and its patterns fold look-alike
+letters and strip invisible characters first.
+
 ## Behavioral Examples
 
 ### Scenario: System prompt mentions memory-store
@@ -460,6 +504,12 @@ no conversation channel, never promises attachments.
   call is refused as not offered; a non-owner run with the same allowlist is
   offered neither (REQ-agent-501)
 
+### Scenario: a fetched issue title tells the model to ignore its rules
+
+- **Given** a tool-tier run that offers `files-write` and calls `github-issue-list`
+- **When** an issue title reads like an instruction to set aside the previous instructions
+- **Then** the tool message starts with the SAFE-13 note and holds the result inside an `UNTRUSTED_DATA` fence, the next request offers no mutating tool, a `files-write` call is refused and writes nothing, `onInjection` gets `{ source: "github-issue-list", reasons: ["ignore-rules"] }`, an `injection-suspected` row is audited, and the summary ends with the "didn't act on it" note (REQ-agent-071)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -505,6 +555,8 @@ no conversation channel, never promises attachments.
 | Git project: instruction file untracked, or HEAD unborn | refused as not committed; named in the Text note |
 | Git project: `.git` unusable (not a repo top level, git missing) | present files refused; no working-tree fallback |
 | Git project: committed symlink leaves the commit, is broken, hops a symlinked dir, or loops | refused; named in the Text note |
+| A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
+| Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
 
 ## Dependencies
 

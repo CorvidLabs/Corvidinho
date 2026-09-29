@@ -71,6 +71,15 @@ and the search clients' `userId` (GitHub numeric id; fixture `user_id`)
 env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
 declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7).
+Untrusted text (SAFE-12 / SAFE-13, #71, REQ-watch-071): `router.ts` exports
+`watchEventText(event)`, `watchInjectionVerdict(event, people)`,
+`WATCH_BODY_FENCE_HEADER` and `WATCH_PROMPT_MAX_CHARS` (8000); `ack.ts`
+exports `buildInjectionRefusalBody(reasons, ownerLogin?)` and
+`postWatchInjectionRefusal(opts)`; `summary.ts` exports
+`watchInjectionLine(injection, ownerLogin?)`, `buildSummaryBody(spawn,
+ownerLogin?)` and `maybePostWatchSummary({ ownerLogin })`; the WATCH
+`AgentSpawnResult` gains `injection?` (validated from the child's result
+frame).
 
 ## Invariants
 
@@ -107,6 +116,21 @@ A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
 `GITHUB_TOKEN / GH_TOKEN`, and settles `fatal` with exit code 1; the default
 error sink prints one SAFE-6 scrubbed line per error, never the error object
 (REQ-watch-418).
+The event's title and body reach the model only inside an `UNTRUSTED_DATA`
+fence, clipped before fencing so the whole prompt stays within
+`WATCH_PROMPT_MAX_CHARS` and the end marker (random id) is always last; the
+header line, `URL:` and any identity block stay outside it. Before any ack or
+run, `watchInjectionVerdict` checks the title and body of every routed event
+whose sender is not the owner (by GitHub id / login in the people list); a
+hit counts `refused`, runs nothing, posts one `buildInjectionRefusalBody`
+comment (any event type; skipped for the watch user's own events and an
+already-answered id; @mentions the owner's GitHub login when configured),
+appends an `injection-suspected` / `denied` audit row (actor
+`github:<login>`, surface `watch:<session>`), logs `[watch] SAFE-13 refused
+…` and reports `onAction` kind `injection_refused`; the event id is already
+processed, so it is never retried. A run whose result carries `injection` gets
+the `watchInjectionLine` (owner @mentioned) in its summary comment
+(REQ-watch-071).
 
 ## Behavioral Examples
 
@@ -119,13 +143,17 @@ summary comment once per event id; spawn start/outcome log + JSONL row; 403
 rate-limit on the fetch, the ack or the summary comment schedules backoff and
 skips tight re-poll; a plain 403 on a comment logs the failure only. Poller restarted on the
 same data dir continues the same issue session; issue idle past TTL →
-start_session with a new id.
+start_session with a new id. A non-owner comment whose body claims to be the
+owner and asks for the API keys → no run; one refusal comment @mentioning the
+owner's GitHub login; an `injection-suspected` audit row (REQ-watch-071).
 
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
 (user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
-(bad or revoked token) stops the loop with exit 1.
+(bad or revoked token) stops the loop with exit 1; a non-owner title or body
+that trips the SAFE-13 detector is refused with one comment and no run
+(REQ-watch-071).
 
 ## Dependencies
 

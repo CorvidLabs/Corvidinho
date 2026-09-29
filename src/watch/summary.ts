@@ -9,6 +9,7 @@
  */
 
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
+import { describeInjectionReasons } from "../agent/untrusted.ts";
 import { attribution } from "../attribution.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import type { AckClient, AckCommentResult } from "./ack.ts";
@@ -48,7 +49,22 @@ export class SuccessfulAckStore {
   }
 }
 
-export function buildSummaryBody(spawn: AgentSpawnResult): string {
+/**
+ * SAFE-13 — the summary line for a run whose tool result looked like a
+ * prompt-injection attempt, @mentioning the owner's GitHub login when set.
+ */
+export function watchInjectionLine(
+  injection: NonNullable<AgentSpawnResult["injection"]>,
+  ownerLogin?: string,
+): string {
+  const who = ownerLogin ? `@${ownerLogin} ` : "";
+  return (
+    `${who}heads-up: a ${injection.source} result in this run looked like a prompt-injection attempt ` +
+    `(it ${describeInjectionReasons(injection.reasons)}); I didn't act on it. (SAFE-13)`
+  );
+}
+
+export function buildSummaryBody(spawn: AgentSpawnResult, ownerLogin?: string): string {
   const status = spawn.ok
     ? `Done (exit ${spawn.exitCode}).`
     : `Failed (exit ${spawn.exitCode}).`;
@@ -63,8 +79,9 @@ export function buildSummaryBody(spawn: AgentSpawnResult): string {
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;
+  const notice = spawn.injection ? `\n\n${watchInjectionLine(spawn.injection, ownerLogin)}` : "";
   const foot = attribution("markdown");
-  return `${body}\n\n---\n${foot}`;
+  return `${body}${notice}\n\n---\n${foot}`;
 }
 
 function splitRepo(repo: string): { owner: string; name: string } | null {
@@ -85,6 +102,8 @@ export async function maybePostWatchSummary(opts: {
   ackClient: AckClient;
   successfulAcks: SuccessfulAckStore;
   summarized: SummarizedIdStore;
+  /** SAFE-13: the owner's GitHub login, @mentioned when the run reports an injection. */
+  ownerLogin?: string;
   log?: (msg: string) => void;
   /**
    * Called with the failed post result after the `summary failed` line; the
@@ -111,7 +130,7 @@ export async function maybePostWatchSummary(opts: {
     return false;
   }
 
-  const body = buildSummaryBody(spawn);
+  const body = buildSummaryBody(spawn, opts.ownerLogin);
   const res = await ackClient.createIssueComment({
     owner: parts.owner,
     repo: parts.name,

@@ -5,6 +5,9 @@
  * prepend a clear block so the model does not claim ignorance when rows exist.
  * Empty scope still gets a one-liner nudging memory-store for new durable facts.
  * No `/memory` slash — agent/prompt behavior only (draft #67 without new HI ids).
+ * Recalled content is the user's own facts, flattened to one line with
+ * invisible characters stripped (SAFE-12); it never changes who they are or
+ * their role (SAFE-11, the system prompt says so).
  *
  * MEMORY-5..7 (#101): a declared person's block is their profile scope (plus
  * rows stored under their Discord ids before they were declared), never
@@ -13,6 +16,7 @@
  * block (MEMORY-6), only when it holds rows.
  */
 
+import { stripInvisible } from "../agent/untrusted.ts";
 import type { PeopleDirectory, PersonRole } from "../identity/people.ts";
 import {
   memorySubjectFor,
@@ -51,7 +55,8 @@ export function formatMemoryInjectBlock(
     lines.push(MEMORY_INJECT_EMPTY);
   } else {
     for (const r of records) {
-      const content = String(r.content ?? "").replace(/\s+/g, " ").trim();
+      // SAFE-12: one line, invisible / bidi / tag characters out.
+      const content = stripInvisible(String(r.content ?? "")).replace(/\s+/g, " ").trim();
       lines.push(`- ${r.category}/${r.key}: ${content}`);
     }
   }
@@ -83,7 +88,8 @@ export function formatProjectMemoryBlock(
   if (records.length === 0) return "";
   const lines = [PROJECT_MEMORY_INJECT_HEADER, `- project: ${key}`];
   for (const r of records) {
-    const content = String(r.content ?? "").replace(/\s+/g, " ").trim();
+    // SAFE-12: one line, invisible / bidi / tag characters out.
+    const content = stripInvisible(String(r.content ?? "")).replace(/\s+/g, " ").trim();
     lines.push(`- ${r.category}/${r.key}: ${content}`);
   }
   return lines.join("\n");

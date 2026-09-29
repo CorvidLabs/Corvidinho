@@ -143,3 +143,25 @@ there and in `tests/discord.forget-card.test.ts` (REQ-agent-101).
   take the first unused position number; a dropped empty option holds no id;
   already-unique options normalize byte-identically (again and again); an
   ask-human call with one id twice gives buttons with distinct `custom_id`s.
+
+## Untrusted text in the task run (REQ-agent-071, SAFE-11/12/13)
+
+`tests/safe.injection.test.ts` — `cleanDisplayName` drops mention markup,
+invisible / bidi / tag characters and role-like tags / labels, drops a name
+that is only a role word (also full-width or look-alike), keeps ordinary
+names and caps at 32; `namesLookAlike` folds case, homoglyphs and `1` / `l`;
+`fenceUntrustedData` keeps its random end marker last and unique, defangs the
+word inside, strips invisible characters and quotes fake Corvidinho lines;
+`detectInjection` trips on 22 known payloads (every reason id, look-alike and
+zero-width variants) and on none of 14 ordinary messages / bug reports, and a
+large hostile body scans in well under 2 s; `injectionNoticeFromUnknown`
+keeps only a tool-name source and known reason ids; the tool-loop and
+read-tier system prompts carry `UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS`;
+a community run whose task claims the owner and asks for `files-write`
+offers no mutating tool and the call gets the role refusal, nothing written;
+through `createTaskExecute` with fake `github-issue-list` / `files-write`
+plugins, an injected issue title makes the tool message start with the SAFE-13
+note and hold the fenced result, the next request offers no `files-write`, a
+`files-write` call is refused and writes nothing, `onInjection` gets the tool
+and reason once, one `injection-suspected` row is audited and the summary
+ends with the note; the web fence's own lines are not a hit.
