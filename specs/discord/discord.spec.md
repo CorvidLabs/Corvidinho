@@ -195,14 +195,18 @@ Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
-restates and a free-text reply answers, and `openAsks` holds earlier button
+restates and a free-text reply answers (a button `pendingAsk` past its
+timeout is cleared with `clearPendingAsk` before any reply but `cancel` is
+gated, so a thin reply never restates it — DISCORD-ASK-5), and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
 array (oldest first, newest last) when several are. The stored question,
 option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
 and the SAFE-6 re-scrub rewrites the column value by value as JSON
 (`scrubJsonText`). `normalizeAskOptions` replaces a model-chosen option id
 that looks like a secret with its position, so askId, expiresAt, option ids
-and stubMessageId are stored byte-identical. `SessionStore.setPendingAsk(session, ask)`
+and stubMessageId are stored byte-identical; an option id that repeats an
+earlier one takes the first unused position number, so every option button
+has its own `custom_id` (REQ-agent-045). `SessionStore.setPendingAsk(session, ask)`
 stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears

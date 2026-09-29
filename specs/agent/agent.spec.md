@@ -195,7 +195,10 @@ Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `askFromToolArguments`, `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
 `ASK_AGENT_SYSTEM_INSTRUCTIONS` (AUTONOMY-7 + prefer `options` / numbered choices
 for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
-`resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`.
+`resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
+(option ids come out unique within an ask: a repeated id takes the first
+unused position number, and already-unique ids are kept byte-identical,
+REQ-agent-045).
 `HumanAsk` MAY include `options: AskOption[]`. A clarify ask ends the run
 `blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
 carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
