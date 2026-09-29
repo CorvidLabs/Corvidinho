@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per",
+  "slug": "nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per",
+  "title": "Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68)",
+  "description": "Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "9209bda288f255dfa366d24d6ddcb96ab2d39a4f",
+  "created_at": 1790696364,
+  "updated_at": 1790705327,
+  "affected_specs": [
+    "cli",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/store/backup.ts",
+    "src/scheduler/service.ts",
+    "src/daemon/daemon.ts",
+    "src/discord/bridge.ts",
+    "src/cli.ts",
+    "src/doctor.ts",
+    "tests/ops.backup.test.ts",
+    "tests/ops.backup-wiring.test.ts",
+    "tests/preload.ts",
+    ".env.example",
+    "README.md",
+    "docs/DAEMON.md",
+    "docs/discord.md",
+    "docs/DISCORD-GO-LIVE.md",
+    "docs/BOX-UPDATE.md",
+    "AGENTS.md",
+    "STATUS.md",
+    "hi/ops.md",
+    "INTENT.md",
+    "specs/cli/cli.spec.md",
+    "specs/cli/requirements.md",
+    "specs/cli/testing.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/requirements.md",
+    "specs/discord/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With CORVIDINHO_BACKUP_DIR set to an absolute local directory outside any git repo, the bridge's or daemon's scheduler tick takes one consistent VACUUM INTO snapshot of corvidinho.db per night from 03:00 local time (claimed once per data dir in SQLite; 0600 file named by UTC time, checked, fsynced, newest 7 kept, other files untouched, SAFE-6 scrubbing carried) and logs it; once a week (and each night while failing) the newest snapshot is restored into a temp dir with the same code as corvidinho backup restore, opened, checked (integrity_check, schema version, tables, row counts equal to the recorded ones) and deleted, and logged; the first failure of a streak records an owner notice that the bridge's next tick posts once as fixed text (no host path) to the /announce channel with only the owner pinged, handed back when the post does not go out, later failures logged only until a success; unset means no backup and doctor prints a [warn] backup: off line (doctor shows dir, snapshots, last backup / restore test or the failure reason and whether the owner was told, never fails doctor); corvidinho backup list prints snapshots and backup restore <snapshot> <target> [--force] checks and restores a named snapshot, refusing any target a process holds open even with --force and an existing target without --force; no new table or schema version; tests/ops.backup.test.ts and tests/ops.backup-wiring.test.ts cover each and fail on the previous code"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
