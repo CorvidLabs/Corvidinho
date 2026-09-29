@@ -17,6 +17,8 @@ export type DetectedEvent = {
   type: DetectedEventType;
   body: string;
   sender: string;
+  /** GitHub numeric user id of `sender` when the API gave it (IDENTITY-7 stable id). */
+  senderId?: number;
   repo: string; // OWNER/REPO
   number: number;
   title: string;

@@ -8,6 +8,7 @@ import {
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
+import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { actorIsAdmin, projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
@@ -136,6 +137,7 @@ export async function handleSessionStart(
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
     owner: ctx.owner,
+    people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
   });
   const prompt = idInject.prompt;
   // AGENT-6 (REQ-discord-072): the topic opens the session's thread as the

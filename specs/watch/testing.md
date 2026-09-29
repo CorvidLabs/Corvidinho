@@ -27,3 +27,14 @@ module: watch
   the summary backs off until the reset (reason `x-ratelimit-reset`); a
   rate-limit message with no headers uses the 60 s default; a plain 403 on the
   ack or the summary sets no backoff.
+
+## Declared commenters (REQ-watch-036, IDENTITY-14 / IDENTITY-7)
+
+- `tests/identity.recognise.test.ts` › "GitHub WATCH recognises declared
+  people" — `routeEvent` with `people`: the leading `[Corvidinho acting GitHub
+  user …]` paragraph (dropped by `planningSelectionText`), renamed login by
+  numeric id, reused login refused, owner by `[owner]` login, strangers
+  `declared_person: none`, prompt unchanged with nobody declared; fixture
+  searcher carries `user_id` to `senderId`; `startWatchPoller` re-reads people
+  from its allowlist file per event.
+

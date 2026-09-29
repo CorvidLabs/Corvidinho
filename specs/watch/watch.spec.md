@@ -59,6 +59,13 @@ rate-limit `headers` (`retry-after`, `x-ratelimit-remaining`,
 `x-ratelimit-reset`) of the failed post; `maybePostWatchAck` /
 `maybePostWatchSummary` take an optional `onPostFailed(res)` called after the
 `ack failed` / `summary failed` line (REQ-watch-011).
+`RouterDeps.people` (a `PeopleDirectory`), `formatWatchIdentityBlock(event,
+people)` and `WATCH_IDENTITY_HEADER` (`router.ts`); `DetectedEvent.senderId`
+and the search clients' `userId` (GitHub numeric id; fixture `user_id`)
+(REQ-watch-036). `startWatchPoller` loads the owner from its allowlist file +
+env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
+declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
+paragraph (IDENTITY-14 / IDENTITY-7).
 
 ## Invariants
 

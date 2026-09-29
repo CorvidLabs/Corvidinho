@@ -107,6 +107,11 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 
 - Matching is by Discord snowflake (or lowercased GitHub login) only, never by display name.
   The display name is shown in `doctor`, `/status` and `/admin config show`; ids are never printed.
+- Declared people (IDENTITY-13/14): add `[people.<id>]` sections to the same file
+  (`display`, `nicknames`, `discord_ids`, `github_logins`, `github_ids`; template in
+  [`allowlist.example.toml`](../allowlist.example.toml)) or use `/admin people add|link|unlink|remove`
+  (owner-only, SAFE-5 audited). Matched on Discord / GitHub ids only, never names (IDENTITY-7);
+  never changed through chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.

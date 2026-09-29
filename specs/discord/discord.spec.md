@@ -14,7 +14,10 @@ files:
   - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
+  - src/identity/people.ts
   - src/identity/index.ts
+  - tests/identity.people.test.ts
+  - tests/identity.recognise.test.ts
   - tests/identity.owner.test.ts
   - tests/discord.owner.test.ts
   - src/discord/session-store.ts
@@ -73,8 +76,10 @@ files:
   - src/discord/command-handlers/announce.ts
   - src/discord/command-handlers/admin.ts
   - src/discord/admin-allowlist.ts
+  - src/discord/admin-people.ts
   - src/discord/channel-autocomplete.ts
   - tests/discord.admin-slash.test.ts
+  - tests/discord.admin-people.test.ts
   - tests/discord.channel-autocomplete.test.ts
   - src/discord/announce-store.ts
   - src/discord/announce.ts
@@ -164,6 +169,22 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
 `setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
 `isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
+`parseJsonObject` (`admin-allowlist.ts`, shared with `/admin people`);
+`/admin people` (ADMIN-3.a, REQ-discord-036): `formatPeopleList`
+(`command-handlers/admin.ts`); `planPeopleChange`, `commitPeopleChange`,
+`setTomlPerson`, `setJsonPerson`, `renderPersonTomlLines`, `samePerson`,
+`formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
+(`admin-people.ts`, the only writer of people). Declared people
+(IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
+githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
+(the one resolver; stable ids only), `loadDeclaredPeople({ allowlist, owner })`
+(re-reads `allowlist.sourcePath`, never throws), `buildPeopleDirectory`,
+`loadPeopleDirectory`, `readPeopleFile`, `parsePeopleToml` /
+`parsePeopleJson` / `parsePeopleText`, `normalizePersonLink`,
+`normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
+`cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
+`LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
+types.
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
@@ -341,6 +362,13 @@ user id + resolved display (owner map wins for owner). Gateway fills
 `userUsername`, and `ComponentInteraction.userDisplayName` / `userUsername`
 from `componentActorNames`). Bridge (chat and button-pick resume) and slash
 handlers inject identity before memory (IDENTITY-4 / REQ-discord-446).
+With declared people (`IdentityInjectInput.people`, from `loadDeclaredPeople`
+on every run) the block also names `declared_person`, the declared display
+(winning over the Discord names), `nicknames` and `github` logins, matched on
+the acting Discord user id only (`resolveActingPerson`); once anyone is
+declared an undeclared non-owner gets `declared_person: none`; an undeclared
+owner's block and every block with nobody declared are unchanged
+(IDENTITY-14 / IDENTITY-7, REQ-discord-036).
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).

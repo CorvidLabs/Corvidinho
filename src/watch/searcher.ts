@@ -32,6 +32,8 @@ export type SearchClient = {
     htmlUrl: string;
     body: string;
     user: string;
+    /** GitHub numeric id of `user` when known (IDENTITY-7). */
+    userId?: number;
     createdAt: string;
     updatedAt: string;
     isPullRequest: boolean;
@@ -48,6 +50,8 @@ export type SearchClient = {
     id: number;
     body: string;
     user: string;
+    /** GitHub numeric id of `user` when known (IDENTITY-7). */
+    userId?: number;
     htmlUrl: string;
     createdAt: string;
   }>>;
@@ -65,6 +69,7 @@ export type FixtureBundle = {
     html_url: string;
     body?: string;
     user?: string;
+    user_id?: number;
     created_at?: string;
     updated_at?: string;
     pull_request?: boolean;
@@ -77,6 +82,7 @@ export type FixtureBundle = {
       id: number;
       body: string;
       user: string;
+      user_id?: number;
       html_url: string;
       created_at: string;
     }>
@@ -103,6 +109,7 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
           htmlUrl: it.html_url,
           body: it.body ?? "",
           user: it.user ?? "unknown",
+          ...(it.user_id !== undefined ? { userId: it.user_id } : {}),
           createdAt: it.created_at ?? new Date().toISOString(),
           updatedAt: it.updated_at ?? it.created_at ?? new Date().toISOString(),
           isPullRequest: !!it.pull_request,
@@ -117,6 +124,7 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
         id: c.id,
         body: c.body,
         user: c.user,
+        ...(c.user_id !== undefined ? { userId: c.user_id } : {}),
         htmlUrl: c.html_url,
         createdAt: c.created_at,
       }));
@@ -188,6 +196,7 @@ export function createOctokitSearchClient(token: string): SearchClient {
             htmlUrl,
             body: it.body ?? "",
             user: it.user?.login ?? "unknown",
+            ...(typeof it.user?.id === "number" ? { userId: it.user.id } : {}),
             createdAt: it.created_at,
             updatedAt: it.updated_at,
             isPullRequest: !!it.pull_request,
@@ -239,6 +248,7 @@ export function createOctokitSearchClient(token: string): SearchClient {
           id: c.id,
           body: c.body ?? "",
           user: c.user?.login ?? "unknown",
+          ...(typeof c.user?.id === "number" ? { userId: c.user.id } : {}),
           htmlUrl: c.html_url,
           createdAt: c.created_at,
         }));
@@ -301,6 +311,7 @@ export async function fetchWatchEvents(opts: {
           type: "issues",
           body: item.body,
           sender: item.user,
+          ...(item.userId !== undefined ? { senderId: item.userId } : {}),
           repo: item.repo,
           number: item.number,
           title: item.title,
@@ -321,6 +332,7 @@ export async function fetchWatchEvents(opts: {
           type: "assignment",
           body: item.body || `assigned to @${username}`,
           sender: item.user,
+          ...(item.userId !== undefined ? { senderId: item.userId } : {}),
           repo: item.repo,
           number: item.number,
           title: item.title,
@@ -346,6 +358,7 @@ export async function fetchWatchEvents(opts: {
           type: "issue_comment",
           body: c.body,
           sender: c.user,
+          ...(c.userId !== undefined ? { senderId: c.userId } : {}),
           repo: item.repo,
           number: item.number,
           title: item.title,
@@ -370,6 +383,7 @@ export async function fetchWatchEvents(opts: {
             type: "review_request",
             body: `review requested of @${username}`,
             sender: item.user,
+            ...(item.userId !== undefined ? { senderId: item.userId } : {}),
             repo: item.repo,
             number: item.number,
             title: item.title,

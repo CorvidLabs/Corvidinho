@@ -1,9 +1,9 @@
 # Discord HEAR surface
 
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
-**As of:** 2026-09-27 (America/Denver). Package version from `src/version.ts` / `package.json`.
+**As of:** 2026-09-29 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..13, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..5), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..7) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..13, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4, ADMIN-3.a), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..7, IDENTITY-13/14), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..7) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
@@ -34,6 +34,11 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/admin channels add` | `channel` (STRING + autocomplete by name/id, required) | yes | Add a channel to `[discord].channels` + live (owner only; ADMIN-2) |
 | `/admin channels remove` | `channel` (STRING + autocomplete from allowlist / name/id, required) | yes | Remove a channel from the file + live; refuses env-only entries and the last live channel, counting deny-listed channels as not live (owner only; ADMIN-2) |
 | `/admin config show` | — | yes | Allowlist/config view: live vs file vs env counts, owner configured yes/no, rate limit, mutes, audit line, which knobs are updatable (owner only; ADMIN-3) |
+| `/admin people list` | — | yes | Declared people and their links, the owner's person, and any problems in the file (owner only; IDENTITY-13) |
+| `/admin people add` | `person` (id, required), optional `display` | yes | Declare a person, or change their display name (owner only; ADMIN-3.a) |
+| `/admin people link` | `person` (required) + one or more of `discord` (user picker), `github` (login), `github_id` (number), `nickname` | yes | Link accounts / nicknames to a person; an id already linked to someone else is refused (owner only; ADMIN-3.a, IDENTITY-6/7) |
+| `/admin people unlink` | same as `link` | yes | Unlink accounts / nicknames (owner only; ADMIN-3.a) |
+| `/admin people remove` | `person` (required) | yes | Remove a declared person and all their links (owner only; ADMIN-3.a) |
 
 
 Gate order for every slash: **channel allowlist → actor gate (user/role allowlist + deny lists, REQ-discord-201; ephemeral zero-width ack on refuse) → mute/rate → minPermission → handler**. An ask button press (open or pick) runs the same **channel → actor → mute/rate** gates before it shows choices or resumes the session.
@@ -67,6 +72,7 @@ Owner-only (IDENTITY-2): the dispatcher floor is ADMIN **and** the handler re-ch
 |------|------------------------|----------------|
 | `[discord].users` | yes — `/admin users add` (approve) | allowlist file + live |
 | `[discord].channels` | yes — `/admin channels add` / `remove` | allowlist file + live |
+| Declared people `[people.<id>]` (IDENTITY-13) | yes — `/admin people add` / `link` / `unlink` / `remove` (ADMIN-3.a) | allowlist file; read on the next message or comment |
 | Env lists (`CORVIDINHO_DISCORD_ALLOW_*`, `DISCORD_CHANNEL_IDS`), owner (`CORVIDINHO_OWNER_*` / `[owner]`), rate limits, roles, deny lists, `[github]` | no — shown by `/admin config show`; edit on the VM and restart | — |
 
 - **One store.** Writes go to the allowlist file the bridge already loaded (`CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml|json`; created `0600` on first write if missing). The rewrite is atomic (temp file in the same dir + fsync + rename, mode kept, symlink target followed). TOML edits touch only the one key line inside `[discord]`; `[owner]`, `[github]`, comments and blank lines stay verbatim. JSON keeps every other key and refuses files whose numeric ids would lose precision.
@@ -76,6 +82,16 @@ Owner-only (IDENTITY-2): the dispatcher floor is ADMIN **and** the handler re-ch
 - **First user narrows access.** While `users` and `roles` are both empty, callers in an allowlisted channel resolve to STANDARD. Adding the first user flips every unlisted non-owner caller to BLOCKED; the reply warns about it.
 - **Audit (SAFE-5).** Each mutation appends `started` then `ok`/`error` rows (surface `discord:admin`, actor = invoker id, args digest only) to the shared audit chain before touching the file; if the trail is unavailable the command fails closed. Guard refusals (deny-listed id, env-only entry, last channel) and a non-owner caught by the handler re-check append `denied` (the dispatcher floor refuses non-owners before the handler, without a row). The reply names the row numbers.
 - Subcommand groups: the gateway flattens `SUB_COMMAND_GROUP` options (`/admin users add`) into `subcommandGroup` + `subcommand` + options.
+
+### Declared people (`/admin people`, IDENTITY-13/14/6/7, ADMIN-3.a)
+
+The owner declares who's who in the same allowlist file, one `[people.<id>]` section per person (JSON: a `people` object; see [`allowlist.example.toml`](../allowlist.example.toml)): `display`, `nicknames`, `discord_ids`, `github_logins`, `github_ids` (singular spellings read too; each value on one line). The person id is 1–32 lowercase letters, digits, `-` or `_`; `owner` is reserved.
+
+- **Recognised on Discord and GitHub (IDENTITY-14).** Chat, button picks, `/session start` and `/work` add the declared person to the acting-user block (`declared_person`, the declared `display_name` — it wins over the Discord name — `nicknames`, `github`); WATCH opens the run prompt with a `[Corvidinho acting GitHub user …]` block for the commenter. Once anyone is declared, an undeclared speaker is marked `declared_person: none`. The owner is always a person: the declared entry holding the owner's Discord id, else a built-in `owner` entry from `[owner]` / env (its GitHub login counts on GitHub). With nobody declared, the Discord block is exactly as before.
+- **Stable ids only (IDENTITY-7).** Matching uses the Discord user id, the GitHub numeric id and the GitHub login — never a display name or nickname. A login is not trusted when GitHub reports a different numeric id than the person declared (renamed / reused login). An id linked to two people matches nobody (and `/admin people link` refuses to create that).
+- **Only the owner changes links, never through chat (IDENTITY-6).** Edit the file on the VM, or use `/admin people …` (owner-only, handler re-check, SAFE-5 audit rows `admin-people-add|link|unlink|remove`, surface `discord:admin`, fail closed without a trail). No plugin or chat path writes people; keep the allowlist file outside project folders (the default `~/.config/corvidinho/`), where the model's file tools cannot reach it.
+- **Live.** People are read from the allowlist file this process loaded (the file `[owner]` comes from), re-read on every message, slash run and WATCH event, so a change applies without a restart. A bridge that started without a file reads the file its first `/admin people` change writes.
+- **Fail closed.** An entry with an unreadable value is skipped whole and listed as a problem in `/admin people list` / `/admin config show`; `/admin people` will not edit it (fix it on the VM). TOML edits rewrite only that person's keys; its header, comments and unread keys, and every other line of the file, stay verbatim.
 
 ```mermaid
 flowchart TD
@@ -98,7 +114,7 @@ flowchart TD
 
 ### Memory (no slash)
 
-MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite in the data dir (`CORVIDINHO_DATA_DIR`, default `~/.local/share/corvidinho/`; shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); no owner configured = nobody is ADMIN (IDENTITY-3). The acting user and ADMIN come only from the env the bridge sets per spawn (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`) — never from tool argv (`--user` / `--admin` / `--db` are refused). Forget/override are two-phase (**SAFE-4**): the first call returns a confirm token (no content); `--confirm TOKEN` must come from a new turn within 10 minutes, and the token must be typed by the human. They are dangerous, so the model is offered them only in the owner's (ADMIN) chat and only when `CORVIDINHO_ALLOWLIST` names them (CLI-3 / SAFE-1, [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.3); a non-owner's chat never gets them (ROLES-CHAT-2). The operator path `corvidinho plugins run memory-forget …` (with the acting env set) still works. There is no slash command for them; `/admin` (#43 / #147) covers allowlists only.
+MEMORY-1..4 / MEMORY-ACL-1..5: local SQLite in the data dir (`CORVIDINHO_DATA_DIR`, default `~/.local/share/corvidinho/`; shared with sessions/schedules). No `/memory` slash — agent plugins `memory-store` / `memory-recall` / `memory-forget` / `memory-override`. Forget/override (including self-forget) re-check ADMIN at handler time (**DISCORD-7** / **ADMIN-4**); no owner configured = nobody is ADMIN (IDENTITY-3). The acting user and ADMIN come only from the env the bridge sets per spawn (`CORVIDINHO_ACTING_DISCORD_USER_ID` / `CORVIDINHO_ACTING_IS_ADMIN`) — never from tool argv (`--user` / `--admin` / `--db` are refused). Forget/override are two-phase (**SAFE-4**): the first call returns a confirm token (no content); `--confirm TOKEN` must come from a new turn within 10 minutes, and the token must be typed by the human. They are dangerous, so the model is offered them only in the owner's (ADMIN) chat and only when `CORVIDINHO_ALLOWLIST` names them (CLI-3 / SAFE-1, [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.3); a non-owner's chat never gets them (ROLES-CHAT-2). The operator path `corvidinho plugins run memory-forget …` (with the acting env set) still works. There is no slash command for them; `/admin` (#43 / #147, #36) covers allowlists and declared people only.
 
 ---
 
@@ -206,6 +222,7 @@ flowchart TD
 - Presence: `src/discord/presence.ts`
 - Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
 - Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
+- Declared people: `src/identity/people.ts` (reader + `resolvePerson`), `src/discord/admin-people.ts` (`/admin people` writer), `src/discord/identity-inject.ts` (Discord block), `src/watch/router.ts` (WATCH block)
 - Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
 - Button asks (DISCORD-ASK): `src/discord/ask-buttons.ts`; thin acks / cancel (AUTONOMY-5/6): `src/discord/thin-ack.ts`
 - Identity + memory inject (IDENTITY-4 / AGENT-7): `src/discord/identity-inject.ts`, `memory-inject.ts` — chat, button-pick, `/session start` and `/work` runs get the acting user's id plus their Discord display name or username when known (owner map display wins for the owner)
