@@ -1,6 +1,6 @@
 ---
 id: security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win
-state: draft
+state: implementing
 type: feature
 base_commit: 0f2e2c2774635d1dcbdff599cba92dbecf8eebd9
 ---
