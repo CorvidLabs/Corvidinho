@@ -54,6 +54,9 @@ files:
   - src/discord/bridge.ts
   - tests/discord.login-failure.test.ts
   - src/discord/thinking-status.ts
+  - src/discord/rich-reply.ts
+  - tests/discord.rich-reply.unit.test.ts
+  - tests/discord.rich-replies.test.ts
   - src/discord/slash-finish.ts
   - src/discord/slash-commands.ts
   - src/discord/register-commands.ts
@@ -435,17 +438,45 @@ role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
 SAFE-5 audited like the other people mutations; `/admin people list` shows
 each role and `config show` counts them.
 
-`ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
-and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
-Final chat reply content remains human text only (DISCORD-3.a).
-`ThinkingStatus.finalizeContent` takes optional `extras` (`plumbing`, `model`)
-and `failed`: a final answer (no `components`) keeps a footer-only embed from
-`buildAnswerFooterEmbed` (`model | plumbing`, done or error color; null when
-neither is known), a Choose stub (`components`) carries none, and a later
-re-edit keeps the first footer and outcome (REQ-discord-457). The bridge chat
+`ThinkingStatus` accepts optional `model`, `plumbing` and `showUsage`; footer
+shows model and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/
+`attempts`); the live token use (`~tok`) shows only when `showUsage` (the
+acting user is the owner, DISCORD-15.a; default false). Final chat reply
+content remains human text only (DISCORD-3.a).
+`ThinkingStatus.finalizeContent` takes optional `extras` (`AnswerExtras`:
+`plumbing`, `model`, `spend`) and `failed`: a final answer (no `components`)
+keeps a footer-only embed from `buildAnswerFooterEmbed`
+(`formatAnswerFooter`: `model | [tokens | cost |] time | plumbing`, done or
+error color; tokens and cost only when `extras.spend` is given, which callers
+do for the owner's runs only, `tokens unknown` / `cost unknown` when not
+known, never $0 — DISCORD-15/15.a, SAFE-16), a Choose stub (`components`)
+carries none, and a later re-edit keeps the first footer (time frozen by
+`elapsedMs` / `answerFooter`) and outcome (REQ-discord-457). The bridge chat
 and button-pick paths and `finishSlashWithThinking` pass the run's
-`thinkExtras` and the same failed/done outcome as their fallback status.
+`thinkExtras` (with `spend: answerSpendFor(result.usage, model)` when
+`isOwnerDiscord(owner, actor)`) and the same failed/done outcome as their
+fallback status; their fallback replies carry `answerFooter` on the last part.
 `DiscordEmbedPayload.description` is optional (omitted on that embed).
+
+Rich replies (REQ-discord-075, DISCORD-16): `src/discord/rich-reply.ts`
+exports `DISCORD_MESSAGE_MAX` (2000), `DISCORD_EMBED_DESCRIPTION_MAX` (4096),
+`DISCORD_ANSWER_MAX` (6000), `splitDiscordMessage` (fence-safe line split,
+role note kept whole in the last part), `readsBetterAsEmbed` /
+`planAnswerParts` (scrub first, SAFE-6; one plain message within 2000, one
+embed for long plain prose with no fence or mention, else split parts with the
+footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
+with the answer's mentions, later parts reply to nothing and allow only users
+first mentioned in them) and `answerSpendFor` (tokens and cost from the run's
+`usage` and `priceForModel`). `finalizeContent` edits the first part into the
+progress message, posts later parts with the optional
+`ThinkingOutbound.sendMessage` (no pings; wired to the gateway reply) and
+returns `FinalizedAnswer { messageId, messageIds, complete }`; a re-edit edits
+only changed parts. `finishSlashWithThinking` takes optional `post` for the
+parts after the deferred reply; `finishSlashWithOwnerNotice` appends the
+notice without cutting a split answer. The Discord spawn client passes
+`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`; the
+gateway `reply` takes an optional `embed`, and gateway / slash adapters cap
+content at 2000.
 
 Listing scope (REQ-discord-418, SESSION-MULTI-1 / IDENTITY-2/3):
 `src/discord/list-scope.ts` exports `actorIsAdmin` (the acting user resolves

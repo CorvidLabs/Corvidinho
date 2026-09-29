@@ -6,7 +6,7 @@
  * protocol lockstep (DISCORD-10).
  */
 
-import type { HumanAsk, SpendWarning } from "../agent/types.ts";
+import type { AgentTokenUsage, HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
@@ -140,6 +140,11 @@ export type AgentSpawnResult = {
   ask?: HumanAsk;
   /** SAFE-8: this run crossed 80% of the daily spend cap (validated amounts). */
   spendWarning?: SpendWarning;
+  /**
+   * Provider-reported token usage of the run (last `usage` frame), when any
+   * arrived — priced for the owner's answer footer (DISCORD-15/15.a).
+   */
+  usage?: AgentTokenUsage;
   /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).

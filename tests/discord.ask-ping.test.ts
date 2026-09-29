@@ -33,6 +33,14 @@ import { Database as SqliteDatabase } from "bun:sqlite";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { openWorkPr } from "../src/work/pr.ts";
 
+/** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
+function answerFooterText(before: string, after?: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return expect.stringMatching(
+    new RegExp(`^${esc(before)} \\| \\d+s${after ? ` \\| ${esc(after)}` : ""}$`),
+  );
+}
+
 const OWNER_ID = "111122223333444455";
 const OWNER = { discordId: OWNER_ID, display: "Leif" };
 const CLARIFY: HumanAsk = { reason: "clarify", question: "Postgres or SQLite?" };
@@ -209,7 +217,7 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     // DISCORD-3.a — a free-text question is the turn's answer: footer-only embed.
     expect(edit!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
-      footer: { text: loadLlmEnv(process.env).model },
+      footer: { text: answerFooterText(loadLlmEnv(process.env).model) },
     });
 
     const session = result.store.getByBotMessage(edit!.messageId);
@@ -237,7 +245,7 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     // DISCORD-3.a — a stuck ask shows as a failure in the footer-only embed.
     expect(edit!.embed).toStrictEqual({
       color: THINKING_COLORS.error,
-      footer: { text: loadLlmEnv(process.env).model },
+      footer: { text: answerFooterText(loadLlmEnv(process.env).model) },
     });
     await result.stop();
   });

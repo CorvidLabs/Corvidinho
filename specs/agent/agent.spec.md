@@ -72,7 +72,11 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
-totals; `extractUsage` reads OpenAI-compatible `usage`.
+totals; `extractUsage` reads OpenAI-compatible `usage`. `collectTaskRunStream`
+returns the last `usage` frame as `usage` (the Discord answer footer prices
+it, DISCORD-15) and takes an optional `bodyMax` for the result-frame chat body
+(default `CHAT_BODY_MAX`, 1800; the Discord spawn client passes a larger cap
+and splits the answer itself, DISCORD-16).
 
 Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
 `TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`),
@@ -175,7 +179,8 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 
-`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
+`task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult` (optional
+`max`, default `CHAT_BODY_MAX` 1800), and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
 `ROLE_REFUSED_SUMMARY_NOTE` and `clipKeepingRoleNote` (REQ-agent-333). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never

@@ -27,6 +27,14 @@ import {
 import { WorkStore } from "../src/discord/work-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 
+/** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
+function answerFooterText(before: string, after?: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return expect.stringMatching(
+    new RegExp(`^${esc(before)} \\| \\d+s${after ? ` \\| ${esc(after)}` : ""}$`),
+  );
+}
+
 function initGitRepo(dir: string): void {
   mkdirSync(dir, { recursive: true });
   const run = (args: string[]) => {
@@ -197,10 +205,14 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       expect(contentEdits.length).toBe(1);
       expect(contentEdits[0]!.content ?? "").toContain("Ship ASK-7 slash");
       expect(contentEdits[0]!.content ?? "").toContain("echo:");
-      // DISCORD-3.a — the answer keeps a footer-only embed (model; echo has no task).
+      // DISCORD-3.a / DISCORD-15 — the answer keeps a footer-only embed (model;
+      // echo has no task). The owner's run shows tokens and cost: echo reports
+      // no usage, so both are unknown, never 0 / $0.
       expect(contentEdits[0]!.embed).toStrictEqual({
         color: THINKING_COLORS.success,
-        footer: { text: loadLlmEnv(process.env).model },
+        footer: {
+          text: answerFooterText(`${loadLlmEnv(process.env).model} | tokens unknown | cost unknown`),
+        },
       });
       expect(getDeleted()).toBe(1);
       // Deferred reply not filled with the full body.
@@ -261,7 +273,11 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       expect(contentEdits[0]!.embed).toStrictEqual({
         color: THINKING_COLORS.error,
         footer: {
-          text: `${loadLlmEnv(process.env).model} | state=failed verified=false cancelled attempts=3`,
+          // DISCORD-15: the owner's run adds tokens and cost (unknown here).
+          text: answerFooterText(
+            `${loadLlmEnv(process.env).model} | tokens unknown | cost unknown`,
+            "state=failed verified=false cancelled attempts=3",
+          ),
         },
       });
       const [session] = store.list();

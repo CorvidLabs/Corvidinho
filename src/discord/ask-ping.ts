@@ -26,7 +26,7 @@ import { defangMassMentions } from "./allowed-mentions.ts";
 
 export { defangMassMentions };
 
-/** Discord hard limit is 2000; the gateway slices at 1900. */
+/** Ask posts stay under Discord's 2000 limit with room to spare. */
 export const ASK_REPLY_MAX = 1900;
 /** Run-summary chars a `/work`, `/session start` or schedule post shows. */
 export const POST_SUMMARY_MAX = 1500;
@@ -189,17 +189,24 @@ export function formatSpendWarningReply(
 
 /**
  * A post with the SAFE-8 80% warning line appended (owner added to the
- * allowed mentions). Returns `post` unchanged when there is no warning.
+ * allowed mentions), cut to `max` (default ASK_REPLY_MAX; a chat answer the
+ * bridge splits into messages passes its whole-answer cap, DISCORD-16).
+ * Returns `post` unchanged when there is no warning.
  */
 export function withSpendWarningPost<
   T extends { content: string; mentionUserIds?: string[] },
->(post: T, warning: SpendWarning | undefined, owner: OwnerRecord | null | undefined): T {
+>(
+  post: T,
+  warning: SpendWarning | undefined,
+  owner: OwnerRecord | null | undefined,
+  max: number = ASK_REPLY_MAX,
+): T {
   if (!warning) return post;
   const w = formatSpendWarningReply(warning, owner);
   const ids = [...new Set([...(post.mentionUserIds ?? []), ...w.mentionUserIds])];
   return {
     ...post,
-    content: appendPostLine(post.content, w.line),
+    content: appendPostLine(post.content, w.line, max),
     ...(ids.length ? { mentionUserIds: ids } : {}),
   };
 }
