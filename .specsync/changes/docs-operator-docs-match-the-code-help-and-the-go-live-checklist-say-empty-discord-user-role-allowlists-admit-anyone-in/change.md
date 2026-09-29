@@ -1,6 +1,6 @@
 ---
 id: docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in
-state: approved
+state: implementing
 type: documentation
 base_commit: 310861f81c5fb0314447109b959b8f37fb323578
 ---

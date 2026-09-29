@@ -90,6 +90,8 @@ Help/STATUS/README SHALL document bot-VM allowlist file + env overlays, default-
 Acceptance Criteria
 - `corvidinho --help` mentions allowlist file/env vars.
 - STATUS/README note how to set allowlists on the bot VM; wallets deferred.
+- `corvidinho --help` says an empty Discord channel list refuses start, users and roles both empty admit anyone in an allowlisted channel, and once either is set only those users, role holders and the owner (REQ-discord-043); no `--help` row naming the Discord `_USERS` / `_ROLES` allowlists says empty = refuse or deny-all.
+- `.env.example` gives an absolute `CORVIDINHO_ALLOWLIST_FILE` example and says `~` is not expanded (a systemd `EnvironmentFile` and Bun's `.env` keep it as-is) and that unset already reads `~/.config/corvidinho/allowlist.toml|json`; no operator doc sets the variable to a `~` path.
 
 ### REQ-cli-006
 
@@ -444,6 +446,7 @@ Acceptance Criteria
 - After `kill -9` of a daemon mid-run, the next start records that run as failed (`interrupted: process restarted`), removes its worktree and branch, and logs `daemon.recovered`.
 - Start removes a leftover worktree of a run already recorded as failed and leaves worktrees with other names alone.
 - Start never touches a schedule-run worktree whose run another data dir owns, even when the daemon's project root is that worktree: its uncommitted files and branch stay.
+- The `docs/DAEMON.md` Logs table has a row for every event `src/daemon/daemon.ts` logs, including `daemon.start_failed` (start refused, exit 1, `message` gives the reason) and `spend.warning` (warn, `spentMicroUsd`, `capMicroUsd`, `percent`).
 
 ### REQ-cli-112
 
