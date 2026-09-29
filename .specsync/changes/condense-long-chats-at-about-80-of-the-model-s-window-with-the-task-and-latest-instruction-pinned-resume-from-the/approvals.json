@@ -1,0 +1,67 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790697262,
+      "digest": "e2ece208c6970891bbcd8ed1ec98d6c2737d53bfff75cdc8d45dc3bfb6a2d702",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the",
+        "title": "Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72)",
+        "description": "Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "STATUS.md",
+          "docs/BOX-UPDATE.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "src/discord/session-store.ts",
+          "src/discord/session-thread.ts",
+          "src/store/conversation.ts",
+          "src/store/db.ts",
+          "src/store/index.ts",
+          "src/store/scrub.ts",
+          "src/watch/poller.ts",
+          "src/watch/session-store.ts",
+          "tests/discord.session-resume.test.ts",
+          "tests/discord.session-thread.unit.test.ts",
+          "tests/scheduler.ask-outbox.test.ts",
+          "tests/session.condense.test.ts",
+          "tests/store.conversation.test.ts",
+          "tests/watch.conversation.test.ts",
+          "tests/watch.session-store.durable.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "When a Discord session's prompt (replayed conversation plus the new message) reaches about 80% of the model's context window (CORVIDINHO_LLM_CONTEXT_TOKENS, default 8192 tokens, chars/4, never past the 32000-char transport ceiling) the oldest turns fold into a scrubbed summary stored with the session while the opening request and the newest human turn stay word for word; after a restart or with a smaller window the prompt picks up from that summary; after the soft TTL the user's reply to one of the session's answers, or their message in its thread, passes the channel, actor and mute gates and starts a new session seeded with the old session's summary and last turns instead of no answer; each Discord conversation and each WATCH issue or PR thread keeps its summary and last 20 turns scrubbed for 30 days after its last update in schema v12 conversation_threads and is then purged; WATCH follow-ups on the same issue or PR get that thread's conversation replayed; SessionStore.forgetConversations and forgetConversations(db, person) delete a person's conversations; tests/session.condense.test.ts, tests/store.conversation.test.ts, tests/discord.session-resume.test.ts and tests/watch.conversation.test.ts cover each and fail on the base sources"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "a8d75efd197f42325c70e797915cc70571afa4df5abdc6ee8b7c1ddf8cd1335c",
+        "watch": "3f4163537ce0b4428b5a9af72210d78171477ff5c65cc3954179e6d6b7026c58"
+      }
+    }
+  ],
+  "reopenings": []
+}
