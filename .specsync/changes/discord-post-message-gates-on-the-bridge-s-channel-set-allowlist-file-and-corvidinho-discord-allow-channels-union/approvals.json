@@ -1,0 +1,45 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790696333,
+      "digest": "c70399c108881615f3ffb8182f84fec074edc63ec9c05b4997b5a47e5d26f8fd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union",
+        "title": "Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win",
+        "description": "discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "plugins/discord/index.ts",
+          "specs/discord/testing.md",
+          "specs/plugins/testing.md",
+          "tests/discord.post.plugin.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "discord-post-message gates its --channel on the same channel set as the bridge and daemon (mergeChannelIds: allowlist file [discord].channels + CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so with no allowlist file, CORVIDINHO_DISCORD_ALLOW_CHANNELS unset and DISCORD_CHANNEL_IDS=111 a dry-run post to 111 succeeds (exit 0) and a post to a channel in no list is still refused (exit 3, not allowlisted); CORVIDINHO_DISCORD_DENY_CHANNELS=111 on top still refuses the post to 111 with exit 3 (deny wins); a malformed allowlist file still refuses (fail closed); the DISCORD_CHANNEL_IDS-only regression test fails on the base and passes after"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "f4642618abd6e076d6fc104adf4e4324376a58ae274a96f5f2c656adf82abe34",
+        "plugins": "7b94daedc74ef04fb7515050986494b91c0016f83264c0247c5068bc2687f11d"
+      }
+    }
+  ],
+  "reopenings": []
+}

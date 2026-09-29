@@ -20,6 +20,13 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
   tier clamp, long decision kept past the chat-body cap, failed chair, council time cap, one-at-a-time limiter, non-ADMIN
   `runPlugin` refusal (`tests/autonomous.council.test.ts`, REQ-plugins-118).
 
+## discord-post-message (REQ-plugins-009)
+
+`tests/discord.post.plugin.test.ts` — dangerous listing, SAFE-1 deny, empty
+channel allowlist refused, and the channel gate uses the bridge's set: a
+channel only in `DISCORD_CHANNEL_IDS` posts (dry run), a channel in no list
+and a deny-listed channel are refused with exit 3.
+
 ## discord-user-lookup (REQ-plugins-312)
 
 `tests/discord.user-lookup.test.ts` — see also discord testing companion.
