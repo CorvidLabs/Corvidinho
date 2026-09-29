@@ -29,6 +29,7 @@ files:
   - src/allowlist/discord.ts
   - src/allowlist/index.ts
   - tests/allowlist.toml-multiline.test.ts
+  - tests/allowlist.tilde-path.test.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/ciStatus.ts
@@ -134,7 +135,11 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
-HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
+HEAR. `resolveAllowlistPath(env, home)` returns `CORVIDINHO_ALLOWLIST_FILE`
+with a leading `~` or `~/` read as `home` (`~user` and every other value as
+written), else the first default path that exists; the loader, owner loader,
+`/admin` writer and doctor all resolve the file through it. File/search
+plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 Shell plugins register via `loadShellPlugins` (`shell-exec`). Language
 runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
 which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`
