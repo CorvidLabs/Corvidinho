@@ -14,12 +14,15 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BACKUP_KEEP,
+  backupDirRefusal,
   type BackupLog,
   type BackupNotify,
   checkDbFile,
@@ -27,6 +30,7 @@ import {
   createBackupTicker,
   formatBackupNotice,
   listSnapshots,
+  markBackupRunning,
   pendingBackupNotices,
   processesHolding,
   readBackupStatus,
@@ -38,6 +42,7 @@ import {
   takeSnapshot,
 } from "../src/store/backup.ts";
 import { readProcStart } from "../src/daemon/lock.ts";
+import { AnnounceStore } from "../src/discord/announce-store.ts";
 import { backupDoctorCheck } from "../src/doctor.ts";
 import { openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
 
@@ -187,6 +192,36 @@ describe("snapshot (OPS-1)", () => {
     const onFile = takeSnapshot(db, file, { now: at() });
     expect(onFile.ok).toBe(false);
     if (!onFile.ok) expect(onFile.error).toContain("is not a directory");
+  });
+
+  test("refuses a symlink that points into a git work tree, and a dir not created yet below it", () => {
+    const { db } = liveDb();
+    const repo = tempDir();
+    mkdirSync(join(repo, ".git"));
+    mkdirSync(join(repo, "backups"));
+    const link = join(tempDir(), "backups-link");
+    symlinkSync(join(repo, "backups"), link);
+    const r = takeSnapshot(db, link, { now: at() });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("inside the git work tree");
+    expect(readdirSync(join(repo, "backups"))).toEqual([]);
+    expect(backupDirRefusal(join(link, "later"))).toContain("inside the git work tree");
+  });
+
+  test("removes a crashed run's leftover temp snapshot, never a recent one or other files", () => {
+    const { db } = liveDb();
+    const dir = tempDir();
+    const stale = join(dir, ".corvidinho-20260920T030000Z.db.tmp");
+    const recent = join(dir, ".corvidinho-20260928T030000Z.db.tmp");
+    const other = join(dir, ".notes.tmp");
+    for (const f of [stale, recent, other]) writeFileSync(f, "private rows");
+    const twoHoursAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+    utimesSync(stale, twoHoursAgo, twoHoursAgo);
+    utimesSync(other, twoHoursAgo, twoHoursAgo);
+    expect(takeSnapshot(db, dir, { now: at() }).ok).toBe(true);
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(recent)).toBe(true);
+    expect(existsSync(other)).toBe(true);
   });
 });
 
@@ -501,6 +536,91 @@ describe("nightly ticker (OPS-1/2)", () => {
     expect(status.restoreTest.lastError).toBeTruthy();
   });
 
+  test("a run a dead process left unfinished is recorded as a failure and told once; a live one is left alone", async () => {
+    const { db } = liveDb();
+    const env = { CORVIDINHO_BACKUP_DIR: tempDir() };
+    const { log, lines } = memoryLog();
+    const told: string[] = [];
+    const ticker = createBackupTicker({
+      db,
+      env,
+      log,
+      notify: async (n) => {
+        told.push(n.content);
+        return true;
+      },
+      tmpRoot: tempDir(),
+    });
+    const running = () =>
+      (db.query("SELECT value FROM schema_meta WHERE key = 'ops_backup_running'").get() as {
+        value: string;
+      } | null)?.value ?? null;
+
+    // Still running in a live process (this one): not a failure.
+    markBackupRunning(db, "backup", at(0));
+    ticker.tick(at(0, 2)); // before 03:00: nothing to claim tonight
+    await ticker.settle();
+    expect(lines).toEqual([]);
+    expect(running()).not.toBeNull();
+
+    // Its process is gone (the pid now belongs to a process started later).
+    db.run("UPDATE schema_meta SET value = ? WHERE key = 'ops_backup_running'", [
+      JSON.stringify({ job: "restore_test", at: at(0), pid: process.pid, procStart: "an-earlier-process" }),
+    ]);
+    ticker.tick(at(0, 2, 10));
+    await ticker.settle();
+    expect(events(lines)).toEqual(["restore_test.failed", "restore_test.owner_told"]);
+    expect(lines[0]!.level).toBe("error");
+    expect(lines[0]!.fields.interrupted).toBe(true);
+    expect(String(lines[0]!.fields.error)).toContain("interrupted: the process stopped during the restore test");
+    expect(told).toHaveLength(1);
+    expect(told[0]).toContain("The restore test failed");
+    expect(readBackupStatus(db).restoreTest.failingSince).toBe(at(0, 2, 10));
+    expect(running()).toBeNull();
+
+    // Taken once; tonight's run then clears its own marker and ends the streak.
+    ticker.tick(at(0, 2, 20));
+    await ticker.settle();
+    expect(lines).toHaveLength(2);
+    ticker.tick(at(0));
+    await ticker.settle();
+    expect(events(lines).slice(2)).toEqual(["backup.ok", "restore_test.ok"]);
+    expect(lines[3]!.fields.recovered).toBe(true);
+    expect(running()).toBeNull();
+  });
+
+  test("shutdown: a notice whose post outlasts the grace is handed back, never lost", async () => {
+    const { db } = liveDb();
+    let finish: (sent: boolean) => void = () => {};
+    const posts: string[] = [];
+    const ticker = createBackupTicker({
+      db,
+      env: { CORVIDINHO_BACKUP_DIR: "relative/dir" },
+      log: () => {},
+      notify: (n) => {
+        posts.push(n.content);
+        return new Promise<boolean>((done) => {
+          finish = done;
+        });
+      },
+    });
+    ticker.tick(at(0));
+    expect(posts).toHaveLength(1);
+    expect(pendingBackupNotices(db)).toEqual([]); // taken; its post is in flight
+    ticker.stop();
+    expect(await ticker.settle(20)).toBe(false);
+    // Handed back: the next start posts it.
+    expect(pendingBackupNotices(db)).toEqual([{ job: "backup", at: at(0) }]);
+    // Stopped: a late tick takes nothing and runs nothing.
+    ticker.tick(at(1));
+    expect(posts).toHaveLength(1);
+    expect(readBackupStatus(db).night).toBe("2026-09-29");
+    // The post did go out after all: taken again, so it is not repeated.
+    finish(true);
+    expect(await ticker.settle()).toBe(true);
+    expect(pendingBackupNotices(db)).toEqual([]);
+  });
+
   test("the night claim is per local day and per data dir", () => {
     const { db } = liveDb();
     expect(claimBackupNight(db, at(0, 1))).toBe(false);
@@ -540,9 +660,18 @@ describe("doctor (OPS-1: no backup when unset, doctor says so)", () => {
     const { db } = liveDb();
     const dir = join(tempDir(), "later");
     const env = { CORVIDINHO_BACKUP_DIR: dir };
+    // OPS-1 "I'm told": the notice only goes to the /announce channel, so
+    // doctor warns until one is set (and still never fails).
+    const unannounced = backupDoctorCheck(env, { db });
+    expect(unannounced).toMatchObject({ ok: true, mark: "warn" });
+    expect(unannounced.detail).toContain(
+      "no /announce channel set, so a failed backup or restore test is not posted to the owner",
+    );
+    new AnnounceStore(db).setChannelId("announce-1");
     const fresh = backupDoctorCheck(env, { db });
     expect(fresh).toMatchObject({ ok: true });
     expect(fresh.mark).toBeUndefined();
+    expect(fresh.detail).not.toContain("/announce");
     expect(fresh.detail).toContain(`${dir} (created on the first backup)`);
     expect(fresh.detail).toContain("0 snapshot(s)");
     expect(fresh.detail).toContain("no backup yet");

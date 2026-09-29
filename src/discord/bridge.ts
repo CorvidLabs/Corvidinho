@@ -110,7 +110,7 @@ import {
   recoverInterruptedReplies,
   type InflightReply,
 } from "./inflight-replies.ts";
-import { consoleBackupLog, createBackupTicker } from "../store/backup.ts";
+import { type BackupTicker, consoleBackupLog, createBackupTicker } from "../store/backup.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
 import {
@@ -1418,13 +1418,14 @@ export async function startBridge(
     });
 
   let scheduler: SchedulerService | null = null;
+  let backup: BackupTicker | undefined;
   if (!opts.disableScheduler) {
     // OPS-1/2 (#68): nightly backup + restore test on the scheduler tick
     // (CORVIDINHO_BACKUP_DIR; off when unset). A failure tells the owner once
     // per failure streak: fixed text in the announcements channel
     // (DISCORD-ANNOUNCE) with only the owner pinged; with no channel set the
     // notice waits (logged once, shown by doctor) and is retried every tick.
-    const backup = db
+    backup = db
       ? createBackupTicker({
           db,
           env,
@@ -1532,6 +1533,9 @@ export async function startBridge(
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       scheduler?.stop();
+      // OPS-1: no further backup notice is taken; one in flight is waited
+      // for below, and handed back if it outlasts the grace (never lost).
+      backup?.stop();
       if (scheduler) {
         // REQ-discord-346: like the daemon, a schedule run still going is
         // recorded failed and its agent tree killed, then gets a short
@@ -1550,6 +1554,7 @@ export async function startBridge(
         // or handed back for the next start, not left taken and unposted.
         await scheduler.settleAskDelivery(ABANDONED_SETTLE_MS);
       }
+      await backup?.settle(ABANDONED_SETTLE_MS);
       await gateway.stop();
     },
   };

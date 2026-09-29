@@ -37,6 +37,7 @@ import {
   resolveAllowlistPath,
 } from "./allowlist/load.ts";
 import type { AllowlistConfig } from "./allowlist/types.ts";
+import { AnnounceStore } from "./discord/announce-store.ts";
 import { mergeChannelIds } from "./discord/config.ts";
 import {
   BACKUP_DIR_ENV,
@@ -717,10 +718,16 @@ export function backupDoctorCheck(
   // History from the shared DB, opened read-only (never created or migrated
   // here); no DB file yet means no history.
   let status: BackupStatus | null = null;
+  // OPS-1 "I'm told": a failure notice is posted only to the /announce channel.
+  let announceSet = false;
+  const readState = (db: Database) => {
+    status = readBackupStatus(db);
+    announceSet = new AnnounceStore(db).getChannelId() !== null;
+  };
   let noDb = false;
   if (opts.db) {
     try {
-      status = readBackupStatus(opts.db);
+      readState(opts.db);
     } catch {
       status = null;
     }
@@ -730,7 +737,7 @@ export function backupDoctorCheck(
     let ro: Database | undefined;
     try {
       ro = new Database(defaultDbPath({ env }), { readonly: true });
-      status = readBackupStatus(ro);
+      readState(ro);
     } catch {
       status = null;
     } finally {
@@ -750,7 +757,9 @@ export function backupDoctorCheck(
     parts.push("no backup yet (no corvidinho.db in the data dir yet)");
     return { name, ok: true, detail: parts.join(" — ") };
   }
-  if (!status) {
+  // Read into a const: TS does not see the closure assignment above.
+  const st = status as BackupStatus | null;
+  if (!st) {
     parts.push("backup history unreadable (data dir)");
     return { name, ok: true, mark: "warn", detail: parts.join(" — ") };
   }
@@ -759,7 +768,7 @@ export function backupDoctorCheck(
       ? "owner not told yet (needs the Discord bridge with an announcements channel set)"
       : "owner told";
   let ok = true;
-  const b = status.backup;
+  const b = st.backup;
   if (b.failingSince !== null) {
     ok = false;
     parts.push(
@@ -768,7 +777,7 @@ export function backupDoctorCheck(
   } else {
     parts.push(b.lastOkAt !== null ? `last backup ok ${utcMinute(b.lastOkAt)}` : "no backup yet");
   }
-  const t = status.restoreTest;
+  const t = st.restoreTest;
   if (t.failingSince !== null) {
     ok = false;
     parts.push(
@@ -776,6 +785,12 @@ export function backupDoctorCheck(
     );
   } else {
     parts.push(t.lastOkAt !== null ? `restore test ok ${utcMinute(t.lastOkAt)}` : "no restore test yet");
+  }
+  if (!announceSet) {
+    ok = false;
+    parts.push(
+      "no /announce channel set, so a failed backup or restore test is not posted to the owner (set one with `/announce channel`)",
+    );
   }
   return ok ? { name, ok: true, detail: parts.join(" — ") } : fail(parts.join(" — "));
 }

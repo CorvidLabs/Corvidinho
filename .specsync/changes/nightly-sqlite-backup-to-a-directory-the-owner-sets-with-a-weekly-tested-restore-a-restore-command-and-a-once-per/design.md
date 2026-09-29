@@ -26,6 +26,15 @@ artifact: design
   when no snapshot yet), records + logs, then delivers pending notices through
   `notify` (one pass in flight; fixed text `formatBackupNotice`; hand back
   and `owner_not_told` once when not sent). Never throws.
+- Review fixes: `backupDirRefusal` also checks the path with the nearest
+  existing ancestor's symlinks resolved; `takeSnapshot` removes our own
+  snapshot temp files older than an hour; `ops_backup_running` marks the
+  night's job (pid + process start) and `takeInterruptedBackupRun` records a
+  dead process's unfinished run as that job's failure; the ticker has
+  `stop()` and `settle(timeoutMs)` (hands the in-flight notice back on a
+  timeout), and the bridge's `stop()` uses both; the daemon ticks the backup
+  on a `tick.allowlist_failed` tick; doctor warns while no `/announce`
+  channel is set.
 - `SchedulerService`: optional `backup`, called in `tick()` after runs are
   claimed. Daemon: `createBackupTicker({ db, env, log })` (no notify),
   `backup` field on `daemon.started`, `now` test seam. Bridge: ticker with

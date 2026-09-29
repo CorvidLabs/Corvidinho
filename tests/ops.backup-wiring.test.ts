@@ -174,6 +174,28 @@ describe("corvidinho daemon (OPS-1/2)", () => {
     expect(meta(db, "ops_backup_notice")).toBe(String(NIGHT));
   });
 
+  test("an allowlist file that stops loading skips the schedules but not the nightly backup", async () => {
+    const backupDir = join(tempDir(), "backups");
+    const { env } = fixture(backupDir);
+    const lines: Array<Record<string, unknown>> = [];
+    const d = await startDaemon({
+      env,
+      projectRoot: tempDir("corvidinho-backup-proj-"),
+      logger: createDaemonLogger({ write: (l) => lines.push(JSON.parse(l)) }),
+      agent: idleAgent,
+      useWorktrees: false,
+      now: () => NIGHT,
+    } as Parameters<typeof startDaemon>[0]);
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+    writeFileSync(env.CORVIDINHO_ALLOWLIST_FILE, '[discord]\nchannels = ["chan-a"\n');
+    await d.tick();
+    expect(lines.find((l) => l.event === "tick.allowlist_failed")).toMatchObject({ level: "error" });
+    expect(snapshots(backupDir)).toHaveLength(1);
+    expect(lines.find((l) => l.event === "backup.ok")).toMatchObject({ dir: backupDir });
+    await d.stop();
+  });
+
   test("unset CORVIDINHO_BACKUP_DIR: daemon.started says off and no backup runs", async () => {
     const { env } = fixture("");
     const lines: Array<Record<string, unknown>> = [];
@@ -197,7 +219,7 @@ describe("corvidinho daemon (OPS-1/2)", () => {
 describe("Discord bridge (OPS-1: I'm told if it fails)", () => {
   type Reply = { channelId: string; content: string; mentionUserIds?: string[] };
 
-  async function bridge(opts: { backupDir: string; announce?: string }) {
+  async function bridge(opts: { backupDir: string; announce?: string; hang?: boolean }) {
     const { db } = liveDb();
     if (opts.announce) new AnnounceStore(db).setChannelId(opts.announce);
     const replies: Reply[] = [];
@@ -220,6 +242,8 @@ describe("Discord bridge (OPS-1: I'm told if it fails)", () => {
       gatewayFactory: async (_cfg, handlers) => {
         handlers.reply = async (o) => {
           replies.push(o);
+          // `hang`: the post never completes (Discord slow or gone at shutdown).
+          if (opts.hang) return new Promise(() => {});
           return { messageId: `bot_${replies.length}` };
         };
         return createNullGateway();
@@ -244,6 +268,17 @@ describe("Discord bridge (OPS-1: I'm told if it fails)", () => {
     expect(meta(db, "ops_backup_notice")).toBeNull();
     expect(meta(db, "ops_backup_failing_since")).toBe(String(NIGHT));
   });
+
+  test("a stop while the owner notice is being posted hands it back for the next start", async () => {
+    const file = join(tempDir(), "not-a-dir");
+    writeFileSync(file, "x");
+    const { db, result, replies } = await bridge({ backupDir: file, announce: "announce-1", hang: true });
+    expect(await until(() => replies.length > 0)).toBe(true);
+    expect(meta(db, "ops_backup_notice")).toBeNull(); // taken; the post is in flight
+    await result.stop(); // waits the short shutdown grace, then hands it back
+    expect(replies).toHaveLength(1);
+    expect(meta(db, "ops_backup_notice")).toBe(String(NIGHT));
+  }, 20_000);
 
   test("with no announcements channel the notice is not posted anywhere and stays pending", async () => {
     const file = join(tempDir(), "not-a-dir");
@@ -344,13 +379,18 @@ describe("corvidinho backup list|restore and doctor (OPS-1/2)", () => {
   }, 30_000);
 
   test("without CORVIDINHO_BACKUP_DIR, backup says so and doctor warns that there is no nightly backup", async () => {
-    const { env } = fixture();
+    const { db, env } = fixture();
     const noDir = { ...env, CORVIDINHO_BACKUP_DIR: "" };
     const list = await cli(["backup", "list"], noDir);
     expect(list.code).toBe(1);
     expect(list.err).toContain("CORVIDINHO_BACKUP_DIR is not set");
     const doctor = await cli(["doctor"], noDir);
     expect(doctor.out).toContain("[warn] backup: off — CORVIDINHO_BACKUP_DIR is not set");
+    // Set, but no /announce channel: a failure would not reach the owner.
+    const unannounced = await cli(["doctor"], env);
+    expect(unannounced.out).toContain(`[warn] backup: ${env.CORVIDINHO_BACKUP_DIR} — 1 snapshot(s)`);
+    expect(unannounced.out).toContain("no /announce channel set");
+    new AnnounceStore(db).setChannelId("announce-1");
     const on = await cli(["doctor"], env);
     expect(on.out).toContain(`[ok] backup: ${env.CORVIDINHO_BACKUP_DIR} — 1 snapshot(s)`);
   }, 60_000);

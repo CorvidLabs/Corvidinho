@@ -28,8 +28,11 @@
  *    scrubbed). The first failure of a streak records an owner notice in
  *    `schema_meta`; a ticker that can post (the bridge) claims it and posts
  *    fixed text (never a host path or error text) with the owner pinged, and
- *    hands it back when the post does not go out. Later failures of the same
- *    streak are logged only; a success ends the streak.
+ *    hands it back when the post does not go out (or, at shutdown, outlasts
+ *    the grace). Later failures of the same streak are logged only; a success
+ *    ends the streak. A night's job whose process died before it finished
+ *    (crash, kill, power loss) is found by its `ops_backup_running` mark and
+ *    recorded as that job's failure, so it is told too.
  *  - Restore: a named snapshot (from `backup list`) is checked, copied to a
  *    temp file next to the target, fsynced and renamed over it. A target a
  *    process holds open (Linux /proc fd scan; for `corvidinho.db` also a
@@ -61,7 +64,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { isHolderAlive, daemonLockPath } from "../daemon/lock.ts";
+import { isHolderAlive, daemonLockPath, readProcStart } from "../daemon/lock.ts";
 import { migrateCorvidinhoDb, SCHEMA_VERSION } from "./db.ts";
 import { ensureScrubbed, formatErrorLine, scrubSecrets } from "./scrub.ts";
 
@@ -104,9 +107,29 @@ export function gitWorkTreeAbove(dir: string): string | null {
   }
 }
 
+/**
+ * `dir` with the symlinks of its nearest existing ancestor resolved (the
+ * parts below it, not created yet, appended as given).
+ */
+function realDirPath(dir: string): string {
+  const rest: string[] = [];
+  for (let cur = resolve(dir); ; ) {
+    try {
+      return join(realpathSync(cur), ...rest);
+    } catch {
+      const parent = dirname(cur);
+      if (parent === cur) return resolve(dir);
+      rest.unshift(basename(cur));
+      cur = parent;
+    }
+  }
+}
+
 /** Why `dir` cannot hold backups, or null when it can (it may not exist yet). */
 export function backupDirRefusal(dir: string): string | null {
-  const repo = gitWorkTreeAbove(dir);
+  // Checked on the path as given and with symlinks resolved, so a link that
+  // points into a repo is refused too.
+  const repo = gitWorkTreeAbove(dir) ?? gitWorkTreeAbove(realDirPath(dir));
   if (repo) {
     return `backup dir ${dir} is inside the git work tree ${repo} — snapshots hold private notes and must never be committed; choose a directory outside any repo`;
   }
@@ -169,6 +192,35 @@ export function listSnapshots(dir: string): SnapshotInfo[] {
     out.push({ name, path, takenAt: stampToMs(m[1]!, m[2]!), bytes });
   }
   return out.sort((a, b) => (a.name < b.name ? 1 : a.name > b.name ? -1 : 0));
+}
+
+/** Temp name a snapshot is written under before its rename. */
+const SNAPSHOT_TMP_RE = /^\.corvidinho-\d{8}T\d{6}Z\.db\.tmp$/;
+/** A snapshot temp file older than this is a crashed run's leftover. */
+const STALE_TMP_MS = 60 * 60 * 1000;
+
+/**
+ * Remove snapshot temp files a crashed or killed run left behind (they hold
+ * a copy of private rows and are never rotated). Only our own temp name, and
+ * only when older than an hour, so a run in progress is never touched.
+ */
+function removeStaleSnapshotTemps(dir: string): void {
+  let names: string[] = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!SNAPSHOT_TMP_RE.test(name)) continue;
+    const path = join(dir, name);
+    try {
+      const st = statSync(path);
+      if (st.isFile() && Date.now() - st.mtimeMs > STALE_TMP_MS) unlinkSync(path);
+    } catch {
+      // gone meanwhile, or not ours to remove
+    }
+  }
 }
 
 /** Delete all but the newest `keep` snapshots (never fewer than 1). Returns deleted names. */
@@ -307,6 +359,7 @@ export function takeSnapshot(
     withPrivateUmask(() => mkdirSync(dir, { recursive: true, mode: 0o700 }));
     if (existsSync(final)) return { ok: false, error: `${name} already exists in ${dir}` };
     rmSync(tmp, { force: true });
+    removeStaleSnapshotTemps(dir);
     // SAFE-6: the snapshot copies rows as stored; re-scrub first when the
     // rules tightened since this DB was opened (a no-op otherwise).
     ensureScrubbed(db);
@@ -597,6 +650,8 @@ export type BackupJob = "backup" | "restore_test";
 
 const NIGHT_KEY = "ops_backup_night";
 const LAST_SNAPSHOT_KEY = "ops_backup_last_snapshot";
+/** The nightly job in progress: `{ job, at, pid, procStart }` while it runs. */
+const RUNNING_KEY = "ops_backup_running";
 const key = (job: BackupJob, field: string) => `ops_${job}_${field}`;
 
 function getMeta(db: Database, k: string): string | null {
@@ -663,6 +718,54 @@ export function recordJobFailure(db: Database, job: BackupJob, now: number, erro
       return true;
     })
     .immediate();
+}
+
+/** Mark `job` as running in this process (cleared when the night's run ends). */
+export function markBackupRunning(db: Database, job: BackupJob, now: number): void {
+  setMeta(
+    db,
+    RUNNING_KEY,
+    JSON.stringify({ job, at: now, pid: process.pid, procStart: readProcStart(process.pid) }),
+  );
+}
+
+/** The night's run ended (ok or failed, both recorded). */
+export function clearBackupRunning(db: Database): void {
+  deleteMeta(db, RUNNING_KEY);
+}
+
+/**
+ * A nightly job a process started and never finished (it crashed, was
+ * killed, or the box lost power): taken (compare-and-delete) once its
+ * process is gone, so it is recorded and told like any failure instead of
+ * the night passing silently. A job another live process is running is left
+ * alone.
+ */
+export function takeInterruptedBackupRun(
+  db: Database,
+  isAlive: typeof isHolderAlive = isHolderAlive,
+): { job: BackupJob; at: number } | null {
+  const raw = getMeta(db, RUNNING_KEY);
+  if (raw === null) return null;
+  let m: { job?: unknown; at?: unknown; pid?: unknown; procStart?: unknown } = {};
+  try {
+    m = JSON.parse(raw) as typeof m;
+  } catch {
+    m = {};
+  }
+  if (
+    typeof m.pid === "number" &&
+    isAlive({ pid: m.pid, startedAt: "", procStart: typeof m.procStart === "string" ? m.procStart : null })
+  ) {
+    return null;
+  }
+  if (db.run("DELETE FROM schema_meta WHERE key = ? AND value = ?", [RUNNING_KEY, raw]).changes !== 1) {
+    return null;
+  }
+  return {
+    job: m.job === "restore_test" ? "restore_test" : "backup",
+    at: typeof m.at === "number" && Number.isFinite(m.at) ? m.at : 0,
+  };
 }
 
 /** Record a successful job; returns true when it ended a failure streak. */
@@ -791,8 +894,15 @@ export type BackupNotify = (notice: PendingBackupNotice & { content: string }) =
 export type BackupTicker = {
   /** Run the nightly backup / restore test when due, deliver notices. Never throws. */
   tick(now: number): void;
-  /** Wait for a notice post in flight (tests, shutdown). */
-  settle(): Promise<void>;
+  /**
+   * Wait for a notice post in flight (tests, shutdown), up to `timeoutMs`
+   * when given; true when none is left. On a timeout the notice in flight is
+   * handed back first, so a shutdown never loses it (at worst it is posted
+   * again by the next start).
+   */
+  settle(timeoutMs?: number): Promise<boolean>;
+  /** Shutdown: take no further notice and run nothing more. */
+  stop(): void;
 };
 
 /** Bridge log sink: one scrubbed `[backup] <event> {json}` console line. */
@@ -819,6 +929,9 @@ export function createBackupTicker(opts: {
   const { db, log, notify } = opts;
   const env = opts.env ?? process.env;
   let delivering: Promise<void> | null = null;
+  let stopped = false;
+  /** The notice whose post is in flight, and whether settle handed it back. */
+  let current: { notice: PendingBackupNotice; handedBack: boolean } | null = null;
   const waitingLogged = new Set<BackupJob>();
 
   const fail = (job: BackupJob, event: string, now: number, error: string, fields: Record<string, unknown>) => {
@@ -836,6 +949,23 @@ export function createBackupTicker(opts: {
   };
 
   const runNight = (now: number) => {
+    try {
+      markBackupRunning(db, "backup", now);
+    } catch (err) {
+      log("error", "backup.state_failed", { error: formatErrorLine(err, { max: ERROR_MAX }) });
+    }
+    try {
+      runJobs(now);
+    } finally {
+      try {
+        clearBackupRunning(db);
+      } catch (err) {
+        log("error", "backup.state_failed", { error: formatErrorLine(err, { max: ERROR_MAX }) });
+      }
+    }
+  };
+
+  const runJobs = (now: number) => {
     const cfg = resolveBackupConfig(env);
     if (cfg.kind === "off") return;
     if (cfg.kind === "invalid") {
@@ -878,6 +1008,7 @@ export function createBackupTicker(opts: {
     }
     try {
       setMeta(db, key("restore_test", "last_at"), String(now));
+      markBackupRunning(db, "restore_test", now);
     } catch (err) {
       log("error", "restore_test.state_failed", { error: formatErrorLine(err, { max: ERROR_MAX }) });
     }
@@ -910,14 +1041,21 @@ export function createBackupTicker(opts: {
     if (pending.length === 0) return;
     delivering = (async () => {
       for (const n of pending) {
+        if (stopped) break;
         if (!claimBackupNotice(db, n)) continue;
+        const entry = { notice: n, handedBack: false };
+        current = entry;
         let sent = false;
         try {
           sent = await notify({ ...n, content: formatBackupNotice(n) });
         } catch {
           sent = false;
+        } finally {
+          current = null;
         }
         if (sent) {
+          // Handed back by a timed-out settle, but it did go out: take it again.
+          if (entry.handedBack) claimBackupNotice(db, n);
           waitingLogged.delete(n.job);
           log("info", `${n.job}.owner_told`, { failedAt: new Date(n.at).toISOString() });
         } else {
@@ -938,10 +1076,29 @@ export function createBackupTicker(opts: {
       });
   };
 
+  /** A run a dead process left unfinished is a failure of its job (told once per streak). */
+  const recordInterrupted = (now: number) => {
+    const lost = takeInterruptedBackupRun(db);
+    if (!lost) return;
+    const what = lost.job === "backup" ? "nightly backup" : "restore test";
+    const started = lost.at > 0 ? ` started ${new Date(lost.at).toISOString()}` : "";
+    fail(
+      lost.job,
+      `${lost.job}.failed`,
+      now,
+      `interrupted: the process stopped during the ${what}${started} (crash, kill or power loss)`,
+      { interrupted: true },
+    );
+  };
+
   return {
     tick(now: number) {
+      if (stopped) return;
       try {
-        if (resolveBackupConfig(env).kind !== "off" && claimBackupNight(db, now)) runNight(now);
+        if (resolveBackupConfig(env).kind !== "off") {
+          recordInterrupted(now);
+          if (claimBackupNight(db, now)) runNight(now);
+        }
       } catch (err) {
         log("error", "backup.tick_failed", { error: formatErrorLine(err, { max: ERROR_MAX }) });
       }
@@ -951,8 +1108,36 @@ export function createBackupTicker(opts: {
         log("error", "backup.notice_failed", { error: formatErrorLine(err, { max: ERROR_MAX }) });
       }
     },
-    async settle() {
-      await delivering;
+    async settle(timeoutMs?: number) {
+      const pass = delivering;
+      if (!pass) return true;
+      if (timeoutMs === undefined) {
+        await pass;
+        return true;
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((done) => {
+        timer = setTimeout(done, Math.max(0, timeoutMs));
+      });
+      try {
+        await Promise.race([pass, timeout]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      if (delivering === null) return true;
+      const inFlight = current as { notice: PendingBackupNotice; handedBack: boolean } | null;
+      if (inFlight && !inFlight.handedBack) {
+        try {
+          releaseBackupNotice(db, inFlight.notice);
+          inFlight.handedBack = true;
+        } catch (err) {
+          log("error", "backup.notice_failed", { error: formatErrorLine(err, { max: ERROR_MAX }) });
+        }
+      }
+      return false;
+    },
+    stop() {
+      stopped = true;
     },
   };
 }

@@ -174,6 +174,10 @@ export async function startDaemon(
     return fail("daemon.start_failed", errorText(err));
   }
 
+  // OPS-1/2: nightly backup + restore test on this tick, logged here. No
+  // Discord: a failure's owner notice waits for a bridge tick to post it.
+  const backup = createBackupTicker({ db: database, env, log });
+  const nowFn = opts.now ?? Date.now;
   const scheduler = new SchedulerService({
     store,
     agent,
@@ -182,9 +186,7 @@ export async function startDaemon(
     defaultProjectRoot: projectRoot,
     useWorktrees: opts.useWorktrees,
     ...(opts.now ? { now: opts.now } : {}),
-    // OPS-1/2: nightly backup + restore test on this tick, logged here. No
-    // Discord: a failure's owner notice waits for a bridge tick to post it.
-    backup: createBackupTicker({ db: database, env, log }),
+    backup,
     // The daemon owns the interval so it can log each tick.
     manual: true,
     onRunFinished: (e) => {
@@ -234,6 +236,9 @@ export async function startDaemon(
       if (stopRequested) return { started: [], skipped: [] };
       if (!loaded.ok) {
         log("error", "tick.allowlist_failed", { error: loaded.error });
+        // OPS-1: the backup reads no allowlist; a broken file must not stop
+        // it (or its failure notice) night after night.
+        backup.tick(nowFn());
         return { started: [], skipped: [] };
       }
       const live = daemonGate(loaded.config, env);

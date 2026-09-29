@@ -380,7 +380,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `<@owner> ⚠️ The nightly backup failed`, `mentionUserIds` [owner], no host
   path; `ops_backup_notice` cleared, `ops_backup_failing_since` set. No announce
   channel: no reply at all and the notice stays pending. A good dir: tonight's
-  snapshot written, no reply.
+  snapshot written, no reply. A reply that never completes (`hang`): `stop()`
+  waits the short grace and the notice is pending again for the next start.
 - `tests/ops.backup.test.ts` › "nightly ticker" covers the delivery rules the
   bridge's `notify` relies on (hand back on a failed post, `owner_not_told`
-  logged once, once per failure streak, notices recorded by a daemon ticker).
+  logged once, once per failure streak, notices recorded by a daemon ticker)
+  and `settle(timeoutMs)` / `stop()` (a post outlasting the grace is handed
+  back; a stopped ticker takes nothing more).

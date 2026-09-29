@@ -214,7 +214,7 @@ export type SchedulerServiceOpts = {
    * OPS-1/2: nightly backup + restore test, run from each tick after the due
    * runs are claimed (it claims its own night; never throws).
    */
-  backup?: BackupTicker;
+  backup?: Pick<BackupTicker, "tick">;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -246,7 +246,7 @@ export class SchedulerService {
   private readonly owner: OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
-  private readonly backup?: BackupTicker;
+  private readonly backup?: Pick<BackupTicker, "tick">;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
