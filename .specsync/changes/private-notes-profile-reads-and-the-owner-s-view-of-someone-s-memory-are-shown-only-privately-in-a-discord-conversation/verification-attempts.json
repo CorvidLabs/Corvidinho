@@ -21,6 +21,27 @@
         "REQ-discord-710",
         "REQ-plugins-710"
       ]
+    },
+    {
+      "timestamp": 1790726273,
+      "commit": "6e9d0dc0a51333f0bfc1393ca380de36b99fdc5d",
+      "contract_digest": "8b9543c098305ff5d918f26a673149499c43751006e6b6713561c30bb95eb203",
+      "execution_digest": "5634067ce3bcd10ea8b4c69486492a275dbb609b0bfcd38cd237efd2da8038c0",
+      "workspace_digest": "8b368a1b65afbc8b30243e7c9972b50db62095688a10dce96a2ec15fcfa5c6c8",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-710",
+        "REQ-cli-710",
+        "REQ-discord-710",
+        "REQ-plugins-710"
+      ]
     }
   ]
 }
