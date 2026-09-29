@@ -62,6 +62,9 @@ list intact.
 The agent's `discord-post-message` SHALL gate its target channel on this
 same union, deny lists first (REQ-plugins-009), so a channel the bridge
 listens in through `DISCORD_CHANNEL_IDS` alone can also be posted to.
+`discord-send-file` SHALL gate the conversation channel the bridge set (a
+thread through its parent, REQ-discord-476) on the same union, deny lists
+first, so it can attach in every channel the bridge talks in.
 
 Acceptance Criteria
 - DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
@@ -72,6 +75,7 @@ Acceptance Criteria
 - A `]` or `#` inside a quoted item survives an `/admin` rewrite; the comment on the edited key's first line is kept.
 - A rewrite that would not reload as intended (an entry the one-line writer cannot quote) is refused and the file is left byte-for-byte unchanged.
 - `discord-post-message` to a channel listed only in `DISCORD_CHANNEL_IDS` passes the channel gate (dry run exit 0); a deny on that channel still refuses (exit 3).
+- `discord-send-file` in a conversation channel listed only in `DISCORD_CHANNEL_IDS`, or a thread whose parent is, attaches; a channel in no list is refused (not allowlisted) and a deny on that channel still refuses (is denied).
 
 ### REQ-discord-005
 
