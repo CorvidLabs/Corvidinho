@@ -7,11 +7,11 @@
   "title": "Free-text asks post a short public stub with the question and one Answer button that opens a private form; its submit passes the same gates as a button press and resumes the requester's session like a reply; replying in the channel still works (DISCORD-ASK-4.a)",
   "description": "Free-text asks post a short public stub with the question and one Answer button that opens a private form; its submit passes the same gates as a button press and resumes the requester's session like a reply; replying in the channel still works (DISCORD-ASK-4.a)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "f1809a59b41a4f33506843a5c54a7796f57e626c",
   "created_at": 1790711123,
-  "updated_at": 1790717884,
+  "updated_at": 1790718054,
   "affected_specs": [
     "discord"
   ],

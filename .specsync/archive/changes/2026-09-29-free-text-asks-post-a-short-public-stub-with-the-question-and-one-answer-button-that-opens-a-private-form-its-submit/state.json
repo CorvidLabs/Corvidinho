@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit",
+  "slug": "free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit",
+  "title": "Free-text asks post a short public stub with the question and one Answer button that opens a private form; its submit passes the same gates as a button press and resumes the requester's session like a reply; replying in the channel still works (DISCORD-ASK-4.a)",
+  "description": "Free-text asks post a short public stub with the question and one Answer button that opens a private form; its submit passes the same gates as a button press and resumes the requester's session like a reply; replying in the channel still works (DISCORD-ASK-4.a)",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "f1809a59b41a4f33506843a5c54a7796f57e626c",
+  "created_at": 1790711123,
+  "updated_at": 1790718285,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "src/discord/ask-buttons.ts",
+    "src/discord/ask-ping.ts",
+    "src/discord/bridge.ts",
+    "src/discord/gateway.ts",
+    "src/discord/index.ts",
+    "src/discord/command-handlers/work.ts",
+    "src/discord/command-handlers/session.ts",
+    "src/discord/slash-finish.ts",
+    "src/discord/spend-post.ts",
+    "src/discord/thinking-status.ts",
+    "tests/discord.ask-answer-modal.test.ts",
+    "tests/discord.ask-ping.test.ts",
+    "tests/discord.thin-ack.test.ts",
+    "tests/discord.slash-pending-ask.test.ts",
+    "tests/discord.slash-choose-ask.test.ts",
+    "docs/discord.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A clarify or stuck ask whose choices cannot be listed posts (chat, a button-pick or form resume, /work, /session start) the question quoted in the public post with the hint 'Press Answer to answer privately, or reply to this message.' and exactly one Answer button, keeps its footer embed and records the post as the ask's stub; the requester's press opens a Discord modal (response type 9) with a short title and one required paragraph input capped at ASK_QUESTION_MAX (within Discord's 4000); the modal submit (interaction type 5) passes the same channel, actor/deny-list, mute/rate, not-yours and ~30-minute expiry gates as a button press (refusals ephemeral only, no run, ask kept), is SAFE-6 scrubbed and resumes the requester's session with the same prior-question block a reply gets, in the stub (thin-updated, then edited into the answer), with an ephemeral ack dropped when the run ends; a late press or submit gets 'that choice expired' and the ask stays for a reply; a thin reply restates it with its live Answer button; a reply still answers it; a spend-cap stop and schedule asks are unchanged; the new bridge-harness tests fail on the base source and pass on the branch"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
