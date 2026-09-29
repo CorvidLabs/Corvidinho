@@ -366,7 +366,8 @@ with no blank line inside, so Planning module selection leaves it out
 (REQ-agent-004). At about 80% of the model's window
 (`CORVIDINHO_LLM_CONTEXT_TOKENS`, same budget as REQ-discord-472) the
 oldest turns SHALL be folded into the summary, the thread's opening request
-and its newest request kept word for word. Another issue or PR never gets
+and its newest request kept word for word (a human turn is kept up to the
+8000-char WATCH event prompt, so a whole event prompt is never clipped). Another issue or PR never gets
 it. A record SHALL be purged 30 days after its last update (every read and
 write purges first, and every poll cycle purges), and forgetting a person
 (`forgetConversations(db, { githubLogins })`, case-insensitive) SHALL delete
@@ -377,6 +378,7 @@ Acceptance Criteria
 - A follow-up on the same issue gets the earlier event and answer replayed, oldest first, ahead of the new event; the first event and another issue get no block; `planningSelectionText` leaves the block out.
 - Two hours later (past the session's TTL) the follow-up still gets it; 30 days after the last update it is purged and the next event gets no block.
 - With a 1024-token window a long thread's prompt stays under the budget with the summary, the opening request and the latest request word for word.
+- An opening event prompt of over 7000 chars replays whole (word for word) in the follow-up's block.
 - The stored turns hold `[redacted:github-token]`, never the token; participants are the lowercased senders; forgetting a login that only commented deletes the thread.
 >>>>>>> 812c4c68 (chore(lifecycle): materialize condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the)
 

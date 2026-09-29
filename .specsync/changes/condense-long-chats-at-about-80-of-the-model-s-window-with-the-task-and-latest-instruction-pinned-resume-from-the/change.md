@@ -1,6 +1,6 @@
 ---
 id: condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the
-state: implementing
+state: verifying
 type: feature
 base_commit: d589638c38f27503373601bb256ee6207fb822f9
 ---
