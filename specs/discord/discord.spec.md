@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 80
+version: 81
 status: draft
 files:
   - src/discord/types.ts
@@ -294,6 +294,16 @@ the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
+Closing role note on the way to a post (REQ-discord-734, ROLES-CHAT-3 /
+REQ-agent-333): `ask-ping.ts` exports `POST_SUMMARY_MAX` (1500) and
+`clipPostSummary(summary, headLength = 0)`, which caps a run summary at 1500
+chars and at what fits after a `headLength`-char post head within
+`ASK_REPLY_MAX` (1900) with `clipKeepingRoleNote`. The scheduler's run-row
+summary and schedule post, and the `/work` and `/session start` answers, use
+it; `appendPostLine` cuts the body for the SAFE-8 warning line the same way
+(ending the kept text in `…`). A closing `(not allowed for your role)` note
+stays last; a summary without it is cut exactly as before.
+
 Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
 DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
 `ask-ping.ts` exports `formatCollapsedPing` (one line: each mentioned user with
@@ -435,6 +445,10 @@ slash reply/editReply, component reply/update, discord-post-message) parses
 no mentions from its content (`parse: []`,
 `@everyone` / `@here` defanged); only the replied-to author and the users an
 ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
+a run summary's closing `(not allowed for your role)` note survives every cap
+between the agent and the post: schedule run rows and posts, `/work` and
+`/session start` answers (fitted under 1900), and the SAFE-8 warning append
+(REQ-discord-734);
 `discord-send-file` attaches only in the channel the bridge set for the run
 (never a model-chosen one; none ⇒ refused), after the bridge's channel gate
 (`isMonitoredConversation` on the bridge's channel set: a thread passes as
@@ -717,3 +731,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | discord-send-file-serves-a-thread-allowlisted-by-its-own-id-like-the-bridge-and-re-checks-the-8-mb-cap-on-the-bytes: Discord-send-file serves a thread allowlisted by its own id like the bridge and re-checks the 8 MB cap on the bytes read (DISCORD-17 review follow-up) |
 | 2026-09-29 | discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl: Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies "that choice expired" with no agent run (DISCORD-ASK-5, REQ-discord-045) |
+| 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |

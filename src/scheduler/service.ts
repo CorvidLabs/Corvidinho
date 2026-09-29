@@ -28,6 +28,7 @@ import { gateActor } from "../discord/permissions.ts";
 import {
   ASK_NO_OWNER_WARNING,
   askPingKey,
+  clipPostSummary,
   formatAskReply,
   withSpendWarningPost,
 } from "../discord/ask-ping.ts";
@@ -639,8 +640,10 @@ export class SchedulerService {
         signal,
       });
 
+      // ROLES-CHAT-3 (REQ-discord-734): the run row's summary and the post
+      // keep a closing role note when they cap a long summary.
       const summary = result.ok
-        ? result.summary.slice(0, 1500)
+        ? clipPostSummary(result.summary)
         : `failed (exit ${result.exitCode})`;
 
       const done = this.finish(schedule, run, {
@@ -679,11 +682,12 @@ export class SchedulerService {
           let posted: void | boolean = false;
           try {
             const status = result.ok ? "✅" : "❌";
+            const head = `${status} ${scheduleTitle(schedule)}:\n`;
             posted = await this.outbound.post(
               withSpendWarningPost(
                 {
                   channelId: schedule.channelId,
-                  content: `${status} ${scheduleTitle(schedule)}:\n${summary.slice(0, 1500)}`,
+                  content: `${head}${clipPostSummary(summary, head.length)}`,
                 },
                 pending?.warning,
                 this.owner,

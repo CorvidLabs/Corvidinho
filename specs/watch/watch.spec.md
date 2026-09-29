@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 18
+version: 19
 status: draft
 files:
   - src/watch/types.ts
@@ -71,6 +71,9 @@ no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 run summary at most once per event id and only after successful auto-ack;
+the run-summary comment clips its SAFE-6 scrubbed summary to 1200 chars and
+keeps a closing `(not allowed for your role)` note (REQ-watch-231,
+REQ-watch-734);
 spawn outcomes logged structurally and appended to durable JSONL; on a GitHub
 403/429 rate-limit on the poll fetch, the auto-ack or the run-summary comment
 back off via Retry-After/reset (default 60s) before the next poll cycle without
@@ -137,3 +140,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
 | 2026-09-27 | a-403-429-github-rate-limit-on-the-watch-auto-ack-or-run-summary-comment-sets-the-backoff-before-the-next-poll-cycle: A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3) |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
+| 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |
