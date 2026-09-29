@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 34
+version: 35
 status: draft
 files:
   - src/agent/types.ts
@@ -195,7 +195,10 @@ Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `askFromToolArguments`, `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
 `ASK_AGENT_SYSTEM_INSTRUCTIONS` (AUTONOMY-7 + prefer `options` / numbered choices
 for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
-`resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`.
+`resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
+(option ids come out unique within an ask: a repeated id takes the first
+unused position number, and already-unique ids are kept byte-identical,
+REQ-agent-045).
 `HumanAsk` MAY include `options: AskOption[]`. A clarify ask ends the run
 `blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
 carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
@@ -550,3 +553,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no: REQ-agent-112 after the Fledge core builtins: an allowlist with no fledge-* entry and a non-ADMIN role session offer no Fledge plugin command and never spawn fledge; the only fledge- tools they offer are the read-only core builtins fledge-lanes-list and fledge-lanes-validate (PLUGIN-1, PLUGIN-3, ROLES-CHAT-2) |
 | 2026-09-27 | fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the: Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending) |
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
+| 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |

@@ -196,14 +196,18 @@ Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
-restates and a free-text reply answers, and `openAsks` holds earlier button
+restates and a free-text reply answers (a button `pendingAsk` past its
+timeout is cleared with `clearPendingAsk` before any reply but `cancel` is
+gated, so a thin reply never restates it — DISCORD-ASK-5), and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
 array (oldest first, newest last) when several are. The stored question,
 option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
 and the SAFE-6 re-scrub rewrites the column value by value as JSON
 (`scrubJsonText`). `normalizeAskOptions` replaces a model-chosen option id
 that looks like a secret with its position, so askId, expiresAt, option ids
-and stubMessageId are stored byte-identical. `SessionStore.setPendingAsk(session, ask)`
+and stubMessageId are stored byte-identical; an option id that repeats an
+earlier one takes the first unused position number, so every option button
+has its own `custom_id` (REQ-agent-045). `SessionStore.setPendingAsk(session, ask)`
 stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
@@ -696,6 +700,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |
 | 2026-09-28 | discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord: Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8) |
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
+| 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
 | 2026-09-29 | scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so: Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |

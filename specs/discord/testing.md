@@ -229,6 +229,17 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   bridge-level tests fail on the base sources (free-text answer, options
   dropped).
 
+## Unique option ids and expired button asks (REQ-discord-044 / REQ-discord-045 / REQ-agent-045, DISCORD-ASK-1/3/5)
+
+- `tests/discord.ask-ephemeral.test.ts` › "ask option ids and expired button
+  asks (DISCORD-ASK-1/3/5)" — an ask whose options repeat one id opens with
+  distinct pick `custom_id`s and a press on the second resumes with its own
+  label; a thin reply after the only button ask timed out runs the agent
+  and restates no Choose button; after the newest ask timed out a thin reply
+  restates the earlier live ask; a substantive reply after expiry runs the
+  agent and clears the ask; `cancel` after expiry keeps its short ack and
+  runs nothing (no live Discord).
+
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
 
