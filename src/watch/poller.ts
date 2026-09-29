@@ -32,15 +32,11 @@ import {
 } from "./config.ts";
 import { dedupeByIssue, ProcessedIdStore } from "./dedup.ts";
 import {
-  isGithubUserAllowed,
-  isRepoAllowed,
-} from "../allowlist/github.ts";
-import {
   DEFAULT_RATE_LIMIT_BACKOFF_MS,
   formatRateLimitLog,
   parseGithubRateLimit,
 } from "./rate-limit.ts";
-import { routeEvent } from "./router.ts";
+import { gateEvent, routeEvent } from "./router.ts";
 import {
   createOctokitSearchClient,
   fetchWatchEvents,
@@ -63,7 +59,11 @@ import {
 } from "./summary.ts";
 import type { DetectedEvent, WatchConfig } from "./types.ts";
 
-/** Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session). */
+/**
+ * Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session).
+ * Same gate as routeEvent, so an assignment / review request by a user who is
+ * not allowlisted never wins the per-issue dedupe (REQ-watch-302).
+ */
 function preferAllowlisted(
   events: DetectedEvent[],
   allowlist: WatchConfig["allowlist"],
@@ -71,9 +71,7 @@ function preferAllowlisted(
   const eligible: DetectedEvent[] = [];
   const denied: DetectedEvent[] = [];
   for (const e of events) {
-    const repoOk = isRepoAllowed(e.repo, allowlist.github).ok;
-    const userOk = isGithubUserAllowed(e.sender, allowlist.github).ok;
-    if (repoOk && userOk) eligible.push(e);
+    if (gateEvent(e, allowlist.github).ok) eligible.push(e);
     else denied.push(e);
   }
   return { eligible, denied };

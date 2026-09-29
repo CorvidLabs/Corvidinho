@@ -17,6 +17,7 @@ files:
   - src/watch/rate-limit.ts
   - src/watch/index.ts
   - tests/watch.auth-stop.test.ts
+  - tests/watch.request-actor.test.ts
 
 db_tables: []
 depends_on:
@@ -58,12 +59,19 @@ computeRateLimitBackoffMs), `StartWatchResult.fatal` / `WatchFatal`
 rate-limit `headers` (`retry-after`, `x-ratelimit-remaining`,
 `x-ratelimit-reset`) of the failed post; `maybePostWatchAck` /
 `maybePostWatchSummary` take an optional `onPostFailed(res)` called after the
-`ack failed` / `summary failed` line (REQ-watch-011).
+`ack failed` / `summary failed` line (REQ-watch-011). `gateEvent` /
+`EventGateResult` (repo, author and, for assignment / review_request, actor
+gates; REQ-watch-302); `DetectedEvent.actor`, `SearchClient.findRequestActor`,
+`newestRequestActor`, fixture `assigners` / `review_requesters`
+(REQ-watch-302).
 
 ## Invariants
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
-allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
+allowlist BEFORE session spawn; assignment / review_request also gate the
+user who assigned / requested (actor; missing actor refused, deny wins) in the
+router and before the poller's per-issue dedupe; denied refuse quietly (no
+session); processed-id
 dedup; with a DB, processed / acked / summarized ids persist per kind in
 `watch_event_ids` so a restart never replays a handled event id, and denied
 ids are kept apart in memory so they never evict a handled id (REQ-watch-247);

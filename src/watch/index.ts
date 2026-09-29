@@ -25,13 +25,21 @@ export {
   type StartWatchResult,
   type WatchFatal,
 } from "./poller.ts";
-export { routeEvent, type RouterDeps } from "./router.ts";
+export {
+  gateEvent,
+  routeEvent,
+  type EventGateResult,
+  type RouterDeps,
+} from "./router.ts";
 export {
   containsMention,
   createFixtureSearchClient,
   createOctokitSearchClient,
   fetchWatchEvents,
+  newestRequestActor,
   type FixtureBundle,
+  type IssueEventLike,
+  type RequestActorKind,
   type SearchClient,
 } from "./searcher.ts";
 export {

@@ -12,7 +12,7 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 ## What it does
 
 1. Interval-poll GitHub (Octokit search) for @mentions / issue comments / review requests / **assignments** involving `CORVIDINHO_WATCH_USERNAME`
-2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
+2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all. For review requests and assignments the user gate checks both the thread author and the user who requested the review / assigned the watch user (REQ-watch-302); deny lists win
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run` (prove-before-done; no `--no-verify`) or echo in dry-run
@@ -68,6 +68,8 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 HI: [`hi/watch.md`](../hi/watch.md).
 
 **Assignee ingress (#48):** when the watch username appears in issue/PR `assignees` (from search results), WATCH emits an `assignment` event — same allowlist → session path as mentions. Dogfood can use assign *or* @mention.
+
+**Who assigned / requested (REQ-watch-302, ALLOW-1/2):** an `assignment` or `review_request` event is started by whoever assigned the watch user or requested its review, who need not be the thread author. WATCH reads that user from the issue's events (the newest `assigned` / `review_requested` event naming the watch user: `assigner` / `review_requester`, else the event `actor`) and runs the event only when **both** the author and that user pass the GitHub user allowlist and neither is on `deny_users`. If that user is not allowlisted, is denied, or cannot be read (API error, no such event), the event is refused quietly: no session, no ack, no run. A collaborator who is not allowlisted cannot start a run by assigning Corvidinho to (or requesting its review on) an allowlisted author's issue or PR. Assignments made by bots or GitHub Actions need that bot's login on the user allowlist.
 
 **What a WATCH run can do:** WATCH runs are non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN=0`, ROLES-CHAT): read/chat tools only, no dangerous or mutating tool. They have no Discord actor, so `memory-store` / `memory-recall` refuse.
 
