@@ -77,6 +77,106 @@ describe("ask-options (DISCORD-ASK-1)", () => {
   });
 });
 
+describe("ask option ids are unique (DISCORD-ASK-1/3 / REQ-agent-045)", () => {
+  const ids = (raw: unknown) => normalizeAskOptions(raw)?.map((o) => o.id);
+
+  test("a repeated explicit id takes the first unused position number", () => {
+    expect(
+      normalizeAskOptions([
+        { id: "x", label: "Keep" },
+        { id: "x", label: "Drop" },
+      ]),
+    ).toEqual([
+      { id: "x", label: "Keep" },
+      { id: "1", label: "Drop" },
+    ]);
+    expect(
+      ids([
+        { id: "x", label: "A" },
+        { id: "x", label: "B" },
+        { id: "1", label: "C" },
+      ]),
+    ).toEqual(["x", "1", "2"]);
+  });
+
+  test("a position fallback that equals an earlier id is moved on", () => {
+    // "✅" cleans to "" and falls back to its position, "2", already taken.
+    expect(
+      ids([
+        { id: "2", label: "A" },
+        { id: "✅", label: "B" },
+      ]),
+    ).toEqual(["2", "1"]);
+    // A plain string takes its position "1"; the explicit "1" moves on.
+    expect(ids(["Yes", { id: "1", label: "No" }])).toEqual(["1", "2"]);
+  });
+
+  test("ids that are equal once cut to 32 chars stay apart", () => {
+    expect(
+      ids([
+        { id: "option_use_postgres_for_the_main_database", label: "DB" },
+        { id: "option_use_postgres_for_the_main_cache", label: "Cache" },
+      ]),
+    ).toEqual(["option_use_postgres_for_the_main", "1"]);
+  });
+
+  test("a dropped empty option does not hold its id", () => {
+    expect(
+      ids([
+        { id: "a", label: "  " },
+        { id: "a", label: "A" },
+        { id: "b", label: "B" },
+      ]),
+    ).toEqual(["a", "b"]);
+  });
+
+  test("already-unique options normalize byte-identically, again and again", () => {
+    for (const raw of [
+      ["Postgres", "SQLite"],
+      [
+        { id: "pg", label: "Postgres" },
+        { id: "lite", label: "SQLite" },
+      ],
+      [{ id: "pg", label: "Postgres" }, "SQLite", { id: "3", label: "MySQL" }],
+      [
+        { id: "x", label: "Keep" },
+        { id: "x", label: "Drop" },
+      ],
+    ]) {
+      const once = normalizeAskOptions(raw)!;
+      expect(JSON.stringify(normalizeAskOptions(once))).toBe(JSON.stringify(once));
+    }
+    expect(
+      JSON.stringify(
+        normalizeAskOptions([
+          { id: "1", label: "Postgres" },
+          { id: "2", label: "SQLite" },
+        ]),
+      ),
+    ).toBe('[{"id":"1","label":"Postgres"},{"id":"2","label":"SQLite"}]');
+  });
+
+  test("ask-human args with one id twice give buttons with distinct custom ids", () => {
+    const r = askFromToolArguments(
+      JSON.stringify({
+        question: "Which?",
+        options: [
+          { id: "x", label: "Keep" },
+          { id: "x", label: "Drop" },
+        ],
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const options = r.ask.options!;
+    const customIds = buildChoiceComponents("ask1", options)[0]!.components.map(
+      (b) => b.custom_id,
+    );
+    expect(new Set(customIds).size).toBe(2);
+    expect(findOptionLabel(options, options[1]!.id)).toBe("Drop");
+  });
+});
+
 describe("ask-buttons custom ids + expiry (DISCORD-ASK-2/5)", () => {
   test("open/pick custom ids round-trip", () => {
     expect(parseAskCustomId(openCustomId("abc123"))).toEqual({

@@ -60,6 +60,24 @@ function refuseProtected(
   return null;
 }
 
+/**
+ * ROLES-CHAT-8 / IDENTITY-10: a non-owner role session (a team member's
+ * `/work` run is the only one that reaches the edit tools) never writes or
+ * edits a secret-looking path — `files-edit` would otherwise answer whether a
+ * string is in it. Re-checked at this call, like the read tools.
+ */
+async function refuseSecretForRole(
+  userPath: string,
+  absPath: string,
+  cwd: string,
+): Promise<PluginHandlerResult | null> {
+  if (!isSecretPath(userPath) && !isSecretPath(relative(realRoot(cwd), absPath))) {
+    return null;
+  }
+  if (!(await secretPathsRefused())) return null;
+  return { ok: false, error: secretRefuseMessage(userPath), exitCode: 2 };
+}
+
 function errResult(err: unknown): PluginHandlerResult {
   if (err instanceof PathEscapeError || err instanceof ArgvError) {
     return { ok: false, error: err.message, exitCode: 1 };
@@ -183,6 +201,8 @@ export const filesCommands: PluginCommand[] = [
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
+        const secret = await refuseSecretForRole(pathArg, abs, ctx.cwd);
+        if (secret) return secret;
 
         const allowLarge = argv.flags.has("--allow-large");
         if (existsSync(abs)) {
@@ -248,6 +268,8 @@ export const filesCommands: PluginCommand[] = [
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
+        const secret = await refuseSecretForRole(pathArg, abs, ctx.cwd);
+        if (secret) return secret;
         assertExistingFile(abs);
 
         const original = readFileSync(abs, "utf8");

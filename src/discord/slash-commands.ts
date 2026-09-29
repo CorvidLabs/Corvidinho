@@ -5,7 +5,7 @@
  * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN
  * + /schedule list|create|pause|resume|delete (single-project; skip templates)
  * + /admin users|channels|config (corvid-agent admin-commands.ts, trimmed to
- * the captured ADMIN-1..3 surface). Channel options use STRING + autocomplete
+ * the captured ADMIN-1..3 surface) + /admin people (ADMIN-3.a, #36; role ADMIN-3.b, #65). Channel options use STRING + autocomplete
  * (searchable names/ids) instead of the limited native CHANNEL picker.
  */
 
@@ -33,6 +33,8 @@ export type SlashOptionDef = {
   channel_types?: number[];
   /** Enable Discord autocomplete (STRING/INTEGER/NUMBER). Max 25 choices. */
   autocomplete?: boolean;
+  /** Fixed choices (STRING): the only values Discord offers (the handler still re-checks). */
+  choices?: Array<{ name: string; value: string }>;
   options?: SlashOptionDef[];
 };
 
@@ -46,7 +48,9 @@ export type SlashCommandBody = {
  * Build the slash set: /session list|start, /status, /agents, /work,
  * /mute /unmute (DISCORD-7), /schedule list|create|pause|resume|delete
  * (DISCORD-SCHEDULE), /announce channel|show (DISCORD-ANNOUNCE),
- * /admin users add | channels add|remove | config show (ADMIN-1..3).
+ * /admin users add | channels add|remove | config show (ADMIN-1..3)
+ * | people list|add|link|unlink|remove (ADMIN-3.a / IDENTITY-13) | people role
+ * (ADMIN-3.b / IDENTITY-8).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -251,7 +255,7 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
     },
     {
       name: "admin",
-      description: "Runtime allowlist admin (owner only)",
+      description: "Runtime allowlist and declared-people admin (owner only)",
       options: [
         {
           type: OPT_SUB_COMMAND_GROUP,
@@ -317,6 +321,147 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
               type: OPT_SUB_COMMAND,
               name: "show",
               description: "Show allowlists and safe config knobs (owner only)",
+            },
+          ],
+        },
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "people",
+          description: "Declared people and their links (IDENTITY-13)",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "list",
+              description: "Show declared people and their links (owner only)",
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "add",
+              description: "Declare a person, or change their display name (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "person",
+                  description: "Person id: lowercase letters, digits, - or _ (e.g. tofu)",
+                  required: true,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "display",
+                  description: "Display name (never used for matching)",
+                  required: false,
+                },
+              ],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "link",
+              description: "Link accounts or nicknames to a person (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "person",
+                  description: "Person id, e.g. tofu",
+                  required: true,
+                },
+                {
+                  type: OPT_USER,
+                  name: "discord",
+                  description: "Discord account (matched on its user id)",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "github",
+                  description: "GitHub login",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "github_id",
+                  description: "GitHub numeric user id",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "nickname",
+                  description: "Nickname (shown to the model, never matched)",
+                  required: false,
+                },
+              ],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "unlink",
+              description: "Unlink accounts or nicknames from a person (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "person",
+                  description: "Person id, e.g. tofu",
+                  required: true,
+                },
+                {
+                  type: OPT_USER,
+                  name: "discord",
+                  description: "Discord account (matched on its user id)",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "github",
+                  description: "GitHub login",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "github_id",
+                  description: "GitHub numeric user id",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "nickname",
+                  description: "Nickname (shown to the model, never matched)",
+                  required: false,
+                },
+              ],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "remove",
+              description: "Remove a declared person and all their links (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "person",
+                  description: "Person id, e.g. tofu",
+                  required: true,
+                },
+              ],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "role",
+              description: "Set a declared person's role: team or community (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "person",
+                  description: "Person id, e.g. tofu",
+                  required: true,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "role",
+                  description: "team: work tasks + reviews; community: Q&A only (IDENTITY-8)",
+                  required: true,
+                  choices: [
+                    { name: "team", value: "team" },
+                    { name: "community", value: "community" },
+                  ],
+                },
+              ],
             },
           ],
         },

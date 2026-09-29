@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 34
+version: 35
 status: draft
 files:
   - src/agent/types.ts
@@ -183,7 +183,10 @@ appears in the final chat reply (DISCORD-3.a).
 
 `execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
-in addition to MEMORY instructions. `execute` exports
+in addition to MEMORY instructions; the public Q&A block names the only
+community site / roadmap sources — the public repo docs (README, docs/,
+STATUS, CHANGELOG) and the public issues and milestones of allowed public
+repos — and says nothing else counts (ROLES-CHAT-8.a, REQ-agent-065). `execute` exports
 `DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS` (DISCORD-17, REQ-agent-476): the
 system prompt carries it only when the run's catalog offers
 `discord-send-file` and its env has a conversation channel
@@ -195,7 +198,10 @@ Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `askFromToolArguments`, `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
 `ASK_AGENT_SYSTEM_INSTRUCTIONS` (AUTONOMY-7 + prefer `options` / numbered choices
 for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
-`resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`.
+`resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
+(option ids come out unique within an ask: a repeated id takes the first
+unused position number, and already-unique ids are kept byte-identical,
+REQ-agent-045).
 `HumanAsk` MAY include `options: AskOption[]`. A clarify ask ends the run
 `blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
 carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
@@ -349,10 +355,11 @@ Planning selects modules from the request only (`planningSelectionText`):
 line labels such as `[WATCH <kind>]` do not count, so a bridge wrapper cannot
 pick a module the request never names.
 
-`buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); `createTaskExecute` resolves ADMIN from env via `resolveActingIsAdmin` when a role session is active.
+`buildOpenAiTools` omits mutating plugins when `actingIsAdmin` is false (ROLES-CHAT-2); given `actingRole` (IDENTITY-9..12, REQ-agent-065) it keeps exactly what `roleAllowsPlugin(actingRole, entry, workTask)` allows — owner (or `null`, no role session): every tool; team: read tools plus `github-issue-comment` / `github-pr-review` (plus `files-write` / `files-edit` when `workTask`); community: read tools only. `createTaskExecute` resolves the role from env via `resolveActingRole` on every attempt (null outside a role session) and passes it with `workTask` (`CORVIDINHO_ACTING_WORK_TASK`); only the owner or no role session discovers Fledge plugin commands.
 
-When the caller is not ADMIN at the call (a role session, re-checked per call
-like `runPlugin`, ROLES-CHAT-6), the tool loop answers a not-offered registered
+When the caller's role does not allow the plugin at the call (a role session,
+re-checked per call like `runPlugin`, ROLES-CHAT-6 / IDENTITY-12), the tool
+loop answers a not-offered registered
 mutating / dangerous plugin with the role refusal `runPlugin` gives (`Denied:
 plugin "<name>" is not allowed for your role (ROLES-CHAT-3).`, exit 2) instead
 of the catalog refusal, and never runs it; an unregistered name keeps the
@@ -550,3 +557,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no: REQ-agent-112 after the Fledge core builtins: an allowlist with no fledge-* entry and a non-ADMIN role session offer no Fledge plugin command and never spawn fledge; the only fledge- tools they offer are the read-only core builtins fledge-lanes-list and fledge-lanes-validate (PLUGIN-1, PLUGIN-3, ROLES-CHAT-2) |
 | 2026-09-27 | fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the: Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending) |
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
+| 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
+| 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |

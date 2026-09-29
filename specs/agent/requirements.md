@@ -546,10 +546,26 @@ when provided or when the question contains a numbered/lettered choice list
 to prefer options for Discord ephemeral buttons and free-text only when
 choices cannot be listed.
 
+`normalizeAskOptions` SHALL return option ids that are unique within the
+ask, because each id rides in its option button's `custom_id` and a pick is
+matched to its label by id (DISCORD-ASK-1/3): an id (explicit, cut to 32
+chars, or the position fallback for a missing, empty or secret-looking id)
+that an earlier kept option already holds SHALL take the first unused
+position number (`1`, `2`, …), and a dropped empty option SHALL hold no id.
+Options whose ids are already unique SHALL come out byte-identical, so
+normalizing a stored ask again changes nothing and its open buttons keep
+working. No new env var, flag or protocol field.
+
 Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
 - Numbered question lines parse into options when structured options absent.
 - Single or empty options do not set HumanAsk.options.
+- `normalizeAskOptions([{id:"x",label:"Keep"},{id:"x",label:"Drop"}])` gives ids `x`, `1`; `[{id:"x"},{id:"x"},{id:"1"}]` (with labels) gives `x`, `1`, `2`.
+- A position fallback equal to an earlier id moves on: `[{id:"2"},{id:"✅"}]` gives `2`, `1`; `["Yes",{id:"1",label:"No"}]` gives `1`, `2`.
+- Two ids that are equal once cut to 32 chars stay apart (the second takes `1`).
+- A dropped empty option holds no id (`[{id:"a",label:"  "},{id:"a"},{id:"b"}]` gives `a`, `b`).
+- Already-unique options normalize byte-identically, and normalizing the result again changes nothing.
+- ask-human arguments whose options repeat one id give option buttons with distinct `custom_id`s, and the second option's id finds the second label.
 
 ### REQ-agent-260
 
@@ -765,8 +781,9 @@ named, until the SAFE-3 decision on the shell and runners is taken: each
 starts in the project dir, which is not a clamp, and a Fledge lane or task
 runs whatever commands the project gives it. They still run through
 `corvidinho plugins run`. The tier filter (`minTier`), the
-ROLES-CHAT-2 role filter (a non-ADMIN role session gets no dangerous or
-mutating tool, whatever the allowlist), the SAFE-9 autonomous filter,
+ROLES-CHAT-2 role filter (a community role session gets no dangerous or
+mutating tool, whatever the allowlist; a team session only what
+REQ-agent-065 allows), the SAFE-9 autonomous filter,
 catalog-only dispatch and the SAFE-1 / SAFE-4 / SAFE-5 / GITHUB-6 runtime
 gates in `runPlugin` and the handlers SHALL be unchanged. With an empty
 allowlist the catalog SHALL be exactly as before. No env var, config key,
@@ -780,7 +797,7 @@ Acceptance Criteria
 - A code-tier task run whose allowlist names the four Fledge core builtins offers only `fledge-lanes-list` and `fledge-lanes-validate` as `fledge-` tools; the model's call to `fledge-run` is refused as not offered, no fledge process starts and `unreportedEditTools` is absent.
 - `actingIsAdmin: false` with every dangerous plugin allowlisted offers no dangerous or mutating tool.
 - `task run` path (`createTaskExecute` without an `allowlist` option, non-interactive, GitHub dry run): with `CORVIDINHO_ALLOWLIST=github-pr-review` the model is offered `github-pr-review`, its call succeeds as a dry run, and its call to the unlisted `github-issue-create` is refused as not offered.
-- An ADMIN role session (owner) with that allowlist is offered and runs `github-pr-review`; a non-ADMIN role session with the same allowlist is not offered it and no call succeeds.
+- An ADMIN role session (owner) with that allowlist is offered and runs `github-pr-review`; a community (non-ADMIN, not team) role session with the same allowlist is not offered it and no call succeeds.
 
 ### REQ-agent-502
 
@@ -833,4 +850,33 @@ protocol field is added by the agent.
 Acceptance Criteria
 - With `discord-send-file` allowlisted and a conversation channel, the tool is offered and the system prompt carries the attach block ("never say you cannot send or attach files or images", the `--git-diff` hint).
 - Not allowlisted, or no conversation channel: the system prompt has no attach block.
+
+### REQ-agent-065
+
+`buildOpenAiTools` SHALL take the acting role (`actingRole`: owner / team /
+community / null) and `workTask`, and when `actingRole` is given keep exactly
+the plugins `roleAllowsPlugin(actingRole, entry, workTask)` allows
+(REQ-plugins-065) after the SAFE-1 allowlist, tier and SAFE-9 filters; without
+it the `actingIsAdmin` filter is unchanged (ROLES-CHAT-2). `createTaskExecute`
+SHALL resolve the role with `resolveActingRole(env)` on every attempt and pass
+it with `workTask` (`CORVIDINHO_ACTING_WORK_TASK`), so each run's catalog is
+built from the role at that moment (IDENTITY-12): owner and no role session get
+today's ADMIN catalog (IDENTITY-9); team gets the read tools plus
+`github-issue-comment` / `github-pr-review` when allowlisted, plus
+`files-write` / `files-edit` in a `/work` run (IDENTITY-10); community gets
+today's non-ADMIN catalog (IDENTITY-11). Fledge plugin discovery stays owner /
+no-role-session only. A not-offered mutating plugin the model names gets the
+role refusal exactly when the role, re-resolved at that call, does not allow
+it (REQ-agent-333 unchanged otherwise). `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`
+SHALL name the only community site / roadmap sources — the public repo docs
+(README, docs/, STATUS, CHANGELOG — `github-docs-read` or the project files)
+and the public issues and milestones of allowed public repos
+(`github-issue-list`, `github-milestone-list`) — and say nothing else counts
+as the site or roadmap (ROLES-CHAT-8.a).
+
+Acceptance Criteria
+- With every dangerous plugin allowlisted, `actingRole` owner and null equal the ADMIN catalog and community equals the non-ADMIN catalog (no mutating plugin); team adds only `github-issue-comment` / `github-pr-review` (and exactly `files-write` / `files-edit` with `workTask`); an unallowlisted review tool is not offered.
+- Through `createTaskExecute` and a scripted provider: a team chat run offers the review tools but not `files-write` or `github-pr-create`; a team `/work` run adds the file tools; a team member on a community-stamped surface and an undeclared actor with a team stamp get read tools only.
+- The public Q&A prompt names README, docs/, STATUS, CHANGELOG and the public issues and milestones of allowed public repos, says nothing else counts, and no longer offers "the project site, and the roadmap".
+- Regression tests in `tests/roles.team.test.ts` and `tests/github.public-docs.test.ts` fail on the base sources and pass after.
 

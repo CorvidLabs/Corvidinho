@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared",
+  "implementation_commit": "89a19b1217f1c36498dc140005bbf6ed896b0379",
+  "implementation_tree": "16a9c59f82f11a17becd5b67b855478b17a0bea7",
+  "contract_digest": "2b761f4470b74e86628f9bf46c447b00cd1f3dc2d4a4194caf7d2eb490bf3323",
+  "workspace_digest": "90b66591b200378b6a73acbdeaa345abc139e3b08338d1422fc9e3c3ede05e39",
+  "closing_digest": "5e353bc508292a0acc1e300ccd0821d37923314af739cb5b2a83167a97401ab4",
+  "review_digest": "7573c0b0905b98304e5a5842c8eececd79915dda1a6aed9286516aac68b6df7c",
+  "finalization_digest": "43ef11a03d7abdbce3345256695c79170b43ad7cbafad5410ddbbdc81a8106e9",
+  "timestamp": 1790704928
+}

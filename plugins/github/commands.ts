@@ -3,6 +3,7 @@ import { attribution } from "../../src/attribution.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
+import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "../../src/plugins/roles.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
 
@@ -24,11 +25,17 @@ function takeFlag(args: string[], name: string): { value: string | undefined; re
   return { value, rest: out };
 }
 
+/**
+ * `--repo` through the acting role's repo gate (GITHUB-6 / ROLES-CHAT-8);
+ * `write` marks a write command: team reviews and comments need an
+ * allowlisted repo (IDENTITY-10).
+ */
 async function requireRepo(
   ctx: PluginHandlerArgs,
+  write = false,
 ): Promise<PluginHandlerResult | { repo: string; owner: string; name: string }> {
   const repo = extractRepoFromArgs(ctx.args);
-  const gate = await checkRepoGateForActingRole(repo);
+  const gate = await checkRepoGateForActingRole(repo, { write });
   if (!gate.ok) {
     return { ok: false, error: gate.error, exitCode: 3 };
   }
@@ -289,7 +296,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -342,7 +349,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -396,7 +403,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -472,7 +479,7 @@ export const githubCommands: PluginCommand[] = [
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      const r = await requireRepo(ctx);
+      const r = await requireRepo(ctx, true);
       if ("ok" in r && r.ok === false) return r;
       const { owner, name } = r as { owner: string; name: string };
       const rest = argsWithoutRepo(ctx.args);
@@ -503,6 +510,19 @@ export const githubCommands: PluginCommand[] = [
           error: `--event must be COMMENT, APPROVE, or REQUEST_CHANGES (got ${eventFlag})`,
           exitCode: 1,
         };
+      }
+      // IDENTITY-10 (#65): a team member's review is feedback, posted as
+      // COMMENT; APPROVE and REQUEST_CHANGES count toward (or block) a merge,
+      // so they stay the owner's. The role is re-resolved at this call.
+      if (event !== "COMMENT") {
+        const role = await resolveActingRole();
+        if (role !== null && role !== "owner") {
+          return {
+            ok: false,
+            error: `Denied: github-pr-review --event ${event} is ${ROLE_REFUSED_MESSAGE} (IDENTITY-10: team reviews post as COMMENT).`,
+            exitCode: 2,
+          };
+        }
       }
       if (githubDryRun()) {
         return okResult(ctx, {

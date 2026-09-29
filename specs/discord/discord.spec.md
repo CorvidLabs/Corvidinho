@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 78
+version: 83
 status: draft
 files:
   - src/discord/types.ts
@@ -14,7 +14,10 @@ files:
   - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
+  - src/identity/people.ts
   - src/identity/index.ts
+  - tests/identity.people.test.ts
+  - tests/identity.recognise.test.ts
   - tests/identity.owner.test.ts
   - tests/discord.owner.test.ts
   - src/discord/session-store.ts
@@ -74,8 +77,10 @@ files:
   - src/discord/command-handlers/announce.ts
   - src/discord/command-handlers/admin.ts
   - src/discord/admin-allowlist.ts
+  - src/discord/admin-people.ts
   - src/discord/channel-autocomplete.ts
   - tests/discord.admin-slash.test.ts
+  - tests/discord.admin-people.test.ts
   - tests/discord.channel-autocomplete.test.ts
   - src/discord/announce-store.ts
   - src/discord/announce.ts
@@ -167,6 +172,27 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
 `setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
 `isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
+`parseJsonObject` (`admin-allowlist.ts`, shared with `/admin people`);
+`/admin people` (ADMIN-3.a, REQ-discord-036): `formatPeopleList`
+(`command-handlers/admin.ts`); `planPeopleChange`, `commitPeopleChange`,
+`setTomlPerson`, `setJsonPerson`, `renderPersonTomlLines`, `samePerson`,
+`formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
+(`admin-people.ts`, the only writer of people and roles; `op: "role"` sets
+team / community, ADMIN-3.b). Declared people
+(IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
+githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
+(the one resolver; stable ids only; `role` is `owner` for the configured
+owner, else the declared `team` / `community`), `roleOfPerson` (effective
+role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
+`normalizePersonRole`, `PersonRole` / `DeclarableRole`, `PERSON_ROLES`,
+`DECLARABLE_ROLES`, `DEFAULT_PERSON_ROLE`, `loadDeclaredPeople({ allowlist, owner })`
+(re-reads `allowlist.sourcePath`, never throws), `buildPeopleDirectory`,
+`loadPeopleDirectory`, `readPeopleFile`, `parsePeopleToml` /
+`parsePeopleJson` / `parsePeopleText`, `normalizePersonLink`,
+`normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
+`cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
+`LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
+types.
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
@@ -196,21 +222,32 @@ Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
-restates and a free-text reply answers, and `openAsks` holds earlier button
+restates and a free-text reply answers (a button `pendingAsk` past its
+timeout is cleared with `clearPendingAsk` before any reply but `cancel` is
+gated, so a thin reply never restates it — DISCORD-ASK-5), and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
 array (oldest first, newest last) when several are. The stored question,
 option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
 and the SAFE-6 re-scrub rewrites the column value by value as JSON
 (`scrubJsonText`). `normalizeAskOptions` replaces a model-chosen option id
 that looks like a secret with its position, so askId, expiresAt, option ids
-and stubMessageId are stored byte-identical. `SessionStore.setPendingAsk(session, ask)`
+and stubMessageId are stored byte-identical; an option id that repeats an
+earlier one takes the first unused position number, so every option button
+has its own `custom_id` (REQ-agent-045). `SessionStore.setPendingAsk(session, ask)`
 stores a new ask beside any open button ask (a superseded free-text ask is
 replaced; an askId already held is updated in place; `null` clears every open
 ask — explicit cancel), `SessionStore.clearPendingAsk(session, askId)` clears
 one ask (a pick, a late press or a free-text answer; the newest remaining one
 that has not timed out becomes `pendingAsk`, and timed-out earlier ones are
 dropped then, never restated) and `SessionStore.findPendingAsk(askId)` returns the live
-session and ask a button press answers. Button pending asks are NOT
+session and ask a button press answers. An ask that leaves past its timeout
+(dropped, or cleared by a late press) or with its TTL-purged session (at
+runtime or on load) is kept as a memory-only `ClosedAsk` (`{ askId, userId,
+expiresAt, channelId, threadId? }` — the session's channel and thread, for
+the channel gate — never the question or option text; the newest
+`CLOSED_ASKS_MAX`, 1000) that `SessionStore.findClosedAsk(askId)` returns, so
+the requester's press on it gets `ASK_CHOICE_EXPIRED` (DISCORD-ASK-5 /
+REQ-discord-045); a pick, an answer of a live ask and a cancel close nothing. Button pending asks are NOT
 cleared by ordinary chat, nor replaced when a later run asks again
 (SESSION-MULTI-3); free-text pending still clears on substantive continue.
 Message router keys sessions by Discord user id + channel
@@ -282,6 +319,16 @@ ping (stuck and spend-cap only) and the warning go out as a fresh post after
 the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
+
+Closing role note on the way to a post (REQ-discord-734, ROLES-CHAT-3 /
+REQ-agent-333): `ask-ping.ts` exports `POST_SUMMARY_MAX` (1500) and
+`clipPostSummary(summary, headLength = 0)`, which caps a run summary at 1500
+chars and at what fits after a `headLength`-char post head within
+`ASK_REPLY_MAX` (1900) with `clipKeepingRoleNote`. The scheduler's run-row
+summary and schedule post, and the `/work` and `/session start` answers, use
+it; `appendPostLine` cuts the body for the SAFE-8 warning line the same way
+(ending the kept text in `…`). A closing `(not allowed for your role)` note
+stays last; a summary without it is cut exactly as before.
 
 Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
 DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
@@ -364,6 +411,29 @@ user id + resolved display (owner map wins for owner). Gateway fills
 `userUsername`, and `ComponentInteraction.userDisplayName` / `userUsername`
 from `componentActorNames`). Bridge (chat and button-pick resume) and slash
 handlers inject identity before memory (IDENTITY-4 / REQ-discord-446).
+With declared people (`IdentityInjectInput.people`, from `loadDeclaredPeople`
+on every run) the block also names `declared_person`, the declared display
+(winning over the Discord names), `nicknames` and `github` logins, matched on
+the acting Discord user id only (`resolveActingPerson`); once anyone is
+declared an undeclared non-owner gets `declared_person: none`; an undeclared
+owner's block and every block with nobody declared are unchanged
+(IDENTITY-14 / IDENTITY-7, REQ-discord-036).
+
+Roles (IDENTITY-8..12, REQ-discord-065): `resolveDiscordActingRole`
+(`permissions.ts`) gives a Discord run's spawn role — `owner` when the caller
+resolves to ADMIN, else `team` when the people list declares the caller's
+Discord id team, else `community` (blocked callers too). The bridge (chat and
+button-pick resume), `/session start` and `/work` pass it as
+`AgentRunChatOpts.actingRole`, `/work` also `workTask: true`; the spawn client
+always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
+`team` only when asked, else `community` — schedules pass none) and
+`CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
+on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
+it. `/work` ships its PR for the owner or a team member (re-resolved after the
+run); community keeps the branch. `/admin people role person:<id>
+role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
+SAFE-5 audited like the other people mutations; `/admin people list` shows
+each role and `config show` counts them.
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
@@ -424,14 +494,20 @@ slash reply/editReply, component reply/update, discord-post-message) parses
 no mentions from its content (`parse: []`,
 `@everyone` / `@here` defanged); only the replied-to author and the users an
 ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
+a run summary's closing `(not allowed for your role)` note survives every cap
+between the agent and the post: schedule run rows and posts, `/work` and
+`/session start` answers (fitted under 1900), and the SAFE-8 warning append
+(REQ-discord-734);
 `discord-send-file` attaches only in the channel the bridge set for the run
-(never a model-chosen one; none ⇒ refused), after the channel allowlist (a
-thread through its parent, unless the thread itself is deny-listed) and the acting user's DISCORD-8 check with Attach
-Files; at most 8 MB, PNG / JPEG / GIF / WebP by magic bytes or UTF-8 txt /
+(never a model-chosen one; none ⇒ refused), after the bridge's channel gate
+(`isMonitoredConversation` on the bridge's channel set: a thread passes as
+itself or through its parent, a deny on the thread or its parent wins) and the acting user's DISCORD-8 check with Attach
+Files; at most 8 MB (on the size and on the bytes read, never reading more than 8 MB + 1 byte), PNG / JPEG / GIF / WebP by magic bytes or UTF-8 txt /
 log / md / diff / patch / json / csv, text secret-scrubbed (SAFE-6), SAFE-2
-protected / `.specsync` / secret paths refused by name and by resolved
-target inside the project root, dry run posts nothing, audited as a dangerous
-plugin (REQ-discord-476);
+protected / `.specsync` / secret paths refused by name, by resolved
+target inside the project root and by the file actually opened (read once
+from one descriptor, no link followed at the checked path), dry run posts
+nothing, audited as a dangerous plugin (REQ-discord-476);
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
@@ -446,6 +522,7 @@ outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or 
 every MessageCreate is processed only when its own channel (thread parent or the thread itself) is allowlisted and neither the thread nor its parent is on `deny_channels` (deny wins over an allowlisted parent on chat, thread, reply, ask button, slash, schedule, restart recovery and `discord-send-file`) — a reply or forward that references a tracked bot message never continues the session in another channel, and the gateway keeps a reference only for a same-channel reply (never a forward); an ask button press resumes only in an allowlisted channel (or the session's thread under an allowlisted parent) while the session's own channel is still allowlisted, else an ephemeral tip (admin) or zero-width ack with no resume (DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-212);
 every @mention/reply/thread message and every slash command also passes `gateActor` after the channel gate: deny-listed users/roles are refused, and when the user or role allowlist is non-empty only listed users, allowed roles or the owner pass; empty user+role lists keep the channel-only path; refusal is silent on MessageCreate and a zero-width ephemeral ack on slash (ALLOW-3/5 / DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-201);
 an ask button press (open or pick) passes channel → `gateActor` (with the press's role ids) → mute/rate (shared per-user state, presser's resolved level) before it opens choices or resumes; a refusal is ephemeral only — zero-width ack for an actor deny, `MUTED` / `RATE_LIMITED` for mute/rate — with no agent run, nothing sent or edited, and the pending ask kept (DISCORD-6 / DISCORD-DENY-3 / REQ-discord-201 / REQ-discord-010);
+after those gates, the requester's press on an ask that is no longer open because it timed out (dropped when a newer ask was cleared, or cleared by a late press) or its session was TTL-purged (at runtime or on load) gets only the ephemeral `ASK_CHOICE_EXPIRED` — no agent run, no session, nothing sent or edited — while another user's press, a re-press after a pick and a press after cancel keep the not-for-you reply; the channel gate judges such a press against the closed ask's session channel and thread as for a live ask, so it holds in the talk's thread under an allowlisted parent (DISCORD-2.a) and stays zero-width elsewhere or once that channel left the allowlist; the store keeps such an ask only as `{ askId, userId, expiresAt, channelId, threadId? }` in memory (no question or option text, newest `CLOSED_ASKS_MAX`) (DISCORD-ASK-5 / DISCORD-ASK-8 / SAFE-6 / REQ-discord-212 / REQ-discord-045);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
 every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
@@ -460,6 +537,7 @@ Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: e
 Needs-human outbox for schedule runs (REQ-discord-347, AUTONOMY-2 / AUTONOMOUS-7): `markRunFinished` also stores the run's ask on its row (`schedule_runs.ask_reason`, `ask_question` scrubbed and capped at `ASK_QUESTION_MAX`, `ask_posted_at`; schema v11, `SCHEMA_VERSION` 11, partial index `idx_schedule_runs_pending_ask`; `ask_question` is in `SCRUB_TARGETS`), and `ScheduleRun` gains optional `ask` / `askPostedAt`. `ScheduleStore.pendingAsks()` returns, per schedule, the newest finished run's ask when no ticker took it (`PendingScheduleAsk`; an older one is moot once a later run finished, a deleted schedule's runs are gone); `claimRunAsk(runId)` takes an ask with a compare-and-set on `ask_posted_at IS NULL` that also re-checks the run is still its schedule's newest finished run (so an ask made moot while a pass is posting is skipped) and `releaseRunAsk(runId)` hands it back. A `SchedulerService` with an outbound (the bridge) takes its own run's ask before posting it (not retried when that post fails, as before, except the auto-pause ask of REQ-discord-353), and each `tick()` starts one fire-and-forget delivery pass (`settleAskDelivery(timeoutMs?)` awaits it; after `stop()` a pass takes no further ask, and the bridge's stop waits ≤3 s, `ABANDONED_SETTLE_MS`, for a post in flight before closing the gateway) that posts pending asks — a run `corvidinho daemon` claimed — for schedules whose creator and channel pass the live DISCORD-SCHEDULE-3 gate (`gateTick`; a refused one stays pending) through the same ask post (`formatAskReply` with the schedule prefix; owner for stuck / spend-cap, creator for clarify; `askPingKey` and `claimCapPing` dedupe; pending 80% warning), handing the ask back when the post resolves `false` or throws (`[scheduler] ask failed: …`). The daemon (no outbound) never takes or posts an ask and keeps its `run.needs_human` log line.
 Nightly backup on the scheduler tick (OPS-1/2, REQ-discord-680): `SchedulerServiceOpts.backup` (a `BackupTicker`, `src/store/backup.ts`, REQ-cli-680) is called with the tick's clock after the due runs are claimed and never throws. The bridge builds it over its shared DB with `consoleBackupLog` (`[backup] <event> {json}`, scrubbed) and a `notify` that posts the pending owner notice (`formatBackupNotice`, fixed text, no path or error) to the `/announce` channel through the gateway reply, prefixed `<@owner>` with `mentionUserIds` [owner] (REQ-discord-205), and resolves false when no channel is set, no gateway reply exists or the post fails, so the notice is handed back and retried each tick (`…owner_not_told` logged once) and nothing is posted elsewhere; notices a daemon recorded are delivered the same way, once per failure streak. The bridge's `stop()` stops the backup ticker (no further notice is taken) and waits ≤3 s (`ABANDONED_SETTLE_MS`, `settle(timeoutMs)`) for a notice post in flight before closing the gateway; one still in flight then is handed back, so the next start posts it instead of it being lost. `SchedulerServiceOpts.backup` needs only `tick`. `StartBridgeOptions.schedulerNow` is the scheduler / backup clock test seam.
 Schedules never stop or fail to start silently (REQ-discord-353, AUTONOMY-2): a run whose project cannot be resolved or whose worktree cannot be created (also when that step throws) is still recorded failed with the full error (`project resolve failed: …` / `worktree failed: …`), and `failBeforeRun` also records a `stuck` ask whose question is fixed, path-free text (`PROJECT_RESOLVE_FAILED_QUESTION` / `WORKTREE_FAILED_QUESTION`, exported from `src/scheduler/service.ts`; REQ-discord-418). `ScheduleStore.markRunFinished` takes an optional `autoPause: { at, ask }` and, when the run failed and the SQL `consecutive_failures` reaches `at` in the same transaction, stores that ask instead of the run's own; `finish()` passes `{ at: FAILURE_AUTO_PAUSE, ask: autoPauseAsk(runAsk) }` (`autoPauseAsk(last?)`: `Paused after 5 failed runs in a row. Fix the cause, then resume it with /schedule resume.` plus `Last failure: <question>`) and returns the run's effective ask (the pause ask when `maybeAutoPause` paused), which `onRunFinished.askReason` reports. The bridge posts it through `postOwnRunAsk` (the REQ-discord-347 in-process gate, take and `postRunAsk`; the pausing run's ask replaces its `❌` post and, when the run had no ask of its own, carries only its `failed (exit N)` line as context; a run that throws posts its pause ask at once with no context; `handBack` releases a pause ask whose post did not go out, since a paused schedule has no next run) and a daemon run's through the next delivery pass; a DISCORD-SCHEDULE-3 refusal records no ask of its own, and the pause ask of refused runs waits for the gate. No schema change.
+Every schedule post — the `✅` / `❌` result line and each ask post (in-process or from the delivery pass, including these stuck asks) — starts with `scheduleTitle` (`Schedule **<name>** (<id>) on <project>`), where the project is `projectLabel(schedule.project)` (`src/discord/list-scope.ts`: the last segment of an absolute path, a relative name as given), never an absolute host path, since the whole channel reads it (REQ-discord-353, REQ-discord-418, SAFE-6). The run row keeps the full error and the model's prompt keeps the stored project.
 Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108). A run never stays "running" forever (REQ-discord-346): `finish()` counts a run recorded only after `markRunFinished` (one IMMEDIATE transaction) succeeds, retrying a throwing write once and otherwise logging `[scheduler] run failed: could not record run …` and counting it failed; the bridge's `stop()` abandons in-flight runs like the daemon (`interrupted: bridge shutdown`); both stops wait ≤3 s (`settleAbandoned`, `ABANDONED_SETTLE_MS`) for aborted runs to park their worktree; each claimed run records its runner (`schedule_runs.runner` = `<pid>:<proc start>`, schema v10, `SCHEMA_VERSION` 10), and the bridge and daemon start with `recoverAbandoned()`, which fails runs whose runner is gone (`interrupted: process restarted`, `RUN_INTERRUPTED_BY_RESTART`) and parks leftover `talk-schedule_<schedule>_<run>` worktrees of runs this data dir recorded as no longer running, deleting a branch only when it has no commits of its own; a live runner's run and worktree are left alone, and a schedule-run worktree whose run this data dir does not know (another data dir's, e.g. `bun test` run inside it) is never touched.
 Each schedule run is gated against the live allowlist before any worktree or agent run and again before its post (DISCORD-SCHEDULE-3 / REQ-discord-020): `SchedulerService` checks the creator with `gateActor` (REQ-discord-201: deny wins; a non-empty user/role list must list the creator's id unless it is the configured `owner`; a tick has no member roles) and the channel with `checkChannel`. A refused run spawns nothing, posts nothing and is recorded failed (`creator not allowlisted: …` / `channel not allowlisted: <id>`), counting toward the 5-failure auto-pause. The bridge ticker shares the allowlist `/admin` edits in place; the daemon reloads it before each tick (REQ-cli-108).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
@@ -589,7 +667,7 @@ REQ-discord-044).
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |
-| `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (or a deny-listed thread under an allowlisted parent), SAFE-2 / secret path (by name or link target), path outside the project, type not allowed or bytes not matching, over 8 MB, requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
+| `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (neither the thread nor its parent listed, or a deny on the thread or its parent), SAFE-2 / secret path (by name, link target, or a file or folder swapped for a link after the checks), path outside the project, type not allowed or bytes not matching, over 8 MB (at the size check or in the bytes read; at most 8 MB + 1 byte is read), requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
 | `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
@@ -698,7 +776,16 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-28 | discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord: Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8) |
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
 | 2026-09-29 | nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per: Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68) |
+| 2026-09-29 | declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared: Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36) |
+| 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
+| 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
 | 2026-09-29 | scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so: Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
+| 2026-09-29 | discord-send-file-serves-a-thread-allowlisted-by-its-own-id-like-the-bridge-and-re-checks-the-8-mb-cap-on-the-bytes: Discord-send-file serves a thread allowlisted by its own id like the bridge and re-checks the 8 MB cap on the bytes read (DISCORD-17 review follow-up) |
+| 2026-09-29 | discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl: Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies "that choice expired" with no agent run (DISCORD-ASK-5, REQ-discord-045) |
+| 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |
+| 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
+| 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), .env.example gives an absolute CORVIDINHO_ALLOWLIST_FILE because ~ is not expanded, and docs/DAEMON.md lists daemon.start_failed and spend.warning |
+| 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |

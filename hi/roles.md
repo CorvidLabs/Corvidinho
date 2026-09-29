@@ -20,10 +20,11 @@ Anyone in an allowlisted Discord channel can have a solid chat experience. Non-a
 - **ROLES-CHAT-6**  Role is re-checked in the plugin/runtime layer each call (same spirit as DISCORD-7 / IDENTITY-12 draft) — prompt text never grants power.
 - **ROLES-CHAT-7**  Prove-before-done: automated tests cover (a) non-admin cannot run file-write / shell / github-create-pr / memory-forget, (b) admin can reach those paths still gated by SAFE, (c) channel allowlist still required.
 - **ROLES-CHAT-8**  Non-ADMIN community Discord sessions may answer from any public GitHub plus site/roadmap; refuse private repo access and secret paths.
+  - **ROLES-CHAT-8.a**  Community sessions may read the public repo docs (README, docs/, STATUS, CHANGELOG) and the public issues and milestones of allowed public repos, and nothing else as site or roadmap.
 - **ROLES-CHAT-9**  In Discord community chat, prefer a conversational prose reply for social or game banter; only open SpecSync, git, github, or project file tools when the query clearly needs Corvidinho codebase or product data.
 
 ## Notes (not numbered AC)
 
-- Full three-role team matrix (#65 / IDENTITY-8..12 draft) is a non-goal for the first ship — this is the **two-tier interim** (community chat vs owner ADMIN) until team role lands.
+- Three roles (owner / team / community) are captured as **IDENTITY-8..12** (Leif, 2026-09-28 interview) and replace this two-tier gate over time: owner = ADMIN here, community = non-ADMIN here, team is the middle tier (#65).
 - Related already captured: ADMIN-1..4 (slash → #43), IDENTITY-1..3, DISCORD-5/7, DISCORD-DENY, SAFE-1..9, MEMORY-ACL.
 - Empty channel allowlist stays deny (do not relax).

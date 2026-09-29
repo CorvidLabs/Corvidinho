@@ -15,6 +15,7 @@ import { extractUsage, loadLlmEnv } from "../src/agent/execute.ts";
 import { createSpendGuard, SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
 import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import { createSpendAlertOutbox } from "../src/agent/spend-outbox.ts";
+import { chatBodyFromTaskResult, ROLE_REFUSED_SUMMARY_NOTE } from "../src/agent/task-summary.ts";
 import type { HumanAsk, SpendWarning, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createDaemonLogger, startDaemon } from "../src/daemon/index.ts";
@@ -105,6 +106,22 @@ describe("80% warning line (formatSpendWarningReply / withSpendWarningPost)", ()
     const out = appendPostLine("x".repeat(5000), "LINE");
     expect(out.length).toBeLessThanOrEqual(ASK_REPLY_MAX);
     expect(out).toEndWith("…\n\nLINE");
+  });
+
+  test("the cut for the warning line keeps a closing role note (REQ-discord-734, ROLES-CHAT-3)", () => {
+    const tail = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+    // A non-ADMIN chat answer: 1800 chars, the note last.
+    const content = chatBodyFromTaskResult({ summary: `${"y".repeat(2500)}${tail}` });
+    expect(content.length).toBe(1800);
+    const post: { channelId: string; content: string; mentionUserIds?: string[] } = { channelId: "c", content };
+    const out = withSpendWarningPost(post, WARNING, OWNER);
+    const line = formatSpendWarningReply(WARNING, OWNER).line;
+    expect(out.content.length).toBe(ASK_REPLY_MAX);
+    expect(out.content).toEndWith(`y…${tail}\n\n${line}`);
+    expect(out.mentionUserIds).toEqual([OWNER_ID]);
+    // A body that fits is untouched.
+    const short = `answer${tail}`;
+    expect(appendPostLine(short, "LINE")).toBe(`${short}\n\nLINE`);
   });
 });
 

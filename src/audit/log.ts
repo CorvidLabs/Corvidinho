@@ -170,11 +170,17 @@ export function verifyAudit(db: Database, key?: string): AuditVerify {
   return { ok: true, count: rows.length, keyedRows, unkeyedRows, keyAvailable: Boolean(key) };
 }
 
-/** One-line human summary for /status and startup logs. */
+/**
+ * One-line human summary for /status and startup logs. A failed verify
+ * counts rows only up to the row it stopped at, so without a key
+ * `keyedRows === 0` means it broke before any keyed row: a tampered unkeyed
+ * row, verified without the key, reads BROKEN like any break. Only stopping
+ * at a keyed row without the key reads "cannot verify keyed rows".
+ */
 export function formatAuditLine(v: AuditVerify): string {
   if (v.count === 0) return "Audit: 0 entries";
   if (!v.ok) {
-    return v.keyAvailable
+    return v.keyAvailable || v.keyedRows === 0
       ? `Audit: ${v.count} entries · chain BROKEN at #${v.brokenAtSeq}`
       : `Audit: ${v.count} entries · cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`;
   }

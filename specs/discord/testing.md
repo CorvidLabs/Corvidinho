@@ -142,6 +142,13 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/discord.send-file.test.ts` — a deny-listed thread under its
   allowlisted parent is refused `is denied` before any requester check or
   upload; another thread under that parent still attaches.
+- `tests/discord.send-file.test.ts` — REQ-discord-212 / REQ-discord-476: a
+  thread allowlisted by its own id, its parent not listed, attaches in the
+  thread after the acting user's check (as the router serves it); with the
+  parent deny-listed it is refused (`is denied`), a deny-listed thread under
+  an allowlisted parent is refused, and a thread whose parent is not listed
+  either is refused (not allowlisted); nothing more is checked or uploaded.
+  Fails against the plugin before this fix (it gated the parent only).
 
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
@@ -195,6 +202,28 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   asks by askId in `discord_sessions.pending_ask` (one object, or an array
   when several are open) across a reopen (no live Discord).
 
+## A late press on an ask that is no longer open (REQ-discord-045, DISCORD-ASK-5/8)
+
+- `tests/discord.ask-ephemeral.test.ts` — the requester's Choose and option
+  press on an earlier ask dropped (timed out) at the newest pick, and on both
+  open asks of a session idle past its TTL, get exactly the ephemeral
+  `ASK_CHOICE_EXPIRED` with no run, no session and nothing posted; another
+  user's press on them (and on the live ask before the purge) gets the
+  not-for-you reply; a still-stored expired ask is cleared by the first press
+  and a second press is still expired; a re-press after a pick and a press
+  after `cancel` keep the not-for-you reply before and after the purge;
+  in a talk inside a thread under the allowlisted channel, the requester's
+  press in that thread on a dropped ask and on a TTL-purged session's ask get
+  `ASK_CHOICE_EXPIRED`, another thread or a non-allowlisted channel (or the
+  talk's channel leaving the allowlist) gets the zero-width ack;
+  `SessionStore.findClosedAsk` holds only askId, user, expiry and the talk's
+  channel and thread for a drop, a late clear, a runtime purge and a load
+  purge (never a pick, a cancel or a re-stored askId) and forgets the oldest
+  past `CLOSED_ASKS_MAX`.
+- `tests/discord.ask-button-gates.test.ts` — a muted or deny-listed
+  requester's press on an ask of a TTL-purged session gets `MUTED` / the
+  zero-width ack; once let through it gets `ASK_CHOICE_EXPIRED`, no run.
+
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
@@ -228,6 +257,17 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   gateway adapter forwards the Choose button on `editReply` and `reply`. The
   bridge-level tests fail on the base sources (free-text answer, options
   dropped).
+
+## Unique option ids and expired button asks (REQ-discord-044 / REQ-discord-045 / REQ-agent-045, DISCORD-ASK-1/3/5)
+
+- `tests/discord.ask-ephemeral.test.ts` › "ask option ids and expired button
+  asks (DISCORD-ASK-1/3/5)" — an ask whose options repeat one id opens with
+  distinct pick `custom_id`s and a press on the second resumes with its own
+  label; a thin reply after the only button ask timed out runs the agent
+  and restates no Choose button; after the newest ask timed out a thin reply
+  restates the earlier live ask; a substantive reply after expiry runs the
+  agent and clears the ask; `cancel` after expiry keeps its short ack and
+  runs nothing (no live Discord).
 
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
@@ -297,6 +337,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
   when the SQL failure count reaches 5 even from a stale cache; a success
   stores none.
+- `tests/scheduler.ask-outbox.test.ts` — a schedule on an absolute project
+  names the project, never the host path: a daemon run whose absolute
+  sibling project cannot be resolved keeps the full error with the path on
+  the row and the first line of the bridge's stuck ask names `gone`, without
+  the temp dir; on `/srv/host-only/acme/Widget` the
+  `✅` and `❌` result posts, a bridge clarify and stuck ask and a
+  daemon-claimed stuck ask all name `Widget` and never `/srv/host-only`,
+  while the model's prompt keeps `on project: /srv/host-only/acme/Widget`.
+  Against the base without the fix: both fail.
 
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
@@ -412,7 +461,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `fledge.toml`, a symlink to `.env`, a symlink into `.git`, a symlink out of
   the project and `..` / absolute outside paths are refused; `.sh`, a
   non-PNG `.png` and non-UTF-8 `.txt` are refused; a file over 8 MB is
-  refused before the check; a 413 / code 40005 answer is reported; a check
+  refused before the check, and so is a PNG whose size as first taken
+  (`statSync` / `fstatSync` spied to report its size before it grew) is
+  under 8 MB but whose bytes read are over it, after at most 8 MB + 1 byte
+  is read (`readSync` / `readFileSync` spied to count; REQ-discord-476,
+  fails against the plugin before the bounded read); a checked `notes.txt`
+  swapped for a link to `.env`, or `logs/out.log` whose folder is swapped for
+  a link into `.ssh`, at its first stat / open is refused (SAFE-2,
+  REQ-discord-476; fails against the plugin that read with `readFileSync`);
+  a 413 / code 40005 answer is reported; a check
   refusal (cannot attach) or a check that throws sends nothing; dry run
   uploads nothing; `started` + `ok` audit rows are written; `--git-diff`
   refuses an empty diff and attaches `changes.diff` with the tracked
@@ -420,7 +477,8 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   spawn client writes the reply channel and parent env (empty when none,
   never inherited); through `startBridge` a channel mention, a thread
   mention (thread + parent), `/session start` and `/work` pass the
-  conversation's channel. Against the base without the change: 20 of 21
+  conversation's channel, and an ask-button pick in a thread resumes with
+  `replyChannelId` = the thread and `replyParentChannelId` = its parent. Against the base without the change: 20 of 21
   fail (the "no attach promise" guard passes).
 
 ## Nightly backup on the bridge tick (REQ-discord-680, OPS-1/2)
@@ -441,3 +499,74 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   logged once, once per failure streak, notices recorded by a daemon ticker)
   and `settle(timeoutMs)` / `stop()` (a post outlasting the grace is handed
   back; a stopped ticker takes nothing more).
+## Closing role note kept on the way to a post (REQ-discord-734, ROLES-CHAT-3)
+
+- `tests/scheduler.service.test.ts` › "a long summary ending with the note
+  keeps it in the run row and the post; one without is cut as before": a
+  schedule with a 448-char name whose run returns the 1800-char
+  `chatBodyFromTaskResult` of a summary ending with the note stores a
+  1500-char run-row summary ending with the note and posts at most 1900 chars
+  ending with it; a run returning 1800 plain chars stores and posts exactly its
+  first 1500.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
+  closing role note within the 1900 cap": a `member-1` `/work` with a
+  207-char description (non-owner PR line) gets a collapsed answer of at most
+  1900 chars whose summary part is under 1500 (fitted after the head) and ends
+  with the note.
+- Same file › "/session start answer for a non-owner keeps the closing role
+  note within the 1900 cap": the answer is at most 1900 chars, its summary part
+  at most 1500, and it ends with the note.
+- `tests/discord.spend.test.ts` › "the cut for the warning line keeps a
+  closing role note": `withSpendWarningPost` on an 1800-char body ending with
+  the note gives a 1900-char post ending `y…`, the note, a blank line and the
+  owner-pinging 80% line; a body that fits is untouched. The existing
+  "a long post is cut so the warning line always fits" (no note) still ends
+  `…\n\nLINE`.
+- With `origin/main`'s `src/discord/ask-ping.ts`,
+  `src/discord/command-handlers/work.ts`, `session.ts` and
+  `src/scheduler/service.ts` swapped in, these four tests fail and every other
+  test in their files passes; on the branch all pass.
+
+## Declared people (REQ-discord-036, IDENTITY-13/14/6/7, ADMIN-3.a)
+
+- `tests/identity.people.test.ts` — `[people.<id>]` TOML (plural + singular
+  keys) and JSON parse; the allowlist loader and `[owner]` reader load the same
+  file; unreadable entries skipped whole with id-free problems; `owner`
+  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub login / numeric
+  id, never by display or nickname, renamed-login rule, clashes match nobody;
+  the owner's built-in or declared person with `role: owner`;
+  `loadDeclaredPeople` re-reads the loaded file and never throws.
+- `tests/discord.admin-people.test.ts` — `/admin people add|link|unlink|
+  remove|list` through the slash dispatcher: file edits (TOML verbatim
+  elsewhere, comments and unread keys kept; JSON entry only), live resolve
+  after each change, SAFE-5 rows, no-change paths, refusals (clashing ids
+  incl. the owner's GitHub login, bad ids, reserved id, unreadable entry, no
+  or throwing audit trail), non-owner refused at dispatch and handler, the
+  writer imported only by the admin handler, list under 2000 chars,
+  `config show` count.
+- `tests/identity.recognise.test.ts` — Discord identity block with people;
+  through `startBridge`: chat, `/session start` and `/work` name the declared
+  person; `/admin people` and a VM edit apply on the next message; a chat
+  request to change links changes nothing (also the WATCH cases of
+  REQ-watch-036).
+
+
+## Roles on Discord surfaces and /admin people role (REQ-discord-065, IDENTITY-8..12, ADMIN-3.b)
+
+`tests/roles.team.test.ts` — `resolveDiscordActingRole` (owner, team,
+community; muted or deny-listed team ⇒ community); the spawn client stamps
+`CORVIDINHO_ACTING_ROLE` owner / team / community and
+`CORVIDINHO_ACTING_WORK_TASK`, never inherited from the bridge env
+(schedules pass no role ⇒ community); through `startBridge` chat stamps each
+speaker's role and a file edit applies to the next message; `/work` runs a
+team member with `actingRole: "team"` + `workTask: true` and reaches the PR
+step, the owner is unchanged, community / undeclared never reach it, and a
+team member demoted mid-run gets no PR; `/session start` stamps the role
+without the work flag; `/admin people role` promotes / demotes with
+`admin-people-role` `started`/`ok` rows, no-change on the same role, refuses
+the owner role, unknown roles, undeclared people, the owner's own person and a
+missing role (`denied` rows, file unchanged), refuses a non-owner (even team)
+and a missing audit trail; `people list` shows each role, `config show` counts
+them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
+`people` group ends with `role` (`person`, `role` with team / community
+choices).

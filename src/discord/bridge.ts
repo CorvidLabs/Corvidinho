@@ -68,6 +68,7 @@ import {
   enrichPromptWithImages,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
+import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
@@ -85,6 +86,7 @@ import {
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
   PermissionLevel,
+  resolveDiscordActingRole,
   resolvePermissionLevel,
   type RateLimitState,
 } from "./permissions.ts";
@@ -326,6 +328,10 @@ export async function startBridge(
     console.warn("[discord] no owner configured — nobody is ADMIN (IDENTITY-3).");
   }
   const env = opts.env ?? process.env;
+  // IDENTITY-13/14 — the owner's declared people, re-read from the allowlist
+  // file on every use so `/admin people` and VM edits apply without a restart.
+  const declaredPeople = () =>
+    loadDeclaredPeople({ allowlist: config.allowlist, owner: config.owner ?? null });
   const db =
     opts.db ??
     (opts.sessionStore || opts.workStore
@@ -557,6 +563,20 @@ export async function startBridge(
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
 
+      // DISCORD-ASK-5 / REQ-discord-044: a button ask past its timeout is
+      // cleared here, before the thin-ack gate, so its dead Choose button is
+      // never restated. The newest open ask that has not timed out takes its
+      // place (earlier timed-out ones are dropped), or none is left and the
+      // message runs the agent. A cancel keeps its ack below.
+      if (
+        action.kind === "continue_session" &&
+        session.pendingAsk?.options?.length &&
+        isAskExpired(session.pendingAsk) &&
+        !isCancelAsk(promptBodyForAskGate(prompt))
+      ) {
+        store.clearPendingAsk(session, session.pendingAsk.askId);
+      }
+
       // AUTONOMY-5/6: while waiting on an ask, thin acks restate the newest
       // one; cancel clears every open ask of the session (SESSION-MULTI-3).
       if (
@@ -701,6 +721,7 @@ export async function startBridge(
             displayName: msg.authorDisplayName,
             username: msg.authorUsername,
             owner: config.owner ?? null,
+            people: declaredPeople(),
           });
           if (idInject.injected) {
             console.log(
@@ -721,16 +742,19 @@ export async function startBridge(
             enrichedPrompt = memInject.prompt;
           }
 
-          const actingIsAdmin =
-            resolvePermissionLevel({
-              userId: msg.authorId,
-              roleIds: msg.authorRoleIds,
-              allowlist: config.allowlist,
-              adminUserIds: config.adminUserIds,
-              adminRoleIds: config.adminRoleIds,
-              owner: config.owner ?? null,
-              mutedUsers,
-            }) >= PermissionLevel.ADMIN;
+          // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared
+          // person's team role, else community; the tool layer re-checks it.
+          const actingRole = resolveDiscordActingRole({
+            userId: msg.authorId,
+            roleIds: msg.authorRoleIds,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+            people: declaredPeople(),
+          });
+          const actingIsAdmin = actingRole === "owner";
           // Busy while the agent runs: the soft-TTL purge must not park this
           // worktree mid-run (REQ-discord-204).
           result = await store.runActive(session, () =>
@@ -743,6 +767,7 @@ export async function startBridge(
               resume: action.kind === "continue_session",
               actingUserId: msg.authorId,
               actingIsAdmin,
+              actingRole,
               cwd: sessionCwd,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
@@ -962,13 +987,23 @@ export async function startBridge(
       // not only the newest one.
       const pressed = store.findPendingAsk(parsed.askId);
       const session = pressed?.session;
+      // DISCORD-ASK-5 / REQ-discord-045 — an ask that is no longer open (timed
+      // out and dropped, or its session TTL-purged) still knows where its talk
+      // lived, so a press on it passes the same channel gate as a live one.
+      const closed = pressed ? undefined : store.findClosedAsk(parsed.askId);
 
       // DISCORD-5 / DISCORD-DENY-2/3 / REQ-discord-212 — a press counts only in
       // an allowlisted channel (inside the session's thread, its allowlisted
       // parent counts, DISCORD-2.a), and only while the session's own channel
       // is still allowlisted, since the resumed run posts there. Otherwise the
       // ack is ephemeral only: the tip for an admin, zero-width for anyone else.
-      if (!componentChannelAllowlisted(interaction.channelId, session, config.allowlist)) {
+      if (
+        !componentChannelAllowlisted(
+          interaction.channelId,
+          session ?? closed,
+          config.allowlist,
+        )
+      ) {
         const admin =
           resolvePermissionLevel({
             userId: interaction.userId,
@@ -1022,6 +1057,16 @@ export async function startBridge(
       }
 
       const pending = pressed?.ask ?? null;
+
+      // DISCORD-ASK-5 / REQ-discord-045 — the requester's press on an ask that
+      // is no longer open because it timed out (dropped, not promoted, when a
+      // newer ask was picked) or its session was TTL-purged is a late press:
+      // "that choice expired", no agent run. Another user's press on it still
+      // gets the not-for-you reply below, as on a live ask.
+      if (!pending && closed && closed.userId === interaction.userId) {
+        await interaction.reply({ content: ASK_CHOICE_EXPIRED, ephemeral: true });
+        return;
+      }
 
       // Wrong user or unknown ask → short ephemeral, do not leak.
       if (!session || !pending || session.userId !== interaction.userId) {
@@ -1137,6 +1182,7 @@ export async function startBridge(
             displayName: interaction.userDisplayName,
             username: interaction.userUsername,
             owner: config.owner ?? null,
+            people: declaredPeople(),
           });
           if (idInject.injected) enrichedPrompt = idInject.prompt;
           const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
@@ -1144,15 +1190,17 @@ export async function startBridge(
           });
           if (memInject.injected) enrichedPrompt = memInject.prompt;
 
-          const actingIsAdmin =
-            resolvePermissionLevel({
-              userId: interaction.userId,
-              allowlist: config.allowlist,
-              adminUserIds: config.adminUserIds,
-              adminRoleIds: config.adminRoleIds,
-              owner: config.owner ?? null,
-              mutedUsers,
-            }) >= PermissionLevel.ADMIN;
+          // IDENTITY-8..12: the presser's role, as on the chat path.
+          const actingRole = resolveDiscordActingRole({
+            userId: interaction.userId,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+            people: declaredPeople(),
+          });
+          const actingIsAdmin = actingRole === "owner";
 
           result = await store.runActive(session, () =>
             agent.runChat({
@@ -1162,6 +1210,7 @@ export async function startBridge(
               resume: true,
               actingUserId: interaction.userId,
               actingIsAdmin,
+              actingRole,
               cwd: sessionCwd,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,

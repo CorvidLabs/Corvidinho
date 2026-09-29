@@ -53,3 +53,26 @@ deny_users = []
 # discord_id = "000000000000000000"
 # github_login = "your-github-login"
 # display = "Your Name"
+
+# Optional declared people (IDENTITY-13/14): who's who on Discord and GitHub.
+# One [people.<id>] section per person; <id> is lowercase letters, digits,
+# - or _ ("owner" is reserved). Keep each value on one line. Matching uses
+# discord_ids, github_ids and github_logins only — never display or nicknames
+# (IDENTITY-7); an id listed for two people matches nobody. Only the owner
+# changes this: here on the VM, or with /admin people add|link|unlink|remove
+# (owner-only, audited) — never through chat (IDENTITY-6). Read live (no
+# restart). Declare yourself by putting the owner's discord_id in your entry.
+# Roles (IDENTITY-8..12): role = "team" (work tasks: /work edits + draft PR;
+# reviews: github-issue-comment / github-pr-review as COMMENT on
+# [github]-allowlisted repos; their own memory) or role = "community" (Q&A,
+# read tools only). No role = community; the owner is always owner ([owner]
+# above); anyone not declared here is community. Set it here or with
+# /admin people role (owner-only, audited, ADMIN-3.b); re-read on every tool
+# call.
+# [people.tofu]
+# display = "Tofu"
+# role = "team"
+# nicknames = ["T"]
+# discord_ids = ["000000000000000000"]
+# github_logins = ["tofu-dev"]
+# github_ids = ["0"]

@@ -7,6 +7,7 @@
 
 import { isMutatingPlugin } from "../plugins/mutating.ts";
 import { get, list } from "../plugins/registry.ts";
+import { roleAllowsPlugin, type ActingRole } from "../plugins/roles.ts";
 import type { CapabilityTier } from "./tier.ts";
 import { tierAllowsPlugin } from "./tier.ts";
 
@@ -77,9 +78,19 @@ export type BuildToolsOpts = {
   allowlist?: ReadonlySet<string>;
   /**
    * When false (non-ADMIN acting session), omit all mutating tools (ROLES-CHAT-2).
-   * Default true when unset (local CLI / no role session).
+   * Default true when unset (local CLI / no role session). Ignored when
+   * `actingRole` is given.
    */
   actingIsAdmin?: boolean;
+  /**
+   * IDENTITY-9..12: the role this run acts with, resolved in the tool layer
+   * (`resolveActingRole`). owner ⇒ every tool; team ⇒ read tools plus its
+   * review tools (and work tools when `workTask`); community ⇒ read tools
+   * only; null ⇒ no role session (no role filter). Wins over `actingIsAdmin`.
+   */
+  actingRole?: ActingRole | null;
+  /** A `/work` run (team work tools, IDENTITY-10). */
+  workTask?: boolean;
   /**
    * SAFE-9: when false (default), omit autonomous extras (e.g. `delegate`)
    * — offered only to sessions allowed autonomous tools (AUTONOMOUS-1).
@@ -101,7 +112,9 @@ export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
     if (entry.dangerous && !includeDangerous && !allowlistOffers(opts.allowlist, entry.name)) {
       continue;
     }
-    if (!actingIsAdmin && isMutatingPlugin(entry)) continue;
+    if (opts.actingRole !== undefined) {
+      if (!roleAllowsPlugin(opts.actingRole, entry, Boolean(opts.workTask))) continue;
+    } else if (!actingIsAdmin && isMutatingPlugin(entry)) continue;
     if (!opts.autonomous && get(entry.name)?.autonomous) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;
     out.push(toolDefForEntry(entry));

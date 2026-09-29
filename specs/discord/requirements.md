@@ -83,6 +83,7 @@ When DISCORD_TOKEN and DISCORD_BOT_TOKEN are both missing, the CLI/doctor/bridge
 
 Acceptance Criteria
 - `corvidinho discord bridge` without token exits non-zero naming DISCORD_TOKEN / DISCORD_BOT_TOKEN and go-live checklist.
+- The go-live checklist (`goLiveChecklist()`, printed by `doctor` and `discord bridge`) says users and roles both empty admit anyone in an allowlisted channel and once either is set only those users, role holders and the owner (REQ-discord-043); it never says empty user/role lists are deny-all.
 
 ### REQ-discord-006
 
@@ -762,12 +763,13 @@ Acceptance Criteria
 ### REQ-discord-043
 
 The bridge SHALL register one owner-only `/admin` slash command with
-subcommand groups `users add` (ADMIN-1), `channels add|remove` (ADMIN-2) and
-`config show` (ADMIN-3). The dispatcher SHALL require ADMIN and the handler
+subcommand groups `users add` (ADMIN-1), `channels add|remove` (ADMIN-2),
+`config show` (ADMIN-3) and `people list|add|link|unlink|remove` (ADMIN-3.a,
+REQ-discord-036) plus `people role` (ADMIN-3.b, REQ-discord-065). The dispatcher SHALL require ADMIN and the handler
 SHALL re-check ADMIN before doing anything else (ADMIN-4 / DISCORD-7); with
 no owner nobody can run it (IDENTITY-2/3).
 
-Mutations SHALL edit only `[discord].users` / `[discord].channels` in the
+The `users` / `channels` mutations SHALL edit only `[discord].users` / `[discord].channels` in the
 allowlist file the bridge already reads (the loaded file, else
 `CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml`,
 created 0600 when missing), written atomically (temp file in the same
@@ -790,7 +792,9 @@ the first user is added while users and roles were both empty, the reply
 SHALL warn that unlisted callers now resolve to BLOCKED. Replies SHALL be
 ephemeral, show before/after counts and never contain tokens or secrets.
 `config show` SHALL list live/file/env counts, owner configured yes/no plus
-display, and which knobs are updatable. Each mutation SHALL append SAFE-5
+display, the number of declared people (and of problems in their entries)
+and of team and community roles among them, and which knobs are updatable
+(declared people and their roles included). Each mutation SHALL append SAFE-5
 audit rows (`started` before the write, then `ok`/`error`); refusals SHALL
 append `denied`. A mutation SHALL fail closed with the same
 `audit log unavailable (SAFE-5)` refusal, writing nothing, both when the
@@ -809,6 +813,9 @@ Acceptance Criteria
 - `allowlist.JSON` (TOML text) is edited as TOML, matching the loader, and reloads with the new entry; `allowlistFileFormat` agrees with `isJsonAllowlistPath` for every path.
 - A dangling or looping symlink at the allowlist path is refused by `/admin`, `writeFileAtomic` and `config show`; the link stays a symlink and its target is not created.
 - Fixture tests only; no live Discord token or network.
+- `/admin config show` shows the declared-people count with the problem count and names `/admin people add|link|unlink|remove` among the updatable knobs.
+- The `/admin` body has the groups `users`, `channels`, `config` and `people` (`list`, `add`, `link`, `unlink`, `remove`, `role`), still nine top-level commands; `role` takes `person` and `role` with the choices `team` / `community`.
+- `/admin config show` counts team and community roles among the declared people and names `/admin people role` among the updatable knobs.
 
 ### REQ-discord-037
 
@@ -968,6 +975,11 @@ opened only when all of these hold, checked before any commit or push:
   run's result frame when it reports `verified`, else run once in the worktree
   before anything is pushed (AGENT-4).
 
+The PR step SHALL run only for the owner (ADMIN) or a declared team member
+(IDENTITY-10; the role is re-resolved from the live people list after the
+run, REQ-discord-065); community /work runs keep the changes on the work
+branch (ROLES-CHAT-3).
+
 The steps SHALL run through the existing typed plugins with
 `nonInteractive: true` — `git-commit` (explicit paths from `git status`),
 `git-push`, then `github-pr-create --draft --head <talk branch> --base
@@ -988,7 +1000,8 @@ Acceptance Criteria
 - An unverified run triggers one verify-lane run in the worktree before push; a failing lane ships nothing.
 - Push or PR-create failure yields a plain line and never a claimed PR.
 - Fixture tests use temp repos, a local bare remote, the dry-run github plugin and a mocked verify lane.
-- A /work by anyone other than ADMIN (the owner) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
 
 ### REQ-discord-085
@@ -1101,6 +1114,16 @@ reply to it by the requester continues that session and the rules above apply
 (AUTONOMY-5/6). A SAFE-8 spend-cap stop SHALL NOT be stored as the pending
 ask and SHALL NOT get Choose buttons.
 
+A continue that is not an explicit cancel, while the session's `pendingAsk`
+is a button ask past its timeout, SHALL first clear that ask as a late press
+does (`clearPendingAsk`), before the thin-ack rule applies: the newest
+remaining open ask that has not timed out SHALL become `pendingAsk` (earlier
+timed-out asks are dropped), so a thin-ack continue restates that live ask,
+or, with none left, runs the agent, and SHALL NOT restate the timed-out ask's
+stub or its Choose button (DISCORD-ASK-5). A substantive continue then runs
+the agent as before, and an explicit cancel still clears every open ask with
+the short ack and no agent run.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
@@ -1132,6 +1155,10 @@ Acceptance Criteria
 - When the newest ask is picked while an earlier open ask has timed out, the earlier ask is dropped, not promoted: the session has no pending ask, a thin reply runs the agent, and a press on the dropped ask is a no-op.
 - `cancel` with several open asks clears all of them with the short ack and no agent run; a later press on any of them is a no-op.
 - `SessionStore`: one open ask persists as one JSON object; two persist as an array and reload as `pendingAsk` plus `openAsks` after a reopen; re-storing a held askId updates it in place; `findPendingAsk` finds an earlier open ask; clearing the newest promotes the earlier one; a new ask replaces a free-text ask but never a button ask; `null` clears all.
+- A thin reply after the session's only button ask timed out runs the agent (no prior-question block), posts no restated stub or Choose button for that ask, and leaves no pending ask.
+- A thin reply after the newest button ask timed out, while an earlier button ask is still open and not timed out, restates the earlier ask with its Choose button and does not run the agent; the earlier ask is the pending ask and no other ask stays open.
+- A substantive reply after the button ask timed out runs the agent and leaves no pending ask, so a later thin reply runs the agent too.
+- `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 
 ### REQ-discord-045
 
@@ -1142,11 +1169,43 @@ interaction listing the option buttons. Button prompts SHALL expire after
 about 30 minutes; a late press SHALL get a short "that choice expired".
 Free-text clarify SHALL be used only when options cannot be listed.
 
+A late press SHALL include the requester's Choose or option press on an ask
+that is no longer open because it timed out and was dropped, not promoted,
+when a newer ask of the session was cleared (REQ-discord-044), or because its
+session was TTL-purged (SESSION-2 / REQ-discord-019), at runtime or while the
+store loads after a restart. Such a press SHALL get the ephemeral
+`ASK_CHOICE_EXPIRED` reply, with no agent run, no new session and nothing
+posted or edited, never "This choice isn't for you (or it was already
+answered)". A still-stored ask past its timeout SHALL keep that reply and be
+cleared, and a later press on it SHALL again get `ASK_CHOICE_EXPIRED`. A
+re-press after a pick and a press after an explicit cancel SHALL stay no-ops
+with today's reply (DISCORD-ASK-8), also once the session is purged. Another
+user's press on a live ask, or on an ask that is no longer open, SHALL get
+the not-for-you reply and SHALL NOT resume anything (DISCORD-ASK-2/3). The
+channel, actor and mute/rate gates (REQ-discord-212 / REQ-discord-201 /
+REQ-discord-010) SHALL run before this reply; for an ask that is no longer
+open, the channel gate SHALL judge the press against the channel and thread
+its session had, as for a live ask, so a late press in the talk's thread
+under an allowlisted channel (DISCORD-2.a) gets `ASK_CHOICE_EXPIRED` too. To
+tell a late press from another user's, `SessionStore` SHALL keep, for each
+ask that leaves past its timeout or with its purged session, only its askId,
+the session's Discord user, the ask's expiry and the session's channel and
+thread ids (`findClosedAsk`), in memory only and bounded to the newest
+`CLOSED_ASKS_MAX` (1000), never the question or option text (SAFE-6). No new
+env var, slash command, table or column.
+
 Acceptance Criteria
 - Structured or numbered options → stub + components; ephemeral open shows choices.
 - Pick resumes the requester session with the chosen label.
 - Expired press returns ASK_CHOICE_EXPIRED and clears pending.
 - Question without listable options keeps the free-text ask-ping path.
+- When the newest ask is picked while an earlier open ask has timed out, the requester's Choose and option press on the dropped earlier ask each get exactly the ephemeral `ASK_CHOICE_EXPIRED`; the agent does not run and nothing is posted or edited; another user's press on it gets the not-for-you reply.
+- With two open asks (neither timed out) and the session idle past its TTL, the requester's Choose and option press on each get the ephemeral `ASK_CHOICE_EXPIRED`, no agent run, no session is created and nothing is posted; another user's press on each gets the not-for-you reply, as it does on the live ask before the purge.
+- A still-stored ask past its timeout: the first press gets `ASK_CHOICE_EXPIRED` and clears it; a second press by the requester gets `ASK_CHOICE_EXPIRED` again, another user's the not-for-you reply, and the agent does not run.
+- A re-press after a pick and a press after `cancel` get the not-for-you / already-answered reply with no run, before and after the session is TTL-purged.
+- A muted or deny-listed requester's press on an ask of a TTL-purged session gets `MUTED` / the zero-width ack; once let through the press gets `ASK_CHOICE_EXPIRED`, with no run and nothing posted.
+- In a talk inside a thread under an allowlisted channel, the requester's press in that thread on a dropped ask or on an ask of the TTL-purged session gets `ASK_CHOICE_EXPIRED` with no run; another user's press there gets the not-for-you reply; a press from another thread or a non-allowlisted channel, or once the talk's channel has left the allowlist, gets the zero-width ack.
+- `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt, channelId, threadId? }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.
 
 ### REQ-discord-046
 
@@ -1888,6 +1947,15 @@ pass ping the owner:
   auto-pause the schedule, the pause ask SHALL stay pending until the gate
   passes, like any pending ask.
 
+Every schedule post in the channel — the `✅` / `❌` result line and every
+ask post, in-process or from the delivery pass, including the stuck asks
+above — SHALL start with the schedule prefix
+`Schedule **<name>** (<id>) on <project>`, where the project is shown by
+name (`projectLabel`: the last segment of an absolute path, a relative name
+as given), never as an absolute host path (REQ-discord-418, SAFE-6): the
+whole channel reads it. The run row SHALL keep the full error and the
+model's prompt SHALL keep the stored project.
+
 No new slash command, env var, config key, table, column or schema version;
 `/schedule resume` is the existing ADMIN subcommand.
 
@@ -1901,6 +1969,8 @@ Acceptance Criteria
 - A daemon run whose project cannot be resolved spawns no agent, keeps `project resolve failed: …` (with the host path) on the row and stores the fixed question; the bridge posts it with the owner ping and without the host path; the same failure again posts without a ping.
 - A bridge run whose worktree cannot be created keeps `worktree failed: …` on the row and posts the fixed question at once with the owner ping, once; so does one whose worktree step throws.
 - The pause ask is chosen by the failure count in SQL: a store handle whose cache is stale stores it when SQL reaches 5; a success stores no ask and resets the count.
+- A schedule whose project is an absolute host path posts its `✅` and `❌` result lines, its clarify and stuck asks (bridge-claimed and daemon-claimed) and its pre-run stuck ask (an absolute sibling project that cannot be resolved) with the project's name in the prefix and never the absolute path; the run row keeps `project resolve failed: …` with the path and the model's prompt keeps the stored project.
+
 ### REQ-discord-431
 
 Channel autocomplete on the STRING `channel` options (`/admin channels add|remove`, `/announce channel`) SHALL list channels only for ADMIN invoking from an allowlisted channel (DISCORD-DENY-3 / ADMIN-4). The check SHALL be re-run on every autocomplete request, never trusted from registration, in the slash gate order: the interaction's channel passes the channel allowlist (`gateChannel`), the actor passes `gateActor` (deny users/roles win; a non-empty user/role allowlist applies), and `resolvePermissionLevel` with the live mute set is ADMIN (the configured owner; no owner means nobody, IDENTITY-3). Otherwise the gateway SHALL answer an empty choice list, so no channel name, id or allowlist entry reaches a non-admin. The gateway SHALL also answer an empty list when no gate is wired or the gate throws (fail closed). An allowed request SHALL keep today's choices: guild text channels for `add` and `/announce channel`, and the live allowlist for `remove`. Autocomplete SHALL NOT consume a rate-limit slot. No new slash command, option, env key or schema version.
@@ -1920,6 +1990,8 @@ Every interactive Discord agent run (an @mention / reply / thread chat
 message, an ask button pick resume, `/session start` and `/work`) SHALL
 prepend the IDENTITY-4 acting-user block to the spawn prompt: the acting
 user's Discord id and, when one is known, a display name. The display name SHALL be the
+declared person's display when the acting user is a declared person with one
+(REQ-discord-036), else the
 configured owner's display when the acting user is the owner and it is set,
 else the Discord display name on that message or interaction, else its
 Discord username; when none is known the block SHALL carry the id only and
@@ -1942,6 +2014,7 @@ Acceptance Criteria
 - The chat path, `/session start` and `/work` keep their identity inject unchanged.
 - No new slash command, env var, config key, table or column; SQLite schema version unchanged.
 - Regression tests in `tests/discord.identity-pick.test.ts` fail on `main` and pass after.
+- A declared person's declared display name wins over the Discord display name and username on every interactive run; with nobody declared the block is exactly as before (REQ-discord-036).
 
 ### REQ-discord-205
 
@@ -1990,9 +2063,9 @@ pass the conversation's channel (the thread, with its parent, in a thread) and
 `/session start` / `/work` the command's channel; schedules SHALL pass none.
 A `--channel` / `-c` argument SHALL be refused, and a run with no
 conversation channel or no acting user SHALL be refused, nothing sent. The
-channel allowlist SHALL gate first (a thread through its parent, DISCORD-5),
-then the DISCORD-8 requester check SHALL run for the acting user with View
-Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
+channel allowlist SHALL gate first (a thread as itself or through its parent,
+DISCORD-5), then the DISCORD-8 requester check SHALL run for the acting user
+with View Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
 `attachFiles`); a check that cannot run SHALL refuse. The file SHALL be at
 most 8 MB (Discord's default upload limit) and SHALL be a PNG, JPEG, GIF or
 WebP image whose magic bytes match its extension, or UTF-8 text with a
@@ -2017,6 +2090,23 @@ parent is allowlisted (deny wins, REQ-discord-212 / REQ-plugins-005), before
 the requester check, with the `checkChannel` "is denied" error; nothing is
 uploaded.
 
+The conversation's channel SHALL pass the gate the bridge serves it by:
+`isMonitoredConversation` on the bridge's channel set (allowlist file and
+`CORVIDINHO_DISCORD_ALLOW_CHANNELS` union `DISCORD_CHANNEL_IDS`,
+REQ-discord-212 / REQ-discord-004). A thread allowlisted by its own id SHALL
+pass even when its parent is not listed, and a thread SHALL be refused when
+it or its parent is on `deny_channels` (deny wins, REQ-plugins-005), before
+the requester check, nothing uploaded. The file SHALL be read once, from one
+descriptor opened without following a link at the checked path, and the file
+that descriptor holds SHALL be a regular file whose own path is inside the
+project and is not a SAFE-2 protected, `.specsync` or secret path: a file or
+folder swapped for a link after the path checks SHALL be refused (SAFE-2).
+The 8 MB cap SHALL hold for the bytes read as well as for the size first
+taken, and no more than the cap + 1 byte SHALL be read: a file that grew
+past the cap after its size was taken SHALL be refused before the requester
+check, nothing uploaded. An ask-button run in a thread SHALL carry the thread
+as the reply channel and its parent.
+
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
@@ -2030,6 +2120,167 @@ Acceptance Criteria
 - `--git-diff` refuses an empty diff and attaches `changes.diff` without secret paths and scrubbed.
 - The spawn client writes the reply channel env (empty when none); the bridge passes the conversation's channel on chat, thread, `/session start` and `/work` runs.
 - A deny-listed thread under its allowlisted parent is refused with the "is denied" error: no requester check runs and nothing is uploaded; another thread under that parent still passes.
+- A thread allowlisted by its own id, its parent not listed, attaches in the thread after the acting user's check; with its parent deny-listed it is refused ("is denied"); a deny-listed thread under an allowlisted parent is refused ("is denied"); an unlisted thread under an unlisted parent is refused (not allowlisted); nothing else is checked or uploaded.
+- A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
+- A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
+- An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+
+### REQ-discord-734
+
+A run summary that ends with the ROLES-CHAT-3 closing note
+`\n\n(not allowed for your role)` (REQ-agent-333) SHALL keep that note
+through every cap it meets after `chatBodyFromTaskResult` on its way to a
+Discord post. Each such cap SHALL use `clipKeepingRoleNote`
+(`src/agent/task-summary.ts`): the text before the note loses its end and
+the note stays last.
+
+- A scheduled run's summary SHALL be capped at `POST_SUMMARY_MAX` (1500
+  chars) for the run row's `summary` and for the `✅` / `❌` schedule post,
+  and in the post also at what fits after the post's head within
+  `ASK_REPLY_MAX` (1900), so the gateway's 1900 cut never reaches it.
+- The `/work` and `/session start` answers SHALL cap the summary at 1500
+  chars and at what fits after the answer's head (task, session, worktree,
+  description and PR lines; session, topic and worktree lines) within 1900,
+  so the gateway's 1900 cut never drops the note.
+- `appendPostLine`, which cuts a post's body so the SAFE-8 80% warning line
+  fits within 1900 (chat replies, schedule posts, a slash owner notice that
+  rides the answer), SHALL cut the body before the note, end the kept text
+  in `…`, and keep the note ahead of the warning line.
+
+`ask-ping.ts` SHALL export `POST_SUMMARY_MAX` and
+`clipPostSummary(summary, headLength = 0)` for these caps. A summary that
+does not end with the note SHALL be capped exactly as before. An ask's post
+(a question or Choose stub, including a stuck ask's 400-char context) is not
+changed. No env var, config key, flag, slash command, table or schema change.
+
+Acceptance Criteria
+- `tests/scheduler.service.test.ts` "a long summary ending with the note keeps it in the run row and the post; one without is cut as before": the run row's summary is 1500 chars ending with the note; the post (448-char schedule name) is at most 1900 chars and ends with the note; a run without the note stores and posts exactly its first 1500 chars.
+- `tests/discord.slash-ask7.test.ts` "/work answer for a non-owner keeps the closing role note within the 1900 cap": the collapsed answer is at most 1900 chars, its summary part is under 1500 (fitted after a long head) and it ends with the note.
+- Same file, "/session start answer for a non-owner keeps the closing role note within the 1900 cap": at most 1900 chars, the summary part at most 1500, ending with the note.
+- `tests/discord.spend.test.ts` "the cut for the warning line keeps a closing role note": an 1800-char body ending with the note plus the 80% line is a 1900-char post ending `y…`, the note, a blank line and the warning line; a body that fits is untouched; a long body without the note still ends `…\n\nLINE`.
+- With main's `src/discord/ask-ping.ts`, `src/discord/command-handlers/work.ts`, `src/discord/command-handlers/session.ts` and `src/scheduler/service.ts`, these four tests fail; they pass on the branch.
+
+### REQ-discord-036
+
+Declared people (IDENTITY-13, #36). The owner SHALL declare who's who as
+`[people.<id>]` sections of the allowlist file (a `people` object in a JSON
+file) with `display`, `nicknames`, `discord_ids`, `github_logins` and
+`github_ids` (singular spellings read too; one-line values). The person id
+SHALL be 1–32 lowercase letters, digits, `-` or `_`; `owner` is reserved.
+People SHALL be read from the allowlist file this process loaded (the file
+`[owner]` comes from, `AllowlistConfig.sourcePath`), re-read on every use, so
+a VM edit or an `/admin people` change applies on the next message, slash run
+or WATCH event without a restart; no file loaded means nobody declared. There
+SHALL be no second store, env var, config key, table or column, and the
+allowlist loader and `[owner]` reader SHALL read a file with people sections
+exactly as before.
+
+Fail closed: an entry with any unreadable value (bad Discord snowflake,
+GitHub login or numeric id, a list spanning lines, a JSON number for a
+Discord id, a duplicate section) SHALL be skipped whole and reported as a
+plain-language problem naming the person id and key, never an account id.
+
+`resolvePerson(directory, { discordId, githubLogin, githubId })` SHALL be the
+one resolver (for later slices too) and SHALL return `{ personId,
+displayName?, role?, person }` or null. It SHALL match only on stable ids —
+the Discord user id (or `<@id>`), the GitHub numeric id and the
+case-insensitive GitHub login — and never on a display name or nickname
+(IDENTITY-7). A login SHALL NOT match when the GitHub numeric id is known and
+the person declared other GitHub ids; ids that point at two different people,
+and an id declared for two people, SHALL match nobody. The configured owner
+(IDENTITY-1) SHALL always be a person: the declared entry holding the owner's
+Discord id (the owner's GitHub login added to it), else a built-in `owner`
+entry from `[owner]` / env; its `role` SHALL be `owner`. No other role is read
+yet (#65 adds roles). No AlgoChat or wallet ids.
+
+Recognised on Discord (IDENTITY-14): every interactive run (chat message,
+ask button pick resume, `/session start`, `/work`) SHALL add to the
+IDENTITY-4 acting-user block, for a declared acting user,
+`declared_person: <id>`, the declared `display_name` (winning over the
+Discord names), `nicknames` and `github` logins, matched on the acting
+Discord user id only. Once anyone is declared, an undeclared non-owner SHALL
+be marked `declared_person: none`, so a Discord display name never passes for
+a declared person. An owner who is not declared under `[people]` keeps the
+block exactly as before, and with nobody declared the block SHALL be
+unchanged.
+
+Only the owner changes people (IDENTITY-6, ADMIN-3.a): `/admin people
+list|add|link|unlink|remove` (owner-only; dispatcher floor ADMIN plus a
+handler re-check) SHALL be the only writer besides editing the file on the
+VM; no plugin, chat path or model tool SHALL write people. `add` declares a
+person or changes their display name; `link` / `unlink` add or remove one or
+more of `discord` (user picker), `github`, `github_id` and `nickname`;
+`remove` drops the person and all links; `list` shows the effective people
+(owner marked) and any problems, under Discord's 2000-character cap. A
+`link` that would put a stable id on a second person (the built-in owner
+included) SHALL be refused; an unreadable entry SHALL NOT be edited. TOML
+writes SHALL rewrite only that person's read keys (header, comments and
+unread keys kept, every other line verbatim), append a new section, or drop a
+removed one; JSON writes SHALL change only that person's entry. The rewrite
+SHALL be atomic (`writeFileAtomic`) and SHALL be re-read before writing: allow
+and deny lists, `[owner]`, every other person and every other section
+unchanged, and the person reading back as planned, else refused with nothing
+written. Each change SHALL append SAFE-5 audit rows `admin-people-<op>`
+(surface `discord:admin`, actor = invoker, args digest only): `started` before
+the write, then `ok` / `error`; refusals and a non-owner caught by the handler
+append `denied`; no trail wired or a trail that throws SHALL refuse with
+`audit log unavailable (SAFE-5)` and write nothing. A bridge that started
+without a file SHALL read the file its first `/admin people` change writes.
+
+Acceptance Criteria
+- `[people.<id>]` TOML (plural and singular keys) and the JSON `people` object parse to people; the allowlist loader and `[owner]` reader load the same file unchanged.
+- Unreadable entries are skipped whole with problems that name the person and key but no account id; `owner` is a reserved id.
+- `resolvePerson` resolves by Discord id, `<@id>`, GitHub login (any case, `@`) and GitHub numeric id (number or string); display names and nicknames resolve nobody; a login with a different known numeric id resolves nobody; ids of two different people, and an id declared twice, resolve nobody.
+- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
+- People are re-read per call from the loaded file; a missing / unreadable file reads as nobody declared, never a throw.
+- A declared chat speaker's prompt names `declared_person`, the declared display (not the Discord one), nicknames and GitHub logins; a stranger with a declared person's display name gets `declared_person: none`; the undeclared owner's and everyone's block with nobody declared are byte-identical to before.
+- Through `startBridge`: an `/admin people add` + `link` by the owner and a VM edit of the file change who the next chat message is recognised as, without a restart; a chat message asking to change links changes nothing.
+- `/admin people add|link|unlink|remove` edit the file as described, keep every other line verbatim, and each change appends `started` + `ok` rows; no-change requests append nothing.
+- Refused: an id linked to another person (including the owner's `[owner]` GitHub login), bad person ids, `owner`, an undeclared person for `link`, invalid link values, an unreadable entry; no audit trail or a throwing trail; the file is unchanged.
+- A non-owner is refused at dispatch and at the handler (`denied` row); `list` is owner-only too.
+- Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
+- Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
+
+### REQ-discord-065
+
+Roles on Discord (IDENTITY-8..12, ADMIN-3.b, #65). Each declared person
+(REQ-discord-036) SHALL have exactly one role, read from `role = "team"` or
+`role = "community"` in their `[people.<id>]` entry (JSON `role`), any case;
+no `role` key reads as community; the configured owner's person is always
+owner; `role = "owner"` on anyone else grants nothing (community, reported as
+a problem naming the person id, never an account id); a list, an empty or an
+unknown value makes the entry unreadable (skipped whole, fail closed).
+`resolvePerson` returns `role` (`owner`, or the declared team / community) and
+`roleOfPerson` the effective role (community for no role and for anyone
+undeclared). `resolveDiscordActingRole` (`permissions.ts`) SHALL give a
+Discord run's spawn role: `owner` when the caller resolves to ADMIN, `team`
+when the owner's people list declares the caller's Discord id team and the
+caller is not BLOCKED (muted / deny-listed), else `community`. The bridge
+(chat and button-pick resume), `/session start` and `/work` SHALL pass it as
+`AgentRunChatOpts.actingRole` (with `actingIsAdmin` = owner) and `/work` also
+`workTask: true`; the spawn client SHALL always overwrite
+`CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, `team` only when the
+caller passed team, else `community` — schedules pass none) and
+`CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`), never inheriting them. The tool
+layer re-resolves the role on every call (REQ-plugins-065). `/admin people
+role person:<id> role:<team|community>` (ADMIN-3.b) SHALL be the only chat
+surface that sets a role: owner-only (dispatcher floor + handler re-check),
+SAFE-5 `admin-people-role` rows (`started` before the atomic write, then
+`ok`; `denied` for refusals; fail closed without a trail), writing only that
+person's `role` key through the `/admin people` writer and its re-read safety
+net; it SHALL refuse the owner role (owner is `[owner]` / env, IDENTITY-1),
+an unknown role, an undeclared person and the owner's own person, and report
+no change for the same role. `/admin people list` shows each person's role;
+`config show` counts team and community. No chat or plugin path sets a role
+(IDENTITY-8).
+
+Acceptance Criteria
+- `role = "team"` / `"community"` (any case, TOML and JSON) resolve; no role, undeclared ⇒ community; the owner ⇒ owner; `role = "owner"` elsewhere ⇒ community with a problem; a list or unknown value skips the entry.
+- `resolveDiscordActingRole` gives owner, team and community, and community for a muted or deny-listed team member.
+- The spawn env carries `CORVIDINHO_ACTING_ROLE` owner / team / community and `CORVIDINHO_ACTING_WORK_TASK`, overwriting a stale parent value; no role passed ⇒ community.
+- Through `startBridge`, chat stamps each speaker's role and a file edit applies to the next message; `/work` stamps team + the work flag for a team member and reaches the PR step; `/session start` stamps the role without the work flag.
+- `/admin people role` promotes and demotes with `admin-people-role` `started`/`ok` rows and a no-change reply for the same role; it refuses the owner role, unknown roles, undeclared people, the owner's person and a missing role (`denied`, file unchanged), a non-owner, and a missing audit trail; JSON files keep unread keys; `people list` shows roles and `config show` counts them.
+- Regression tests in `tests/roles.team.test.ts` and `tests/discord.admin-slash.test.ts` fail on the base sources and pass after.
 
 ### REQ-discord-680
 

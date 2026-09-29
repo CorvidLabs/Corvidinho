@@ -5,6 +5,17 @@
  *   /admin channels add channel:<search>  ADMIN-2 add a channel (STRING+autocomplete)
  *   /admin channels remove channel:<…>    ADMIN-2 remove a channel (STRING+autocomplete)
  *   /admin config show                    ADMIN-3 show knobs (read-only view)
+ *   /admin people list                    IDENTITY-13 declared people (read-only view)
+ *   /admin people add person:<id> [display:<name>]
+ *   /admin people link|unlink person:<id> [discord:@x] [github:<login>]
+ *                             [github_id:<n>] [nickname:<text>]
+ *   /admin people remove person:<id>      ADMIN-3.a add, change, remove people
+ *                                         and their links (IDENTITY-6: only
+ *                                         here or in the file on the VM)
+ *   /admin people role person:<id> role:<team|community>
+ *                                         ADMIN-3.b set a declared person's one
+ *                                         role (IDENTITY-8; the owner role is
+ *                                         [owner] / env only)
  *
  * Owner-only (IDENTITY-2): dispatch enforces minPermission ADMIN and this
  * handler re-checks ADMIN itself before anything else (ADMIN-4 / DISCORD-7);
@@ -19,12 +30,29 @@
 import { argsDigest, type AuditEntryInput, type AuditOutcome } from "../../audit/index.ts";
 import { formatOwnerStatus } from "../../identity/owner.ts";
 import {
+  DEFAULT_PERSON_ROLE,
+  loadDeclaredPeople,
+  OWNER_PERSON_ID,
+  type DeclaredPerson,
+  type PeopleDirectory,
+  type PersonLinkKind,
+  type PersonRole,
+} from "../../identity/people.ts";
+import {
+  commitPeopleChange,
+  formatPersonLink,
+  planPeopleChange,
+  type PeopleAdminOp,
+  type PeopleAdminPlan,
+} from "../admin-people.ts";
+import {
   ADMIN_LIST_ENV,
   ADMIN_SNOWFLAKE_RE,
   commitAdminListChange,
   envAdminList,
   planAdminListChange,
   readAdminFileView,
+  resolveAdminAllowlistPath,
   type AdminListKey,
   type AdminListOp,
   type AdminListPlan,
@@ -71,6 +99,25 @@ const MUTATIONS: Record<string, Mutation> = {
     usage: "usage: /admin channels remove channel:<name or id> (pick from autocomplete, or paste a snowflake)",
   },
 };
+
+/** ADMIN-3.a — `/admin people …` mutations (audited like MUTATIONS). */
+const PEOPLE_OPS: Record<string, PeopleAdminOp> = {
+  "people add": "add",
+  "people link": "link",
+  "people unlink": "unlink",
+  "people remove": "remove",
+  "people role": "role",
+};
+
+const PEOPLE_USAGE: Record<PeopleAdminOp, string> = {
+  add: "usage: /admin people add person:<id> [display:<name>] — id is lowercase letters, digits, - or _ (e.g. tofu)",
+  link: "usage: /admin people link person:<id> and one or more of discord:@user github:<login> github_id:<number> nickname:<text>",
+  unlink: "usage: /admin people unlink person:<id> and one or more of discord:@user github:<login> github_id:<number> nickname:<text>",
+  remove: "usage: /admin people remove person:<id>",
+  role: "usage: /admin people role person:<id> role:<team|community> — the owner role is [owner] / env only (IDENTITY-1)",
+};
+
+const LINK_OPTIONS: readonly PersonLinkKind[] = ["discord", "github", "github_id", "nickname"];
 
 function isAdmin(ctx: SlashContext, interaction: SlashInteraction): boolean {
   return (
@@ -129,13 +176,26 @@ export async function handleAdminCommand(
   // dispatcher floor are never enough. No owner ⇒ nobody is ADMIN.
   if (!isAdmin(ctx, interaction)) {
     const m = MUTATIONS[route];
+    const pop = PEOPLE_OPS[route];
     if (m) auditSoft(ctx, auditEntry(interaction, m.action, "denied", [group, sub]));
+    else if (pop) auditSoft(ctx, auditEntry(interaction, `admin-people-${pop}`, "denied", [group, sub]));
     await interaction.reply({ content: NOT_AUTHORIZED, ephemeral: true });
     return;
   }
 
   if (route === "config show") {
     await interaction.reply({ content: formatConfigShow(ctx), ephemeral: true });
+    return;
+  }
+
+  if (route === "people list") {
+    await interaction.reply({ content: formatPeopleList(ctx), ephemeral: true });
+    return;
+  }
+
+  const pop = PEOPLE_OPS[route];
+  if (pop) {
+    await handlePeopleMutation(ctx, interaction, pop, [group, sub]);
     return;
   }
 
@@ -252,6 +312,217 @@ async function handleMutation(
     content: formatApplied(ctx, interaction, plan, startedSeq, okSeq),
     ephemeral: true,
   });
+}
+
+/**
+ * ADMIN-3.a / IDENTITY-6 — add, change or remove a declared person or its
+ * links. Same shape as the list mutations: plan, audit intent (fail closed),
+ * commit, audit outcome, all synchronous. The only writer of people.
+ */
+async function handlePeopleMutation(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  op: PeopleAdminOp,
+  route: string[],
+): Promise<void> {
+  const str = (k: string): string | undefined => {
+    const v = interaction.options[k];
+    return typeof v === "string" && v.trim() ? v : undefined;
+  };
+  const action = `admin-people-${op}`;
+  const person = str("person")?.trim() ?? "";
+  if (!person) {
+    await interaction.reply({ content: PEOPLE_USAGE[op], ephemeral: true });
+    return;
+  }
+  const display = op === "add" ? str("display") : undefined;
+  const role = op === "role" ? str("role")?.trim() : undefined;
+  if (op === "role" && !role) {
+    await interaction.reply({ content: PEOPLE_USAGE[op], ephemeral: true });
+    return;
+  }
+  const links =
+    op === "link" || op === "unlink"
+      ? LINK_OPTIONS.flatMap((kind) => {
+          const value = str(kind);
+          return value === undefined ? [] : [{ kind, value: value.trim() }];
+        })
+      : [];
+  if ((op === "link" || op === "unlink") && links.length === 0) {
+    await interaction.reply({ content: PEOPLE_USAGE[op], ephemeral: true });
+    return;
+  }
+  const args = [
+    ...route,
+    person.toLowerCase(),
+    ...(display !== undefined ? [`display:${display}`] : []),
+    ...links.map((l) => `${l.kind}:${l.value}`),
+    ...(role !== undefined ? [`role:${role.toLowerCase()}`] : []),
+  ];
+
+  // Plan, audit intent, commit: all synchronous, so no interleaving.
+  const planned = planPeopleChange({
+    allowlist: ctx.allowlist,
+    owner: ctx.owner,
+    env: ctx.env ?? process.env,
+    request: { op, personId: person, display, links, ...(role !== undefined ? { role } : {}) },
+  });
+  if (!planned.ok) {
+    auditSoft(ctx, auditEntry(interaction, action, planned.kind === "refused" ? "denied" : "error", args));
+    await interaction.reply({
+      content:
+        planned.kind === "refused"
+          ? `Refused: ${planned.error}. Nothing changed.`
+          : `Refused: ${planned.error}. File: \`${planned.path}\` — nothing changed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  const plan = planned.plan;
+  if (!plan.fileChanged) {
+    await interaction.reply({ content: formatPeopleNoChange(plan), ephemeral: true });
+    return;
+  }
+
+  // SAFE-5: intent on the tamper-evident trail before the write; no trail
+  // (or a trail that throws) fails closed — an unaudited change is never made.
+  let startedSeq: number;
+  try {
+    if (!ctx.recordAudit) throw new Error("no audit database is wired to this bridge");
+    startedSeq = ctx.recordAudit(auditEntry(interaction, action, "started", args)).seq;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await interaction.reply({
+      content: `Refused: audit log unavailable (SAFE-5): ${msg}. Nothing changed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  try {
+    commitPeopleChange(plan);
+    // Surfaces read people from the file this process loaded; a bridge that
+    // started without one reads the file this change wrote from now on.
+    if (!ctx.allowlist.sourcePath) ctx.allowlist.sourcePath = plan.path;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    auditSoft(ctx, auditEntry(interaction, action, "error", args));
+    await interaction.reply({
+      content: `Error: could not write \`${plan.path}\`: ${msg}. Declared people unchanged.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  const okSeq = auditSoft(ctx, auditEntry(interaction, action, "ok", args));
+  await interaction.reply({ content: formatPeopleApplied(plan, startedSeq, okSeq), ephemeral: true });
+}
+
+function personLabel(p: DeclaredPerson): string {
+  return p.display ? `"${p.id}" (${p.display})` : `"${p.id}"`;
+}
+
+function formatPeopleNoChange(plan: PeopleAdminPlan): string {
+  const where = `(\`${plan.path}\`)`;
+  if (plan.op === "add") {
+    return `No change: "${plan.personId}" is already declared${plan.before?.display ? ` as ${plan.before.display}` : ""} ${where}. Use display: to change the name, /admin people link to add links.`;
+  }
+  if (plan.op === "remove") {
+    return `No change: "${plan.personId}" is not a declared person in the file ${where}.`;
+  }
+  if (plan.op === "role") {
+    return `No change: "${plan.personId}" already has role ${plan.roleAfter} ${where}.`;
+  }
+  const what = plan.unchanged.map(formatPersonLink).join(", ");
+  return plan.op === "link"
+    ? `No change: "${plan.personId}" already has ${what} ${where}.`
+    : `No change: "${plan.personId}" has no ${what} in the file ${where}.`;
+}
+
+function formatPeopleApplied(
+  plan: PeopleAdminPlan,
+  startedSeq: number,
+  okSeq: number | undefined,
+): string {
+  const lines: string[] = [];
+  const who = plan.after ? personLabel(plan.after) : `"${plan.personId}"`;
+  if (plan.op === "add") {
+    lines.push(
+      plan.before
+        ? `✅ /admin people add: ${who} — display name changed${plan.before.display ? ` from ${plan.before.display}` : ""}.`
+        : `✅ /admin people add: declared ${who}. Link accounts with /admin people link.`,
+    );
+  } else if (plan.op === "role") {
+    lines.push(
+      `✅ /admin people role: ${who} — role ${plan.roleBefore ?? DEFAULT_PERSON_ROLE} → ${plan.roleAfter} (IDENTITY-8). The tool layer re-checks it on the next run.`,
+    );
+  } else if (plan.op === "remove") {
+    const b = plan.before!;
+    const n = b.discordIds.length + b.githubLogins.length + b.githubIds.length + b.nicknames.length;
+    lines.push(`✅ /admin people remove: ${personLabel(b)} is no longer a declared person (${n} link${n === 1 ? "" : "s"} dropped).`);
+  } else {
+    const verb = plan.op === "link" ? "linked" : "unlinked";
+    lines.push(`✅ /admin people ${plan.op}: ${who} — ${verb} ${plan.changed.map(formatPersonLink).join(", ")}.`);
+    if (plan.unchanged.length > 0) {
+      lines.push(
+        `${plan.op === "link" ? "Already linked" : "Not linked"} (unchanged): ${plan.unchanged.map(formatPersonLink).join(", ")}.`,
+      );
+    }
+  }
+  lines.push(
+    `File \`${plan.path}\`${plan.exists ? "" : " (created)"}: people ${plan.countBefore} → ${plan.countAfter}. Takes effect on the next message or comment — no restart.`,
+  );
+  lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
+  return lines.join("\n");
+}
+
+/** A listed person's effective role (IDENTITY-8): declared team / community, else community. */
+function listedRole(dir: PeopleDirectory, p: DeclaredPerson): PersonRole {
+  if (p.id === dir.ownerPersonId) return "owner";
+  return p.role === "team" || p.role === "community" ? p.role : DEFAULT_PERSON_ROLE;
+}
+
+/** Max people listed by `/admin people list` before "+N more" (Discord 2000-char cap). */
+const PEOPLE_LIST_MAX_CHARS = 1800;
+
+/** IDENTITY-13: ephemeral read-only view of the declared people (owner only). */
+export function formatPeopleList(ctx: SlashContext): string {
+  const env = ctx.env ?? process.env;
+  // Exactly what chat, slash and WATCH see: the file this process loaded.
+  const dir = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  const declared = dir.people.filter((p) => p.id !== OWNER_PERSON_ID);
+  const head = ["**/admin people** (IDENTITY-13, read-only view)"];
+  head.push(
+    ctx.allowlist.sourcePath
+      ? `Allowlist file: \`${ctx.allowlist.sourcePath}\` — ${declared.length} declared`
+      : `No allowlist file loaded — /admin people add writes \`${resolveAdminAllowlistPath(ctx.allowlist, env)}\``,
+  );
+  const rows = dir.people.map((p) => {
+    const parts = [p.id === OWNER_PERSON_ID ? "owner (from [owner] / env)" : p.id];
+    if (p.display) parts.push(p.display);
+    if (p.nicknames.length) parts.push(`nicknames ${p.nicknames.join(", ")}`);
+    if (p.discordIds.length) parts.push(`Discord ${p.discordIds.map((d) => `<@${d}>`).join(" ")}`);
+    if (p.githubLogins.length) parts.push(`GitHub ${p.githubLogins.map((l) => `@${l}`).join(" ")}`);
+    if (p.githubIds.length) parts.push(`GitHub id ${p.githubIds.join(" ")}`);
+    const owner = p.id === dir.ownerPersonId ? " — **owner**" : ` — role ${listedRole(dir, p)}`;
+    return `• ${parts.join(" · ")}${owner}`;
+  });
+  const tail: string[] = [];
+  if (dir.issues.length > 0) tail.push(`⚠️ ${dir.issues.length} problem(s): ${dir.issues.join("; ")}`);
+  tail.push(
+    "Matched on Discord user ids and GitHub ids / logins only, never on names. Change with /admin people add|link|unlink|remove|role (audited) or in the file on the VM — never through chat. Roles: owner, team, community (IDENTITY-8); undeclared is community.",
+  );
+  const out = [...head];
+  let used = [...head, ...tail].join("\n").length;
+  let shown = 0;
+  for (const r of rows) {
+    if (used + r.length + 1 > PEOPLE_LIST_MAX_CHARS) break;
+    out.push(r);
+    used += r.length + 1;
+    shown++;
+  }
+  if (rows.length === 0) out.push("• nobody declared yet — /admin people add person:<id> display:<name>");
+  if (shown < rows.length) out.push(`… +${rows.length - shown} more (see the file)`);
+  out.push(...tail);
+  return out.join("\n").slice(0, 1990);
 }
 
 /**
@@ -381,6 +652,13 @@ export function formatConfigShow(ctx: SlashContext): string {
     `GitHub (live): orgs ${g.orgs.length} · repos ${g.repos.length} · users ${g.users.length} · deny orgs/repos/users ${g.denyOrgs.length}/${g.denyRepos.length}/${g.denyUsers.length}`,
   );
   lines.push(`${formatOwnerStatus(ctx.owner)} — the only ADMIN (IDENTITY-2)`);
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  const nPeople = people.people.filter((p) => p.id !== OWNER_PERSON_ID).length;
+  const others = people.people.filter((p) => p.id !== OWNER_PERSON_ID && p.id !== people.ownerPersonId);
+  const nTeam = others.filter((p) => p.role === "team").length;
+  lines.push(
+    `Declared people: ${nPeople}${people.issues.length ? ` (⚠️ ${people.issues.length} problem(s))` : ""} — /admin people list (IDENTITY-13); roles: team ${nTeam}, community ${others.length - nTeam} (IDENTITY-8)`,
+  );
   if (ctx.rateLimitConfig) {
     lines.push(
       `Rate limit: ${ctx.rateLimitConfig.maxMessages} per ${Math.round(ctx.rateLimitConfig.windowMs / 1000)}s (env)`,
@@ -390,7 +668,7 @@ export function formatConfigShow(ctx: SlashContext): string {
   const audit = ctx.auditLine?.();
   if (audit) lines.push(audit);
   lines.push(
-    "Updatable here: [discord].users (/admin users add) and [discord].channels (/admin channels add|remove) — written to the file, live immediately.",
+    "Updatable here: [discord].users (/admin users add), [discord].channels (/admin channels add|remove), declared people (/admin people add|link|unlink|remove) and their roles (/admin people role) — written to the file, live immediately.",
   );
   lines.push(
     "Read-only at runtime: env values (CORVIDINHO_DISCORD_ALLOW_*, DISCORD_CHANNEL_IDS, CORVIDINHO_OWNER_*, rate limits) and every other file key — edit on the VM and restart.",

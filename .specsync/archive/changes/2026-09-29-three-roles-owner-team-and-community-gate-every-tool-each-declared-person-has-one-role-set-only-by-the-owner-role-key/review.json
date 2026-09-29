@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "7b0d2066c2d1a6feabc10e9709e104d20095d2a8",
+  "contract_digest": "d309803d44d4aec0a50085a0b7d7d55576bad489f19431b2ffe61811049e0010",
+  "execution_digest": "e7f98d49eba1e6408ec3def567571e1efb21d6306516d455e82e96fa89967753",
+  "workspace_digest": "a41b09220812602c11e2c29c7afde2d0e1012eff4b5fa57999ed7152c1a98e11",
+  "timestamp": 1790707946
+}

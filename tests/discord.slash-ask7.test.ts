@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadLlmEnv } from "../src/agent/execute.ts";
+import { chatBodyFromTaskResult, ROLE_REFUSED_SUMMARY_NOTE } from "../src/agent/task-summary.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { handleSessionStart } from "../src/discord/command-handlers/session.ts";
@@ -147,7 +148,12 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
     };
   }
 
-  function slashIx(commandName: string, options: Record<string, string>, subcommand?: string) {
+  function slashIx(
+    commandName: string,
+    options: Record<string, string>,
+    subcommand?: string,
+    userId = "owner-1",
+  ) {
     const edits: SlashReplyPayload[] = [];
     let deleted = 0;
     const ix: SlashInteraction = {
@@ -155,7 +161,7 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       commandName,
       subcommand,
       channelId: "chan-allowed",
-      userId: "owner-1",
+      userId,
       options,
       reply: async (p) => {
         edits.push(p);
@@ -258,6 +264,58 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
           text: `${loadLlmEnv(process.env).model} | state=failed verified=false cancelled attempts=3`,
         },
       });
+      const [session] = store.list();
+      if (session) await store.endSession(session);
+    });
+  });
+
+  // ROLES-CHAT-3 (REQ-discord-734): what runChat hands a non-ADMIN run whose
+  // tool call was refused for the role — 1800 chars, the note last.
+  const ROLE_TAIL = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+  function roleNoteAgent(): AgentClient {
+    const summary = chatBodyFromTaskResult({ summary: `${"word ".repeat(500)}${ROLE_TAIL}` });
+    return {
+      async runChat(input) {
+        return { ok: true, sessionId: input.sessionId, exitCode: 0, summary };
+      },
+    };
+  }
+
+  test("/work answer for a non-owner keeps the closing role note within the 1900 cap (REQ-discord-734)", async () => {
+    await withRepo(async (_project, store) => {
+      const { outbound, contentEdits } = mockOutbound();
+      const tracked: string[] = [];
+      const { ix } = slashIx("work", { description: `Fix it ${"d".repeat(200)}` }, undefined, "member-1");
+      await handleWorkCommand(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
+
+      expect(contentEdits.length).toBe(1);
+      const body = contentEdits[0]!.content ?? "";
+      expect(body).toContain("only the owner (ADMIN) can ship /work as a PR");
+      // The head leaves under 1500 chars for the summary: it is cut to fit.
+      expect(body.length - body.indexOf("word")).toBeLessThan(1500);
+      expect(body.length).toBeLessThanOrEqual(1900);
+      expect(body.endsWith(ROLE_TAIL)).toBe(true);
+      expect(body.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
+      const [session] = store.list();
+      if (session) await store.endSession(session);
+    });
+  });
+
+  test("/session start answer for a non-owner keeps the closing role note within the 1900 cap (REQ-discord-734)", async () => {
+    await withRepo(async (_project, store) => {
+      const { outbound, contentEdits } = mockOutbound();
+      const tracked: string[] = [];
+      const { ix } = slashIx("session", { topic: `Fix it ${"t".repeat(200)}` }, "start", "member-1");
+      await handleSessionStart(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
+
+      expect(contentEdits.length).toBe(1);
+      const body = contentEdits[0]!.content ?? "";
+      expect(body).toContain("started.\nTopic: Fix it");
+      expect(body.length).toBeLessThanOrEqual(1900);
+      expect(body.endsWith(ROLE_TAIL)).toBe(true);
+      expect(body.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
+      // The summary part is capped at 1500 like before, note included.
+      expect(body.slice(body.indexOf("word")).length).toBeLessThanOrEqual(1500);
       const [session] = store.list();
       if (session) await store.endSession(session);
     });

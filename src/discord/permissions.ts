@@ -3,6 +3,8 @@
  * DISCORD-6 — per-user rate limits + mutes (thin steal from corvid-agent).
  * DISCORD-7 — resolvePermissionLevel + minPermission re-check at run time.
  * IDENTITY-1 / ADMIN-4 — configured owner resolves to ADMIN at handler time.
+ * IDENTITY-8..12 — resolveDiscordActingRole: owner / team / community for a
+ * Discord run's spawn (the tool layer re-resolves it on every call).
  */
 
 import {
@@ -14,6 +16,12 @@ import {
 } from "../allowlist/discord.ts";
 import type { AllowlistConfig, GateResult } from "../allowlist/types.ts";
 import { isOwnerDiscord, type OwnerRecord } from "../identity/owner.ts";
+import {
+  resolvePerson,
+  roleOfPerson,
+  type PeopleDirectory,
+  type PersonRole,
+} from "../identity/people.ts";
 import { MUTED, NOT_AUTHORIZED, RATE_LIMITED } from "./types.ts";
 
 
@@ -80,6 +88,25 @@ export function resolvePermissionLevel(opts: ResolvePermissionOpts): PermissionL
     return PermissionLevel.STANDARD;
   }
   return PermissionLevel.BLOCKED;
+}
+
+/**
+ * IDENTITY-8..12 — the role a Discord run (chat, slash, button pick) is
+ * spawned with: owner when the caller resolves to ADMIN (unchanged, owner
+ * only); else team when the owner's people list, matched on the caller's
+ * Discord user id (IDENTITY-7), declares them team; else community — the
+ * undeclared, declared community, and a blocked (deny-listed / muted)
+ * caller. This only caps the run: the tool layer re-resolves the role from
+ * the live config and people list on every call (`resolveActingRole`).
+ */
+export function resolveDiscordActingRole(
+  opts: ResolvePermissionOpts & { people?: PeopleDirectory | null },
+): PersonRole {
+  const level = resolvePermissionLevel(opts);
+  if (level >= PermissionLevel.ADMIN) return "owner";
+  if (level === PermissionLevel.BLOCKED) return "community";
+  const person = resolvePerson(opts.people, { discordId: opts.userId });
+  return roleOfPerson(person) === "team" ? "team" : "community";
 }
 
 /** Ancestor default: 10 messages / 60s window. */

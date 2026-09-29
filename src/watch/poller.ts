@@ -10,6 +10,8 @@
 
 import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import { loadOwnerConfig } from "../identity/owner.ts";
+import { loadDeclaredPeople } from "../identity/people.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
 import {
@@ -32,15 +34,11 @@ import {
 } from "./config.ts";
 import { dedupeByIssue, ProcessedIdStore } from "./dedup.ts";
 import {
-  isGithubUserAllowed,
-  isRepoAllowed,
-} from "../allowlist/github.ts";
-import {
   DEFAULT_RATE_LIMIT_BACKOFF_MS,
   formatRateLimitLog,
   parseGithubRateLimit,
 } from "./rate-limit.ts";
-import { routeEvent } from "./router.ts";
+import { gateEvent, routeEvent } from "./router.ts";
 import {
   createOctokitSearchClient,
   fetchWatchEvents,
@@ -63,7 +61,11 @@ import {
 } from "./summary.ts";
 import type { DetectedEvent, WatchConfig } from "./types.ts";
 
-/** Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session). */
+/**
+ * Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session).
+ * Same gate as routeEvent, so an assignment / review request by a user who is
+ * not allowlisted never wins the per-issue dedupe (REQ-watch-302).
+ */
 function preferAllowlisted(
   events: DetectedEvent[],
   allowlist: WatchConfig["allowlist"],
@@ -71,9 +73,7 @@ function preferAllowlisted(
   const eligible: DetectedEvent[] = [];
   const denied: DetectedEvent[] = [];
   for (const e of events) {
-    const repoOk = isRepoAllowed(e.repo, allowlist.github).ok;
-    const userOk = isGithubUserAllowed(e.sender, allowlist.github).ok;
-    if (repoOk && userOk) eligible.push(e);
+    if (gateEvent(e, allowlist.github).ok) eligible.push(e);
     else denied.push(e);
   }
   return { eligible, denied };
@@ -192,6 +192,10 @@ export async function startWatchPoller(
 
   const config = loaded.config;
   const env = opts.env ?? process.env;
+  // IDENTITY-14 — the owner (IDENTITY-1) from the allowlist file the watch
+  // loaded + env, as the bridge reads it; declared people are re-read per
+  // event (loadDeclaredPeople) so edits apply without a restart.
+  const { owner } = await loadOwnerConfig({ env, filePath: config.allowlist.sourcePath });
   // Durable WATCH sessions (REQ-watch-037). Dry-run without an explicit data
   // dir stays in-memory so tests never touch ~/.local/share/corvidinho.
   const ownedDb =
@@ -398,6 +402,7 @@ export async function startWatchPoller(
         const action = routeEvent(event, {
           store,
           allowlist: config.allowlist,
+          people: loadDeclaredPeople({ allowlist: config.allowlist, owner }),
         });
         routed = true;
         processed.addMany(relatedIds);
