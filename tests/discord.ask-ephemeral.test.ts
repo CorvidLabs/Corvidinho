@@ -18,8 +18,9 @@ import {
   toPendingAsk,
 } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
-import { SessionStore } from "../src/discord/session-store.ts";
+import { CLOSED_ASKS_MAX, SessionStore } from "../src/discord/session-store.ts";
 import { ASK_CANCELLED_ACK } from "../src/discord/thin-ack.ts";
+import { EPHEMERAL_SILENT_ACK } from "../src/discord/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import {
   createNullGateway,
@@ -566,8 +567,11 @@ describe("open button asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044
     expect(calls).toHaveLength(4);
     expect(calls[3]!.prompt).not.toContain("Which DB?]");
     expect(replies.slice(before).some((r) => r.content.includes("Which DB?"))).toBe(false);
+    // DISCORD-ASK-5: the dropped ask timed out, so a press on it is a late
+    // press — "that choice expired", not "already answered", and no run.
     const late = await press(handlers, openCustomId(askA.askId));
-    expect(String(late[0]!.content).toLowerCase()).toContain("already");
+    expect(late).toEqual([{ content: ASK_CHOICE_EXPIRED, ephemeral: true }]);
+    expect(calls).toHaveLength(4);
     await result.stop();
   });
 
@@ -763,5 +767,280 @@ describe("ask option ids and expired button asks (DISCORD-ASK-1/3/5)", () => {
     expect(replies.at(-1)!.content).toBe(ASK_CANCELLED_ACK);
     expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
     await result.stop();
+  });
+});
+
+const NOT_YOURS = "This choice isn’t for you (or it was already answered).";
+const EXPIRED_REPLY = [{ content: ASK_CHOICE_EXPIRED, ephemeral: true }];
+
+/** Push the session's last activity past the soft TTL (SESSION-2). */
+function idlePastTtl(session: { lastActivityAt: number }): void {
+  session.lastActivityAt = Date.now() - 2 * 60 * 60 * 1000;
+}
+
+describe("a late press on an ask that is no longer open (DISCORD-ASK-5 / REQ-discord-045)", () => {
+  test("an ask dropped at the newest pick: the requester's Choose and option press get 'that choice expired', no run; another user's press gets not-for-you", async () => {
+    const { result, handlers, replies, calls, outbound } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, CACHE_ASK, "Using Redis"]),
+    );
+    await say(handlers, "m1", "set up storage");
+    const askA = result.store.list()[0]!.pendingAsk!;
+    await say(handlers, "m2", "and caching?");
+    const session = result.store.list()[0]!;
+    const askB = session.pendingAsk!;
+    session.openAsks![0]!.expiresAt = Date.now() - 1;
+    await press(handlers, pickCustomId(askB.askId, "1"));
+    expect(calls).toHaveLength(3);
+    expect(result.store.findPendingAsk(askA.askId)).toBeUndefined();
+
+    const posted = replies.length + outbound.sends.length + outbound.contentEdits.length;
+    expect(await press(handlers, openCustomId(askA.askId))).toEqual(EXPIRED_REPLY);
+    expect(await press(handlers, pickCustomId(askA.askId, "2"))).toEqual(EXPIRED_REPLY);
+    // Another user never learns it was an ask of someone else's that expired.
+    expect(await press(handlers, pickCustomId(askA.askId, "1"), "user-2")).toEqual([
+      { content: NOT_YOURS, ephemeral: true },
+    ]);
+    expect(calls).toHaveLength(3);
+    expect(replies.length + outbound.sends.length + outbound.contentEdits.length).toBe(posted);
+    await result.stop();
+  });
+
+  test("an ask whose session was TTL-purged: the requester's press gets 'that choice expired', no run and no new session", async () => {
+    const { result, handlers, replies, calls, outbound } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, CACHE_ASK, "unused"]),
+    );
+    await say(handlers, "m1", "set up storage");
+    const askA = result.store.list()[0]!.pendingAsk!;
+    await say(handlers, "m2", "and caching?");
+    const session = result.store.list()[0]!;
+    const askB = session.pendingAsk!;
+    expect(session.openAsks?.map((a) => a.askId)).toEqual([askA.askId]);
+    // Neither ask has timed out yet: only the session is idle past its TTL.
+    expect(askA.expiresAt).toBeGreaterThan(Date.now());
+    // DISCORD-ASK-2/3: before the purge another user's press on the live ask
+    // is not-for-you and resumes nothing.
+    expect(await press(handlers, pickCustomId(askB.askId, "1"), "user-2")).toEqual([
+      { content: NOT_YOURS, ephemeral: true },
+    ]);
+    expect(calls).toHaveLength(2);
+    idlePastTtl(session);
+
+    const posted = replies.length + outbound.sends.length + outbound.contentEdits.length;
+    for (const askId of [askA.askId, askB.askId]) {
+      expect(await press(handlers, openCustomId(askId))).toEqual(EXPIRED_REPLY);
+      expect(await press(handlers, pickCustomId(askId, "1"))).toEqual(EXPIRED_REPLY);
+      expect(await press(handlers, pickCustomId(askId, "1"), "user-2")).toEqual([
+        { content: NOT_YOURS, ephemeral: true },
+      ]);
+    }
+    expect(calls).toHaveLength(2);
+    expect(result.store.list()).toHaveLength(0);
+    expect(replies.length + outbound.sends.length + outbound.contentEdits.length).toBe(posted);
+    await result.stop();
+  });
+
+  test("a still-stored ask past its timeout keeps today's reply and is cleared; a second late press is still 'that choice expired'", async () => {
+    const { result, handlers, calls } = await bridgeWith(scriptedAgent([OPTIONS_ASK]));
+    await say(handlers, "m1", "set up storage");
+    const session = result.store.list()[0]!;
+    const ask = session.pendingAsk!;
+    ask.expiresAt = Date.now() - 1;
+    expect(await press(handlers, pickCustomId(ask.askId, "1"))).toEqual(EXPIRED_REPLY);
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    expect(await press(handlers, openCustomId(ask.askId))).toEqual(EXPIRED_REPLY);
+    expect(await press(handlers, openCustomId(ask.askId), "user-2")).toEqual([
+      { content: NOT_YOURS, ephemeral: true },
+    ]);
+    expect(calls).toHaveLength(1);
+    await result.stop();
+  });
+
+  test("DISCORD-ASK-8 holds: a re-press after a pick and a press after cancel stay no-ops with today's reply, even after the session is purged", async () => {
+    const { result, handlers, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, "Using Postgres", CACHE_ASK]),
+    );
+    await say(handlers, "m1", "set up storage");
+    const picked = result.store.list()[0]!.pendingAsk!;
+    await press(handlers, pickCustomId(picked.askId, "1"));
+    expect(calls).toHaveLength(2);
+    await say(handlers, "m2", "and caching?");
+    const cancelled = result.store.list()[0]!.pendingAsk!;
+    expect(cancelled.askId).not.toBe(picked.askId);
+    await say(handlers, "m3", "cancel");
+    expect(calls).toHaveLength(3);
+
+    const nowAndAfterPurge = async () => {
+      for (const askId of [picked.askId, cancelled.askId]) {
+        const eph = await press(handlers, pickCustomId(askId, "2"));
+        expect(eph).toEqual([{ content: NOT_YOURS, ephemeral: true }]);
+      }
+      expect(calls).toHaveLength(3);
+    };
+    await nowAndAfterPurge();
+    idlePastTtl(result.store.list()[0]!);
+    expect(result.store.list()).toHaveLength(0);
+    await nowAndAfterPurge();
+    await result.stop();
+  });
+
+  test("inside a thread under the allowlisted channel (DISCORD-2.a): a late press on a dropped or a TTL-purged ask is 'that choice expired', with the same channel gate as a live press", async () => {
+    const { result, handlers, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, CACHE_ASK, "Using Redis"]),
+    );
+    const sayIn = (id: string, content: string) =>
+      handlers.onMessage({
+        id,
+        channelId: "chan-1",
+        threadId: "thr-1",
+        authorId: "user-1",
+        authorBot: false,
+        content: `<@999> ${content}`,
+        mentionedBot: true,
+      });
+    const pressIn = async (customId: string, channelId: string, userId = "user-1") => {
+      const eph: Array<Record<string, unknown>> = [];
+      await handlers.onComponent!({
+        id: `ix-${customId}-${channelId}`,
+        customId,
+        channelId,
+        userId,
+        reply: async (opts) => {
+          eph.push(opts as Record<string, unknown>);
+        },
+        deleteReply: async () => {},
+      });
+      return eph;
+    };
+    await sayIn("t1", "set up storage");
+    const session = result.store.list()[0]!;
+    expect(session.threadId).toBe("thr-1");
+    const askA = session.pendingAsk!;
+    await sayIn("t2", "and caching?");
+    const askB = session.pendingAsk!;
+    session.openAsks![0]!.expiresAt = Date.now() - 1;
+    await pressIn(pickCustomId(askB.askId, "1"), "thr-1");
+    expect(calls).toHaveLength(3);
+    expect(result.store.findPendingAsk(askA.askId)).toBeUndefined();
+
+    // The dropped ask, pressed in the talk's thread.
+    expect(await pressIn(openCustomId(askA.askId), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askA.askId, "2"), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askA.askId, "2"), "thr-1", "user-2")).toEqual([
+      { content: NOT_YOURS, ephemeral: true },
+    ]);
+    // Another thread, or a channel off the allowlist, stays zero-width.
+    expect(await pressIn(openCustomId(askA.askId), "thr-2")).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+
+    // A newer, live ask in the thread, then the talk idles past its TTL.
+    const askC = toPendingAsk(OPTIONS_ASK);
+    result.store.setPendingAsk(session, askC);
+    idlePastTtl(session);
+    const ran = calls.length;
+    expect(await pressIn(openCustomId(askC.askId), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askC.askId, "1"), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askC.askId, "1"), "chan-off")).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+    // Once the talk's own channel leaves the allowlist, a press in its
+    // thread is zero-width, as on a live ask (REQ-discord-212).
+    result.config.allowlist.discord.channels = ["chan-other"];
+    expect(await pressIn(pickCustomId(askC.askId, "1"), "thr-1")).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+    expect(calls).toHaveLength(ran);
+    expect(result.store.list()).toHaveLength(0);
+    await result.stop();
+  });
+
+  test("SessionStore keeps closed asks as askId, user, expiry and the talk's channel/thread only — from a TTL purge, a drop, a late clear and a reload — never a pick or a cancel", () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-closed-asks-"));
+    try {
+      const path = join(dir, "corvidinho.db");
+      let now = 1_000_000_000_000;
+      const ttlMs = 45 * 60 * 1000;
+      const db1 = openCorvidinhoDb({ path });
+      const store1 = new SessionStore({ db: db1, ttlMs, now: () => now });
+
+      // A pick of a live ask and a cancel close nothing (DISCORD-ASK-8).
+      const s = store1.create({ channelId: "chan-1", userId: "user-1" });
+      store1.setPendingAsk(s, toPendingAsk(OPTIONS_ASK, { askId: "picked", nowMs: now }));
+      store1.clearPendingAsk(s, "picked");
+      store1.setPendingAsk(s, toPendingAsk(OPTIONS_ASK, { askId: "cancelled", nowMs: now }));
+      store1.setPendingAsk(s, null);
+      expect(store1.findClosedAsk("picked")).toBeUndefined();
+      expect(store1.findClosedAsk("cancelled")).toBeUndefined();
+
+      // An earlier ask past its timeout is dropped at the newest pick: closed.
+      store1.setPendingAsk(s, toPendingAsk(OPTIONS_ASK, { askId: "old", nowMs: now - 31 * 60 * 1000 }));
+      store1.setPendingAsk(s, toPendingAsk(CACHE_ASK, { askId: "new", nowMs: now }));
+      store1.clearPendingAsk(s, "new");
+      expect(s.pendingAsk ?? null).toBeNull();
+      const old = store1.findClosedAsk("old")!;
+      expect(old).toEqual({
+        askId: "old",
+        userId: "user-1",
+        expiresAt: now - 60 * 1000,
+        channelId: "chan-1",
+      });
+      // No question or option text is kept (SAFE-6).
+      expect(JSON.stringify(old)).not.toContain("Which DB?");
+      expect(JSON.stringify(old)).not.toContain("Postgres");
+      expect(store1.findClosedAsk("new")).toBeUndefined();
+
+      // The late-pressed ask itself, cleared past its timeout: closed.
+      store1.setPendingAsk(s, toPendingAsk(OPTIONS_ASK, { askId: "late", nowMs: now - 31 * 60 * 1000 }));
+      store1.clearPendingAsk(s, "late");
+      expect(store1.findClosedAsk("late")?.userId).toBe("user-1");
+
+      // A TTL purge closes every open ask of the session, timed out or not.
+      const a1 = toPendingAsk(OPTIONS_ASK, { askId: "a1", nowMs: now });
+      store1.setPendingAsk(s, a1);
+      store1.setPendingAsk(s, toPendingAsk(CACHE_ASK, { askId: "a2", nowMs: now }));
+      store1.touch(s);
+      now += ttlMs + 1;
+      expect(store1.findPendingAsk("a1")).toBeUndefined();
+      expect(store1.findClosedAsk("a1")).toEqual({
+        askId: "a1",
+        userId: "user-1",
+        expiresAt: a1.expiresAt,
+        channelId: "chan-1",
+      });
+      expect(store1.findClosedAsk("a2")?.userId).toBe("user-1");
+      // Re-opening an askId makes it open again, not closed.
+      const s2 = store1.create({ channelId: "chan-1", userId: "user-2" });
+      store1.setPendingAsk(s2, toPendingAsk(OPTIONS_ASK, { askId: "a2", nowMs: now }));
+      expect(store1.findClosedAsk("a2")).toBeUndefined();
+
+      // A session row reloaded past its TTL after a restart closes its asks too.
+      const s3 = store1.create({ channelId: "chan-1", userId: "user-3", threadId: "thr-3" });
+      store1.setPendingAsk(s3, toPendingAsk(OPTIONS_ASK, { askId: "b1", nowMs: now }));
+      db1.close();
+      now += ttlMs + 1;
+      const db2 = openCorvidinhoDb({ path });
+      const store2 = new SessionStore({ db: db2, ttlMs, now: () => now });
+      expect(store2.get(s3.id)).toBeUndefined();
+      expect(store2.findClosedAsk("b1")).toMatchObject({
+        userId: "user-3",
+        channelId: "chan-1",
+        threadId: "thr-3",
+      });
+      db2.close();
+
+      // Bounded: past CLOSED_ASKS_MAX the oldest closed ask is forgotten.
+      const store3 = new SessionStore({ ttlMs, now: () => now });
+      for (let i = 0; i <= CLOSED_ASKS_MAX; i++) {
+        const si = store3.create({ channelId: "chan-1", userId: `u${i}` });
+        store3.setPendingAsk(si, toPendingAsk(OPTIONS_ASK, { askId: `c${i}`, nowMs: now }));
+      }
+      now += ttlMs + 1;
+      expect(store3.list()).toHaveLength(0);
+      expect(store3.findClosedAsk("c0")).toBeUndefined();
+      expect(store3.findClosedAsk("c1")?.userId).toBe("u1");
+      expect(store3.findClosedAsk(`c${CLOSED_ASKS_MAX}`)?.userId).toBe(`u${CLOSED_ASKS_MAX}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

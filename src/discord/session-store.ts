@@ -65,8 +65,7 @@ function pendingAskBody(ask: PendingAsk): Record<string, unknown> {
  * `pendingAsk` last (SESSION-MULTI-3). Same column, no schema bump.
  */
 function serializePendingAsks(session: SessionStub): string | null {
-  const open = [...(session.openAsks ?? [])];
-  if (session.pendingAsk) open.push(session.pendingAsk);
+  const open = openAsksOf(session);
   if (open.length === 0) return null;
   if (open.length === 1) return JSON.stringify(pendingAskBody(open[0]!));
   return JSON.stringify(open.map(pendingAskBody));
@@ -142,6 +141,33 @@ function newId(): string {
   return `sess_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
+/**
+ * An ask that is no longer open because it timed out or its session was
+ * TTL-purged, kept only so a late press on its buttons gets "that choice
+ * expired" and not "not yours" (DISCORD-ASK-5 / REQ-discord-045). Only the
+ * askId, the session's Discord user, the ask's expiry and where the talk
+ * lived (its channel and thread ids, so the press passes the same channel
+ * gate as on a live ask, REQ-discord-212 / DISCORD-2.a) are kept: never the
+ * question or option text (SAFE-6). Memory only, never written to the DB.
+ */
+export type ClosedAsk = {
+  askId: string;
+  userId: string;
+  expiresAt: number;
+  channelId: string;
+  threadId?: string;
+};
+
+/** Closed asks kept in memory, newest last; past this the oldest is forgotten. */
+export const CLOSED_ASKS_MAX = 1000;
+
+/** Every open ask of a session: earlier open asks first, `pendingAsk` last. */
+function openAsksOf(session: SessionStub): PendingAsk[] {
+  const open = [...(session.openAsks ?? [])];
+  if (session.pendingAsk) open.push(session.pendingAsk);
+  return open;
+}
+
 export type SessionStoreOptions = {
   /** When set, persist/reload from shared Corvidinho DB. */
   db?: Database;
@@ -188,6 +214,8 @@ export class SessionStore {
   private readonly activeRuns = new Map<string, number>();
   /** session id → recorded turns, oldest first (REQ-discord-072). */
   private readonly turns = new Map<string, SessionTurn[]>();
+  /** askId → an ask no longer open, for a late press (DISCORD-ASK-5). */
+  private readonly closedAsks = new Map<string, ClosedAsk>();
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
@@ -221,6 +249,8 @@ export class SessionStore {
     if (!this.expired(session)) return false;
     // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
     void this.parkSessionWorktree(session);
+    // DISCORD-ASK-5: a later press on this talk's buttons is a late press.
+    this.closeAsks(session, openAsksOf(session));
     this.removeLocal(session);
     this.deleteFromDb(session.id);
     return true;
@@ -287,6 +317,7 @@ export class SessionStore {
           lastActivityAt: row.last_activity_at,
         };
         void this.parkSessionWorktree(doomed);
+        this.closeAsks(doomed, openAsksOf(doomed));
         this.deleteFromDb(row.id);
         continue;
       }
@@ -647,6 +678,8 @@ export class SessionStore {
    * every open ask (explicit cancel). Persists when a DB is configured.
    */
   setPendingAsk(session: SessionStub, ask: PendingAsk | null): void {
+    // An open ask is never a closed one (DISCORD-ASK-5).
+    if (ask) this.closedAsks.delete(ask.askId);
     if (!ask) {
       session.pendingAsk = null;
       delete session.openAsks;
@@ -673,25 +706,78 @@ export class SessionStore {
    * is cleared the newest remaining open ask that has not timed out takes its
    * place, and earlier asks already past their timeout are dropped then, so a
    * thin reply never restates buttons that only answer "that choice expired".
+   * An ask that leaves past its timeout (the cleared one or a dropped one) is
+   * kept as a closed ask for a later press (DISCORD-ASK-5 / `findClosedAsk`).
    * No-op when the session does not hold that askId.
    */
   clearPendingAsk(session: SessionStub, askId: string): void {
     const earlier = session.openAsks ?? [];
+    const nowMs = this.nowMs();
+    let cleared: PendingAsk;
+    let dropped: PendingAsk[] = [];
     if (session.pendingAsk?.askId === askId) {
-      const nowMs = this.nowMs();
+      cleared = session.pendingAsk;
       const live = earlier.filter((a) => !isAskExpired(a, nowMs));
+      dropped = earlier.filter((a) => isAskExpired(a, nowMs));
       session.pendingAsk = live.at(-1) ?? null;
       const rest = live.slice(0, -1);
       if (rest.length > 0) session.openAsks = rest;
       else delete session.openAsks;
-    } else if (earlier.some((a) => a.askId === askId)) {
+    } else {
+      const held = earlier.find((a) => a.askId === askId);
+      if (!held) return;
+      cleared = held;
       const rest = earlier.filter((a) => a.askId !== askId);
       if (rest.length > 0) session.openAsks = rest;
       else delete session.openAsks;
-    } else {
-      return;
     }
+    // DISCORD-ASK-5: an ask that leaves past its timeout (the late-pressed ask
+    // itself, or an earlier one dropped above) stays a closed ask, so a later
+    // press on it is still "that choice expired". A pick or an answer of a
+    // live ask is not closed: a re-press stays a no-op (DISCORD-ASK-8).
+    this.closeAsks(
+      session,
+      isAskExpired(cleared, nowMs) ? [...dropped, cleared] : dropped,
+    );
     this.persistSession(session);
+  }
+
+  /**
+   * Keep `asks` as closed asks of `session` (DISCORD-ASK-5): askId, user,
+   * expiry and the talk's channel and thread ids only (SAFE-6), newest last,
+   * at most CLOSED_ASKS_MAX.
+   */
+  private closeAsks(
+    session: Pick<SessionStub, "userId" | "channelId" | "threadId">,
+    asks: readonly PendingAsk[],
+  ): void {
+    for (const ask of asks) {
+      this.closedAsks.delete(ask.askId);
+      this.closedAsks.set(ask.askId, {
+        askId: ask.askId,
+        userId: session.userId,
+        expiresAt: ask.expiresAt,
+        channelId: session.channelId,
+        ...(session.threadId !== undefined ? { threadId: session.threadId } : {}),
+      });
+    }
+    while (this.closedAsks.size > CLOSED_ASKS_MAX) {
+      const oldest = this.closedAsks.keys().next().value;
+      if (oldest === undefined) break;
+      this.closedAsks.delete(oldest);
+    }
+  }
+
+  /**
+   * An ask that timed out, or whose session was TTL-purged, and is no longer
+   * open (DISCORD-ASK-5): a press on it is a late press. Undefined for an ask
+   * that is still open, was picked, answered or cancelled, or is unknown.
+   * Expired sessions are purged first, as in `findPendingAsk`.
+   */
+  findClosedAsk(askId: string): ClosedAsk | undefined {
+    this.list();
+    const closed = this.closedAsks.get(askId);
+    return closed ? { ...closed } : undefined;
   }
 
   /**

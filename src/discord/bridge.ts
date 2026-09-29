@@ -973,13 +973,23 @@ export async function startBridge(
       // not only the newest one.
       const pressed = store.findPendingAsk(parsed.askId);
       const session = pressed?.session;
+      // DISCORD-ASK-5 / REQ-discord-045 — an ask that is no longer open (timed
+      // out and dropped, or its session TTL-purged) still knows where its talk
+      // lived, so a press on it passes the same channel gate as a live one.
+      const closed = pressed ? undefined : store.findClosedAsk(parsed.askId);
 
       // DISCORD-5 / DISCORD-DENY-2/3 / REQ-discord-212 — a press counts only in
       // an allowlisted channel (inside the session's thread, its allowlisted
       // parent counts, DISCORD-2.a), and only while the session's own channel
       // is still allowlisted, since the resumed run posts there. Otherwise the
       // ack is ephemeral only: the tip for an admin, zero-width for anyone else.
-      if (!componentChannelAllowlisted(interaction.channelId, session, config.allowlist)) {
+      if (
+        !componentChannelAllowlisted(
+          interaction.channelId,
+          session ?? closed,
+          config.allowlist,
+        )
+      ) {
         const admin =
           resolvePermissionLevel({
             userId: interaction.userId,
@@ -1033,6 +1043,16 @@ export async function startBridge(
       }
 
       const pending = pressed?.ask ?? null;
+
+      // DISCORD-ASK-5 / REQ-discord-045 — the requester's press on an ask that
+      // is no longer open because it timed out (dropped, not promoted, when a
+      // newer ask was picked) or its session was TTL-purged is a late press:
+      // "that choice expired", no agent run. Another user's press on it still
+      // gets the not-for-you reply below, as on a live ask.
+      if (!pending && closed && closed.userId === interaction.userId) {
+        await interaction.reply({ content: ASK_CHOICE_EXPIRED, ephemeral: true });
+        return;
+      }
 
       // Wrong user or unknown ask → short ephemeral, do not leak.
       if (!session || !pending || session.userId !== interaction.userId) {
