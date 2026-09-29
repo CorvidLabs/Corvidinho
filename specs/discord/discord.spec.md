@@ -462,11 +462,13 @@ Rich replies (REQ-discord-075, DISCORD-16): `src/discord/rich-reply.ts`
 exports `DISCORD_MESSAGE_MAX` (2000), `DISCORD_EMBED_DESCRIPTION_MAX` (4096),
 `DISCORD_ANSWER_MAX` (6000), `splitDiscordMessage` (fence-safe line split,
 role note kept whole in the last part), `readsBetterAsEmbed` /
-`planAnswerParts` (scrub first, SAFE-6; one plain message within 2000, one
+`planAnswerParts` (scrub first, SAFE-6, then cut to `DISCORD_ANSWER_MAX`
+keeping a role note; one plain message within 2000, one
 embed for long plain prose with no fence or mention, else split parts with the
 footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
-first mentioned in them) and `answerSpendFor` (tokens and cost from the run's
+first mentioned in them, so a mention past the first part still pings once)
+and `answerSpendFor` (tokens and cost from the run's
 `usage` and `priceForModel`). `finalizeContent` edits the first part into the
 progress message, posts later parts with the optional
 `ThinkingOutbound.sendMessage` (no pings; wired to the gateway reply) and

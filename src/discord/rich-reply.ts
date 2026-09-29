@@ -22,7 +22,7 @@
  */
 
 import { costMicroUsd, priceForModel } from "../agent/spend.ts";
-import { ROLE_REFUSED_SUMMARY_NOTE } from "../agent/task-summary.ts";
+import { ROLE_REFUSED_SUMMARY_NOTE, clipKeepingRoleNote } from "../agent/task-summary.ts";
 import type { AgentTokenUsage } from "../agent/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
@@ -204,13 +204,19 @@ export type AnswerPart = {
  * first (SAFE-6). Within 2000 characters: one plain message with the footer
  * embed (as before). Longer plain prose (`allowEmbed`, see
  * `readsBetterAsEmbed`): one embed holding the text and the footer. Anything
- * else: `splitDiscordMessage` parts, the footer embed on the last one.
+ * else: `splitDiscordMessage` parts, the footer embed on the last one. A text
+ * over DISCORD_ANSWER_MAX is cut to it (ending in `…`, a closing role note
+ * kept) after the scrub, so no path posts more than that.
  */
 export function planAnswerParts(
   text: string,
   opts: { footer: DiscordEmbedPayload | null; allowEmbed?: boolean },
 ): AnswerPart[] {
-  const clean = scrubSecrets(text);
+  const clean = clipKeepingRoleNote(
+    scrubSecrets(text),
+    DISCORD_ANSWER_MAX,
+    (head, n) => `${head.slice(0, Math.max(0, n - 1))}…`,
+  );
   if (clean.length <= DISCORD_MESSAGE_MAX) return [{ content: clean, embed: opts.footer }];
   if (opts.allowEmbed && readsBetterAsEmbed(clean)) {
     return [
@@ -255,8 +261,9 @@ export type AnswerPost = (p: {
  * Post an answer as fresh messages (the reply paths that cannot edit the
  * thinking message). The first part replies to `replyToMessageId` with the
  * answer's allowed mentions, as a single reply did; each later part allows
- * only the users first mentioned in it (none by default, so model text never
- * pings). `components` ride the last part. Returns the posted message ids in
+ * only the users of `mentionUserIds` first mentioned in it (none by default,
+ * so model text never pings), so a mention that landed past the first part
+ * still pings. `components` ride the last part. Returns the posted message ids in
  * order, or null when the first part did not go out.
  */
 export async function postAnswerParts(
@@ -281,13 +288,13 @@ export async function postAnswerParts(
   const pinged = new Set<string>();
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
-    if (i === 0) {
-      for (const id of opts.mentionUserIds ?? []) pinged.add(id);
-      if (opts.skipFirst) continue;
-    }
+    // A user counts as pinged only by the part that holds their mention: one
+    // that lands in a later part (e.g. the SAFE-8 owner line appended at the
+    // end of a long answer) is pinged by that part, once.
+    const firstMentioned = mentionsIn(part.content, opts.mentionUserIds ?? [], pinged);
+    if (i === 0 && opts.skipFirst) continue;
     const last = i === parts.length - 1;
-    const mentions =
-      i === 0 ? opts.mentionUserIds : mentionsIn(part.content, opts.mentionUserIds ?? [], pinged);
+    const mentions = i === 0 ? opts.mentionUserIds : firstMentioned;
     const sent = await post({
       channelId: opts.channelId,
       content: part.content ?? "",

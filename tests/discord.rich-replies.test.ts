@@ -22,7 +22,7 @@ import { Client } from "discord.js";
 import { resultFrame, serializeFrame, usageFrame } from "../src/agent/events-ndjson.ts";
 import { loadLlmEnv } from "../src/agent/execute.ts";
 import { costMicroUsd, formatUsd, priceForModel } from "../src/agent/spend.ts";
-import type { AgentTokenUsage, HumanAsk, TaskResult } from "../src/agent/types.ts";
+import type { AgentTokenUsage, HumanAsk, SpendWarning, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import {
@@ -227,6 +227,38 @@ describe("chat answers are split at 2000 without breaking code fences (DISCORD-1
     }
     for (const r of replies.slice(0, -1)) expect(r.embed).toBeUndefined();
     expect(replies.at(-1)!.embed!.footer!.text).toMatch(new RegExp(`^${esc(model())} \\| \\d+s$`));
+    await result.stop();
+  });
+
+  test("a split fallback reply still pings the owner on the part that holds the SAFE-8 warning line", async () => {
+    const base = memoryThinkingOutbound();
+    const noEdit: ThinkingOutbound = { sendEmbed: base.sendEmbed, editEmbed: base.editEmbed };
+    const answer = longAnswer();
+    const warning: SpendWarning = { spentMicroUsd: 4_100_000, capMicroUsd: 5_000_000, percent: 82 };
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: answer, exitCode: 0, spendWarning: warning };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(agent, { outbound: noEdit, owner: OWNER_ID });
+    await handlers.onMessage(mention(OTHER_ID));
+    // The warning line (with the owner's mention) is appended at the end of the
+    // answer, so it lands in a later part.
+    const warningLine = replies.at(-1)!.content.split("\n").at(-1)!;
+    expect(warningLine).toContain(`<@${OWNER_ID}>`);
+    expect(warningLine).toContain("82%");
+    expectSplit(
+      replies.map((r) => r.content),
+      `${answer}\n\n${warningLine}`,
+    );
+    // The part that holds the mention allows it, and no other later part does:
+    // the owner is pinged once, where the line is.
+    const holder = replies.find((r) => r.content.includes(`<@${OWNER_ID}>`))!;
+    expect(holder).not.toBe(replies[0]);
+    expect(holder.mentionUserIds).toEqual([OWNER_ID]);
+    for (const r of replies.slice(1)) {
+      if (r !== holder) expect(r.mentionUserIds).toEqual([]);
+    }
     await result.stop();
   });
 

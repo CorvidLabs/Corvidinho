@@ -111,10 +111,12 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `tests/discord.rich-reply.unit.test.ts` (fence-safe split, moved and
   reopened blocks, closed open fence, space / surrogate-safe cuts, role note in
   the last part, scrub before split, embed only for long plain prose, fresh
-  part mentions, tokens / cost unknown never $0, owner-only spend in the
+  part mentions (a mention past the first part pings there once), the
+  whole-answer cap, tokens / cost unknown never $0, owner-only spend in the
   footer) and `tests/discord.rich-replies.test.ts` (bridge chat, fallback
   reply, button-pick resume, `/work`, `/session start` split with the footer on
-  the last part; owner vs non-owner footer and live token use; Discord spawn
+  the last part; a split fallback reply pings the owner on the part holding
+  the SAFE-8 warning line, once; owner vs non-owner footer and live token use; Discord spawn
   client passes the whole answer and `usage`, WATCH keeps 1800; live gateway
   sends 2000 characters with the embed). Footer assertions elsewhere expect the
   time segment (`model | Ns`).

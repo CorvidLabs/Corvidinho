@@ -189,8 +189,17 @@ describe("planAnswerParts (DISCORD-16, SAFE-6)", () => {
     expect(readsBetterAsEmbed(prose(120, "too long for one embed"))).toBe(false);
   });
 
-  test("the whole-answer cap is three messages' worth", () => {
+  test("the whole-answer cap is three messages' worth, and no plan holds more (role note kept)", () => {
     expect(DISCORD_ANSWER_MAX).toBe(3 * DISCORD_MESSAGE_MAX);
+    const note = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+    const huge = `${prose(400, "h")}${note}`;
+    expect(huge.length).toBeGreaterThan(2 * DISCORD_ANSWER_MAX);
+    const parts = planAnswerParts(huge, { footer, allowEmbed: true });
+    const all = parts.map((p) => p.content!);
+    expect(all.join("").length).toBeLessThanOrEqual(DISCORD_ANSWER_MAX);
+    expect(all.at(-1)!.endsWith(note)).toBe(true);
+    expect(all.join("\n")).toContain(`…${note}`);
+    for (const p of all) expect(p.length).toBeLessThanOrEqual(DISCORD_MESSAGE_MAX);
   });
 });
 
@@ -219,6 +228,9 @@ describe("postAnswerParts (fresh replies, DISCORD-16)", () => {
     expect(posts.at(-1)!.embed).toEqual(footer);
     expect(posts.at(-1)!.mentionUserIds).toEqual([]);
 
+    // The owner's line landed in a later part: that part pings the owner (the
+    // first part held no mention of them, so it pinged nobody).
+    posts.length = 0;
     const withOwner = await postAnswerParts(post, {
       channelId: "c",
       content: body,
@@ -226,9 +238,21 @@ describe("postAnswerParts (fresh replies, DISCORD-16)", () => {
       mentionUserIds: [owner],
       skipFirst: true,
     });
-    // The owner is already allowed on the (skipped) first part: never pinged twice.
     expect(withOwner!.length).toBeGreaterThan(0);
-    expect(posts.at(-1)!.mentionUserIds).toEqual([]);
+    expect(posts.at(-1)!.content).toContain(`<@${owner}>`);
+    expect(posts.at(-1)!.mentionUserIds).toEqual([owner]);
+
+    // A mention the (skipped) first part already holds is never pinged twice.
+    posts.length = 0;
+    await postAnswerParts(post, {
+      channelId: "c",
+      content: `<@${owner}> see below\n${body}`,
+      footer,
+      mentionUserIds: [owner],
+      skipFirst: true,
+    });
+    expect(posts.length).toBeGreaterThan(0);
+    for (const p of posts) expect(p.mentionUserIds).toEqual([]);
   });
 
   test("a first part that does not go out returns null", async () => {
