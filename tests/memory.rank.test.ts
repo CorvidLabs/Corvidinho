@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   claimsIgnorance,
+  injectedMemorySearches,
+  memoryRecallSearchKind,
   memorySearchQuery,
   RECALL_BEFORE_IGNORANCE_HEADER,
   searchMemoryBeforeIgnorance,
@@ -227,6 +229,34 @@ describe("recall-guard", () => {
     expect(taskHasMemorySearch(task)).toBe(false);
     expect(taskHasMemorySearch(`[Corvidinho project memory — …]\n- project: x\n\n${task}`)).toBe(true);
     expect(memorySearchQuery(task)).toBe("CorvidLabs/Corvidinho#7 by @tofu-dev Title: editor question which editor do I use? see");
+  });
+
+  test("injectedMemorySearches: only the harness blocks at the head of the task count, own and project apart", () => {
+    const own = "[Corvidinho memory for this Discord user — …]\n(no stored memories yet)";
+    const project = "[Corvidinho project memory — …]\n- project: x";
+    const id = "[Corvidinho acting Discord user — …]\n- discord_user_id: 1";
+    expect(injectedMemorySearches(`${own}\n\n${project}\n\n${id}\n\nhi`)).toEqual({ own: true, project: true });
+    expect(injectedMemorySearches(`${project}\n\n${id}\n\nwork on it`)).toEqual({ own: false, project: true });
+    expect(injectedMemorySearches(`${id}\n\nwho is Ada?\n\n${own}\n\n${project}`)).toEqual({ own: false, project: false });
+    expect(taskHasMemorySearch(`who is Ada?\n\n${own}`)).toBe(false);
+    expect(memoryRecallSearchKind(["--query", "Ada"])).toBe("own");
+    expect(memoryRecallSearchKind(["--person", "tofu"])).toBe("own");
+    expect(memoryRecallSearchKind(["--project", "--query", "tests"])).toBe("project");
+  });
+
+  test("searchMemoryBeforeIgnorance: only the searches not yet run", async () => {
+    const calls: string[][] = [];
+    const run = async (argv: string[]) => {
+      calls.push(argv);
+      return { ok: true, data: [{ category: "entity", key: "k", content: argv[0] === "--project" ? "P" : "O" }], exitCode: 0 };
+    };
+    expect(await searchMemoryBeforeIgnorance({ taskText: "who is Tofu", run, searched: { project: true } })).toBe(
+      `${RECALL_BEFORE_IGNORANCE_HEADER}\n- entity/k: O`,
+    );
+    expect(calls).toEqual([["--query", "who is Tofu"]]);
+    calls.length = 0;
+    expect(await searchMemoryBeforeIgnorance({ taskText: "who is Tofu", run, searched: { own: true, project: true } })).toBeNull();
+    expect(calls).toEqual([]);
   });
 
   test("searchMemoryBeforeIgnorance: own rows then project rows; nothing (or refusals) ⇒ null", async () => {

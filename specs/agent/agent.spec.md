@@ -63,11 +63,13 @@ one person what is stored about another or repeat private notes, and route a
 They also say to search memory before saying "I don't know" (MEMORY-9) and how
 memory works in a GitHub WATCH run (MEMORY-8, REQ-agent-067); the tool loop
 backs the rule with a guard (`src/agent/recall-guard.ts`): a final reply that
-says it doesn't know, in an attempt with no memory search yet (no injected
-memory block, no `memory-recall` call), makes the loop run `memory-recall
---query` (and `--project`) itself with the request's words through the plugin
-gates — nothing found, the reply stands with no extra model call; facts found
-go back to the model once for one more reply, which uses no tool round.
+says it doesn't know, in an attempt where the person's own memory or the
+project's was not searched yet (no injected block of that kind at the head of
+the task, no `memory-recall` call for it), makes the loop run the missing
+`memory-recall --query` / `--project --query` itself with the request's words
+through the plugin gates — nothing found, the reply stands with no extra
+model call; facts found go back to the model once for one more reply, which
+uses no tool round.
 
 ## Public API
 

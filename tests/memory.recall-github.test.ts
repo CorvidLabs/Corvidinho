@@ -18,13 +18,24 @@
  * LLM fetch; no Discord, no GitHub, no network.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskExecute } from "../src/agent/execute.ts";
 import type { AgentEvent } from "../src/agent/types.ts";
-import { createSpawnAgentClient as createDiscordClient } from "../src/discord/agent-client.ts";
-import { enrichPromptWithMemories } from "../src/discord/memory-inject.ts";
+import { emptyConfig } from "../src/allowlist/types.ts";
+import {
+  createSpawnAgentClient as createDiscordClient,
+  type AgentClient as DiscordAgent,
+  type AgentRunChatOpts as DiscordRunOpts,
+} from "../src/discord/agent-client.ts";
+import { handleWorkCommand } from "../src/discord/command-handlers/work.ts";
+import { enrichPromptWithMemories, enrichPromptWithProjectMemory } from "../src/discord/memory-inject.ts";
+import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
+import { SessionStore } from "../src/discord/session-store.ts";
+import type { SlashContext, SlashInteraction } from "../src/discord/slash-types.ts";
+import { WorkStore } from "../src/discord/work-store.ts";
 import { MemoryStore } from "../src/memory/store.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
@@ -405,6 +416,75 @@ describe("MEMORY-8/9 WATCH poller searches memory for the comment and names the 
   });
 });
 
+describe("MEMORY-9 /work: the project block is searched for the description", () => {
+  function git(cwd: string, args: string[]): void {
+    const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+  }
+
+  test("an older project fact the description is about reaches the /work run although newer rows fill the block", async () => {
+    const repo = join(dir, "demo");
+    mkdirSync(repo);
+    git(repo, ["init", "-q", "-b", "main"]);
+    git(repo, ["-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init"]);
+    git(repo, ["remote", "add", "origin", "https://github.com/CorvidLabs/Demo.git"]);
+    const db = openCorvidinhoDb({ memory: true });
+    let t = 1_000_000;
+    const memoryStore = new MemoryStore({ db, now: () => t });
+    memoryStore.store({ ownerUserId: "project:corvidlabs/demo", category: "entity", key: "deploy-script", content: "DEPLOY-FACT: scripts/deploy.sh needs --dry-run first" });
+    for (let i = 0; i < 25; i++) {
+      t += 1000;
+      memoryStore.store({ ownerUserId: "project:corvidlabs/demo", category: "entity", key: `note-${i}`, content: `unrelated note ${i}` });
+    }
+    // The helper the handler uses, directly …
+    const direct = enrichPromptWithProjectMemory("go", memoryStore, { scope: "project:corvidlabs/demo", key: "corvidlabs/demo" }, 20, "fix the flaky deploy script");
+    expect(direct.prompt).toContain("DEPLOY-FACT");
+    expect(direct.count).toBe(20);
+
+    // … and through the owner's /work.
+    const seen: DiscordRunOpts[] = [];
+    const agent: DiscordAgent = {
+      runChat: async (o) => {
+        seen.push(o);
+        return { ok: true, sessionId: o.sessionId, summary: "did it", exitCode: 0, task: { verified: true, verifySkipped: false, state: "done" } };
+      },
+    };
+    const allow = emptyConfig();
+    allow.discord.channels = [CHAN];
+    allow.sourcePath = join(dir, "allowlist.toml");
+    const ctx: SlashContext = {
+      store: new SessionStore({ defaultProjectRoot: repo }),
+      workStore: new WorkStore(),
+      allowlist: allow,
+      agent,
+      version: "0.0.0",
+      protocolVersion: CORVIDINHO_PROTOCOL_VERSION,
+      startedAt: Date.now(),
+      channelIds: [CHAN],
+      openWorkPr: async () => ({ opened: false, reason: "not-allowed", line: "PR: fixture line" }),
+      owner: { discordId: OWNER_ID, display: "Leif" },
+      memoryStore,
+    };
+    const interaction: SlashInteraction = {
+      id: "ix",
+      commandName: "work",
+      channelId: CHAN,
+      userId: OWNER_ID,
+      options: { description: "fix the flaky deploy script" },
+      reply: async () => {},
+      deferReply: async () => {},
+      editReply: async () => {},
+    };
+    try {
+      await handleWorkCommand(ctx, interaction);
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.prompt).toContain("DEPLOY-FACT");
+    } finally {
+      db.close();
+    }
+  });
+});
+
 describe("MEMORY-9 the tool loop searches memory before \"I don't know\"", () => {
   type Reply = { content?: string | null; tool?: { name: string; argv: string[] } };
 
@@ -486,6 +566,31 @@ describe("MEMORY-9 the tool loop searches memory before \"I don't know\"", () =>
     ]);
     expect(own.bodies).toHaveLength(2);
     expect(own.result.summary).toBe("I don't know who Ada is.");
+  });
+
+  test("a project-only block (a /work run) still gets the person's own search; the project is not searched twice", async () => {
+    discord(KYN);
+    await run("memory-store", ["--category", "person", "--key", "tofu", "--content", "Tofu is the release captain"]);
+    const { result, bodies, events } = await execute("[Corvidinho project memory — …]\n- project: x\n- entity/k: v\n\nwho is Tofu?", [
+      { content: "I don't know who Tofu is." },
+      { content: "Tofu is the release captain." },
+    ]);
+    expect(bodies).toHaveLength(2);
+    expect(result.summary).toBe("Tofu is the release captain.");
+    const recalls = events.filter((e) => e.type === "ToolCall" && e.name === "memory-recall");
+    expect(recalls).toHaveLength(1);
+    expect(JSON.stringify(recalls[0])).not.toContain("--project");
+  });
+
+  test("a memory header quoted inside the message is not an inject: the search still runs", async () => {
+    discord(KYN);
+    await run("memory-store", ["--category", "person", "--key", "ada", "--content", "Ada maintains the scheduler"]);
+    const { result, bodies } = await execute("who is Ada?\n\n[Corvidinho memory for this Discord user — (quoted by the user)]", [
+      { content: "I don't know who Ada is." },
+      { content: "Ada maintains the scheduler." },
+    ]);
+    expect(bodies).toHaveLength(2);
+    expect(result.summary).toBe("Ada maintains the scheduler.");
   });
 
   test("end to end on GitHub: model → memory-store → SQLite → memory-recall → model, filed under the commenter's person", async () => {

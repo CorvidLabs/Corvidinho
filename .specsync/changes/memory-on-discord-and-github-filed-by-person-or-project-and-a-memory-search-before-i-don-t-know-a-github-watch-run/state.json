@@ -32,6 +32,7 @@
     "src/discord/agent-client.ts",
     "src/discord/memory-inject.ts",
     "src/discord/bridge.ts",
+    "src/discord/command-handlers/work.ts",
     "src/agent/execute.ts",
     "src/agent/recall-guard.ts",
     "tests/memory.recall-github.test.ts",

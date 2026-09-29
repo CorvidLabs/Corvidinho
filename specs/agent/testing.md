@@ -143,9 +143,13 @@ run whose actor has a stored fact makes the loop run `memory-recall` itself
 (a `ToolCall` event), send the fact back once and return the second reply;
 with nothing stored the reply stands after one model call; a task with an
 injected memory block, or a run where the model already called
-`memory-recall`, gets no second search; end to end in a GitHub-shaped env the
-model's `memory-store` → SQLite (`person:tofu`) → `memory-recall` → model.
-`tests/memory.rank.test.ts` › "recall-guard" — `claimsIgnorance` phrases and
-non-matches, `taskHasMemorySearch`, `memorySearchQuery` (harness blocks,
-WATCH label and URLs dropped) and `searchMemoryBeforeIgnorance` (own rows then
-project rows, refusals or nothing ⇒ null).
+`memory-recall`, gets no second search; a task led by a project block only (a
+`/work` run) still gets one search of the person's own memory; a memory
+header quoted inside the message does not turn the search off; end to end in
+a GitHub-shaped env the model's `memory-store` → SQLite (`person:tofu`) →
+`memory-recall` → model. `tests/memory.rank.test.ts` › "recall-guard" —
+`claimsIgnorance` phrases and non-matches, `taskHasMemorySearch` /
+`injectedMemorySearches` (only the head blocks count, own and project apart),
+`memoryRecallSearchKind`, `memorySearchQuery` (harness blocks, WATCH label and
+URLs dropped) and `searchMemoryBeforeIgnorance` (own rows then project rows,
+only the searches not yet run, refusals or nothing ⇒ null).

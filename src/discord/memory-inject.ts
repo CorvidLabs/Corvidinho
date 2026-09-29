@@ -170,16 +170,19 @@ export function enrichPromptWithMemories(
 /**
  * MEMORY-6 — prepend only the project block (owner / team `/work` runs,
  * which get no personal memory block). Unchanged when there is no store,
- * no project scope, or nothing stored for the project.
+ * no project scope, or nothing stored for the project. With `query` (the
+ * work description, MEMORY-9) the block is a search: the rows relevant to it
+ * first, then the newest.
  */
 export function enrichPromptWithProjectMemory(
   text: string,
   store: MemoryStore | undefined,
   project: { scope: string; key: string } | undefined,
   limit = MEMORY_INJECT_LIMIT,
+  query?: string,
 ): MemoryInjectResult {
   if (!store || !project) return { prompt: text, count: 0, injected: false };
-  const rows = store.recall({ ownerUserId: project.scope, limit });
+  const rows = recallRelevantThenRecent(store, { ownerUserId: project.scope, query, limit });
   const block = formatProjectMemoryBlock(project.key, rows);
   if (!block) return { prompt: text, count: 0, injected: false };
   const prompt = text.trim().length > 0 ? `${block}\n\n${text}` : block;

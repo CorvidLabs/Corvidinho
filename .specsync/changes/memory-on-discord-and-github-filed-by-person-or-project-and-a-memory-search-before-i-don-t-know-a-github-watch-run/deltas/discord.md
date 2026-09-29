@@ -27,7 +27,10 @@ The chat and button-pick inject (REQ-discord-023 / REQ-discord-101) SHALL
 search memory for the human's message (the picked label on a button):
 `recallRelevantThenRecent` — the rows relevant to it first, then the newest to
 fill, at most 20 — for the speaker's block and for the owner / team project
-block. Without a query the blocks are the newest rows, as before.
+block; the owner's and team's `/work` project block (REQ-discord-101) SHALL
+likewise be searched for the work description
+(`enrichPromptWithProjectMemory(…, limit, query)`). Without a query the
+blocks are the newest rows, as before.
 
 `memorySubjectForGithub(dir, { login, id })` SHALL resolve a GitHub
 commenter to their declared person's subject (the same scopes as on Discord;
@@ -41,7 +44,7 @@ scheduled run never acts for a GitHub commenter.
 Acceptance Criteria
 - A question in plain words finds the fact it is about; a key hit outranks a newer passing mention; equal relevance goes to the newer row; a question-words-only query matches as one substring.
 - A multi-scope search keeps the newest of a key once and leaves private notes out.
-- The Discord inject holds an older fact the message is about although newer rows fill the block.
+- The Discord inject holds an older fact the message is about although newer rows fill the block; an owner's `/work` run holds an older project fact its description is about although newer rows fill the block.
 - `memorySubjectForGithub` matches by numeric id or login, refuses a login whose numeric id differs, and maps the undeclared-under-`[people]` owner to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
 - A Discord spawn clears inherited GitHub commenter keys.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.

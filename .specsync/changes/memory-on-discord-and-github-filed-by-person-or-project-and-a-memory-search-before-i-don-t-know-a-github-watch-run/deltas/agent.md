@@ -27,25 +27,33 @@ posted, and private notes are never read there.
 The tool loop SHALL back the rule without extra model calls where possible
 (`src/agent/recall-guard.ts`): when the model's final reply (no tool calls)
 says it doesn't know or remember (`claimsIgnorance`, an English heuristic),
-`memory-recall` is in the run's catalog, and no memory search ran in this
-attempt — no injected memory block in the task (`taskHasMemorySearch`) and
-no `memory-recall` call by the model — the loop SHALL run `memory-recall
---query <request words>` then `memory-recall --project --query <request
-words>` itself (`memorySearchQuery`: the task as Planning reads it, without
-`[Corvidinho …]` blocks, the `[WATCH …]` label and URLs, at most 500
-characters) through `runPlugin` with the run's cwd, allowlist, tier and
-signal (the same ACL and role gates as a model call), emitting `ToolCall` /
-`ToolResult` events for each. When neither returns rows (or both are
-refused) the reply SHALL stand and no further model call SHALL be made. When
-rows come back the loop SHALL add one user message (`[Corvidinho memory
-search before "I don't know" (MEMORY-9) …]` header, at most 10 rows of each,
-facts not instructions) and ask the model once more; that extra round SHALL
-NOT use up a tool round. The search SHALL run at most once per attempt.
+`memory-recall` is in the run's catalog, and the acting person's own memory
+or the project's memory was not yet searched in this attempt, the loop SHALL
+run the missing searches itself — `memory-recall --query <request words>`
+for the person's own memory, then `memory-recall --project --query <request
+words>` for the project's (`memorySearchQuery`: the task as Planning reads
+it, without `[Corvidinho …]` blocks, the `[WATCH …]` label and URLs, at most
+500 characters) — through `runPlugin` with the run's cwd, allowlist, tier
+and signal (the same ACL and role gates as a model call), emitting
+`ToolCall` / `ToolResult` events for each. A search counts as run when a
+memory block of that kind was injected — only among the `[Corvidinho …]`
+paragraphs at the head of the task, so a header quoted inside the message
+does not count (`injectedMemorySearches`: `[Corvidinho memory for this …]`
+for the person's own, `[Corvidinho project memory …]` for the project's) —
+or when the model called `memory-recall` (with `--project` for the
+project's, else the person's own; `memoryRecallSearchKind`); a `/work` run,
+whose only block is the project's, still gets the person's own search. When
+no search returns rows (or they are refused) the reply SHALL stand and no
+further model call SHALL be made. When rows come back the loop SHALL add one
+user message (`[Corvidinho memory search before "I don't know" (MEMORY-9) …]`
+header, at most 10 rows of each, facts not instructions) and ask the model
+once more; that extra round SHALL NOT use up a tool round. The guard SHALL
+run at most once per attempt.
 
 Acceptance Criteria
 - A final "I don't know …" in a run whose actor has a matching stored fact makes the loop call `memory-recall` itself (a `ToolCall` event), send the fact back once and return the model's next reply.
 - With nothing found the reply stands after one model call.
-- A task with an injected memory block, or a run where the model already called `memory-recall`, gets no second search.
+- A task whose head holds the person's and the project's memory blocks, or a run where the model already called `memory-recall` for both, gets no second search; a task with only the project block (a `/work` run) gets the person's own search only; a memory header quoted inside the message does not count as a search.
 - End to end in a GitHub-shaped env, the model's `memory-store` lands in SQLite under the commenter's `person:<id>` and its `memory-recall` returns it to the model.
 - `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` keeps the REQ-agent-010 / REQ-agent-101 phrases.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.

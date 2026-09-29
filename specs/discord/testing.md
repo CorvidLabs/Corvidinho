@@ -443,8 +443,11 @@ Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
 in plain words finds the fact it is about; a key hit outranks a newer passing
 mention and equal relevance goes to the newer row; › "the Discord inject
 searches memory for the message" — an older fact the message is about is
-injected although 25 newer rows exist (block still 20 rows); › "Discord spawn
-clears inherited GitHub commenter keys". `tests/memory.rank.test.ts` —
+injected although 25 newer rows exist (block still 20 rows); › "/work: the
+project block is searched for the description" — with 25 newer project rows
+the owner's `/work` (through `handleWorkCommand`) still carries the older
+project fact its description is about; › "Discord spawn clears inherited
+GitHub commenter keys". `tests/memory.rank.test.ts` —
 `recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
 a multi-scope search keeping the newest of a key once and no private notes, a
 question-words-only query matching as one substring, `recallRelevantThenRecent`,

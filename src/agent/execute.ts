@@ -29,9 +29,10 @@ import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
   claimsIgnorance,
+  injectedMemorySearches,
   MEMORY_RECALL_TOOL,
+  memoryRecallSearchKind,
   searchMemoryBeforeIgnorance,
-  taskHasMemorySearch,
 } from "./recall-guard.ts";
 import {
   ASK_AGENT_SYSTEM_INSTRUCTIONS,
@@ -638,9 +639,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   // the tool results that opened them, so a refusal can take the parts out.
   const imageMessages: { message: ChatMessage; opened: OpenedImage[] }[] = [];
   let imagesRefused = false;
-  // MEMORY-9 (REQ-agent-067): an injected memory block is a search already
-  // run for this task; otherwise a memory-recall call counts as one.
-  let memorySearched = taskHasMemorySearch(taskText);
+  // MEMORY-9 (REQ-agent-067): an injected memory block at the head of the
+  // task is a search already run for this task (the person's own or the
+  // project's); a memory-recall call by the model counts for what it
+  // searched. The guard below runs at most once per attempt.
+  const memorySearched = injectedMemorySearches(taskText);
+  let memoryGuardRan = false;
   // The recall-before-"I don't know" follow-up never uses up a tool round.
   let roundLimit = maxToolRounds;
 
@@ -711,10 +715,16 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       // MEMORY-9: about to say it doesn't know, with no memory search in
       // this attempt — search now (no model call); only facts found go back
       // to the model, once.
-      if (!memorySearched && offered.has(MEMORY_RECALL_TOOL) && claimsIgnorance(content)) {
-        memorySearched = true;
+      if (
+        !memoryGuardRan &&
+        !(memorySearched.own && memorySearched.project) &&
+        offered.has(MEMORY_RECALL_TOOL) &&
+        claimsIgnorance(content)
+      ) {
+        memoryGuardRan = true;
         const followUp = await searchMemoryBeforeIgnorance({
           taskText,
+          searched: memorySearched,
           run: async (argv) => {
             emit(onEvent, { type: "ToolCall", name: MEMORY_RECALL_TOOL, args: JSON.stringify({ argv }) });
             let result: PluginHandlerResult;
@@ -771,12 +781,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       }
 
       const name = tc.function?.name?.trim() || "(unknown)";
-      if (name === MEMORY_RECALL_TOOL && offered.has(name)) memorySearched = true;
       // Events feed live bridge status (DISCORD-3): only a catalog name is
       // shown; a made-up name stays in the refusal detail, not the status.
       const eventName = offered.has(name) ? name : UNKNOWN_TOOL_LABEL;
       const rawArgs = tc.function?.arguments ?? "{}";
       const argv = argvFromToolArguments(rawArgs);
+      if (name === MEMORY_RECALL_TOOL && offered.has(name)) memorySearched[memoryRecallSearchKind(argv)] = true;
       emit(onEvent, { type: "ToolCall", name: eventName, args: rawArgs });
 
       // AUTONOMY-1: ask-human ends the run with the question (never "done").
