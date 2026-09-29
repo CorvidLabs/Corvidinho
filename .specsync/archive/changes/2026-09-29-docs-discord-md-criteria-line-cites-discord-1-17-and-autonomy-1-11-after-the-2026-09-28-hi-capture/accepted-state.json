@@ -7,11 +7,11 @@
   "title": "Docs/discord.md criteria line cites DISCORD-1..17 and AUTONOMY-1..11 after the 2026-09-28 hi capture",
   "description": "docs/discord.md criteria line cites DISCORD-1..17 and AUTONOMY-1..11 after the 2026-09-28 hi capture",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "9bf2bebc354203debed24f6d7b67517d1a2021a7",
   "created_at": 1790692948,
-  "updated_at": 1790692971,
+  "updated_at": 1790692983,
   "affected_specs": [],
   "affected_paths": [
     "docs/discord.md"
