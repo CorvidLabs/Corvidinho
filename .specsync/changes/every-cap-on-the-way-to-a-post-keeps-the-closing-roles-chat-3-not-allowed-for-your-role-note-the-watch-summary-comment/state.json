@@ -7,10 +7,11 @@
   "title": "Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append",
   "description": "Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "0f2e2c2774635d1dcbdff599cba92dbecf8eebd9",
   "created_at": 1790699131,
-  "updated_at": 1790699293,
+  "updated_at": 1790699337,
   "affected_specs": [
     "discord",
     "watch"
