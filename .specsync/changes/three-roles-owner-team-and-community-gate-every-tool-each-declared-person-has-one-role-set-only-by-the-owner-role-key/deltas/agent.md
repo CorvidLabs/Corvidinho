@@ -40,7 +40,6 @@ Acceptance Criteria
 
 ### REQUIREMENT REQ-agent-501
 
-
 Allowlisted dangerous tools in the task-run catalog (CLI-3 / SAFE-1,
 GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3). `buildOpenAiTools` SHALL take an optional
 `allowlist` and SHALL offer a dangerous plugin only when that allowlist names

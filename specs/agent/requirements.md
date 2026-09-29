@@ -765,8 +765,9 @@ named, until the SAFE-3 decision on the shell and runners is taken: each
 starts in the project dir, which is not a clamp, and a Fledge lane or task
 runs whatever commands the project gives it. They still run through
 `corvidinho plugins run`. The tier filter (`minTier`), the
-ROLES-CHAT-2 role filter (a non-ADMIN role session gets no dangerous or
-mutating tool, whatever the allowlist), the SAFE-9 autonomous filter,
+ROLES-CHAT-2 role filter (a community role session gets no dangerous or
+mutating tool, whatever the allowlist; a team session only what
+REQ-agent-065 allows), the SAFE-9 autonomous filter,
 catalog-only dispatch and the SAFE-1 / SAFE-4 / SAFE-5 / GITHUB-6 runtime
 gates in `runPlugin` and the handlers SHALL be unchanged. With an empty
 allowlist the catalog SHALL be exactly as before. No env var, config key,
@@ -780,7 +781,7 @@ Acceptance Criteria
 - A code-tier task run whose allowlist names the four Fledge core builtins offers only `fledge-lanes-list` and `fledge-lanes-validate` as `fledge-` tools; the model's call to `fledge-run` is refused as not offered, no fledge process starts and `unreportedEditTools` is absent.
 - `actingIsAdmin: false` with every dangerous plugin allowlisted offers no dangerous or mutating tool.
 - `task run` path (`createTaskExecute` without an `allowlist` option, non-interactive, GitHub dry run): with `CORVIDINHO_ALLOWLIST=github-pr-review` the model is offered `github-pr-review`, its call succeeds as a dry run, and its call to the unlisted `github-issue-create` is refused as not offered.
-- An ADMIN role session (owner) with that allowlist is offered and runs `github-pr-review`; a non-ADMIN role session with the same allowlist is not offered it and no call succeeds.
+- An ADMIN role session (owner) with that allowlist is offered and runs `github-pr-review`; a community (non-ADMIN, not team) role session with the same allowlist is not offered it and no call succeeds.
 
 ### REQ-agent-502
 

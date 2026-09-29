@@ -1143,7 +1143,15 @@ plugins (`isMutatingPlugin`) for the owner and `null`; for team only
 existing `Denied: plugin "<name>" is not allowed for your role
 (ROLES-CHAT-3).` (exit 2) before SAFE-1, the audit row or the handler; SAFE-1,
 SAFE-2, SAFE-5 and the memory ACL (forget / override stay owner-only,
-REQ-plugins-011) still apply to whatever the role allows.
+REQ-plugins-011) still apply to whatever the role allows. A team review is
+feedback: `github-pr-review` SHALL refuse `--event APPROVE` and
+`REQUEST_CHANGES` with the role refusal (exit 2, naming IDENTITY-10) unless
+the role, re-resolved at that call, is owner or there is no role session, so
+a team member never gets an approval that counts toward, or a review that
+blocks, a merge. In a team `/work` run `files-write` and `files-edit` SHALL
+refuse a secret-looking path (`isSecretPath`, as named or as resolved; exit
+2, ROLES-CHAT-8) like the read tools, so an edit is never a read oracle for a
+secret file; the owner and the local CLI keep it.
 `checkRepoGateForActingRole(repo, { write })` SHALL keep deny lists first,
 then: team reads pass on a GITHUB-6-allowlisted repo or a confirmed-public one;
 team writes (`write: true`, passed by `github-issue-create`,
@@ -1158,6 +1166,8 @@ Acceptance Criteria
 - A `role = "team"` person with a team stamp resolves team; the same person with a community stamp, no stamp, muted, deny-listed or demoted in the file resolves community at the next call; an owner stamp for a team person resolves team; undeclared, declared-community and no-role people resolve community even with a team stamp; the owner with the bridge bit resolves owner; no role session resolves null; an unreadable allowlist file resolves community.
 - `roleAllowsPlugin` allows every read plugin for every role, every plugin for owner and null, only the review tools (plus the work tools with the work flag) of the mutating plugins for team, none for community.
 - As team, `github-issue-comment` and `github-pr-review` run (dry-run) on an allowlisted repo and a non-allowlisted repo gets GITHUB-6; every other mutating plugin gets the role refusal; `files-write` runs only with the work flag and SAFE-2 still refuses `.env`; memory store/recall stay in the actor's scope, forget/override are refused.
+- As team, `github-pr-review --event COMMENT` runs and `APPROVE` / `REQUEST_CHANGES` (any case) get the role refusal naming IDENTITY-10; the owner runs all three events.
+- In a team `/work` run `files-write` refuses `credentials.json`, `id_rsa`, `*.pem` and `.ssh/…`, and `files-edit` on a secret file refuses without saying whether the old string matched, leaving the file unchanged; the owner edits it.
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
 
@@ -1173,7 +1183,9 @@ confirmed public; team ⇒ allowlisted or public; owner / CLI ⇒ GITHUB-6):
 anything under `docs/` (a directory lists its `docs/` entries, at most 200) —
 and SHALL refuse any other path (`publicDocPath`: no `..`, `.` or empty
 segments, no backslashes) with exit 2 before GitHub is called, for every role;
-text is SAFE-6 scrubbed, capped at 64 KiB with a truncation flag, labelled
+a non-owner role session SHALL also refuse a secret-looking doc path
+(`isSecretPath`, exit 2, ROLES-CHAT-8) and never list one; text is SAFE-6
+scrubbed, capped at 64 KiB with a truncation flag, labelled
 untrusted; a non-file or binary entry is refused. `github-milestone-list`
 lists milestones (`issues.listMilestones`, `--state open|closed|all`,
 `--limit` 1–100) with number, title, state, a ≤500-char scrubbed description,
@@ -1184,6 +1196,7 @@ Acceptance Criteria
 - `publicDocPath` accepts README / STATUS / CHANGELOG at the root (any case, optional extension) and `docs` / `docs/**`; it refuses source files, `.env`, `..`, nested READMEs, backslashes and empty segments.
 - In a community session with a public repo, README, `STATUS.md` and a `docs/` file are read (secrets scrubbed, untrusted note), a `docs/` directory lists its entries, a doc over 64 KiB is truncated and a binary doc is refused.
 - Any other path is refused with exit 2 and no GitHub call, also from the CLI; a private, unconfirmed or denied repo is refused before any read.
+- A community session refuses `docs/.env.example`, `docs/deploy.pem`, `docs/.ssh/…` and `docs/keystore/…` with exit 2 and no GitHub call, and a `docs/` listing leaves them out; the owner reads and lists them.
 - Milestones map state, due date, counts and a 500-char description; `--state` / `--limit` reach the API; bad flags are refused.
 - The community catalog offers both readers and `github-issue-list` and never `web-fetch`, even allowlisted.
 - Regression tests in `tests/github.public-docs.test.ts` fail on the base sources and pass after.

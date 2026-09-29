@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "72fec65395d657fef8c11ace63bd2205baa83f23",
   "created_at": 1790699334,
-  "updated_at": 1790700971,
+  "updated_at": 1790702118,
   "affected_specs": [
     "plugins",
     "agent",
@@ -26,6 +26,7 @@
     "src/plugins/roles.ts",
     "src/plugins/run.ts",
     "src/plugins/githubPublic.ts",
+    "plugins/files/commands.ts",
     "plugins/github/commands.ts",
     "plugins/github/public-docs.ts",
     "plugins/github/index.ts",
