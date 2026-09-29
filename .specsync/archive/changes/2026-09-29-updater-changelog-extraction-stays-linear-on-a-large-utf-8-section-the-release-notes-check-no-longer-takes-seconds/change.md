@@ -1,6 +1,6 @@
 ---
 id: updater-changelog-extraction-stays-linear-on-a-large-utf-8-section-the-release-notes-check-no-longer-takes-seconds
-state: implementing
+state: archived
 type: bug_fix
 base_commit: ba1f819eab26eb829d1f0018240eac860cdf09d2
 ---

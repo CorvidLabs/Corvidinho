@@ -7,11 +7,11 @@
   "title": "Updater changelog extraction stays linear on a large UTF-8 section (the release notes check no longer takes seconds)",
   "description": "Updater changelog extraction stays linear on a large UTF-8 section (the release notes check no longer takes seconds)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "ba1f819eab26eb829d1f0018240eac860cdf09d2",
   "created_at": 1790725194,
-  "updated_at": 1790725226,
+  "updated_at": 1790725241,
   "affected_specs": [],
   "affected_paths": [
     "scripts/lib/update-helpers.sh",

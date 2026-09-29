@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "updater-changelog-extraction-stays-linear-on-a-large-utf-8-section-the-release-notes-check-no-longer-takes-seconds",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "76e4b2291255b0114be45757428bf31e67dc3cda",
+      "contract_digest": "6c396e1573164db51716b9e2063626d10909edf1f96803bf410c10089dc800cd",
+      "execution_digest": "56ebaa41c2cb042e652764ed66b954338184f918872a002d248f6a9e6a53f69c",
+      "workspace_digest": "943a58f1f1a22a47963d1c3ec77e1264df2ecc196cd6c8c2f2e0f64789048bf9",
+      "timestamp": 1790725227
+    }
+  ]
+}
