@@ -140,6 +140,16 @@ export type GatewayHandlers = {
     channelId: string;
     messageId: string;
   }) => Promise<boolean>;
+  /**
+   * Direct message to one user (MEMORY-ACL-6: the owner's Approve/Deny card,
+   * the asker's outcome notice). Parses no mentions (REQ-discord-205).
+   * Resolves the DM channel and message ids, or null when it did not go out.
+   */
+  sendDm?: (opts: {
+    userId: string;
+    content: string;
+    components?: unknown[];
+  }) => Promise<{ channelId: string; messageId: string } | null>;
 };
 
 /** Who asked for channel autocomplete, and where (REQ-discord-431). */
@@ -710,6 +720,22 @@ export async function createLiveGateway(
     } catch (err) {
       console.error("[discord] editMessage failed:", err);
       return false;
+    }
+  };
+
+  handlers.sendDm = async ({ userId, content, components }) => {
+    try {
+      const user = await client.users.fetch(userId);
+      // REQ-discord-205: a DM parses no mentions either.
+      const sent = await user.send({
+        content: defangMassMentions(content).slice(0, 1900),
+        ...(components?.length ? { components: components as never } : {}),
+        allowedMentions: outboundAllowedMentions(),
+      });
+      return { channelId: sent.channelId, messageId: sent.id };
+    } catch (err) {
+      console.error("[discord] direct message failed:", err instanceof Error ? err.message : err);
+      return null;
     }
   };
 
