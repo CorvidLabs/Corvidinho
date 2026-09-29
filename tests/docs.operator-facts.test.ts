@@ -17,6 +17,7 @@ import {
 } from "../src/discord/ask-ping.ts";
 import { goLiveChecklist, loadBridgeConfig } from "../src/discord/config.ts";
 import {
+  gateActor,
   PermissionLevel,
   resolvePermissionLevel,
 } from "../src/discord/permissions.ts";
@@ -42,15 +43,18 @@ function section(md: string, heading: string): string {
   return lines.slice(start, end < 0 ? undefined : end).join("\n");
 }
 
-/** What `corvidinho --help` prints, as an operator sees it. */
+/** What `corvidinho --help` prints, as an operator sees it (spawned once). */
+let helpCache: string | undefined;
 function helpText(): string {
+  if (helpCache !== undefined) return helpCache;
   const r = Bun.spawnSync([process.execPath, "src/cli.ts", "--help"], {
     cwd: ROOT,
     stdout: "pipe",
     stderr: "pipe",
   });
   expect(r.exitCode).toBe(0);
-  return r.stdout.toString();
+  helpCache = r.stdout.toString();
+  return helpCache;
 }
 
 function allowlist(discord: Partial<AllowlistConfig["discord"]> = {}): AllowlistConfig {
@@ -218,6 +222,24 @@ describe("Discord user/role allowlists and ADMIN", () => {
     );
   });
 
+  test("docs/DAEMON.md allowlist row says what empty user/role lists do for schedules (REQ-discord-020)", () => {
+    // Code: the schedule tick's creator gate (gateActor, no member roles).
+    // Both empty ⇒ any creator passes; a listed user or a listed role narrows
+    // it, and a tick knows no roles, so a role-only creator is refused.
+    expect(gateActor({ userId: "5", allowlist: allowlist() }).ok).toBe(true);
+    expect(gateActor({ userId: "5", allowlist: allowlist({ users: ["6"] }) }).ok).toBe(false);
+    expect(gateActor({ userId: "5", allowlist: allowlist({ roles: ["7"] }) }).ok).toBe(false);
+    const row = section(read("docs/DAEMON.md"), "Configuration")
+      .split("\n")
+      .find((l) => l.startsWith("| `CORVIDINHO_ALLOWLIST_FILE`"));
+    expect(row).toBeDefined();
+    expect(row!).not.toMatch(/empty means deny-all/i);
+    expect(row!).toContain("An empty channel list refuses every schedule that has a channel");
+    expect(row!).toContain(
+      "Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs",
+    );
+  });
+
   test("no doc keys ADMIN on admin lists instead of the owner", () => {
     for (const p of OPERATOR_DOCS) {
       const text = read(p);
@@ -278,11 +300,20 @@ describe("docs/DAEMON.md log events", () => {
     table.find((l) => [...l.split("|")[1]!.matchAll(/`([a-z_.]+)`/g)].some((m) => m[1] === event));
 
   test("the Logs table has a row for every event the daemon logs", () => {
+    // Every dotted event literal with a known prefix (catches the lock
+    // ternary), plus whatever is passed as the event to log(level, "…") or
+    // fail("…"), so an event with a new prefix is not missed.
     const events = [
-      ...new Set([...src.matchAll(/"((?:daemon|tick|run|spend)\.[a-z_]+)"/g)].map((m) => m[1]!)),
+      ...new Set(
+        [
+          ...src.matchAll(/"((?:daemon|tick|run|spend)\.[a-z_]+)"/g),
+          ...src.matchAll(/\blog\(\s*[^,]+,\s*"([a-z_.]+)"/g),
+          ...src.matchAll(/\bfail\(\s*"([a-z_.]+)"/g),
+        ].map((m) => m[1]!),
+      ),
     ];
-    expect(src).toContain('log("info", "tick"');
-    events.push("tick");
+    expect(events).toContain("tick");
+    expect(events).toContain("daemon.protocol_mismatch");
     expect(events).toContain("daemon.start_failed");
     expect(events).toContain("spend.warning");
     const missing = events.filter((e) => !rowOf(e));

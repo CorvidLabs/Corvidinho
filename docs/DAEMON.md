@@ -67,7 +67,7 @@ The daemon uses the same environment as the bridge. It adds no new variables.
 |-----|---------|
 | `CORVIDINHO_DATA_DIR` | Data dir holding `corvidinho.db` and `daemon.lock` (default `~/.local/share/corvidinho`) |
 | `CORVIDINHO_BIN` | Agent binary to spawn per run (default `<cwd>/src/cli.ts`) |
-| `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. Empty means deny-all. |
+| `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
 | `CORVIDINHO_LLM_API_KEY` / … | Provider for the spawned `task run` (never commit) |
 
 ## Single instance
