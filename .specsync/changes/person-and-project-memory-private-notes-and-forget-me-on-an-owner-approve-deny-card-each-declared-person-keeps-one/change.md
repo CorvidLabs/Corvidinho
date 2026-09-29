@@ -1,6 +1,6 @@
 ---
 id: person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one
-state: implementing
+state: verifying
 type: feature
 base_commit: 89f79769b75713829f816c812052393472733084
 ---

@@ -2180,7 +2180,7 @@ configured owner, not muted, not deny-listed); anyone else gets an ephemeral
 refusal and a `denied` audit row. A closed ask SHALL answer "already
 closed"; a press at or after expiry SHALL close it `expired` and delete
 nothing (a late answer is no). Deny SHALL close it `denied` (audited),
-delete nothing and tell the asker. Approve SHALL append the SAFE-5
+delete nothing, answer the press, then tell the asker. Approve SHALL append the SAFE-5
 `memory-forget-approve` `started` row first and, when it cannot be
 written, refuse and leave the ask pending; then, in one IMMEDIATE transaction,
 compare-and-set the ask to `approved` and delete for good every memory row
@@ -2188,16 +2188,21 @@ of the recorded subject — `person:<id>` and the Discord ids linked to that
 person now plus the asker's id, or the undeclared asker's id; active,
 soft-deleted and private rows — and the stored turns of those Discord ids'
 sessions; then append `ok` (or `error`, the ask left pending, on a
-failure), update the card with the counts and no buttons, and tell the asker.
-The people list entry and project memory SHALL NOT be touched. Audit rows hold
-the request id digest and outcome only.
+failure), drop the session threads the running bridge holds for those
+Discord ids (`SessionStore.forgetTurnsOfUsers`, so no later run replays
+them), answer the press by updating the card with the counts and no
+buttons, and then tell the asker. After a Deny or an Approve the card SHALL
+be edited once more to say whether the asker was told (the press is answered
+before any DM, within Discord's interaction window). The people list entry
+and project memory SHALL NOT be touched. Audit rows hold the request id
+digest and outcome only.
 
 Acceptance Criteria
 - A declared person's store lands in `person:<id>`, each linked Discord id recalls it, rows under their Discord ids from before still read once; an undeclared user keeps the Discord-id scope.
 - The chat inject holds the speaker's own profile only, never private notes; owner / team get the project block (also in `/work`), community never.
 - `projectKeyFor` gives `owner/repo` without credentials for a checkout and its worktree, the main checkout path without an origin, the folder path for a plain folder.
 - A delivery pass DMs the owner one card per pending ask (count, no content), expires unanswered asks (card closed, asker told) and tells deciders' askers by DM or in their allowlisted conversation.
-- Only the owner's press counts; Approve deletes every memory row and session turn of that person (not others', not project memory, not the people list), writes `started` then `ok`, updates the card and tells the asker; a keyed chain with no key refuses Approve and deletes nothing.
+- Only the owner's press counts; Approve deletes every memory row and session turn of that person, stored and held by the running bridge (not others', not project memory, not the people list), writes `started` then `ok`, answers the press first, then tells the asker and marks the card; a keyed chain with no key refuses Approve and deletes nothing.
 - Deny and a late press delete nothing and tell the asker; a second press finds the ask closed.
 - A v11 DB migrates to v12 keeping its data; `forget_requests` has no free-text column and one pending ask per subject; re-running is a no-op.
 - `tests/discord.forget-card.test.ts` and `tests/memory.profiles.test.ts` cover each and fail on the stacked base sources.
