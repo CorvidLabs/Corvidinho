@@ -6,6 +6,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
+import { enrichPromptWithProjectMemory, memoryInjectOptsFor } from "../memory-inject.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
@@ -112,6 +113,17 @@ export async function handleWorkCommand(
     owner: ctx.owner,
     people,
   });
+  // MEMORY-6 (#101): the owner's and team's work starts from what earlier
+  // work learned about this repo (never for community; nothing when empty).
+  const workCwd = ctx.store.cwdFor(session);
+  const projectInject =
+    actingRole === "owner" || actingRole === "team"
+      ? enrichPromptWithProjectMemory(
+          idInject.prompt,
+          ctx.memoryStore,
+          memoryInjectOptsFor({ userId: interaction.userId, people, role: actingRole, projectDir: workCwd }).project,
+        )
+      : { prompt: idInject.prompt };
   // AGENT-6 (REQ-discord-072): the description opens the session's thread as
   // the run starts, so a reply to this answer carries it (even after a
   // failure).
@@ -122,7 +134,7 @@ export async function handleWorkCommand(
     // worktree mid-run (REQ-discord-204).
     result = await ctx.store.runActive(session, () =>
       ctx.agent.runChat({
-        prompt: idInject.prompt,
+        prompt: projectInject.prompt,
         humanText: description,
         sessionId: session.id,
         resume: false,
@@ -131,7 +143,7 @@ export async function handleWorkCommand(
         actingRole,
         // IDENTITY-10: a /work run — team work tools apply in its worktree.
         workTask: true,
-        cwd: ctx.store.cwdFor(session),
+        cwd: workCwd,
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,
         onStatus: (u) => {
