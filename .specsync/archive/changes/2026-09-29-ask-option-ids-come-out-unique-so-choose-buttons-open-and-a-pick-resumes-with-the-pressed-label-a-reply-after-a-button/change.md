@@ -1,6 +1,6 @@
 ---
 id: ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 0f2e2c2774635d1dcbdff599cba92dbecf8eebd9
 ---
