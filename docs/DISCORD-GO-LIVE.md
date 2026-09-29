@@ -123,8 +123,14 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
   memory forget/override (from the owner's chat once `CORVIDINHO_ALLOWLIST` names them, E.3, or
   `corvidinho plugins run` with the acting env set; see [`discord.md`](discord.md) Memory),
+  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7),
   mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
+- Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them; the bridge sends the
+  owner a **direct message** with Approve / Deny buttons (no answer within 24 h is a no). The bot
+  can DM the owner only when they share a server with it and accept DMs from its members (the
+  server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
+  no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
 - When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
   stop (SAFE-8) ping the owner. With no owner a stuck or spend-cap question still posts and the
@@ -285,7 +291,8 @@ Who is who in an allowlisted channel:
   `REQUEST_CHANGES` stay the owner's), plus `files-write` / `files-edit` in their `/work`
   run's own worktree (never on a secret-looking path); their `/work` can open the draft PR
   like the owner's. Memory stays their
-  own (`memory-store` / `-recall`; forget/override stay owner-only). No shell, runners, git
+  own (`memory-store` / `-recall` / `-profile`; forget/override stay owner-only), plus the
+  project's memory (`--project`, MEMORY-6). No shell, runners, git
   writes, other GitHub writes, Discord posts, `web-fetch`, `delegate` or `council`. Briefings
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
@@ -311,7 +318,8 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `fledge-lanes-list`/`-validate`,
-  `memory-store`/`-recall` (scoped to the acting user), `discord-user-lookup` (members of
+  `memory-store`/`-recall`/`-profile` (scoped to the acting person; no project memory),
+  `memory-forget-me` (asks the owner, MEMORY-ACL-6), `discord-user-lookup` (members of
   the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never
   offered, is refused with `not allowed for your role` (ROLES-CHAT-3) and nothing runs. The

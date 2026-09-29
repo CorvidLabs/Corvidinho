@@ -69,7 +69,9 @@ import {
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
-import { enrichPromptWithMemories } from "./memory-inject.ts";
+import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
+import { parseApproveCardCustomId } from "./approve-card.ts";
+import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
 import {
@@ -148,6 +150,12 @@ export type StartBridgeResult =
       scheduleStore: ScheduleStore;
       memoryStore?: MemoryStore;
       announceStore?: AnnounceStore;
+      /**
+       * MEMORY-ACL-6: one forget-card delivery pass (owner cards, expiries,
+       * outcome notices); also run by every scheduler tick and after each
+       * chat message. Undefined without a DB.
+       */
+      deliverForgetCards?: () => Promise<ForgetDeliveryResult>;
       mutedUsers: Set<string>;
       rateLimitState: RateLimitState;
       muteUser: (userId: string) => void;
@@ -435,6 +443,24 @@ export async function startBridge(
         appendAudit(db, entry, { key: auditKeyFromEnv(env) })
     : undefined;
   const mutedUsers = new Set<string>(config.mutedUserIds);
+  // MEMORY-ACL-6: forget requests reach the owner as a DM Approve/Deny card.
+  const sendDmRef: { fn?: GatewayHandlers["sendDm"] } = {};
+  const forgetCards = db
+    ? createForgetCards({
+        db,
+        env,
+        owner: () => config.owner ?? null,
+        people: () => declaredPeople(),
+        sendDm: async (o) => (sendDmRef.fn ? sendDmRef.fn(o) : null),
+        editMessage: async (o) => (embedRef.editMessage ? embedRef.editMessage(o) : false),
+        post: async ({ channelId, content, mentionUserIds }) =>
+          !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
+        // DISCORD-5: the fallback notice only in a conversation still allowlisted.
+        mayPost: (channelId, parentChannelId) =>
+          isMonitoredChannel(channelId, config.allowlist) ||
+          (parentChannelId != null && isMonitoredChannel(parentChannelId, config.allowlist)),
+      })
+    : undefined;
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
     windowMs: config.rateLimitWindowMs,
@@ -698,13 +724,14 @@ export async function startBridge(
             },
           );
 
+          const people = declaredPeople();
           // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
           const idInject = enrichPromptWithIdentity(enrichedPrompt, {
             userId: msg.authorId,
             displayName: msg.authorDisplayName,
             username: msg.authorUsername,
             owner: config.owner ?? null,
-            people: declaredPeople(),
+            people,
           });
           if (idInject.injected) {
             console.log(
@@ -712,17 +739,6 @@ export async function startBridge(
                 (idInject.displayLabel ? ` as ${idInject.displayLabel}` : ""),
             );
             enrichedPrompt = idInject.prompt;
-          }
-
-          // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
-          const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-            ownerUserId: msg.authorId,
-          });
-          if (memInject.injected) {
-            console.log(
-              `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
-            );
-            enrichedPrompt = memInject.prompt;
           }
 
           // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared
@@ -735,9 +751,29 @@ export async function startBridge(
             adminRoleIds: config.adminRoleIds,
             owner: config.owner ?? null,
             mutedUsers,
-            people: declaredPeople(),
+            people,
           });
           const actingIsAdmin = actingRole === "owner";
+
+          // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user:
+          // their profile when declared (MEMORY-5), never private notes
+          // (MEMORY-7), and the project's memory for owner / team (MEMORY-6).
+          const memInject = enrichPromptWithMemories(
+            enrichedPrompt,
+            memoryStore,
+            memoryInjectOptsFor({
+              userId: msg.authorId,
+              people,
+              role: actingRole,
+              projectDir: sessionCwd ?? config.projectRoot,
+            }),
+          );
+          if (memInject.injected) {
+            console.log(
+              `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
+            );
+            enrichedPrompt = memInject.prompt;
+          }
           // Busy while the agent runs: the soft-TTL purge must not park this
           // worktree mid-run (REQ-discord-204).
           result = await store.runActive(session, () =>
@@ -960,9 +996,32 @@ export async function startBridge(
         }
       } finally {
         inflight.end();
+        // MEMORY-ACL-6: a forget request made in this run reaches the owner now.
+        void forgetCards?.deliver();
       }
     },
     onComponent: async (interaction) => {
+      // MEMORY-ACL-6: an Approve/Deny card press (the owner's DM, so no
+      // channel allowlist); the presser must be the owner, re-checked now.
+      const card = parseApproveCardCustomId(interaction.customId);
+      if (card) {
+        if (card.kind === FORGET_CARD_KIND && forgetCards) {
+          const mayDecide =
+            resolvePermissionLevel({
+              userId: interaction.userId,
+              roleIds: interaction.roleIds,
+              allowlist: config.allowlist,
+              adminUserIds: config.adminUserIds,
+              adminRoleIds: config.adminRoleIds,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }) >= PermissionLevel.ADMIN;
+          await forgetCards.press(interaction, card, mayDecide);
+        } else {
+          await interaction.reply({ content: "This card is no longer handled.", ephemeral: true });
+        }
+        return;
+      }
       const parsed = parseAskCustomId(interaction.customId);
       if (!parsed) return;
 
@@ -1138,6 +1197,7 @@ export async function startBridge(
         let result;
         try {
           let enrichedPrompt = agentPrompt;
+          const people = declaredPeople();
           // IDENTITY-4 / REQ-discord-446 — the presser's Discord names, as on
           // the chat path (the presser is the session's user, checked above).
           const idInject = enrichPromptWithIdentity(enrichedPrompt, {
@@ -1145,13 +1205,9 @@ export async function startBridge(
             displayName: interaction.userDisplayName,
             username: interaction.userUsername,
             owner: config.owner ?? null,
-            people: declaredPeople(),
+            people,
           });
           if (idInject.injected) enrichedPrompt = idInject.prompt;
-          const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-            ownerUserId: interaction.userId,
-          });
-          if (memInject.injected) enrichedPrompt = memInject.prompt;
 
           // IDENTITY-8..12: the presser's role, as on the chat path.
           const actingRole = resolveDiscordActingRole({
@@ -1161,9 +1217,21 @@ export async function startBridge(
             adminRoleIds: config.adminRoleIds,
             owner: config.owner ?? null,
             mutedUsers,
-            people: declaredPeople(),
+            people,
           });
           const actingIsAdmin = actingRole === "owner";
+          // MEMORY-5..7: as on the chat path.
+          const memInject = enrichPromptWithMemories(
+            enrichedPrompt,
+            memoryStore,
+            memoryInjectOptsFor({
+              userId: interaction.userId,
+              people,
+              role: actingRole,
+              projectDir: sessionCwd ?? config.projectRoot,
+            }),
+          );
+          if (memInject.injected) enrichedPrompt = memInject.prompt;
 
           result = await store.runActive(session, () =>
             agent.runChat({
@@ -1426,6 +1494,7 @@ export async function startBridge(
       embedRef.edit = h.editEmbed;
       embedRef.editMessage = h.editMessage;
       embedRef.deleteMessage = h.deleteMessage;
+      sendDmRef.fn = h.sendDm;
       return gw;
     });
 
@@ -1439,6 +1508,8 @@ export async function startBridge(
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
       spendAlerts,
+      // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices.
+      ...(forgetCards ? { onTick: () => void forgetCards.deliver() } : {}),
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
           if (!replyRef.fn) return false;
@@ -1468,6 +1539,7 @@ export async function startBridge(
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
   if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
   if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
+  if (handlers.sendDm) sendDmRef.fn = handlers.sendDm;
 
   try {
     await gateway.start();
@@ -1513,6 +1585,7 @@ export async function startBridge(
     scheduleStore,
     memoryStore,
     announceStore,
+    ...(forgetCards ? { deliverForgetCards: () => forgetCards.deliver() } : {}),
     mutedUsers,
     rateLimitState,
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),

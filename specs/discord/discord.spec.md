@@ -39,6 +39,12 @@ files:
   - src/memory/types.ts
   - src/memory/store.ts
   - src/memory/index.ts
+  - src/memory/scope.ts
+  - src/memory/profile.ts
+  - src/memory/forget.ts
+  - src/discord/approve-card.ts
+  - src/discord/forget-card.ts
+  - tests/discord.forget-card.test.ts
   - tests/memory.store.test.ts
   - tests/memory.spawn-env.test.ts
   - src/discord/work-store.ts
@@ -495,7 +501,7 @@ every Discord agent run (chat, button pick, `/session start`, `/work`) records t
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
-memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
+memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only) reaches the owner as a DM Approve/Deny card (`src/discord/approve-card.ts`, reusable; `src/discord/forget-card.ts`) on every scheduler tick (`onTick`) and after each chat message, and only the owner's press on a pending, unexpired card forgets — SAFE-5 `started` first (fail closed), then one transaction deletes every memory row of that person and their session turns — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
 a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. a thread's allowlisted parent channel + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
 `/work` opens a draft PR only from a verified git worktree with changes, only when `git-commit` (dirty tree), `git-push` and `github-pr-create` are all allowlisted for non-interactive use, and only through those typed plugins; otherwise its reply says plainly why no PR (AUTONOMOUS-3 / GITHUB-2/5/6 / AGENT-4 / REQ-discord-088).
@@ -509,7 +515,11 @@ When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
-No `/memory` slash command.
+No `/memory` slash command. The recall reads the speaker's declared person's
+profile scope plus their Discord ids (`memoryInjectOptsFor`), never private
+notes, and for an owner or team speaker (chat, button pick) appends the
+project's memory block when it holds rows; owner / team `/work` runs start
+with that project block (REQ-discord-101).
 Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
 from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 `src/discord/session-thread.ts`, REQ-discord-072) are created with CREATE
@@ -574,6 +584,12 @@ REQ-discord-044).
 - **Then** that option's id is its position (`2`), so neither the button
   custom id nor `discord_sessions.pending_ask` carries the key; an older
   build's row that stored it is redacted by the re-scrub, other ids unchanged
+
+### Scenario: The owner approves a forget request on a DM card (MEMORY-ACL-6)
+
+- **Given** a declared person asked `memory-forget-me` in a conversation
+- **When** the next delivery pass DMs the owner the Approve/Deny card and the owner presses Approve before it lapses
+- **Then** a SAFE-5 `started` row is written, every memory row of that person (profile, notes, private notes, superseded history, rows under their Discord ids) and their session turns are deleted in one transaction with the ask closed `approved`, the card shows the outcome without buttons, and the asker is told by DM (else in their allowlisted conversation); the people list and project memory are untouched
 
 ### Scenario: Empty owner scope
 

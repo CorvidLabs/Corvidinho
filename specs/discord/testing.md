@@ -412,3 +412,27 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
+`tests/discord.forget-card.test.ts` — the Approve/Deny card helper
+(`cvok:<kind>:<decision>:<id>` round trip, junk refused, Approve danger /
+Deny grey, expiry, text); `memory-forget-me` records one pending ask per
+person for a declared person, a community member and an undeclared user,
+audited `memory-forget-request` started / ok, deleting nothing; refused with
+no actor, outside a conversation, with arguments and with no owner. Through
+`startBridge` with a fake gateway: `deliverForgetCards` DMs the owner one card
+(who, count, request id, lapse; no content) with Approve / Deny; a non-owner
+press (even the asker) is refused ephemerally with a `denied` row; the owner's
+Approve deletes every memory row of that person (profile, private, superseded,
+legacy and alt Discord-id scopes) and their session turns, keeps other
+people's and project memory and the people list, writes `started` / `ok`,
+updates the card without buttons and DMs the asker; a second press finds it
+closed. Deny deletes nothing and, when the DM fails, tells the asker in their
+allowlisted conversation. The chat path delivers the card after the message.
+A keyed audit chain with no key refuses Approve and leaves the ask pending
+(SAFE-5 fail closed). With a fake clock an unanswered ask expires on the pass
+(card closed, asker told) and a late Approve deletes nothing. Schema v12: a
+v11 DB migrates keeping memories, `forget_requests` has no free-text column,
+one pending ask per subject, re-running is a no-op.
+`tests/watch.session-store.durable.test.ts` and
+`tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 12.

@@ -57,6 +57,7 @@ files:
   - plugins/search/commands.ts
   - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
+  - tests/memory.profiles.test.ts
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/files.dangling-symlink.test.ts
@@ -205,6 +206,20 @@ only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
 `memory-forget` / `memory-override` are two-phase with an HMAC confirm token
 confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+Whose memory a call reads and writes is the acting Discord id matched in the
+owner's people list re-read at the call (MEMORY-5 / REQ-plugins-101): a
+declared person's one `person:<id>` profile (plus rows under their Discord
+ids from before), else the Discord id as before; profile categories
+`project` / `preference` / `decision` / `ask` / `approval` and private notes
+(`private`); `memory-profile` shows role (the people list's), projects,
+preferences and history, private notes counted only. `--person` reads
+someone else's memory for the owner only, opaque `not authorized` otherwise;
+private notes come back only when asked for by name, by that person or the
+owner, in a conversation (MEMORY-7). `--project` is the run's repo memory
+(`project:<owner/repo>` or the main checkout path) for owner, team and the
+local CLI, never community (MEMORY-6). `memory-forget-me` (safe, no argv)
+records the acting person's forget request from a conversation, audited;
+it deletes nothing (MEMORY-ACL-6).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.

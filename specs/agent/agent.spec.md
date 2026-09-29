@@ -56,7 +56,9 @@ Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260
 
 Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
 so Discord/CLI chats trust injected facts and call memory-store/recall
-appropriately (REQ-agent-010).
+appropriately (REQ-agent-010), keep profiles and project memory, never tell
+one person what is stored about another or repeat private notes, and route a
+"forget me" to `memory-forget-me` (MEMORY-5..7 / MEMORY-ACL-6, REQ-agent-101).
 
 ## Public API
 

@@ -111,3 +111,28 @@ reads and lists it); milestones map state, due date,
 issue counts, a 500-char description, and `--state` / `--limit` reach the
 API; bad flags are refused. The community catalog offers the readers and never
 `web-fetch`. No network, no token.
+
+Profiles, project memory and privacy (MEMORY-5..7, #101 / REQ-plugins-101):
+`tests/memory.profiles.test.ts` — with a temp people list and data dir, a
+declared person's `memory-store` lands in `person:<id>` and every linked
+Discord id recalls it, rows stored under a Discord id before they were
+declared are still read (a newer key in the profile wins, no duplicate), an
+undeclared user keeps their Discord-id scope; `memory-profile` shows the
+people list's role (a file edit changes it), projects, preferences, history
+newest first and a private-note count without content. Another person
+(community, undeclared, team) never sees someone's memory — default recall,
+`--person` by id / Discord id / mention / unknown id, `memory-profile
+--person` — and always gets the opaque `not authorized`; the owner with the
+bridge bit reads it and its private notes with `--person` (not muted, not
+without the bit); private notes are left out of default and query recalls,
+returned only on `--category private` by that person or the owner in a
+conversation, refused in a schedule run; `memory-store --person` is refused.
+`--project` is keyed by origin `owner/repo` (credentials dropped) and shared
+by a worktree, else the main checkout path, else the folder; the owner and
+team read and write it, community / undeclared / a community-stamped team
+member get the role refusal, the local CLI reads it; no private notes in a
+project, `--project` with `--person` refused. The inject helpers and the
+bridge give each speaker only their own profile, never private notes, and the
+project block to owner / team only; a Discord id declared for two people
+joins neither profile. Fails on the stacked base (13 of 16; three tests that
+also hold there pass by design).

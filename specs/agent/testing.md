@@ -128,3 +128,10 @@ adds the file tools; a team member on a community-stamped surface and an
 undeclared actor with a team stamp get read tools only.
 `tests/github.public-docs.test.ts` checks the public Q&A prompt names the
 ROLES-CHAT-8.a sources and says nothing else counts.
+`tests/discord.memory-inject.test.ts` keeps checking the memory rules
+(trust / store / recall / never invent); `tests/memory.profiles.test.ts`
+checks the MEMORY-5..7 / MEMORY-ACL-6 rules (profile categories and
+`memory-profile`, `memory-recall` / `memory-store --project`, never telling
+one person about another, private notes never injected, `memory-forget-me`
+until the owner approves on a card), and the plugins they name are covered
+there and in `tests/discord.forget-card.test.ts` (REQ-agent-101).

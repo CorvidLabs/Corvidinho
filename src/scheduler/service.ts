@@ -110,7 +110,7 @@ function errorLine(err: unknown): string {
  * Never throws: it runs in the `.catch` that keeps these promises from
  * rejecting.
  */
-function logSchedulerError(where: "tick" | "run" | "recovery" | "ask", err: unknown): void {
+function logSchedulerError(where: "tick" | "tick hook" | "run" | "recovery" | "ask", err: unknown): void {
   console.error(`[scheduler] ${where} failed: ${errorLine(err)}`);
 }
 
@@ -206,6 +206,11 @@ export type SchedulerServiceOpts = {
   spendAlerts?: SpendAlertOutbox;
   /** Called once per run when it finishes or is abandoned (daemon logs). */
   onRunFinished?: (event: ScheduleRunFinished) => void;
+  /**
+   * Called at the start of every tick, fire-and-forget (the bridge's forget
+   * cards, MEMORY-ACL-6). A throw is logged; the tick goes on.
+   */
+  onTick?: () => void;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -237,6 +242,7 @@ export class SchedulerService {
   private readonly owner: OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
+  private readonly onTick?: () => void;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -262,6 +268,7 @@ export class SchedulerService {
     this.owner = opts.owner ?? null;
     this.spendAlerts = opts.spendAlerts;
     this.onRunFinished = opts.onRunFinished;
+    this.onTick = opts.onTick;
     if (!opts.manual) {
       this.start();
     }
@@ -310,6 +317,13 @@ export class SchedulerService {
   async tick(): Promise<{ started: string[]; skipped: string[] }> {
     if (this.tickInFlight) return { started: [], skipped: [] };
     this.tickInFlight = true;
+    if (this.onTick) {
+      try {
+        this.onTick();
+      } catch (err) {
+        logSchedulerError("tick hook", err);
+      }
+    }
     const started: string[] = [];
     const skipped: string[] = [];
     try {
