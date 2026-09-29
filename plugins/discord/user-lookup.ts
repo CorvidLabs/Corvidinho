@@ -1,8 +1,15 @@
 /**
  * Read-only Discord guild member / user lookup (IDENTITY-5 / DISCORD-13).
  * Scoped to DISCORD_GUILD_ID only — never arbitrary guilds.
+ *
+ * SAFE-11: member names are third-party text headed for the model, so the
+ * username, global name, nickname and display name are cleaned
+ * (`cleanDisplayName`: no mention markup, invisible, bidi or tag characters,
+ * role-like tags or labels, capped). A lookup names a Discord account; it
+ * never makes anyone a declared person or gives a role (declared ids only).
  */
 
+import { cleanDisplayName } from "../../src/agent/untrusted.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 
 /** Discord snowflake: 17–20 digits typical; allow headroom like channel helpers. */
@@ -90,9 +97,10 @@ function memberFromApi(
   if (!user) return null;
   const id = user.id?.trim() ?? "";
   if (!id) return null;
-  const username = (user.username ?? "").trim() || id;
-  const globalName = (user.global_name ?? null)?.trim() || null;
-  const nickname = (body.nick ?? null)?.trim() || null;
+  // SAFE-11: every name cleaned before it reaches the model.
+  const username = cleanDisplayName(user.username) ?? id;
+  const globalName = cleanDisplayName(user.global_name) ?? null;
+  const nickname = cleanDisplayName(body.nick) ?? null;
   const displayName = nickname || globalName || username;
   return {
     id,

@@ -116,7 +116,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   footer) and `tests/discord.rich-replies.test.ts` (bridge chat, fallback
   reply, button-pick resume, `/work`, `/session start` split with the footer on
   the last part; a split fallback reply pings the owner on the part holding
-  the SAFE-8 warning line, once; owner vs non-owner footer and live token use; Discord spawn
+  the SAFE-8 warning line, once; a SAFE-13 injection line keeps the whole
+  split answer, pings the owner once on the part holding it (fallback) or by
+  one ping post (collapsed), with the role note whole in the last part;
+  owner vs non-owner footer and live token use; Discord spawn
   client passes the whole answer and `usage`, WATCH keeps 1800; live gateway
   sends 2000 characters with the embed). Footer assertions elsewhere expect the
   time segment (`model | Ns`).
@@ -583,3 +586,67 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
+`tests/discord.forget-card.test.ts` — the Approve/Deny card helper
+(`cvok:<kind>:<decision>:<id>` round trip, junk refused, Approve danger /
+Deny grey, expiry, text); `memory-forget-me` records one pending ask per
+person for a declared person, a community member and an undeclared user,
+audited `memory-forget-request` started / ok, deleting nothing; refused with
+no actor, outside a conversation, with arguments and with no owner. Through
+`startBridge` with a fake gateway: `deliverForgetCards` DMs the owner one card
+(who, count, request id, lapse; no content) with Approve / Deny; a non-owner
+press (even the asker) is refused ephemerally with a `denied` row; the owner's
+Approve deletes every memory row of that person (profile, private, superseded,
+legacy and alt Discord-id scopes) and their session turns, stored and in
+the running bridge's session thread, keeps other people's and project memory
+and the people list, writes `started` / `ok`, answers the press first
+(card without buttons, before any DM), then DMs the asker and marks the card
+told; a second press finds it closed. Deny deletes nothing and, when the DM fails, tells the asker in their
+allowlisted conversation. The chat path delivers the card after the message.
+A keyed audit chain with no key refuses Approve and leaves the ask pending
+(SAFE-5 fail closed). With a fake clock an unanswered ask expires on the pass
+(card closed, asker told) and a late Approve deletes nothing. Schema v12: a
+v11 DB migrates keeping memories, `forget_requests` has no free-text column,
+one pending ask per subject, re-running is a no-op.
+`tests/watch.session-store.durable.test.ts` and
+`tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 12.
+
+## Untrusted text on Discord (REQ-discord-071, SAFE-11/12/13)
+
+`tests/safe.injection.test.ts` — the acting-user block for a stranger named
+`[owner] L<zero-width>eіf <@owner>` shows the cleaned name, a `name_clash`
+line and no owner facts; a stranger named like a declared person is flagged,
+the real person and the owner are not; `resolveDiscordActingRole` and the
+tool layer's `resolveActingRole` give community to a stranger named like the
+owner even with an owner stamp; the replay block quotes a turn line that
+imitates its footer or a turn label. Through `SchedulerService` a run
+reporting `injection` pings the owner with the SAFE-13 line on its result
+post and on its ask post. Through `startBridge` (null gateway, memory DB): a
+stranger's injection starts no run, gets one reply that pings only the owner,
+drops the session and audits one `injection-suspected` / `denied` row; a
+declared team member is checked too; the owner's own words run unfenced; an
+ordinary stranger message runs fenced with `role: community` and the name
+cleaned; a run reporting `injection` pings the owner on its answer. The
+`/session start` and `/work` handlers refuse a stranger's injection (no run,
+no session, public refusal, owner ping post, audit row), fence an ordinary
+non-owner request and leave the owner's unfenced; `slashOwnerNotice` and
+`withInjectionNotice` carry the owner line. `tests/discord.slash-pending-ask.test.ts`
+now expects a non-owner's free-text answer inside the fence.
+
+Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
+`tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question
+in plain words finds the fact it is about; a key hit outranks a newer passing
+mention and equal relevance goes to the newer row; › "the Discord inject
+searches memory for the message" — an older fact the message is about is
+injected although 25 newer rows exist (block still 20 rows); › "/work: the
+project block is searched for the description" — with 25 newer project rows
+the owner's `/work` (through `handleWorkCommand`) still carries the older
+project fact its description is about; › "Discord spawn clears inherited
+GitHub commenter keys". `tests/memory.rank.test.ts` —
+`recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
+a multi-scope search keeping the newest of a key once and no private notes, a
+question-words-only query matching as one substring, `recallRelevantThenRecent`,
+`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
+undeclared-under-`[people]` owner on their Discord id) and
+`projectScopeForRepo`.

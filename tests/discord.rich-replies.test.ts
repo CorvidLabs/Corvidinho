@@ -262,6 +262,71 @@ describe("chat answers are split at 2000 without breaking code fences (DISCORD-1
     await result.stop();
   });
 
+  test("a split fallback reply keeps the whole answer and pings the owner once on the part that holds the SAFE-13 line", async () => {
+    const base = memoryThinkingOutbound();
+    const noEdit: ThinkingOutbound = { sendEmbed: base.sendEmbed, editEmbed: base.editEmbed };
+    const answer = longAnswer();
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return {
+          ok: true,
+          sessionId,
+          summary: answer,
+          exitCode: 0,
+          injection: { source: "web-fetch", reasons: ["ignore-rules"] },
+        };
+      },
+    };
+    const { result, handlers, replies } = await bridgeWith(agent, { outbound: noEdit, owner: OWNER_ID });
+    await handlers.onMessage(mention(OTHER_ID));
+    // The SAFE-13 line is appended after the whole answer (never cut to one
+    // message), so it lands in a later part.
+    const line = replies.at(-1)!.content.split("\n").at(-1)!;
+    expect(line).toContain(`🛡️ <@${OWNER_ID}> heads-up: a web-fetch result`);
+    expectSplit(
+      replies.map((r) => r.content),
+      `${answer}\n\n${line}`,
+    );
+    const holder = replies.find((r) => r.content.includes(`<@${OWNER_ID}>`))!;
+    expect(holder).not.toBe(replies[0]);
+    expect(holder.mentionUserIds).toEqual([OWNER_ID]);
+    for (const r of replies.slice(1)) {
+      if (r !== holder) expect(r.mentionUserIds).toEqual([]);
+    }
+    await result.stop();
+  });
+
+  test("a collapsed split answer keeps the whole answer and the ROLES-CHAT-3 note with the SAFE-13 line; the owner gets one ping post", async () => {
+    const note = "(not allowed for your role)";
+    const answer = `${longAnswer()}\n\n${note}`;
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return {
+          ok: true,
+          sessionId,
+          summary: answer,
+          exitCode: 0,
+          injection: { source: "web-fetch", reasons: ["ignore-rules"] },
+        };
+      },
+    };
+    const { result, handlers, outbound, replies } = await bridgeWith(agent, { owner: OWNER_ID });
+    await handlers.onMessage(mention(OTHER_ID));
+    const first = outbound.contentEdits.at(-1)!;
+    const posts = ((outbound as { posts?: PartPost[] }).posts ?? []) as PartPost[];
+    const parts = [String(first.content), ...posts.map((p) => p.content)];
+    const line = parts.at(-1)!.split("\n").at(-1)!;
+    expect(line).toContain(`🛡️ <@${OWNER_ID}> heads-up: a web-fetch result`);
+    expectSplit(parts, `${answer}\n\n${line}`);
+    // The role note stays whole, once, in the last part with the owner line.
+    expect(parts.filter((p) => p.includes(note))).toEqual([parts.at(-1)!]);
+    expect(parts.at(-1)!.endsWith(`${note}\n\n${line}`)).toBe(true);
+    // An edit does not notify: the owner gets exactly one fresh ping post.
+    const pings = replies.filter((r) => r.mentionUserIds?.includes(OWNER_ID));
+    expect(pings).toHaveLength(1);
+    await result.stop();
+  });
+
   test("a button-pick resume splits its long answer the same way", async () => {
     const ask: HumanAsk = {
       reason: "clarify",

@@ -13,6 +13,7 @@ import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
+import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import type { PersonRole } from "../identity/people.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
 import {
@@ -108,7 +109,8 @@ export type SpawnAgentClientOpts = {
  * CORVIDINHO_ACTING_WORK_TASK (1 for /work) for the role gate (IDENTITY-8..12),
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
- * REQ-discord-476).
+ * REQ-discord-476). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
+ * MEMORY-8) are always cleared.
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
@@ -157,6 +159,11 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           // Always overwritten, never inherited from the bridge env.
           CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: replyChannelId ?? "",
           CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID: replyParentChannelId ?? "",
+          // MEMORY-8: a Discord (or schedule) run never acts for a GitHub
+          // commenter — always cleared, never inherited.
+          CORVIDINHO_ACTING_GITHUB_LOGIN: "",
+          CORVIDINHO_ACTING_GITHUB_ID: "",
+          CORVIDINHO_ACTING_GITHUB_REPO: "",
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
@@ -218,6 +225,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const ask = askFromUnknown(result?.ask);
       // SAFE-8: the 80% warning, amounts only (validated, percent recomputed).
       const spendWarning = spendWarningFromUnknown(result?.spendWarning);
+      // SAFE-13: a tool result looked like an injection (tool + reason ids only).
+      const injection = injectionNoticeFromUnknown(result?.injection);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -225,6 +234,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         exitCode,
         ...(ask ? { ask } : {}),
         ...(spendWarning ? { spendWarning } : {}),
+        ...(injection ? { injection } : {}),
         // DISCORD-15: provider-reported usage for the answer footer.
         ...(usage ? { usage } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
