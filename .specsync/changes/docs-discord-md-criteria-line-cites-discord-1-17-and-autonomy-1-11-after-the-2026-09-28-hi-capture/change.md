@@ -1,6 +1,6 @@
 ---
 id: docs-discord-md-criteria-line-cites-discord-1-17-and-autonomy-1-11-after-the-2026-09-28-hi-capture
-state: approved
+state: implementing
 type: documentation
 base_commit: 9bf2bebc354203debed24f6d7b67517d1a2021a7
 ---
