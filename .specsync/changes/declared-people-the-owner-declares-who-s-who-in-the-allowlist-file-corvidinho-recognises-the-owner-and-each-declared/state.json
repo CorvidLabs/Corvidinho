@@ -7,10 +7,11 @@
   "title": "Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36)",
   "description": "Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "e54ec96dbd98ee6f6f85b80d81f9780cbf5fd889",
   "created_at": 1790694708,
-  "updated_at": 1790695109,
+  "updated_at": 1790695123,
   "affected_specs": [
     "discord",
     "watch"
