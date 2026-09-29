@@ -199,7 +199,10 @@ register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
 `github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
 non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
-plain Made with Corvidinho attribution (no @handles). Dry-run via
+plain Made with Corvidinho attribution (no @handles) unless the body already
+holds it (`ATTRIBUTION_MARKDOWN` or `ATTRIBUTION_PLAIN`; the two words alone
+do not count). The Octokit token is `GITHUB_TOKEN`, else `GH_TOKEN`, trimmed;
+a blank one is missing and never shadows the other, as WATCH reads it. Dry-run via
 CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).

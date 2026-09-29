@@ -154,8 +154,8 @@ function which(bin: string): string | null {
 }
 
 function envPresent(name: string): boolean {
-  const v = process.env[name];
-  return typeof v === "string" && v.length > 0;
+  // Blank counts as missing, as the bridge / WATCH / Octokit trim tokens (REQ-cli-003).
+  return (process.env[name]?.trim() ?? "").length > 0;
 }
 
 /**

@@ -57,7 +57,10 @@ does). In a non-git project a Fledge edit no tool reported runs verify and
 fails (allowlisted, and with `includeDangerous`), a GitHub-only run still
 skips verify, and the gate off stays done; a `delegate` call whose worker
 failed its own verify makes the lead verify and fail when the allowlist names
-`fledge-hello`, and skip verify when it names no `fledge-*` command.
+`fledge-hello`, and skip verify when it names no `fledge-*` command; a worker
+that writes `app.ts` and exits 137 before any result frame makes the lead
+verify once and fail (never `done` with verify skipped) with an empty
+allowlist, and the note names `delegate`.
 `tests/agent.tool-loop.test.ts` "tool loop dispatches only offered tools":
 an unlisted `danger-ping` in an interactive run and an allowlisted
 `shell-exec` at code tier are refused as not offered (REQ-agent-128).
@@ -75,7 +78,9 @@ stderr report) does not crowd out the failure's own lines; colour escapes are
 dropped and hide no marker; a failing parallel step is named whole and kept
 from its `Running parallel:` line; a log with no fledge markers keeps its end
 and is not called a failing step's output; output within the cap is
-unchanged; never over the cap and never half a surrogate pair. `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
+unchanged; never over the cap and never half a surrogate pair, including an
+emoji `error:` line that the end of the error-line scan cuts (61 noise counts
+after it, at 4000 and at runTask's 3946 cap). `tests/agent.loop.test.ts`: the retry's `verifyFeedback` from that log
 names the failing test within 4000 chars; a short output arrives whole.
 `tests/agent.tool-loop.test.ts`: the tool loop's retry request and the
 read-tier chat carry the failing step, not the first 4000 chars.

@@ -1,0 +1,121 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790702931,
+      "digest": "26be939fec6a5ca44f5bc4a44ec37e8a61ec8843e7ea87ce8e461384cdf359ee",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned",
+        "title": "Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing",
+        "description": "Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "plugins/github/api.ts",
+          "plugins/github/commands.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/verify.ts",
+          "src/cli.ts",
+          "tests/agent.allowlisted-dangerous.test.ts",
+          "tests/agent.verify-feedback.test.ts",
+          "tests/cli.doctor-truth.test.ts",
+          "tests/github.fixture.test.ts",
+          "tests/github.write.plugin.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "verifyFeedbackExcerpt never keeps an error line that ends on half a surrogate pair when the end of its error-line scan falls inside an emoji, at 4000 and at runTask's 3946 cap; in a non-git project a delegate call whose worker ran but left no result frame (killed, timed out, crashed; its data has no verified) is named in unreportedEditTools, so the lead runs the verify lane once and ends failed on a failing lane instead of done with verify skipped, whatever the allowlist; github-pr-create appends the Made with Corvidinho footer unless the body already holds ATTRIBUTION_MARKDOWN or ATTRIBUTION_PLAIN, so a body that only mentions the two words gets it and one that has it does not get a second; doctor prints [missing] github for a whitespace-only GITHUB_TOKEN/GH_TOKEN, and getGithubToken / createOctokit treat a blank token as missing so it never shadows a real GH_TOKEN or reaches Octokit; each has a regression test that fails on main and passes here; no new env var, config key, flag, command, data field or schema change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "66abcce4ab1d83f7d453f37c6433e94a60c7b95b240da4fb8e8ed3e5570ada07",
+        "cli": "26bc57459cc84ea9ddb1db08f939ae5dd4a96f3371c4eeb87ac731ec46c28a1b",
+        "plugins": "12d273c772f478ec320287befc60bb4d400e0ede96fa3cd5569d3096804cba72"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790702999,
+      "digest": "26be939fec6a5ca44f5bc4a44ec37e8a61ec8843e7ea87ce8e461384cdf359ee",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned",
+        "title": "Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing",
+        "description": "Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "plugins/github/api.ts",
+          "plugins/github/commands.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/verify.ts",
+          "src/cli.ts",
+          "tests/agent.allowlisted-dangerous.test.ts",
+          "tests/agent.verify-feedback.test.ts",
+          "tests/cli.doctor-truth.test.ts",
+          "tests/github.fixture.test.ts",
+          "tests/github.write.plugin.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "verifyFeedbackExcerpt never keeps an error line that ends on half a surrogate pair when the end of its error-line scan falls inside an emoji, at 4000 and at runTask's 3946 cap; in a non-git project a delegate call whose worker ran but left no result frame (killed, timed out, crashed; its data has no verified) is named in unreportedEditTools, so the lead runs the verify lane once and ends failed on a failing lane instead of done with verify skipped, whatever the allowlist; github-pr-create appends the Made with Corvidinho footer unless the body already holds ATTRIBUTION_MARKDOWN or ATTRIBUTION_PLAIN, so a body that only mentions the two words gets it and one that has it does not get a second; doctor prints [missing] github for a whitespace-only GITHUB_TOKEN/GH_TOKEN, and getGithubToken / createOctokit treat a blank token as missing so it never shadows a real GH_TOKEN or reaches Octokit; each has a regression test that fails on main and passes here; no new env var, config key, flag, command, data field or schema change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "66abcce4ab1d83f7d453f37c6433e94a60c7b95b240da4fb8e8ed3e5570ada07",
+        "cli": "26bc57459cc84ea9ddb1db08f939ae5dd4a96f3371c4eeb87ac731ec46c28a1b",
+        "plugins": "c12898a3a5cdb6fd306a4aaa8de55e32fe0d2e7376f870ab5f2a74156b3e90c0"
+      }
+    }
+  ],
+  "reopenings": []
+}

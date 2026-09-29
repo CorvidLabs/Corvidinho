@@ -221,7 +221,8 @@ What an entry unlocks **today**:
   `fledge-lanes-validate`, `fledge-lanes-run`, `fledge-run`) starts no discovery. Fledge
   commands can change files without reporting them, so in a project that is not a git work
   tree a run that called one, or a local run's `delegate` worker (which could have), runs the
-  verify lane anyway (AGENT-4).
+  verify lane anyway (AGENT-4). So does a run whose `delegate` worker ended without its result
+  (stopped at its timeout, crashed, or never started), since its edits reached the lead nowhere.
 - Allowlisting `git-commit`, `git-push` and `github-pr-create` for the `/work` PR step also
   offers them to the owner's runs, so the model can commit, push or open a PR itself before the
   run's verify.
