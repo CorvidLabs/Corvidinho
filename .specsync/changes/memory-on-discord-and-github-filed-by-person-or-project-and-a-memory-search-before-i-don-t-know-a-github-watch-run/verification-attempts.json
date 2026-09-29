@@ -66,6 +66,28 @@
         "REQ-watch-008",
         "REQ-watch-067"
       ]
+    },
+    {
+      "timestamp": 1790708686,
+      "commit": "5b8c878b0f05e219ee381d670d652e18542ec71c",
+      "contract_digest": "7e0a4371cb33f549b1062dc88945c962c52e07cc3f03e2af4eccce015041c119",
+      "execution_digest": "f0e9bee3506604cc20b518084ed801c87952185e13cd0c0d75a95be837e325e7",
+      "workspace_digest": "613d8ca6f7542d25f1238d5be78e01667f500ab35b7aabcf66f0812d7fbd7e9f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-067",
+        "REQ-discord-067",
+        "REQ-plugins-067",
+        "REQ-watch-008",
+        "REQ-watch-067"
+      ]
     }
   ]
 }
