@@ -1,6 +1,6 @@
 /**
- * `discord-send-file` (DISCORD-17, REQ-discord-476 / REQ-discord-506): attach
- * a file or image to a reply in the conversation's own Discord channel.
+ * `discord-send-file` (DISCORD-17): attach a file or image to a reply in the
+ * conversation's own Discord channel.
  *
  * - Dangerous (externally visible write): SAFE-1 allowlist, SAFE-5 audit via
  *   runPlugin, and mutating, so ROLES-CHAT-3 refuses it in non-owner runs.

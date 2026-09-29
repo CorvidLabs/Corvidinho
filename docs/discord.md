@@ -161,7 +161,7 @@ The agent can attach a file or image (a screenshot, log, diff or chart) to its r
 - **Refused paths:** SAFE-2 protected infra (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`, `specs/`, `*.spec.md`, keystores), anything under `.specsync`, and secret paths (`.ssh`, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`). Checked on the path as given and on where it resolves inside the project root with symlinks followed, so a link named `notes.txt` that points at `.env` is refused; a path or link that leaves the project is refused. The file is then read once, from the file actually opened (a link at the checked path is not followed, and the opened file's own path is checked again), so a file or folder swapped for a link after those checks is refused.
 - **Dry run:** with `CORVIDINHO_DISCORD_DRY_RUN=1` nothing is posted; the result names the file, size and type it would attach.
 
-Source: `plugins/discord/send-file.ts` (REQ-discord-476, REQ-discord-506, REQ-agent-476).
+Source: `plugins/discord/send-file.ts` (REQ-discord-476, REQ-agent-476).
 
 ---
 

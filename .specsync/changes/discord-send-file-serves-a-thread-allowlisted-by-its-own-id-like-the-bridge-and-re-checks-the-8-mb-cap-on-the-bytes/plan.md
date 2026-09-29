@@ -13,8 +13,8 @@ artifact: plan
 2. `send-file.ts`: gate through `isMonitoredConversation`; read once from
    one descriptor (`O_NOFOLLOW`, opened path re-checked), capped at the
    limit + 1 byte.
-3. Spec prose / Error Cases / testing; delta REQ-discord-506 (Added, beside
-   REQ-discord-476, which #276's still-open change also modifies);
+3. Spec prose / Error Cases / testing; delta REQ-discord-476 (Modified,
+   full text);
    `docs/discord.md`, `docs/DISCORD-GO-LIVE.md`.
 4. `specsync change approve` → `specsync change check --commit` → audit,
    coverage 100, `hi check`, `bunx tsc --noEmit`, `bun test`,

@@ -11,6 +11,6 @@ artifact: tasks
 - [x] Tests: a checked file swapped for a link to `.env`, or its folder swapped for a link into `.ssh`, at its first stat / open is refused (SAFE-2), nothing checked or uploaded (fails on `main`).
 - [x] Tests: an ask-button pick in a thread resumes with the thread and its parent (coverage; passes on `main`).
 - [x] `send-file.ts`: gate through `isMonitoredConversation` on the bridge's channel set; read once from one descriptor (`O_NOFOLLOW`, opened path re-checked), at most the cap + 1 byte.
-- [x] Specs: discord Invariants / Error Cases, testing companion; delta REQ-discord-506 (Added).
+- [x] Specs: discord Invariants / Error Cases, testing companion; delta REQ-discord-476 (Modified, full text).
 - [x] Docs: `docs/discord.md` gate, cap and refused-paths wording; `docs/DISCORD-GO-LIVE.md` step 4 Attach Files.
 - [x] SpecSync approve / check / audit / coverage, `hi check`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive`.
