@@ -86,6 +86,7 @@ import {
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
   PermissionLevel,
+  resolveDiscordActingRole,
   resolvePermissionLevel,
   type RateLimitState,
 } from "./permissions.ts";
@@ -738,16 +739,19 @@ export async function startBridge(
             enrichedPrompt = memInject.prompt;
           }
 
-          const actingIsAdmin =
-            resolvePermissionLevel({
-              userId: msg.authorId,
-              roleIds: msg.authorRoleIds,
-              allowlist: config.allowlist,
-              adminUserIds: config.adminUserIds,
-              adminRoleIds: config.adminRoleIds,
-              owner: config.owner ?? null,
-              mutedUsers,
-            }) >= PermissionLevel.ADMIN;
+          // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared
+          // person's team role, else community; the tool layer re-checks it.
+          const actingRole = resolveDiscordActingRole({
+            userId: msg.authorId,
+            roleIds: msg.authorRoleIds,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+            people: declaredPeople(),
+          });
+          const actingIsAdmin = actingRole === "owner";
           // Busy while the agent runs: the soft-TTL purge must not park this
           // worktree mid-run (REQ-discord-204).
           result = await store.runActive(session, () =>
@@ -760,6 +764,7 @@ export async function startBridge(
               resume: action.kind === "continue_session",
               actingUserId: msg.authorId,
               actingIsAdmin,
+              actingRole,
               cwd: sessionCwd,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
@@ -1182,15 +1187,17 @@ export async function startBridge(
           });
           if (memInject.injected) enrichedPrompt = memInject.prompt;
 
-          const actingIsAdmin =
-            resolvePermissionLevel({
-              userId: interaction.userId,
-              allowlist: config.allowlist,
-              adminUserIds: config.adminUserIds,
-              adminRoleIds: config.adminRoleIds,
-              owner: config.owner ?? null,
-              mutedUsers,
-            }) >= PermissionLevel.ADMIN;
+          // IDENTITY-8..12: the presser's role, as on the chat path.
+          const actingRole = resolveDiscordActingRole({
+            userId: interaction.userId,
+            allowlist: config.allowlist,
+            adminUserIds: config.adminUserIds,
+            adminRoleIds: config.adminRoleIds,
+            owner: config.owner ?? null,
+            mutedUsers,
+            people: declaredPeople(),
+          });
+          const actingIsAdmin = actingRole === "owner";
 
           result = await store.runActive(session, () =>
             agent.runChat({
@@ -1200,6 +1207,7 @@ export async function startBridge(
               resume: true,
               actingUserId: interaction.userId,
               actingIsAdmin,
+              actingRole,
               cwd: sessionCwd,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,

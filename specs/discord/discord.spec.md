@@ -177,10 +177,15 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 (`command-handlers/admin.ts`); `planPeopleChange`, `commitPeopleChange`,
 `setTomlPerson`, `setJsonPerson`, `renderPersonTomlLines`, `samePerson`,
 `formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
-(`admin-people.ts`, the only writer of people). Declared people
+(`admin-people.ts`, the only writer of people and roles; `op: "role"` sets
+team / community, ADMIN-3.b). Declared people
 (IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
 githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
-(the one resolver; stable ids only), `loadDeclaredPeople({ allowlist, owner })`
+(the one resolver; stable ids only; `role` is `owner` for the configured
+owner, else the declared `team` / `community`), `roleOfPerson` (effective
+role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
+`normalizePersonRole`, `PersonRole` / `DeclarableRole`, `PERSON_ROLES`,
+`DECLARABLE_ROLES`, `DEFAULT_PERSON_ROLE`, `loadDeclaredPeople({ allowlist, owner })`
 (re-reads `allowlist.sourcePath`, never throws), `buildPeopleDirectory`,
 `loadPeopleDirectory`, `readPeopleFile`, `parsePeopleToml` /
 `parsePeopleJson` / `parsePeopleText`, `normalizePersonLink`,
@@ -413,6 +418,22 @@ the acting Discord user id only (`resolveActingPerson`); once anyone is
 declared an undeclared non-owner gets `declared_person: none`; an undeclared
 owner's block and every block with nobody declared are unchanged
 (IDENTITY-14 / IDENTITY-7, REQ-discord-036).
+
+Roles (IDENTITY-8..12, REQ-discord-065): `resolveDiscordActingRole`
+(`permissions.ts`) gives a Discord run's spawn role — `owner` when the caller
+resolves to ADMIN, else `team` when the people list declares the caller's
+Discord id team, else `community` (blocked callers too). The bridge (chat and
+button-pick resume), `/session start` and `/work` pass it as
+`AgentRunChatOpts.actingRole`, `/work` also `workTask: true`; the spawn client
+always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
+`team` only when asked, else `community` — schedules pass none) and
+`CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
+on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
+it. `/work` ships its PR for the owner or a team member (re-resolved after the
+run); community keeps the branch. `/admin people role person:<id>
+role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
+SAFE-5 audited like the other people mutations; `/admin people list` shows
+each role and `config show` counts them.
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
@@ -754,6 +775,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-28 | discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord: Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8) |
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
 | 2026-09-29 | declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared: Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36) |
+| 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
 | 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
 | 2026-09-29 | scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so: Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |

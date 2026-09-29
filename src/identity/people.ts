@@ -11,7 +11,8 @@
  *         nicknames = ["T"]                             "nicknames": ["T"],
  *         discord_ids = ["123456789012345678"]          "discord_ids": ["1234…"],
  *         github_logins = ["tofu-dev"]                  "github_logins": ["tofu-dev"],
- *         github_ids = ["4242"]                         "github_ids": ["4242"] } } }
+ *         github_ids = ["4242"]                         "github_ids": ["4242"],
+ *         role = "team"                                 "role": "team" } } }
  *
  * Singular keys (`discord_id`, `github_login`, `github_id`, `nickname`) are
  * read too, as the `[owner]` section spells them. Values stay on one line.
@@ -28,11 +29,18 @@
  *   and key, never the account ids.
  * - The configured owner (IDENTITY-1) is always a person: the declared person
  *   whose `discord_ids` hold the owner's Discord id, else a built-in `owner`
- *   entry from `[owner]` / env. Its `role` is "owner"; other roles (#65) are
- *   not read yet.
- * - Only the owner changes the list: by editing the file on the VM, or with
- *   owner-only, audited `/admin people …` (ADMIN-3.a). Chat and the model have
- *   no writer (IDENTITY-6).
+ *   entry from `[owner]` / env. Its role is always "owner".
+ * - Roles (IDENTITY-8, #65): every other declared person has exactly one role,
+ *   `role = "team"` or `role = "community"`; no `role` key reads as community.
+ *   A role that is not one string among owner / team / community makes the
+ *   entry unreadable (skipped whole, like any other bad value). `role =
+ *   "owner"` on anyone but the owner's person grants nothing: community, with
+ *   an issue (the owner is `[owner]` / env only). Anyone undeclared is
+ *   community at most (IDENTITY-12); the tool layer reads roles through
+ *   `resolvePerson` (src/plugins/roles.ts).
+ * - Only the owner changes the list and the roles: by editing the file on the
+ *   VM, or with owner-only, audited `/admin people …` (ADMIN-3.a / ADMIN-3.b).
+ *   Chat and the model have no writer (IDENTITY-6 / IDENTITY-8).
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -54,8 +62,28 @@ const GITHUB_ID_RE = /^\d{1,20}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u0008\u000e-\u001f\u007f]/g;
 
-/** Roles a resolved person can carry. #65 adds team / community. */
-export type PersonRole = "owner";
+/** The three roles (IDENTITY-8): each declared person has exactly one. */
+export type PersonRole = "owner" | "team" | "community";
+
+/** Every role value a `role` key may hold. */
+export const PERSON_ROLES: readonly PersonRole[] = ["owner", "team", "community"];
+
+/**
+ * Roles the owner sets on a declared person (ADMIN-3.b / IDENTITY-8). The
+ * owner role is the configured owner's only (`[owner]` / env, IDENTITY-1).
+ */
+export type DeclarableRole = Exclude<PersonRole, "owner">;
+export const DECLARABLE_ROLES: readonly DeclarableRole[] = ["team", "community"];
+
+/** The role of a declared person with no `role` key, and of anyone undeclared (IDENTITY-12). */
+export const DEFAULT_PERSON_ROLE: PersonRole = "community";
+
+/** A role value as written (any case, trimmed), else undefined. */
+export function normalizePersonRole(raw: string | undefined | null): PersonRole | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const t = String(raw).trim().toLowerCase();
+  return (PERSON_ROLES as readonly string[]).includes(t) ? (t as PersonRole) : undefined;
+}
 
 /** Kinds of link `/admin people link|unlink` changes. */
 export type PersonLinkKind = "discord" | "github" | "github_id" | "nickname";
@@ -73,6 +101,8 @@ export type DeclaredPerson = {
   githubLogins: string[];
   /** GitHub numeric user ids (digits). */
   githubIds: string[];
+  /** Declared role as written (IDENTITY-8); absent ⇒ community. */
+  role?: PersonRole;
 };
 
 export type PeopleParseResult = {
@@ -108,7 +138,10 @@ export type ResolvedPerson = {
   personId: string;
   /** Declared display, else the owner's display (owner), else first nickname, else the id; undefined only for a built-in owner with no display. */
   displayName?: string;
-  /** "owner" for the configured owner; other roles arrive with #65. */
+  /**
+   * "owner" for the configured owner; else the declared `team` / `community`
+   * role; absent when none is declared (community, {@link roleOfPerson}).
+   */
   role?: PersonRole;
   /** The effective entry (links and nicknames). */
   person: DeclaredPerson;
@@ -154,11 +187,14 @@ export function normalizeGithubId(raw: string | number | undefined | null): stri
 // Parsing (TOML subset + JSON)
 
 /** DeclaredPerson fields read from the file. */
-export type PersonField = "display" | "nicknames" | "discordIds" | "githubLogins" | "githubIds";
+export type PersonField = "display" | "role" | "nicknames" | "discordIds" | "githubLogins" | "githubIds";
 type Field = PersonField;
+/** Fields holding one string, never a list. */
+const SINGLE_FIELDS: ReadonlySet<Field> = new Set<Field>(["display", "role"]);
 
 const KEY_FIELD: Record<string, Field> = {
   display: "display",
+  role: "role",
   nickname: "nicknames",
   nicknames: "nicknames",
   discord_id: "discordIds",
@@ -173,7 +209,7 @@ const KEY_FIELD: Record<string, Field> = {
 export const PERSON_KEYS: ReadonlySet<string> = new Set(Object.keys(KEY_FIELD));
 
 /** Directory field each `/admin people link|unlink` kind edits. */
-export const LINK_FIELD: Record<PersonLinkKind, Exclude<Field, "display">> = {
+export const LINK_FIELD: Record<PersonLinkKind, Exclude<Field, "display" | "role">> = {
   discord: "discordIds",
   github: "githubLogins",
   github_id: "githubIds",
@@ -339,6 +375,16 @@ function validatePerson(r: RawPerson, issues: string[]): DeclaredPerson | null {
     const d = cleanPersonLabel(v.display[0]);
     if (d) p.display = d;
   }
+  if (v.role) {
+    // IDENTITY-8: exactly one role, one of the three; anything else is an
+    // unreadable entry (skipped whole — never read as a wider role).
+    const role = v.role.length === 1 ? normalizePersonRole(v.role[0]) : undefined;
+    if (!role) {
+      issues.push(`${where}: role must be one of owner, team or community (exactly one) — skipped`);
+      return null;
+    }
+    p.role = role;
+  }
   p.nicknames = uniq(
     (v.nicknames ?? []).map((n) => cleanPersonLabel(n)).filter((n): n is string => !!n),
     (n) => n.toLowerCase(),
@@ -428,8 +474,8 @@ export function parsePeopleToml(text: string): PeopleParseResult {
       current.bad = true;
       continue;
     }
-    if (field === "display" && parsed.array) {
-      if (!current.bad) issues.push(`${where}.display must be a string — skipped`);
+    if (SINGLE_FIELDS.has(field) && parsed.array) {
+      if (!current.bad) issues.push(`${where}.${key} must be a string — skipped`);
       current.bad = true;
       continue;
     }
@@ -484,8 +530,8 @@ export function parsePeopleJson(raw: unknown): PeopleParseResult {
         }
       }
       if (r.bad) break;
-      if (field === "display" && Array.isArray(v)) {
-        issues.push(`${where}.display must be a string — skipped`);
+      if (SINGLE_FIELDS.has(field) && Array.isArray(v)) {
+        issues.push(`${where}.${key} must be a string — skipped`);
         r.bad = true;
         break;
       }
@@ -536,7 +582,7 @@ export function buildPeopleDirectory(
   owner: OwnerRecord | null | undefined,
 ): PeopleDirectory {
   const issues = [...parsed.issues];
-  const people = parsed.people.map((p) => ({
+  const people: DeclaredPerson[] = parsed.people.map((p) => ({
     ...p,
     nicknames: [...p.nicknames],
     discordIds: [...p.discordIds],
@@ -559,6 +605,17 @@ export function buildPeopleDirectory(
       p.discordIds.push(owner.discordId);
       if (owner.githubLogin) p.githubLogins.push(owner.githubLogin);
       people.push(p);
+    }
+  }
+
+  // IDENTITY-8 / IDENTITY-1: the owner role is the configured owner's only.
+  for (const p of people) {
+    if (p.id === ownerPersonId) {
+      if (p.role && p.role !== "owner") {
+        issues.push(`person "${p.id}" holds the owner's Discord id, so its role is owner — role = "${p.role}" is ignored`);
+      }
+    } else if (p.role === "owner") {
+      issues.push(`person "${p.id}": role owner comes only from [owner] / env (IDENTITY-1) — treated as community`);
     }
   }
 
@@ -638,7 +695,18 @@ export function resolvePerson(
   const out: ResolvedPerson = { personId, person };
   if (displayName) out.displayName = displayName;
   if (isOwner) out.role = "owner";
+  else if (person.role === "team" || person.role === "community") out.role = person.role;
   return out;
+}
+
+/**
+ * The effective role (IDENTITY-8 / IDENTITY-12): "owner" for the configured
+ * owner, a declared person's `team` / `community`, else community — for a
+ * declared person without a role, for `role = "owner"` on anyone but the
+ * owner, and for anyone undeclared (`null`).
+ */
+export function roleOfPerson(person: ResolvedPerson | null | undefined): PersonRole {
+  return person?.role ?? DEFAULT_PERSON_ROLE;
 }
 
 /** Read the file and build the directory with `owner` (re-read on every call). */

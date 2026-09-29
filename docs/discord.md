@@ -3,7 +3,7 @@
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
 **As of:** 2026-09-29 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..17, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4, ADMIN-3.a), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..7, IDENTITY-13/14), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..11) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..17, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4, ADMIN-3.a, ADMIN-3.b), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..14), [`hi/roles.md`](../hi/roles.md) (ROLES-CHAT-1..9, ROLES-CHAT-8.a), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..11) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
@@ -39,6 +39,7 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/admin people link` | `person` (required) + one or more of `discord` (user picker), `github` (login), `github_id` (number), `nickname` | yes | Link accounts / nicknames to a person; an id already linked to someone else is refused (owner only; ADMIN-3.a, IDENTITY-6/7) |
 | `/admin people unlink` | same as `link` | yes | Unlink accounts / nicknames (owner only; ADMIN-3.a) |
 | `/admin people remove` | `person` (required) | yes | Remove a declared person and all their links (owner only; ADMIN-3.a) |
+| `/admin people role` | `person` (required), `role` (`team` / `community`, required) | yes | Set a declared person's one role (owner only; ADMIN-3.b, IDENTITY-8); the owner role is `[owner]` / env only |
 
 
 Gate order for every slash: **channel allowlist → actor gate (user/role allowlist + deny lists, REQ-discord-201; ephemeral zero-width ack on refuse) → mute/rate → minPermission → handler**. An ask button press (open or pick) runs the same **channel → actor → mute/rate** gates before it shows choices or resumes the session.
@@ -73,6 +74,7 @@ Owner-only (IDENTITY-2): the dispatcher floor is ADMIN **and** the handler re-ch
 | `[discord].users` | yes — `/admin users add` (approve) | allowlist file + live |
 | `[discord].channels` | yes — `/admin channels add` / `remove` | allowlist file + live |
 | Declared people `[people.<id>]` (IDENTITY-13) | yes — `/admin people add` / `link` / `unlink` / `remove` (ADMIN-3.a) | allowlist file; read on the next message or comment |
+| A declared person's role `role = "team" \| "community"` (IDENTITY-8) | yes — `/admin people role` (ADMIN-3.b) | allowlist file; re-read by the tool layer on every call |
 | Env lists (`CORVIDINHO_DISCORD_ALLOW_*`, `DISCORD_CHANNEL_IDS`), owner (`CORVIDINHO_OWNER_*` / `[owner]`), rate limits, roles, deny lists, `[github]` | no — shown by `/admin config show`; edit on the VM and restart | — |
 
 - **One store.** Writes go to the allowlist file the bridge already loaded (`CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml|json`; created `0600` on first write if missing). The rewrite is atomic (temp file in the same dir + fsync + rename, mode kept, symlink target followed). TOML edits touch only the one key line inside `[discord]`; `[owner]`, `[github]`, comments and blank lines stay verbatim. JSON keeps every other key and refuses files whose numeric ids would lose precision.
@@ -92,6 +94,16 @@ The owner declares who's who in the same allowlist file, one `[people.<id>]` sec
 - **Only the owner changes links, never through chat (IDENTITY-6).** Edit the file on the VM, or use `/admin people …` (owner-only, handler re-check, SAFE-5 audit rows `admin-people-add|link|unlink|remove`, surface `discord:admin`, fail closed without a trail). No plugin or chat path writes people; keep the allowlist file outside project folders (the default `~/.config/corvidinho/`), where the model's file tools cannot reach it.
 - **Live.** People are read from the allowlist file this process loaded (the file `[owner]` comes from), re-read on every message, slash run and WATCH event, so a change applies without a restart. A bridge that started without a file reads the file its first `/admin people` change writes.
 - **Fail closed.** An entry with an unreadable value is skipped whole and listed as a problem in `/admin people list` / `/admin config show`; `/admin people` will not edit it (fix it on the VM). TOML edits rewrite only that person's keys; its header, comments and unread keys, and every other line of the file, stay verbatim.
+
+### Roles (`role`, `/admin people role`, IDENTITY-8..12, ADMIN-3.b)
+
+Each declared person has exactly one role: `role = "team"` or `role = "community"` in their `[people.<id>]` entry (no `role` key = community). The owner (`[owner]` / env) is always owner; `role = "owner"` on anyone else grants nothing (community, listed as a problem), and anyone undeclared is community (IDENTITY-12). A `role` that is not one of owner / team / community, or a list, makes the entry unreadable (skipped whole).
+
+- **Owner** (IDENTITY-9): everything, as ADMIN today, still behind SAFE, the allowlists and the must-ask rules.
+- **Team** (IDENTITY-10): work tasks — `/work` runs get `files-write` / `files-edit` in their own worktree (never on a secret-looking path) and ship the draft PR like the owner's — and reviews — `github-issue-comment` / `github-pr-review` (allowlisted in `CORVIDINHO_ALLOWLIST`, on GITHUB-6-allowlisted repos only; reviews post as `COMMENT`, `APPROVE` / `REQUEST_CHANGES` stay the owner's) — plus every read tool and their own memory (`memory-store` / `-recall`; forget/override stay owner-only). Briefings (#102) are not built yet.
+- **Community** (IDENTITY-11): Q&A and announcements; read/chat tools only, no mutating tool (ROLES-CHAT-2/3). Its site / roadmap sources are the public repo docs (README, `docs/`, STATUS, CHANGELOG, via `github-docs-read` or the project files) and the public issues and milestones of allowed public repos (`github-issue-list`, `github-milestone-list`) — nothing else (ROLES-CHAT-8.a).
+- **Checked in the tool layer on every run and surface** (IDENTITY-12). Discord chat, button picks, `/session start` and `/work` spawn with the speaker's role; WATCH, schedules and `delegate` / `council` workers are community. `runPlugin` and the tool catalog re-resolve the role from the live owner config and people list at every call, so a `/admin people role` change or a VM edit applies to the next call; the spawn's stamp can only lower the role.
+- **Only the owner sets it** (IDENTITY-8 / ADMIN-3.b): in the file on the VM, or `/admin people role person:<id> role:<team|community>` (owner-only, handler re-check, SAFE-5 rows `admin-people-role`, fail closed without a trail). The owner's own person cannot be given another role there. `/admin people list` shows each person's role; `/admin config show` counts them.
 
 ```mermaid
 flowchart TD
@@ -239,6 +251,7 @@ flowchart TD
 - Announce: `src/discord/announce.ts`, `announce-store.ts`, `command-handlers/announce.ts`
 - Runtime admin: `src/discord/command-handlers/admin.ts`, `admin-allowlist.ts` (file edit + atomic write + live splice)
 - Declared people: `src/identity/people.ts` (reader + `resolvePerson`), `src/discord/admin-people.ts` (`/admin people` writer), `src/discord/identity-inject.ts` (Discord block), `src/watch/router.ts` (WATCH block)
+- Roles (IDENTITY-8..12): `src/identity/people.ts` (`role`, `roleOfPerson`), `src/discord/permissions.ts` (`resolveDiscordActingRole`, the spawn role), `src/plugins/roles.ts` (`resolveActingRole` / `roleAllowsPlugin`, re-checked by `runPlugin` and the catalog on every call), `plugins/github/public-docs.ts` (ROLES-CHAT-8.a `github-docs-read` / `github-milestone-list`)
 - Questions / owner ping: `src/discord/ask-ping.ts` (agent side: `src/agent/ask.ts`)
 - Button asks (DISCORD-ASK): `src/discord/ask-buttons.ts`; thin acks / cancel (AUTONOMY-5/6): `src/discord/thin-ack.ts`
 - Identity + memory inject (IDENTITY-4 / AGENT-7): `src/discord/identity-inject.ts`, `memory-inject.ts` — chat, button-pick, `/session start` and `/work` runs get the acting user's id plus their Discord display name or username when known (a declared person's display wins, then the owner map display for the owner; #36 adds `declared_person` / `nicknames` / `github`, see "Declared people")

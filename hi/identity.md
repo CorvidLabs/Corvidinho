@@ -21,7 +21,12 @@ Corvidinho knows a durable owner (Discord user id, optional GitHub / display suc
 - **IDENTITY-14**  It recognises me and each declared person on Discord and GitHub.
 - **IDENTITY-6**  Only I add, change or remove a person's links, never through chat.
 - **IDENTITY-7**  It matches people on stable ids, never on display names.
+- **IDENTITY-8**  Each declared person has exactly one role (owner, team or community), and only I set it.
+- **IDENTITY-9**  The owner can use everything, subject to the must-ask list.
+- **IDENTITY-10**  Team members get work tasks, reviews, and only their own memory and briefings.
+- **IDENTITY-11**  Community members get Q&A and announcements only, with no mutating tools.
+- **IDENTITY-12**  The role is checked in the tool layer on every run and surface; anyone undeclared is community at most.
 
 ## Notes (not numbered AC)
 
-- Community vs ADMIN tool gates (read/chat only for non-owners): **ROLES-CHAT-1..7** in [`hi/roles.md`](roles.md) — two-tier interim until #65 team role.
+- Community vs ADMIN tool gates (read/chat only for non-owners): **ROLES-CHAT-1..7** in [`hi/roles.md`](roles.md) — the two-tier gate that the three roles of **IDENTITY-8..12** (owner / team / community) replace over time (#65).

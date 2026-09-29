@@ -98,6 +98,45 @@ sniffed whatever the name, a text `.png` stays text; > 20 MB refused (sparse
 file), exactly 20 MB read; text read unchanged; path clamp and ROLES-CHAT-8
 secret gate still refuse first. No network.
 
+## Three roles in the tool layer (REQ-plugins-065, IDENTITY-8..12)
+
+`tests/roles.team.test.ts` — a temp allowlist file with `[owner]`, a team
+person, a declared-community person, a person with no `role` and an
+undeclared id: `role` parsing (TOML/JSON, any case; a list, unknown or empty
+value skips the entry; `role = "owner"` on anyone but the owner's person is
+community with an issue); `resolveActingRole` gives owner / team / community
+from the live file, the surface stamp only lowers it (owner stamp + team
+person ⇒ team; no stamp, `community` stamp, undeclared / community / no-role
+person ⇒ community), a file edit, mute, deny-list or unreadable file applies at
+the next call; `roleAllowsPlugin` for every registered plugin; `runPlugin` as
+team: `github-issue-comment` / `github-pr-review` run (dry-run) on an
+allowlisted repo, a non-allowlisted one gets GITHUB-6, every other mutating
+tool the role refusal, `files-write` only with the `/work` flag (SAFE-2 still
+refuses `.env`), a demotion refuses the next call, memory store/recall stay in
+the actor's scope and forget/override are refused; team `github-pr-review`
+runs as `COMMENT` and `APPROVE` / `REQUEST_CHANGES` get the role refusal (the
+owner runs all three); a team `/work` `files-write` / `files-edit` refuses
+secret-looking paths without revealing a match (the owner edits them);
+`checkRepoGateForActingRole` by role (team reads allowlisted or public, writes
+allowlisted only; community writes refused; deny wins). Fixture files,
+dry-run GitHub, no network.
+
+## Community site / roadmap readers (REQ-plugins-066, ROLES-CHAT-8.a)
+
+`tests/github.public-docs.test.ts` — `publicDocPath` accepts README / STATUS /
+CHANGELOG at the root and `docs/**`, refuses everything else (`..`,
+backslashes, nested READMEs, source files, `.env`); `github-docs-read` and
+`github-milestone-list` through a real Octokit with a mocked fetch in a
+community role session: README, `STATUS.md` and a `docs/` file are read
+(secrets scrubbed, untrusted note), a `docs/` directory lists its entries, a
+doc over 64 KiB is truncated, a binary doc is refused, any other path is
+refused with exit 2 before GitHub is called (CLI too), a private / unconfirmed
+/ denied repo is refused before any read, a secret-looking doc path is
+refused and left out of a `docs/` listing for a community session (the owner
+reads and lists it); milestones map state, due date,
+issue counts, a 500-char description, and `--state` / `--limit` reach the
+API; bad flags are refused. The community catalog offers the readers and never
+`web-fetch`. No network, no token.
 ## Channel deny helper (REQ-plugins-005)
 
 `tests/allowlist.default-deny.test.ts` ("isChannelDenied") — a deny-listed

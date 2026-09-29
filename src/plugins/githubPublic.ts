@@ -1,7 +1,13 @@
 /**
  * ROLES-CHAT-8 — community (non-ADMIN) Discord sessions may use any *public*
- * GitHub repo (+ site/roadmap via web-fetch). Private repos are refused.
- * Deny lists still win. ADMIN keeps the existing allowlist gate (GITHUB-6).
+ * GitHub repo; their site / roadmap is the public repo docs and the public
+ * issues and milestones of those repos (ROLES-CHAT-8.a — no site URLs, and
+ * `web-fetch` is never theirs). Private repos are refused. Deny lists still
+ * win. ADMIN keeps the existing allowlist gate (GITHUB-6).
+ *
+ * Team (IDENTITY-10, #65): reads pass on an allowlisted repo (GITHUB-6) or a
+ * confirmed-public one, like community; writes (reviews, comments) pass on
+ * allowlisted repos only.
  */
 
 import {
@@ -10,7 +16,7 @@ import {
   type AllowlistConfig,
 } from "../allowlist/index.ts";
 import { createOctokit, splitOwnerRepo } from "../../plugins/github/api.ts";
-import { resolveActingIsAdmin, roleSessionActive } from "./roles.ts";
+import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "./roles.ts";
 import { allowlistFileRefusal, type RepoGateResult } from "./githubDeny.ts";
 
 export type RepoVisibility = "public" | "private" | "unknown";
@@ -40,8 +46,10 @@ export function createOctokitVisibilityLookup(
 }
 
 /**
- * Deny always wins. For non-ADMIN role sessions: allow only when the repo is
- * confirmed public (ROLES-CHAT-8). Otherwise GITHUB-6 allowlist (ADMIN / CLI).
+ * Deny always wins. For community role sessions: allow only when the repo is
+ * confirmed public (ROLES-CHAT-8). For team: GITHUB-6 allowlist, or (reads
+ * only) a confirmed-public repo; `write` ⇒ allowlist only. Otherwise GITHUB-6
+ * allowlist (owner / CLI).
  */
 export async function checkRepoGateForActingRole(
   repo: string | undefined,
@@ -49,6 +57,8 @@ export async function checkRepoGateForActingRole(
     env?: NodeJS.ProcessEnv;
     cfg?: AllowlistConfig;
     visibilityLookup?: VisibilityLookup;
+    /** The command writes (review, comment, issue, PR): team needs the allowlist. */
+    write?: boolean;
   } = {},
 ): Promise<RepoGateResult> {
   const env = opts.env ?? process.env;
@@ -97,9 +107,24 @@ export async function checkRepoGateForActingRole(
     }
   }
 
-  const community =
-    roleSessionActive(env) && !(await resolveActingIsAdmin(env));
+  const role = await resolveActingRole(env);
+  if (role === "team") {
+    // IDENTITY-10: reviews and comments on allowlisted repos only; reads
+    // also reach confirmed-public repos (never less than community).
+    const r = checkGithubRepo(repo, cfg);
+    if (r.ok) return { ok: true, repo: r.repo! };
+    if (opts.write) return { ok: false, repo, error: r.error };
+    const lookup = opts.visibilityLookup ?? createOctokitVisibilityLookup(env);
+    if ((await lookup(repo)) === "public") return { ok: true, repo };
+    return { ok: false, repo, error: r.error };
+  }
+  const community = role === "community";
   if (community) {
+    if (opts.write) {
+      // runPlugin refuses community writes first; this keeps the gate closed
+      // for any caller that reaches a write handler directly (ROLES-CHAT-3).
+      return { ok: false, repo, error: `GITHUB-6: ${repo} — GitHub writes are ${ROLE_REFUSED_MESSAGE} (ROLES-CHAT-3)` };
+    }
     const lookup = opts.visibilityLookup ?? createOctokitVisibilityLookup(env);
     const vis = await lookup(repo);
     if (vis === "public") {

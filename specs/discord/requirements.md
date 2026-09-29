@@ -765,7 +765,7 @@ Acceptance Criteria
 The bridge SHALL register one owner-only `/admin` slash command with
 subcommand groups `users add` (ADMIN-1), `channels add|remove` (ADMIN-2),
 `config show` (ADMIN-3) and `people list|add|link|unlink|remove` (ADMIN-3.a,
-REQ-discord-036). The dispatcher SHALL require ADMIN and the handler
+REQ-discord-036) plus `people role` (ADMIN-3.b, REQ-discord-065). The dispatcher SHALL require ADMIN and the handler
 SHALL re-check ADMIN before doing anything else (ADMIN-4 / DISCORD-7); with
 no owner nobody can run it (IDENTITY-2/3).
 
@@ -792,8 +792,9 @@ the first user is added while users and roles were both empty, the reply
 SHALL warn that unlisted callers now resolve to BLOCKED. Replies SHALL be
 ephemeral, show before/after counts and never contain tokens or secrets.
 `config show` SHALL list live/file/env counts, owner configured yes/no plus
-display, the number of declared people (and of problems in their entries),
-and which knobs are updatable (declared people included). Each mutation SHALL append SAFE-5
+display, the number of declared people (and of problems in their entries)
+and of team and community roles among them, and which knobs are updatable
+(declared people and their roles included). Each mutation SHALL append SAFE-5
 audit rows (`started` before the write, then `ok`/`error`); refusals SHALL
 append `denied`. A mutation SHALL fail closed with the same
 `audit log unavailable (SAFE-5)` refusal, writing nothing, both when the
@@ -813,7 +814,8 @@ Acceptance Criteria
 - A dangling or looping symlink at the allowlist path is refused by `/admin`, `writeFileAtomic` and `config show`; the link stays a symlink and its target is not created.
 - Fixture tests only; no live Discord token or network.
 - `/admin config show` shows the declared-people count with the problem count and names `/admin people add|link|unlink|remove` among the updatable knobs.
-- The `/admin` body has the groups `users`, `channels`, `config` and `people` (`list`, `add`, `link`, `unlink`, `remove`), still nine top-level commands.
+- The `/admin` body has the groups `users`, `channels`, `config` and `people` (`list`, `add`, `link`, `unlink`, `remove`, `role`), still nine top-level commands; `role` takes `person` and `role` with the choices `team` / `community`.
+- `/admin config show` counts team and community roles among the declared people and names `/admin people role` among the updatable knobs.
 
 ### REQ-discord-037
 
@@ -973,6 +975,11 @@ opened only when all of these hold, checked before any commit or push:
   run's result frame when it reports `verified`, else run once in the worktree
   before anything is pushed (AGENT-4).
 
+The PR step SHALL run only for the owner (ADMIN) or a declared team member
+(IDENTITY-10; the role is re-resolved from the live people list after the
+run, REQ-discord-065); community /work runs keep the changes on the work
+branch (ROLES-CHAT-3).
+
 The steps SHALL run through the existing typed plugins with
 `nonInteractive: true` — `git-commit` (explicit paths from `git status`),
 `git-push`, then `github-pr-create --draft --head <talk branch> --base
@@ -993,7 +1000,8 @@ Acceptance Criteria
 - An unverified run triggers one verify-lane run in the worktree before push; a failing lane ships nothing.
 - Push or PR-create failure yields a plain line and never a claimed PR.
 - Fixture tests use temp repos, a local bare remote, the dry-run github plugin and a mocked verify lane.
-- A /work by anyone other than ADMIN (the owner) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
 
 ### REQ-discord-085
@@ -2232,4 +2240,45 @@ Acceptance Criteria
 - A non-owner is refused at dispatch and at the handler (`denied` row); `list` is owner-only too.
 - Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
 - Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
+
+### REQ-discord-065
+
+Roles on Discord (IDENTITY-8..12, ADMIN-3.b, #65). Each declared person
+(REQ-discord-036) SHALL have exactly one role, read from `role = "team"` or
+`role = "community"` in their `[people.<id>]` entry (JSON `role`), any case;
+no `role` key reads as community; the configured owner's person is always
+owner; `role = "owner"` on anyone else grants nothing (community, reported as
+a problem naming the person id, never an account id); a list, an empty or an
+unknown value makes the entry unreadable (skipped whole, fail closed).
+`resolvePerson` returns `role` (`owner`, or the declared team / community) and
+`roleOfPerson` the effective role (community for no role and for anyone
+undeclared). `resolveDiscordActingRole` (`permissions.ts`) SHALL give a
+Discord run's spawn role: `owner` when the caller resolves to ADMIN, `team`
+when the owner's people list declares the caller's Discord id team and the
+caller is not BLOCKED (muted / deny-listed), else `community`. The bridge
+(chat and button-pick resume), `/session start` and `/work` SHALL pass it as
+`AgentRunChatOpts.actingRole` (with `actingIsAdmin` = owner) and `/work` also
+`workTask: true`; the spawn client SHALL always overwrite
+`CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, `team` only when the
+caller passed team, else `community` — schedules pass none) and
+`CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`), never inheriting them. The tool
+layer re-resolves the role on every call (REQ-plugins-065). `/admin people
+role person:<id> role:<team|community>` (ADMIN-3.b) SHALL be the only chat
+surface that sets a role: owner-only (dispatcher floor + handler re-check),
+SAFE-5 `admin-people-role` rows (`started` before the atomic write, then
+`ok`; `denied` for refusals; fail closed without a trail), writing only that
+person's `role` key through the `/admin people` writer and its re-read safety
+net; it SHALL refuse the owner role (owner is `[owner]` / env, IDENTITY-1),
+an unknown role, an undeclared person and the owner's own person, and report
+no change for the same role. `/admin people list` shows each person's role;
+`config show` counts team and community. No chat or plugin path sets a role
+(IDENTITY-8).
+
+Acceptance Criteria
+- `role = "team"` / `"community"` (any case, TOML and JSON) resolve; no role, undeclared ⇒ community; the owner ⇒ owner; `role = "owner"` elsewhere ⇒ community with a problem; a list or unknown value skips the entry.
+- `resolveDiscordActingRole` gives owner, team and community, and community for a muted or deny-listed team member.
+- The spawn env carries `CORVIDINHO_ACTING_ROLE` owner / team / community and `CORVIDINHO_ACTING_WORK_TASK`, overwriting a stale parent value; no role passed ⇒ community.
+- Through `startBridge`, chat stamps each speaker's role and a file edit applies to the next message; `/work` stamps team + the work flag for a team member and reaches the PR step; `/session start` stamps the role without the work flag.
+- `/admin people role` promotes and demotes with `admin-people-role` `started`/`ok` rows and a no-change reply for the same role; it refuses the owner role, unknown roles, undeclared people, the owner's person and a missing role (`denied`, file unchanged), a non-owner, and a missing audit trail; JSON files keep unread keys; `people list` shows roles and `config show` counts them.
+- Regression tests in `tests/roles.team.test.ts` and `tests/discord.admin-slash.test.ts` fail on the base sources and pass after.
 

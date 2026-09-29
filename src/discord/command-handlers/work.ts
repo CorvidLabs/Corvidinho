@@ -1,7 +1,4 @@
-import {
-  PermissionLevel,
-  resolvePermissionLevel,
-} from "../permissions.ts";
+import { resolveDiscordActingRole } from "../permissions.ts";
 /**
  * /work — drive a work task (DISCORD-4). Thin steal from corvid-agent
  * session-commands handleWorkCommand + work-dispatch (agent ops, not token product).
@@ -94,22 +91,26 @@ export async function handleWorkCommand(
     });
   }
 
-  const actingIsAdmin =
-    resolvePermissionLevel({
-      userId: interaction.userId,
-      roleIds: interaction.roleIds,
-      allowlist: ctx.allowlist,
-      adminUserIds: ctx.adminUserIds,
-      adminRoleIds: ctx.adminRoleIds,
-      owner: ctx.owner,
-      mutedUsers: ctx.mutedUsers,
-    }) >= PermissionLevel.ADMIN;
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  // IDENTITY-8..12: owner (ADMIN), a declared team member (work tasks,
+  // IDENTITY-10), or community; the tool layer re-resolves it on every call.
+  const actingRole = resolveDiscordActingRole({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
+    mutedUsers: ctx.mutedUsers,
+    people,
+  });
+  const actingIsAdmin = actingRole === "owner";
   const idInject = enrichPromptWithIdentity(description, {
     userId: interaction.userId,
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
     owner: ctx.owner,
-    people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
+    people,
   });
   // AGENT-6 (REQ-discord-072): the description opens the session's thread as
   // the run starts, so a reply to this answer carries it (even after a
@@ -127,6 +128,9 @@ export async function handleWorkCommand(
         resume: false,
         actingUserId: interaction.userId,
         actingIsAdmin,
+        actingRole,
+        // IDENTITY-10: a /work run — team work tools apply in its worktree.
+        workTask: true,
         cwd: ctx.store.cwdFor(session),
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,
@@ -239,12 +243,26 @@ export async function handleWorkCommand(
     : "";
   // AUTONOMOUS-3 / GITHUB-2/5 (REQ-discord-088): ship a verified worktree as
   // a draft PR only when the PR path is allowlisted; else one plain line why.
-  // ROLES-CHAT-3: commit/push/PR are mutating — only ADMIN (the owner) may
-  // ship /work as a PR; everyone else keeps the changes on the work branch.
+  // ROLES-CHAT-3 / IDENTITY-10: commit/push/PR are mutating — only the owner
+  // (ADMIN) or a team member (work tasks, the role re-resolved from the live
+  // people list now) may ship /work as a PR; community keeps the changes on
+  // the work branch. The PR path's own gates (allowlist, GITHUB-6) still apply.
+  const shipRole = actingIsAdmin
+    ? "owner"
+    : actingRole === "team"
+    ? resolveDiscordActingRole({
+        userId: interaction.userId,
+        roleIds: interaction.roleIds,
+        allowlist: ctx.allowlist,
+        owner: ctx.owner,
+        mutedUsers: ctx.mutedUsers,
+        people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
+      })
+    : "community";
   const prLine = result.ask?.reason === "spend-cap"
     ? "PR: not opened — the work run paused at the daily spend cap (SAFE-8)."
-    : !actingIsAdmin
-    ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR (ROLES-CHAT-3). The changes stay on the work branch."
+    : shipRole !== "owner" && shipRole !== "team"
+    ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR, or a declared team member (IDENTITY-10); community runs cannot (ROLES-CHAT-3). The changes stay on the work branch."
     : await shipWorkPr(ctx, {
     worktreePath:
       session.worktreeState === "active" ? session.worktreePath : undefined,

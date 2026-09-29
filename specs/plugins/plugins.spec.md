@@ -37,6 +37,8 @@ files:
   - plugins/github/index.ts
   - plugins/github/review.ts
   - tests/github.review.plugin.test.ts
+  - plugins/github/public-docs.ts
+  - tests/github.public-docs.test.ts
   - plugins/meta/index.ts
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
@@ -103,6 +105,7 @@ files:
   - src/plugins/proc-group.ts
   - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
+  - tests/roles.team.test.ts
 
 db_tables: []
 depends_on: []
@@ -342,14 +345,47 @@ like the same `cd` typed directly.
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
 When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
-non-ADMIN callers are refused for every mutating plugin at run time with a
-"not allowed for your role" error (ROLES-CHAT-3/6); ADMIN still passes SAFE-1
-for dangerous tools. Role is re-checked via owner config each call.
+the acting role (IDENTITY-8..12, REQ-plugins-065) is resolved at every call by
+`resolveActingRole` (`src/plugins/roles.ts`): `owner` (the ADMIN re-check:
+bridge bit + configured owner, not muted or deny-listed) runs every mutating
+plugin, still behind SAFE-1 for dangerous tools (ROLES-CHAT-4 / IDENTITY-9);
+`team` — only when the spawning surface stamped `CORVIDINHO_ACTING_ROLE=team`
+(Discord chat, slash, buttons) and the owner's people list, re-read now,
+declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
+(`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
+(`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
+`files-edit`); `community` (everyone else: undeclared, declared community,
+WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
+(IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+A team `github-pr-review` posts as `COMMENT` only: `--event APPROVE` /
+`REQUEST_CHANGES` get the role refusal (exit 2) unless the role, re-resolved
+at the call, is owner or there is no role session. In a team `/work` run
+`files-write` / `files-edit` refuse a secret-looking path (`isSecretPath`,
+exit 2) like the read tools, so an edit is never a read oracle (ROLES-CHAT-8).
+`roleAllowsPlugin(role, cmd, workTask)` is the one rule for `runPlugin` and
+the catalog (REQ-agent-065); with no stamp the ADMIN bit alone caps at owner
+(`actingRoleCap`), and a stamp never raises the role.
 
-Non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN` set and not admin) may
-call GitHub read tools against any *public* repository after deny-list checks
-(ROLES-CHAT-8). Private or unknown visibility is refused. ADMIN / non-role
+Community role sessions may call GitHub read tools against any *public*
+repository after deny-list checks (ROLES-CHAT-8). Private or unknown
+visibility is refused. Team reads pass on a GITHUB-6-allowlisted or confirmed
+public repo; GitHub writes (`checkRepoGateForActingRole(repo, { write: true
+})`: issue create/comment, PR create/review) pass for team only on an
+allowlisted repo and are refused for community (IDENTITY-10). Owner / non-role
 sessions keep the GITHUB-6 allowlist gate.
+
+ROLES-CHAT-8.a (REQ-plugins-066, `plugins/github/public-docs.ts`): the
+community site / roadmap sources are the public repo docs and the public
+issues and milestones of allowed public repos, read with
+`github-docs-read` (README by default, a root `STATUS*` / `CHANGELOG*` file or
+anything under `docs/`, a directory listed; any other path refused with exit
+2 for every role before GitHub is called, `publicDocPath`; non-owner role
+sessions also refuse a secret-looking doc path and never list one,
+`isSecretPath`; text SAFE-6 scrubbed, capped at 64 KiB, labelled untrusted)
+and `github-milestone-list`
+(`issues.listMilestones`, `--state`, `--limit` ≤100) — both read-only,
+minTier 0, behind the acting role's repo gate. `web-fetch` stays dangerous,
+so no site URL is a community source.
 
 `files-read` refuses secret-looking paths (`.env*`, `.ssh`, keystores, key
 files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
@@ -640,6 +676,9 @@ command line.
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
 | Mutating + acting non-ADMIN (ROLES-CHAT-3) | Deny (exit 2, not allowed for your role) |
+| Team role, mutating tool outside its review tools (and work tools in /work) (IDENTITY-10) | Deny (exit 2, not allowed for your role) |
+| Team GitHub write on a repo not on the GITHUB-6 allowlist (IDENTITY-10) | Refuse (exit 3, GITHUB-6) |
+| `github-docs-read` path outside README / docs/ / STATUS / CHANGELOG (ROLES-CHAT-8.a) | Refuse (exit 2) before GitHub is called |
 | Missing token / API fail on github-* | Clear error; non-zero exit |
 | Dangerous github write + non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | github write + empty/missing repo allowlist | Refuse (exit 3, GITHUB-6) |
@@ -763,6 +802,7 @@ and current rows for plugins host evolution.
 | 2026-09-27 | safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and: SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable) |
 | 2026-09-27 | plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and: PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |
+| 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
 | 2026-09-29 | allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer: Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |

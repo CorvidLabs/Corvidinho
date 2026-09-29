@@ -189,7 +189,7 @@ function auditRows(db: Database): Array<{ action: string; actor: string; surface
 }
 
 describe("/admin command body (ADMIN-1..3)", () => {
-  test("nine commands; admin groups users add, channels add|remove, config show, people list|add|link|unlink|remove", () => {
+  test("nine commands; admin groups users add, channels add|remove, config show, people list|add|link|unlink|remove|role", () => {
     expect(SLASH_COMMAND_NAMES).toContain("admin");
     expect(SLASH_COMMAND_NAMES.length).toBe(9);
     const admin = buildSlashCommandBodies().find((b) => b.name === "admin");
@@ -208,7 +208,14 @@ describe("/admin command body (ADMIN-1..3)", () => {
     expect(subs("users")).toEqual(["add"]);
     expect(subs("channels")).toEqual(["add", "remove"]);
     expect(subs("config")).toEqual(["show"]);
-    expect(subs("people")).toEqual(["list", "add", "link", "unlink", "remove"]);
+    expect(subs("people")).toEqual(["list", "add", "link", "unlink", "remove", "role"]);
+    // ADMIN-3.b / IDENTITY-8: role takes a person and one of team / community.
+    const roleSub = groups[3]?.options?.find((o) => o.name === "role");
+    expect(roleSub?.options?.map((o) => [o.type, o.name, o.required])).toEqual([
+      [OPT_STRING, "person", true],
+      [OPT_STRING, "role", true],
+    ]);
+    expect(roleSub?.options?.[1]?.choices?.map((c) => c.value)).toEqual(["team", "community"]);
     const userOpt = groups[0]?.options?.[0]?.options?.[0];
     expect(userOpt).toMatchObject({ type: OPT_USER, name: "user", required: true });
     const chanAdd = groups[1]?.options?.[0]?.options?.[0];

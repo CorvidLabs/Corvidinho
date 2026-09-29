@@ -13,6 +13,7 @@ import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
+import type { PersonRole } from "../identity/people.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
 import {
   collectProcessTree,
@@ -47,6 +48,16 @@ export type AgentRunChatOpts = {
    * Empty admin lists ⇒ false (deny-all for forget/override).
    */
   actingIsAdmin?: boolean;
+  /**
+   * IDENTITY-8..12: the most this run allows its actor — "team" only from
+   * Discord chat, slash and button picks for a declared team member
+   * (`resolveDiscordActingRole`). Omitted ⇒ owner when `actingIsAdmin`, else
+   * community (schedules). The tool layer re-resolves the role from the
+   * people list on every call; this stamp can only lower it.
+   */
+  actingRole?: PersonRole;
+  /** A `/work` run: team work tools apply (IDENTITY-10). */
+  workTask?: boolean;
   /**
    * Per-call working directory (SESSION-WORKTREE-1). When set, overrides the
    * client default cwd so talks/schedules do not share a mutable checkout.
@@ -90,6 +101,8 @@ export type SpawnAgentClientOpts = {
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
  * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
  * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011),
+ * CORVIDINHO_ACTING_ROLE (owner | team | community) and
+ * CORVIDINHO_ACTING_WORK_TASK (1 for /work) for the role gate (IDENTITY-8..12),
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
  * REQ-discord-476).
@@ -102,6 +115,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       sessionId,
       actingUserId,
       actingIsAdmin,
+      actingRole,
+      workTask,
       cwd,
       onStatus,
       signal,
@@ -142,6 +157,14 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),
+          // IDENTITY-12: the most this surface allows; always overwritten,
+          // never inherited. Team only when the caller said so (fail closed).
+          CORVIDINHO_ACTING_ROLE: actingIsAdmin
+            ? "owner"
+            : actingRole === "team"
+            ? "team"
+            : "community",
+          CORVIDINHO_ACTING_WORK_TASK: workTask ? "1" : "0",
         },
         // Own process group, so a stop reaches its tools and workers too.
         detached: true,

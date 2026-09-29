@@ -15,7 +15,9 @@ import { isMutatingPlugin } from "../plugins/mutating.ts";
 import { get as getPlugin } from "../plugins/registry.ts";
 import {
   ROLE_REFUSED_MESSAGE,
-  resolveActingIsAdmin,
+  actingWorkTask,
+  resolveActingRole,
+  roleAllowsPlugin,
   roleSessionActive,
 } from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
@@ -105,9 +107,14 @@ export const IDENTITY_AGENT_SYSTEM_INSTRUCTIONS =
   "(c) Never invent or guess alternate names (e.g. do not call Leif 'Kyn'). " +
   "(d) Memory is scoped to the acting Discord user id — do not mix users. ";
 
-/** ROLES-CHAT-8 — community public Q&A posture. */
+/**
+ * ROLES-CHAT-8 / ROLES-CHAT-8.a — community public Q&A posture: public GitHub;
+ * the site / roadmap is only the public repo docs and the public issues and
+ * milestones of allowed public repos (no site URLs).
+ */
 export const PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS =
-  "Public Q&A (ROLES-CHAT-8): In community / non-ADMIN Discord sessions, answer from public GitHub, the project site, and the roadmap. " +
+  "Public Q&A (ROLES-CHAT-8 / ROLES-CHAT-8.a): In community / non-ADMIN Discord sessions, answer from public GitHub. " +
+  "For the project site or roadmap use only the public repo docs (README, docs/, STATUS, CHANGELOG — github-docs-read, or the project files) and the public issues and milestones of allowed public repos (github-issue-list, github-milestone-list); nothing else counts as the site or roadmap. " +
   "Never access private repos or secret paths (.env, keys, keystores). Prefer read-only tools. ";
 
 /**
@@ -329,11 +336,18 @@ function isRoleRefusal(name: string, result: PluginHandlerResult): boolean {
 }
 
 /**
- * ROLES-CHAT-3/6: a role session whose caller is not ADMIN at this call,
- * re-checked against the live owner config the way `runPlugin` does.
+ * ROLES-CHAT-3/6 + IDENTITY-12: a role session whose caller's role, resolved
+ * at this call against the live owner config and people list the way
+ * `runPlugin` does, may not run `cmd`.
  */
-async function refusedForRole(env: NodeJS.ProcessEnv): Promise<boolean> {
-  return roleSessionActive(env) && !(await resolveActingIsAdmin(env));
+async function refusedForRole(
+  env: NodeJS.ProcessEnv,
+  cmd: { name: string; dangerous?: boolean; mutating?: boolean },
+): Promise<boolean> {
+  return (
+    roleSessionActive(env) &&
+    !roleAllowsPlugin(await resolveActingRole(env), cmd, actingWorkTask(env))
+  );
 }
 
 function emit(
@@ -451,10 +465,11 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    let actingIsAdmin = true;
-    if (roleSessionActive(env)) {
-      actingIsAdmin = await resolveActingIsAdmin(env);
-    }
+    // IDENTITY-9..12: the role this run acts with, re-resolved for every
+    // attempt (null = no role session, the local CLI). Only the owner (or no
+    // role session) is ADMIN for Fledge discovery.
+    const actingRole = await resolveActingRole(env);
+    const actingIsAdmin = actingRole === null || actingRole === "owner";
     if (
       opts.loadPlugins !== false &&
       (includeDangerous || (actingIsAdmin && allowsFledge(allowlist)))
@@ -472,9 +487,11 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         tier,
         includeDangerous,
         // SAFE-1 / CLI-3: the allowlist is the consent that offers a
-        // dangerous tool; role (ROLES-CHAT-2) and tier filters still apply.
+        // dangerous tool; role (ROLES-CHAT-2 / IDENTITY-9..11) and tier
+        // filters still apply.
         allowlist,
-        actingIsAdmin,
+        actingRole,
+        workTask: actingWorkTask(env),
         autonomous,
       }),
     );
@@ -736,7 +753,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               tier: llm.tier,
               signal,
             })
-          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv))
+          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented))
           ? roleRefusal(name)
           : {
               ok: false,

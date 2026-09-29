@@ -1,7 +1,4 @@
-import {
-  PermissionLevel,
-  resolvePermissionLevel,
-} from "../permissions.ts";
+import { resolveDiscordActingRole } from "../permissions.ts";
 /**
  * /session list|start (DISCORD-4). Thin steal from corvid-agent session-commands.
  * Optional project (SESSION-WORKTREE-4). No ProcessManager, no Discord thread product UI.
@@ -132,12 +129,13 @@ export async function handleSessionStart(
     await thinking.start({ description: `Session: ${topic.slice(0, 80)}` });
   }
 
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
   const idInject = enrichPromptWithIdentity(topic, {
     userId: interaction.userId,
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
     owner: ctx.owner,
-    people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
+    people,
   });
   const prompt = idInject.prompt;
   // AGENT-6 (REQ-discord-072): the topic opens the session's thread as the
@@ -146,16 +144,19 @@ export async function handleSessionStart(
 
   let result;
   try {
-    const actingIsAdmin =
-      resolvePermissionLevel({
-        userId: interaction.userId,
-        roleIds: interaction.roleIds,
-        allowlist: ctx.allowlist,
-        adminUserIds: ctx.adminUserIds,
-        adminRoleIds: ctx.adminRoleIds,
-        owner: ctx.owner,
-        mutedUsers: ctx.mutedUsers,
-      }) >= PermissionLevel.ADMIN;
+    // IDENTITY-8..12: owner (ADMIN), a declared team member, or community;
+    // the tool layer re-resolves it on every call.
+    const actingRole = resolveDiscordActingRole({
+      userId: interaction.userId,
+      roleIds: interaction.roleIds,
+      allowlist: ctx.allowlist,
+      adminUserIds: ctx.adminUserIds,
+      adminRoleIds: ctx.adminRoleIds,
+      owner: ctx.owner,
+      mutedUsers: ctx.mutedUsers,
+      people,
+    });
+    const actingIsAdmin = actingRole === "owner";
     // Busy while the agent runs: the soft-TTL purge must not park this
     // worktree mid-run (REQ-discord-204).
     result = await ctx.store.runActive(session, () =>
@@ -166,6 +167,7 @@ export async function handleSessionStart(
         resume: false,
         actingUserId: interaction.userId,
         actingIsAdmin,
+        actingRole,
         cwd: ctx.store.cwdFor(session),
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,

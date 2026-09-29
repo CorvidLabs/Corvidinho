@@ -532,3 +532,23 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   request to change links changes nothing (also the WATCH cases of
   REQ-watch-036).
 
+
+## Roles on Discord surfaces and /admin people role (REQ-discord-065, IDENTITY-8..12, ADMIN-3.b)
+
+`tests/roles.team.test.ts` — `resolveDiscordActingRole` (owner, team,
+community; muted or deny-listed team ⇒ community); the spawn client stamps
+`CORVIDINHO_ACTING_ROLE` owner / team / community and
+`CORVIDINHO_ACTING_WORK_TASK`, never inherited from the bridge env
+(schedules pass no role ⇒ community); through `startBridge` chat stamps each
+speaker's role and a file edit applies to the next message; `/work` runs a
+team member with `actingRole: "team"` + `workTask: true` and reaches the PR
+step, the owner is unchanged, community / undeclared never reach it, and a
+team member demoted mid-run gets no PR; `/session start` stamps the role
+without the work flag; `/admin people role` promotes / demotes with
+`admin-people-role` `started`/`ok` rows, no-change on the same role, refuses
+the owner role, unknown roles, undeclared people, the owner's own person and a
+missing role (`denied` rows, file unchanged), refuses a non-owner (even team)
+and a missing audit trail; `people list` shows each role, `config show` counts
+them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
+`people` group ends with `role` (`person`, `role` with team / community
+choices).
