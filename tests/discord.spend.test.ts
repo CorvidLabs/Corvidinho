@@ -113,7 +113,8 @@ describe("80% warning line (formatSpendWarningReply / withSpendWarningPost)", ()
     // A non-ADMIN chat answer: 1800 chars, the note last.
     const content = chatBodyFromTaskResult({ summary: `${"y".repeat(2500)}${tail}` });
     expect(content.length).toBe(1800);
-    const out = withSpendWarningPost({ channelId: "c", content }, WARNING, OWNER);
+    const post: { channelId: string; content: string; mentionUserIds?: string[] } = { channelId: "c", content };
+    const out = withSpendWarningPost(post, WARNING, OWNER);
     const line = formatSpendWarningReply(WARNING, OWNER).line;
     expect(out.content.length).toBe(ASK_REPLY_MAX);
     expect(out.content).toEndWith(`y…${tail}\n\n${line}`);
