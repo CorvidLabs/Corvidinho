@@ -748,8 +748,12 @@ the thread and tracks the refusal post on the session; a community user's
 ordinary answer resumes inside the fence (`source=ask-answer`) with
 `humanText` and the thread turn the plain answer, the "Got it" ack and no row;
 the owner's answer with injection-like words runs unfenced, with no refusal
-and no row. The first three fail on the base bridge (a run starts / the
-answer is unfenced); the owner test passes on both (unchanged behaviour).
+and no row; a declared team member allowlisted only by a Discord role (a
+non-empty user / role allowlist), whose chat run is team, answers through the
+form as team too (acting role team, fence header `role: team`). The first
+three and the role-id test fail on the base bridge (a run starts / the answer
+is unfenced / the form resolved the presser as community); the owner test
+passes on both (unchanged behaviour).
 
 Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
 `tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question

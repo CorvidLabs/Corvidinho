@@ -15,7 +15,8 @@ artifact: design
   "an answer typed in the private Answer form").
 - `src/discord/bridge.ts` `onComponent`: the presser's people directory and
   acting role are resolved once, before the answer / pick branches (they were
-  resolved inside the run's try; same inputs). In the answer branch, after the
+  resolved inside the run's try), now with the presser's Discord role ids as
+  on the chat path. In the answer branch, after the
   thin and cancel checks (the same order as chat: thin / cancel gate, then
   SAFE-13), `inboundInjection(answer, actingRole)`; on a hit
   `refuseInjectedAnswer` and `store.trackBotMessage(post ?? bot_reply_for_<ix>)`
@@ -36,7 +37,17 @@ Design choices pending Leif:
    interaction reply as `/work` does.
 2. The ask stays open after a refused submit (as after a refused chat reply),
    so the requester can still answer by form or reply.
-3. The button path's role resolution still omits the presser's Discord role
-   ids (chat passes them), so an admin who is admin only through
-   `adminRoleIds` is team / community on the button and form path (fenced and
-   scanned). Left as it was: widening it is a role change outside this fix.
+3. A button pick's answer is the label of an option the model wrote, so it
+   reaches the run unfenced and unscanned, as before. A label the model
+   copied from a non-owner's own (fenced) words comes back as `Human answer:`
+   unfenced when they pick it; the role cap still limits what may run.
+   Alternative: fence a non-owner's pick as well.
+
+Review fix: the button / form path resolved the presser's role without their
+Discord role ids (chat, `/session start` and `/work` pass them). Admin role
+lists grant nothing (IDENTITY-2), but a declared team member allowlisted only
+by a Discord role resolved BLOCKED there, so the form fenced their answer as
+`role: community` and capped the run at community while their chat message
+ran as team (REQ-discord-065 says team unless muted or deny-listed). The
+bridge now passes `interaction.roleIds`, as chat does; nobody gets more than
+their chat message gets.

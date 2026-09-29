@@ -41,6 +41,48 @@
       "approved_delta_digests": {
         "discord": "644bb8ca6161bd4529135410e2ad7ea91fb5f363eaba1640011f9e6a7d2c9236"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790726986,
+      "digest": "f76ddc6d7a31c369745f7e6b72c4a41dbcec8eb93236803fc411b1dd62f4e7e0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like",
+        "title": "An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a)",
+        "description": "An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/injection-guard.ts",
+          "tests/discord.ask-answer-modal.test.ts",
+          "tests/safe.injection.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Through startBridge with a memory DB (the SAFE-11/12/13 bridge harness): a community user's Answer form submit whose text trips the SAFE-13 detector starts no run, leaves the free-text ask pending and the session live, acks the submit privately (ephemeral refusal, never the text), posts one message in the session channel replying to the ask stub that pings only the owner (allowed mentions the owner only), and appends exactly one injection-suspected / denied SAFE-5 row with the user as actor and surface discord:<session>; a declared team member's injected submit is refused the same way; an ordinary community answer resumes the session with the answer inside the UNTRUSTED_DATA fence (role: community, source=ask-answer) after the reply's prior-question block; the owner's own answer (injection-like text included) resumes unfenced and unscanned; humanText, the thread turn and the memory query stay the raw scrubbed answer as for chat; button picks (model-written option labels) are unchanged; refuseInjectedSlash output is unchanged. The new tests fail on main and pass on the branch; no env var, config key, table, column or schema version."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "22ce2ff305733326fda6ccf0d8e2eaf8a92c0683457bbcbf5e330b9487f867cd"
+      }
     }
   ],
   "reopenings": []

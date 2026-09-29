@@ -12,4 +12,5 @@ artifact: tasks
 - [x] Fail-on-base proof (base `bridge.ts` + `injection-guard.ts` swapped in: 8 fail; restored: all pass).
 - [x] Docs: `docs/discord.md` (SAFE-12/13 section, Questions section), `docs/DISCORD-GO-LIVE.md` E.6.a.
 - [x] Spec: delta (REQ-discord-548, REQ-discord-071 Modified), `discord.spec.md` prose, exports and scenario, `testing.md`.
+- [x] Review fix: the form / pick role is resolved with the presser's Discord role ids, as in chat (role-id test in `tests/safe.injection.test.ts`).
 - [x] SpecSync approve / check / audit, coverage, `hi check`, tsc, `bun test`, fledge verify.

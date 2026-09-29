@@ -1321,10 +1321,13 @@ export async function startBridge(
 
       const prior = pending.question;
       const people = declaredPeople();
-      // IDENTITY-8..12: the presser's role, as on the chat path. Resolved
-      // before the run: SAFE-12/13 need to know whose words a typed answer is.
+      // IDENTITY-8..12: the presser's role, as on the chat path (their
+      // Discord role ids included, so a team member allowlisted by role is
+      // team here as in chat). Resolved before the run: SAFE-12/13 need to
+      // know whose words a typed answer is.
       const actingRole = resolveDiscordActingRole({
         userId: interaction.userId,
+        roleIds: interaction.roleIds,
         allowlist: config.allowlist,
         adminUserIds: config.adminUserIds,
         adminRoleIds: config.adminRoleIds,

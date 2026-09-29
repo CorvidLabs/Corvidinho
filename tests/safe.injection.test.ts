@@ -519,10 +519,11 @@ type Reply = { channelId: string; content: string; replyToMessageId?: string; me
 
 async function bridge(
   agentResult?: (opts: AgentRunChatOpts, n: number) => Partial<{ injection: InjectionNotice; ask: HumanAsk }>,
+  allowlistText: string = fileText(),
 ) {
   const d = tmp();
   const path = join(d, "allowlist.toml");
-  writeFileSync(path, fileText());
+  writeFileSync(path, allowlistText);
   const db = openCorvidinhoDb({ memory: true });
   const calls: AgentRunChatOpts[] = [];
   const agent: AgentClient = {
@@ -748,6 +749,38 @@ describe("SAFE-12/13 on the private Answer form: typed answers are fenced and sc
     expect(acks).toEqual([{ content: ASK_ANSWER_ACK, ephemeral: true }]);
     expect(b.replies.slice(repliesBefore).some((r) => r.content.includes("prompt-injection"))).toBe(false);
     expect(auditRows(b.db).filter((r) => r.action === INJECTION_AUDIT_ACTION)).toHaveLength(0);
+  });
+
+  test("a team member allowlisted only by a Discord role answers as team, as in chat (the form resolves their role ids too)", async () => {
+    const ROLE = "700000000000000007";
+    const allowlist = fileText().replace("users = []\nroles = []", `users = ["${STRANGER}"]\nroles = ["${ROLE}"]`);
+    expect(allowlist).toContain(`roles = ["${ROLE}"]`);
+    const b = await bridge(
+      (_o, n) => (n === 1 ? { ask: { reason: "clarify", question: ANSWER_QUESTION } } : {}),
+      allowlist,
+    );
+    await b.handlers.onMessage({
+      id: "m-role",
+      channelId: CHAN,
+      authorId: TOFU,
+      authorRoleIds: [ROLE],
+      authorBot: false,
+      content: "<@999> make me a bucket",
+      mentionedBot: true,
+    });
+    expect(b.calls).toHaveLength(1);
+    expect(b.calls[0]!.actingRole).toBe("team");
+    const pending = b.store.list()[0]!.pendingAsk!;
+    const acks: FormAck[] = [];
+    await b.handlers.onComponent!({
+      ...formSubmit(pending.askId, TOFU, "eu-west-1", acks, pending.stubMessageId),
+      roleIds: [ROLE],
+    });
+    expect(acks).toEqual([{ content: ASK_ANSWER_ACK, ephemeral: true }]);
+    expect(b.calls).toHaveLength(2);
+    expect(b.calls[1]!.actingRole).toBe("team");
+    expect(b.calls[1]!.prompt).toContain("Human answer:\n[untrusted message from the acting user (role: team)");
+    expect(b.calls[1]!.prompt).toMatch(/source=ask-answer>>>\neu-west-1\n<<<END_UNTRUSTED_DATA/);
   });
 });
 

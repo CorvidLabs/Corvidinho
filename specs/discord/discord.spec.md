@@ -360,7 +360,8 @@ the ask gets (`[Prior clarifying question you asked (the human is answering
 it now): …]` + `Human answer:`), `humanText` and the thread turn being the
 scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). The
 answer reaches the model as the same words in a reply would (SAFE-12/13,
-REQ-discord-071): the presser's role is resolved first; a team or community
+REQ-discord-071): the presser's role is resolved first (with their Discord
+role ids, as in chat, so a team member allowlisted by role is team here too); a team or community
 answer goes through `fenceSpeakerText` (`source=ask-answer`), and one that
 `inboundInjection` flags is refused before the ask is cleared
 (`refuseInjectedAnswer`: no run, ask and session kept, ephemeral refusal, one
