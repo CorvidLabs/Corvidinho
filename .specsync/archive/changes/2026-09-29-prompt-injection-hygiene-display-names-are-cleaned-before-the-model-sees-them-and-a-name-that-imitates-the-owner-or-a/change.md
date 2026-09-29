@@ -1,6 +1,6 @@
 ---
 id: prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a
-state: implementing
+state: archived
 type: feature
 base_commit: 53f2e5df126fb01632b641ba57f51997aea8660e
 ---

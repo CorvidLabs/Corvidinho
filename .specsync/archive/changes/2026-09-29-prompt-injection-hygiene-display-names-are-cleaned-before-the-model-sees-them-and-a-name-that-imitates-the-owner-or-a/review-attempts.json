@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "578972be9d12f94434e6612df7d33809fc0ba64d",
+      "contract_digest": "2e1340259e8e4a81f3b08925576824c464f68828562e4534df0c8b186393dfc7",
+      "execution_digest": "e2a10fd1bbef19a6bbb2b51d181a12381fb745de785e189383c7c52b1c3299b8",
+      "workspace_digest": "4bca11d29eb1a0c8b1724e4e409e7dd71e02aa33d262dd0c5c37f8808ebd3351",
+      "timestamp": 1790716377
+    }
+  ]
+}
