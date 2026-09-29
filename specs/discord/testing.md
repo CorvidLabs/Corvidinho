@@ -202,6 +202,23 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   asks by askId in `discord_sessions.pending_ask` (one object, or an array
   when several are open) across a reopen (no live Discord).
 
+## A late press on an ask that is no longer open (REQ-discord-045, DISCORD-ASK-5/8)
+
+- `tests/discord.ask-ephemeral.test.ts` — the requester's Choose and option
+  press on an earlier ask dropped (timed out) at the newest pick, and on both
+  open asks of a session idle past its TTL, get exactly the ephemeral
+  `ASK_CHOICE_EXPIRED` with no run, no session and nothing posted; another
+  user's press on them (and on the live ask before the purge) gets the
+  not-for-you reply; a still-stored expired ask is cleared by the first press
+  and a second press is still expired; a re-press after a pick and a press
+  after `cancel` keep the not-for-you reply before and after the purge;
+  `SessionStore.findClosedAsk` holds only askId, user and expiry for a drop, a
+  late clear, a runtime purge and a load purge (never a pick, a cancel or a
+  re-stored askId) and forgets the oldest past `CLOSED_ASKS_MAX`.
+- `tests/discord.ask-button-gates.test.ts` — a muted or deny-listed
+  requester's press on an ask of a TTL-purged session gets `MUTED` / the
+  zero-width ack; once let through it gets `ASK_CHOICE_EXPIRED`, no run.
+
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`

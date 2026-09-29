@@ -1034,6 +1034,19 @@ export async function startBridge(
 
       const pending = pressed?.ask ?? null;
 
+      // DISCORD-ASK-5 / REQ-discord-045 — the requester's press on an ask that
+      // is no longer open because it timed out (dropped, not promoted, when a
+      // newer ask was picked) or its session was TTL-purged is a late press:
+      // "that choice expired", no agent run. Another user's press on it still
+      // gets the not-for-you reply below, as on a live ask.
+      if (!pending) {
+        const closed = store.findClosedAsk(parsed.askId);
+        if (closed && closed.userId === interaction.userId) {
+          await interaction.reply({ content: ASK_CHOICE_EXPIRED, ephemeral: true });
+          return;
+        }
+      }
+
       // Wrong user or unknown ask → short ephemeral, do not leak.
       if (!session || !pending || session.userId !== interaction.userId) {
         await interaction.reply({

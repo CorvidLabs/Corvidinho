@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
-import { openCustomId, pickCustomId } from "../src/discord/ask-buttons.ts";
+import { ASK_CHOICE_EXPIRED, openCustomId, pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   adaptComponent,
@@ -205,6 +205,32 @@ describe("ask button press: mute (DISCORD-6 / REQ-discord-010)", () => {
     const eph: Ephemeral[] = [];
     await b.handlers.onComponent!(press(openCustomId(b.askId), USER_ID, eph));
     expectRefused(b, before, eph, MUTED);
+    await b.result.stop();
+  });
+});
+
+describe("the gates stay ahead of the late-press reply (DISCORD-ASK-5 / REQ-discord-045)", () => {
+  test("a muted or deny-listed requester's press on a TTL-purged ask gets the gate's ack, not 'that choice expired'; once let through it is expired, with no run", async () => {
+    const b = await withButtonAsk();
+    b.result.store.list()[0]!.lastActivityAt = Date.now() - 2 * 60 * 60 * 1000;
+    b.result.muteUser(USER_ID);
+    const before = sent(b);
+    const muted: Ephemeral[] = [];
+    await b.handlers.onComponent!(press(pickCustomId(b.askId, "1"), USER_ID, muted));
+    expect(muted).toEqual([{ content: MUTED, ephemeral: true }]);
+    b.result.unmuteUser(USER_ID);
+
+    b.result.config.allowlist.discord.denyUsers = [USER_ID];
+    const denied: Ephemeral[] = [];
+    await b.handlers.onComponent!(press(openCustomId(b.askId), USER_ID, denied));
+    expect(denied).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+    b.result.config.allowlist.discord.denyUsers = [];
+
+    const late: Ephemeral[] = [];
+    await b.handlers.onComponent!(press(pickCustomId(b.askId, "1"), USER_ID, late));
+    expect(late).toEqual([{ content: ASK_CHOICE_EXPIRED, ephemeral: true }]);
+    expect(b.prompts).toHaveLength(1);
+    expect(sent(b)).toBe(before);
     await b.result.stop();
   });
 });
