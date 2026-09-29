@@ -416,7 +416,7 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/discord.session-thread.unit.test.ts` — the renderer (32000-char
   block ceiling, opening request + newest turns, exact omitted count,
   per-turn clip by role — agent 1500, a 4000-char human turn whole, human
-  past 6000 clipped — that never cuts a surrogate pair, one paragraph that
+  past 8000 clipped — that never cuts a surrogate pair, one paragraph that
   Planning selection skips, `answerTurnText`) and `SessionStore` turns
   (module-owned table without a schema version change, reload after reopen,
   delete on end/TTL, orphan sweep, turn cap, scrub on write, `SCRUB_TARGETS`
@@ -452,8 +452,13 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   its summary; another user's reply / thread message gets nothing of mine; a
   muted or deny-listed user or a non-allowlisted channel gets no run; a
   session that idled out while the bridge was down resumes after the restart;
-  after 30 days (purged) or once the person is forgotten the reply gets no
-  answer; with `CORVIDINHO_LLM_CONTEXT_TOKENS=2048` in the bridge env a long
+  a reply to an older answer after the resumed session idled out unnoticed
+  starts from the resumed session's newest turns (the record keeps them); a
+  talk on an explicit project resumes in that project and, once the project
+  is gone, fails to bind instead of using the default project
+  (SESSION-WORKTREE-4); after 30 days (purged, counted from the last
+  activity even when the idle-out is noticed late) or once the person is
+  forgotten the reply gets no answer; with `CORVIDINHO_LLM_CONTEXT_TOKENS=2048` in the bridge env a long
   chat's block stays under 80% with the task and latest instruction whole.
   Every bridge test here fails on the base sources (no retained conversation,
   no condensing); see the change's testing artifact for the fail-on-base run.

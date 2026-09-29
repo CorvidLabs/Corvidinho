@@ -20,8 +20,8 @@ artifact: design
   no blank line; the old omitted-marker path as a ceiling safety net) and
   `ConversationStore` over `conversation_threads`.
 - Schema v12: `conversation_threads(id, surface, thread_key, user_id,
-  session_id, summary, turns JSON, participants JSON, bot_message_ids JSON,
-  updated_at)`, indexes (surface, thread_key, user_id), (session_id),
+  session_id, project, summary, turns JSON, participants JSON,
+  bot_message_ids JSON, updated_at)`, indexes (surface, thread_key, user_id), (session_id),
   (updated_at). `summary` + JSON `turns` in `SCRUB_TARGETS`.
 - Discord `SessionStore`: `summaries` / `conversationIds` maps;
   `threadPrompt` condenses and, on a fold, rewrites the session's turn rows
@@ -31,8 +31,9 @@ artifact: design
   `purgeIfExpired` / `endSession` keep the conversation (summary, turns,
   answer ids from `byBotMessageId`) before removing; `recordTurn` clips by
   role and folds turns past 200 into the summary; `retainedForReply`,
-  `retainedForThread`, `resumeFromRetained` (new session seeded with the
-  record's summary and turns, record re-pointed to it), `forgetConversations`,
+  `retainedForThread`, `resumeFromRetained` (reads the record again, then a
+  new session seeded with its summary and turns, in its project, record
+  re-pointed to it; nothing when the record is gone), `forgetConversations`,
   `purgeExpiredConversations`. Every conversation DB step is best effort.
 - Router: `resumeRetained` after the channel gate, on the thread path (no own
   live session) and the reply path (no live session for the referenced

@@ -150,7 +150,7 @@ labelled replay block, optional `summary`, `SESSION_THREAD_HEADER` /
 `answerTurnText`, `ensureSessionTurns` and the limits
 `SESSION_THREAD_BUDGET_CHARS` (32000, the block's transport ceiling),
 `SESSION_THREAD_TURN_MAX_CHARS` (1500, agent turns),
-`SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (6000, human turns) and
+`SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (8000, human turns) and
 `SESSION_THREAD_MAX_TURNS` (200);
 `SessionStore.recordTurn(session, role, text)` records one turn (the
 human's words as a run starts, the posted answer or failure line when it
@@ -178,7 +178,8 @@ store (`ConversationStore`: `get`, `forSession`, `latestForThread`,
 prompt, { windowTokens? })` returns the prompt with the condensed block and
 stores a fold; `summaryFor(session)`; `retainedForReply(botMessageId)` /
 `retainedForThread(threadId, userId)` / `resumeFromRetained(record, where)`
-(the router's SESSION-3.a path); `forgetConversations(userId)` and
+(the router's SESSION-3.a path; reads the record again, returns undefined
+when it is gone, and keeps the conversation's project); `forgetConversations(userId)` and
 `purgeExpiredConversations()`. `src/discord/bridge.ts` exports
 `CONVERSATION_PURGE_INTERVAL_MS` (hourly purge while running).
 
@@ -587,8 +588,10 @@ no free-text column (a constant kind and integers).
 Retained conversations live in `conversation_threads` (schema v12,
 `SCHEMA_VERSION` 12, a forward-only migration; REQ-discord-472): `summary`
 and the JSON `turns` are scrubbed on write and are `SCRUB_TARGETS`;
-`participants` and `bot_message_ids` hold ids only; a record is never served
-and is purged 30 days after its last update.
+`participants` and `bot_message_ids` hold ids only; `project` is the Discord
+session's project directory, so a session resumed from it works there again
+(SESSION-WORKTREE-4); a record is never served and is purged 30 days after
+its last update (a kept session's last activity).
 The spend warning line and `/status` spend line are built from integer
 amounts, never from child-written text; the spend-cap question is scrubbed and
 mention-defanged like every ask.

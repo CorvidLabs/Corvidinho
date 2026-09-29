@@ -460,13 +460,19 @@ export class SessionStore {
   }
 
   /**
-   * Write a session's conversation (summary, turns, answer ids) to its
-   * retained record, keeping the answer ids an earlier session of the same
-   * conversation left there (SESSION-3.a). Best effort.
+   * Write a session's conversation (summary, turns, answer ids, project) to
+   * its retained record, keeping the answer ids an earlier session of the same
+   * conversation left there (SESSION-3.a). `lastActiveAt` (default now) is
+   * when the conversation was last active. Best effort.
    */
   private saveConversation(
     session: SessionStub,
-    parts: { summary: string; turns: readonly SessionTurn[]; botMessageIds?: readonly string[] },
+    parts: {
+      summary: string;
+      turns: readonly SessionTurn[];
+      botMessageIds?: readonly string[];
+      lastActiveAt?: number;
+    },
   ): void {
     const store = this.conversations;
     if (!store) return;
@@ -478,10 +484,15 @@ export class SessionStore {
         threadKey: discordThreadKey(session),
         userId: session.userId,
         sessionId: session.id,
+        // SESSION-WORKTREE-4: a session resumed from it works in this project.
+        ...(session.project ?? prior?.project
+          ? { project: session.project ?? prior?.project }
+          : {}),
         summary: parts.summary,
         turns: parts.turns,
         participants: [discordParticipant(session.userId)],
         botMessageIds: [...(prior?.botMessageIds ?? []), ...(parts.botMessageIds ?? [])],
+        ...(parts.lastActiveAt !== undefined ? { lastActiveAt: parts.lastActiveAt } : {}),
       });
       if (this.bySessionId.get(session.id) === session) {
         this.conversationIds.set(session.id, record.id);
@@ -491,8 +502,9 @@ export class SessionStore {
 
   /**
    * AGENT-6.a / SESSION-3.a — a session that ends or idles out keeps its
-   * conversation (summary, last turns, answer ids) for the retention window.
-   * A session with nothing said is not kept.
+   * conversation (summary, last turns, answer ids, project) for the retention
+   * window, counted from its last activity. A session with nothing said is not
+   * kept.
    */
   private retainConversation(session: SessionStub): void {
     const turns = this.turns.get(session.id) ?? [];
@@ -501,7 +513,12 @@ export class SessionStore {
     const botMessageIds = [...this.byBotMessageId.entries()]
       .filter(([, s]) => s.id === session.id)
       .map(([id]) => id);
-    this.saveConversation(session, { summary, turns, botMessageIds });
+    this.saveConversation(session, {
+      summary,
+      turns,
+      botMessageIds,
+      lastActiveAt: session.lastActivityAt,
+    });
   }
 
   /** {@link retainConversation} for a session only in the DB (expired at load). */
@@ -530,7 +547,12 @@ export class SessionStore {
       ).map((r) => r.bot_message_id);
       const summary = this.conversations!.forSession(session.id)?.summary ?? "";
       if (turns.length === 0 && !summary) return;
-      this.saveConversation(session, { summary, turns, botMessageIds });
+      this.saveConversation(session, {
+        summary,
+        turns,
+        botMessageIds,
+        lastActiveAt: session.lastActivityAt,
+      });
     });
   }
 
@@ -1075,8 +1097,10 @@ export class SessionStore {
     });
     if (out.folded.length > 0 && this.bySessionId.get(session.id) === session) {
       this.turns.set(session.id, out.turns);
-      this.rewriteTurns(session.id, out.turns);
+      // Summary first: a crash between the two writes leaves a turn both in
+      // the summary and in the rows (folded again next time), never in neither.
       this.setSummary(session, out.summary);
+      this.rewriteTurns(session.id, out.turns);
     }
     return withSessionThread(prompt, out.turns, { summary: out.summary });
   }
@@ -1104,24 +1128,48 @@ export class SessionStore {
    * SESSION-3.a — start a new session for `where` that begins from a
    * retained conversation: its summary and kept turns seed the new session,
    * which then carries the record (the next end or idle-out updates it).
+   * The record is read again first, so turns a carrying session kept there
+   * after `record` was read (it idled out on the way here) are not lost;
+   * undefined when it is gone (purged or forgotten). The new session works in
+   * the conversation's project (SESSION-WORKTREE-4): when that project no
+   * longer resolves, binding its worktree fails honestly instead of silently
+   * switching to the default project.
    */
   resumeFromRetained(
     record: ConversationRecord,
     where: { channelId: string; userId: string; threadId?: string },
-  ): SessionStub {
+  ): SessionStub | undefined {
+    let current = record;
+    if (this.conversations) {
+      let reread: ConversationRecord | undefined;
+      try {
+        reread = this.conversations.get(record.id);
+      } catch (err) {
+        console.warn(`[discord] conversation read failed: ${formatErrorLine(err)}`);
+        reread = record;
+      }
+      if (!reread) return undefined;
+      current = reread;
+    }
     const session = this.create({
       channelId: where.channelId,
       userId: where.userId,
       threadId: where.threadId,
+      ...(current.project ? { project: current.project } : {}),
     });
-    const turns = record.turns.map((t) => ({ ...t }));
+    if (current.project && session.project !== current.project) {
+      session.project = current.project;
+      this.persistSession(session);
+    }
+    const turns = current.turns.map((t) => ({ ...t }));
     this.turns.set(session.id, turns);
     this.rewriteTurns(session.id, turns);
-    if (record.summary) this.summaries.set(session.id, record.summary);
-    this.conversationIds.set(session.id, record.id);
+    if (current.summary) this.summaries.set(session.id, current.summary);
+    this.conversationIds.set(session.id, current.id);
+    // Active again: its 30 days count from now.
     this.bestEffort("resume", () =>
       this.conversations?.save({
-        ...record,
+        ...current,
         sessionId: session.id,
       }),
     );

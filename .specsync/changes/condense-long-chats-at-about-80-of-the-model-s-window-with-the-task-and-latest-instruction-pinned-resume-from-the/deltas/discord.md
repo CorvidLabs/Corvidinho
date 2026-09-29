@@ -50,14 +50,17 @@ TTL (also one found expired when the store loads after a restart) or ends,
 and it has turns or a summary, its conversation SHALL be kept in
 `conversation_threads`: surface `discord`, thread key `thread:<thread id>`
 (a session in a Discord thread) or `channel:<channel id>`, the session's
-user, the session id, the summary, its turns bounded to the last 20
-(`CONVERSATION_KEEP_TURNS`; the opening human turn kept, the rest folded
-into the summary) and its answer message ids (the newest 100), all text
-scrubbed (SAFE-6; `summary` and the JSON `turns` are `SCRUB_TARGETS`). A
-record SHALL be purged 30 days (`CONVERSATION_RETENTION_MS`) after its last
-update: every read and write purges first (so nothing older is ever
-served), the store purges on open, and a running bridge purges every hour
-(`CONVERSATION_PURGE_INTERVAL_MS`).
+user, the session id, the session's project directory, the summary, its
+turns bounded to the last 20 (`CONVERSATION_KEEP_TURNS`; the opening human
+turn kept, the rest folded into the summary) and its answer message ids (the
+newest 100), all text scrubbed (SAFE-6; `summary` and the JSON `turns` are
+`SCRUB_TARGETS`). A record SHALL be purged 30 days
+(`CONVERSATION_RETENTION_MS`) after its last update; a session kept when it
+ends or idles out counts from its last activity, not from when its idle-out
+is noticed (a lookup or a restart may notice it late), and a record already
+past its 30 days is purged at once. Every read and write purges first (so
+nothing older is ever served), the store purges on open, and a running
+bridge purges every hour (`CONVERSATION_PURGE_INTERVAL_MS`).
 
 Resumed after the TTL (SESSION-3.a). A message that reaches the router
 after its session expired SHALL start a new session from the retained
@@ -70,10 +73,16 @@ outside threads). The channel allowlist gate (REQ-discord-212), the actor
 gate (REQ-discord-201, deny lists win) and the mute / rate limit gate
 (DISCORD-6) SHALL run first, exactly as for a continue. The new session
 (`resumeFromRetained`: new id, `start_session`, `resume: false`, its own
-worktree) SHALL begin with the retained summary and turns and carry the
-same record, so its own end updates it; when a live session already carries
+worktree) SHALL begin with the retained summary and turns as stored when
+the message arrives (the record is read again: a session that carried it
+and idled out, noticed on that lookup, keeps its newer turns there first) and
+carry the same record, so its own end updates it; a record gone by then
+(purged or forgotten) resumes nothing. When a live session already carries
 the record (resumed earlier), the message SHALL continue that session
-instead. Another user's reply or thread message SHALL never get the
+instead. The new session SHALL work in the conversation's project
+(SESSION-WORKTREE-4): the project is re-checked when its worktree is bound,
+and when it no longer resolves the bind fails as for any talk, never
+falling back to the default project. Another user's reply or thread message SHALL never get the
 conversation; a new @mention elsewhere in the channel starts with nothing
 replayed (SESSION-1/3).
 
@@ -88,9 +97,9 @@ chat path is added here.
 
 Schema v12 (`SCHEMA_VERSION` 12) SHALL add `conversation_threads` by a
 forward-only migration (`id`, `surface`, `thread_key`, `user_id`,
-`session_id`, `summary`, `turns`, `participants`, `bot_message_ids`,
-`updated_at`; indexes on thread, session and `updated_at`), keeping every
-existing row; re-running it changes nothing.
+`session_id`, `project`, `summary`, `turns`, `participants`,
+`bot_message_ids`, `updated_at`; indexes on thread, session and
+`updated_at`), keeping every existing row; re-running it changes nothing.
 
 Acceptance Criteria
 - `CORVIDINHO_LLM_CONTEXT_TOKENS` sets the window (unset or not a positive integer → 8192; below 1024 → 1024); the condense budget is `floor(window × 0.8) × 4` characters, never past 32000.
@@ -100,7 +109,9 @@ Acceptance Criteria
 - After the soft TTL, the user's reply to the session's answer starts a new session (new id, `resume: false`, `humanText` the new message) whose prompt holds the earlier request and answer (and the summary when there was one); a second reply to the old answer continues that new session; a plain message in its thread does the same without a mention.
 - Another user's reply to my expired answer, or message in my thread, never gets my conversation; a deny-listed or muted user, or a message from a channel that is not allowlisted, gets no run.
 - A session that idled out while the bridge was down resumes by reply after the restart.
-- 30 days after its last update the record is purged and the reply gets no answer; a session with nothing said keeps nothing.
+- A reply to an older answer after the resumed session idled out (nothing looked it up since) starts a new session from the resumed session's newest turns, not the older ones, and the one record keeps them.
+- A `/session start`-style talk on an explicit project resumes in that project (the bind works there); once the project is gone the resumed session's bind fails rather than working in the default project.
+- 30 days after its last update the record is purged and the reply gets no answer; a session nothing looked up for 30 days after its last activity keeps nothing; a session with nothing said keeps nothing.
 - `forgetConversations` deletes the person's retained records (Discord ids, GitHub logins case-insensitive, participants) and clears their live threads, never another person's; a later reply gets no answer.
 - A v11 DB migrates to v12 keeping its rows; `rescrubDatabase` re-scrubs `conversation_threads.summary` and `turns`.
 
@@ -182,8 +193,8 @@ pending-ask block, before identity and memory are added
 window: at about 80% of it the oldest turns are condensed into the summary
 (REQ-discord-472). An agent turn SHALL be clipped to
 `SESSION_THREAD_TURN_MAX_CHARS` (1500) and a human turn to
-`SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (6000, a whole Discord message or slash
-option). As a transport safety net, a block still over
+`SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (8000: a whole Discord message or
+6000-char slash option, and a whole WATCH event prompt). As a transport safety net, a block still over
 `SESSION_THREAD_BUDGET_CHARS` (32000) SHALL keep the session's opening
 request and as many of the newest turns as fit, and the turns between SHALL
 be replaced by one `(N earlier turns omitted)` marker. The
@@ -224,7 +235,7 @@ Acceptance Criteria
 - `planningSelectionText` of a continued run's prompt is the new message only: the block's header and earlier turns (multi-paragraph answers included) pick no module, and a module the new message names still counts; a turn clipped next to an emoji never ends on half a surrogate pair.
 - A button pick's resumed run carries the original request (not only the question and the label); a later reply carries the request, the question, the picked label and the answer.
 - A spend-cap stop keeps the human's request in the thread; the next prompt holds no spend-cap text and no pending-ask block.
-- A thread past the 32000-char block ceiling renders within it: the opening request right after the header, one marker whose count is exactly the turns left out, then the newest turns ending with the newest answer; one huge agent turn is clipped at 1500, a 4000-char human turn is kept whole and one past 6000 is clipped.
+- A thread past the 32000-char block ceiling renders within it: the opening request right after the header, one marker whose count is exactly the turns left out, then the newest turns ending with the newest answer; one huge agent turn is clipped at 1500, a 4000-char human turn is kept whole and one past 8000 is clipped.
 - A new @mention after the soft TTL starts a new session whose prompt holds no earlier turn; ending or expiring a session deletes its live turn rows (memory and DB); orphan rows left by an older build are swept on load.
 - Past 200 turns the oldest turn after the opening request is folded into the session's summary (stored with the session), not lost.
 - Another user's session in the same channel (by @mention or by replying with the ping to my answer) never sees my turns, and my continuation never sees theirs.

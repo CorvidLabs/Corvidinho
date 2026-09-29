@@ -81,11 +81,12 @@ export const CONVERSATION_KEEP_BOT_MESSAGES = 100;
 export const AGENT_TURN_MAX_CHARS = 1500;
 
 /**
- * A human turn is clipped to this: above Discord's longest input (a 6000-char
- * slash option; a message is at most 4000), so the task and the latest
- * instruction are kept whole and pinned word for word (SESSION-5).
+ * A human turn is clipped to this: the longest human input any surface keeps,
+ * a WATCH event prompt (capped at 8000 by the WATCH router); Discord's longest
+ * is a 6000-char slash option (a message is at most 4000). So the task and the
+ * latest instruction are kept whole and pinned word for word (SESSION-5).
  */
-export const HUMAN_TURN_MAX_CHARS = 6000;
+export const HUMAN_TURN_MAX_CHARS = 8000;
 
 /** One summary point keeps at most this many chars of the folded turn. */
 export const SUMMARY_POINT_MAX_CHARS = 160;
@@ -371,6 +372,12 @@ export type ConversationRecord = {
   userId: string;
   /** The session that last carried it. */
   sessionId?: string;
+  /**
+   * The project directory its Discord session worked in (SESSION-WORKTREE-4):
+   * a session resumed from it works there again, never silently in the
+   * default project.
+   */
+  project?: string;
   summary: string;
   turns: ConversationTurn[];
   /** Qualified ids of everyone whose words it holds (`discord:<id>`, `github:<login>`). */
@@ -386,6 +393,7 @@ type ConversationRow = {
   thread_key: string;
   user_id: string;
   session_id: string | null;
+  project: string | null;
   summary: string;
   turns: string;
   participants: string;
@@ -448,6 +456,7 @@ function rowToRecord(row: ConversationRow): ConversationRecord {
     threadKey: row.thread_key,
     userId: row.user_id,
     ...(row.session_id ? { sessionId: row.session_id } : {}),
+    ...(row.project ? { project: row.project } : {}),
     summary: row.summary,
     turns: parseTurns(row.turns),
     participants: parseStrings(row.participants),
@@ -467,10 +476,19 @@ export type SaveConversationInput = {
   threadKey: string;
   userId: string;
   sessionId?: string;
+  /** Discord: the session's project directory (SESSION-WORKTREE-4). */
+  project?: string;
   summary: string;
   turns: readonly ConversationTurn[];
   participants?: readonly string[];
   botMessageIds?: readonly string[];
+  /**
+   * When the conversation was last active (default now): a session kept when
+   * it ends or idles out counts its 30 days from its last activity, not from
+   * when the store noticed it expired (AGENT-6.a). Its own name, so a record
+   * spread back into `save` never carries its old `updatedAt`.
+   */
+  lastActiveAt?: number;
 };
 
 /**
@@ -557,7 +575,9 @@ export class ConversationStore {
    * Insert or update a record: text scrubbed (SAFE-6), turns bounded to
    * {@link CONVERSATION_KEEP_TURNS} (the opening human turn kept, the rest
    * folded into the summary), bot message ids to the newest
-   * {@link CONVERSATION_KEEP_BOT_MESSAGES}, `updated_at` = now.
+   * {@link CONVERSATION_KEEP_BOT_MESSAGES}, `updated_at` = `input.lastActiveAt`
+   * (never later than now) or now. A record already past the retention window
+   * is purged right away.
    */
   save(input: SaveConversationInput): ConversationRecord {
     this.purgeExpired();
@@ -574,22 +594,24 @@ export class ConversationStore {
       threadKey: input.threadKey,
       userId: input.userId,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.project ? { project: input.project } : {}),
       summary: bounded.summary,
       turns: bounded.turns,
       participants: [...new Set(input.participants ?? [])],
       botMessageIds: [...new Set(input.botMessageIds ?? [])].slice(-CONVERSATION_KEEP_BOT_MESSAGES),
-      updatedAt: this.now(),
+      updatedAt: Math.min(input.lastActiveAt ?? this.now(), this.now()),
     };
     this.db.run(
       `INSERT INTO conversation_threads
-        (id, surface, thread_key, user_id, session_id, summary, turns,
+        (id, surface, thread_key, user_id, session_id, project, summary, turns,
          participants, bot_message_ids, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          surface = excluded.surface,
          thread_key = excluded.thread_key,
          user_id = excluded.user_id,
          session_id = excluded.session_id,
+         project = excluded.project,
          summary = excluded.summary,
          turns = excluded.turns,
          participants = excluded.participants,
@@ -601,6 +623,7 @@ export class ConversationStore {
         record.threadKey,
         record.userId,
         record.sessionId ?? null,
+        record.project ?? null,
         record.summary,
         JSON.stringify(record.turns),
         JSON.stringify(record.participants),
@@ -608,6 +631,9 @@ export class ConversationStore {
         record.updatedAt,
       ],
     );
+    // Kept after its window already ran out (an idle session noticed late):
+    // it goes at once, never served.
+    if (record.updatedAt < this.now() - this.retentionMs) this.purgeExpired();
     return record;
   }
 

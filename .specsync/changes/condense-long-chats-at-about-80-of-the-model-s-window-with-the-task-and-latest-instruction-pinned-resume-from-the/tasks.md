@@ -14,4 +14,5 @@ artifact: tasks
 - [x] WATCH poller: replay the issue/PR thread's conversation into follow-ups, record each run, purge each cycle.
 - [x] Tests (4 new files, 31 tests) fail on the base sources (see testing) and pass on the branch; renderer unit test and the two schema-version pins updated.
 - [x] Docs, spec prose, `files:`, testing notes; deltas Added REQ-discord-472 / REQ-watch-472, Modified REQ-discord-019 / REQ-discord-072 / REQ-watch-037.
+- [x] Review fixes: a resume reads the record again (a carrier that idled out on the lookup keeps its newer turns first), keeps the conversation's project (`conversation_threads.project`, SESSION-WORKTREE-4), a kept session counts its 30 days from its last activity, a fold stores the summary before rewriting the turn rows, human turns kept up to 8000 (a whole WATCH event prompt); four tests that fail on the reviewed sources.
 - [x] `specsync check --require-coverage 100`, `hi check`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive`.

@@ -12,12 +12,13 @@ artifact: requirements
   per thread in `conversation_threads` (schema v12, scrubbed) and purged
   (AGENT-6.a); a reply to an expired session's answer or a message in its
   thread starts a new session from it after the channel, actor and mute gates
-  (SESSION-3.a); `SessionStore.forgetConversations` /
+  (SESSION-3.a), in the conversation's project (SESSION-WORKTREE-4) and from
+  the record as stored when the message arrives; `SessionStore.forgetConversations` /
   `forgetConversations(db, person)` for the forget-me flow (AGENT-6.a,
   MEMORY-ACL-6).
 - Modified **REQ-discord-072**: the fixed 6000-char budget and "No model
   summarising" become the window-based condensed block (32000-char transport
-  ceiling kept as a safety net), human turns clipped at 6000, past 200 turns
+  ceiling kept as a safety net), human turns clipped at 8000, past 200 turns
   folded not dropped, turn rows go with the session after the conversation is
   kept, the one optional env var; three acceptance bullets updated/added.
 - Modified **REQ-discord-019**: an expired session is still never continued,

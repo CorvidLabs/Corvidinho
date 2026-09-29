@@ -228,7 +228,9 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_pending_ask
  * Discord conversation (a thread, or a channel talk and the sessions resumed
  * from it) or WATCH issue/PR thread, holding its condensed summary and last
  * turns for 30 days after its last update. `summary` and `turns` (JSON) are
- * SAFE-6 scrub targets; `participants` and `bot_message_ids` hold ids only.
+ * SAFE-6 scrub targets; `participants` and `bot_message_ids` hold ids only;
+ * `project` is the Discord session's project directory, so a session resumed
+ * from it works there again (SESSION-WORKTREE-4).
  */
 const SCHEMA_V12_SQL = `
 CREATE TABLE IF NOT EXISTS conversation_threads (
@@ -237,6 +239,7 @@ CREATE TABLE IF NOT EXISTS conversation_threads (
   thread_key TEXT NOT NULL,
   user_id TEXT NOT NULL,
   session_id TEXT,
+  project TEXT,
   summary TEXT NOT NULL DEFAULT '',
   turns TEXT NOT NULL DEFAULT '[]',
   participants TEXT NOT NULL DEFAULT '[]',

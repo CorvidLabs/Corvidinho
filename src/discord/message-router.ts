@@ -192,8 +192,9 @@ function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null 
  * a new session that begins from it, after the actor and mute/rate gates (the
  * channel gate already ran). Only the conversation's own user, and only where
  * it was held (the same thread, or the same channel outside threads). A live
- * session already carrying it is continued instead. Null when `record` does
- * not apply.
+ * session already carrying it is continued instead; one that idled out keeps
+ * its turns in the record on that lookup, and the new session starts from the
+ * record as stored then. Null when `record` does not apply or is gone.
  */
 function resumeRetained(
   msg: InboundMessage,
@@ -217,6 +218,7 @@ function resumeRetained(
     userId: msg.authorId,
     threadId: msg.threadId,
   });
+  if (!session) return null;
   return { kind: "start_session", session, prompt };
 }
 

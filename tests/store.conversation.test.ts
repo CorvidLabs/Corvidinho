@@ -75,6 +75,7 @@ describe("schema v12 conversation_threads (forward-only migration)", () => {
       "thread_key",
       "user_id",
       "session_id",
+      "project",
       "summary",
       "turns",
       "participants",

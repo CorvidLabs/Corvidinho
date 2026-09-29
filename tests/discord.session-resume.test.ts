@@ -8,14 +8,16 @@
  * about 80% of the configured window with the task and latest instruction
  * word for word.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
+import { emptyConfig } from "../src/allowlist/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
+import { routeMessage } from "../src/discord/message-router.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import type { InboundMessage } from "../src/discord/types.ts";
 import {
@@ -326,6 +328,50 @@ describe("after the soft TTL a reply or a thread message resumes from the summar
     expect(n).toBe(0);
   });
 
+  test("a reply to an older answer after the resumed session idled out starts from its newest turns", async () => {
+    const { clock, db, projectRoot } = setup();
+    const { handlers, calls, outbound } = await bridgeWith((n) => `answer number ${n}`, {
+      db,
+      clock,
+      projectRoot,
+    });
+    await handlers.onMessage(mention("m1", OWNER, OPENING));
+    const first = answerId(outbound, 0);
+    clock.now += TTL_MS + 5_000;
+    await handlers.onMessage(replyTo("m2", OWNER, "the second request", first));
+    expect(calls).toHaveLength(2);
+    clock.now += TTL_MS + 5_000;
+    // Nothing looked the resumed session up since it idled out, and the reply
+    // goes to the FIRST answer: the new session still begins from the second
+    // request and its answer, which that session kept.
+    await handlers.onMessage(replyTo("m3", OWNER, "the third request", first));
+    expect(calls).toHaveLength(3);
+    const third = call(calls, 2);
+    expect(third.sessionId).not.toBe(call(calls, 1).sessionId);
+    expect(third.prompt).toContain(OPENING);
+    expect(third.prompt).toContain("Human: the second request");
+    expect(third.prompt).toContain("answer number 2");
+    const kept = db
+      .query("SELECT turns FROM conversation_threads WHERE surface = 'discord'")
+      .all() as Array<{ turns: string }>;
+    expect(kept).toHaveLength(1);
+    expect(kept[0]!.turns).toContain("the second request");
+  });
+
+  test("a session noticed idle late counts its 30 days from its last activity (AGENT-6.a)", async () => {
+    const { clock, db, projectRoot } = setup();
+    const { handlers, calls, outbound } = await bridgeWith(() => ANSWER_1, { db, clock, projectRoot });
+    await handlers.onMessage(mention("m1", OWNER, OPENING));
+    const answer = answerId(outbound, 0);
+    // Nothing looks the session up for 30 days: its conversation is not kept
+    // past them just because the idle-out is noticed late.
+    clock.now += CONVERSATION_RETENTION_MS + 5_000;
+    await handlers.onMessage(replyTo("m2", OWNER, "what was the codeword?", answer));
+    expect(calls).toHaveLength(1);
+    const n = (db.query("SELECT COUNT(*) AS n FROM conversation_threads").get() as { n: number }).n;
+    expect(n).toBe(0);
+  });
+
   test("forgetting the person deletes it: a later reply gets no answer (MEMORY-ACL-6)", async () => {
     const { clock, db, projectRoot } = setup();
     const { handlers, calls, outbound, store } = await bridgeWith(() => ANSWER_1, {
@@ -406,5 +452,47 @@ describe("a long chat is condensed at about 80% of the window (SESSION-5)", () =
     expect(thread).toContain("- Human: step 2:");
     expect(thread).not.toContain(`step 2: ${"details ".repeat(80)}`.trim());
     expect(last.endsWith("go on")).toBe(true);
+  });
+});
+
+describe("a resumed session works in the conversation's project (SESSION-3.a with SESSION-WORKTREE-4)", () => {
+  test("never silently the default project; a project that no longer resolves fails to bind", async () => {
+    const clock: Clock = { now: 1_000_000 };
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const root = tempDir("corvidinho-resume-root-");
+    const other = join(root, "other");
+    mkdirSync(other);
+    const store = new SessionStore({ db, ttlMs: TTL_MS, now: () => clock.now, defaultProjectRoot: root });
+    const allowlist = emptyConfig();
+    allowlist.discord.channels = [CHAN];
+    const deps = { store, allowlist, owner: null };
+
+    // `/session start project:other`-style talk, then its TTL runs out.
+    const s0 = store.create({ channelId: CHAN, userId: OWNER, project: "other" });
+    expect(s0.project).toBe(other);
+    store.recordTurn(s0, "human", "fix the parser in other");
+    store.recordTurn(s0, "agent", "fixed");
+    store.trackBotMessage("bot-0", s0);
+    clock.now += TTL_MS + 5_000;
+
+    const r1 = routeMessage(replyTo("m1", OWNER, "and its test", "bot-0"), deps);
+    if (r1.kind !== "start_session") throw new Error(r1.kind);
+    expect(r1.session.project).toBe(other);
+    const bound = await store.bindWorktree(r1.session);
+    expect(bound.ok).toBe(true);
+    if (bound.ok) expect(bound.workspace.projectWorkingDir).toBe(other);
+    await store.endSession(r1.session);
+    expect(store.retainedForReply("bot-0")?.project).toBe(other);
+
+    // The project is gone: the next resume refuses to bind rather than
+    // working in the default project.
+    rmSync(other, { recursive: true, force: true });
+    const r2 = routeMessage(replyTo("m2", OWNER, "and again", "bot-0"), deps);
+    if (r2.kind !== "start_session") throw new Error(r2.kind);
+    expect(r2.session.project).toBe(other);
+    const failed = await store.bindWorktree(r2.session);
+    expect(failed.ok).toBe(false);
+    expect(store.cwdFor(r2.session)).not.toBe(root);
   });
 });

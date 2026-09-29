@@ -141,6 +141,20 @@ describe("WATCH follow-ups pick up the thread's conversation (REQ-watch-472)", (
     expect(block).toContain("- Human: [WATCH issue_comment]");
   });
 
+  test("a long opening issue comment replays whole: the task is pinned word for word (SESSION-5)", async () => {
+    const w = await watcher();
+    // The WATCH prompt (header, title, URL and body) is capped at 8000 chars.
+    const body = `@corvid-agent OPENING ${"spec detail ".repeat(620)}END-OF-TASK`;
+    await w.poll(ev({ id: "c1", body }));
+    await w.poll(ev({ id: "c2", body: "@corvid-agent did you get all of it?" }));
+    const follow = w.prompts[1]!;
+    const block = follow.slice(0, follow.indexOf("[End of earlier conversation]"));
+    expect(w.prompts[0]!.length).toBeGreaterThan(7000);
+    // Word for word (the block's one-paragraph rule only folds blank lines).
+    expect(block).toContain(`Human: ${w.prompts[0]!.replace(/\n\n/g, "\n")}\n`);
+    expect(block).toContain("END-OF-TASK");
+  });
+
   test("the kept conversation is scrubbed, and forgetting the person deletes it", async () => {
     const w = await watcher();
     await w.poll(ev({ id: "c1", body: `@corvid-agent use ${TOKEN}` }));
