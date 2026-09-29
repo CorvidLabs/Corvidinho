@@ -260,16 +260,6 @@ schedule post append the 80% warning line with the owner added to
 `mentionUserIds`. `SlashContext.spendLine` / `StatusReportInput.spendLine`
 carry `/status`'s 24 h spend vs cap line (`formatSpendStatusLine` over
 `readSpendSnapshot` on the bridge's shared DB); no new slash command.
-
-Closing role note on the way to a post (REQ-discord-734, ROLES-CHAT-3 /
-REQ-agent-333): `ask-ping.ts` exports `POST_SUMMARY_MAX` (1500) and
-`clipPostSummary(summary, headLength = 0)`, which caps a run summary at 1500
-chars and at what fits after a `headLength`-char post head within
-`ASK_REPLY_MAX` (1900) with `clipKeepingRoleNote`. The scheduler's run-row
-summary and schedule post, and the `/work` and `/session start` answers, use
-it; `appendPostLine` cuts the body for the SAFE-8 warning line the same way
-(ending the kept text in `…`). A closing `(not allowed for your role)` note
-stays last; a summary without it is cut exactly as before.
 The bridge builds one `createSpendAlertOutbox({ db, env })`
 (`src/agent/spend-outbox.ts`) and shares it as `SlashContext.spendAlerts` and
 `SchedulerServiceOpts.spendAlerts`; `SlashContext.post` is the gateway reply
@@ -303,6 +293,16 @@ ping (stuck and spend-cap only) and the warning go out as a fresh post after
 the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
+
+Closing role note on the way to a post (REQ-discord-734, ROLES-CHAT-3 /
+REQ-agent-333): `ask-ping.ts` exports `POST_SUMMARY_MAX` (1500) and
+`clipPostSummary(summary, headLength = 0)`, which caps a run summary at 1500
+chars and at what fits after a `headLength`-char post head within
+`ASK_REPLY_MAX` (1900) with `clipKeepingRoleNote`. The scheduler's run-row
+summary and schedule post, and the `/work` and `/session start` answers, use
+it; `appendPostLine` cuts the body for the SAFE-8 warning line the same way
+(ending the kept text in `…`). A closing `(not allowed for your role)` note
+stays last; a summary without it is cut exactly as before.
 
 Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
 DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
