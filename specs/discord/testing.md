@@ -36,6 +36,13 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   Server Members Intent off); a `fetch` spy proves nothing is posted. With the
   acting env empty or unset the flag / strict behaviour is unchanged
   (REQ-discord-012, no token, no network).
+- Same file, live path with no injected checker: `Client.prototype.login` is
+  stubbed to emit `ready` on a fake guild text channel, so
+  `verifyRequesterCanSend` runs its own `permissionsFor(member).has` check —
+  no View Channel + Send Messages → 403, both → ok, not in guild → 403,
+  missing / non-text channel → 404, a file post without Attach Files → 403;
+  `discord-post-message` in a bridge run posts nothing on a live denial and
+  once when allowed (REQ-discord-012 / REQ-discord-476).
 - `tests/discord.allowed-mentions.test.ts` — REQ-discord-205: fake discord.js
   injected into the live gateway; chat mention/reply-continue, `/session
   start`, `/work`, slash, embeds, schedule tick and `discord-post-message`
