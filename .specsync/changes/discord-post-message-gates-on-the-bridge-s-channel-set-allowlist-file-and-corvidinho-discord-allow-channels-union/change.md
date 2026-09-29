@@ -1,6 +1,6 @@
 ---
 id: discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 310861f81c5fb0314447109b959b8f37fb323578
 ---

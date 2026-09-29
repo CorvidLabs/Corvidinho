@@ -7,10 +7,11 @@
   "title": "Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win",
   "description": "discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "310861f81c5fb0314447109b959b8f37fb323578",
   "created_at": 1790696282,
-  "updated_at": 1790696333,
+  "updated_at": 1790696365,
   "affected_specs": [
     "plugins",
     "discord"
