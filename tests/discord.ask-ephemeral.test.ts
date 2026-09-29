@@ -20,6 +20,7 @@ import {
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { CLOSED_ASKS_MAX, SessionStore } from "../src/discord/session-store.ts";
 import { ASK_CANCELLED_ACK } from "../src/discord/thin-ack.ts";
+import { EPHEMERAL_SILENT_ACK } from "../src/discord/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import {
   createNullGateway,
@@ -879,7 +880,78 @@ describe("a late press on an ask that is no longer open (DISCORD-ASK-5 / REQ-dis
     await result.stop();
   });
 
-  test("SessionStore keeps closed asks as askId, user and expiry only — from a TTL purge, a drop, a late clear and a reload — never a pick or a cancel", () => {
+  test("inside a thread under the allowlisted channel (DISCORD-2.a): a late press on a dropped or a TTL-purged ask is 'that choice expired', with the same channel gate as a live press", async () => {
+    const { result, handlers, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, CACHE_ASK, "Using Redis"]),
+    );
+    const sayIn = (id: string, content: string) =>
+      handlers.onMessage({
+        id,
+        channelId: "chan-1",
+        threadId: "thr-1",
+        authorId: "user-1",
+        authorBot: false,
+        content: `<@999> ${content}`,
+        mentionedBot: true,
+      });
+    const pressIn = async (customId: string, channelId: string, userId = "user-1") => {
+      const eph: Array<Record<string, unknown>> = [];
+      await handlers.onComponent!({
+        id: `ix-${customId}-${channelId}`,
+        customId,
+        channelId,
+        userId,
+        reply: async (opts) => {
+          eph.push(opts as Record<string, unknown>);
+        },
+        deleteReply: async () => {},
+      });
+      return eph;
+    };
+    await sayIn("t1", "set up storage");
+    const session = result.store.list()[0]!;
+    expect(session.threadId).toBe("thr-1");
+    const askA = session.pendingAsk!;
+    await sayIn("t2", "and caching?");
+    const askB = session.pendingAsk!;
+    session.openAsks![0]!.expiresAt = Date.now() - 1;
+    await pressIn(pickCustomId(askB.askId, "1"), "thr-1");
+    expect(calls).toHaveLength(3);
+    expect(result.store.findPendingAsk(askA.askId)).toBeUndefined();
+
+    // The dropped ask, pressed in the talk's thread.
+    expect(await pressIn(openCustomId(askA.askId), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askA.askId, "2"), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askA.askId, "2"), "thr-1", "user-2")).toEqual([
+      { content: NOT_YOURS, ephemeral: true },
+    ]);
+    // Another thread, or a channel off the allowlist, stays zero-width.
+    expect(await pressIn(openCustomId(askA.askId), "thr-2")).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+
+    // A newer, live ask in the thread, then the talk idles past its TTL.
+    const askC = toPendingAsk(OPTIONS_ASK);
+    result.store.setPendingAsk(session, askC);
+    idlePastTtl(session);
+    const ran = calls.length;
+    expect(await pressIn(openCustomId(askC.askId), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askC.askId, "1"), "thr-1")).toEqual(EXPIRED_REPLY);
+    expect(await pressIn(pickCustomId(askC.askId, "1"), "chan-off")).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+    // Once the talk's own channel leaves the allowlist, a press in its
+    // thread is zero-width, as on a live ask (REQ-discord-212).
+    result.config.allowlist.discord.channels = ["chan-other"];
+    expect(await pressIn(pickCustomId(askC.askId, "1"), "thr-1")).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+    expect(calls).toHaveLength(ran);
+    expect(result.store.list()).toHaveLength(0);
+    await result.stop();
+  });
+
+  test("SessionStore keeps closed asks as askId, user, expiry and the talk's channel/thread only — from a TTL purge, a drop, a late clear and a reload — never a pick or a cancel", () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-closed-asks-"));
     try {
       const path = join(dir, "corvidinho.db");
@@ -903,7 +975,12 @@ describe("a late press on an ask that is no longer open (DISCORD-ASK-5 / REQ-dis
       store1.clearPendingAsk(s, "new");
       expect(s.pendingAsk ?? null).toBeNull();
       const old = store1.findClosedAsk("old")!;
-      expect(old).toEqual({ askId: "old", userId: "user-1", expiresAt: now - 60 * 1000 });
+      expect(old).toEqual({
+        askId: "old",
+        userId: "user-1",
+        expiresAt: now - 60 * 1000,
+        channelId: "chan-1",
+      });
       // No question or option text is kept (SAFE-6).
       expect(JSON.stringify(old)).not.toContain("Which DB?");
       expect(JSON.stringify(old)).not.toContain("Postgres");
@@ -925,6 +1002,7 @@ describe("a late press on an ask that is no longer open (DISCORD-ASK-5 / REQ-dis
         askId: "a1",
         userId: "user-1",
         expiresAt: a1.expiresAt,
+        channelId: "chan-1",
       });
       expect(store1.findClosedAsk("a2")?.userId).toBe("user-1");
       // Re-opening an askId makes it open again, not closed.
@@ -933,14 +1011,18 @@ describe("a late press on an ask that is no longer open (DISCORD-ASK-5 / REQ-dis
       expect(store1.findClosedAsk("a2")).toBeUndefined();
 
       // A session row reloaded past its TTL after a restart closes its asks too.
-      const s3 = store1.create({ channelId: "chan-1", userId: "user-3" });
+      const s3 = store1.create({ channelId: "chan-1", userId: "user-3", threadId: "thr-3" });
       store1.setPendingAsk(s3, toPendingAsk(OPTIONS_ASK, { askId: "b1", nowMs: now }));
       db1.close();
       now += ttlMs + 1;
       const db2 = openCorvidinhoDb({ path });
       const store2 = new SessionStore({ db: db2, ttlMs, now: () => now });
       expect(store2.get(s3.id)).toBeUndefined();
-      expect(store2.findClosedAsk("b1")?.userId).toBe("user-3");
+      expect(store2.findClosedAsk("b1")).toMatchObject({
+        userId: "user-3",
+        channelId: "chan-1",
+        threadId: "thr-3",
+      });
       db2.close();
 
       // Bounded: past CLOSED_ASKS_MAX the oldest closed ask is forgotten.

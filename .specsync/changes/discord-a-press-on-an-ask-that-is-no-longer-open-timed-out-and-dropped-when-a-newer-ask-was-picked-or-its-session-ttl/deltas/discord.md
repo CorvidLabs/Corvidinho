@@ -30,12 +30,16 @@ with today's reply (DISCORD-ASK-8), also once the session is purged. Another
 user's press on a live ask, or on an ask that is no longer open, SHALL get
 the not-for-you reply and SHALL NOT resume anything (DISCORD-ASK-2/3). The
 channel, actor and mute/rate gates (REQ-discord-212 / REQ-discord-201 /
-REQ-discord-010) SHALL run before this reply. To tell a late press from
-another user's, `SessionStore` SHALL keep, for each ask that leaves past its
-timeout or with its purged session, only its askId, the session's Discord
-user and the ask's expiry (`findClosedAsk`), in memory only and bounded to
-the newest `CLOSED_ASKS_MAX` (1000), never the question or option text
-(SAFE-6). No new env var, slash command, table or column.
+REQ-discord-010) SHALL run before this reply; for an ask that is no longer
+open, the channel gate SHALL judge the press against the channel and thread
+its session had, as for a live ask, so a late press in the talk's thread
+under an allowlisted channel (DISCORD-2.a) gets `ASK_CHOICE_EXPIRED` too. To
+tell a late press from another user's, `SessionStore` SHALL keep, for each
+ask that leaves past its timeout or with its purged session, only its askId,
+the session's Discord user, the ask's expiry and the session's channel and
+thread ids (`findClosedAsk`), in memory only and bounded to the newest
+`CLOSED_ASKS_MAX` (1000), never the question or option text (SAFE-6). No new
+env var, slash command, table or column.
 
 Acceptance Criteria
 - Structured or numbered options → stub + components; ephemeral open shows choices.
@@ -47,4 +51,5 @@ Acceptance Criteria
 - A still-stored ask past its timeout: the first press gets `ASK_CHOICE_EXPIRED` and clears it; a second press by the requester gets `ASK_CHOICE_EXPIRED` again, another user's the not-for-you reply, and the agent does not run.
 - A re-press after a pick and a press after `cancel` get the not-for-you / already-answered reply with no run, before and after the session is TTL-purged.
 - A muted or deny-listed requester's press on an ask of a TTL-purged session gets `MUTED` / the zero-width ack; once let through the press gets `ASK_CHOICE_EXPIRED`, with no run and nothing posted.
-- `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.
+- In a talk inside a thread under an allowlisted channel, the requester's press in that thread on a dropped ask or on an ask of the TTL-purged session gets `ASK_CHOICE_EXPIRED` with no run; another user's press there gets the not-for-you reply; a press from another thread or a non-allowlisted channel, or once the talk's channel has left the allowlist, gets the zero-width ack.
+- `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt, channelId, threadId? }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.

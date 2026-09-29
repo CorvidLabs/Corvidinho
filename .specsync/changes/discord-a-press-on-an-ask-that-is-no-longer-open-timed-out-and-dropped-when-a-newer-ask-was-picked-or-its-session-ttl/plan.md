@@ -9,7 +9,9 @@ artifact: plan
    `tests/discord.ask-button-gates.test.ts` (fail on main `310861f`).
 2. `SessionStore`: `ClosedAsk`, `CLOSED_ASKS_MAX`, `closeAsks` from
    `clearPendingAsk` / `purgeIfExpired` / `loadFromDb`, `findClosedAsk`.
-3. `onComponent`: the late-press reply after the gates, before not-for-you.
+3. `onComponent`: a closed ask's channel and thread stand in for the missing
+   session at the channel gate; the late-press reply after the gates, before
+   not-for-you.
 4. Delta Modified REQ-discord-045; spec Public API + invariant; testing.md
    evidence; `docs/discord.md` ask paragraph.
 5. `specsync change check --commit`, `specsync check --require-coverage

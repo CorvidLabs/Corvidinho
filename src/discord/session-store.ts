@@ -145,10 +145,18 @@ function newId(): string {
  * An ask that is no longer open because it timed out or its session was
  * TTL-purged, kept only so a late press on its buttons gets "that choice
  * expired" and not "not yours" (DISCORD-ASK-5 / REQ-discord-045). Only the
- * askId, the session's Discord user and the ask's expiry are kept: never the
+ * askId, the session's Discord user, the ask's expiry and where the talk
+ * lived (its channel and thread ids, so the press passes the same channel
+ * gate as on a live ask, REQ-discord-212 / DISCORD-2.a) are kept: never the
  * question or option text (SAFE-6). Memory only, never written to the DB.
  */
-export type ClosedAsk = { askId: string; userId: string; expiresAt: number };
+export type ClosedAsk = {
+  askId: string;
+  userId: string;
+  expiresAt: number;
+  channelId: string;
+  threadId?: string;
+};
 
 /** Closed asks kept in memory, newest last; past this the oldest is forgotten. */
 export const CLOSED_ASKS_MAX = 1000;
@@ -242,7 +250,7 @@ export class SessionStore {
     // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
     void this.parkSessionWorktree(session);
     // DISCORD-ASK-5: a later press on this talk's buttons is a late press.
-    this.closeAsks(session.userId, openAsksOf(session));
+    this.closeAsks(session, openAsksOf(session));
     this.removeLocal(session);
     this.deleteFromDb(session.id);
     return true;
@@ -309,7 +317,7 @@ export class SessionStore {
           lastActivityAt: row.last_activity_at,
         };
         void this.parkSessionWorktree(doomed);
-        this.closeAsks(doomed.userId, openAsksOf(doomed));
+        this.closeAsks(doomed, openAsksOf(doomed));
         this.deleteFromDb(row.id);
         continue;
       }
@@ -728,23 +736,29 @@ export class SessionStore {
     // press on it is still "that choice expired". A pick or an answer of a
     // live ask is not closed: a re-press stays a no-op (DISCORD-ASK-8).
     this.closeAsks(
-      session.userId,
+      session,
       isAskExpired(cleared, nowMs) ? [...dropped, cleared] : dropped,
     );
     this.persistSession(session);
   }
 
   /**
-   * Keep `asks` as closed asks of `userId` (DISCORD-ASK-5): askId, user and
-   * expiry only (SAFE-6), newest last, at most CLOSED_ASKS_MAX.
+   * Keep `asks` as closed asks of `session` (DISCORD-ASK-5): askId, user,
+   * expiry and the talk's channel and thread ids only (SAFE-6), newest last,
+   * at most CLOSED_ASKS_MAX.
    */
-  private closeAsks(userId: string, asks: readonly PendingAsk[]): void {
+  private closeAsks(
+    session: Pick<SessionStub, "userId" | "channelId" | "threadId">,
+    asks: readonly PendingAsk[],
+  ): void {
     for (const ask of asks) {
       this.closedAsks.delete(ask.askId);
       this.closedAsks.set(ask.askId, {
         askId: ask.askId,
-        userId,
+        userId: session.userId,
         expiresAt: ask.expiresAt,
+        channelId: session.channelId,
+        ...(session.threadId !== undefined ? { threadId: session.threadId } : {}),
       });
     }
     while (this.closedAsks.size > CLOSED_ASKS_MAX) {

@@ -212,9 +212,14 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   not-for-you reply; a still-stored expired ask is cleared by the first press
   and a second press is still expired; a re-press after a pick and a press
   after `cancel` keep the not-for-you reply before and after the purge;
-  `SessionStore.findClosedAsk` holds only askId, user and expiry for a drop, a
-  late clear, a runtime purge and a load purge (never a pick, a cancel or a
-  re-stored askId) and forgets the oldest past `CLOSED_ASKS_MAX`.
+  in a talk inside a thread under the allowlisted channel, the requester's
+  press in that thread on a dropped ask and on a TTL-purged session's ask get
+  `ASK_CHOICE_EXPIRED`, another thread or a non-allowlisted channel (or the
+  talk's channel leaving the allowlist) gets the zero-width ack;
+  `SessionStore.findClosedAsk` holds only askId, user, expiry and the talk's
+  channel and thread for a drop, a late clear, a runtime purge and a load
+  purge (never a pick, a cancel or a re-stored askId) and forgets the oldest
+  past `CLOSED_ASKS_MAX`.
 - `tests/discord.ask-button-gates.test.ts` — a muted or deny-listed
   requester's press on an ask of a TTL-purged session gets `MUTED` / the
   zero-width ack; once let through it gets `ASK_CHOICE_EXPIRED`, no run.
