@@ -270,6 +270,21 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
 
+## Zero cron step never hangs /schedule create (REQ-discord-020, DISCORD-SCHEDULE-4)
+
+- `tests/scheduler.cron.test.ts` — "cron step and range forms never hang":
+  `*/0`, `0-59/0`, `0,*/0` and `/0` in the hour, day, month and weekday fields
+  run in a child bun with a 10 s timeout; `validateAndResolveCadence` and
+  `getNextCronDate` each throw `CadenceError` (`Invalid cron step in "…"`);
+  `5/0` is refused in-process; `0-99999999999 * * * *` is refused by the
+  5-minute rule, a range past 2^53 has no run date, and
+  `0 0-99999999999/2 * * *` resolves to itself with the next run of
+  `0 */2 * * *`; cadences with steps of 1 or more resolve as before.
+- `tests/discord.schedule.test.ts` — the owner's `/schedule create` with
+  `*/0 * * * *` and `0-59/0 * * * *` (child bun, 10 s timeout) gets the
+  ephemeral CadenceError reply, creates nothing, and a following
+  `/schedule list` still answers. No live Discord.
+
 ## /schedule delete audit (REQ-discord-020, SAFE-5)
 
 - `tests/discord.schedule.test.ts` — "/schedule delete audit (SAFE-5)": with a
