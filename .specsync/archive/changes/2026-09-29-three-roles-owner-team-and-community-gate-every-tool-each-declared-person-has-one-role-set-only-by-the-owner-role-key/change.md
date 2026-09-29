@@ -1,6 +1,6 @@
 ---
 id: three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key
-state: verifying
+state: archived
 type: feature
 base_commit: 72fec65395d657fef8c11ace63bd2205baa83f23
 ---
