@@ -25,6 +25,10 @@ files:
   - src/discord/session-thread.ts
   - tests/discord.session-thread.test.ts
   - tests/discord.session-thread.unit.test.ts
+  - src/store/conversation.ts
+  - tests/session.condense.test.ts
+  - tests/store.conversation.test.ts
+  - tests/discord.session-resume.test.ts
   - src/store/db.ts
   - src/store/index.ts
   - src/store/paths.ts
@@ -155,13 +159,50 @@ STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 Session thread (AGENT-6 / REQ-discord-072): `src/discord/session-thread.ts`
 exports `SessionTurn`, `formatSessionThread` / `withSessionThread` (the
-labelled replay block, `SESSION_THREAD_HEADER` / `SESSION_THREAD_FOOTER`,
-`formatSessionThreadOmitted`), `clipTurnText`, `answerTurnText`,
-`ensureSessionTurns` and the limits `SESSION_THREAD_BUDGET_CHARS` (6000),
-`SESSION_THREAD_TURN_MAX_CHARS` (1500) and `SESSION_THREAD_MAX_TURNS` (200);
+labelled replay block, optional `summary`, `SESSION_THREAD_HEADER` /
+`SESSION_THREAD_FOOTER`, `formatSessionThreadOmitted`), `clipTurnText`,
+`answerTurnText`, `ensureSessionTurns` and the limits
+`SESSION_THREAD_BUDGET_CHARS` (32000, the block's transport ceiling),
+`SESSION_THREAD_TURN_MAX_CHARS` (1500, agent turns),
+`SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (8000, human turns) and
+`SESSION_THREAD_MAX_TURNS` (200);
 `SessionStore.recordTurn(session, role, text)` records one turn (the
 human's words as a run starts, the posted answer or failure line when it
 ends) and `SessionStore.threadFor(session)` returns them oldest first.
+
+Condensed conversations (SESSION-5/6, SESSION-3.a, AGENT-6.a /
+REQ-discord-472): `src/store/conversation.ts` exports the window
+(`resolveContextWindowTokens(env)`, `CONTEXT_WINDOW_ENV`
+= `CORVIDINHO_LLM_CONTEXT_TOKENS`, `CONTEXT_WINDOW_DEFAULT_TOKENS` 8192,
+`CONTEXT_WINDOW_MIN_TOKENS` 1024, `CONDENSE_AT_FRACTION` 0.8,
+`CHARS_PER_TOKEN` 4, `condenseBudgetChars(window)`,
+`CONVERSATION_PROMPT_MAX_CHARS` 32000, `estimateTokens`), the pure
+condensing (`condenseConversation`, `boundConversation`,
+`pinnedTurnIndexes`, `summaryPoint`, `appendSummary`, `summaryCapChars`,
+`formatConversationBlock` / `withConversationBlock`, `SUMMARY_LABEL`,
+`clipTurnForRole`, `ConversationTurn` / `Conversation`; the block quotes
+replayed turns and summary points as data and a summary point keeps an
+untrusted-data fence's own markers around the words it holds, SAFE-12 /
+REQ-discord-071), and the retained
+store (`ConversationStore`: `get`, `forSession`, `latestForThread`,
+`byBotMessage`, `save`, `delete`, `purgeExpired`, `deleteForPerson`;
+`forgetConversations(db, person)`; `ConversationRecord`,
+`discordThreadKey`, `watchThreadKey`, `discordParticipant`,
+`githubParticipant`, `CONVERSATION_RETENTION_MS` 30 days,
+`CONVERSATION_KEEP_TURNS` 20, `CONVERSATION_KEEP_BOT_MESSAGES` 100).
+`SessionStoreOptions.contextWindowTokens` (bridge:
+`resolveContextWindowTokens(env)`); `SessionStore.threadPrompt(session,
+prompt, { windowTokens? })` returns the prompt with the condensed block and
+stores a fold; `summaryFor(session)`; `retainedForReply(botMessageId)` /
+`retainedForThread(threadId, userId)` / `resumeFromRetained(record, where)`
+(the router's SESSION-3.a path; reads the record again, returns undefined
+when it is gone, and keeps the conversation's project); `forgetConversations(userId)` and
+`purgeExpiredConversations()`; `forgetTurnsOfUsers(userIds)` (the approved
+forget-me, REQ-discord-101) also drops those users' live summaries and
+retained records. `forgetMemoryTargets` (`src/memory/forget.ts`) deletes the
+person's retained records (Discord ids, a declared person's GitHub logins) in
+the approval's transaction and returns their count (`conversations`). `src/discord/bridge.ts` exports
+`CONVERSATION_PURGE_INTERVAL_MS` (hourly purge while running).
 
 Scrub at rest (REQ-discord-066, SAFE-6): `src/store/scrub.ts` exports
 `scrubSecrets` / `scrubOpt`, `scrubJsonText(raw)` (scrubs every string value
@@ -625,11 +666,11 @@ every @mention/reply/thread message and every slash command also passes `gateAct
 an ask button press (open or pick) passes channel → `gateActor` (with the press's role ids) → mute/rate (shared per-user state, presser's resolved level) before it opens choices or resumes; a refusal is ephemeral only — zero-width ack for an actor deny, `MUTED` / `RATE_LIMITED` for mute/rate — with no agent run, nothing sent or edited, and the pending ask kept (DISCORD-6 / DISCORD-DENY-3 / REQ-discord-201 / REQ-discord-010);
 after those gates, the requester's press on an ask that is no longer open because it timed out (dropped when a newer ask was cleared, or cleared by a late press) or its session was TTL-purged (at runtime or on load) gets only the ephemeral `ASK_CHOICE_EXPIRED` — no agent run, no session, nothing sent or edited — while another user's press, a re-press after a pick and a press after cancel keep the not-for-you reply; the channel gate judges such a press against the closed ask's session channel and thread as for a live ask, so it holds in the talk's thread under an allowlisted parent (DISCORD-2.a) and stays zero-width elsewhere or once that channel left the allowlist; the store keeps such an ask only as `{ askId, userId, expiresAt, channelId, threadId? }` in memory (no question or option text, newest `CLOSED_ASKS_MAX`) (DISCORD-ASK-5 / DISCORD-ASK-8 / SAFE-6 / REQ-discord-212 / REQ-discord-045);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
-every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
+every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message; when that prompt reaches about 80% of the model's window (`CORVIDINHO_LLM_CONTEXT_TOKENS`, default 8192 tokens, never past 32000 chars) the oldest turns fold into the session's summary (extractive points, no model call) while the opening request, the newest human turn and the new message stay word for word, and the summary is stored with the session so a restart or a smaller window picks up from it (SESSION-5/6 / REQ-discord-472); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); live turns persist in `discord_session_turns` across a restart within the soft TTL and their rows go with their session (end or TTL) after its conversation is kept 30 days in `conversation_threads`, from which only its own user's reply to one of its answers or message in its thread starts a new session after the gates (SESSION-3.a / AGENT-6.a); turns never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
-memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only) reaches the owner as a DM Approve/Deny card (`src/discord/approve-card.ts`, reusable; `src/discord/forget-card.ts`) on every scheduler tick (`onTick`) and after each chat message, and only the owner's press on a pending, unexpired card forgets — SAFE-5 `started` first (fail closed), then one transaction deletes every memory row of that person and their session turns — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); a recall with a query is a ranked search (relevance, then recency; `src/memory/rank.ts`) and the chat / button-pick inject searches memory for the message (the owner's and team's `/work` project block for the description), relevant rows first then the newest (MEMORY-9 / REQ-discord-067); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env, and always clears the GitHub commenter keys (`CORVIDINHO_ACTING_GITHUB_*`, MEMORY-8);
+memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only) reaches the owner as a DM Approve/Deny card (`src/discord/approve-card.ts`, reusable; `src/discord/forget-card.ts`) on every scheduler tick (`onTick`) and after each chat message, and only the owner's press on a pending, unexpired card forgets — SAFE-5 `started` first (fail closed), then one transaction deletes every memory row of that person and their session turns (and their kept conversations, REQ-discord-472) — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); a recall with a query is a ranked search (relevance, then recency; `src/memory/rank.ts`) and the chat / button-pick inject searches memory for the message (the owner's and team's `/work` project block for the description), relevant rows first then the newest (MEMORY-9 / REQ-discord-067); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env, and always clears the GitHub commenter keys (`CORVIDINHO_ACTING_GITHUB_*`, MEMORY-8);
 a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. a thread's allowlisted parent channel + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence (a zero cron step — `*/0`, `a-b/0`, `n/0` in any field — is a `CadenceError` refused before any field is expanded, and a range is expanded only up to its field's maximum, so no cadence can hang `/schedule create`, the store's next-run computation or the bridge), schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
@@ -661,6 +702,14 @@ from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
 scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
 no free-text column (a constant kind and integers).
+Retained conversations live in `conversation_threads` (schema v13,
+`SCHEMA_VERSION` 13, a forward-only migration after v12's `forget_requests`;
+REQ-discord-472): `summary`
+and the JSON `turns` are scrubbed on write and are `SCRUB_TARGETS`;
+`participants` and `bot_message_ids` hold ids only; `project` is the Discord
+session's project directory, so a session resumed from it works there again
+(SESSION-WORKTREE-4); a record is never served and is purged 30 days after
+its last update (a kept session's last activity).
 The spend warning line and `/status` spend line are built from integer
 amounts, never from child-written text; the spend-cap question is scrubbed and
 mention-defanged like every ask.
@@ -838,6 +887,9 @@ characters. No new env var, config key, table or column.
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |
 | `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (neither the thread nor its parent listed, or a deny on the thread or its parent), SAFE-2 / secret path (by name, link target, or a file or folder swapped for a link after the checks), path outside the project, type not allowed or bytes not matching, over 8 MB (at the size check or in the bytes read; at most 8 MB + 1 byte is read), requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
 | `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
+| A retained-conversation read or write fails (DB busy) | Warning logged (`[discord] conversation … failed`); the run goes on without the summary write or the resume (REQ-discord-472) |
+| A reply to an expired session's answer by another user, or a plain message in the thread from someone whose conversation is not there | No resume: routed as before (no mention ⇒ ignored; a mention starts their own session with nothing replayed) (REQ-discord-472) |
+| `CORVIDINHO_LLM_CONTEXT_TOKENS` unset, not a positive integer, or below 1024 | 8192 (unset / invalid) or 1024 (too small) (REQ-discord-472) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 | Non-owner chat message, `/session start` topic or `/work` description trips the SAFE-13 detector | No run, no session / worktree / work task; one short public refusal; the owner pinged (chat: in the reply; slash: a fresh channel post); `injection-suspected` audit row (REQ-discord-071) |
 | SAFE-13 refusal with no owner configured | The refusal still goes out and says no owner is configured; `INJECTION_NO_OWNER_WARNING` logged (REQ-discord-071) |
@@ -968,3 +1020,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
+| 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |

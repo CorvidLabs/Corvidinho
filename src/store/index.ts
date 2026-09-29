@@ -1,5 +1,6 @@
 /**
- * Shared local store helpers (SESSION durable + DISCORD-SCHEDULE + MEMORY #41/#59).
+ * Shared local store helpers (SESSION durable + DISCORD-SCHEDULE + MEMORY #41/#59;
+ * retained condensed conversations, SESSION-5/6 / AGENT-6.a #72).
  */
 
 export {
@@ -22,3 +23,10 @@ export {
   isSessionExpired,
   resolveSessionTtlMs,
 } from "./session-ttl.ts";
+export {
+  CONVERSATION_RETENTION_MS,
+  ConversationStore,
+  condenseBudgetChars,
+  forgetConversations,
+  resolveContextWindowTokens,
+} from "./conversation.ts";

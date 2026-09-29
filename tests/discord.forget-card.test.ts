@@ -538,7 +538,8 @@ describe("no answer, or a late answer, is no", () => {
 
 describe("schema v12: forget_requests (forward-only migration)", () => {
   test("a v11 DB migrates to v12 keeping its memories; one pending ask per subject", () => {
-    expect(SCHEMA_VERSION).toBe(12);
+    // v13 (retained conversations, REQ-discord-472) follows v12.
+    expect(SCHEMA_VERSION).toBe(13);
     const d = new SqliteDatabase(":memory:");
     try {
       migrateCorvidinhoDb(d);
@@ -546,7 +547,7 @@ describe("schema v12: forget_requests (forward-only migration)", () => {
       d.exec("DROP TABLE forget_requests");
       d.run("UPDATE schema_meta SET value = '11' WHERE key = 'version'");
       migrateCorvidinhoDb(d);
-      expect(d.query("SELECT value FROM schema_meta WHERE key = 'version'").get()).toEqual({ value: "12" });
+      expect(d.query("SELECT value FROM schema_meta WHERE key = 'version'").get()).toEqual({ value: String(SCHEMA_VERSION) });
       expect(d.query("SELECT content FROM memories").all()).toEqual([{ content: "KEPT" }]);
       const cols = (d.query("PRAGMA table_info(forget_requests)").all() as Array<{ name: string }>).map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(["subject_kind", "subject_id", "requester_user_id", "status", "expires_at", "card_message_id"]));
@@ -562,7 +563,7 @@ describe("schema v12: forget_requests (forward-only migration)", () => {
       expect(() => ins("b")).toThrow();
       // Re-running is a no-op (forward-only, idempotent).
       migrateCorvidinhoDb(d);
-      expect(d.query("SELECT value FROM schema_meta WHERE key = 'version'").get()).toEqual({ value: "12" });
+      expect(d.query("SELECT value FROM schema_meta WHERE key = 'version'").get()).toEqual({ value: String(SCHEMA_VERSION) });
     } finally {
       d.close();
     }

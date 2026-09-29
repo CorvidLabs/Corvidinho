@@ -19,6 +19,7 @@ import {
   SESSION_THREAD_BUDGET_CHARS,
   SESSION_THREAD_FOOTER,
   SESSION_THREAD_HEADER,
+  SESSION_THREAD_HUMAN_TURN_MAX_CHARS,
   SESSION_THREAD_MAX_TURNS,
   SESSION_THREAD_TURN_MAX_CHARS,
   type SessionTurn,
@@ -89,8 +90,9 @@ describe("session thread block (REQ-discord-072)", () => {
   });
 
   test("a long thread keeps the opening request and newest turns within budget, eliding the middle with a count marker", () => {
+    // Past the block ceiling (condensation normally keeps it well inside).
     const turns: SessionTurn[] = [];
-    for (let n = 1; n <= 60; n += 1) turns.push(...exchange(n, 200));
+    for (let n = 1; n <= 60; n += 1) turns.push(...exchange(n, 400));
     const block = formatSessionThread(turns);
     expect(block.length).toBeLessThanOrEqual(SESSION_THREAD_BUDGET_CHARS);
     expect(block.startsWith(SESSION_THREAD_HEADER)).toBe(true);
@@ -114,12 +116,19 @@ describe("session thread block (REQ-discord-072)", () => {
   test("one turn is clipped, so a huge message never crowds out the rest", () => {
     const huge = "y".repeat(SESSION_THREAD_TURN_MAX_CHARS * 3);
     const block = formatSessionThread([
-      { role: "human", content: huge },
-      { role: "agent", content: "short answer" },
+      { role: "human", content: "short request" },
+      { role: "agent", content: huge },
     ]);
-    expect(block).toContain(`Human: ${"y".repeat(SESSION_THREAD_TURN_MAX_CHARS - 1)}…`);
+    expect(block).toContain(`You (Corvidinho): ${"y".repeat(SESSION_THREAD_TURN_MAX_CHARS - 1)}…`);
     expect(block).not.toContain("y".repeat(SESSION_THREAD_TURN_MAX_CHARS));
-    expect(block).toContain("You (Corvidinho): short answer");
+    expect(block).toContain("Human: short request");
+    // A human turn keeps a whole Discord input (SESSION-5 pins it word for
+    // word) and is clipped only past SESSION_THREAD_HUMAN_TURN_MAX_CHARS.
+    const whole = "w".repeat(4000);
+    expect(formatSessionThread([{ role: "human", content: whole }])).toContain(`Human: ${whole}\n`);
+    const over = "z".repeat(SESSION_THREAD_HUMAN_TURN_MAX_CHARS + 10);
+    const clipped = formatSessionThread([{ role: "human", content: over }]);
+    expect(clipped).toContain(`Human: ${"z".repeat(SESSION_THREAD_HUMAN_TURN_MAX_CHARS - 1)}…`);
   });
 
   test("Planning module selection skips the whole block, multi-paragraph turns included (REQ-agent-004)", () => {
