@@ -16,10 +16,12 @@
  * the spawn env, a fake gateway for the bridge, a fake LLM provider. No live
  * Discord, no network.
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import {
   mkdirSync,
   mkdtempSync,
+  renameSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -27,8 +29,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
 import { createSpawnAgentClient } from "../src/discord/agent-client.ts";
+import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import {
@@ -320,6 +324,46 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
     expect(uploads[0]!.url).toContain(`/channels/${OTHER_CHAN}/messages`);
   });
 
+  test("DISCORD-5 / REQ-discord-212: a thread allowlisted by its own id attaches without its parent listed, as the router serves it; a deny on the thread or its parent still wins", async () => {
+    put("shot.png", PNG);
+    // The thread is listed, its parent is not: the bridge talks in it
+    // (isMonitoredConversation), so the tool it is offered must work there.
+    process.env.CORVIDINHO_DISCORD_ALLOW_CHANNELS = THREAD;
+    process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = THREAD;
+    process.env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID = OTHER_CHAN;
+    const own = await send(["shot.png"]);
+    expect(own.error).toBeUndefined();
+    expect(own.ok).toBe(true);
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.url).toContain(`/channels/${THREAD}/messages`);
+    expect(checks).toEqual([{ channelId: THREAD, userId: OWNER, needs: { attachFiles: true } }]);
+
+    // Deny wins: a deny-listed parent refuses its allowlisted thread…
+    process.env.CORVIDINHO_DISCORD_DENY_CHANNELS = OTHER_CHAN;
+    const parentDenied = await send(["shot.png"]);
+    expect(parentDenied.ok).toBe(false);
+    expect(parentDenied.error).toContain(`"${OTHER_CHAN}" is denied`);
+
+    // …and a deny-listed thread is refused under an allowlisted parent.
+    process.env.CORVIDINHO_DISCORD_ALLOW_CHANNELS = `${THREAD},${CHAN}`;
+    process.env.CORVIDINHO_DISCORD_DENY_CHANNELS = THREAD;
+    process.env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID = CHAN;
+    const threadDenied = await send(["shot.png"]);
+    expect(threadDenied.ok).toBe(false);
+    expect(threadDenied.error).toContain(`"${THREAD}" is denied`);
+
+    // Neither the thread nor its parent listed: refused.
+    delete process.env.CORVIDINHO_DISCORD_DENY_CHANNELS;
+    process.env.CORVIDINHO_DISCORD_ALLOW_CHANNELS = CHAN;
+    process.env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID = OTHER_CHAN;
+    const unlisted = await send(["shot.png"]);
+    expect(unlisted.ok).toBe(false);
+    expect(unlisted.error).toContain("not allowlisted");
+
+    expect(uploads).toHaveLength(1);
+    expect(checks).toHaveLength(1);
+  });
+
   test("REQ-discord-004: a channel the bridge listens in only through DISCORD_CHANNEL_IDS attaches; a deny still wins", async () => {
     put("shot.png", PNG);
     const savedFile = process.env.CORVIDINHO_ALLOWLIST_FILE;
@@ -424,6 +468,135 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
     expect(r.error).toContain("upload limit");
     expect(uploads).toHaveLength(0);
     expect(checks).toHaveLength(0);
+  });
+
+  test("the 8 MB cap holds for the bytes read: a file that grew past it after its size was checked is refused, reading no more than the cap + 1 byte", async () => {
+    // A PNG of twice the cap on disk whose size, as the plugin takes it (a
+    // path stat or the open descriptor's fstat), is still the size it had
+    // before it grew: the file grew between the size check and the read.
+    const abs = put("grew.png", PNG);
+    const grownSize = 2 * UPLOAD_MAX;
+    truncateSync(abs, grownSize);
+    const realStat = fs.statSync;
+    const realFstat = fs.fstatSync;
+    const realReadFile = fs.readFileSync;
+    const realRead = fs.readSync;
+    const shrink = <T,>(st: T): T => {
+      const s = st as unknown as fs.Stats | undefined;
+      if (s && s.size === grownSize) Object.defineProperty(s, "size", { value: PNG.byteLength });
+      return st;
+    };
+    const stat = spyOn(fs, "statSync").mockImplementation(((
+      p: fs.PathLike,
+      o?: fs.StatSyncOptions,
+    ) => {
+      const st = realStat(p, o);
+      return String(p).endsWith("grew.png") ? shrink(st) : st;
+    }) as typeof fs.statSync);
+    let lied = false;
+    const fstat = spyOn(fs, "fstatSync").mockImplementation(((
+      fd: number,
+      o?: fs.StatOptions,
+    ) => {
+      // Only the first look (the size check) is stale; later ones see the truth.
+      const st = realFstat(fd, o as undefined);
+      if (lied || st.size !== grownSize) return st;
+      lied = true;
+      return shrink(st);
+    }) as typeof fs.fstatSync);
+    // Bytes the plugin pulls from the file, however it reads it.
+    let bytesRead = 0;
+    const readFile = spyOn(fs, "readFileSync").mockImplementation(((
+      p: fs.PathOrFileDescriptor,
+      o?: unknown,
+    ) => {
+      const out = realReadFile(p, o as undefined);
+      if (String(p).endsWith("grew.png")) bytesRead += out.length;
+      return out;
+    }) as typeof fs.readFileSync);
+    const read = spyOn(fs, "readSync").mockImplementation(((...a: unknown[]) => {
+      const n = (realRead as (...x: unknown[]) => number)(...a);
+      bytesRead += n;
+      return n;
+    }) as typeof fs.readSync);
+    try {
+      const r = await send(["grew.png"]);
+      expect(r.ok).toBe(false);
+      expect(r.error).toContain("upload limit");
+      expect(r.error).toContain(`${grownSize} bytes`);
+      expect(bytesRead).toBeGreaterThan(UPLOAD_MAX);
+      expect(bytesRead).toBeLessThanOrEqual(UPLOAD_MAX + 1);
+      expect(uploads).toHaveLength(0);
+      expect(checks).toHaveLength(0);
+    } finally {
+      stat.mockRestore();
+      fstat.mockRestore();
+      readFile.mockRestore();
+      read.mockRestore();
+    }
+  });
+
+  test("SAFE-2: a file swapped after the path checks (for a link to .env, or its folder for a link into .ssh) is refused; what is read is what was checked", async () => {
+    put(".env", `TOKEN=${SECRET}\nLEAK_MARKER=env\n`);
+    put(".ssh/out.log", "LEAK_MARKER=ssh\n");
+    put("notes.txt", "harmless\n");
+    put("logs/out.log", "harmless\n");
+    // Swap each target once, right after the plugin has checked it: at the
+    // first stat or open of the checked path (the plugin does no fs call on it
+    // between the name checks and the read).
+    const swaps: Record<string, () => void> = {
+      [join(project, "notes.txt")]: () => {
+        rmSync(join(project, "notes.txt"));
+        symlinkSync(join(project, ".env"), join(project, "notes.txt"));
+      },
+      [join(project, "logs", "out.log")]: () => {
+        renameSync(join(project, "logs"), join(project, "logs.old"));
+        symlinkSync(join(project, ".ssh"), join(project, "logs"));
+      },
+    };
+    const swapOnce = (p: fs.PathLike | number): void => {
+      if (typeof p !== "string") return;
+      const swap = swaps[p];
+      if (!swap) return;
+      delete swaps[p];
+      swap();
+    };
+    const realStat = fs.statSync;
+    const realOpen = fs.openSync;
+    const stat = spyOn(fs, "statSync").mockImplementation(((
+      p: fs.PathLike,
+      o?: fs.StatSyncOptions,
+    ) => {
+      swapOnce(p);
+      return realStat(p, o);
+    }) as typeof fs.statSync);
+    const open = spyOn(fs, "openSync").mockImplementation(((
+      p: fs.PathLike,
+      flags: fs.OpenMode,
+      mode?: fs.Mode | null,
+    ) => {
+      swapOnce(p);
+      return realOpen(p, flags, mode);
+    }) as typeof fs.openSync);
+    try {
+      for (const [p, why] of [
+        // The checked path itself is now a link: not followed (O_NOFOLLOW).
+        ["notes.txt", "became a symlink after it was checked"],
+        // Its folder is now a link: the opened file's own path is refused.
+        ["logs/out.log", "now opens a protected, secret or outside path"],
+      ] as const) {
+        const r = await send([p]);
+        expect(`${p}: ${r.ok}`).toBe(`${p}: false`);
+        expect(r.error ?? "").toContain("refused (SAFE-2)");
+        expect(r.error ?? "").toContain(why);
+      }
+      expect(Object.keys(swaps)).toEqual([]);
+      expect(uploads).toHaveLength(0);
+      expect(checks).toHaveLength(0);
+    } finally {
+      stat.mockRestore();
+      open.mockRestore();
+    }
   });
 
   test("a server limit lower than 8 MB (Discord 413 / code 40005) is reported, not retried", async () => {
@@ -537,6 +710,84 @@ describe("the bridge supplies the conversation channel (REQ-discord-476)", () =>
     expect(inThread.summary).toContain(`reply=[${THREAD}] parent=[${CHAN}]`);
     const none = await client.runChat({ prompt: "hi", sessionId: "s2", actingUserId: OWNER });
     expect(none.summary).toContain("reply=[] parent=[]");
+  });
+
+  test("an ask-button pick in a thread resumes with the conversation's thread and its parent", async () => {
+    const ask: HumanAsk = {
+      reason: "clarify",
+      question: "Which file?",
+      options: [
+        { id: "1", label: "build.log" },
+        { id: "2", label: "screen.png" },
+      ],
+    };
+    const calls: AgentRunChatOpts[] = [];
+    const agent: AgentClient = {
+      async runChat(opts) {
+        calls.push(opts);
+        return calls.length === 1
+          ? {
+              ok: true,
+              sessionId: opts.sessionId,
+              summary: "need input",
+              exitCode: 0,
+              ask,
+              task: { verified: false, verifySkipped: true, state: "blocked" },
+            }
+          : { ok: true, sessionId: opts.sessionId, summary: "done", exitCode: 0 };
+      },
+    };
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const result = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: CHAN,
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: join(tempDir("corvidinho-send-file-allow-"), "none.toml"),
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
+      },
+      projectRoot: tempDir("corvidinho-send-file-proj-"),
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      thinkingOutbound: memoryThinkingOutbound(),
+      thinkingDebounceMs: 0,
+      thinkingTickMs: 60_000,
+      agent,
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        let n = 0;
+        handlers.reply = async () => ({ messageId: `bot-reply-${++n}` });
+        return createNullGateway();
+      },
+    });
+    if (result.ok !== true || !box.handlers) throw new Error("bridge did not start");
+    try {
+      const h = box.handlers;
+      await h.onMessage({
+        id: "m1",
+        channelId: CHAN,
+        threadId: THREAD,
+        authorId: OWNER,
+        authorBot: false,
+        content: "send me one of them",
+        mentionedBot: true,
+      });
+      expect(calls).toHaveLength(1);
+      const askId = result.store.list()[0]?.pendingAsk?.askId;
+      if (!askId) throw new Error("no button ask");
+      await h.onComponent!({
+        id: "ix-1",
+        customId: pickCustomId(askId, "2"),
+        channelId: THREAD,
+        userId: OWNER,
+        reply: async () => {},
+        deleteReply: async () => {},
+      });
+      expect(calls).toHaveLength(2);
+      expect(calls[1]).toMatchObject({ replyChannelId: THREAD, replyParentChannelId: CHAN });
+    } finally {
+      await result.stop();
+    }
   });
 
   test("chat runs get the conversation's channel (thread + parent in a thread); /session start and /work the command's channel", async () => {

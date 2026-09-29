@@ -142,6 +142,13 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/discord.send-file.test.ts` — a deny-listed thread under its
   allowlisted parent is refused `is denied` before any requester check or
   upload; another thread under that parent still attaches.
+- `tests/discord.send-file.test.ts` — REQ-discord-212 / REQ-discord-476: a
+  thread allowlisted by its own id, its parent not listed, attaches in the
+  thread after the acting user's check (as the router serves it); with the
+  parent deny-listed it is refused (`is denied`), a deny-listed thread under
+  an allowlisted parent is refused, and a thread whose parent is not listed
+  either is refused (not allowlisted); nothing more is checked or uploaded.
+  Fails against the plugin before this fix (it gated the parent only).
 
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
@@ -423,7 +430,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `fledge.toml`, a symlink to `.env`, a symlink into `.git`, a symlink out of
   the project and `..` / absolute outside paths are refused; `.sh`, a
   non-PNG `.png` and non-UTF-8 `.txt` are refused; a file over 8 MB is
-  refused before the check; a 413 / code 40005 answer is reported; a check
+  refused before the check, and so is a PNG whose size as first taken
+  (`statSync` / `fstatSync` spied to report its size before it grew) is
+  under 8 MB but whose bytes read are over it, after at most 8 MB + 1 byte
+  is read (`readSync` / `readFileSync` spied to count; REQ-discord-476,
+  fails against the plugin before the bounded read); a checked `notes.txt`
+  swapped for a link to `.env`, or `logs/out.log` whose folder is swapped for
+  a link into `.ssh`, at its first stat / open is refused (SAFE-2,
+  REQ-discord-476; fails against the plugin that read with `readFileSync`);
+  a 413 / code 40005 answer is reported; a check
   refusal (cannot attach) or a check that throws sends nothing; dry run
   uploads nothing; `started` + `ok` audit rows are written; `--git-diff`
   refuses an empty diff and attaches `changes.diff` with the tracked
@@ -431,5 +446,6 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   spawn client writes the reply channel and parent env (empty when none,
   never inherited); through `startBridge` a channel mention, a thread
   mention (thread + parent), `/session start` and `/work` pass the
-  conversation's channel. Against the base without the change: 20 of 21
+  conversation's channel, and an ask-button pick in a thread resumes with
+  `replyChannelId` = the thread and `replyParentChannelId` = its parent. Against the base without the change: 20 of 21
   fail (the "no attach promise" guard passes).
