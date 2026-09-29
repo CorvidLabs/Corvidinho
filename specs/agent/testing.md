@@ -106,3 +106,10 @@ call); an offered tool whose own error only quotes the phrase adds no note; a
 long reply keeps the note through the `resultFrame` and `chatBodyFromTaskResult`
 caps; an unregistered name, ADMIN and the local CLI keep the "not offered"
 refusal with no note; a summary that already says it gets no second note.
+- `tests/discord.send-file.test.ts` › "the model is told it can attach"
+  (REQ-agent-476, DISCORD-17): fake provider; with `discord-send-file`
+  allowlisted and `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` set the tool is
+  offered and the system prompt carries `Attachments (DISCORD-17)`, "never
+  say you cannot send or attach files or images" and the `--git-diff` hint;
+  not allowlisted, or no conversation channel, the prompt has no attach
+  block.

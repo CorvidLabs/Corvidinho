@@ -747,6 +747,9 @@ export async function startBridge(
               actingUserId: msg.authorId,
               actingIsAdmin,
               cwd: sessionCwd,
+              // DISCORD-17: files attach in this conversation's channel only.
+              replyChannelId: channelId,
+              ...(msg.threadId ? { replyParentChannelId: msg.channelId } : {}),
               onStatus: (u) => {
                 void thinking.update({
                   tool: u.tool,
@@ -1164,6 +1167,9 @@ export async function startBridge(
               actingUserId: interaction.userId,
               actingIsAdmin,
               cwd: sessionCwd,
+              // DISCORD-17: files attach in this conversation's channel only.
+              replyChannelId: channelId,
+              ...(session.threadId ? { replyParentChannelId: session.channelId } : {}),
               onStatus: (u) => {
                 void thinking.update({
                   tool: u.tool,

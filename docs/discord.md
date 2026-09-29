@@ -3,7 +3,7 @@
 Operator / UX inventory for Corvidinho’s Discord bridge (HEAR).  
 **As of:** 2026-09-29 (America/Denver). Package version from `src/version.ts` / `package.json`.
 
-Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..13, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4, ADMIN-3.a), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..7, IDENTITY-13/14), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..7) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
+Acceptance criteria live in [`hi/discord.md`](../hi/discord.md) (DISCORD-1..17, DISCORD-DENY-1..3, DISCORD-SCHEDULE-1..5, DISCORD-ANNOUNCE-1..6, DISCORD-ASK-1..8), [`hi/admin.md`](../hi/admin.md) (ADMIN-1..4, ADMIN-3.a), [`hi/identity.md`](../hi/identity.md) (IDENTITY-1..7, IDENTITY-13/14), [`hi/autonomy.md`](../hi/autonomy.md) (AUTONOMY-1..11) and [`hi/session.md`](../hi/session.md) (SESSION-WORKTREE-1..5, SESSION-MULTI-1..4).  
 Go-live secrets checklist: [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md). Box updater / slash re-register: [`BOX-UPDATE.md`](BOX-UPDATE.md).
 
 > **Mermaid is docs-only.** Discord chat does **not** render Mermaid natively. Use embeds, code fences, or PNG in Discord; keep flowcharts in this repo doc.
@@ -128,7 +128,7 @@ Live source (AGENT-8 / DISCORD-3, #73; AGENT-4 / #85): the bridge spawns `task r
 
 ### Mentions in outbound posts (DISCORD-8)
 
-Every post the bridge makes — chat replies, `/session start` and `/work` replies, other slash replies, ask-button replies and collapse edits, schedule and announce posts, thinking embeds — and the agent's `discord-post-message` parses **no** mentions from its text (`allowedMentions.parse = []`, also the discord.js client default). Model text is untrusted (a chatter's prompt, public GitHub content), so `@everyone`, `@here`, `<@&role>` and `<@user>` in a summary never ping; `@everyone` / `@here` are also defanged with a zero-width space. A reply still pings the person it answers. The only other pings are the users a question names (requester or owner, below). Source: `src/discord/allowed-mentions.ts` (REQ-discord-205).
+Every post the bridge makes — chat replies, `/session start` and `/work` replies, other slash replies, ask-button replies and collapse edits, schedule and announce posts, thinking embeds — and the agent's `discord-post-message` and `discord-send-file` caption parse **no** mentions from its text (`allowedMentions.parse = []`, also the discord.js client default). Model text is untrusted (a chatter's prompt, public GitHub content), so `@everyone`, `@here`, `<@&role>` and `<@user>` in a summary never ping; `@everyone` / `@here` are also defanged with a zero-width space. A reply still pings the person it answers. The only other pings are the users a question names (requester or owner, below). Source: `src/discord/allowed-mentions.ts` (REQ-discord-205).
 
 ### Session replies (mention / continue)
 
@@ -165,6 +165,19 @@ Mostly ephemeral plain text (`/status`, `/agents`, `/session list`, mute/unmute,
 ### Posts to another channel (DISCORD-8)
 
 `discord-post-message` is a dangerous tool (allowlist it in `CORVIDINHO_ALLOWLIST`, [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.3); the model is offered it only in the owner's runs and a local `task run`. The channel allowlist is checked first. In a run the bridge started (chat, `/session start`, `/work`), the post then also needs the Discord user the run acts for (`CORVIDINHO_ACTING_DISCORD_USER_ID`, set per spawn by the bridge) to have **View Channel** and **Send Messages** on the target channel, not only the bot. The tool's `--requesting-user-id` (or `--requester`) cannot change who is checked: any value naming a different user is refused, and nothing is posted. If the check cannot run (the Guild Members login is refused because **Server Members Intent** is off, times out, or errors), the post is refused with the reason (one scrubbed line, SAFE-6) and nothing is posted; a user the member lookup cannot find is refused as not in the guild. Outside the bridge (operator `corvidinho plugins run` or a local `task run`, both with no acting user), the check runs only for a passed `--requesting-user-id`, and `CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1` refuses a post without one. WATCH runs have no acting user and are not ADMIN, so ROLES-CHAT-3 refuses the tool there before it runs.
+
+### Files and images in replies (DISCORD-17)
+
+The agent can attach a file or image (a screenshot, log, diff or chart) to its reply with `discord-send-file`, and the model is told so: when the tool is in its catalog and the run is a Discord conversation, the system prompt says it can attach files and images and must never say it can't. It is a dangerous tool (allowlist it in `CORVIDINHO_ALLOWLIST`, [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.3) and mutating, so only the owner's runs get it (non-owners, WATCH and schedules are refused by ROLES-CHAT-3), and every call is on the audit trail (SAFE-5).
+
+- **Channel:** always the conversation's own channel — the thread for a talk in a thread, else the channel of the message or slash command. The bridge sets it per run (`CORVIDINHO_DISCORD_REPLY_CHANNEL_ID`, and `CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` for a thread; internal, never set these yourself). The model cannot choose one: a `--channel` / `-c` argument is refused, and a run without a conversation channel (a schedule, WATCH, `plugins run`, a local `task run`) is refused. Nothing is posted anywhere else.
+- **Gates, in order:** the channel allowlist (a thread through its parent channel, DISCORD-5); then the DISCORD-8 check for the Discord user the run acts for, who needs **View Channel**, **Send Messages** and **Attach Files** there (needs **Server Members Intent**; a check that cannot run refuses).
+- **What can be attached:** `discord-send-file <path>` for a file under the project: images `.png`, `.jpg` / `.jpeg`, `.gif`, `.webp` (the bytes must match the name) or UTF-8 text `.txt`, `.log`, `.md`, `.diff`, `.patch`, `.json`, `.csv`. `discord-send-file --git-diff [--staged]` attaches the current diff as `changes.diff` (`staged.diff`): a large diff goes as a file, not a wall of text; secret paths are left out of it. At most **8 MB** after scrubbing; a lower server limit (Discord 413 / code 40005) is reported and nothing is retried. Optional `--caption <text>` (1900 characters, no mentions).
+- **Secrets:** text files, diffs and the caption are secret-scrubbed first (SAFE-6: vendor-key shapes and the literal values of `DISCORD_TOKEN`, `GITHUB_TOKEN`, the LLM key and the other secret env vars become `[redacted:…]`). Images are sent as they are.
+- **Refused paths:** SAFE-2 protected infra (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`, `specs/`, `*.spec.md`, keystores), anything under `.specsync`, and secret paths (`.ssh`, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`). Checked on the path as given and on where it resolves inside the project root with symlinks followed, so a link named `notes.txt` that points at `.env` is refused; a path or link that leaves the project is refused.
+- **Dry run:** with `CORVIDINHO_DISCORD_DRY_RUN=1` nothing is posted; the result names the file, size and type it would attach.
+
+Source: `plugins/discord/send-file.ts` (REQ-discord-476, REQ-agent-476).
 
 ---
 
@@ -205,7 +218,8 @@ flowchart TD
 
 | Limit | Corvidinho practice |
 |-------|---------------------|
-| Message content | Hard-cap **1900** at gateway / slash adapt / `discord-post-message` |
+| Message content | Hard-cap **1900** at gateway / slash adapt / `discord-post-message` / `discord-send-file` caption |
+| Attachments | `discord-send-file`: one file per call, at most **8 MB** (Discord's default upload limit; a lower server limit is reported, not retried) |
 | Thinking embeds | Description + footer only; one embed |
 | Mermaid | **Repo docs only** — not Discord chat |
 | Presence | Custom Status `vX.Y.Z` (DISCORD-12), sent on every gateway IDENTIFY (Client `presence` option, also on the DISCORD-8 requester-check login) and set again on ready |

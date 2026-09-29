@@ -8,8 +8,13 @@
  * substitutions, so redirections, quoting, `\`-newlines, `$(…)`/backticks and
  * dynamic `CDPATH`/`DIRSTACK` can no longer smuggle a `cd` past the check. A
  * `cd`/`pushd` left open by an unterminated quote or a trailing `\` refuses.
+ * `eval` arguments, `trap` actions, shell `-c` strings and the scripts a
+ * command runs in a shell (sourced, handed to a shell, or run by path) are
+ * read and checked the same way; a script it cannot read refuses. No shell
+ * evaluation still means another interpreter's `chdir` is out of reach.
  */
 
+import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 
 /** Strip surrounding quotes from a cd target token. */
@@ -105,7 +110,16 @@ const EXPANSION = /[$`*?[{]/;
 
 /** A word, its expansion flag, and where it starts in the tokenized text. */
 type Word = { value: string; expands: boolean; start: number };
-type Tok = { redir: true } | { word: Word };
+/**
+ * A redirection: `in` (`<`, `<&`), `out` (`>`, `>>`, `>|`, `>&`, `&>`), `rw`
+ * (`<>`), `heredoc` (`<<`, `<<-`) or `herestring` (`<<<`).
+ */
+type RedirKind = "in" | "out" | "rw" | "heredoc" | "herestring";
+/** A here-doc's body as the shell read it, and whether it is expanded. */
+type HereDocBody = { body: string; literal: boolean };
+/** A redirection marker: its target is the next word. */
+type Redir = { redir: RedirKind; doc?: HereDocBody };
+type Tok = Redir | { word: Word };
 
 /**
  * A tokenized command: its simple commands, the command substitutions inside
@@ -150,7 +164,13 @@ const BASH: Reading = { hereDocs: true, ansiC: true };
 const BASH_CODE: Reading = { hereDocs: false, ansiC: true };
 
 /** A here-doc (`<<` / `<<-`) whose body starts after the next newline. */
-type HereDoc = { delim: string; stripTabs: boolean; literal: boolean };
+type HereDoc = {
+  delim: string;
+  stripTabs: boolean;
+  literal: boolean;
+  /** Its redirection marker, which gets the body once it is read. */
+  tok: Redir;
+};
 
 /** Index after the backtick closing the one at `open`, or -1 when none does. */
 function matchBacktick(s: string, open: number): number {
@@ -246,8 +266,9 @@ function tokenize(
   let quoted = false;
   let start = -1; // where the current word began; -1 between words
   let parens = 0; // bare `(` nesting inside a `$( )` body
-  // The next word is a here-doc delimiter (true: `<<-`).
+  // The next word is a here-doc delimiter (true: `<<-`) for `docTok`.
   let delimNext: boolean | null = null;
+  let docTok: Redir = { redir: "heredoc" };
   // Here-docs whose body starts after the next newline.
   const pending: HereDoc[] = [];
 
@@ -257,7 +278,12 @@ function tokenize(
   const endWord = () => {
     if (start >= 0) {
       if (delimNext != null) {
-        pending.push({ delim: value, stripTabs: delimNext, literal: quoted });
+        pending.push({
+          delim: value,
+          stripTabs: delimNext,
+          literal: quoted,
+          tok: docTok,
+        });
         delimNext = null;
       }
       cur.push({ word: { value, expands, start } });
@@ -297,10 +323,12 @@ function tokenize(
         }
         i = next;
       }
-      if (!doc.literal) {
-        const body = cmd.slice(bodyStart, bodyEnd);
-        hereDocSubstitutions(body, subs, reading, depth);
-      }
+      const body = cmd.slice(bodyStart, bodyEnd);
+      doc.tok.doc = {
+        body: doc.stripTabs ? body.replace(/^\t+/gm, "") : body,
+        literal: doc.literal,
+      };
+      if (!doc.literal) hereDocSubstitutions(body, subs, reading, depth);
     }
     return i;
   };
@@ -425,7 +453,7 @@ function tokenize(
         endWord();
         i += 2;
         if (cmd[i] === ">") i++;
-        cur.push({ redir: true });
+        cur.push({ redir: "out" });
         continue;
       }
       endFrag();
@@ -450,9 +478,18 @@ function tokenize(
         i++;
         delimNext = cmd[i] === "-";
         if (delimNext) i++;
-        cur.push({ redir: true });
+        docTok = { redir: "heredoc" };
+        cur.push(docTok);
         continue;
       }
+      if (c === "<" && d === "<" && cmd[i + 1] === "<") {
+        i += 2; // `<<<` here-string: the next word is fed as input
+        cur.push({ redir: "herestring" });
+        continue;
+      }
+      let kind: RedirKind = c === ">" ? "out" : "in";
+      if (c === "<" && d === ">") kind = "rw";
+      if (c === "<" && d === "<") kind = "heredoc"; // `<<` read as code
       if (
         d === ">" ||
         d === "&" ||
@@ -461,7 +498,7 @@ function tokenize(
       ) {
         i++;
       }
-      cur.push({ redir: true });
+      cur.push({ redir: kind });
       continue;
     }
     if (reading.ansiC && c === "$" && cmd[i + 1] === "'") {
@@ -510,25 +547,56 @@ function tokenize(
   return { text: cmd, frags, subs, depth, end: n, open: open || inSubst };
 }
 
-/** Words of a fragment with each redirection operator + its target dropped. */
-function stripRedirections(frag: Tok[]): Word[] {
-  const consumed = new Array<boolean>(frag.length).fill(false);
-  for (let k = 0; k < frag.length; k++) {
-    if ("redir" in frag[k]!) {
-      for (let m = k + 1; m < frag.length; m++) {
-        if ("word" in frag[m]!) {
-          consumed[m] = true;
-          break;
-        }
-      }
+/** A redirection of a simple command, with its target word if it has one. */
+type Redirection = { kind: RedirKind; target: Word | null; doc?: HereDocBody };
+
+/** A simple command's words and its redirections. */
+type Parts = { words: Word[]; redirs: Redirection[] };
+
+/**
+ * Split a fragment into its words and its redirections. A redirection's
+ * target is the next word; a `<(…)` / `>(…)` process substitution leaves it
+ * without one.
+ */
+function fragParts(frag: Tok[]): Parts {
+  const words: Word[] = [];
+  const redirs: Redirection[] = [];
+  let pending: Redirection | null = null;
+  for (const tk of frag) {
+    if ("redir" in tk) {
+      pending = { kind: tk.redir, target: null, doc: tk.doc };
+      redirs.push(pending);
+    } else if (pending) {
+      pending.target = tk.word; // a redirection's target is not an argument
+      pending = null;
+    } else {
+      words.push(tk.word);
     }
   }
-  const words: Word[] = [];
-  for (let k = 0; k < frag.length; k++) {
-    const tk = frag[k]!;
-    if ("word" in tk && !consumed[k]) words.push(tk.word);
+  return { words, redirs };
+}
+
+/** Index of the command word, past prefix words and `NAME=value` assignments. */
+function commandStart(words: Word[]): number {
+  let i = 0;
+  while (i < words.length) {
+    const v = words[i]!.value;
+    if (PREFIX_WORDS.has(v)) {
+      i++;
+      while (i < words.length && words[i]!.value.startsWith("-")) i++;
+      continue;
+    }
+    if (v === "function") {
+      i += 2; // `function name { … }`
+      continue;
+    }
+    if (ASSIGNMENT.test(v)) {
+      i++;
+      continue;
+    }
+    break;
   }
-  return words;
+  return i;
 }
 
 /** Shells whose `-c` string runs as a command (matched by name or path). */
@@ -541,6 +609,53 @@ const SHELL_OPT_ARGS = new Set([
   "-o", "+o", "-O", "+O", "--rcfile", "--init-file",
 ]);
 
+/** Shell options whose argument is a startup file the shell sources. */
+const SHELL_RC_OPTS = new Set(["--rcfile", "--init-file"]);
+
+/** Last path component (`/bin/sh` → `sh`). */
+function baseName(v: string): string {
+  return v.slice(v.lastIndexOf("/") + 1);
+}
+
+/**
+ * A shell's options after the shell word at `k`: whether `-c` was given, the
+ * startup files it is told to source, and the index of its first operand (the
+ * `-c` string or a script file), or -1 when it reads its commands from
+ * standard input (no operand, or `-s`). `-` ends the options like `--`, and
+ * `o` / `O` in a cluster (`-eo pipefail`) take the next word.
+ */
+function shellArgs(
+  words: Word[],
+  k: number,
+): { dashC: boolean; operand: number; rcFiles: Word[] } {
+  let dashC = false;
+  let dashS = false;
+  const rcFiles: Word[] = [];
+  let m = k + 1;
+  for (; m < words.length; m++) {
+    const v = words[m]!.value;
+    if (v === "--" || v === "-") {
+      m++;
+      break;
+    }
+    if (SHELL_OPT_ARGS.has(v)) {
+      m++;
+      if (SHELL_RC_OPTS.has(v) && words[m]) rcFiles.push(words[m]!);
+      continue;
+    }
+    if (/^[-+][A-Za-z]+$/.test(v)) {
+      if (v[0] === "-" && v.includes("c")) dashC = true;
+      if (v[0] === "-" && v.includes("s")) dashS = true;
+      m += (v.slice(1).match(/[oO]/g) ?? []).length;
+      continue;
+    }
+    if (v.startsWith("--")) continue; // --norc, --login, --posix …
+    break;
+  }
+  const stdin = m >= words.length || (dashS && !dashC);
+  return { dashC, operand: stdin ? -1 : m, rcFiles };
+}
+
 /**
  * Check the `-c` string of every shell named in `words` like an `eval`
  * argument. Any word counts, not just the command word, so a shell behind
@@ -552,28 +667,9 @@ function shellScripts(
   evalCommand: (cmd: string) => string | null,
 ): string | null {
   for (let k = 0; k < words.length; k++) {
-    const name = words[k]!.value;
-    if (!SHELLS.has(name.slice(name.lastIndexOf("/") + 1))) continue;
-    let dashC = false;
-    let m = k + 1;
-    for (; m < words.length; m++) {
-      const v = words[m]!.value;
-      if (v === "--") {
-        m++;
-        break;
-      }
-      if (SHELL_OPT_ARGS.has(v)) {
-        m++;
-        continue;
-      }
-      if (/^[-+][A-Za-z]+$/.test(v)) {
-        if (v[0] === "-" && v.includes("c")) dashC = true;
-        continue;
-      }
-      if (v.startsWith("--")) continue; // --norc, --login, --posix …
-      break;
-    }
-    const script = words[m];
+    if (!SHELLS.has(baseName(words[k]!.value))) continue;
+    const { dashC, operand } = shellArgs(words, k);
+    const script = words[operand];
     if (!dashC || !script) continue;
     if (script.expands) return script.value || "$(...)";
     const r = evalCommand(script.value);
@@ -583,34 +679,431 @@ function shellScripts(
 }
 
 /**
+ * The action of a `trap` command at `i`, which the shell runs later as a
+ * command, or undefined when it only lists or resets traps.
+ */
+function trapAction(words: Word[], i: number): Word | undefined {
+  let m = i + 1;
+  if (words[m]?.value === "--") m++;
+  const action = words[m];
+  if (!action || !words[m + 1] || /^(-.*|\d+)$/.test(action.value)) {
+    return undefined;
+  }
+  return action;
+}
+
+/** Options of an exec wrapper that take the next word as their argument. */
+const WRAPPER_OPT_ARGS: Record<string, Set<string>> = {
+  exec: new Set(["-a"]),
+  env: new Set(["-u", "--unset"]),
+  nice: new Set(["-n", "--adjustment"]),
+  timeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
+  stdbuf: new Set(["-i", "-o", "-e", "--input", "--output", "--error"]),
+  xargs: new Set([
+    "-a", "-E", "-I", "-L", "-n", "-P", "-s", "-d", "--arg-file", "--eof",
+    "--replace", "--max-lines", "--max-args", "--max-procs", "--max-chars",
+    "--delimiter",
+  ]),
+  nohup: new Set(),
+  setsid: new Set(),
+  busybox: new Set(),
+};
+
+/**
+ * Index of the command that the exec wrapper at `k` runs (`env X=1 ./x`,
+ * `timeout 5 ./x`, `xargs -n1 ./x`, `busybox sh`), or -1 when `k` is not a
+ * wrapper or its command cannot be read (`env -C`, `env -S`).
+ */
+function wrapped(words: Word[], k: number): number {
+  const name = baseName(words[k]!.value);
+  const optArgs = WRAPPER_OPT_ARGS[name];
+  if (!optArgs) return -1;
+  let m = k + 1;
+  for (; m < words.length; m++) {
+    const v = words[m]!.value;
+    if (v === "--") {
+      m++;
+      break;
+    }
+    if (name === "env" && (v === "-" || ASSIGNMENT.test(v))) continue;
+    if (!v.startsWith("-") || v === "-") break;
+    if (name === "env" && /^(-C|--chdir|-S|--split-string)/.test(v)) return -1;
+    if (optArgs.has(v)) m++; // the option's argument is the next word
+  }
+  if (name === "timeout") m++; // the duration
+  return m < words.length ? m : -1;
+}
+
+/**
+ * Indexes of the words that run as commands, starting at the command word
+ * `i`: the command word, what exec wrappers around it run, and the command
+ * after each `find … -exec` / `-execdir` / `-ok` / `-okdir`.
+ */
+function commandIndexes(words: Word[], i: number): number[] {
+  const out: number[] = [];
+  for (let k = i; k >= 0 && k < words.length; k = wrapped(words, k)) {
+    out.push(k);
+    if (baseName(words[k]!.value) === "find") {
+      for (let m = k + 1; m + 1 < words.length; m++) {
+        if (/^-(exec|execdir|ok|okdir)$/.test(words[m]!.value)) out.push(m + 1);
+      }
+    }
+  }
+  return out;
+}
+
+/** Commands that never write the files they name (builtins and readers). */
+const READ_ONLY = new Set([
+  "cat", "bat", "less", "more", "head", "tail", "wc", "ls", "stat", "file",
+  "test", "[", "[[", "grep", "egrep", "fgrep", "rg", "diff", "cmp", "md5sum",
+  "sha1sum", "sha256sum", "sha512sum", "readlink", "realpath", "dirname",
+  "basename", "echo", "printf", "chmod", "shellcheck", "true", "false",
+  "which", "type", "du", "cd", "pushd", "popd", "pwd", "export", "unset",
+  "set", "sleep", "exit", "return", "shift", "wait",
+]);
+
+/** `git` subcommands that never write the files they name. */
+const GIT_READ_ONLY = new Set([
+  "add", "diff", "status", "log", "show", "blame", "ls-files", "grep",
+  "commit", "push", "fetch", "rev-parse",
+]);
+
+/** Most directories tracked as places the shell may have `cd`'d to. */
+const MAX_CWDS = 32;
+
+/** Most script files, and most bytes of script text, read for one command. */
+const MAX_SCRIPTS = 32;
+const MAX_SCRIPT_BYTES = 1 << 20;
+
+/** What one `firstDisallowedCd` call knows about the command as a whole. */
+type Ctx = {
+  root: string;
+  /** The root and every in-root `cd` target reached from the dirs before. */
+  cwds: string[];
+  /** Set once `cwds` would grow past MAX_CWDS: script paths then refuse. */
+  cwdsOverflow: boolean;
+  /** Paths the command writes: output redirections, non-read-only args. */
+  writes: string[];
+  /** Each path a script was looked for at → the script word, for messages. */
+  lookedUp: Map<string, string>;
+  /** Script file → verdict (null: fine, or still being checked). */
+  scripts: Map<string, string | null>;
+  /** Bytes of script text read so far (at most MAX_SCRIPT_BYTES). */
+  scriptBytes: number;
+};
+
+/** Note that the shell may now be in `target`, from any dir it may be in. */
+function addCwd(ctx: Ctx, target: string): void {
+  for (const c of ctx.cwds.slice()) {
+    const d = isAbsolute(target) ? normalize(target) : resolve(c, target);
+    if (ctx.cwds.includes(d)) continue;
+    if (ctx.cwds.length >= MAX_CWDS) {
+      ctx.cwdsOverflow = true;
+      return;
+    }
+    ctx.cwds.push(d);
+  }
+}
+
+/** Where a path word may point, from every dir the shell may be in. */
+function candidates(ctx: Ctx, v: string): string[] {
+  if (isAbsolute(v)) return [normalize(v)];
+  return [...new Set(ctx.cwds.map((c) => resolve(c, v)))];
+}
+
+/**
+ * Add what `text` writes to `ctx.writes`: output redirection targets, and the
+ * arguments of every command that is not read-only (a script that a shell or
+ * `.` runs and a command a wrapper runs are not writes). `eval` arguments,
+ * `trap` actions and shell `-c` strings are read the same way.
+ */
+function collectWrites(text: string, ctx: Ctx, depth: number): void {
+  const readings = [DASH];
+  if (text.includes("$'")) readings.push(BASH);
+  if (text.includes("<<")) readings.push(BASH_CODE);
+  for (const reading of readings) {
+    collectLexedWrites(tokenize(text, reading, depth), ctx);
+  }
+}
+
+function collectLexedWrites(lx: Lexed, ctx: Ctx): void {
+  const push = (w: Word) => {
+    if (w.expands) return;
+    ctx.writes.push(w.value);
+    const eq = w.value.lastIndexOf("=");
+    if (eq >= 0) ctx.writes.push(w.value.slice(eq + 1)); // `of=x`, `--out=x`
+  };
+  for (const frag of lx.frags) {
+    const { words, redirs } = fragParts(frag);
+    for (const r of redirs) {
+      if ((r.kind === "out" || r.kind === "rw") && r.target) push(r.target);
+    }
+    const i = commandStart(words);
+    if (!words[i]) continue;
+    if (words[i]!.value === "eval") {
+      const rest = words.slice(i + 1).map((w) => w.value).join(" ");
+      collectWrites(rest, ctx, lx.depth + 1);
+      continue;
+    }
+    if (words[i]!.value === "trap") {
+      const action = trapAction(words, i);
+      if (action) collectWrites(action.value, ctx, lx.depth + 1);
+      continue;
+    }
+    const cmds = commandIndexes(words, i);
+    for (let n = 0; n < cmds.length; n++) {
+      const k = cmds[n]!;
+      const end = cmds[n + 1] ?? words.length;
+      const name = baseName(words[k]!.value);
+      let from = k + 1;
+      let read: Word[] = [];
+      if (SHELLS.has(name)) {
+        const { dashC, operand, rcFiles } = shellArgs(words, k);
+        if (operand >= 0 && dashC) {
+          collectWrites(words[operand]!.value, ctx, lx.depth + 1);
+        }
+        if (operand >= 0) from = operand + 1; // its script is read, not written
+        read = rcFiles;
+      } else if (name === "." || name === "source") {
+        from = k + 2;
+      } else if (
+        READ_ONLY.has(name) ||
+        (name === "git" && GIT_READ_ONLY.has(words[k + 1]?.value ?? ""))
+      ) {
+        continue;
+      }
+      for (let m = from; m < end; m++) {
+        if (!read.includes(words[m]!)) push(words[m]!);
+      }
+    }
+  }
+  for (const sub of lx.subs) collectLexedWrites(sub, ctx);
+}
+
+/** A script the command runs in a shell: sourced, handed to a shell, or run. */
+type ScriptRef = { word: Word; kind: "source" | "shell" | "exec" };
+
+/** `BASH_ENV=file`: a startup file that a non-interactive bash sources. */
+const BASH_ENV = /^BASH_ENV=/;
+
+/**
+ * First offending cd/pushd target in the scripts that the simple command at
+ * `i` runs in a shell: a file sourced with `.` / `source`, named by
+ * `BASH_ENV=` or by a shell's `--rcfile`; a file, here-doc or here-string a
+ * shell reads its commands from; a file run by path that is a shell script.
+ * A shell reading commands from anything else (a pipe, the standard input it
+ * was started with, a process substitution) refuses: its script is unknown.
+ */
+function scriptRefs(
+  parts: Parts,
+  i: number,
+  ctx: Ctx,
+  scriptCommand: (text: string) => string | null,
+): string | null {
+  const { words, redirs } = parts;
+  const refs: ScriptRef[] = [];
+  for (const w of words) {
+    if (!BASH_ENV.test(w.value)) continue;
+    const value = w.value.slice("BASH_ENV=".length);
+    if (value) refs.push({ word: { ...w, value }, kind: "source" });
+  }
+  const head = words[i]!;
+  if (head.value === "." || head.value === "source") {
+    const k = words[i + 1]?.value === "--" ? i + 2 : i + 1;
+    if (!words[k]) return `${head.value} (script not named)`;
+    refs.push({ word: words[k]!, kind: "source" });
+  }
+  for (const k of commandIndexes(words, i)) {
+    const w = words[k]!;
+    if (SHELLS.has(baseName(w.value))) {
+      const { dashC, operand, rcFiles } = shellArgs(words, k);
+      for (const rc of rcFiles) refs.push({ word: rc, kind: "source" });
+      if (dashC) continue; // the -c string is checked like an eval argument
+      if (operand >= 0) {
+        refs.push({ word: words[operand]!, kind: "shell" });
+        continue;
+      }
+      // The shell reads its commands from standard input: the last input
+      // redirection of this command, or else whatever it inherited.
+      const input = redirs.filter((r) => r.kind !== "out").at(-1);
+      if (input?.kind === "heredoc") {
+        // Read as code (no body), its lines are checked as commands anyway.
+        const r = input.doc ? hereDocScript(input.doc, w.value, scriptCommand) : null;
+        if (r != null) return r;
+      } else if (input?.kind === "herestring" && input.target) {
+        if (input.target.expands) {
+          return `${input.target.value} (shell input would expand)`;
+        }
+        const r = scriptCommand(input.target.value);
+        if (r != null) return r;
+      } else if (input?.target) {
+        refs.push({ word: input.target, kind: "shell" });
+      } else {
+        return `${w.value} (reads commands from standard input)`;
+      }
+    } else if (w.value.includes("/") && !w.expands) {
+      refs.push({ word: w, kind: "exec" });
+    }
+  }
+  for (const ref of refs) {
+    const r = checkScript(ref, ctx, scriptCommand);
+    if (r != null) return r;
+  }
+  return null;
+}
+
+/**
+ * Check a here-doc a shell reads its commands from. The body of an unquoted
+ * one is expanded first: `\$`, `` \` ``, `\\` and `\`-newline lose their
+ * backslash, and a `$` or backtick left refuses (the text is not lexical).
+ */
+function hereDocScript(
+  doc: HereDocBody,
+  shell: string,
+  scriptCommand: (text: string) => string | null,
+): string | null {
+  if (doc.literal) return scriptCommand(doc.body);
+  let text = "";
+  for (let k = 0; k < doc.body.length; k++) {
+    const c = doc.body[k]!;
+    const d = doc.body[k + 1];
+    if (c === "\\" && d != null && "$`\\\n".includes(d)) {
+      if (d !== "\n") text += d;
+      k++;
+      continue;
+    }
+    if (c === "$" || c === "`") return `${shell} (shell input would expand)`;
+    text += c;
+  }
+  return scriptCommand(text);
+}
+
+/**
+ * Check one script (see `scriptRefs`) from every dir the shell may be in.
+ * It refuses when its path would expand, when this command writes it, when a
+ * sourced or shell-run script does not exist, when it is too large or cannot
+ * be read, or when its contents refuse. A file run by path that does not
+ * exist yet (a program the command builds) or is not a shell script is left
+ * alone.
+ */
+function checkScript(
+  ref: ScriptRef,
+  ctx: Ctx,
+  scriptCommand: (text: string) => string | null,
+): string | null {
+  const v = ref.word.value;
+  if (ref.word.expands || EXPANSION.test(v) || v.startsWith("~")) {
+    return `${v} (script path would expand)`;
+  }
+  if (ctx.cwdsOverflow) return `${v} (too many directory changes to place it)`;
+  let paths = candidates(ctx, v);
+  if (!v.includes("/") && ref.kind !== "exec") {
+    // A bare name: `.` searches PATH (bash then the cwd), a shell the cwd
+    // and then PATH.
+    const dirs = (process.env.PATH ?? "").split(":").filter(Boolean);
+    const onPath = dirs.flatMap((d) => candidates(ctx, join(d, v)));
+    paths = [...new Set([...paths, ...onPath])];
+  }
+  for (const p of paths) if (!ctx.lookedUp.has(p)) ctx.lookedUp.set(p, v);
+  const written = new Set(ctx.writes.flatMap((w) => candidates(ctx, w)));
+  if (paths.some((p) => written.has(p))) {
+    return `${v} (script written by this command)`;
+  }
+  const files = paths.filter(isFile);
+  if (files.length === 0) {
+    return ref.kind === "exec" ? null : `${v} (script not found)`;
+  }
+  for (const file of files) {
+    if (ctx.scripts.has(file)) {
+      const seen = ctx.scripts.get(file) ?? null;
+      if (seen != null) return seen;
+      continue;
+    }
+    if (ctx.scripts.size >= MAX_SCRIPTS) return `${v} (too many scripts to check)`;
+    ctx.scripts.set(file, null);
+    const budget = MAX_SCRIPT_BYTES - ctx.scriptBytes;
+    const text = readScript(file, ref.kind === "exec", budget);
+    if (text === undefined) continue; // run by path, but not a shell script
+    if (text !== null) ctx.scriptBytes += text.length;
+    const r =
+      text === null ? "(script too large or unreadable to check)" : scriptCommand(text);
+    if (r != null) {
+      const out = `${r} (in ${v})`;
+      ctx.scripts.set(file, out);
+      return out;
+    }
+  }
+  return null;
+}
+
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A script file's text; `undefined` when `runByPath` and the file is not a
+ * shell script (a binary, or `#!` naming another interpreter); null when it is
+ * larger than `budget` bytes or cannot be read.
+ */
+function readScript(
+  file: string,
+  runByPath: boolean,
+  budget: number,
+): string | null | undefined {
+  let fd: number | undefined;
+  try {
+    const size = statSync(file).size;
+    const head = Buffer.alloc(Math.min(size, 8192));
+    fd = openSync(file, "r");
+    readSync(fd, head, 0, head.length, 0);
+    if (runByPath && !isShellScript(head)) return undefined;
+    if (size > budget) return null;
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
+ * Whether a file the shell executes runs as a shell script: its `#!` line
+ * names a shell (directly, or through `env` / `busybox`), or it has no `#!`
+ * line and is text (the shell then runs it itself).
+ */
+function isShellScript(head: Buffer): boolean {
+  if (head[0] === 0x23 && head[1] === 0x21) {
+    const argv = head.toString("latin1", 2).split("\n")[0]!.trim().split(/\s+/);
+    let k = 0;
+    while (["env", "busybox"].includes(baseName(argv[k] ?? ""))) {
+      k++;
+      while (argv[k] && (argv[k]!.startsWith("-") || ASSIGNMENT.test(argv[k]!))) k++;
+    }
+    return SHELLS.has(baseName(argv[k] ?? ""));
+  }
+  return !head.includes(0);
+}
+
+/**
  * First offending cd/pushd target within one simple command, else null.
  * `openText` is the tokenized text when this command is the one the text ran
  * out in (open quote, trailing `\`); a cd/pushd there refuses.
  */
 function analyzeFragment(
-  words: Word[],
-  root: string,
+  parts: Parts,
+  ctx: Ctx,
   evalCommand: (cmd: string) => string | null,
+  scriptCommand: (text: string) => string | null,
   openText: string | null,
 ): string | null {
-  let i = 0;
-  while (i < words.length) {
-    const w = words[i]!;
-    if (DIRSTACK_WRITE.test(w.value)) return "$DIRSTACK";
-    if (PREFIX_WORDS.has(w.value)) {
-      i++;
-      while (i < words.length && words[i]!.value.startsWith("-")) i++;
-      continue;
-    }
-    if (w.value === "function") {
-      i += 2; // `function name { … }`
-      continue;
-    }
-    if (ASSIGNMENT.test(w.value)) {
-      i++;
-      continue;
-    }
-    break;
+  const words = parts.words;
+  const i = commandStart(words);
+  for (let k = 0; k <= i && k < words.length; k++) {
+    if (DIRSTACK_WRITE.test(words[k]!.value)) return "$DIRSTACK";
   }
   const head = words[i];
   if (!head) return null;
@@ -623,8 +1116,23 @@ function analyzeFragment(
     }
     return evalCommand(rest.map((w) => w.value).join(" "));
   }
+  if (head.value === "trap") {
+    // The action runs later as a command, like an `eval` argument.
+    const action = trapAction(words, i);
+    if (!action) return null;
+    if (action.expands) return action.value || "$(...)";
+    return evalCommand(action.value);
+  }
+  if (head.value === "alias") {
+    // An alias can turn any later word into `cd`: the clamp does not follow.
+    const def = words.slice(i + 1).find((w) => w.value.includes("="));
+    return def ? `${def.value} (alias)` : null;
+  }
   if (head.value !== "cd" && head.value !== "pushd") {
-    return shellScripts(words.slice(i), evalCommand);
+    return (
+      shellScripts(words.slice(i), evalCommand) ??
+      scriptRefs(parts, i, ctx, scriptCommand)
+    );
   }
 
   let j = i + 1;
@@ -650,26 +1158,51 @@ function analyzeFragment(
   if (target.value === "-") return "$OLDPWD";
   if (target.expands) return target.value; // $VAR / $(…) / backtick in target
   if (EXPANSION.test(target.value)) return target.value; // glob / brace / literal $
-  if (isCdEscape(target.value, root)) return target.value;
+  if (isCdEscape(target.value, ctx.root)) return target.value;
+  addCwd(ctx, target.value); // later script paths may be relative to it
   return null;
 }
 
 /**
  * First offending cd/pushd target in `cmd`, or null when every cd-like is safe.
  * Fail-closed: unparsable or expanded command words, `cd -`, expanded or
- * escaping targets, dir-stack writes, escaping cd inside command
- * substitutions, and a cd/pushd left open by an unterminated quote or a
- * trailing `\` all refuse. Runtime hardening (`CDPATH=; readonly CDPATH`,
- * dropped `CDPATH`/`OLDPWD`) covers what a lexer cannot, so CDPATH is no longer
- * refused lexically.
+ * escaping targets, dir-stack writes, alias definitions, escaping cd inside
+ * command substitutions, `eval` arguments, `trap` actions and shell `-c`
+ * strings, and a cd/pushd left open by an unterminated quote or a trailing
+ * `\` all refuse. Scripts the command runs in a shell (sourced, handed to a
+ * shell, or run by path) are read and checked the same way, and refuse when
+ * they cannot be: missing, too large, written by the command itself, or read
+ * from an unknown input. Runtime hardening (`CDPATH=; readonly CDPATH`,
+ * dropped `CDPATH`/`OLDPWD`) covers what a lexer cannot, so CDPATH is no
+ * longer refused lexically.
  */
 export function firstDisallowedCd(cmd: string, root: string): string | null {
+  const rootAbs = resolve(root);
+  const ctx: Ctx = {
+    root: rootAbs,
+    cwds: [rootAbs],
+    cwdsOverflow: false,
+    writes: [],
+    lookedUp: new Map(),
+    scripts: new Map(),
+    scriptBytes: 0,
+  };
   try {
-    return checkReadings(cmd, root, { bash: false, code: false }, 0);
+    collectWrites(cmd, ctx, 0);
+    const r = checkReadings(cmd, ctx, { bash: false, code: false }, 0);
+    if (r != null) return r;
   } catch (e) {
     if (e instanceof NestedTooDeep) return "(nested too deeply to check)";
     throw e;
   }
+  // A script checked before a later part of the command (or a script it ran)
+  // was seen to write it, or before a later cd put it in reach.
+  if (ctx.lookedUp.size === 0) return null;
+  const written = new Set(ctx.writes.flatMap((w) => candidates(ctx, w)));
+  for (const [path, v] of ctx.lookedUp) {
+    if (written.has(path)) return `${v} (script written by this command)`;
+  }
+  return null;
 }
 
 /** Checks an `eval` argument or `-c` string found in a text at `depth`. */
@@ -689,57 +1222,65 @@ type Covered = { bash: boolean; code: boolean };
  */
 function checkReadings(
   cmd: string,
-  root: string,
+  ctx: Ctx,
   covered: Covered,
   depth: number,
 ): string | null {
   const bash = !covered.bash && cmd.includes("$'");
   const code = !covered.code && cmd.includes("<<");
   const inner = { bash: covered.bash || bash, code: covered.code || code };
-  const r = analyzeLexed(tokenize(cmd, DASH, depth), root, (sub, d) =>
-    checkReadings(sub, root, inner, d),
+  const r = analyzeLexed(tokenize(cmd, DASH, depth), ctx, (sub, d) =>
+    checkReadings(sub, ctx, inner, d),
   );
   if (r != null) return r;
   if (bash) {
-    const b = checkOne(cmd, root, BASH, depth);
+    const b = checkOne(cmd, ctx, BASH, depth);
     if (b != null) return b;
   }
-  return code ? checkOne(cmd, root, BASH_CODE, depth) : null;
+  return code ? checkOne(cmd, ctx, BASH_CODE, depth) : null;
 }
 
 /** `cmd` under one bash reading, and every `eval` / `-c` string in it too. */
 function checkOne(
   cmd: string,
-  root: string,
+  ctx: Ctx,
   reading: Reading,
   depth: number,
 ): string | null {
-  return analyzeLexed(tokenize(cmd, reading, depth), root, (sub, d) =>
-    checkOne(sub, root, reading, d),
+  return analyzeLexed(tokenize(cmd, reading, depth), ctx, (sub, d) =>
+    checkOne(sub, ctx, reading, d),
   );
+}
+
+/** A script's text, checked as a new command after noting what it writes. */
+function checkScriptText(text: string, ctx: Ctx, depth: number): string | null {
+  collectWrites(text, ctx, depth);
+  return checkReadings(text, ctx, { bash: false, code: false }, depth);
 }
 
 /** First offending cd/pushd target in a tokenized command or its subs. */
 function analyzeLexed(
   lx: Lexed,
-  root: string,
+  ctx: Ctx,
   evalCommand: EvalCheck,
 ): string | null {
-  // An `eval` argument is re-parsed one level deeper than its text.
+  // An `eval` argument or a script is read one level deeper than its text.
   const evalHere = (inner: string) => evalCommand(inner, lx.depth + 1);
+  const scriptHere = (text: string) => checkScriptText(text, ctx, lx.depth + 1);
   for (let k = 0; k < lx.frags.length; k++) {
     // Only the last command can be the one the text ran out in.
     const openText = lx.open && k === lx.frags.length - 1 ? lx.text : null;
     const r = analyzeFragment(
-      stripRedirections(lx.frags[k]!),
-      root,
+      fragParts(lx.frags[k]!),
+      ctx,
       evalHere,
+      scriptHere,
       openText,
     );
     if (r != null) return r;
   }
   for (const sub of lx.subs) {
-    const r = analyzeLexed(sub, root, evalCommand);
+    const r = analyzeLexed(sub, ctx, evalCommand);
     if (r != null) return r;
   }
   return null;

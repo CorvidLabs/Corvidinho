@@ -1,0 +1,63 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790694590,
+      "digest": "fa8dfcc3bee9a31890c475724c4e128e3ee6a4db2814f1efaa0c712f5d6275be",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can",
+        "title": "Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17)",
+        "description": "discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "plugins/discord/index.ts",
+          "plugins/discord/send-file.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/execute.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/requester-perms.ts",
+          "src/store/scrub.ts",
+          "tests/discord.send-file.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "discord-send-file (dangerous, mutating, minTier 1) attaches a project file or image, or the worktree diff as changes.diff, to a message in the conversation's own channel that the bridge set for the run (the thread in a thread); a --channel is refused and a run with no conversation channel or acting user is refused; the channel allowlist gates first (a thread through its parent) and the acting user must view, send and attach files there (DISCORD-8); non-owner runs are refused by ROLES-CHAT-3 and an unlisted tool by SAFE-1; at most 8 MB, PNG/JPEG/GIF/WebP by magic bytes or UTF-8 txt/log/md/diff/patch/json/csv; text and the caption are secret-scrubbed (SAFE-6) and the caption parses no mentions; SAFE-2 protected, .specsync and secret paths are refused by name and by symlink target, and paths outside the project are refused; a Discord 413/40005 is reported; dry run posts nothing; each attach is audited; the system prompt says the model can attach and never to say it can't whenever the tool is offered in a conversation run"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "b8dc7a9eee8812add3bec6db2513686e29258f9bb3d68a2d231e7d14713d418f",
+        "discord": "33a12d66b0172d6ed0f63d00d42b956389d56058bcd3e166a98ff93a2d0e1232"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790696365,
+      "digest": "d9aec6c483d45fd3a410690933c54a3da36bceb81080dceca90a7d17a2dcddea",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

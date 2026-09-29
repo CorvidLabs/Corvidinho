@@ -26,12 +26,18 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-10**  If the bridge and the agent binary disagree on protocol version, the bridge refuses to start rather than misparsing quiet failure.
 - **DISCORD-12**  Under the bot name I always see the Corvidinho version (same shared version as /status) as a short Discord presence or custom status so I can tell which build is live at a glance.
 - **DISCORD-13**  In Discord community chat, prefer conversational prose for social or game banter; when a snowflake, @mention, or named guild member is referenced, use the Discord member lookup tool (configured guild only) before SpecSync/git/github/files; only open Corvidinho repo tools when the query clearly needs codebase or product data
+- **DISCORD-15**  Every answer carries a small footer with model, tokens, cost and time; a cost it doesn't know shows as unknown, never $0.
+  - **DISCORD-15.a**  Tokens and cost show only in my own runs' footers; everyone else sees model and time.
+- **DISCORD-16**  Long answers are split at Discord's 2000-character limit without breaking code fences, using embeds where they read better than plain text.
+- **DISCORD-17**  It can attach files and images (screenshots, logs, diffs, charts) to its replies in the conversation's channel, and it never says it can't send them.
 - **DISCORD-DENY-1**  If a message or slash arrives outside an allowlisted channel (or from a non-configured user where user allowlist applies), Corvidinho does not send any public channel reply.
 - **DISCORD-DENY-2**  If the actor is an admin (existing admin allowlist / ADMIN HI), reply ephemeral only with a short tip: how to add the channel (or user) to the Discord allowlist config — no public leak. MessageCreate has no ephemeral, so MessageCreate stays silent for admins too (tip is slash/interaction only).
 - **DISCORD-DENY-3**  Non-admins get zero response (no DM, no public message, no reaction). Slash interactions still require a Discord ack within 3s: use ephemeral zero-width (or defer+delete) so only the invoker briefly sees nothing useful — document the choice; never leak allowlist guidance to non-admins.
 - **DISCORD-SCHEDULE-1**  Slash `/schedule` (or equivalent) lets me create a recurring run with a human-readable cadence (e.g. every hour / cron) and a target project or work scope, so the agent does that work on the Linux host without me babysitting a REPL.
+  - **DISCORD-SCHEDULE-1.a**  A schedule I create runs with my tools and my allowlist (still never the shell or runners, SAFE-3.a) and asks me through Approve cards where the must-ask list says so; schedules other people create stay read-only.
 - **DISCORD-SCHEDULE-2**  I can list, pause, resume, and delete schedules from Discord; mutations require ADMIN and re-check permission at handler time (**DISCORD-7** / **ADMIN-4**); empty admin/owner = deny-all.
 - **DISCORD-SCHEDULE-3**  Schedule ticks respect existing channel/user allowlists and SAFE gates; a schedule cannot post or act outside channels/repos I already allow.
+  - **DISCORD-SCHEDULE-3.a**  Scheduled runs read and act only on repos I allowlist, even public ones.
 - **DISCORD-SCHEDULE-4**  Ingress responsiveness stays ≤ ~1 minute for live Discord/GH mentions (existing HEAR + WATCH ~60s poll); schedule ticks must not starve or delay that ingress path.
 - **DISCORD-SCHEDULE-5**  Provenance: steal from archived corvid-agent `server/discord/command-handlers/schedule-commands.ts`, `server/scheduler/`, `server/db/schedules*`, ADR `docs/decisions/001-autonomous-scheduler.md` — skip flock/council/on-chain extras unless separately HI’d.
 
@@ -48,6 +54,7 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
 - **DISCORD-ASK-2**  Ask UI is ephemeral (only the requester sees the choice buttons / question UI).
 - **DISCORD-ASK-3**  Button press continues that requester's session; no public reply is required to answer.
 - **DISCORD-ASK-4**  Free-text clarify only when options cannot be listed; prefer ephemeral over a public ping.
+  - **DISCORD-ASK-4.a**  When the choices can't be listed, the question still goes in the short public stub and the requester answers privately in a form; replying in the channel still works.
 - **DISCORD-ASK-5**  Button prompts expire after about 30 minutes; a late press gets a short "that choice expired".
 - **DISCORD-ASK-6**  When posting a button ask, do not leave a separate thinking "Needs your input" as the primary UX — prefer one public Choose stub (edit the thinking embed into the stub, or delete/collapse it).
 - **DISCORD-ASK-7**  On successful completion after a button pick (or normal done — including `/session start` and `/work`), prefer editing the existing stub/thinking message into the final answer instead of posting an extra ✅ Done + new reply when practical. When the thinking message carries the answer, drop or thin-resolve the deferred slash reply.

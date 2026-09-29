@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or",
+  "implementation_commit": "6232019289110d01daf8eb91fb2ef0a271fd06e5",
+  "implementation_tree": "880ed7396a175284bec95ba97b5ac3e5300b5ffe",
+  "contract_digest": "bd9b7216fa0bb680307a4aa5f128bcf93cb2a81a348f9f05a2e9474ab4d0f997",
+  "workspace_digest": "d2275f320d0600eb6b2122640bef1314a1286a8144f0ff9f07aee02f9cdfd10e",
+  "closing_digest": "af1260962d9a8e9bcb3ca8743189beaf86b93992bcca55aad39fd5d204d6b48f",
+  "review_digest": "bcc502d85d955cfc3914b8a2556c722ee4aecf4d08edb55b72729dfbf45a6e3a",
+  "finalization_digest": "f2c35cff6b6d9799cc9f983acec8836974fc36ba059819d3831ebccec826aec3",
+  "timestamp": 1790604173
+}

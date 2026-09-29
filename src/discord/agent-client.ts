@@ -62,6 +62,14 @@ export type AgentRunChatOpts = {
    * the daemon aborts runs it abandons at shutdown (REQ-cli-108).
    */
   signal?: AbortSignal;
+  /**
+   * The channel this conversation replies in (the thread when the talk is in
+   * one). `discord-send-file` attaches only here (DISCORD-17); unset ⇒ the
+   * run has no conversation channel (schedules) and the tool refuses.
+   */
+  replyChannelId?: string;
+  /** The thread's parent channel, which the channel allowlist names (DISCORD-5). */
+  replyParentChannelId?: string;
 };
 
 export type AgentClient = {
@@ -81,7 +89,10 @@ export type SpawnAgentClientOpts = {
  * from the `result` frame (fallback: summarizeTaskRunOutput).
  * Session continuity is tracked by the bridge; CLI may ignore resume for stub.
  * Always sets CORVIDINHO_ACTING_DISCORD_USER_ID (empty when no actor) and
- * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011).
+ * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011),
+ * and the conversation's reply channel for `discord-send-file`
+ * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
+ * REQ-discord-476).
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
@@ -94,6 +105,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       cwd,
       onStatus,
       signal,
+      replyChannelId,
+      replyParentChannelId,
     }) {
       if (signal?.aborted) {
         return { ok: false, sessionId, summary: "interrupted before start", exitCode: 130 };
@@ -122,6 +135,10 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
           // SAFE-4: only confirm tokens the human typed in this message count.
           CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(humanText ?? "").join(","),
+          // DISCORD-17: the only channel discord-send-file may attach in.
+          // Always overwritten, never inherited from the bridge env.
+          CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: replyChannelId ?? "",
+          CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID: replyParentChannelId ?? "",
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),

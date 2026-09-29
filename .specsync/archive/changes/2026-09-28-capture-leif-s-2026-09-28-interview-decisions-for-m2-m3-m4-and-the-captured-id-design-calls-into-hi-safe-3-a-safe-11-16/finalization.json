@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-leif-s-2026-09-28-interview-decisions-for-m2-m3-m4-and-the-captured-id-design-calls-into-hi-safe-3-a-safe-11-16",
+  "implementation_commit": "ff7d3550412cf623d6e6eb37270f12b8b4f387ec",
+  "implementation_tree": "f88dc6ff18d4f8f28639cf0c3176d5dcc734bcbd",
+  "contract_digest": "690016949e35a6719cba6e5dd367fbcc9782431e0d32f00087321084ca26a2de",
+  "workspace_digest": "15c959534fdd0c909d1a59ffcfbc1cc840c41cc9ad23bcfca618a36b5b539457",
+  "closing_digest": "a6984aaaab61a650ba0a4f4b4bc11b1bb077ae34671e7e129dc8411fc5f19591",
+  "review_digest": "55af3a5cee1f362aaa4aee18b8c145b51c2bdd4a252fedc22d292a7421a2aaac",
+  "finalization_digest": "e0ae86354b00e19592d3049506c916f86cc022707aaecc91eed419039edce694",
+  "timestamp": 1790603919
+}

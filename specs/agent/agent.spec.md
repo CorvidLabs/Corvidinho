@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 33
+version: 34
 status: draft
 files:
   - src/agent/types.ts
@@ -183,7 +183,12 @@ appears in the final chat reply (DISCORD-3.a).
 
 `execute` system prompt SHALL include IDENTITY-4 and ROLES-CHAT-8 instruction
 blocks (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`)
-in addition to MEMORY instructions.
+in addition to MEMORY instructions. `execute` exports
+`DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS` (DISCORD-17, REQ-agent-476): the
+system prompt carries it only when the run's catalog offers
+`discord-send-file` and its env has a conversation channel
+(`CORVIDINHO_DISCORD_REPLY_CHANNEL_ID`), so the model never says it cannot
+send files or images there and sends a large diff as a `.diff` attachment.
 
 Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `src/agent/ask.ts` exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`,
@@ -386,6 +391,11 @@ is offered only on tool/code tiers. A run with an ask is never `done`; the
 question is capped at 1500 chars and an empty question is refused back to the
 model.
 
+The attach instructions (REQ-agent-476, DISCORD-17) are in the system prompt
+exactly when `discord-send-file` is in the run's offered catalog and the run
+env names a conversation channel; a run that does not offer the tool, or has
+no conversation channel, never promises attachments.
+
 ## Behavioral Examples
 
 ### Scenario: System prompt mentions memory-store
@@ -539,3 +549,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-27 | task-run-offers-allowlisted-dangerous-tools-to-the-model-a-dangerous-plugin-enters-the-catalog-only-when-corvidinho: Task run offers allowlisted dangerous tools to the model: a dangerous plugin enters the catalog only when CORVIDINHO_ALLOWLIST names it (tier, role and SAFE-9 filters unchanged); shell-exec and the node/python/cargo runners stay out pending the SAFE-3 decision; a non-git run whose Fledge command may have changed files verifies anyway (CLI-3, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3, AGENT-4) |
 | 2026-09-27 | req-agent-112-after-the-fledge-core-builtins-an-allowlist-with-no-fledge-entry-and-a-non-admin-role-session-offer-no: REQ-agent-112 after the Fledge core builtins: an allowlist with no fledge-* entry and a non-ADMIN role session offer no Fledge plugin command and never spawn fledge; the only fledge- tools they offer are the read-only core builtins fledge-lanes-list and fledge-lanes-validate (PLUGIN-1, PLUGIN-3, ROLES-CHAT-2) |
 | 2026-09-27 | fledge-core-runs-wait-on-safe-3-like-the-shell-fledge-lanes-run-and-fledge-run-are-never-offered-to-the-model-from-the: Fledge core runs wait on SAFE-3 like the shell: fledge-lanes-run and fledge-run are never offered to the model from the task-run allowlist (SAFE3_PENDING_TOOLS), and allowlisting a Fledge core builtin does not start Fledge plugin discovery (PLUGIN-1, CLI-3, SAFE-1, SAFE-3 pending) |
+| 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |

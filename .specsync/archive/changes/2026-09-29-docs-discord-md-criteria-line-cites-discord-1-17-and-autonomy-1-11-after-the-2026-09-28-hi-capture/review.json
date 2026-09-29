@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-discord-md-criteria-line-cites-discord-1-17-and-autonomy-1-11-after-the-2026-09-28-hi-capture",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "742d2a155b3ec19c688f007c23297420378d120b",
+  "contract_digest": "a46cc549e92bfbe04bb3702324cde21b9343f045529b3e4ec168e2f303f47679",
+  "execution_digest": "d84dcb01afa52b39ef66a9ff9c0b56aec17d9af6669925602585ea8de52d2614",
+  "workspace_digest": "61a19c76338b7448ce0327646c184a62ffd772ab8a4beeccc8bda76a32746b36",
+  "timestamp": 1790692972
+}

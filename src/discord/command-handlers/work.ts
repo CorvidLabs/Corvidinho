@@ -128,6 +128,8 @@ export async function handleWorkCommand(
         actingUserId: interaction.userId,
         actingIsAdmin,
         cwd: ctx.store.cwdFor(session),
+        // DISCORD-17: files attach in the channel the command ran in.
+        replyChannelId: interaction.channelId,
         onStatus: (u) => {
           void thinking?.update({
             tool: u.tool,

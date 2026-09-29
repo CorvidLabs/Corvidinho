@@ -129,7 +129,9 @@ describe("shared DB writers wait for another process's write lock", () => {
     } finally {
       db.close();
     }
-  });
+    // A child `bun` process holds the lock: on a slow runner its start-up alone
+    // can pass bun:test's 5 s default, so give it the same room as below.
+  }, 30_000);
 
   test("rescrubDatabase waits under busy_timeout instead of failing at once (SAFE-6)", async () => {
     const path = tempDbPath();
@@ -162,7 +164,7 @@ describe("shared DB writers wait for another process's write lock", () => {
     } finally {
       db.close();
     }
-  });
+  }, 30_000);
 
   test(
     "concurrent appenders in several processes lose no rows and keep one chain (SAFE-5)",

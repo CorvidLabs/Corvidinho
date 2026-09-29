@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "busy-lock-tests-get-an-explicit-30-s-timeout-so-a-slow-ci-runner-no-longer-fails-them-on-bun-test-s-5-s-default-the",
+  "implementation_commit": "6232019289110d01daf8eb91fb2ef0a271fd06e5",
+  "implementation_tree": "880ed7396a175284bec95ba97b5ac3e5300b5ffe",
+  "contract_digest": "253b8ee6edb741f356cc10203896085302be6b2f53bcba397f5f246430fc482a",
+  "workspace_digest": "d2275f320d0600eb6b2122640bef1314a1286a8144f0ff9f07aee02f9cdfd10e",
+  "closing_digest": "97292cd8b041221d001df9ab645e42d98039165fb86f45c49c032633570f9dca",
+  "review_digest": "302f4d1ae598e2bac4f91b093539bc5b936b6624e11b0ae2f2cdabc2804f6bc0",
+  "finalization_digest": "6c8408eecdceda23a99dbf41cd906169de8b154d5bfe145a2f0bfd9e47a011b7",
+  "timestamp": 1790603954
+}

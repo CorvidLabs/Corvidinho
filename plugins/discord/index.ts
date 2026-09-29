@@ -1,5 +1,6 @@
 /**
- * Discord outbound plugins — discord-post-message is dangerous (externally visible write).
+ * Discord outbound plugins — discord-post-message and discord-send-file
+ * (DISCORD-17, `send-file.ts`) are dangerous (externally visible writes).
  * DISCORD-8: confused-deputy requester check (Merlin-primary). In a run the
  * bridge started, the check is always for the acting Discord user the bridge
  * set (CORVIDINHO_ACTING_DISCORD_USER_ID), never a model-supplied id. The
@@ -23,6 +24,7 @@ import {
   discordUserLookup,
   DISCORD_USER_LOOKUP_NAME,
 } from "./user-lookup.ts";
+import { discordSendFile, DISCORD_SEND_FILE_NAME } from "./send-file.ts";
 
 export {
   extractUserSnowflake,
@@ -31,6 +33,14 @@ export {
   DISCORD_USER_LOOKUP_NAME,
   buildDiscordUserLookupCommand,
 } from "./user-lookup.ts";
+
+export {
+  DISCORD_SEND_FILE_NAME,
+  DISCORD_UPLOAD_MAX_BYTES,
+  REPLY_CHANNEL_ENV,
+  REPLY_PARENT_CHANNEL_ENV,
+  SEND_FILE_ALLOWED_EXTENSIONS,
+} from "./send-file.ts";
 
 export { setRequesterPermCheckerForTests };
 
@@ -247,4 +257,6 @@ export function loadDiscordPlugins(): void {
   // Re-register after clearRegistry() in other tests (module flag would stick).
   if (!get("discord-post-message")) register(discordPostMessage);
   if (!get(DISCORD_USER_LOOKUP_NAME)) register(discordUserLookup);
+  // DISCORD-17: attach a file or image in the conversation's own channel.
+  if (!get(DISCORD_SEND_FILE_NAME)) register(discordSendFile);
 }
