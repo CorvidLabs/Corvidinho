@@ -3,6 +3,7 @@
  */
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { appendAudit, argsDigest, verifyAudit } from "../src/audit/index.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
@@ -214,6 +215,70 @@ describe("/schedule dispatch", () => {
     expect(fast.replies[0]?.content).toMatch(/5 minutes/i);
     expect(ctx.scheduleStore!.list()).toHaveLength(0);
   });
+
+  test(
+    "create with a zero cron step replies with the CadenceError and the bridge keeps answering (W12)",
+    () => {
+      // The handler parses the cadence synchronously in the bridge process,
+      // so on main `*/0` froze it for good. Run it in a child bun with a
+      // hard timeout: a hang gets the child killed and fails this test.
+      const src = (p: string) =>
+        JSON.stringify(resolve(import.meta.dir, "../src", p));
+      const script = `
+        import { emptyConfig } from ${src("allowlist/types.ts")};
+        import { createEchoAgentClient } from ${src("discord/agent-client.ts")};
+        import { CORVIDINHO_PROTOCOL_VERSION } from ${src("discord/protocol-version.ts")};
+        import { SessionStore } from ${src("discord/session-store.ts")};
+        import { handleSlashInteraction } from ${src("discord/slash-dispatch.ts")};
+        import { WorkStore } from ${src("discord/work-store.ts")};
+        import { ScheduleStore } from ${src("scheduler/store.ts")};
+        const allowlist = emptyConfig();
+        allowlist.discord.channels = ["chan-allowed"];
+        const ctx = {
+          store: new SessionStore(), workStore: new WorkStore(),
+          scheduleStore: new ScheduleStore(), allowlist,
+          agent: createEchoAgentClient({ delayMs: 0 }), version: "0.0.3",
+          protocolVersion: CORVIDINHO_PROTOCOL_VERSION, startedAt: Date.now(),
+          channelIds: ["chan-allowed"], owner: { discordId: "boss" },
+        };
+        const ix = (subcommand, options) => {
+          const replies = [];
+          return { id: "ix_" + subcommand, commandName: "schedule", subcommand,
+            channelId: "chan-allowed", userId: "boss", options, replies,
+            reply: async (o) => { replies.push(o); } };
+        };
+        const out = {};
+        for (const cadence of ["*/0 * * * *", "0-59/0 * * * *"]) {
+          const create = ix("create", { name: "spin", cadence, project: ".", prompt: "do" });
+          await handleSlashInteraction(ctx, create);
+          out[cadence] = create.replies;
+        }
+        const list = ix("list", {});
+        await handleSlashInteraction(ctx, list);
+        out.list = list.replies;
+        out.count = ctx.scheduleStore.list().length;
+        console.log(JSON.stringify(out));
+      `;
+      const p = Bun.spawnSync([process.execPath, "-e", script], {
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 10_000,
+      });
+      expect(p.stderr.toString()).toBe("");
+      expect(p.exitCode).toBe(0);
+      const out = JSON.parse(p.stdout.toString());
+      for (const cadence of ["*/0 * * * *", "0-59/0 * * * *"]) {
+        expect(out[cadence]).toHaveLength(1);
+        expect(out[cadence][0].content).toMatch(
+          /^Invalid cron step in ".*\/0": the step must be 1 or more\.$/,
+        );
+        expect(out[cadence][0].ephemeral).toBe(true);
+      }
+      expect(out.list[0].content).toContain("No schedules");
+      expect(out.count).toBe(0);
+    },
+    30_000,
+  );
 
   test("non-admin cannot pause", async () => {
     const store = new ScheduleStore();

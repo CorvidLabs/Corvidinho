@@ -21,6 +21,20 @@ function notListed(kind: string, id: string): GateResult {
   return { ok: false, error: `not authorized: Discord ${kind} "${id}" is not allowlisted` };
 }
 
+/**
+ * True when `channelId` is on `deny_channels` (case-insensitive, as
+ * `checkChannel`). A thread gate checks it on both the thread and its parent
+ * so a deny on either wins over the other being allowlisted (REQ-plugins-005).
+ */
+export function isChannelDenied(
+  channelId: string | null | undefined,
+  cfg: AllowlistConfig | DiscordAllowlists,
+): boolean {
+  const d = "discord" in cfg ? cfg.discord : cfg;
+  const id = (channelId ?? "").trim().toLowerCase();
+  return id !== "" && d.denyChannels.some((x) => x.toLowerCase() === id);
+}
+
 export function checkChannel(
   channelId: string | undefined,
   cfg: AllowlistConfig | DiscordAllowlists,
@@ -28,7 +42,7 @@ export function checkChannel(
   const d = "discord" in cfg ? cfg.discord : cfg;
   const id = (channelId ?? "").trim().toLowerCase();
   if (!id) return { ok: false, error: "not authorized: missing Discord channel" };
-  if (d.denyChannels.some((x) => x.toLowerCase() === id)) return denied("channel", channelId!);
+  if (isChannelDenied(id, d)) return denied("channel", channelId!);
   if (d.channels.length === 0) return emptyDeny("channel");
   if (!d.channels.some((x) => x.toLowerCase() === id)) return notListed("channel", channelId!);
   return { ok: true };

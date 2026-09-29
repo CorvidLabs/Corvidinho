@@ -3,10 +3,20 @@
 See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over live `gh`.
 - memory-* plugin list + forget ACL fixtures (REQ-plugins-010).
 - files-* / search-grep happy path + SAFE-2 deny + path escape (REQ-plugins-081..084).
+  SAFE-2 covers every path under `specs/` (`specs/agent/requirements.md`,
+  `specs/agent/context.md`, a new `specs/notes.md`), not only `*.spec.md`, for
+  files-write / files-edit / files-delete and the git-commit staging of a
+  deletion (REQ-plugins-083 / REQ-plugins-182).
 - web-fetch SAFE-7 guard: every blocked range, DNS answers, redirect/rebinding, caps, content types via injected resolver/transport; loopback-only socket + TLS SNI fixtures (REQ-plugins-111).
 - git-* plugins against temp repos (`git init` in mkdtemp, isolated git config)
   and a local bare remote at `<tmp>/acme/widget.git` gated via
-  `CORVIDINHO_GITHUB_ALLOW_REPOS` / a temp allowlist file (REQ-plugins-182).
+  `CORVIDINHO_GITHUB_ALLOW_REPOS` / a temp allowlist file (REQ-plugins-182);
+  `deny_repos` and `deny_orgs` win over an allow list that names the repo
+  (REQ-plugins-004).
+- ROLES-CHAT-8 community repo gate through the real Octokit visibility lookup
+  (no injected lookup; `fetch` stubbed, no network): private refused with no
+  pulls call, 404 / no token refused as unconfirmed, public admitted
+  (`tests/github.public.community.test.ts`, REQ-plugins-493).
 - `delegate` autonomous plugin against sh / `.ts` fake bins in mkdtemp dirs:
   refusals spawn nothing, argv / env of the worker, failure, spawn failure, timeout, abort,
   drain, `.env` isolation, worker env without bridge / GitHub tokens or the
@@ -19,6 +29,22 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
   tier, empty allowlist, `CORVIDINHO_ACTING_IS_ADMIN=0`, stripped tokens),
   tier clamp, long decision kept past the chat-body cap, failed chair, council time cap, one-at-a-time limiter, non-ADMIN
   `runPlugin` refusal (`tests/autonomous.council.test.ts`, REQ-plugins-118).
+- SAFE-5 audit line without a key (`tests/audit.log.test.ts`,
+  REQ-plugins-095): three unkeyed rows read `chain OK (unkeyed — …)`; with
+  row 2 tampered behind the dropped trigger, `verifyAudit` without a key
+  gives `keyedRows: 0, brokenAtSeq: 2` and the line reads
+  `Audit: 3 entries · chain BROKEN at #2`, the same as with a key; an
+  unkeyed prefix before a keyed row reads `cannot verify keyed rows …`
+  intact and `chain BROKEN at #1` once row 1 is tampered; a keyed chain
+  read without the key still reads `cannot verify keyed rows …`. Against
+  the base without the fix: fails (`cannot verify keyed rows …`).
+
+## discord-post-message (REQ-plugins-009)
+
+`tests/discord.post.plugin.test.ts` — dangerous listing, SAFE-1 deny, empty
+channel allowlist refused, and the channel gate uses the bridge's set: a
+channel only in `DISCORD_CHANNEL_IDS` posts (dry run), a channel in no list
+and a deny-listed channel are refused with exit 3.
 
 ## discord-user-lookup (REQ-plugins-312)
 
@@ -136,3 +162,10 @@ bridge give each speaker only their own profile, never private notes, and the
 project block to owner / team only; a Discord id declared for two people
 joins neither profile. Fails on the stacked base (13 of 16; three tests that
 also hold there pass by design).
+## Channel deny helper (REQ-plugins-005)
+
+`tests/allowlist.default-deny.test.ts` ("isChannelDenied") — a deny-listed
+channel id is reported whatever its case and surrounding space, allowlisted,
+unlisted, empty and missing ids are not, and `checkChannel` reports the id as
+denied. The thread paths that use it are in `tests/discord.thread-deny.test.ts`
+(discord testing companion).

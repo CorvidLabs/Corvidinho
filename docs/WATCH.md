@@ -12,7 +12,7 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 ## What it does
 
 1. Interval-poll GitHub (Octokit search) for @mentions / issue comments / review requests / **assignments** involving `CORVIDINHO_WATCH_USERNAME`
-2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all
+2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all. For review requests and assignments the user gate checks both the thread author and the user who requested the review / assigned the watch user (REQ-watch-302); deny lists win
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run` (prove-before-done; no `--no-verify`) or echo in dry-run
@@ -64,7 +64,7 @@ ADMIN tools). Once anyone is declared, an undeclared commenter is marked
   `[watch] poll cycle fetched=… new=… started=… continued=… refused=… skipped=…`  
   Errors from `pollOnce` are caught and logged (`[watch] pollOnce error`) — not swallowed by `void`.
 - **Auto-ack:** on `start_session` / `continue_session` from an `issue_comment` or `issues` mention whose sender is **not** the watch username, WATCH posts a short GitHub issue comment (Made with Corvidinho footer) **before** spawn, at most once per event id. Skips own-username senders to avoid self-loops. Dry-run uses an echo ack client (no live post).
-- **Run summary (WATCH-RELIABILITY-1):** after a **successful** auto-ack, when the agent run finishes (success or failure), WATCH posts a short summary comment on the same thread, once per event id (Made with Corvidinho footer). The summary (≤1200 chars) and the spawn-log preview (≤240) are SAFE-6 scrubbed before they are clipped, so a cap never leaves half a secret.
+- **Run summary (WATCH-RELIABILITY-1):** after a **successful** auto-ack, when the agent run finishes (success or failure), WATCH posts a short summary comment on the same thread, once per event id (Made with Corvidinho footer). The summary (≤1200 chars) and the spawn-log preview (≤240) are SAFE-6 scrubbed before they are clipped, so a cap never leaves half a secret. A summary that ends with the `(not allowed for your role)` line (ROLES-CHAT-3) keeps it when the comment clips it: the text before it loses its end.
 - **Spawn outcome log (WATCH-RELIABILITY-2):** each spawn emits structured  
   `[watch] spawn start …` / `[watch] spawn outcome event=… exit=… error_class=… duration_ms=…`  
   and appends a JSONL record (default `<data dir>/watch-spawn.jsonl` — data dir = `CORVIDINHO_DATA_DIR` or `~/.local/share/corvidinho`; override `CORVIDINHO_WATCH_SPAWN_LOG`) so ops can read outcomes without Discord.
@@ -80,6 +80,8 @@ ADMIN tools). Once anyone is declared, an undeclared commenter is marked
 HI: [`hi/watch.md`](../hi/watch.md).
 
 **Assignee ingress (#48):** when the watch username appears in issue/PR `assignees` (from search results), WATCH emits an `assignment` event — same allowlist → session path as mentions. Dogfood can use assign *or* @mention.
+
+**Who assigned / requested (REQ-watch-302, ALLOW-1/2):** an `assignment` or `review_request` event is started by whoever assigned the watch user or requested its review, who need not be the thread author. WATCH reads that user from the issue's events (the newest `assigned` / `review_requested` event naming the watch user: `assigner` / `review_requester`, else the event `actor`) and runs the event only when **both** the author and that user pass the GitHub user allowlist and neither is on `deny_users`. If that user is not allowlisted, is denied, or cannot be read (API error, no such event), the event is refused quietly: no session, no ack, no run. A collaborator who is not allowlisted cannot start a run by assigning Corvidinho to (or requesting its review on) an allowlisted author's issue or PR. Assignments made by bots or GitHub Actions need that bot's login on the user allowlist.
 
 **What a WATCH run can do:** WATCH runs are non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN=0`, ROLES-CHAT): read/chat tools only, no dangerous or mutating tool. They have no Discord actor, so `memory-store` / `memory-recall` / `memory-profile` / `memory-forget-me` refuse, and the project's memory (`--project`, MEMORY-6) is the owner's and team's only.
 

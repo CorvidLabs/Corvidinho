@@ -29,6 +29,7 @@ files:
   - src/allowlist/discord.ts
   - src/allowlist/index.ts
   - tests/allowlist.toml-multiline.test.ts
+  - tests/allowlist.tilde-path.test.ts
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/ciStatus.ts
@@ -138,7 +139,14 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
-HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
+HEAR. `resolveAllowlistPath(env, home)` returns `CORVIDINHO_ALLOWLIST_FILE`
+with a leading `~` or `~/` read as `home` (`~user` and every other value as
+written), else the first default path that exists; the loader, owner loader,
+`/admin` writer and doctor all resolve the file through it. File/search
+plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
+HEAR. `isChannelDenied` (`src/allowlist/discord.ts`) reports a `deny_channels`
+hit alone (case-insensitive, trimmed, as `checkChannel` uses it) so a thread
+gate can make a deny on the thread or its parent win (REQ-plugins-005). File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 Shell plugins register via `loadShellPlugins` (`shell-exec`). Language
 runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
 which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`
@@ -421,7 +429,12 @@ append after a keyed row (a dangerous run is then refused, fail closed), and
 break. An unkeyed prefix followed by keyed rows still verifies as mixed.
 Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
 the newest rows is not detectable from the DB alone; it needs an anchor kept
-outside the DB.
+outside the DB. `formatAuditLine` (the bridge start log and `/status`) reads
+`chain BROKEN at #N` for any break verify finds with the key, and also
+without the key when the break comes before any keyed row (`keyedRows` is
+counted up to the break, so it is 0): a tampered unkeyed row needs no key to
+be seen. Only a verify that stops at a keyed row without the key reads
+`cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
 
 SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
 PLUGIN-1, REQ-plugins-008).
@@ -806,3 +819,8 @@ and current rows for plugins host evolution.
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |
 | 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
 | 2026-09-29 | person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one: Person and project memory, private notes, and forget-me on an owner Approve/Deny card: each declared person keeps one profile keyed by person id (role, projects, preferences, history of decisions, asks and approvals), each project keeps memory keyed by its repo for whoever works on it next, a person's memory and private notes are shown only to them and the owner on every surface, and anyone can ask to be forgotten, which deletes their memories once the owner approves on a DM Approve/Deny card (MEMORY-5/6/7, MEMORY-ACL-6, #101) |
+| 2026-09-29 | allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer: Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner |
+| 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
+| 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
+| 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
+| 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |

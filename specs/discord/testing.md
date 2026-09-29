@@ -36,10 +36,26 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   Server Members Intent off); a `fetch` spy proves nothing is posted. With the
   acting env empty or unset the flag / strict behaviour is unchanged
   (REQ-discord-012, no token, no network).
+- Same file, live path with no injected checker: `Client.prototype.login` is
+  stubbed to emit `ready` on a fake guild text channel, so
+  `verifyRequesterCanSend` runs its own `permissionsFor(member).has` check —
+  no View Channel + Send Messages → 403, both → ok, not in guild → 403,
+  missing / non-text channel → 404, a file post without Attach Files → 403;
+  `discord-post-message` in a bridge run posts nothing on a live denial and
+  once when allowed (REQ-discord-012 / REQ-discord-476).
 - `tests/discord.allowed-mentions.test.ts` — REQ-discord-205: fake discord.js
   injected into the live gateway; chat mention/reply-continue, `/session
   start`, `/work`, slash, embeds, schedule tick and `discord-post-message`
   (stubbed fetch) all send `parse: []`; ask keeps owner-only (no live token).
+- `tests/discord.post.plugin.test.ts` — REQ-discord-004 / REQ-plugins-009:
+  with no allowlist file, `CORVIDINHO_DISCORD_ALLOW_CHANNELS` unset and
+  `DISCORD_CHANNEL_IDS=111`, a dry-run `discord-post-message` to `111` posts
+  and one to `222` is refused (not allowlisted);
+  `CORVIDINHO_DISCORD_DENY_CHANNELS=111` on top refuses `111` with exit 3.
+- `tests/discord.send-file.test.ts` — REQ-discord-004 / REQ-discord-476: with
+  no allowlist file and the conversation channel only in `DISCORD_CHANNEL_IDS`,
+  `discord-send-file` attaches there and in a thread under it; a channel in no
+  list is refused (not allowlisted) and a deny on the channel refuses.
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 
@@ -104,6 +120,36 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   client (real `login`, socket connect stubbed) reaches `onComponent` with the
   presser's names, or neither when none is known (no live Discord).
 
+## Deny wins over an allowlisted parent (REQ-discord-212 / REQ-discord-311 / REQ-discord-476, DISCORD-5)
+
+- `tests/discord.thread-deny.test.ts` — `channels = [parent]`,
+  `deny_channels = [thread]`: `routeMessage` refuses the @mention silently and
+  ignores a plain message in the thread; a session started there before the
+  deny is not continued by a thread message, a reply to its bot message or a
+  mention; a deny on the parent wins over an allowlisted thread; the parent and
+  its other threads are still served. `componentChannelAllowlisted` is false
+  for a press in the denied thread, for a session in it pressed from the
+  parent, and for a session under a denied parent. Through `startBridge` (fake
+  gateway, dry run): the owner's @mention there runs no agent and posts
+  nothing; a talk in the thread stops once it is deny-listed; an ask button
+  there gets only the zero-width ack (the tip for an admin) and stays pending.
+  A slash command there gets only the zero-width ack (the tip for the owner),
+  `/schedule create` naming it is refused, and a schedule whose channel is the
+  thread neither runs nor posts at tick (both already gated the thread id;
+  kept as regression locks). Restart recovery edits and replies nothing for a
+  row in the denied thread or under a denied parent and deletes the row, and
+  still recovers a row in another thread under the parent.
+- `tests/discord.send-file.test.ts` — a deny-listed thread under its
+  allowlisted parent is refused `is denied` before any requester check or
+  upload; another thread under that parent still attaches.
+- `tests/discord.send-file.test.ts` — REQ-discord-212 / REQ-discord-476: a
+  thread allowlisted by its own id, its parent not listed, attaches in the
+  thread after the acting user's check (as the router serves it); with the
+  parent deny-listed it is refused (`is denied`), a deny-listed thread under
+  an allowlisted parent is refused, and a thread whose parent is not listed
+  either is refused (not allowlisted); nothing more is checked or uploaded.
+  Fails against the plugin before this fix (it gated the parent only).
+
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
 - `tests/discord.inflight-replies.test.ts` — schema v9 table + v8→v9
@@ -156,6 +202,28 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   asks by askId in `discord_sessions.pending_ask` (one object, or an array
   when several are open) across a reopen (no live Discord).
 
+## A late press on an ask that is no longer open (REQ-discord-045, DISCORD-ASK-5/8)
+
+- `tests/discord.ask-ephemeral.test.ts` — the requester's Choose and option
+  press on an earlier ask dropped (timed out) at the newest pick, and on both
+  open asks of a session idle past its TTL, get exactly the ephemeral
+  `ASK_CHOICE_EXPIRED` with no run, no session and nothing posted; another
+  user's press on them (and on the live ask before the purge) gets the
+  not-for-you reply; a still-stored expired ask is cleared by the first press
+  and a second press is still expired; a re-press after a pick and a press
+  after `cancel` keep the not-for-you reply before and after the purge;
+  in a talk inside a thread under the allowlisted channel, the requester's
+  press in that thread on a dropped ask and on a TTL-purged session's ask get
+  `ASK_CHOICE_EXPIRED`, another thread or a non-allowlisted channel (or the
+  talk's channel leaving the allowlist) gets the zero-width ack;
+  `SessionStore.findClosedAsk` holds only askId, user, expiry and the talk's
+  channel and thread for a drop, a late clear, a runtime purge and a load
+  purge (never a pick, a cancel or a re-stored askId) and forgets the oldest
+  past `CLOSED_ASKS_MAX`.
+- `tests/discord.ask-button-gates.test.ts` — a muted or deny-listed
+  requester's press on an ask of a TTL-purged session gets `MUTED` / the
+  zero-width ack; once let through it gets `ASK_CHOICE_EXPIRED`, no run.
+
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
@@ -189,6 +257,17 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   gateway adapter forwards the Choose button on `editReply` and `reply`. The
   bridge-level tests fail on the base sources (free-text answer, options
   dropped).
+
+## Unique option ids and expired button asks (REQ-discord-044 / REQ-discord-045 / REQ-agent-045, DISCORD-ASK-1/3/5)
+
+- `tests/discord.ask-ephemeral.test.ts` › "ask option ids and expired button
+  asks (DISCORD-ASK-1/3/5)" — an ask whose options repeat one id opens with
+  distinct pick `custom_id`s and a press on the second resumes with its own
+  label; a thin reply after the only button ask timed out runs the agent
+  and restates no Choose button; after the newest ask timed out a thin reply
+  restates the earlier live ask; a substantive reply after expiry runs the
+  agent and clears the ask; `cancel` after expiry keeps its short ack and
+  runs nothing (no live Discord).
 
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
@@ -258,6 +337,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
   when the SQL failure count reaches 5 even from a stale cache; a success
   stores none.
+- `tests/scheduler.ask-outbox.test.ts` — a schedule on an absolute project
+  names the project, never the host path: a daemon run whose absolute
+  sibling project cannot be resolved keeps the full error with the path on
+  the row and the first line of the bridge's stuck ask names `gone`, without
+  the temp dir; on `/srv/host-only/acme/Widget` the
+  `✅` and `❌` result posts, a bridge clarify and stuck ask and a
+  daemon-claimed stuck ask all name `Widget` and never `/srv/host-only`,
+  while the model's prompt keeps `on project: /srv/host-only/acme/Widget`.
+  Against the base without the fix: both fail.
 
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
@@ -269,6 +357,21 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   run is in flight gets no post; refused ticks auto-pause the schedule after
   5; empty user and role lists still run any creator. In-memory store,
   injected agent, no live Discord.
+
+## Zero cron step never hangs /schedule create (REQ-discord-020, DISCORD-SCHEDULE-4)
+
+- `tests/scheduler.cron.test.ts` — "cron step and range forms never hang":
+  `*/0`, `0-59/0`, `0,*/0` and `/0` in the hour, day, month and weekday fields
+  run in a child bun with a 10 s timeout; `validateAndResolveCadence` and
+  `getNextCronDate` each throw `CadenceError` (`Invalid cron step in "…"`);
+  `5/0` is refused in-process; `0-99999999999 * * * *` is refused by the
+  5-minute rule, a range past 2^53 has no run date, and
+  `0 0-99999999999/2 * * *` resolves to itself with the next run of
+  `0 */2 * * *`; cadences with steps of 1 or more resolve as before.
+- `tests/discord.schedule.test.ts` — the owner's `/schedule create` with
+  `*/0 * * * *` and `0-59/0 * * * *` (child bun, 10 s timeout) gets the
+  ephemeral CadenceError reply, creates nothing, and a following
+  `/schedule list` still answers. No live Discord.
 
 ## /schedule delete audit (REQ-discord-020, SAFE-5)
 
@@ -358,7 +461,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `fledge.toml`, a symlink to `.env`, a symlink into `.git`, a symlink out of
   the project and `..` / absolute outside paths are refused; `.sh`, a
   non-PNG `.png` and non-UTF-8 `.txt` are refused; a file over 8 MB is
-  refused before the check; a 413 / code 40005 answer is reported; a check
+  refused before the check, and so is a PNG whose size as first taken
+  (`statSync` / `fstatSync` spied to report its size before it grew) is
+  under 8 MB but whose bytes read are over it, after at most 8 MB + 1 byte
+  is read (`readSync` / `readFileSync` spied to count; REQ-discord-476,
+  fails against the plugin before the bounded read); a checked `notes.txt`
+  swapped for a link to `.env`, or `logs/out.log` whose folder is swapped for
+  a link into `.ssh`, at its first stat / open is refused (SAFE-2,
+  REQ-discord-476; fails against the plugin that read with `readFileSync`);
+  a 413 / code 40005 answer is reported; a check
   refusal (cannot attach) or a check that throws sends nothing; dry run
   uploads nothing; `started` + `ok` audit rows are written; `--git-diff`
   refuses an empty diff and attaches `changes.diff` with the tracked
@@ -366,8 +477,37 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   spawn client writes the reply channel and parent env (empty when none,
   never inherited); through `startBridge` a channel mention, a thread
   mention (thread + parent), `/session start` and `/work` pass the
-  conversation's channel. Against the base without the change: 20 of 21
+  conversation's channel, and an ask-button pick in a thread resumes with
+  `replyChannelId` = the thread and `replyParentChannelId` = its parent. Against the base without the change: 20 of 21
   fail (the "no attach promise" guard passes).
+
+## Closing role note kept on the way to a post (REQ-discord-734, ROLES-CHAT-3)
+
+- `tests/scheduler.service.test.ts` › "a long summary ending with the note
+  keeps it in the run row and the post; one without is cut as before": a
+  schedule with a 448-char name whose run returns the 1800-char
+  `chatBodyFromTaskResult` of a summary ending with the note stores a
+  1500-char run-row summary ending with the note and posts at most 1900 chars
+  ending with it; a run returning 1800 plain chars stores and posts exactly its
+  first 1500.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
+  closing role note within the 1900 cap": a `member-1` `/work` with a
+  207-char description (non-owner PR line) gets a collapsed answer of at most
+  1900 chars whose summary part is under 1500 (fitted after the head) and ends
+  with the note.
+- Same file › "/session start answer for a non-owner keeps the closing role
+  note within the 1900 cap": the answer is at most 1900 chars, its summary part
+  at most 1500, and it ends with the note.
+- `tests/discord.spend.test.ts` › "the cut for the warning line keeps a
+  closing role note": `withSpendWarningPost` on an 1800-char body ending with
+  the note gives a 1900-char post ending `y…`, the note, a blank line and the
+  owner-pinging 80% line; a body that fits is untouched. The existing
+  "a long post is cut so the warning line always fits" (no note) still ends
+  `…\n\nLINE`.
+- With `origin/main`'s `src/discord/ask-ping.ts`,
+  `src/discord/command-handlers/work.ts`, `session.ts` and
+  `src/scheduler/service.ts` swapped in, these four tests fail and every other
+  test in their files passes; on the branch all pass.
 
 ## Declared people (REQ-discord-036, IDENTITY-13/14/6/7, ADMIN-3.a)
 

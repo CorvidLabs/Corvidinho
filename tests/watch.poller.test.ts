@@ -4,7 +4,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createEchoAgentClient } from "../src/watch/agent-client.ts";
+import { createEchoAckClient } from "../src/watch/ack.ts";
+import {
+  createEchoAgentClient,
+  type AgentClient,
+} from "../src/watch/agent-client.ts";
 import { startWatchPoller } from "../src/watch/poller.ts";
 import {
   containsMention,
@@ -77,6 +81,11 @@ describe("fixture searcher → events", () => {
     expect(events.some((e) => e.id === "assign-CorvidLabs/Corvidinho#48")).toBe(
       true,
     );
+    // Who assigned / requested rides along as `actor` (REQ-watch-302).
+    const byId = new Map(events.map((e) => [e.id, e]));
+    expect(byId.get("assign-CorvidLabs/Corvidinho#48")?.actor).toBe("0xLeif");
+    expect(byId.get("reviewreq-CorvidLabs/Corvidinho#7")?.actor).toBe("0xLeif");
+    expect(byId.get("comment-9001")?.actor).toBeUndefined();
   });
 });
 
@@ -153,5 +162,158 @@ describe("startWatchPoller fixture cycle", () => {
     expect(c2.continued).toBe(1);
     expect(result.store.bySessionId.size).toBe(1);
     await result.stop();
+  });
+});
+
+// ALLOW-1/2 (REQ-watch-302): an assignment or review request is started by
+// whoever assigned / requested, not by the thread author. Both must be
+// allowlisted; otherwise no session, no ack and no run (ALLOW-5, quiet).
+describe("assignment / review_request gate the user who assigned or requested", () => {
+  const env = {
+    GITHUB_TOKEN: "fake",
+    CORVIDINHO_WATCH_USERNAME: "corvid-agent",
+    CORVIDINHO_GITHUB_ALLOW_REPOS: "O/R",
+    CORVIDINHO_GITHUB_ALLOW_USERS: "leif",
+    CORVIDINHO_WATCH_DRY_RUN: "1",
+  };
+
+  /** PR O/R#8 and issue O/R#9, both by allowlisted leif; review of #8 requested, #9 assigned. */
+  function bundleWith(
+    actor: string | undefined,
+    extra: Partial<FixtureBundle> = {},
+  ): FixtureBundle {
+    return {
+      involving: [
+        {
+          number: 8,
+          title: "Add cache",
+          html_url: "https://github.com/O/R/pull/8",
+          body: "ready",
+          user: "leif",
+          created_at: "2026-09-28T10:00:00Z",
+          updated_at: "2026-09-28T12:00:00Z",
+          pull_request: true,
+          repo: "O/R",
+          assignees: [],
+        },
+        {
+          number: 9,
+          title: "Fix flake",
+          html_url: "https://github.com/O/R/issues/9",
+          body: "please fix",
+          user: "leif",
+          created_at: "2026-09-28T10:00:00Z",
+          updated_at: "2026-09-28T12:00:00Z",
+          pull_request: false,
+          repo: "O/R",
+          assignees: ["corvid-agent"],
+        },
+      ],
+      review_requests: { "o/r#8": ["corvid-agent"] },
+      ...(actor
+        ? {
+            assigners: { "o/r#9": actor },
+            review_requesters: { "o/r#8": actor },
+          }
+        : {}),
+      ...extra,
+    };
+  }
+
+  async function cycleOf(
+    bundle: FixtureBundle,
+    envOver: Record<string, string> = {},
+  ) {
+    const actions: string[] = [];
+    const runs: string[] = [];
+    const ack = createEchoAckClient();
+    const agent: AgentClient = {
+      async runChat({ prompt, sessionId }) {
+        runs.push(prompt);
+        return { ok: true, sessionId, summary: "done", exitCode: 0 };
+      },
+    };
+    const result = await startWatchPoller({
+      env: { ...env, ...envOver },
+      filePath: null,
+      runLoop: false,
+      agent,
+      ackClient: ack,
+      searchClient: createFixtureSearchClient(bundle),
+      log: () => {},
+      onAction: (info) => actions.push(`${info.kind}:${info.event.id}`),
+    });
+    if (!result.ok) throw new Error(result.message);
+    const cycle = await result.pollOnce();
+    const sessions = result.store.bySessionId.size;
+    await result.stop();
+    return { cycle, actions: actions.sort(), runs, acks: ack.posts, sessions };
+  }
+
+  test("a non-allowlisted assigner / review requester is refused: no session, ack or run", async () => {
+    const r = await cycleOf(bundleWith("bob"));
+    expect(r.cycle.fetched).toBe(2);
+    expect(r.cycle.started).toBe(0);
+    expect(r.cycle.refused).toBe(2);
+    expect(r.actions).toEqual(["refuse:assign-O/R#9", "refuse:reviewreq-O/R#8"]);
+    expect(r.runs).toEqual([]);
+    expect(r.acks).toEqual([]);
+    expect(r.sessions).toBe(0);
+  });
+
+  test("an actor that could not be read is refused (fail closed)", async () => {
+    const r = await cycleOf(bundleWith(undefined));
+    expect(r.cycle.started).toBe(0);
+    expect(r.cycle.refused).toBe(2);
+    expect(r.runs).toEqual([]);
+    expect(r.acks).toEqual([]);
+    expect(r.sessions).toBe(0);
+  });
+
+  test("deny_users wins over an allowlisted actor", async () => {
+    const r = await cycleOf(bundleWith("bob"), {
+      CORVIDINHO_GITHUB_ALLOW_USERS: "leif,bob",
+      CORVIDINHO_GITHUB_DENY_USERS: "bob",
+    });
+    expect(r.cycle.started).toBe(0);
+    expect(r.cycle.refused).toBe(2);
+    expect(r.runs).toEqual([]);
+    expect(r.sessions).toBe(0);
+  });
+
+  test("an allowlisted actor still starts both sessions (no ack for these types)", async () => {
+    const r = await cycleOf(bundleWith("leif"));
+    expect(r.cycle.started).toBe(2);
+    expect(r.cycle.refused).toBe(0);
+    expect(r.actions).toEqual([
+      "start_session:assign-O/R#9",
+      "start_session:reviewreq-O/R#8",
+    ]);
+    expect(r.runs.length).toBe(2);
+    expect(r.acks).toEqual([]);
+    expect(r.sessions).toBe(2);
+  });
+
+  test("an untrusted newer assignment never shadows a trusted comment on the same issue", async () => {
+    const r = await cycleOf(
+      bundleWith("bob", {
+        comments: {
+          "o/r#9": [
+            {
+              id: 501,
+              body: "@corvid-agent please take this",
+              user: "leif",
+              html_url: "https://github.com/O/R/issues/9#issuecomment-501",
+              created_at: "2026-09-28T11:00:00Z",
+            },
+          ],
+        },
+      }),
+    );
+    expect(r.cycle.started).toBe(1);
+    expect(r.cycle.refused).toBe(2);
+    expect(r.actions).toContain("start_session:comment-501");
+    expect(r.runs.length).toBe(1);
+    expect(r.runs[0]).toContain("[WATCH issue_comment] O/R#9 by @leif");
   });
 });

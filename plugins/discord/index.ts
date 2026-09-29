@@ -9,6 +9,7 @@
 
 import { checkChannel } from "../../src/allowlist/discord.ts";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
+import { mergeChannelIds } from "../../src/discord/config.ts";
 import { formatErrorLine } from "../../src/store/scrub.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand } from "../../src/plugins/types.ts";
@@ -79,7 +80,8 @@ function actingDiscordUser(env: NodeJS.ProcessEnv): string {
 
 /**
  * Dangerous: posts a message to a Discord channel via REST.
- * Requires token + allowlisted channel. DISCORD-8 requester check: in a
+ * Requires token + allowlisted channel (the bridge's set: allowlist file / env
+ * ∪ DISCORD_CHANNEL_IDS; deny lists win). DISCORD-8 requester check: in a
  * bridge-started run always for the acting user (a --requesting-user-id
  * naming anyone else is refused, and a check that cannot run refuses);
  * otherwise when --requesting-user-id is provided (or strict mode requires it).
@@ -121,7 +123,13 @@ const discordPostMessage: PluginCommand = {
     if (!loaded.ok) {
       return { ok: false, error: `not authorized: ${loaded.error}`, exitCode: 3 };
     }
-    const gate = checkChannel(channelId, loaded.config);
+    // DISCORD-5 / REQ-discord-004: the bridge's and daemon's channel set —
+    // allowlist file + CORVIDINHO_DISCORD_ALLOW_CHANNELS ∪ DISCORD_CHANNEL_IDS.
+    // checkChannel reads the deny lists first, so a deny still wins.
+    const gate = checkChannel(channelId, {
+      ...loaded.config.discord,
+      channels: mergeChannelIds(loaded.config, process.env),
+    });
     if (!gate.ok) {
       return {
         ok: false,

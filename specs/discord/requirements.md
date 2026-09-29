@@ -59,6 +59,13 @@ intended and every other list and key (`[owner]` included) is unchanged — so
 a file it rewrites always reloads with every existing entry and every other
 list intact.
 
+The agent's `discord-post-message` SHALL gate its target channel on this
+same union, deny lists first (REQ-plugins-009), so a channel the bridge
+listens in through `DISCORD_CHANNEL_IDS` alone can also be posted to.
+`discord-send-file` SHALL gate the conversation channel the bridge set (a
+thread through its parent, REQ-discord-476) on the same union, deny lists
+first, so it can attach in every channel the bridge talks in.
+
 Acceptance Criteria
 - DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
 - A malformed allowlist file → `allowlist` error; the bridge does not start.
@@ -67,6 +74,8 @@ Acceptance Criteria
 - `/admin users add` on a file whose `[discord]` has only a multi-line `channels` array (LF and CRLF), and `/admin channels add` after a multi-line `deny_users`, put the new key after the closing `]`; the file reloads with every list intact.
 - A `]` or `#` inside a quoted item survives an `/admin` rewrite; the comment on the edited key's first line is kept.
 - A rewrite that would not reload as intended (an entry the one-line writer cannot quote) is refused and the file is left byte-for-byte unchanged.
+- `discord-post-message` to a channel listed only in `DISCORD_CHANNEL_IDS` passes the channel gate (dry run exit 0); a deny on that channel still refuses (exit 3).
+- `discord-send-file` in a conversation channel listed only in `DISCORD_CHANNEL_IDS`, or a thread whose parent is, attaches; a channel in no list is refused (not allowlisted) and a deny on that channel still refuses (is denied).
 
 ### REQ-discord-005
 
@@ -74,6 +83,7 @@ When DISCORD_TOKEN and DISCORD_BOT_TOKEN are both missing, the CLI/doctor/bridge
 
 Acceptance Criteria
 - `corvidinho discord bridge` without token exits non-zero naming DISCORD_TOKEN / DISCORD_BOT_TOKEN and go-live checklist.
+- The go-live checklist (`goLiveChecklist()`, printed by `doctor` and `discord bridge`) says users and roles both empty admit anyone in an allowlisted channel and once either is set only those users, role holders and the owner (REQ-discord-043); it never says empty user/role lists are deny-all.
 
 ### REQ-discord-006
 
@@ -247,6 +257,10 @@ Acceptance Criteria
 - Bridge run, the check cannot run (the checker throws; the live Guild Members login is refused, e.g. Server Members Intent off) → refused (exit 3) with the reason in one scrubbed line that names Server Members Intent; the bot token never appears; nothing posted.
 - Bridge run: the channel allowlist deny still wins before the acting user check.
 - Acting env empty or unset: no flag posts without a check; the flag checks the named user; strict refuses a missing id; a throwing check still throws.
+- With no injected checker, `verifyRequesterCanSend` runs its own discord.js check (gateway login stubbed to be ready on a fake guild text channel, no token or network): a requester without both View Channel and Send Messages is refused with status 403, one with both is allowed, a requester not in the guild is refused (403), and a missing or non-text channel is refused (404).
+- With `attachFiles`, the same live check refuses a requester with View Channel + Send Messages but no Attach Files (403, the attach reason) and allows one with all three (REQ-discord-476).
+- `discord-post-message` in a bridge run, through that live check, posts nothing when the acting user cannot send and posts once when they can.
+- These tests fail when the `permissionsFor` View Channel + Send Messages check (or the Attach Files check) is disabled.
 
 ### REQ-discord-013
 
@@ -450,6 +464,14 @@ never make an unaudited delete. An unknown or missing schedule id deletes
 nothing and appends no row.
 
 Cadence SHALL enforce a minimum interval of **5 minutes** at create time.
+A cron step SHALL be 1 or more in every field: a zero step (`*/0`, `a-b/0`,
+`n/0`, also inside a comma list) SHALL be refused as a `CadenceError` before
+the field is expanded, so `/schedule create` replies with that message
+ephemerally and creates nothing, and the store's next-run computation
+(create, resume, claim) throws the same error. A range SHALL be expanded only
+up to its field's maximum, so a range whose end is past it (`0-99999999999`)
+resolves at once and the other cadence rules apply. No cadence SHALL hang the
+bridge process that parses it (DISCORD-SCHEDULE-4).
 Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
 asynchronously with a small concurrency cap so live Discord HEAR and GitHub
@@ -476,6 +498,8 @@ Acceptance Criteria
 - `/schedule` registered with list/create/pause/resume/delete bodies.
 - Admin can create with cadence + project + prompt; non-admin / empty admin denied.
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
+- A zero cron step (`*/0 * * * *`, `0-59/0 * * * *`, `0,*/0 * * * *`, `5/0 * * * *`, or `/0` in the hour, day, month or weekday field) is refused with the ephemeral `Invalid cron step in "…": the step must be 1 or more.`, nothing is created, and the bridge keeps answering; `parseCron` / `getNextCronDate` throw the same `CadenceError`.
+- A range past its field's maximum resolves at once: `0-99999999999 * * * *` is refused by the 5-minute rule and `0 0-99999999999/2 * * *` runs like `0 */2 * * *`; cadences with steps of 1 or more resolve as before.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
 - `/schedule delete` by the owner appends `started` then `ok` (action `schedule-delete`, surface `discord:schedule`, args digest only) before the schedule and its runs are gone; the reply names both row numbers and the chain verifies.
 - When the audit trail throws, the chain is keyed and the process has no key, or no trail is wired, `/schedule delete` replies `audit log unavailable (SAFE-5)` and the schedule and its run history are kept.
@@ -1098,6 +1122,16 @@ reply to it by the requester continues that session and the rules above apply
 (AUTONOMY-5/6). A SAFE-8 spend-cap stop SHALL NOT be stored as the pending
 ask and SHALL NOT get Choose buttons.
 
+A continue that is not an explicit cancel, while the session's `pendingAsk`
+is a button ask past its timeout, SHALL first clear that ask as a late press
+does (`clearPendingAsk`), before the thin-ack rule applies: the newest
+remaining open ask that has not timed out SHALL become `pendingAsk` (earlier
+timed-out asks are dropped), so a thin-ack continue restates that live ask,
+or, with none left, runs the agent, and SHALL NOT restate the timed-out ask's
+stub or its Choose button (DISCORD-ASK-5). A substantive continue then runs
+the agent as before, and an explicit cancel still clears every open ask with
+the short ack and no agent run.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
@@ -1129,6 +1163,10 @@ Acceptance Criteria
 - When the newest ask is picked while an earlier open ask has timed out, the earlier ask is dropped, not promoted: the session has no pending ask, a thin reply runs the agent, and a press on the dropped ask is a no-op.
 - `cancel` with several open asks clears all of them with the short ack and no agent run; a later press on any of them is a no-op.
 - `SessionStore`: one open ask persists as one JSON object; two persist as an array and reload as `pendingAsk` plus `openAsks` after a reopen; re-storing a held askId updates it in place; `findPendingAsk` finds an earlier open ask; clearing the newest promotes the earlier one; a new ask replaces a free-text ask but never a button ask; `null` clears all.
+- A thin reply after the session's only button ask timed out runs the agent (no prior-question block), posts no restated stub or Choose button for that ask, and leaves no pending ask.
+- A thin reply after the newest button ask timed out, while an earlier button ask is still open and not timed out, restates the earlier ask with its Choose button and does not run the agent; the earlier ask is the pending ask and no other ask stays open.
+- A substantive reply after the button ask timed out runs the agent and leaves no pending ask, so a later thin reply runs the agent too.
+- `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 
 ### REQ-discord-045
 
@@ -1139,11 +1177,43 @@ interaction listing the option buttons. Button prompts SHALL expire after
 about 30 minutes; a late press SHALL get a short "that choice expired".
 Free-text clarify SHALL be used only when options cannot be listed.
 
+A late press SHALL include the requester's Choose or option press on an ask
+that is no longer open because it timed out and was dropped, not promoted,
+when a newer ask of the session was cleared (REQ-discord-044), or because its
+session was TTL-purged (SESSION-2 / REQ-discord-019), at runtime or while the
+store loads after a restart. Such a press SHALL get the ephemeral
+`ASK_CHOICE_EXPIRED` reply, with no agent run, no new session and nothing
+posted or edited, never "This choice isn't for you (or it was already
+answered)". A still-stored ask past its timeout SHALL keep that reply and be
+cleared, and a later press on it SHALL again get `ASK_CHOICE_EXPIRED`. A
+re-press after a pick and a press after an explicit cancel SHALL stay no-ops
+with today's reply (DISCORD-ASK-8), also once the session is purged. Another
+user's press on a live ask, or on an ask that is no longer open, SHALL get
+the not-for-you reply and SHALL NOT resume anything (DISCORD-ASK-2/3). The
+channel, actor and mute/rate gates (REQ-discord-212 / REQ-discord-201 /
+REQ-discord-010) SHALL run before this reply; for an ask that is no longer
+open, the channel gate SHALL judge the press against the channel and thread
+its session had, as for a live ask, so a late press in the talk's thread
+under an allowlisted channel (DISCORD-2.a) gets `ASK_CHOICE_EXPIRED` too. To
+tell a late press from another user's, `SessionStore` SHALL keep, for each
+ask that leaves past its timeout or with its purged session, only its askId,
+the session's Discord user, the ask's expiry and the session's channel and
+thread ids (`findClosedAsk`), in memory only and bounded to the newest
+`CLOSED_ASKS_MAX` (1000), never the question or option text (SAFE-6). No new
+env var, slash command, table or column.
+
 Acceptance Criteria
 - Structured or numbered options → stub + components; ephemeral open shows choices.
 - Pick resumes the requester session with the chosen label.
 - Expired press returns ASK_CHOICE_EXPIRED and clears pending.
 - Question without listable options keeps the free-text ask-ping path.
+- When the newest ask is picked while an earlier open ask has timed out, the requester's Choose and option press on the dropped earlier ask each get exactly the ephemeral `ASK_CHOICE_EXPIRED`; the agent does not run and nothing is posted or edited; another user's press on it gets the not-for-you reply.
+- With two open asks (neither timed out) and the session idle past its TTL, the requester's Choose and option press on each get the ephemeral `ASK_CHOICE_EXPIRED`, no agent run, no session is created and nothing is posted; another user's press on each gets the not-for-you reply, as it does on the live ask before the purge.
+- A still-stored ask past its timeout: the first press gets `ASK_CHOICE_EXPIRED` and clears it; a second press by the requester gets `ASK_CHOICE_EXPIRED` again, another user's the not-for-you reply, and the agent does not run.
+- A re-press after a pick and a press after `cancel` get the not-for-you / already-answered reply with no run, before and after the session is TTL-purged.
+- A muted or deny-listed requester's press on an ask of a TTL-purged session gets `MUTED` / the zero-width ack; once let through the press gets `ASK_CHOICE_EXPIRED`, with no run and nothing posted.
+- In a talk inside a thread under an allowlisted channel, the requester's press in that thread on a dropped ask or on an ask of the TTL-purged session gets `ASK_CHOICE_EXPIRED` with no run; another user's press there gets the not-for-you reply; a press from another thread or a non-allowlisted channel, or once the talk's channel has left the allowlist, gets the zero-width ack.
+- `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt, channelId, threadId? }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.
 
 ### REQ-discord-046
 
@@ -1433,6 +1503,10 @@ channel with the same text; then delete the row. Recovery SHALL NOT throw out
 of bridge start and SHALL NOT touch any other channel or message. No slash
 command or env var is added.
 
+A row whose channel (the thread) or parent channel is on `deny_channels`
+SHALL count as not allowlisted even when the other is allowlisted (deny wins,
+REQ-discord-212): nothing is edited or posted and the row is deleted.
+
 Acceptance Criteria
 - A running reply has exactly one row whose progress id is the sent embed; the row is gone after success, failed exit, ask, thrown error and worktree refusal; ignored or refused messages never add one.
 - A reply in a thread records the thread as its channel and the allowlisted parent channel; a button pick's resumed run records a row (request id = the ask stub message) and clears it after.
@@ -1442,6 +1516,7 @@ Acceptance Criteria
 - Edit and reply both failing still lets the bridge start; the row is deleted.
 - With no rows, bridge start sends, edits and replies nothing.
 - A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
+- A row in a deny-listed thread under an allowlisted parent, or in an allowlisted thread under a deny-listed parent, gets no edit and no reply; the row is deleted. A row in another thread under the allowlisted parent is still recovered in that thread.
 
 ### REQ-discord-212
 
@@ -1471,12 +1546,31 @@ anyone else (DISCORD-DENY-2/3) — and SHALL NOT resume the session, run the
 agent, or send or edit anything. No slash command, env var, table or column
 is added.
 
+Deny SHALL always win over an allowlisted parent (REQ-plugins-005): when a
+thread or its parent channel is on `deny_channels`, the thread SHALL count as
+not allowlisted on every path, even when the other id is allowlisted. An
+@mention, a thread continuation and a reply to a tracked bot message there
+SHALL be refused silently as above; an ask button pressed there, or for a
+session whose channel or thread is deny-listed, SHALL get only the ephemeral
+ack and SHALL NOT resume; a slash command there and a schedule whose channel
+is that thread SHALL be refused (both gate the thread id itself); restart
+recovery (REQ-discord-311) SHALL post and edit nothing there; and
+`discord-send-file` (REQ-discord-476) SHALL upload nothing there.
+`isMonitoredConversation` (`permissions.ts`: the thread or its parent is
+allowlisted and neither is deny-listed) SHALL be the shared check for
+MessageCreate, ask buttons and restart recovery.
+
 Acceptance Criteria
 - The owner forwards a tracked bot message from an allowlisted channel into a non-allowlisted channel (with or without an @mention): `routeMessage` returns a silent `ignore` / `refuse` with no reply, the agent is not spawned, and nothing is sent, edited or deleted in that channel.
 - A thread message under a non-allowlisted parent does not continue a session whose recorded channel is allowlisted.
 - `replyReferenceMessageId` returns undefined for a forward-type reference and for a reference to another channel; it returns the message id for a same-channel reply (default or missing type) and, inside a thread, for a reference to the thread or its parent.
 - A reply to a tracked bot message in the same allowlisted channel still continues the same session; a thread under an allowlisted parent still continues its session.
 - An ask button pressed in a non-allowlisted channel, or after the session's channel left the allowlist, gets only the ephemeral zero-width ack (the allowlist tip for an admin): the ask stays pending, the agent is not run, and nothing is sent or edited; a press in the allowlisted channel, or in the session's thread under an allowlisted parent, still resumes (DISCORD-ASK-3).
+- With `channels = [parent]` and `deny_channels = [thread]`, an @mention in the thread is refused silently (no reply): no session is started, the agent is not run and nothing is posted; a session started there before the deny is not continued by a thread message, a reply to its bot message or a mention.
+- A thread under a deny-listed parent is refused even when the thread itself is allowlisted.
+- `componentChannelAllowlisted` is false for a press in the deny-listed thread and for a session in it (also when pressed in the parent); the bridge answers only the zero-width ack (the allowlist tip for an admin), the ask stays pending and nothing is sent.
+- A slash command in the deny-listed thread gets only the zero-width ack (the tip for the owner); `/schedule create` naming the thread as its channel is refused, and a schedule whose channel is the thread neither runs nor posts at tick.
+- The allowlisted parent itself and its other threads are still served (DISCORD-2.a).
 
 ### REQ-discord-215
 
@@ -1861,6 +1955,15 @@ pass ping the owner:
   auto-pause the schedule, the pause ask SHALL stay pending until the gate
   passes, like any pending ask.
 
+Every schedule post in the channel — the `✅` / `❌` result line and every
+ask post, in-process or from the delivery pass, including the stuck asks
+above — SHALL start with the schedule prefix
+`Schedule **<name>** (<id>) on <project>`, where the project is shown by
+name (`projectLabel`: the last segment of an absolute path, a relative name
+as given), never as an absolute host path (REQ-discord-418, SAFE-6): the
+whole channel reads it. The run row SHALL keep the full error and the
+model's prompt SHALL keep the stored project.
+
 No new slash command, env var, config key, table, column or schema version;
 `/schedule resume` is the existing ADMIN subcommand.
 
@@ -1874,6 +1977,8 @@ Acceptance Criteria
 - A daemon run whose project cannot be resolved spawns no agent, keeps `project resolve failed: …` (with the host path) on the row and stores the fixed question; the bridge posts it with the owner ping and without the host path; the same failure again posts without a ping.
 - A bridge run whose worktree cannot be created keeps `worktree failed: …` on the row and posts the fixed question at once with the owner ping, once; so does one whose worktree step throws.
 - The pause ask is chosen by the failure count in SQL: a store handle whose cache is stale stores it when SQL reaches 5; a success stores no ask and resets the count.
+- A schedule whose project is an absolute host path posts its `✅` and `❌` result lines, its clarify and stuck asks (bridge-claimed and daemon-claimed) and its pre-run stuck ask (an absolute sibling project that cannot be resolved) with the project's name in the prefix and never the absolute path; the run row keeps `project resolve failed: …` with the path and the model's prompt keeps the stored project.
+
 ### REQ-discord-431
 
 Channel autocomplete on the STRING `channel` options (`/admin channels add|remove`, `/announce channel`) SHALL list channels only for ADMIN invoking from an allowlisted channel (DISCORD-DENY-3 / ADMIN-4). The check SHALL be re-run on every autocomplete request, never trusted from registration, in the slash gate order: the interaction's channel passes the channel allowlist (`gateChannel`), the actor passes `gateActor` (deny users/roles win; a non-empty user/role allowlist applies), and `resolvePermissionLevel` with the live mute set is ADMIN (the configured owner; no owner means nobody, IDENTITY-3). Otherwise the gateway SHALL answer an empty choice list, so no channel name, id or allowlist entry reaches a non-admin. The gateway SHALL also answer an empty list when no gate is wired or the gate throws (fail closed). An allowed request SHALL keep today's choices: guild text channels for `add` and `/announce channel`, and the live allowlist for `remove`. Autocomplete SHALL NOT consume a rate-limit slot. No new slash command, option, env key or schema version.
@@ -1966,9 +2071,9 @@ pass the conversation's channel (the thread, with its parent, in a thread) and
 `/session start` / `/work` the command's channel; schedules SHALL pass none.
 A `--channel` / `-c` argument SHALL be refused, and a run with no
 conversation channel or no acting user SHALL be refused, nothing sent. The
-channel allowlist SHALL gate first (a thread through its parent, DISCORD-5),
-then the DISCORD-8 requester check SHALL run for the acting user with View
-Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
+channel allowlist SHALL gate first (a thread as itself or through its parent,
+DISCORD-5), then the DISCORD-8 requester check SHALL run for the acting user
+with View Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
 `attachFiles`); a check that cannot run SHALL refuse. The file SHALL be at
 most 8 MB (Discord's default upload limit) and SHALL be a PNG, JPEG, GIF or
 WebP image whose magic bytes match its extension, or UTF-8 text with a
@@ -1988,6 +2093,28 @@ scrubbed, so a large diff goes as a `.diff` attachment. A Discord 413 / code
 `CORVIDINHO_DISCORD_DRY_RUN=1` SHALL post nothing. No slash command, config
 key, table or column is added; the two env vars are bridge-to-run plumbing.
 
+A conversation thread on `deny_channels` SHALL be refused even when its
+parent is allowlisted (deny wins, REQ-discord-212 / REQ-plugins-005), before
+the requester check, with the `checkChannel` "is denied" error; nothing is
+uploaded.
+
+The conversation's channel SHALL pass the gate the bridge serves it by:
+`isMonitoredConversation` on the bridge's channel set (allowlist file and
+`CORVIDINHO_DISCORD_ALLOW_CHANNELS` union `DISCORD_CHANNEL_IDS`,
+REQ-discord-212 / REQ-discord-004). A thread allowlisted by its own id SHALL
+pass even when its parent is not listed, and a thread SHALL be refused when
+it or its parent is on `deny_channels` (deny wins, REQ-plugins-005), before
+the requester check, nothing uploaded. The file SHALL be read once, from one
+descriptor opened without following a link at the checked path, and the file
+that descriptor holds SHALL be a regular file whose own path is inside the
+project and is not a SAFE-2 protected, `.specsync` or secret path: a file or
+folder swapped for a link after the path checks SHALL be refused (SAFE-2).
+The 8 MB cap SHALL hold for the bytes read as well as for the size first
+taken, and no more than the cap + 1 byte SHALL be read: a file that grew
+past the cap after its size was taken SHALL be refused before the requester
+check, nothing uploaded. An ask-button run in a thread SHALL carry the thread
+as the reply channel and its parent.
+
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
@@ -2000,6 +2127,46 @@ Acceptance Criteria
 - A requester who cannot attach, or a check that throws, sends nothing; dry run uploads nothing; `started` and `ok` audit rows are written.
 - `--git-diff` refuses an empty diff and attaches `changes.diff` without secret paths and scrubbed.
 - The spawn client writes the reply channel env (empty when none); the bridge passes the conversation's channel on chat, thread, `/session start` and `/work` runs.
+- A deny-listed thread under its allowlisted parent is refused with the "is denied" error: no requester check runs and nothing is uploaded; another thread under that parent still passes.
+- A thread allowlisted by its own id, its parent not listed, attaches in the thread after the acting user's check; with its parent deny-listed it is refused ("is denied"); a deny-listed thread under an allowlisted parent is refused ("is denied"); an unlisted thread under an unlisted parent is refused (not allowlisted); nothing else is checked or uploaded.
+- A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
+- A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
+- An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+
+### REQ-discord-734
+
+A run summary that ends with the ROLES-CHAT-3 closing note
+`\n\n(not allowed for your role)` (REQ-agent-333) SHALL keep that note
+through every cap it meets after `chatBodyFromTaskResult` on its way to a
+Discord post. Each such cap SHALL use `clipKeepingRoleNote`
+(`src/agent/task-summary.ts`): the text before the note loses its end and
+the note stays last.
+
+- A scheduled run's summary SHALL be capped at `POST_SUMMARY_MAX` (1500
+  chars) for the run row's `summary` and for the `✅` / `❌` schedule post,
+  and in the post also at what fits after the post's head within
+  `ASK_REPLY_MAX` (1900), so the gateway's 1900 cut never reaches it.
+- The `/work` and `/session start` answers SHALL cap the summary at 1500
+  chars and at what fits after the answer's head (task, session, worktree,
+  description and PR lines; session, topic and worktree lines) within 1900,
+  so the gateway's 1900 cut never drops the note.
+- `appendPostLine`, which cuts a post's body so the SAFE-8 80% warning line
+  fits within 1900 (chat replies, schedule posts, a slash owner notice that
+  rides the answer), SHALL cut the body before the note, end the kept text
+  in `…`, and keep the note ahead of the warning line.
+
+`ask-ping.ts` SHALL export `POST_SUMMARY_MAX` and
+`clipPostSummary(summary, headLength = 0)` for these caps. A summary that
+does not end with the note SHALL be capped exactly as before. An ask's post
+(a question or Choose stub, including a stuck ask's 400-char context) is not
+changed. No env var, config key, flag, slash command, table or schema change.
+
+Acceptance Criteria
+- `tests/scheduler.service.test.ts` "a long summary ending with the note keeps it in the run row and the post; one without is cut as before": the run row's summary is 1500 chars ending with the note; the post (448-char schedule name) is at most 1900 chars and ends with the note; a run without the note stores and posts exactly its first 1500 chars.
+- `tests/discord.slash-ask7.test.ts` "/work answer for a non-owner keeps the closing role note within the 1900 cap": the collapsed answer is at most 1900 chars, its summary part is under 1500 (fitted after a long head) and it ends with the note.
+- Same file, "/session start answer for a non-owner keeps the closing role note within the 1900 cap": at most 1900 chars, the summary part at most 1500, ending with the note.
+- `tests/discord.spend.test.ts` "the cut for the warning line keeps a closing role note": an 1800-char body ending with the note plus the 80% line is a 1900-char post ending `y…`, the note, a blank line and the warning line; a body that fits is untouched; a long body without the note still ends `…\n\nLINE`.
+- With main's `src/discord/ask-ping.ts`, `src/discord/command-handlers/work.ts`, `src/discord/command-handlers/session.ts` and `src/scheduler/service.ts`, these four tests fail; they pass on the branch.
 
 ### REQ-discord-036
 
