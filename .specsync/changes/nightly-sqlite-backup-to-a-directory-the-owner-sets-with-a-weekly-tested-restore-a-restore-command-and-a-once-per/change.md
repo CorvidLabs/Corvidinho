@@ -1,6 +1,6 @@
 ---
 id: nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per
-state: approved
+state: implementing
 type: feature
 base_commit: 9209bda288f255dfa366d24d6ddcb96ab2d39a4f
 ---

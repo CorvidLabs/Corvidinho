@@ -7,10 +7,11 @@
   "title": "Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68)",
   "description": "Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "9209bda288f255dfa366d24d6ddcb96ab2d39a4f",
   "created_at": 1790696364,
-  "updated_at": 1790696618,
+  "updated_at": 1790696725,
   "affected_specs": [
     "cli",
     "discord"
