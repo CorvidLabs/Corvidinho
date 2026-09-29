@@ -218,19 +218,21 @@ describe("automatic re-scrub when rules tighten", () => {
 });
 
 describe("re-scrub covers every column REQ-discord-066 lists", () => {
-  // [table, column, fake secret, redaction kind] — one kind per column, so a
-  // column dropped from SCRUB_TARGETS (or read from the wrong row) shows up.
-  const LISTED: ReadonlyArray<[table: string, column: string, secret: string, kind: string]> = [
-    ["discord_sessions", "topic", FAKE.discord, "discord-token"],
-    ["discord_work_tasks", "description", FAKE.github, "github-token"],
-    ["discord_work_tasks", "summary", FAKE.openai, "openai-key"],
-    ["schedules", "name", FAKE.slack, "slack-token"],
-    ["schedules", "description", FAKE.aws, "aws-key"],
-    ["schedules", "prompt", FAKE.google, "google-key"],
-    ["schedule_runs", "summary", FAKE.jwt, "jwt"],
-    ["schedule_runs", "error", FAKE.anthropic, "anthropic-key"],
-    ["memories", "key", FAKE.githubPat, "github-token"],
-    ["memories", "content", FAKE.pem, "private-key"],
+  // [table, column, fake secret, stored after the re-scrub] — a different
+  // vendor kind per column (all ten kinds once), so a column dropped from
+  // SCRUB_TARGETS (or read from the wrong row) shows up.
+  const r = (kind: string) => `[redacted:${kind}]`;
+  const LISTED: ReadonlyArray<[table: string, column: string, secret: string, stored: string]> = [
+    ["discord_sessions", "topic", FAKE.discord, r("discord-token")],
+    ["discord_work_tasks", "description", FAKE.github, r("github-token")],
+    ["discord_work_tasks", "summary", FAKE.openai, r("openai-key")],
+    ["schedules", "name", FAKE.slack, r("slack-token")],
+    ["schedules", "description", FAKE.aws, r("aws-key")],
+    ["schedules", "prompt", FAKE.google, r("google-key")],
+    ["schedule_runs", "summary", FAKE.jwt, r("jwt")],
+    ["schedule_runs", "error", FAKE.anthropic, r("anthropic-key")],
+    ["memories", "key", "Bearer " + a(32), `Bearer ${r("bearer")}`],
+    ["memories", "content", FAKE.pem, r("private-key")],
   ];
 
   test("SCRUB_TARGETS lists each of them", () => {
@@ -281,9 +283,9 @@ describe("re-scrub covers every column REQ-discord-066 lists", () => {
       db1.close();
 
       const db2 = openCorvidinhoDb({ path });
-      for (const [table, column, secret, kind] of LISTED) {
+      for (const [table, column, secret, stored] of LISTED) {
         const row = db2.query(`SELECT ${column} AS v FROM ${table}`).get() as { v: string };
-        expect({ table, column, value: row.v }).toEqual({ table, column, value: `old [redacted:${kind}]` });
+        expect({ table, column, value: row.v }).toEqual({ table, column, value: `old ${stored}` });
         expect(row.v).not.toContain(secret.slice(0, 20));
       }
       expect(rescrubDatabase(db2).rowsUpdated).toBe(0);
