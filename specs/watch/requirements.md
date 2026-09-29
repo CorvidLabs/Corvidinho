@@ -324,7 +324,8 @@ still gets no ADMIN tools), before the `[WATCH …]` header; Planning ignores
 that paragraph like the Discord identity block. Once anyone is declared, an
 unresolved commenter SHALL get the block with `declared_person: none`; with
 nobody declared (only the owner) and an unresolved commenter, or without
-`people`, the prompt SHALL be exactly as before. Allowlist gates, sessions,
+`people`, the prompt SHALL be exactly as before, apart from the SAFE-12 fence
+around the title and body (REQ-watch-071). Allowlist gates, sessions,
 acks and the spawn env (no Discord actor, non-ADMIN) are unchanged.
 
 Acceptance Criteria
@@ -335,4 +336,39 @@ Acceptance Criteria
 - The fixture search client carries `user_id` to `senderId` on comment events.
 - `startWatchPoller` with an allowlist file recognises a declared commenter, and a person added to the file after start is recognised on the next event.
 - Regression tests in `tests/identity.recognise.test.ts` fail on the base sources and pass after.
+- With nobody declared, an unresolved commenter's prompt still starts with `[WATCH`; the title and body follow inside the `UNTRUSTED_DATA` fence (REQ-watch-071, `tests/safe.injection.test.ts`).
+
+### REQ-watch-071
+
+Untrusted GitHub text on WATCH (SAFE-12 / SAFE-13, #71). The event's title
+and body (`watchEventText`) SHALL reach the model only inside an
+`UNTRUSTED_DATA` fence (`source=github-thread`, header
+`WATCH_BODY_FENCE_HEADER`) after the `[WATCH …]` header and `URL:` line, the
+text clipped before fencing (and again by any overflow the fence adds) so the
+whole prompt stays within `WATCH_PROMPT_MAX_CHARS` (8000) and the end marker
+with its random id is always last. Before any ack or run the poller SHALL call
+`watchInjectionVerdict(event, people)` for every routed event: null for the
+owner (recognised by GitHub id / login in the owner's people list) and for
+text that does not trip `detectInjection`; on a hit the event SHALL count
+`refused`, run nothing and get no ack, one comment
+(`buildInjectionRefusalBody`: what WATCH won't do and why in plain words,
+never the text, @mentioning the owner's GitHub login from `[owner]` / env when
+set) posted by `postWatchInjectionRefusal` for any event type (skipped for the
+watch user's own events, an already-answered id and a bad repo; the id joins
+the acked store; a rate-limited post backs off like an ack), one
+`injection-suspected` / `denied` SAFE-5 row (actor `github:<login>`, surface
+`watch:<session>`, digest of the source and reasons; best effort), a
+`[watch] SAFE-13 refused …` log line and `onAction` kind
+`injection_refused`; the event id is already processed, so it is never
+retried. The WATCH spawn client SHALL read the child's `result.injection`
+(`injectionNoticeFromUnknown`) into `AgentSpawnResult.injection`, and the
+run-summary comment SHALL then add `watchInjectionLine` (@mentioning the
+owner's login when set). No env var, config key, table or column.
+
+Acceptance Criteria
+- `routeEvent` puts the title and body inside the fence after the header; a 20 000-char body that guesses the end marker, and a body of lines that get quoted, both leave the real end marker last and the prompt within 8000 chars.
+- `watchInjectionVerdict` flags a non-owner's injected body or title and returns null for the owner's and for an ordinary body.
+- Through `startWatchPoller` with a memory DB and the echo ack client: an injected comment runs nothing, gets one comment @mentioning the owner's GitHub login and one `injection-suspected` row with actor `github:<login>`; the next ordinary event runs with its body fenced.
+- `buildSummaryBody` adds the owner line only when the run reports `injection`.
+- Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 

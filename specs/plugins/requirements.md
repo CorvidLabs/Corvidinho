@@ -221,12 +221,10 @@ Acceptance Criteria
 
 Corvidinho SHALL register memory plugins `memory-store`, `memory-recall`,
 `memory-forget`, and `memory-override` (PLUGIN-1 memory surface) backed by
-shared-store `MemoryStore` (REQ-discord-021), plus `memory-profile` and
-`memory-forget-me` (REQ-plugins-101).
+shared-store `MemoryStore` (REQ-discord-021).
 
 `memory-store` / `memory-recall` are safe and act only in the acting user's
-own scope (a declared person's profile; `--project` for the run's repo; the
-owner's `--person` read, REQ-plugins-101). `memory-forget` / `memory-override` are dangerous (SAFE-1) and
+own scope. `memory-forget` / `memory-override` are dangerous (SAFE-1) and
 SHALL require the two-phase confirm token plus ADMIN re-checked at handler
 time (REQ-plugins-011, MEMORY-ACL-3/4). Acting Discord user id and ADMIN come
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID`,
@@ -239,7 +237,6 @@ Acceptance Criteria
 - Forget/override without a valid confirm token or without admin refuse.
 - Non-admin cross-user forget refuses without leaking content.
 - Builtins load memory plugins; fixture tests without live Discord.
-- `memory-profile` and `memory-forget-me` are registered as safe (not dangerous, not mutating).
 
 ### REQ-plugins-081
 
@@ -1280,7 +1277,13 @@ shared `fenceUntrustedData` with the `UNTRUSTED_WEB_CONTENT` word and its
 existing header, so page text also loses bidi, zero-width, BOM, soft hyphen
 and tag characters and a page line that imitates a Corvidinho context block is
 marked `(quoted)`; everything REQ-plugins-111 requires of the fence still
-holds. What a plugin may run SHALL be decided only by the acting role resolved
+holds. `delegate` and `council` SHALL pass a worker's validated
+`result.injection` (SAFE-13: one of the worker's own tool results looked like
+an injection; `injectionNoticeFromUnknown`, tool name and known reason ids
+only) back as `data.injection` — `runDelegateChild` reads it into
+`DelegateChildOutcome.injection` and `runCouncil` keeps the first voice's or
+chair's on `CouncilOutcome.injection` — so the lead's tool loop takes it as
+its own hit (REQ-agent-071). What a plugin may run SHALL be decided only by the acting role resolved
 in the tool layer (`resolveActingRole`, REQ-plugins-065): text in a task, a
 body or a tool result that claims the owner's identity widens nothing. No env
 var, config key or flag.
@@ -1289,7 +1292,9 @@ Acceptance Criteria
 - `lookupGuildMemberById` over a stubbed fetch returns the nickname, global name and display name cleaned (no mention markup, zero-width or bidi characters, role tags or labels) and a message line without `<@`.
 - A community role session whose task claims the owner and asks for `files-write` is offered no mutating plugin and the call is refused with `not allowed for your role`; nothing is written.
 - `tests/web.fetch.test.ts` passes unchanged on the shared fence.
+- `delegate` over a fake worker whose result frame carries `injection` returns `data.injection` with the tool and known reason ids only, and none for an invalid notice; `runCouncil` keeps the first voice's notice on its outcome.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
+
 
 ### REQ-plugins-101
 
@@ -1344,4 +1349,3 @@ Acceptance Criteria
 - `--project` works for owner, team and the local CLI and is refused for community, undeclared and a community-stamped team member; `--project --category private` and `--project --person` are refused.
 - `memory-forget-me` records one pending ask per person (audited), deletes nothing, and refuses with no actor, outside a conversation, with arguments, and with no owner.
 - `tests/memory.profiles.test.ts` and `tests/discord.forget-card.test.ts` cover each and fail on the stacked base sources.
-
