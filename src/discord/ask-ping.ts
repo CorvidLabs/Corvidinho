@@ -37,6 +37,12 @@ export const ASK_REPLY_CONTEXT_MAX = 400;
 
 export const ASK_REPLY_HINT = "Reply to this message to answer.";
 
+/**
+ * DISCORD-ASK-4.a — hint on a free-text ask post that carries the Answer
+ * button: the private form first, a reply still works.
+ */
+export const ASK_ANSWER_HINT = "Press **Answer** to answer privately, or reply to this message.";
+
 /** Bridge log line when a run needs a human but nobody can be pinged. */
 export const ASK_NO_OWNER_WARNING =
   "[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)";
@@ -72,6 +78,11 @@ export type FormatAskReplyOpts = {
    * ignored for a spend-cap ask, which a reply cannot unblock).
    */
   replyHint?: boolean;
+  /**
+   * The post carries the Answer button (DISCORD-ASK-4.a): the hint line is
+   * ASK_ANSWER_HINT in place of ASK_REPLY_HINT (ignored for a spend-cap ask).
+   */
+  answerButton?: boolean;
 };
 
 /**
@@ -134,7 +145,8 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   }
   // SAFE-8: a reply cannot lift the cap (no Approve card yet, #96), so a
   // spend-cap ask never invites one.
-  if (opts.replyHint && !spendCap) lines.push(ASK_REPLY_HINT);
+  if (opts.answerButton && !spendCap) lines.push(ASK_ANSWER_HINT);
+  else if (opts.replyHint && !spendCap) lines.push(ASK_REPLY_HINT);
   let content = lines.join("\n");
   if (content.length > ASK_REPLY_MAX) {
     content = `${content.slice(0, ASK_REPLY_MAX - 1)}…`;

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "23e33d547dd13f4bd302d96f21f4cc5b71728847",
+      "contract_digest": "a60a71d9b43556712ca8de67a7bbedb79b9e5954a7fc499a1fa09f7850327843",
+      "execution_digest": "0cb6a6aaac235f1c3ce7c95e9589a8ec7406bc81dc57c17c4c733ab33ca9eec3",
+      "workspace_digest": "6663ca92d408101d7cb6d906b8d101acde774e18e7d6cd23573f4570aebabf00",
+      "timestamp": 1790704482
+    }
+  ]
+}

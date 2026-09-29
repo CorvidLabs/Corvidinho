@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run",
+  "slug": "memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run",
+  "title": "Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67)",
+  "description": "Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "1a392777183f0f7f0b53d14efc2ffc8a70e277ca",
+  "created_at": 1790707622,
+  "updated_at": 1790716745,
+  "affected_specs": [
+    "agent",
+    "plugins",
+    "watch",
+    "discord"
+  ],
+  "affected_paths": [
+    "hi/memory.md",
+    "INTENT.md",
+    "src/memory/rank.ts",
+    "src/memory/store.ts",
+    "src/memory/scope.ts",
+    "src/memory/index.ts",
+    "plugins/memory/commands.ts",
+    "src/watch/memory-inject.ts",
+    "src/watch/agent-client.ts",
+    "src/watch/poller.ts",
+    "src/discord/agent-client.ts",
+    "src/discord/memory-inject.ts",
+    "src/discord/bridge.ts",
+    "src/discord/command-handlers/work.ts",
+    "src/agent/execute.ts",
+    "src/agent/recall-guard.ts",
+    "tests/memory.recall-github.test.ts",
+    "tests/memory.rank.test.ts",
+    "docs/WATCH.md",
+    "docs/discord.md",
+    "docs/DISCORD-GO-LIVE.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "In a GitHub WATCH run the memory plugins act for the commenter's declared person, matched by GitHub numeric id / login in the owner's people list re-read at the call (stable ids only; a login whose numeric id differs matches nobody), storing into and recalling from the same person:<id> profile as on Discord (the configured owner not declared under [people] on their Discord-id scope), with MEMORY-7 privacy: on GitHub --person is refused for anyone but the commenter, private notes and memory-forget-me are refused and project memory is read-only; an undeclared commenter gets community scope - memory-recall --project reads the thread repo's project memory (project:<owner/repo>), nothing is saved; the WATCH spawn passes the commenter's login, numeric id and the thread's repo (CORVIDINHO_ACTING_GITHUB_LOGIN / _ID / _REPO) with no Discord actor, non-ADMIN, and the Discord spawn clears those keys (REQ-watch-008 changed; MEMORY-8); memory-recall --query is a ranked search (terms and the whole query matched in keys and content, rarer terms and key hits weigh more, newer first among near-equals; no schema change), the Discord chat / button inject and the WATCH poller search memory for the message or comment and prepend the relevant rows first, and when the model's final reply says it doesn't know with no memory search yet in the attempt the tool loop runs memory-recall itself - nothing found keeps the reply with no extra model call, facts found go back to the model once (MEMORY-9); tests/memory.recall-github.test.ts and tests/memory.rank.test.ts cover each and fail on the stacked base sources"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

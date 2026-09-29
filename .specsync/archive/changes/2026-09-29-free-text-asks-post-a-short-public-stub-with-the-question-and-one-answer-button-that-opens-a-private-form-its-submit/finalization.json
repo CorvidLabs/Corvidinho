@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit",
+  "implementation_commit": "5a07279207056a27d978066a49a6a115bacdcb32",
+  "implementation_tree": "0f29ba76b2aa0ef7206c988b2d3dd9476479010a",
+  "contract_digest": "73407389b8dd5903c4330ec5546deef2f4c69a946c79d261dcebef4ad0dc3de9",
+  "workspace_digest": "f46d31d030bf5d6ad2a9c412253d5a1585d2a5d974bb0dd21bafc133de2d5726",
+  "closing_digest": "40525b98d492436e0f6d3ea4e914ab236d4b0d84cd408ee034a40b2b8b92a71c",
+  "review_digest": "417d769b40349dd38adb218f3a38fa8012e4f69d3cae4ffe233407465b951075",
+  "finalization_digest": "cb73d3bb0907393ec3dd0257947824f12c033fe0fef7535e997f69f6b0d8b0a5",
+  "timestamp": 1790718054
+}

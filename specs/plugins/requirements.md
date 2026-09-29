@@ -396,6 +396,8 @@ Acceptance Criteria
 - A keyed row that follows a keyed row, edited and relinked with the rows after it as unkeyed SHA-256 links, fails verify with the key at that row (`chain BROKEN at #N`).
 - Without the key, appending after a keyed row is refused, so a keyless dangerous run fails closed and the chain stays keyed; an unkeyed prefix followed by keyed rows still verifies (`mixed keyed/unkeyed`).
 - Without `CORVIDINHO_AUDIT_HMAC_KEY`, a tampered unkeyed chain (no keyed rows) reads `Audit: N entries · chain BROKEN at #n` at the first tampered row, the same line as with a key, and so does a tampered unkeyed prefix before keyed rows; an intact unkeyed prefix before keyed rows, or a keyed chain, read without the key still reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
+- An edit to any one stored column of a keyed row made behind a dropped update trigger — `ts`, `action`, `actor`, `surface`, `args_digest`, `outcome`, `exit_code`, `keyed`, `prev_hash` or `hash` — fails verify with the key at that row (`chain BROKEN at #N`).
+- A dangerous run whose handler returns `ok: false` appends `started` (no exit code) then `error` with the handler's exit code; a dangerous run whose handler throws appends `started` then `error` with exit code 1, and the throw still reaches the caller.
 
 ### REQ-plugins-042
 
@@ -1266,3 +1268,136 @@ Acceptance Criteria
 - GitHub answering `private: false` passes the gate and `github-pr-list` sends its pulls request.
 - Fixture tests stub `fetch` (Octokit's transport); no live token or network. The private-repo test fails when the lookup always answers public.
 
+### REQ-plugins-071
+
+Plugins and untrusted text (SAFE-11 / SAFE-12, #71). `discord-user-lookup`
+SHALL clean every member name it returns — username, global name, nickname
+and the display name built from them — with `cleanDisplayName`
+(`src/agent/untrusted.ts`) before the result reaches the model or the
+message line; a name that is only a role word is dropped (the username, else
+the id, stands in). A lookup names a Discord account; it never makes anyone a
+declared person or gives a role. `web-fetch`'s `fenceUntrusted` SHALL be the
+shared `fenceUntrustedData` with the `UNTRUSTED_WEB_CONTENT` word and its
+existing header, so page text also loses bidi, zero-width, BOM, soft hyphen
+and tag characters and a page line that imitates a Corvidinho context block is
+marked `(quoted)`; everything REQ-plugins-111 requires of the fence still
+holds. `delegate` and `council` SHALL pass a worker's validated
+`result.injection` (SAFE-13: one of the worker's own tool results looked like
+an injection; `injectionNoticeFromUnknown`, tool name and known reason ids
+only) back as `data.injection` — `runDelegateChild` reads it into
+`DelegateChildOutcome.injection` and `runCouncil` keeps the first voice's or
+chair's on `CouncilOutcome.injection` — so the lead's tool loop takes it as
+its own hit (REQ-agent-071). What a plugin may run SHALL be decided only by the acting role resolved
+in the tool layer (`resolveActingRole`, REQ-plugins-065): text in a task, a
+body or a tool result that claims the owner's identity widens nothing. No env
+var, config key or flag.
+
+Acceptance Criteria
+- `lookupGuildMemberById` over a stubbed fetch returns the nickname, global name and display name cleaned (no mention markup, zero-width or bidi characters, role tags or labels) and a message line without `<@`.
+- A community role session whose task claims the owner and asks for `files-write` is offered no mutating plugin and the call is refused with `not allowed for your role`; nothing is written.
+- `tests/web.fetch.test.ts` passes unchanged on the shared fence.
+- `delegate` over a fake worker whose result frame carries `injection` returns `data.injection` with the tool and known reason ids only, and none for an invalid notice; `runCouncil` keeps the first voice's notice on its outcome.
+- Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
+
+
+### REQ-plugins-101
+
+Memory plugins by person and project, private to the person and the owner
+(MEMORY-5..7, MEMORY-ACL-6, #101). Whose memory a call reads and writes SHALL
+be the acting Discord id (bridge env only, REQ-plugins-011) matched in the
+owner's people list re-read at the call (`loadPeopleForMemory`,
+`memorySubjectFor`): a declared person's `person:<id>` profile (reading
+also the rows under their linked Discord ids from before they were
+declared), else the Discord id as before (MEMORY-ACL-1). `memory-store`
+SHALL accept the profile categories `project`, `preference`,
+`decision`, `ask`, `approval` (MEMORY-5) and `private` (MEMORY-7), and
+SHALL refuse `--person` (it writes only the acting person's own memory).
+`memory-profile` (safe, minTier 0) SHALL show the subject's role from the
+people list (IDENTITY-8; never from memory), projects, preferences, a history
+of decisions, asks and approvals newest first, and counts of private and
+other notes — never private note content.
+
+`memory-recall` / `memory-profile` SHALL read someone else's memory only
+with `--person <declared id | Discord id | mention>` when the handler-time
+ADMIN re-check passes (the owner with the bridge bit, not muted or
+deny-listed); anyone else naming anyone but themselves SHALL get the opaque
+`not authorized` whether or not that person exists (MEMORY-7 /
+MEMORY-ACL-2). A recall SHALL leave private notes out unless `--category
+private` is asked for, and then SHALL return them only in a conversation
+(`CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` set by the bridge; never a schedule
+or other run), labelled for that person and the owner only.
+
+`--project` on `memory-store` / `memory-recall` SHALL use the run's
+project scope (`projectScopeFor(cwd)`, REQ-discord-101) and SHALL be allowed
+only when `resolveActingRole` is owner, team or null (the local CLI);
+community (undeclared, declared community, WATCH, schedules, workers) SHALL
+get the role refusal (exit 2); a project SHALL have no private notes, and
+`--project` SHALL NOT combine with `--person`.
+
+`memory-forget-me` (safe, minTier 0, not mutating, so every role may call
+it) SHALL take no arguments and record a forget request for the acting
+subject (`ForgetRequestStore.request`, one pending per subject; a repeat
+returns the open one) with the conversation it came from; it SHALL refuse
+with no acting user, outside a conversation, and when no owner is configured
+(IDENTITY-3); it SHALL write SAFE-5 `memory-forget-request` rows (`started`
+first, refusing when that cannot be written, then `ok` / `error`) and SHALL
+delete nothing: forgetting happens only on the owner's Approve
+(REQ-discord-101). `memory-forget` / `memory-override` (owner, two-phase)
+are unchanged.
+
+Acceptance Criteria
+- A declared person's `memory-store` lands in `person:<id>` and every linked Discord id recalls it; rows under their Discord ids from before are read once; an undeclared user's scope is their Discord id.
+- `memory-profile` shows the people list's role (a file edit changes it), projects, preferences, history newest first and a private-note count without content.
+- A non-owner's `--person` (any ref, known or not) and `memory-profile --person` get `not authorized`; the owner with the bridge bit reads a person's memory and private notes; without the bit or muted, refused.
+- Private notes are left out of default and query recalls, returned on `--category private` for that person or the owner in a conversation, refused in a schedule run; `memory-store --person` is refused.
+- `--project` works for owner, team and the local CLI and is refused for community, undeclared and a community-stamped team member; `--project --category private` and `--project --person` are refused.
+- `memory-forget-me` records one pending ask per person (audited), deletes nothing, and refuses with no actor, outside a conversation, with arguments, and with no owner.
+- `tests/memory.profiles.test.ts` and `tests/discord.forget-card.test.ts` cover each and fail on the stacked base sources.
+
+### REQ-plugins-067
+
+Memory plugins in GitHub conversations, filed by person or project, and a
+ranked search (MEMORY-8 / MEMORY-9, #67). When a run has no Discord actor
+and the WATCH spawn set a GitHub commenter (`CORVIDINHO_ACTING_GITHUB_LOGIN`
+/ `CORVIDINHO_ACTING_GITHUB_ID`, the thread's `CORVIDINHO_ACTING_GITHUB_REPO`;
+env only, never argv, REQ-watch-067), the acting subject SHALL be the
+commenter's declared person: their GitHub numeric id / login matched in the
+owner's people list re-read at the call (`memorySubjectForGithub`, stable
+ids only, IDENTITY-7; a login whose known numeric id differs from the
+declared ones matches nobody), the same `person:<id>` profile and read
+scopes as on Discord; the configured owner not declared under `[people]`
+SHALL use their Discord-id scope. A Discord actor SHALL always win over the
+GitHub keys.
+
+For a declared commenter `memory-store` / `memory-recall` /
+`memory-profile` SHALL act on their own profile as on Discord. An undeclared
+commenter SHALL get community scope: `memory-store` (own or `--project`)
+SHALL be refused with nothing saved, a personal `memory-recall` /
+`memory-profile` SHALL be refused, and `memory-recall --project` SHALL read
+the thread repo's project memory (`project:<owner/repo>` lowercased,
+`projectScopeForRepo`; refused when the run names no valid repo). In every
+GitHub run project memory SHALL be read-only (`memory-store --project` keeps
+the role refusal), `--person` SHALL get the opaque `not authorized` for any
+ref but the commenter's own, private notes SHALL be refused (the thread is
+public, MEMORY-7), and `memory-forget-me` SHALL be refused (a forget request
+comes from a Discord conversation, MEMORY-ACL-6). With neither a Discord
+actor nor a GitHub commenter the plugins SHALL refuse as before (no acting
+user), except `--project` for the local CLI. This narrows, for GitHub runs
+only, REQ-plugins-101's role refusal of `--project` for WATCH to writes:
+reads of the thread repo's project memory are allowed (Leif's 2026-09-28
+interview, #67); every other REQ-plugins-101 rule stands (#101's change is
+still active, so REQ-plugins-101 is not modified here).
+
+`memory-recall --query` SHALL be a ranked search (`MemoryStore.recall`,
+REQ-discord-067): rows holding the query or any of its terms, most relevant
+first, newer first among near-equals. The `memory-recall` description SHALL
+tell the model to search with `--query` and the key words before claiming it
+does not know (MEMORY-9), and the `memory-store` / `memory-recall`
+descriptions SHALL say how they work on GitHub.
+
+Acceptance Criteria
+- In a GitHub-shaped env a declared commenter (numeric id or login, any case) stores into `person:<id>`, recalls with a plain-words `--query` and reads `memory-profile`; the same rows are read from Discord; the `[owner]` GitHub login recalls the owner's Discord-id memory.
+- On GitHub private notes, `memory-forget-me` and `--person` (any other ref) are refused and another person's rows never show; a login whose numeric id differs saves nothing.
+- An undeclared commenter saves nothing (own or `--project`), has no personal recall and reads only the thread repo's project memory with `--project`.
+- A Discord actor wins over stale GitHub keys.
+- `tests/memory.recall-github.test.ts` covers each and fails on the stacked base sources.

@@ -24,3 +24,11 @@ spec: cli.spec.md
 
 - Run `bun src/cli.ts doctor` with and without Discord token env; confirm secret values never appear in output.
 - Run `fledge lanes run verify --non-interactive` after CLI changes.
+
+## SAFE-13 notice on the task-run result (REQ-cli-071)
+
+`tests/safe.injection.test.ts` — `createTaskExecute({ onInjection })` reports
+the tool and reason ids once, which `task run` copies to
+`TaskResult.injection`; the Discord and WATCH spawn clients read it back with
+`injectionNoticeFromUnknown` (tool-name source, known reasons only), and the
+bridge / WATCH tests drive the owner notice from it.

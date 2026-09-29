@@ -128,6 +128,8 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
             : {}),
           ...(outcome.timedOut ? { timedOut: true } : {}),
           ...(outcome.aborted ? { aborted: true } : {}),
+          // SAFE-13: the worker's own hit, for the lead's tool loop.
+          ...(outcome.injection ? { injection: outcome.injection } : {}),
         };
         const label = parsed.value.skill ? ` [${parsed.value.skill}]` : "";
         return ok

@@ -6,6 +6,8 @@ import { resolveDiscordActingRole } from "../permissions.ts";
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
+import { enrichPromptWithProjectMemory, MEMORY_INJECT_LIMIT, memoryInjectOptsFor } from "../memory-inject.ts";
+import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
@@ -15,7 +17,7 @@ import { loadLlmEnv } from "../../agent/execute.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
 import { ASK_NO_OWNER_WARNING, clipPostSummary, formatAskReply } from "../ask-ping.ts";
-import { buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
+import { answerAskFor, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
@@ -43,6 +45,29 @@ export async function handleWorkCommand(
     typeof projectRaw === "string" && projectRaw.trim()
       ? projectRaw.trim()
       : undefined;
+
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  // IDENTITY-8..12: owner (ADMIN), a declared team member (work tasks,
+  // IDENTITY-10), or community; the tool layer re-resolves it on every call.
+  const actingRole = resolveDiscordActingRole({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
+    mutedUsers: ctx.mutedUsers,
+    people,
+  });
+  const actingIsAdmin = actingRole === "owner";
+
+  // SAFE-13: a non-owner task that looks like an injection attempt starts no
+  // session or work task: a short reply, the owner pinged, an audit row.
+  const suspected = inboundInjection(description, actingRole);
+  if (suspected) {
+    await refuseInjectedSlash(ctx, interaction, suspected, "work-task");
+    return;
+  }
 
   await interaction.deferReply?.({ ephemeral: false });
 
@@ -91,27 +116,28 @@ export async function handleWorkCommand(
     });
   }
 
-  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
-  // IDENTITY-8..12: owner (ADMIN), a declared team member (work tasks,
-  // IDENTITY-10), or community; the tool layer re-resolves it on every call.
-  const actingRole = resolveDiscordActingRole({
-    userId: interaction.userId,
-    roleIds: interaction.roleIds,
-    allowlist: ctx.allowlist,
-    adminUserIds: ctx.adminUserIds,
-    adminRoleIds: ctx.adminRoleIds,
-    owner: ctx.owner,
-    mutedUsers: ctx.mutedUsers,
-    people,
-  });
-  const actingIsAdmin = actingRole === "owner";
-  const idInject = enrichPromptWithIdentity(description, {
+  // SAFE-12: a non-owner's task goes to the model fenced as untrusted data.
+  const idInject = enrichPromptWithIdentity(fenceSpeakerText(description, actingRole, "work-task"), {
     userId: interaction.userId,
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
     owner: ctx.owner,
     people,
   });
+  // MEMORY-6 (#101): the owner's and team's work starts from what earlier
+  // work learned about this repo (never for community; nothing when empty),
+  // searched for the description (MEMORY-9, #67).
+  const workCwd = ctx.store.cwdFor(session);
+  const projectInject =
+    actingRole === "owner" || actingRole === "team"
+      ? enrichPromptWithProjectMemory(
+          idInject.prompt,
+          ctx.memoryStore,
+          memoryInjectOptsFor({ userId: interaction.userId, people, role: actingRole, projectDir: workCwd }).project,
+          MEMORY_INJECT_LIMIT,
+          description,
+        )
+      : { prompt: idInject.prompt };
   // AGENT-6 (REQ-discord-072): the description opens the session's thread as
   // the run starts, so a reply to this answer carries it (even after a
   // failure).
@@ -122,7 +148,7 @@ export async function handleWorkCommand(
     // worktree mid-run (REQ-discord-204).
     result = await ctx.store.runActive(session, () =>
       ctx.agent.runChat({
-        prompt: idInject.prompt,
+        prompt: projectInject.prompt,
         humanText: description,
         sessionId: session.id,
         resume: false,
@@ -131,7 +157,7 @@ export async function handleWorkCommand(
         actingRole,
         // IDENTITY-10: a /work run — team work tools apply in its worktree.
         workTask: true,
-        cwd: ctx.store.cwdFor(session),
+        cwd: workCwd,
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,
         onStatus: (u) => {
@@ -181,6 +207,10 @@ export async function handleWorkCommand(
   const choice = result.ask
     ? buttonAskFor({ ask: result.ask, requesterDiscordId: interaction.userId })
     : null;
+  // DISCORD-ASK-4.a: otherwise a clarify or stuck ask keeps its question in
+  // the answer and gets the Answer button (a private form), as in chat; a
+  // reply still answers it. Never on a spend-cap stop.
+  const answerAsk = result.ask && !choice ? answerAskFor({ ask: result.ask }) : null;
   // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
   // pinged in a separate post (below) for stuck and spend-cap.
   const ask = choice
@@ -191,6 +221,7 @@ export async function handleWorkCommand(
         owner: null,
         requesterDiscordId: interaction.userId,
         context: result.summary,
+        answerButton: Boolean(answerAsk),
       })
     : null;
   if (ask && result.ask) {
@@ -204,6 +235,7 @@ export async function handleWorkCommand(
       ctx.store.setPendingAsk(
         session,
         choice?.pending ??
+          answerAsk?.pending ??
           toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
       );
     }
@@ -293,6 +325,8 @@ export async function handleWorkCommand(
     ask: result.ask,
     askOwner,
     spendWarning: result.spendWarning,
+    // SAFE-13: a tool result that looked like an injection tells the owner.
+    injection: result.injection,
     label: `/work \`${task.id}\``,
   });
   await finishSlashWithOwnerNotice({
@@ -310,6 +344,13 @@ export async function handleWorkCommand(
           components: choice.components,
           onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
             recordSlashStub(ctx.store, session, choice.pending, messageId),
+        }
+      : answerAsk
+      ? {
+          components: answerAsk.components,
+          keepFooter: true,
+          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+            recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
         }
       : {}),
     notice,

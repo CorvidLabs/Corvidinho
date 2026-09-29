@@ -251,12 +251,54 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   nobody and the owner notice is the one fresh post; when that notice post
   fails the re-edited stub keeps its Choose button; without `editMessage` the
   deferred reply carries the stub and button and its id is `stubMessageId`;
-  without listable options the answer stays free text with no button;
+  without listable options the answer stays free text with no Choose button
+  but one Answer button, the Answer hint and its `stubMessageId`
+  (REQ-discord-548);
   `recordSlashStub` records the stub id only on a still-pending ask of a live
   session (not after a pick took it, not after the session ended); the live
   gateway adapter forwards the Choose button on `editReply` and `reply`. The
   bridge-level tests fail on the base sources (free-text answer, options
   dropped).
+
+## Free-text asks answered privately (REQ-discord-548, DISCORD-ASK-4.a)
+
+- `tests/discord.ask-answer-modal.test.ts` (bridge harness: fake gateway,
+  injected agent, memory outbound, no token) — the free-text stub quotes the
+  question, carries `ASK_ANSWER_HINT`, exactly one Answer button and its
+  footer embed, and is the ask's `stubMessageId`; a spend-cap stop has no
+  button and no pending ask; `answerAskFor` is null for listable options and
+  spend-cap, drops a lone option; `formatAskReply` swaps the hint. The
+  requester's press opens `buildAnswerModal` (type 18 label, type 4 paragraph
+  input, `ASK_ANSWER_MAX` ≤ 4000, short title, scrubbed ≤100-char question
+  description) with no post and no run; another user's press gets
+  not-for-you. The submit resumes the same session (`resume: true`) with the
+  reply's prior-question block, `humanText` the trimmed answer, ephemeral
+  `ASK_ANSWER_ACK` then deleted, the stub thin-updated and edited into the
+  answer, the typed text never posted, the thread turn recorded, the ask
+  cleared, a second submit a no-op; the text is scrubbed before the run and
+  the thread; `normalizeAskAnswer` cuts and trims; a thin or blank submit
+  (`ok`, whitespace, emoji, `sure!`) is restated privately with the Answer
+  button, no run, ask kept, nothing in the thread, and a real submit then
+  resumes (AUTONOMY-5); a `never mind` / `cancel` submit gets only the
+  ephemeral `ASK_CANCELLED_ACK`, runs nothing and clears the free-text ask and
+  an earlier open Choose ask, after which the Answer button is already
+  answered (AUTONOMY-6); a follow-up free-text ask gets its own Answer button
+  in the same stub. Another user's, a muted (then unmuted: resumes), a deny-listed
+  (user or role), an off-channel, a rate-limited and a late (past ~30 min)
+  press or submit are refused ephemerally with no run and the ask kept; after
+  a late one a thin reply restates without a button and a reply still
+  answers with the prior-question block; a press/submit id mix-up is
+  ignored; a submit on a Choose ask is refused. A reply answers the ask as
+  before and the Answer button then says already answered; a thin reply
+  restates with the live button. A `/work` free-text answer's Answer form
+  resumes that session in the answer message. Gateway: `parseAskCustomId`
+  reads `answer`; `adaptComponent.showModal` calls discord.js `showModal`;
+  `adaptModalSubmit` maps text inputs, ephemeral flag 64 and no parsed
+  mentions; a MODAL_SUBMIT interaction on the live client reaches
+  `onComponent` with its text. `tests/discord.ask-ping.test.ts`,
+  `tests/discord.thin-ack.test.ts`, `tests/discord.slash-pending-ask.test.ts`
+  and `tests/discord.slash-choose-ask.test.ts` now expect the Answer button
+  and hint on free-text asks. These fail on the base sources.
 
 ## Unique option ids and expired button asks (REQ-discord-044 / REQ-discord-045 / REQ-agent-045, DISCORD-ASK-1/3/5)
 
@@ -570,3 +612,67 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
+`tests/discord.forget-card.test.ts` — the Approve/Deny card helper
+(`cvok:<kind>:<decision>:<id>` round trip, junk refused, Approve danger /
+Deny grey, expiry, text); `memory-forget-me` records one pending ask per
+person for a declared person, a community member and an undeclared user,
+audited `memory-forget-request` started / ok, deleting nothing; refused with
+no actor, outside a conversation, with arguments and with no owner. Through
+`startBridge` with a fake gateway: `deliverForgetCards` DMs the owner one card
+(who, count, request id, lapse; no content) with Approve / Deny; a non-owner
+press (even the asker) is refused ephemerally with a `denied` row; the owner's
+Approve deletes every memory row of that person (profile, private, superseded,
+legacy and alt Discord-id scopes) and their session turns, stored and in
+the running bridge's session thread, keeps other people's and project memory
+and the people list, writes `started` / `ok`, answers the press first
+(card without buttons, before any DM), then DMs the asker and marks the card
+told; a second press finds it closed. Deny deletes nothing and, when the DM fails, tells the asker in their
+allowlisted conversation. The chat path delivers the card after the message.
+A keyed audit chain with no key refuses Approve and leaves the ask pending
+(SAFE-5 fail closed). With a fake clock an unanswered ask expires on the pass
+(card closed, asker told) and a late Approve deletes nothing. Schema v12: a
+v11 DB migrates keeping memories, `forget_requests` has no free-text column,
+one pending ask per subject, re-running is a no-op.
+`tests/watch.session-store.durable.test.ts` and
+`tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 12.
+
+## Untrusted text on Discord (REQ-discord-071, SAFE-11/12/13)
+
+`tests/safe.injection.test.ts` — the acting-user block for a stranger named
+`[owner] L<zero-width>eіf <@owner>` shows the cleaned name, a `name_clash`
+line and no owner facts; a stranger named like a declared person is flagged,
+the real person and the owner are not; `resolveDiscordActingRole` and the
+tool layer's `resolveActingRole` give community to a stranger named like the
+owner even with an owner stamp; the replay block quotes a turn line that
+imitates its footer or a turn label. Through `SchedulerService` a run
+reporting `injection` pings the owner with the SAFE-13 line on its result
+post and on its ask post. Through `startBridge` (null gateway, memory DB): a
+stranger's injection starts no run, gets one reply that pings only the owner,
+drops the session and audits one `injection-suspected` / `denied` row; a
+declared team member is checked too; the owner's own words run unfenced; an
+ordinary stranger message runs fenced with `role: community` and the name
+cleaned; a run reporting `injection` pings the owner on its answer. The
+`/session start` and `/work` handlers refuse a stranger's injection (no run,
+no session, public refusal, owner ping post, audit row), fence an ordinary
+non-owner request and leave the owner's unfenced; `slashOwnerNotice` and
+`withInjectionNotice` carry the owner line. `tests/discord.slash-pending-ask.test.ts`
+now expects a non-owner's free-text answer inside the fence.
+
+Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
+`tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question
+in plain words finds the fact it is about; a key hit outranks a newer passing
+mention and equal relevance goes to the newer row; › "the Discord inject
+searches memory for the message" — an older fact the message is about is
+injected although 25 newer rows exist (block still 20 rows); › "/work: the
+project block is searched for the description" — with 25 newer project rows
+the owner's `/work` (through `handleWorkCommand`) still carries the older
+project fact its description is about; › "Discord spawn clears inherited
+GitHub commenter keys". `tests/memory.rank.test.ts` —
+`recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
+a multi-scope search keeping the newest of a key once and no private notes, a
+question-words-only query matching as one substring, `recallRelevantThenRecent`,
+`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
+undeclared-under-`[people]` owner on their Discord id) and
+`projectScopeForRepo`.

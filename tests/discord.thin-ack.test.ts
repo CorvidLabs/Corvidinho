@@ -7,8 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
-import { ASK_REPLY_HINT, formatAskReply } from "../src/discord/ask-ping.ts";
-import { toPendingAsk } from "../src/discord/ask-buttons.ts";
+import { ASK_ANSWER_HINT, ASK_REPLY_HINT, formatAskReply } from "../src/discord/ask-ping.ts";
+import { buildAnswerStubComponents, toPendingAsk } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import {
@@ -70,6 +70,7 @@ type Reply = {
   content: string;
   replyToMessageId?: string;
   mentionUserIds?: string[];
+  components?: unknown[];
 };
 
 async function bridgeWith(agent: AgentClient) {
@@ -161,7 +162,11 @@ describe("bridge thin-ack restates / cancel clears (AUTONOMY-5/6)", () => {
     });
     expect(replies).toHaveLength(2);
     expect(replies[1]!.content).toContain("> Postgres or SQLite?");
-    expect(replies[1]!.content).toContain(ASK_REPLY_HINT);
+    // DISCORD-ASK-4.a: the restated free-text ask carries its live Answer button.
+    expect(replies[1]!.content).toContain(ASK_ANSWER_HINT);
+    expect(replies[1]!.content).not.toContain(ASK_REPLY_HINT);
+    const restatedAsk = result.store.getByBotMessage(stubId)!.pendingAsk!;
+    expect(replies[1]!.components).toEqual(buildAnswerStubComponents(restatedAsk.askId));
     expect(replies[1]!.content).toContain("<@user-1>");
     expect(replies[1]!.content).not.toContain("SHOULD_NOT_RUN");
     expect(replies[1]!.content).not.toContain("ready when you are");

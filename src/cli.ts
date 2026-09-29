@@ -22,6 +22,7 @@ import {
   type TaskResult,
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
+import type { InjectionNotice } from "./agent/untrusted.ts";
 import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
 import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
@@ -812,8 +813,14 @@ async function taskRun(opts: {
     onSpendWarning: (w) => {
       spendWarning = w;
     },
+    // SAFE-13: a tool result that looked like an injection rides the result
+    // too, so the bridge tells the owner.
+    onInjection: (n) => {
+      injection = n;
+    },
   });
   let spendWarning: SpendWarning | undefined;
+  let injection: InjectionNotice | undefined;
   // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
   // and tool loop stop and the cancelled result below is still printed (exit
   // 130). `once`: a second signal takes the default action. A signal this
@@ -846,6 +853,7 @@ async function taskRun(opts: {
     for (const sig of hooked) process.off(sig, onSignal);
   }
   if (spendWarning) result.spendWarning = spendWarning;
+  if (injection) result.injection = injection;
 
   if (ndjson) {
     ndjson.result(result);

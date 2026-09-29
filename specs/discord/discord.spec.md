@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 83
+version: 84
 status: draft
 files:
   - src/discord/types.ts
@@ -10,6 +10,7 @@ files:
   - src/discord/memory-inject.ts
   - tests/discord.memory-inject.test.ts
   - src/discord/identity-inject.ts
+  - src/discord/injection-guard.ts
   - tests/discord.identity-inject.test.ts
   - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
@@ -39,8 +40,16 @@ files:
   - src/memory/types.ts
   - src/memory/store.ts
   - src/memory/index.ts
+  - src/memory/scope.ts
+  - src/memory/profile.ts
+  - src/memory/forget.ts
+  - src/memory/rank.ts
+  - src/discord/approve-card.ts
+  - src/discord/forget-card.ts
+  - tests/discord.forget-card.test.ts
   - tests/memory.store.test.ts
   - tests/memory.spawn-env.test.ts
+  - tests/memory.rank.test.ts
   - src/discord/work-store.ts
   - src/discord/message-router.ts
   - tests/discord.actor-gate.test.ts
@@ -105,12 +114,14 @@ files:
   - src/discord/ask-ping.ts
   - src/discord/spend-post.ts
   - tests/discord.spend.test.ts
+  - tests/discord.status-audit.test.ts
   - tests/discord.ask-ping.test.ts
   - src/discord/thin-ack.ts
   - tests/discord.thin-ack.test.ts
   - src/discord/ask-buttons.ts
   - src/agent/ask-options.ts
   - tests/discord.ask-buttons.test.ts
+  - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
@@ -208,7 +219,7 @@ mute set) ≥ ADMIN.
 
 Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6 /
 DISCORD-ASK / SESSION-MULTI): `src/discord/ask-ping.ts` exports `formatAskReply`,
-`defangMassMentions`, `ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`.
+`defangMassMentions`, `ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_ANSWER_HINT`, `ASK_REPLY_MAX`.
 Clarify mentions `requesterDiscordId`; stuck mentions the configured owner.
 When an ask has structured options (or a numbered list in the question),
 `src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
@@ -273,6 +284,45 @@ of a live session), so the chat `onComponent` open/pick path
 resumes the session in that message. Otherwise the answer is the free-text
 ask: a thin reply restates, cancel clears, a substantive reply resumes with
 the question.
+
+Free-text asks answer privately (REQ-discord-548, DISCORD-ASK-4.a): a clarify
+or stuck ask whose choices cannot be listed gets `answerAskFor`
+(`ask-buttons.ts`; an `AnswerAsk` — the free-text `PendingAsk`, any lone
+option dropped, and `buildAnswerStubComponents`, one Primary **Answer**
+button on the `open` custom_id — or null for a `spend-cap` stop or listable
+options). The post stays `formatAskReply` with the question quoted and
+`answerButton: true` (`ASK_ANSWER_HINT` in place of `ASK_REPLY_HINT`), on the
+chat reply, a pick or form resume's follow-up ask, a thin-reply restatement
+while the ask has not timed out, and the `/work` / `/session start` answer
+(`recordSlashStub` records its id); it keeps its footer embed
+(`finalizeContent` / `finishSlashWithThinking` `keepFooter`) and its message
+id becomes the ask's `stubMessageId`. The requester's press on it (an `open`
+press on an ask without options) calls `ComponentInteraction.showModal` with
+`buildAnswerModal` (interaction response type 9: `custom_id`
+`cvask:answer:<askId>`, title `ASK_ANSWER_MODAL_TITLE`, one Label (type 18)
+whose description is the scrubbed start of the question, ≤100 chars, around
+one required paragraph text input `ASK_ANSWER_INPUT_ID`, max
+`ASK_ANSWER_MAX` = min(`ASK_QUESTION_MAX`, `DISCORD_MODAL_INPUT_MAX` 4000)).
+The live gateway routes a MODAL_SUBMIT (interaction type 5) to `onComponent`
+through `adaptModalSubmit` (text values by input id in
+`ComponentInteraction.modalValues`, via `modalTextValues`; replies parse no
+mentions). `parseAskCustomId` reads `answer`; only an `answer` id with
+`modalValues` (and never a press id with them) is taken. The submit passes the
+channel, actor, mute/rate, not-yours and expiry gates a press passes;
+`normalizeAskAnswer` scrubs (SAFE-6) and trims it; the ask is cleared, the
+submit gets the ephemeral `ASK_ANSWER_ACK`, and the session resumes like a
+pick in the stub (`existingMessageId`) with the prompt a reply that answers
+the ask gets (`[Prior clarifying question you asked (the human is answering
+it now): …]` + `Human answer:`), `humanText` and the thread turn being the
+scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). A
+thin or blank submit (`isThinAck`, AUTONOMY-5) is not an answer: the ask
+stays, nothing runs and the question is restated in an ephemeral
+`formatAskReply` with the Answer button; a cancel submit (`isCancelAsk`,
+AUTONOMY-6) clears every open ask of the session like a cancel reply, with the
+ephemeral `ASK_CANCELLED_ACK` and no run. A submit on a Choose ask gets the
+not-for-you reply. A press or submit on a free-text ask past its timeout gets
+`ASK_CHOICE_EXPIRED` and leaves the ask pending (a reply still answers it).
+Schedule asks keep posting text without a button.
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
 AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
@@ -441,7 +491,8 @@ Final chat reply content remains human text only (DISCORD-3.a).
 `ThinkingStatus.finalizeContent` takes optional `extras` (`plumbing`, `model`)
 and `failed`: a final answer (no `components`) keeps a footer-only embed from
 `buildAnswerFooterEmbed` (`model | plumbing`, done or error color; null when
-neither is known), a Choose stub (`components`) carries none, and a later
+neither is known), a Choose stub (`components`) carries none unless
+`keepFooter` (a free-text ask's Answer button, REQ-discord-548), and a later
 re-edit keeps the first footer and outcome (REQ-discord-457). The bridge chat
 and button-pick paths and `finishSlashWithThinking` pass the run's
 `thinkExtras` and the same failed/done outcome as their fallback status.
@@ -480,6 +531,20 @@ DISCORD-6 (REQ-discord-010): `rateLimitByLevel` keys on the actor's
 notices to one per user per window; `command-handlers/mute.ts` exports
 `MUTE_SELF_OR_OWNER_REFUSED`, the ephemeral refusal for `/mute` of yourself or
 the configured owner.
+
+Untrusted text on Discord (SAFE-11/12/13, #71, REQ-discord-071):
+`src/discord/injection-guard.ts` exports `fenceSpeakerText(text, role,
+source, id?)` / `speakerFenceHeader(role)` / `SpeakerSurface`
+(`chat-message`, `session-topic`, `work-task`), `inboundInjection(text,
+role)`, `injectionRefusalHead`, `formatInjectionRefusal(reasons, owner)`,
+`refuseInjectedSlash(ctx, interaction, verdict, source)`,
+`formatInjectionOwnerLine(notice, owner)`, `withInjectionNotice(post, notice,
+owner)`, `auditInboundInjection(recordAudit, …)` and
+`INJECTION_NO_OWNER_WARNING`. `src/discord/identity-inject.ts` adds
+`cleanedDiscordName(input)` and `displayNameClash(input)`;
+`slashOwnerNotice` takes `injection?`; `AgentSpawnResult` gains
+`injection?: InjectionNotice` (the spawn client validates the child's
+`result.injection` with `injectionNoticeFromUnknown`).
 
 ## Invariants
 
@@ -527,6 +592,9 @@ SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/
 every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
+`/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence, schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
+memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only) reaches the owner as a DM Approve/Deny card (`src/discord/approve-card.ts`, reusable; `src/discord/forget-card.ts`) on every scheduler tick (`onTick`) and after each chat message, and only the owner's press on a pending, unexpired card forgets — SAFE-5 `started` first (fail closed), then one transaction deletes every memory row of that person and their session turns — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); a recall with a query is a ranked search (relevance, then recency; `src/memory/rank.ts`) and the chat / button-pick inject searches memory for the message (the owner's and team's `/work` project block for the description), relevant rows first then the newest (MEMORY-9 / REQ-discord-067); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env, and always clears the GitHub commenter keys (`CORVIDINHO_ACTING_GITHUB_*`, MEMORY-8);
+a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. a thread's allowlisted parent channel + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence (a zero cron step — `*/0`, `a-b/0`, `n/0` in any field — is a `CadenceError` refused before any field is expanded, and a range is expanded only up to its field's maximum, so no cadence can hang `/schedule create`, the store's next-run computation or the bridge), schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
 memories in shared SQLite schema v3 scoped by Discord owner_user_id; ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env;
 a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. a thread's allowlisted parent channel + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted and neither is deny-listed (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
@@ -544,7 +612,13 @@ When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
 or blank author id leaves the prompt unchanged. Bridge logs inject count.
-No `/memory` slash command.
+No `/memory` slash command. The recall reads the speaker's declared person's
+profile scope plus their Discord ids (`memoryInjectOptsFor`), never private
+notes, and for an owner or team speaker (chat, button pick) appends the
+project's memory block when it holds rows; owner / team `/work` runs start
+with that project block (REQ-discord-101). Each block is searched for the
+human's message (the picked label, the `/work` description): the rows
+relevant to it first, then the newest (MEMORY-9, REQ-discord-067).
 Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
 from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 `src/discord/session-thread.ts`, REQ-discord-072) are created with CREATE
@@ -575,6 +649,32 @@ choices fit a short list, else free text; never a spend-cap stop), and its
 answer message is tracked like a chat reply, so a reply to it by the
 requester never goes unheard (AUTONOMY-1/5/6 / DISCORD-ASK-1/4 /
 REQ-discord-044).
+
+Untrusted text on Discord (SAFE-11/12/13, REQ-discord-071): the IDENTITY-4
+block shows the acting user's Discord display name / username only after
+`cleanDisplayName` (a declared person's display and the owner map display are
+the owner's and shown as configured), and when that shown Discord name reads
+like the owner's display or another declared person's display or nickname
+(`namesLookAlike`) it adds one `name_clash` line saying this Discord user id
+is someone else; recognition and role stay on declared ids only (IDENTITY-7 /
+IDENTITY-12). Chat, `/session start` and `/work` resolve the speaker's role
+before the run: for team and community, `inboundInjection` runs over the
+speaker's own text, and a hit starts no run — chat: one public reply
+(`formatInjectionRefusal`, allowed mentions the owner only, replying to the
+message; a session the message started is ended and the turn is not
+recorded); slash: the interaction's public refusal, then a fresh channel post
+pinging only the owner (`refuseInjectedSlash`; no session, worktree or work
+task) — plus an `injection-suspected` / `denied` audit row (actor, surface
+`discord:<session>` or `discord:/<command>`, digest of the source and reason
+ids; never the text). Otherwise the team / community speaker's words go to
+the model through `fenceSpeakerText` (the owner's unchanged). A run whose
+result carries `injection` pings the owner on the post that carries its
+answer: chat and button-pick replies (`withInjectionNotice`), `/session
+start` and `/work` owner notices (`slashOwnerNotice`) and a schedule run's
+result post or ask post. Replayed session turns strip invisible characters and
+mark a line that imitates a Corvidinho block or a turn label (`Human:`,
+`You (Corvidinho):`) `(quoted)`; recalled memory lines strip invisible
+characters. No new env var, config key, table or column.
 
 ## Behavioral Examples
 
@@ -609,6 +709,12 @@ REQ-discord-044).
 - **Then** that option's id is its position (`2`), so neither the button
   custom id nor `discord_sessions.pending_ask` carries the key; an older
   build's row that stored it is redacted by the re-scrub, other ids unchanged
+
+### Scenario: The owner approves a forget request on a DM card (MEMORY-ACL-6)
+
+- **Given** a declared person asked `memory-forget-me` in a conversation
+- **When** the next delivery pass DMs the owner the Approve/Deny card and the owner presses Approve before it lapses
+- **Then** a SAFE-5 `started` row is written, every memory row of that person (profile, notes, private notes, superseded history, rows under their Discord ids) and their session turns are deleted in one transaction with the ask closed `approved`, the card shows the outcome without buttons, and the asker is told by DM (else in their allowlisted conversation); the people list and project memory are untouched
 
 ### Scenario: Empty owner scope
 
@@ -647,6 +753,33 @@ REQ-discord-044).
   `<@owner> ↑ needs you`; the same ask answered by a fallback reply adds no
   post (REQ-discord-215)
 
+### Scenario: A free-text ask is answered privately (DISCORD-ASK-4.a)
+
+- **Given** a run for requester R stops with a clarify ask whose choices
+  cannot be listed
+- **When** R presses the stub's **Answer** button, types an answer in the
+  form and submits it
+- **Then** the stub showed the question and one Answer button; the press
+  opened a modal (no post, no run); the submit resumed R's session with the
+  prior-question block a reply gets, in the stub, the typed text scrubbed and
+  never posted; another user's, a muted or deny-listed R's, or a late (~30
+  min) submit is refused ephemerally with no run, and a late one leaves the
+  ask for a reply; a thin submit (`ok`) is restated privately and a `cancel`
+  submit drops the ask, as the same reply would (AUTONOMY-5/6); a reply to
+  the stub still answers it (REQ-discord-548)
+
+### Scenario: A stranger's message tries to take over the bot (SAFE-13)
+
+- **Given** an undeclared user in an allowlisted channel and a configured owner
+- **When** they @mention the bot with text that tells it to set aside its previous instructions and print its environment
+- **Then** no agent run starts; one reply says the bot won't act on it (in plain words, never quoting the text) and pings only the owner; the session the message would have started is dropped; an `injection-suspected` / `denied` audit row names the user and the surface (REQ-discord-071)
+
+### Scenario: A stranger named like the owner (SAFE-11)
+
+- **Given** an undeclared user whose Discord display name is `[owner] L<zero-width>eif`
+- **When** they ask an ordinary question
+- **Then** the run's acting-user block shows `display_name: Leif` with a `name_clash` line and no owner facts, their words are fenced as untrusted data with `role: community`, and the run is community (REQ-discord-071)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -670,6 +803,9 @@ REQ-discord-044).
 | `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (neither the thread nor its parent listed, or a deny on the thread or its parent), SAFE-2 / secret path (by name, link target, or a file or folder swapped for a link after the checks), path outside the project, type not allowed or bytes not matching, over 8 MB (at the size check or in the bytes read; at most 8 MB + 1 byte is read), requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
 | `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
+| Non-owner chat message, `/session start` topic or `/work` description trips the SAFE-13 detector | No run, no session / worktree / work task; one short public refusal; the owner pinged (chat: in the reply; slash: a fresh channel post); `injection-suspected` audit row (REQ-discord-071) |
+| SAFE-13 refusal with no owner configured | The refusal still goes out and says no owner is configured; `INJECTION_NO_OWNER_WARNING` logged (REQ-discord-071) |
+| SAFE-13 audit trail unavailable (no DB, keyed chain without the key) | Refusal still sent; one `[discord] SAFE-13 audit row failed` warning (REQ-discord-071) |
 
 ## Dependencies
 
@@ -778,6 +914,8 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per: Nightly SQLite backup to a directory the owner sets with a weekly tested restore, a restore command and a once-per-failure-streak owner notice (OPS-1/2, #68) |
 | 2026-09-29 | declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared: Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36) |
 | 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
+| 2026-09-29 | person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one: Person and project memory, private notes, and forget-me on an owner Approve/Deny card: each declared person keeps one profile keyed by person id (role, projects, preferences, history of decisions, asks and approvals), each project keeps memory keyed by its repo for whoever works on it next, a person's memory and private notes are shown only to them and the owner on every surface, and anyone can ask to be forgotten, which deletes their memories once the owner approves on a DM Approve/Deny card (MEMORY-5/6/7, MEMORY-ACL-6, #101) |
+| 2026-09-29 | memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run: Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67) |
 | 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
 | 2026-09-29 | scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so: Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
@@ -789,3 +927,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), .env.example gives an absolute CORVIDINHO_ALLOWLIST_FILE because ~ is not expanded, and docs/DAEMON.md lists daemon.start_failed and spend.warning |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
+| 2026-09-29 | safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re: SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key |
+| 2026-09-29 | free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit: Free-text asks post a short public stub with the question and one Answer button that opens a private form; its submit passes the same gates as a button press and resumes the requester's session like a reply; replying in the channel still works (DISCORD-ASK-4.a) |
+
+| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

@@ -6,12 +6,16 @@
  * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL;
  * cycles are single-flight, stop() halts before the next event and waits for
  * the in-flight cycle, and one failing event never aborts the cycle.
+ * REQ-watch-067 (MEMORY-8/9): before each run the commenter's declared
+ * person's memory and the thread repo's project memory are searched for the
+ * comment and prepended, and the run acts for the commenter's GitHub ids.
  */
 
 import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { loadOwnerConfig } from "../identity/owner.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
+import { MemoryStore } from "../memory/store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
 import {
@@ -24,6 +28,7 @@ import {
   createEchoAckClient,
   createOctokitAckClient,
   maybePostWatchAck,
+  postWatchInjectionRefusal,
   type AckClient,
   type AckCommentResult,
 } from "./ack.ts";
@@ -38,7 +43,10 @@ import {
   formatRateLimitLog,
   parseGithubRateLimit,
 } from "./rate-limit.ts";
-import { gateEvent, routeEvent } from "./router.ts";
+import { enrichWatchPromptWithMemories } from "./memory-inject.ts";
+import { gateEvent, routeEvent, watchInjectionVerdict } from "./router.ts";
+import { INJECTION_AUDIT_ACTION, type InjectionReason } from "../agent/untrusted.ts";
+import { appendAudit, argsDigest, auditKeyFromEnv } from "../audit/index.ts";
 import {
   createOctokitSearchClient,
   fetchWatchEvents,
@@ -55,11 +63,12 @@ import {
   type SpawnOutcome,
 } from "./spawn-log.ts";
 import {
+  maybePostWatchInjectionNotice,
   maybePostWatchSummary,
   SuccessfulAckStore,
   SummarizedIdStore,
 } from "./summary.ts";
-import type { DetectedEvent, WatchConfig } from "./types.ts";
+import type { AgentSpawnResult, DetectedEvent, WatchConfig } from "./types.ts";
 
 /**
  * Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session).
@@ -208,6 +217,9 @@ export async function startWatchPoller(
         );
   const db = opts.db ?? ownedDb;
   let dbClosed = false;
+  // MEMORY-8/9 (REQ-watch-067): the same shared DB the spawned run's memory
+  // plugins use. No DB (an injected session store alone) ⇒ no inject.
+  const memoryStore = db ? new MemoryStore({ db }) : undefined;
   const store =
     opts.sessionStore ??
     new SessionStore({
@@ -299,6 +311,33 @@ export async function startWatchPoller(
     backoffUntilMs = Math.max(backoffUntilMs, until);
     log(formatRateLimitLog(parsed, backoffUntilMs));
     return parsed.waitMs;
+  };
+
+  /**
+   * SAFE-13 / SAFE-5: one `injection-suspected` row (`denied`) for an event
+   * WATCH will not run. Best effort: the event is refused either way.
+   */
+  const auditWatchInjection = (
+    event: DetectedEvent,
+    sessionId: string,
+    reasons: readonly InjectionReason[],
+  ): void => {
+    if (!db) return;
+    try {
+      appendAudit(
+        db,
+        {
+          action: INJECTION_AUDIT_ACTION,
+          actor: `github:${event.sender}`,
+          surface: `watch:${sessionId}`,
+          argsDigest: argsDigest(["github-thread", ...reasons]),
+          outcome: "denied",
+        },
+        { key: auditKeyFromEnv(env) },
+      );
+    } catch (err) {
+      logError("[watch] SAFE-13 audit row failed", err);
+    }
   };
 
   const runCycle = async (): Promise<PollCycleResult> => {
@@ -399,10 +438,11 @@ export async function startWatchPoller(
       let marked = false;
 
       try {
+        const people = loadDeclaredPeople({ allowlist: config.allowlist, owner });
         const action = routeEvent(event, {
           store,
           allowlist: config.allowlist,
-          people: loadDeclaredPeople({ allowlist: config.allowlist, owner }),
+          people,
         });
         routed = true;
         processed.addMany(relatedIds);
@@ -411,6 +451,31 @@ export async function startWatchPoller(
         if (action.kind === "refuse" || action.kind === "ignore") {
           result.refused += 1;
           opts.onAction?.({ kind: action.kind, event });
+          continue;
+        }
+
+        // SAFE-13: a title or body (from anyone but the owner) that looks like
+        // an injection attempt never reaches a run. One comment says so and
+        // @mentions the owner's GitHub login; an audit row records the
+        // sender, the session and the reason ids, never the text.
+        const suspected = watchInjectionVerdict(event, people);
+        if (suspected) {
+          result.refused += 1;
+          auditWatchInjection(event, action.session.id, suspected.reasons);
+          log(
+            `[watch] SAFE-13 refused ${event.repo}#${event.number} id=${event.id} (${suspected.reasons.join(", ")})`,
+          );
+          await postWatchInjectionRefusal({
+            event,
+            reasons: suspected.reasons,
+            ownerLogin: owner?.githubLogin,
+            mentionUsername: config.mentionUsername,
+            ackClient,
+            acked,
+            log,
+            onPostFailed: backoffOnCommentFailure,
+          });
+          opts.onAction?.({ kind: "injection_refused", event, sessionId: action.session.id });
           continue;
         }
 
@@ -446,19 +511,38 @@ export async function startWatchPoller(
           }),
         );
 
+        // MEMORY-9: search memory for this comment before the run, so the
+        // model has it before it could say it doesn't know (no model call).
+        let prompt = action.prompt;
+        try {
+          const mem = enrichWatchPromptWithMemories(prompt, memoryStore, { event, people });
+          if (mem.injected) {
+            prompt = mem.prompt;
+            log(`[watch] memory inject: ${mem.count} recalled for @${event.sender}${mem.declared ? "" : " (project only)"}`);
+          }
+        } catch (err) {
+          logError("[watch] memory inject failed", err);
+        }
+
         let spawnOk = false;
         let spawnExit = 1;
         let spawnSummary = "";
+        let spawnInjection: AgentSpawnResult["injection"];
         let threw = false;
         try {
           const spawn = await agent.runChat({
-            prompt: action.prompt,
+            prompt,
             sessionId: action.session.id,
             resume: action.kind === "continue_session",
+            // MEMORY-8: the commenter (GitHub API ids) and the thread's repo.
+            actingGithubLogin: event.sender,
+            ...(event.senderId !== undefined ? { actingGithubId: event.senderId } : {}),
+            repo: event.repo,
           });
           spawnOk = spawn.ok;
           spawnExit = spawn.exitCode;
           spawnSummary = spawn.summary;
+          spawnInjection = spawn.injection;
           opts.onAction?.({
             kind: action.kind,
             event,
@@ -492,20 +576,35 @@ export async function startWatchPoller(
         log(formatSpawnOutcomeLog(outcome));
 
         // WATCH-RELIABILITY-1 — summary after run, only if auto-ack succeeded.
-        await maybePostWatchSummary({
+        const summaryPosted = await maybePostWatchSummary({
           event,
           spawn: {
             ok: spawnOk,
             sessionId: action.session.id,
             summary: spawnSummary,
             exitCode: spawnExit,
+            ...(spawnInjection ? { injection: spawnInjection } : {}),
           },
           ackClient,
           successfulAcks,
           summarized,
+          ownerLogin: owner?.githubLogin,
           log,
           onPostFailed: backoffOnCommentFailure,
         });
+        // SAFE-13: no summary carried the in-run hit (an event type WATCH
+        // does not ack, or no successful ack): one comment tells the owner.
+        if (!summaryPosted && spawnInjection) {
+          await maybePostWatchInjectionNotice({
+            event,
+            injection: spawnInjection,
+            ownerLogin: owner?.githubLogin,
+            ackClient,
+            summarized,
+            log,
+            onPostFailed: backoffOnCommentFailure,
+          });
+        }
       } catch (err) {
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
         // retried forever ahead of later events: log, mark processed, move on.

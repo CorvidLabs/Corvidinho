@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 20
+version: 21
 status: draft
 files:
   - src/watch/types.ts
@@ -16,6 +16,7 @@ files:
   - src/watch/spawn-log.ts
   - src/watch/rate-limit.ts
   - src/watch/index.ts
+  - src/watch/memory-inject.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
 
@@ -40,7 +41,13 @@ own mentions in search, document org-search pagination bury risk; plus
 WATCH-RELIABILITY-1..3 — post-run summary after successful auto-ack, durable
 spawn outcome logging, and GitHub 403 rate-limit backoff. WATCH sessions
 persist in the shared SQLite DB (`watch_sessions`, schema v6) with the same
-soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037).
+soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037). Memory in GitHub
+runs (MEMORY-8/9, REQ-watch-067): the spawn passes the commenter's GitHub
+login / numeric id and the thread's repo so the memory plugins act for the
+commenter's declared person (undeclared: the repo's project memory,
+read-only), and before each run the poller searches the commenter's profile
+and the repo's project memory for the comment and prepends what it found
+(`src/watch/memory-inject.ts`).
 
 ## Public API
 
@@ -71,6 +78,25 @@ and the search clients' `userId` (GitHub numeric id; fixture `user_id`)
 env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
 declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7).
+Untrusted text (SAFE-12 / SAFE-13, #71, REQ-watch-071): `router.ts` exports
+`watchEventText(event)`, `watchInjectionVerdict(event, people)`,
+`WATCH_BODY_FENCE_HEADER` and `WATCH_PROMPT_MAX_CHARS` (8000); `ack.ts`
+exports `buildInjectionRefusalBody(reasons, ownerLogin?)` and
+`postWatchInjectionRefusal(opts)`; `summary.ts` exports
+`watchInjectionLine(injection, ownerLogin?)`, `buildSummaryBody(spawn,
+ownerLogin?)` and `maybePostWatchSummary({ ownerLogin })`; the WATCH
+`AgentSpawnResult` gains `injection?` (validated from the child's result
+frame).
+
+`AgentRunChatOpts.actingGithubLogin` / `actingGithubId` / `repo` (the
+commenter and the thread's repo, set by the poller; the spawn stamps them as
+`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`) and
+`src/watch/memory-inject.ts`: `enrichWatchPromptWithMemories(prompt, store,
+{ event, people, limit? })`, `formatWatchMemoryBlock`,
+`formatWatchProjectMemoryBlock`, `WATCH_MEMORY_INJECT_HEADER` /
+`WATCH_MEMORY_INJECT_EMPTY` / `WATCH_PROJECT_MEMORY_INJECT_HEADER`,
+`WATCH_MEMORY_INJECT_LIMIT`, `WATCH_MEMORY_ROW_MAX_CHARS` (MEMORY-8/9,
+REQ-watch-067).
 
 ## Invariants
 
@@ -107,6 +133,23 @@ A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
 `GITHUB_TOKEN / GH_TOKEN`, and settles `fatal` with exit code 1; the default
 error sink prints one SAFE-6 scrubbed line per error, never the error object
 (REQ-watch-418).
+The event's title and body reach the model only inside an `UNTRUSTED_DATA`
+fence, clipped before fencing so the whole prompt stays within
+`WATCH_PROMPT_MAX_CHARS` and the end marker (random id) is always last; the
+header line, `URL:` and any identity block stay outside it. Before any ack or
+run, `watchInjectionVerdict` checks the title and body of every routed event
+whose sender is not the owner (by GitHub id / login in the people list); a
+hit counts `refused`, runs nothing, posts one `buildInjectionRefusalBody`
+comment (any event type; skipped for the watch user's own events and an
+already-answered id; @mentions the owner's GitHub login when configured),
+appends an `injection-suspected` / `denied` audit row (actor
+`github:<login>`, surface `watch:<session>`), logs `[watch] SAFE-13 refused
+…` and reports `onAction` kind `injection_refused`; the event id is already
+processed, so it is never retried. A run whose result carries `injection` gets
+the `watchInjectionLine` (owner @mentioned) in its summary comment, or, when
+no summary comment is posted (an event type WATCH does not ack, or no
+successful ack), in one `maybePostWatchInjectionNotice` comment of its own,
+once per event id (REQ-watch-071).
 
 ## Behavioral Examples
 
@@ -119,13 +162,17 @@ summary comment once per event id; spawn start/outcome log + JSONL row; 403
 rate-limit on the fetch, the ack or the summary comment schedules backoff and
 skips tight re-poll; a plain 403 on a comment logs the failure only. Poller restarted on the
 same data dir continues the same issue session; issue idle past TTL →
-start_session with a new id.
+start_session with a new id. A non-owner comment whose body claims to be the
+owner and asks for the API keys → no run; one refusal comment @mentioning the
+owner's GitHub login; an `injection-suspected` audit row (REQ-watch-071).
 
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
 (user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
-(bad or revoked token) stops the loop with exit 1.
+(bad or revoked token) stops the loop with exit 1; a non-owner title or body
+that trips the SAFE-13 detector is refused with one comment and no run
+(REQ-watch-071).
 
 ## Dependencies
 
@@ -155,6 +202,8 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
 | 2026-09-27 | a-403-429-github-rate-limit-on-the-watch-auto-ack-or-run-summary-comment-sets-the-backoff-before-the-next-poll-cycle: A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3) |
 | 2026-09-29 | declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared: Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36) |
+| 2026-09-29 | memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run: Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67) |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |
 | 2026-09-29 | watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor: WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5) |
+| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
