@@ -4,6 +4,7 @@
  */
 
 import { Octokit } from "@octokit/rest";
+import { describeInjectionReasons, type InjectionReason } from "../agent/untrusted.ts";
 import { attribution } from "../attribution.ts";
 import { ProcessedIdStore, type IdStoreOptions } from "./dedup.ts";
 import type { RateLimitHeaders } from "./rate-limit.ts";
@@ -236,4 +237,72 @@ export async function maybePostWatchAck(opts: {
   log?.(`[watch] ack failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`);
   onPostFailed?.(res);
   return { attempted: true, posted: false };
+}
+
+/**
+ * SAFE-13 — the one comment WATCH posts on an event it will not act on (its
+ * title or body looked like a prompt-injection attempt): what it won't do and
+ * why (reason words, never the text), and an @mention of the owner's GitHub
+ * login when one is configured, so the owner is told on GitHub.
+ */
+export function buildInjectionRefusalBody(
+  reasons: readonly InjectionReason[],
+  ownerLogin?: string,
+): string {
+  const head =
+    "Corvidinho WATCH won't act on this: it looks like a prompt-injection attempt " +
+    `(it ${describeInjectionReasons(reasons)}).`;
+  const tell = ownerLogin ? ` @${ownerLogin}, flagging this for you.` : "";
+  return `${head}${tell} (SAFE-13)\n\n---\n${attribution("markdown")}`;
+}
+
+/**
+ * SAFE-13 — post the refusal comment for an event the poller will not run
+ * (any event type, not only the ackable ones: this is the only reply it
+ * gets). Skipped for the watch user's own events, a bad repo and an event
+ * already answered (the ack dedup store, so a restart never posts twice).
+ * True when the comment went out.
+ */
+export async function postWatchInjectionRefusal(opts: {
+  event: DetectedEvent;
+  reasons: readonly InjectionReason[];
+  ownerLogin?: string;
+  mentionUsername: string;
+  ackClient: AckClient;
+  acked: AckedIdStore;
+  log?: (msg: string) => void;
+  onPostFailed?: (res: AckCommentResult) => void;
+}): Promise<boolean> {
+  const { event, ackClient, acked, log } = opts;
+  if (opts.mentionUsername && event.sender.toLowerCase() === opts.mentionUsername.toLowerCase()) {
+    return false;
+  }
+  if (acked.has(event.id)) return false;
+  const parts = splitRepo(event.repo);
+  if (!parts) {
+    log?.(`[watch] injection refusal skip bad repo=${event.repo}`);
+    return false;
+  }
+  const res = await ackClient.createIssueComment({
+    owner: parts.owner,
+    repo: parts.name,
+    issue_number: event.number,
+    body: buildInjectionRefusalBody(opts.reasons, opts.ownerLogin),
+  });
+  try {
+    acked.add(event.id);
+  } catch (err) {
+    log?.(`[watch] injection refusal id write failed id=${event.id}: ${errorMessage(err)}`);
+  }
+  if (res.ok) {
+    log?.(
+      `[watch] injection refusal ${res.dryRun ? "dry-run" : "posted"} ${event.repo}#${event.number} id=${event.id}`,
+    );
+    return true;
+  }
+  log?.(
+    `[watch] injection refusal failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`,
+  );
+  opts.onPostFailed?.(res);
+  return false;
 }

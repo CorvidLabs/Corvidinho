@@ -534,7 +534,9 @@ version **3**, table `memories`) so they survive process restart (MEMORY-1..4).
 Memory SHALL stay local SQLite only — no on-chain, Trust, or Augur path
 (MEMORY-3 / MEMORY-ACL-5).
 
-Each memory row SHALL be scoped to `owner_user_id` (acting Discord user id).
+Each memory row SHALL be scoped to `owner_user_id` (acting Discord user id;
+since #101 a declared person's `person:<id>` profile scope or a project's
+`project:<key>` scope, REQ-discord-101).
 Reads and writes SHALL default to that user’s scope only (MEMORY-ACL-1).
 
 Forget, delete, overwrite, and re-attribute operations SHALL require ADMIN
@@ -543,7 +545,9 @@ including **self-forget** of one’s own memories. Empty admin/owner lists SHALL
 deny-all for forget/override. A non-admin attempt against another user’s
 memories SHALL be refused without leaking the other user’s content
 (MEMORY-ACL-2). Soft-delete MAY retain audit fields (`deleted_at`,
-`deleted_by_user_id`).
+`deleted_by_user_id`). The one other forget path is a person's own forget
+request, carried out only once the owner approves it on a card
+(MEMORY-ACL-6, REQ-discord-101).
 
 The Discord agent spawn SHALL always overwrite `CORVIDINHO_ACTING_DISCORD_USER_ID`
 (empty when the run has no acting user) and `CORVIDINHO_ACTING_IS_ADMIN`, so a
@@ -558,7 +562,9 @@ is never a non-admin forget path (MEMORY-ACL-4).
 
 No Discord slash `/memory` SHALL be invented in this requirement — exposure is
 via `MemoryStore` + memory plugins used by the agent/session path. Categories
-SHALL be `conversation` | `entity` | `person` | `personality`. Fixture tests
+SHALL be `conversation` | `entity` | `person` | `personality`, plus the
+profile categories `project` | `preference` | `decision` | `ask` |
+`approval` (MEMORY-5) and private notes `private` (MEMORY-7). Fixture tests
 without live Discord SHALL cover CRUD, reload, ACL deny, and admin forget.
 
 Acceptance Criteria
@@ -572,6 +578,8 @@ Acceptance Criteria
 - Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries only human-typed confirm tokens.
 - Re-storing a key soft-deletes the prior row instead of overwriting it.
 - Fixture tests + SpecSync + fledge verify green.
+- The profile and private-note categories are accepted; a default recall leaves private notes out.
+- A declared person's rows use the `person:<id>` scope and a project's the `project:<key>` scope (REQ-discord-101).
 
 ### REQ-discord-022
 
@@ -2204,7 +2212,12 @@ Discord user id only. Once anyone is declared, an undeclared non-owner SHALL
 be marked `declared_person: none`, so a Discord display name never passes for
 a declared person. An owner who is not declared under `[people]` keeps the
 block exactly as before, and with nobody declared the block SHALL be
-unchanged.
+unchanged. The one exception is SAFE-11 (REQ-discord-071): the
+Discord display name / username shown is cleaned first (`cleanDisplayName`),
+and a non-owner whose shown Discord name reads like the owner's display or
+another declared person's display or nickname gets one `name_clash` line
+saying this Discord user id is someone else; recognition and roles stay on
+stable ids.
 
 Only the owner changes people (IDENTITY-6, ADMIN-3.a): `/admin people
 list|add|link|unlink|remove` (owner-only; dispatcher floor ADMIN plus a
@@ -2242,6 +2255,7 @@ Acceptance Criteria
 - A non-owner is refused at dispatch and at the handler (`denied` row); `list` is owner-only too.
 - Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
 - Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
+- SAFE-11 (REQ-discord-071): a stranger named `[owner] L<zero-width>eif` is shown as `display_name: Leif` with a `name_clash` line naming the owner and no owner facts; a stranger named like a declared person gets a `name_clash` line naming that person; the owner and a declared person shown by their own declared display get none; with nobody declared a clean, non-clashing name leaves the block byte-identical to before (`tests/safe.injection.test.ts`, `tests/identity.recognise.test.ts`).
 
 ### REQ-discord-065
 
@@ -2284,6 +2298,89 @@ Acceptance Criteria
 - `/admin people role` promotes and demotes with `admin-people-role` `started`/`ok` rows and a no-change reply for the same role; it refuses the owner role, unknown roles, undeclared people, the owner's person and a missing role (`denied`, file unchanged), a non-owner, and a missing audit trail; JSON files keep unread keys; `people list` shows roles and `config show` counts them.
 - Regression tests in `tests/roles.team.test.ts` and `tests/discord.admin-slash.test.ts` fail on the base sources and pass after.
 
+### REQ-discord-101
+
+Memory scopes, the Discord inject and forget on request (MEMORY-5..7,
+MEMORY-ACL-6, #101). A memory row's `owner_user_id` SHALL be its scope
+(`src/memory/scope.ts`): the Discord user id for anyone not on the owner's
+people list (and for the configured owner until declared under `[people]`),
+as before; `person:<id>` for a declared person, matched on the acting
+Discord id in the people list re-read now (stable ids only, IDENTITY-7), so
+every Discord id linked to them reaches one profile (an id declared for two
+people matches nobody and joins neither profile), and reads SHALL also
+include rows stored under those Discord ids before they were declared (a key
+in two scopes read once, newest first); `project:<key>` for a project,
+keyed by the lowercased `owner/repo` of the checkout's `origin` remote
+(credentials in the URL never kept), else the real path of the main checkout
+(so every talk worktree shares it), else the folder's real path (only the
+folder itself is examined for a repository). `MemoryStore.recall` SHALL
+leave private notes (`private`) out unless `category` is `private` or
+`includePrivate` is set.
+
+The chat and button-pick inject (REQ-discord-023) SHALL recall the speaker's
+subject (`memoryInjectOptsFor`: their declared person's scopes, else their
+Discord id), never private notes and never anyone else's memory, and for an
+owner or team speaker SHALL append a `[Corvidinho project memory …]` block
+for the session's project (`sessionCwd` or the project root) when it holds
+rows; community speakers never get it. Owner and team `/work` runs SHALL
+start with that project block when it holds rows
+(`enrichPromptWithProjectMemory`).
+
+Forget on request (MEMORY-ACL-6): an ask recorded by `memory-forget-me`
+(REQ-plugins-101) SHALL live in `forget_requests` (schema v12, forward-only
+migration: id, subject kind and id, requester Discord id, origin
+conversation ids, status `pending|approved|denied|expired`, created /
+expires / card / decided / notified times, decider id, deleted-row count —
+no free text, so nothing to scrub, SAFE-6; at most one pending ask per
+subject). The bridge SHALL run one delivery pass (`createForgetCards`,
+`src/discord/forget-card.ts`; never throws, one pass at a time) on every
+scheduler tick (`SchedulerServiceOpts.onTick`, called at the start of each
+tick, a throw logged) and after each chat message, and expose it as
+`deliverForgetCards` on the started bridge. A pass SHALL: close every
+pending ask past its expiry (24 h, `FORGET_REQUEST_TTL_MS`) as `expired`
+and edit its card to say nothing was forgotten, buttons removed; DM the
+configured owner (`GatewayHandlers.sendDm`, no mentions parsed) one
+Approve/Deny card per undelivered pending ask, built with the reusable
+helper `src/discord/approve-card.ts` (`cvok:<kind>:<approve|deny>:<id>`
+custom ids; Approve danger, Deny grey; the text names who asked and where,
+what Approve deletes with a stored-row count, what is kept, the request id and
+when it lapses — never memory content), recording the card's DM channel and
+message ids; and tell each asker whose ask was closed the outcome, by DM,
+else in the conversation they asked in while it or its parent channel is
+still allowlisted (mentioning only them), giving up after a day.
+
+A press on a card SHALL be handled before the channel allowlist (it is the
+owner's DM) and SHALL count only when the presser resolves ADMIN now (the
+configured owner, not muted, not deny-listed); anyone else gets an ephemeral
+refusal and a `denied` audit row. A closed ask SHALL answer "already
+closed"; a press at or after expiry SHALL close it `expired` and delete
+nothing (a late answer is no). Deny SHALL close it `denied` (audited),
+delete nothing, answer the press, then tell the asker. Approve SHALL append the SAFE-5
+`memory-forget-approve` `started` row first and, when it cannot be
+written, refuse and leave the ask pending; then, in one IMMEDIATE transaction,
+compare-and-set the ask to `approved` and delete for good every memory row
+of the recorded subject — `person:<id>` and the Discord ids linked to that
+person now plus the asker's id, or the undeclared asker's id; active,
+soft-deleted and private rows — and the stored turns of those Discord ids'
+sessions; then append `ok` (or `error`, the ask left pending, on a
+failure), drop the session threads the running bridge holds for those
+Discord ids (`SessionStore.forgetTurnsOfUsers`, so no later run replays
+them), answer the press by updating the card with the counts and no
+buttons, and then tell the asker. After a Deny or an Approve the card SHALL
+be edited once more to say whether the asker was told (the press is answered
+before any DM, within Discord's interaction window). The people list entry
+and project memory SHALL NOT be touched. Audit rows hold the request id
+digest and outcome only.
+
+Acceptance Criteria
+- A declared person's store lands in `person:<id>`, each linked Discord id recalls it, rows under their Discord ids from before still read once; an undeclared user keeps the Discord-id scope.
+- The chat inject holds the speaker's own profile only, never private notes; owner / team get the project block (also in `/work`), community never.
+- `projectKeyFor` gives `owner/repo` without credentials for a checkout and its worktree, the main checkout path without an origin, the folder path for a plain folder.
+- A delivery pass DMs the owner one card per pending ask (count, no content), expires unanswered asks (card closed, asker told) and tells deciders' askers by DM or in their allowlisted conversation.
+- Only the owner's press counts; Approve deletes every memory row and session turn of that person, stored and held by the running bridge (not others', not project memory, not the people list), writes `started` then `ok`, answers the press first, then tells the asker and marks the card; a keyed chain with no key refuses Approve and deletes nothing.
+- Deny and a late press delete nothing and tell the asker; a second press finds the ask closed.
+- A v11 DB migrates to v12 keeping its data; `forget_requests` has no free-text column and one pending ask per subject; re-running is a no-op.
+- `tests/discord.forget-card.test.ts` and `tests/memory.profiles.test.ts` cover each and fail on the stacked base sources.
 ### REQ-discord-680
 
 The Discord bridge's scheduler tick SHALL run the nightly backup and restore
@@ -2311,4 +2408,119 @@ Acceptance Criteria
 - Without an announcements channel no reply is posted and the notice stays pending.
 - A good backup dir gets tonight's snapshot from the bridge tick and nobody is pinged.
 - `SchedulerService.tick` hands its clock to the backup ticker on every tick.
+
+### REQ-discord-548
+
+When a clarify or stuck ask's choices cannot be listed (the free-text ask of REQ-discord-044 / REQ-discord-045), its public post SHALL stay the short stub that quotes the question and SHALL carry exactly one **Answer** button; the requester's press SHALL open a private form (a Discord modal, interaction response type 9) with one paragraph text input, and the form's submit (interaction type 5, MODAL_SUBMIT) SHALL pass the same gates as a button press and resume the requester's session exactly as a reply that answers the ask would (DISCORD-ASK-4.a, with DISCORD-ASK-2/3/5/7/8). Replying in the channel SHALL still answer it.
+
+- The post is `formatAskReply` (question quoted, requester or owner mention as before) with the hint `ASK_ANSWER_HINT` ("Press **Answer** to answer privately, or reply to this message.") in place of `ASK_REPLY_HINT`, and `buildAnswerStubComponents(askId)`: one Primary button labelled `Answer` on the ask's `open` custom_id. It applies to the chat answer, the follow-up ask of a resumed pick or form submit, the `/work` and `/session start` answer, and a thin-reply restatement while the ask has not timed out (after that the restatement has no button and the reply hint, as before). The post keeps its footer-only embed (it is still the turn's answer, DISCORD-3.a) and its message id is stored as the ask's `stubMessageId`. A SAFE-8 spend-cap stop gets no button and is never pending; a Choose ask (listable options) keeps its Choose stub; a lone option is dropped (free text). Schedule asks keep posting text without a button.
+- The requester's press on the Answer button (an `open` press on a pending ask without options) SHALL answer with the modal `buildAnswerModal`: `custom_id` `cvask:answer:<askId>`, title `Answer privately`, one Label component (type 18) `Your answer` whose description is the SAFE-6 scrubbed, defanged, one-line start of the question (≤100 chars), around one required paragraph text input (type 4, style 2, `custom_id` `answer`, `min_length` 1, `max_length` `ASK_ANSWER_MAX` = min(`ASK_QUESTION_MAX`, 4000)). The press posts nothing and runs nothing; the ask stays pending. Without a modal-capable interaction the press keeps today's ephemeral "reply in the channel instead".
+- The live gateway SHALL route a MODAL_SUBMIT to the component handler with the form's text input values by input custom_id (`modalValues`); its replies parse no mentions and an ephemeral reply is flag 64. Only the form's `answer` custom_id with typed text is taken; a press id with typed text or the form id without it is ignored.
+- The submit SHALL pass, in order, the channel gate (REQ-discord-212), the actor gate with deny lists and a non-empty user/role allowlist (REQ-discord-201), mute/rate (REQ-discord-010), the not-yours / already-answered check and the expiry check, exactly as a press; every refusal is ephemeral only (zero-width ack, the admin allowlist tip, `MUTED` / `RATE_LIMITED`, "This choice isn't for you (or it was already answered)", `ASK_CHOICE_EXPIRED`), with no agent run, nothing posted or edited and the ask left pending (DISCORD-DENY). A submit on a Choose ask gets the not-for-you reply.
+- A submit whose scrubbed text is thin or an explicit cancel SHALL be handled as the same text in a reply is (AUTONOMY-5/6): a thin or blank answer (`isThinAck`: `ok`, `sure`, emoji-only, whitespace and similar) SHALL NOT clear the ask or run the agent — the question is restated once, privately (an ephemeral `formatAskReply` with `ASK_ANSWER_HINT` and the Answer button); an explicit cancel (`isCancelAsk`: `cancel`, `never mind`, `forget it`, `stop asking`, `nm`) SHALL clear every open ask of the session, as a cancel reply does (SESSION-MULTI-3), with the ephemeral `ASK_CANCELLED_ACK` and no run. Neither posts or edits anything in the channel.
+- An accepted submit SHALL be SAFE-6 scrubbed, control characters dropped, trimmed and cut at `ASK_ANSWER_MAX` (`normalizeAskAnswer`); the ask SHALL be cleared first (a reply or second submit cannot resume twice); the submit gets the ephemeral `ASK_ANSWER_ACK`, deleted when the resumed run ends (DISCORD-ASK-8); the session SHALL resume (`resume: true`) with its thread replayed and the prompt `[Prior clarifying question you asked (the human is answering it now):\n<question>]\n\nHuman answer:\n<answer>` — the block a reply that answers the ask gets — with `humanText` and the recorded human turn the scrubbed answer, the presser's identity, memory and acting role as on a button pick, and the stub as the progress surface (content and button cleared) edited into the answer (DISCORD-ASK-7). The typed text SHALL NOT be posted.
+- A press or submit on a free-text ask past its ~30-minute timeout SHALL get `ASK_CHOICE_EXPIRED` and run nothing, and the ask SHALL stay pending so a reply still answers it with the prior-question block (unlike a Choose ask, which a late press clears, REQ-discord-045). A reply that answered the ask leaves the Answer button answering "already answered".
+- No new env var, config key, slash command, table, column or schema version.
+
+Acceptance Criteria
+- A chat clarify ask without listable options: the collapsed stub quotes the question, carries `ASK_ANSWER_HINT` (not `ASK_REPLY_HINT`), exactly one Answer button (`open` custom_id) and a footer embed; the pending ask is free text with the stub as `stubMessageId`. A spend-cap stop has no button and no pending ask.
+- The requester's Answer press calls `showModal` with `buildAnswerModal` (title ≤45, one type 18 label ≤45 with the question as description, one required type 4 paragraph input, `max_length` `ASK_ANSWER_MAX` ≤ 4000); nothing is posted, no run, the ask stays. Another user's press gets the not-for-you reply and no form.
+- The requester's submit resumes the same session with the reply's prior-question block and the trimmed answer; ephemeral `ASK_ANSWER_ACK` then deleted; the stub is thin-updated and edited into the answer; the typed text is never posted; the ask is cleared and a second submit is "already answered". A secret in the text never reaches the run or the thread.
+- Another user's, a muted, a deny-listed (user or role), an off-channel, a rate-limited and a late submit (and the same presses) are refused ephemerally with no run and the ask kept; after the late one a thin reply restates without a button and a reply still answers it.
+- A reply to the stub answers the ask as before; a later Answer press or submit is "already answered". A thin reply restates with the live Answer button.
+- A thin or blank submit (`ok`, whitespace, `👍`, `sure!`) gets only the private restatement with the Answer button: no run, nothing posted, ask kept, nothing added to the thread; a real submit afterwards resumes. A `never mind` / `cancel` submit gets only the ephemeral `ASK_CANCELLED_ACK`, clears the free-text ask and an earlier open Choose ask of the session, runs nothing, and a later Answer press is "already answered".
+- `/work` without listable options answers with the Answer button and hint and records `stubMessageId`; its submit resumes that session in the answer message. A follow-up free-text ask from a resumed run gets its own Answer button in the same stub.
+- The live gateway routes a MODAL_SUBMIT with its text to the component handler; `adaptModalSubmit` maps text inputs by id, replies ephemerally with no parsed mentions.
+- These tests fail on the base sources.
+
+### REQ-discord-071
+
+Untrusted text on Discord (SAFE-11 / SAFE-12 / SAFE-13, #71). The IDENTITY-4
+acting-user block SHALL show the acting user's Discord display name or
+username only after `cleanDisplayName` (`cleanedDiscordName`; the declared
+person's display and the owner map display are the owner's own and shown as
+configured), and SHALL add one `name_clash` line when that shown Discord name
+reads like the owner's display or another declared person's display or
+nickname (`displayNameClash`, `namesLookAlike`); who the user is and their
+role come only from the Discord user id (IDENTITY-7 / IDENTITY-12). Chat
+messages, `/session start` and `/work` SHALL resolve the speaker's role
+(`resolveDiscordActingRole`) before the run. For team and community speakers
+(never the owner) `inboundInjection` SHALL scan the speaker's own words; a hit
+SHALL start no run: on chat one public reply to the message
+(`formatInjectionRefusal`: what it won't do and why in plain words, never the
+text, pinging the owner with allowed mentions limited to the owner; without an
+owner it says nobody could be told and logs `INJECTION_NO_OWNER_WARNING`), a
+session the message started is ended and the turn is not recorded; on slash
+(`refuseInjectedSlash`) the interaction gets the public refusal and the owner a
+fresh channel post that pings only them, and no session, worktree or work task
+is created; either way one `injection-suspected` / `denied` SAFE-5 row is
+appended through the bridge's trail (actor, surface `discord:<session>` or
+`discord:/<command>`, digest of the source and reason ids; best effort).
+Otherwise a team / community speaker's words SHALL reach the model through
+`fenceSpeakerText` (the `UNTRUSTED_DATA` fence with a header naming their role
+and saying it is their request but data, not instructions); the owner's words
+are unchanged. The spawn client SHALL read the child's `result.injection`
+with `injectionNoticeFromUnknown` into `AgentSpawnResult.injection`, and the
+post that carries a run's answer SHALL then ping the owner with
+`formatInjectionOwnerLine`: chat and button-pick replies (`withInjectionNotice`,
+with the SAFE-8 warning), `/session start` and `/work` (`slashOwnerNotice`
+`injection`) and a schedule run's result post or ask post. Replayed session
+turns SHALL strip invisible characters and mark a line that imitates a
+Corvidinho block or a turn label (`Human:`, `You (Corvidinho):`) `(quoted)`,
+so an earlier message cannot close the replay block or pass for a turn of
+Corvidinho's own; recalled
+memory lines SHALL strip invisible characters. `discord-user-lookup` names are
+cleaned (REQ-plugins-071). No env var, config key, table or column.
+
+Acceptance Criteria
+- Through `startBridge` with a memory DB: a stranger's injection starts no run, gets one reply to the message that pings only the owner, ends the session it started and appends one `injection-suspected` / `denied` row with the stranger as actor; a declared team member's injection is refused too; the owner's own words run unfenced.
+- An ordinary stranger message runs with the words inside the fence (`role: community`, `source=chat-message`), the display name cleaned and a `name_clash` line; a run reporting `injection` gets the owner line and the owner in its allowed mentions.
+- `/session start` and `/work`: a stranger's injection creates no session and runs nothing, the interaction gets the refusal, the owner a fresh ping post, the trail one `denied` row; an ordinary stranger request runs fenced and the owner's unfenced.
+- `slashOwnerNotice` and `withInjectionNotice` carry the SAFE-13 owner line and the owner mention; no notice leaves a post unchanged.
+- The replay block marks a turn line that imitates its footer or a turn label `(quoted)` and still ends with its own footer.
+- A schedule run reporting `injection` pings the owner with the SAFE-13 line on its result post and, when it ends with an ask, on its ask post.
+- A non-owner's free-text answer to a pending ask reaches the model inside the fence (`tests/discord.slash-pending-ask.test.ts`).
+- Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
+
+### REQ-discord-067
+
+Ranked recall and a memory search for each message (MEMORY-9, #67), and the
+GitHub memory subject (MEMORY-8). `MemoryStore.recall` with a `query` SHALL
+be a search: its terms (`recallTerms`: lowercased letters/digits, words of
+two or more characters, common question words and pronouns dropped, a light
+English stem, at most 24) and the whole query are matched in keys and content
+(case-insensitive), at most 500 newest candidates are read, a key read in two
+scopes is kept once (newest), and rows are ranked (`rankMemories`) by
+relevance — each term weighted by its inverse frequency among the
+candidates, a key hit counting double, the whole query adding a bonus — times
+a recency weight (30-day half-life, never below 3/4), newer first on ties.
+A query with no terms SHALL match as one substring, newest first, as before.
+Private notes stay out unless asked (MEMORY-7). No FTS table and no schema
+change.
+
+The chat and button-pick inject (REQ-discord-023 / REQ-discord-101) SHALL
+search memory for the human's message (the picked label on a button):
+`recallRelevantThenRecent` — the rows relevant to it first, then the newest to
+fill, at most 20 — for the speaker's block and for the owner / team project
+block; the owner's and team's `/work` project block (REQ-discord-101) SHALL
+likewise be searched for the work description
+(`enrichPromptWithProjectMemory(…, limit, query)`). Without a query the
+blocks are the newest rows, as before.
+
+`memorySubjectForGithub(dir, { login, id })` SHALL resolve a GitHub
+commenter to their declared person's subject (the same scopes as on Discord;
+the configured owner not declared under `[people]` to their Discord-id
+subject; undeclared or ambiguous ⇒ null), and `projectScopeForRepo(repo)`
+SHALL give `project:<owner/repo>` lowercased for a valid `owner/repo` (else
+null). The Discord agent spawn SHALL always clear
+`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, so a Discord or
+scheduled run never acts for a GitHub commenter.
+
+Acceptance Criteria
+- A question in plain words finds the fact it is about; a key hit outranks a newer passing mention; equal relevance goes to the newer row; a question-words-only query matches as one substring.
+- A multi-scope search keeps the newest of a key once and leaves private notes out.
+- The Discord inject holds an older fact the message is about although newer rows fill the block; an owner's `/work` run holds an older project fact its description is about although newer rows fill the block.
+- `memorySubjectForGithub` matches by numeric id or login, refuses a login whose numeric id differs, and maps the undeclared-under-`[people]` owner to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
+- A Discord spawn clears inherited GitHub commenter keys.
+- `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.
 

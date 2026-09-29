@@ -30,11 +30,16 @@ import type {
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
+import type { DiscordModal } from "./ask-buttons.ts";
 import { buildVersionPresenceData } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
-/** Thin MessageComponent interaction (DISCORD-ASK buttons). */
+/**
+ * Thin MessageComponent interaction (DISCORD-ASK buttons), or the submit of
+ * an ask's Answer form (MODAL_SUBMIT, interaction type 5; DISCORD-ASK-4.a),
+ * which carries `modalValues`.
+ */
 export type ComponentInteraction = {
   id: string;
   customId: string;
@@ -60,13 +65,26 @@ export type ComponentInteraction = {
   userDisplayName?: string;
   /** Presser's Discord username when known (IDENTITY-4). */
   userUsername?: string;
+  /**
+   * DISCORD-ASK-4.a — answer a button press with a modal (interaction
+   * response type 9). Absent on a modal submit (a submit cannot open one).
+   */
+  showModal?: (modal: DiscordModal) => Promise<void>;
+  /**
+   * DISCORD-ASK-4.a — a modal submit's text input values by input custom_id.
+   * Set on a modal submit only; a button press never carries it.
+   */
+  modalValues?: Record<string, string>;
 };
 
 export type GatewayHandlers = {
   onMessage: (msg: InboundMessage) => void | Promise<void>;
   /** Slash commands (DISCORD-4). */
   onSlash?: (interaction: SlashInteraction) => void | Promise<void>;
-  /** Button / select component presses (DISCORD-ASK). */
+  /**
+   * Button / select component presses (DISCORD-ASK) and ask Answer form
+   * submits (DISCORD-ASK-4.a), through the same gates.
+   */
   onComponent?: (interaction: ComponentInteraction) => void | Promise<void>;
   /**
    * Live allowlisted channel ids for `/admin channels remove` autocomplete.
@@ -122,6 +140,16 @@ export type GatewayHandlers = {
     channelId: string;
     messageId: string;
   }) => Promise<boolean>;
+  /**
+   * Direct message to one user (MEMORY-ACL-6: the owner's Approve/Deny card,
+   * the asker's outcome notice). Parses no mentions (REQ-discord-205).
+   * Resolves the DM channel and message ids, or null when it did not go out.
+   */
+  sendDm?: (opts: {
+    userId: string;
+    content: string;
+    components?: unknown[];
+  }) => Promise<{ channelId: string; messageId: string } | null>;
 };
 
 /** Who asked for channel autocomplete, and where (REQ-discord-431). */
@@ -535,6 +563,15 @@ export async function createLiveGateway(
           });
           return;
         }
+        // DISCORD-ASK-4.a — an ask's Answer form submit takes the press path.
+        if (typeof interaction.isModalSubmit === "function" && interaction.isModalSubmit()) {
+          if (!handlers.onComponent) return;
+          const adapted = adaptModalSubmit(interaction as never);
+          Promise.resolve(handlers.onComponent(adapted)).catch((err) => {
+            console.error("[discord] modal submit handler error:", err);
+          });
+          return;
+        }
         if (!interaction.isChatInputCommand()) return;
         if (!handlers.onSlash) return;
         const adapted = adaptChatInput(interaction as never);
@@ -686,6 +723,22 @@ export async function createLiveGateway(
     }
   };
 
+  handlers.sendDm = async ({ userId, content, components }) => {
+    try {
+      const user = await client.users.fetch(userId);
+      // REQ-discord-205: a DM parses no mentions either.
+      const sent = await user.send({
+        content: defangMassMentions(content).slice(0, 1900),
+        ...(components?.length ? { components: components as never } : {}),
+        allowedMentions: outboundAllowedMentions(),
+      });
+      return { channelId: sent.channelId, messageId: sent.id };
+    } catch (err) {
+      console.error("[discord] direct message failed:", err instanceof Error ? err.message : err);
+      return null;
+    }
+  };
+
   handlers.deleteMessage = async ({ channelId, messageId }) => {
     try {
       const channel = await client.channels.fetch(channelId);
@@ -725,7 +778,9 @@ export function adaptComponent(interaction: {
   reply: (opts: unknown) => Promise<unknown>;
   update: (opts: unknown) => Promise<unknown>;
   deleteReply?: () => Promise<unknown>;
+  showModal?: (modal: unknown) => Promise<unknown>;
 } & ComponentActorSource): ComponentInteraction {
+  const showModal = interaction.showModal;
   return {
     id: interaction.id,
     customId: interaction.customId,
@@ -766,8 +821,88 @@ export function adaptComponent(interaction: {
         await interaction.deleteReply();
       }
     },
+    // DISCORD-ASK-4.a — the Answer button opens the private form (type 9).
+    ...(typeof showModal === "function"
+      ? {
+          showModal: async (modal: DiscordModal) => {
+            await showModal.call(interaction, modal);
+          },
+        }
+      : {}),
     // IDENTITY-4 — the presser's names, so a button-pick resume injects them
     // like a chat message (REQ-discord-446).
+    ...componentActorNames(interaction),
+  };
+}
+
+/** Fixture-friendly subset of discord.js `ModalSubmitInteraction.fields`. */
+export type RawModalFields = {
+  fields?: {
+    values: () => Iterable<{ type?: number; customId?: string; value?: unknown }>;
+  };
+} | null;
+
+/**
+ * DISCORD-ASK-4.a — text input values of a modal submit by input custom_id
+ * (component type 4); other components and non-string values are skipped.
+ */
+export function modalTextValues(fields: RawModalFields | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  const all = fields?.fields;
+  if (!all || typeof all.values !== "function") return out;
+  for (const field of all.values()) {
+    if (field?.type !== 4) continue;
+    if (typeof field.customId !== "string" || typeof field.value !== "string") continue;
+    out[field.customId] = field.value;
+  }
+  return out;
+}
+
+/**
+ * discord.js ModalSubmitInteraction (interaction type 5) →
+ * `ComponentInteraction` with `modalValues` (DISCORD-ASK-4.a). Its replies
+ * parse no mentions (REQ-discord-205); an ephemeral reply is flag 64.
+ */
+export function adaptModalSubmit(interaction: {
+  id: string;
+  customId: string;
+  channelId: string | null;
+  guildId: string | null;
+  member?: { roles?: RawMemberRoles } | null;
+  message?: { id?: string } | null;
+  fields?: RawModalFields;
+  deferred: boolean;
+  replied: boolean;
+  reply: (opts: unknown) => Promise<unknown>;
+  deleteReply?: () => Promise<unknown>;
+} & ComponentActorSource): ComponentInteraction {
+  return {
+    id: interaction.id,
+    customId: interaction.customId,
+    channelId: interaction.channelId ?? "",
+    guildId: interaction.guildId ?? undefined,
+    userId: interaction.user.id,
+    roleIds: interactionRoleIds(interaction.member),
+    messageId: interaction.message?.id,
+    modalValues: modalTextValues(interaction.fields),
+    reply: async (opts) => {
+      const payload: Record<string, unknown> = {
+        allowedMentions: outboundAllowedMentions(),
+      };
+      if (opts.content !== undefined) {
+        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+      }
+      if (opts.components !== undefined) {
+        payload.components = opts.components as never;
+      }
+      if (opts.ephemeral) payload.flags = 64;
+      await interaction.reply(payload);
+    },
+    deleteReply: async () => {
+      if (typeof interaction.deleteReply === "function") {
+        await interaction.deleteReply();
+      }
+    },
     ...componentActorNames(interaction),
   };
 }

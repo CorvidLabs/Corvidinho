@@ -19,6 +19,8 @@
  * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * a press passes channel → actor → mute/rate first (REQ-discord-212/201/010);
+ * ASK-4.a: a free-text ask's Answer button opens a private form whose submit
+ * takes the same gates and resumes like a reply (a reply still works);
  * SESSION-MULTI: per-user sessions.
  * AGENT-6: each run is recorded with its session and a continued run gets the
  * earlier turns replayed ahead of the new message (session-thread.ts).
@@ -35,13 +37,19 @@ import {
   withSpendWarningPost,
 } from "./ask-ping.ts";
 import {
+  ASK_ANSWER_ACK,
+  ASK_ANSWER_INPUT_ID,
   ASK_CHOICE_EXPIRED,
+  answerAskFor,
+  buildAnswerModal,
+  buildAnswerStubComponents,
   buildChoiceComponents,
   buildOpenStubComponents,
   findOptionLabel,
   formatAskEphemeralContent,
   formatAskStub,
   isAskExpired,
+  normalizeAskAnswer,
   parseAskCustomId,
   toPendingAsk,
   type PendingAsk,
@@ -68,8 +76,18 @@ import {
   enrichPromptWithImages,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
+import {
+  INJECTION_NO_OWNER_WARNING,
+  auditInboundInjection,
+  fenceSpeakerText,
+  formatInjectionRefusal,
+  inboundInjection,
+  withInjectionNotice,
+} from "./injection-guard.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
-import { enrichPromptWithMemories } from "./memory-inject.ts";
+import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
+import { parseApproveCardCustomId } from "./approve-card.ts";
+import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
 import {
@@ -149,6 +167,12 @@ export type StartBridgeResult =
       scheduleStore: ScheduleStore;
       memoryStore?: MemoryStore;
       announceStore?: AnnounceStore;
+      /**
+       * MEMORY-ACL-6: one forget-card delivery pass (owner cards, expiries,
+       * outcome notices); also run by every scheduler tick and after each
+       * chat message. Undefined without a DB.
+       */
+      deliverForgetCards?: () => Promise<ForgetDeliveryResult>;
       mutedUsers: Set<string>;
       rateLimitState: RateLimitState;
       muteUser: (userId: string) => void;
@@ -438,6 +462,28 @@ export async function startBridge(
         appendAudit(db, entry, { key: auditKeyFromEnv(env) })
     : undefined;
   const mutedUsers = new Set<string>(config.mutedUserIds);
+  // MEMORY-ACL-6: forget requests reach the owner as a DM Approve/Deny card.
+  const sendDmRef: { fn?: GatewayHandlers["sendDm"] } = {};
+  const forgetCards = db
+    ? createForgetCards({
+        db,
+        env,
+        owner: () => config.owner ?? null,
+        people: () => declaredPeople(),
+        sendDm: async (o) => (sendDmRef.fn ? sendDmRef.fn(o) : null),
+        editMessage: async (o) => (embedRef.editMessage ? embedRef.editMessage(o) : false),
+        post: async ({ channelId, content, mentionUserIds }) =>
+          !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
+        // DISCORD-5: the fallback notice only in a conversation still allowlisted.
+        mayPost: (channelId, parentChannelId) =>
+          isMonitoredConversation(channelId, parentChannelId, config.allowlist),
+        // An approved forget also drops the session threads this process
+        // still holds for them, so no later run replays those turns.
+        onForgotten: ({ discordIds }) => {
+          store.forgetTurnsOfUsers(discordIds);
+        },
+      })
+    : undefined;
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
   const rateLimitConfig = defaultRateLimitConfig({
     windowMs: config.rateLimitWindowMs,
@@ -601,6 +647,10 @@ export async function startBridge(
         }
         // Thin ack: restate once; do not spawn agent.
         const hasButtons = Boolean(session.pendingAsk.options?.length);
+        // DISCORD-ASK-4.a: a free-text ask restates with its Answer button
+        // while that button has not timed out (DISCORD-ASK-5); after that the
+        // restatement is the reply-only text it was before.
+        const answerButton = !hasButtons && !isAskExpired(session.pendingAsk);
         const restated = hasButtons
           ? formatAskStub({
               ask: session.pendingAsk,
@@ -612,6 +662,7 @@ export async function startBridge(
               owner: config.owner,
               requesterDiscordId: msg.authorId,
               replyHint: true,
+              answerButton,
             });
         if (replyRef.fn) {
           const sent = await replyRef.fn({
@@ -621,6 +672,8 @@ export async function startBridge(
             mentionUserIds: restated.mentionUserIds,
             ...(hasButtons
               ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
+              : answerButton
+              ? { components: buildAnswerStubComponents(session.pendingAsk.askId) }
               : {}),
           });
           if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
@@ -630,19 +683,69 @@ export async function startBridge(
         return;
       }
 
+      // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared person's
+      // team role, else community; the tool layer re-checks it on every call.
+      // Resolved before the run: SAFE-12/13 need to know whose words these are.
+      const actingRole = resolveDiscordActingRole({
+        userId: msg.authorId,
+        roleIds: msg.authorRoleIds,
+        allowlist: config.allowlist,
+        adminUserIds: config.adminUserIds,
+        adminRoleIds: config.adminRoleIds,
+        owner: config.owner ?? null,
+        mutedUsers,
+        people: declaredPeople(),
+      });
+      const actingIsAdmin = actingRole === "owner";
+
+      // SAFE-13: a non-owner's message that looks like an injection attempt
+      // never reaches a run. One short reply says so and pings the owner
+      // (allowed mentions: the owner only); an audit row records the actor,
+      // the surface and the reason ids, never the text. A session this
+      // message would have started is dropped; the turn is not recorded.
+      const suspected = inboundInjection(prompt, actingRole);
+      if (suspected) {
+        auditInboundInjection(recordAudit, {
+          actor: msg.authorId,
+          surface: `discord:${session.id}`,
+          source: "chat-message",
+          reasons: suspected.reasons,
+        });
+        const refusal = formatInjectionRefusal(suspected.reasons, config.owner);
+        if (refusal.mentionUserIds.length === 0) console.warn(INJECTION_NO_OWNER_WARNING);
+        const sent = replyRef.fn
+          ? await replyRef.fn({
+              channelId,
+              content: refusal.content,
+              replyToMessageId: msg.id,
+              mentionUserIds: refusal.mentionUserIds,
+            })
+          : null;
+        if (action.kind === "start_session") {
+          await store.endSession(session);
+        } else {
+          store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);
+        }
+        return;
+      }
+
+      // SAFE-12: a non-owner's words go to the model fenced as untrusted data
+      // (their request, never instructions; only their role decides what runs).
+      const spoken = fenceSpeakerText(prompt, actingRole, "chat-message");
+
       // AUTONOMY-6 / SESSION-MULTI-3 / DISCORD-ASK:
       // - free-text pending (no options): substantive continue answers and clears.
       // - button pending (has options): chat continues; buttons stay until pick/timeout.
-      let agentPrompt = prompt;
+      let agentPrompt = spoken;
       if (action.kind === "continue_session" && session.pendingAsk) {
         const pending = session.pendingAsk;
         if (pending.options?.length) {
-          agentPrompt = prompt;
+          agentPrompt = spoken;
         } else {
           const prior = pending.question;
           agentPrompt =
             `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
-            `Human answer:\n${prompt}`;
+            `Human answer:\n${spoken}`;
           // Only the answered ask: earlier open button asks stay (SESSION-MULTI-3).
           store.clearPendingAsk(session, pending.askId);
         }
@@ -715,13 +818,14 @@ export async function startBridge(
             },
           );
 
+          const people = declaredPeople();
           // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
           const idInject = enrichPromptWithIdentity(enrichedPrompt, {
             userId: msg.authorId,
             displayName: msg.authorDisplayName,
             username: msg.authorUsername,
             owner: config.owner ?? null,
-            people: declaredPeople(),
+            people,
           });
           if (idInject.injected) {
             console.log(
@@ -731,10 +835,24 @@ export async function startBridge(
             enrichedPrompt = idInject.prompt;
           }
 
-          // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user.
-          const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-            ownerUserId: msg.authorId,
-          });
+          // AGENT-7 / MEMORY-2/4 — auto-recall inject for acting Discord user:
+          // their profile when declared (MEMORY-5), never private notes
+          // (MEMORY-7), and the project's memory for owner / team (MEMORY-6).
+          // actingRole already resolved above for SAFE-12/13.
+          const memInject = enrichPromptWithMemories(
+            enrichedPrompt,
+            memoryStore,
+            {
+              ...memoryInjectOptsFor({
+                userId: msg.authorId,
+                people,
+                role: actingRole,
+                projectDir: sessionCwd ?? config.projectRoot,
+              }),
+              // MEMORY-9: search memory for this message.
+              query: prompt,
+            },
+          );
           if (memInject.injected) {
             console.log(
               `[discord] memory inject: ${memInject.count} recalled for user ${msg.authorId}`,
@@ -742,19 +860,7 @@ export async function startBridge(
             enrichedPrompt = memInject.prompt;
           }
 
-          // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared
-          // person's team role, else community; the tool layer re-checks it.
-          const actingRole = resolveDiscordActingRole({
-            userId: msg.authorId,
-            roleIds: msg.authorRoleIds,
-            allowlist: config.allowlist,
-            adminUserIds: config.adminUserIds,
-            adminRoleIds: config.adminRoleIds,
-            owner: config.owner ?? null,
-            mutedUsers,
-            people: declaredPeople(),
-          });
-          const actingIsAdmin = actingRole === "owner";
+
           // Busy while the agent runs: the soft-TTL purge must not park this
           // worktree mid-run (REQ-discord-204).
           result = await store.runActive(session, () =>
@@ -819,6 +925,8 @@ export async function startBridge(
           failed: boolean;
           ownerPinged?: boolean;
           components?: unknown[];
+          /** Answer button, not a Choose stub: keep the footer (DISCORD-ASK-4.a). */
+          keepFooter?: boolean;
         } | null = null;
         let pendingToStore: PendingAsk | null = null;
 
@@ -842,12 +950,17 @@ export async function startBridge(
           };
           pendingToStore = pending;
         } else if (askRaw) {
+          // DISCORD-ASK-4.a: a free-text clarify or stuck ask keeps its
+          // question in the public post and gets the Answer button (private
+          // form); a reply still answers it. Never on a spend-cap stop.
+          const answer = spendCap ? null : answerAskFor({ ask: askRaw });
           const formatted = formatAskReply({
             ask: askRaw,
             owner: askOwner?.owner,
             requesterDiscordId: msg.authorId,
             context: result.summary,
             replyHint: true,
+            answerButton: Boolean(answer),
           });
           askBody = {
             content: formatted.content,
@@ -855,11 +968,12 @@ export async function startBridge(
             status: formatted.status,
             failed: formatted.failed,
             ownerPinged: formatted.ownerPinged,
+            ...(answer ? { components: answer.components, keepFooter: true } : {}),
           };
           // AUTONOMY-5/6: a clarify or stuck ask waits for the requester's
           // answer. A spend-cap stop is not answerable by a reply, so a later
           // "ok" runs normally and a substantive reply carries no cap text.
-          pendingToStore = spendCap ? null : toPendingAsk(askRaw);
+          pendingToStore = answer?.pending ?? null;
         }
 
         // Pending ask (AUTONOMY-5/6, SESSION-MULTI-3): a new ask is stored
@@ -896,12 +1010,18 @@ export async function startBridge(
         // whichever message goes out (the collapsed edit or the fallback
         // reply); when neither does, the warning and the cap ping go back.
         const spend = spendAlerts.takeWarning(result.spendWarning);
-        const out = withSpendWarningPost(
-          {
-            content: body,
-            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-          },
-          spend?.warning,
+        // SAFE-13: a tool result that looked like an injection pings the owner
+        // on the same post.
+        const out = withInjectionNotice(
+          withSpendWarningPost(
+            {
+              content: body,
+              ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+            },
+            spend?.warning,
+            config.owner,
+          ),
+          result.injection,
           config.owner,
         );
         let delivered = false;
@@ -912,6 +1032,7 @@ export async function startBridge(
           const collapsed = await thinking.finalizeContent({
             content: out.content,
             components: askBody?.components,
+            keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
             failed: askBody ? askBody.failed : !result.ok,
@@ -977,11 +1098,38 @@ export async function startBridge(
         }
       } finally {
         inflight.end();
+        // MEMORY-ACL-6: a forget request made in this run reaches the owner now.
+        void forgetCards?.deliver();
       }
     },
     onComponent: async (interaction) => {
+      // MEMORY-ACL-6: an Approve/Deny card press (the owner's DM, so no
+      // channel allowlist); the presser must be the owner, re-checked now.
+      const card = parseApproveCardCustomId(interaction.customId);
+      if (card) {
+        if (card.kind === FORGET_CARD_KIND && forgetCards) {
+          const mayDecide =
+            resolvePermissionLevel({
+              userId: interaction.userId,
+              roleIds: interaction.roleIds,
+              allowlist: config.allowlist,
+              adminUserIds: config.adminUserIds,
+              adminRoleIds: config.adminRoleIds,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }) >= PermissionLevel.ADMIN;
+          await forgetCards.press(interaction, card, mayDecide);
+        } else {
+          await interaction.reply({ content: "This card is no longer handled.", ephemeral: true });
+        }
+        return;
+      }
       const parsed = parseAskCustomId(interaction.customId);
       if (!parsed) return;
+      // DISCORD-ASK-4.a — typed text only ever comes from the Answer form's
+      // submit, and that form's custom_id only ever comes with typed text; a
+      // mix-up (a forged press or submit) is ignored.
+      if ((parsed.kind === "answer") !== (interaction.modalValues !== undefined)) return;
 
       // SESSION-MULTI-3: any open ask of the session answers by its askId,
       // not only the newest one.
@@ -1078,7 +1226,10 @@ export async function startBridge(
       }
 
       if (isAskExpired(pending)) {
-        store.clearPendingAsk(session, pending.askId);
+        // DISCORD-ASK-4.a: a late Answer press or form submit on a free-text
+        // ask leaves it pending, so a reply still answers it as before; a
+        // button ask is cleared as a late press (DISCORD-ASK-5).
+        if (pending.options?.length) store.clearPendingAsk(session, pending.askId);
         await interaction.reply({
           content: ASK_CHOICE_EXPIRED,
           ephemeral: true,
@@ -1089,6 +1240,12 @@ export async function startBridge(
       if (parsed.kind === "open") {
         const options = pending.options;
         if (!options?.length) {
+          // DISCORD-ASK-4.a — the Answer button opens the private form (a
+          // modal, interaction response type 9) for the requester only.
+          if (interaction.showModal) {
+            await interaction.showModal(buildAnswerModal(pending));
+            return;
+          }
           await interaction.reply({
             content: "No choices available — reply in the channel instead.",
             ephemeral: true,
@@ -1103,30 +1260,74 @@ export async function startBridge(
         return;
       }
 
-      // pick — claim immediately so a concurrent re-press cannot double-resume.
-      const label =
-        findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
       const prior = pending.question;
-      // Only the pressed ask: the session's other open asks stay (SESSION-MULTI-3).
-      store.clearPendingAsk(session, pending.askId);
-      // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
-      await interaction.reply({
-        content: `Got it — **${label}**. Working on it…`,
-        ephemeral: true,
-        update: true,
-        components: [],
-      });
+      // The human's answer (a chosen label or the privately typed text) and
+      // the prior-question block the resumed run gets ahead of it.
+      let answer: string;
+      let priorBlock: string;
+      if (parsed.kind === "answer") {
+        // DISCORD-ASK-4.a — the private Answer form's submit. It passed the
+        // same channel, actor, mute/rate, not-yours and expiry gates as a
+        // press above. A button ask is answered by its buttons, not a form.
+        if (pending.options?.length) {
+          await interaction.reply({
+            content: "This choice isn’t for you (or it was already answered).",
+            ephemeral: true,
+          });
+          return;
+        }
+        // SAFE-6: scrubbed before it reaches the run or the session thread.
+        answer = normalizeAskAnswer(interaction.modalValues?.[ASK_ANSWER_INPUT_ID]);
+        // AUTONOMY-6: an explicit cancel typed in the form drops every open
+        // ask of the session, as the same word in a reply does; nothing runs
+        // and the ack stays private.
+        if (isCancelAsk(answer)) {
+          store.setPendingAsk(session, null);
+          await interaction.reply({ content: ASK_CANCELLED_ACK, ephemeral: true });
+          return;
+        }
+        // AUTONOMY-5: a thin answer (`ok`, emoji-only, blank) is not an
+        // answer — as for a thin reply, the question is restated once (here
+        // privately, with the Answer button again), the ask stays and nothing
+        // runs.
+        if (isThinAck(answer)) {
+          const restated = formatAskReply({ ask: pending, owner: null, answerButton: true });
+          await interaction.reply({
+            content: restated.content,
+            ephemeral: true,
+            components: buildAnswerStubComponents(pending.askId),
+          });
+          return;
+        }
+        // Claim immediately so a reply or a second submit cannot resume twice.
+        store.clearPendingAsk(session, pending.askId);
+        await interaction.reply({ content: ASK_ANSWER_ACK, ephemeral: true });
+        // Exactly the block a reply that answers a free-text ask gets.
+        priorBlock = `[Prior clarifying question you asked (the human is answering it now):\n${prior}]`;
+      } else {
+        // pick — claim immediately so a concurrent re-press cannot double-resume.
+        answer = findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
+        // Only the pressed ask: the session's other open asks stay (SESSION-MULTI-3).
+        store.clearPendingAsk(session, pending.askId);
+        // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
+        await interaction.reply({
+          content: `Got it — **${answer}**. Working on it…`,
+          ephemeral: true,
+          update: true,
+          components: [],
+        });
+        priorBlock = `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]`;
+      }
 
       const channelId = session.threadId ?? session.channelId;
       // AGENT-6 (REQ-discord-072): the earlier turns (the original request
       // included) go ahead of the answered question, as on a chat reply; the
-      // pick joins the thread as the run starts.
+      // answer joins the thread as the run starts.
       const agentPrompt = withSessionThread(
-        `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]\n\n` +
-          `Human answer:\n${label}`,
+        `${priorBlock}\n\nHuman answer:\n${answer}`,
         store.threadFor(session),
       );
-      store.recordTurn(session, "human", label);
+      store.recordTurn(session, "human", answer);
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
@@ -1175,6 +1376,7 @@ export async function startBridge(
         let result;
         try {
           let enrichedPrompt = agentPrompt;
+          const people = declaredPeople();
           // IDENTITY-4 / REQ-discord-446 — the presser's Discord names, as on
           // the chat path (the presser is the session's user, checked above).
           const idInject = enrichPromptWithIdentity(enrichedPrompt, {
@@ -1182,13 +1384,9 @@ export async function startBridge(
             displayName: interaction.userDisplayName,
             username: interaction.userUsername,
             owner: config.owner ?? null,
-            people: declaredPeople(),
+            people,
           });
           if (idInject.injected) enrichedPrompt = idInject.prompt;
-          const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
-            ownerUserId: interaction.userId,
-          });
-          if (memInject.injected) enrichedPrompt = memInject.prompt;
 
           // IDENTITY-8..12: the presser's role, as on the chat path.
           const actingRole = resolveDiscordActingRole({
@@ -1198,14 +1396,30 @@ export async function startBridge(
             adminRoleIds: config.adminRoleIds,
             owner: config.owner ?? null,
             mutedUsers,
-            people: declaredPeople(),
+            people,
           });
           const actingIsAdmin = actingRole === "owner";
+          // MEMORY-5..7: as on the chat path.
+          const memInject = enrichPromptWithMemories(
+            enrichedPrompt,
+            memoryStore,
+            {
+              ...memoryInjectOptsFor({
+                userId: interaction.userId,
+                people,
+                role: actingRole,
+                projectDir: sessionCwd ?? config.projectRoot,
+              }),
+              // MEMORY-9: search memory for the picked / typed answer.
+              query: answer,
+            },
+          );
+          if (memInject.injected) enrichedPrompt = memInject.prompt;
 
           result = await store.runActive(session, () =>
             agent.runChat({
               prompt: enrichedPrompt,
-              humanText: label,
+              humanText: answer,
               sessionId: session.id,
               resume: true,
               actingUserId: interaction.userId,
@@ -1267,6 +1481,8 @@ export async function startBridge(
           failed: boolean;
           ownerPinged?: boolean;
           components?: unknown[];
+          /** Answer button, not a Choose stub: keep the footer (DISCORD-ASK-4.a). */
+          keepFooter?: boolean;
         } | null = null;
         let pendingToStore: PendingAsk | null = null;
 
@@ -1290,12 +1506,16 @@ export async function startBridge(
           };
           pendingToStore = next;
         } else if (askRaw) {
+          // DISCORD-ASK-4.a: as on a chat reply — a free-text follow-up ask
+          // gets the Answer button (never a spend-cap stop).
+          const answer = spendCap ? null : answerAskFor({ ask: askRaw });
           const formatted = formatAskReply({
             ask: askRaw,
             owner: askOwner?.owner,
             requesterDiscordId: interaction.userId,
             context: result.summary,
             replyHint: true,
+            answerButton: Boolean(answer),
           });
           askBody = {
             content: formatted.content,
@@ -1303,8 +1523,9 @@ export async function startBridge(
             status: formatted.status,
             failed: formatted.failed,
             ownerPinged: formatted.ownerPinged,
+            ...(answer ? { components: answer.components, keepFooter: true } : {}),
           };
-          pendingToStore = spendCap ? null : toPendingAsk(askRaw);
+          pendingToStore = answer?.pending ?? null;
         }
 
         // The pick already cleared the answered ask; store a follow-up ask
@@ -1324,12 +1545,18 @@ export async function startBridge(
         // SAFE-8: the pending 80% warning and its owner mention ride whichever
         // message goes out; when neither does, it and the cap ping go back.
         const spend = spendAlerts.takeWarning(result.spendWarning);
-        const out = withSpendWarningPost(
-          {
-            content: body,
-            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-          },
-          spend?.warning,
+        // SAFE-13: a tool result that looked like an injection pings the owner
+        // on the same post.
+        const out = withInjectionNotice(
+          withSpendWarningPost(
+            {
+              content: body,
+              ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+            },
+            spend?.warning,
+            config.owner,
+          ),
+          result.injection,
           config.owner,
         );
         let delivered = false;
@@ -1339,6 +1566,7 @@ export async function startBridge(
           const collapsed = await thinking.finalizeContent({
             content: out.content,
             components: askBody?.components,
+            keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
             failed: askBody ? askBody.failed : !result.ok,
@@ -1463,6 +1691,7 @@ export async function startBridge(
       embedRef.edit = h.editEmbed;
       embedRef.editMessage = h.editMessage;
       embedRef.deleteMessage = h.deleteMessage;
+      sendDmRef.fn = h.sendDm;
       return gw;
     });
 
@@ -1501,6 +1730,8 @@ export async function startBridge(
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
       spendAlerts,
+      // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices.
+      ...(forgetCards ? { onTick: () => void forgetCards.deliver() } : {}),
       backup,
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
@@ -1531,6 +1762,7 @@ export async function startBridge(
   if (handlers.editEmbed) embedRef.edit = handlers.editEmbed;
   if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
   if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
+  if (handlers.sendDm) sendDmRef.fn = handlers.sendDm;
 
   try {
     await gateway.start();
@@ -1575,6 +1807,7 @@ export async function startBridge(
     scheduleStore,
     memoryStore,
     announceStore,
+    ...(forgetCards ? { deliverForgetCards: () => forgetCards.deliver() } : {}),
     mutedUsers,
     rateLimitState,
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),

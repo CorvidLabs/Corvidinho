@@ -6,20 +6,58 @@
  * sets per spawn. ADMIN is re-checked here at handler time against the live
  * admin config (ADMIN-4 / DISCORD-7; empty ⇒ deny-all). Forget/override are
  * two-phase with a confirm token from a different turn (SAFE-4).
+ *
+ * Profiles, projects and privacy (MEMORY-5..7, MEMORY-ACL-6, #101 /
+ * REQ-plugins-101): the acting Discord id is matched in the owner's people
+ * list (re-read now, src/memory/scope.ts) — a declared person reads and
+ * writes one profile scope, anyone else their Discord id as before.
+ * `--person` names someone else's memory for the owner only (opaque refusal
+ * otherwise). `--project` is the project's own memory (the run's repo), for
+ * the owner and team and the local CLI. Private notes (`--category private`)
+ * are never recalled unless asked for by name, and then only for that
+ * person or the owner in a conversation with them. `memory-forget-me` asks
+ * the owner to approve forgetting the acting person (nothing is deleted
+ * here).
+ *
+ * GitHub (MEMORY-8, #67 / REQ-plugins-067): a WATCH run has no Discord actor;
+ * the poller sets the commenter's GitHub login / numeric id and the thread's
+ * repo (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, never argv). The
+ * commenter's declared person (people list re-read now, stable ids only)
+ * saves and recalls their own profile, as on Discord; anyone undeclared
+ * gets community scope: this repo's project memory read-only
+ * (`memory-recall --project`) and nothing saved. Project writes, `--person`,
+ * private notes and forget-me stay off on GitHub (a WATCH run is community
+ * and its thread is public, MEMORY-7). A search (`--query`) is ranked by
+ * relevance, then recency (MEMORY-9, src/memory/rank.ts).
  */
 
+import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../../src/audit/log.ts";
 import {
+  buildMemoryProfile,
   checkConfirmToken,
+  FORGET_REQUEST_TTL_MS,
+  ForgetRequestStore,
+  formatMemoryProfile,
   isHumanSuppliedToken,
   issueConfirmToken,
+  loadPeopleForMemory,
   MEMORY_ACL_DENIED,
   MemoryAclError,
+  memorySubjectFor,
+  memorySubjectForGithub,
+  memorySubjectForRef,
   MemoryNotFoundError,
   MemoryStore,
   MemoryValidationError,
+  PRIVATE_NOTE_CATEGORY,
+  projectScopeFor,
+  projectScopeForRepo,
+  sameSubject,
+  subjectLabel,
   type ConfirmBinding,
+  type MemorySubject,
 } from "../../src/memory/index.ts";
-import { resolveActingIsAdmin } from "../../src/plugins/roles.ts";
+import { resolveActingIsAdmin, resolveActingRole, ROLE_REFUSED_MESSAGE } from "../../src/plugins/roles.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
 
@@ -33,6 +71,7 @@ const VALUE_FLAGS = new Set([
   "--id",
   "--limit",
   "--confirm",
+  "--person",
 ]);
 
 function flagValue(args: string[], name: string): string | undefined {
@@ -60,6 +99,12 @@ function flagTokens(args: string[]): string[] {
     if (a.startsWith("--")) out.push(a);
   }
   return out;
+}
+
+/** A flag (value flags included) in flag position, before any `--`. */
+function flagPresent(args: string[], name: string): boolean {
+  const end = args.indexOf("--");
+  return (end >= 0 ? args.slice(0, end) : args).some((a) => a === name || a.startsWith(`${name}=`));
 }
 
 function hasFlag(args: string[], name: string): boolean {
@@ -111,10 +156,41 @@ function actingUser(env: NodeJS.ProcessEnv): string {
   return env.CORVIDINHO_ACTING_DISCORD_USER_ID?.trim() ?? "";
 }
 
+/** The GitHub commenter of a WATCH run (MEMORY-8), from the poller-set env only. */
+type GithubActor = { login?: string; id?: string; repo?: string };
+
+/**
+ * The commenter a GitHub WATCH run acts for: set by the poller
+ * (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID`, the thread's `_REPO`), and only
+ * when there is no Discord actor (a Discord run is never a GitHub one).
+ */
+function actingGithub(env: NodeJS.ProcessEnv): GithubActor | null {
+  if (actingUser(env)) return null;
+  const login = env.CORVIDINHO_ACTING_GITHUB_LOGIN?.trim() ?? "";
+  const id = env.CORVIDINHO_ACTING_GITHUB_ID?.trim() ?? "";
+  if (!login && !id) return null;
+  const repo = env.CORVIDINHO_ACTING_GITHUB_REPO?.trim() ?? "";
+  return { ...(login ? { login } : {}), ...(id ? { id } : {}), ...(repo ? { repo } : {}) };
+}
+
 const NO_ACTOR: PluginHandlerResult = {
   ok: false,
   error:
-    "refused: no acting user — memory is per-user and the actor is set by the Discord bridge (CORVIDINHO_ACTING_DISCORD_USER_ID)",
+    "refused: no acting user — memory is per-user and the actor is set by the Discord bridge (CORVIDINHO_ACTING_DISCORD_USER_ID) or, for a GitHub commenter, by the WATCH poller (CORVIDINHO_ACTING_GITHUB_LOGIN / _ID)",
+  exitCode: 2,
+};
+
+/** MEMORY-8: an undeclared GitHub commenter has community scope — project memory read-only, nothing saved. */
+const GITHUB_UNDECLARED: PluginHandlerResult = {
+  ok: false,
+  error:
+    "refused: this GitHub user is not on the owner's people list, so nothing is saved or recalled for them personally (MEMORY-8) — this repo's project memory is readable with memory-recall --project",
+  exitCode: 2,
+};
+
+const GITHUB_NO_REPO: PluginHandlerResult = {
+  ok: false,
+  error: "refused: this GitHub run names no owner/repo, so there is no project memory to read (MEMORY-8)",
   exitCode: 2,
 };
 
@@ -133,6 +209,89 @@ export async function actingIsAdmin(
   userId: string,
 ): Promise<boolean> {
   return resolveActingIsAdmin(env, userId);
+}
+
+const PROJECT_DENIED: PluginHandlerResult = {
+  ok: false,
+  error: `refused: ${ROLE_REFUSED_MESSAGE} — project memory is for the owner and team working on the repo (MEMORY-6)`,
+  exitCode: 2,
+};
+
+const PRIVATE_NEEDS_CONVERSATION: PluginHandlerResult = {
+  ok: false,
+  error:
+    "refused: private notes are shown only in a conversation with that person or the owner, never in a schedule or other run (MEMORY-7)",
+  exitCode: 2,
+};
+
+const PRIVATE_NOT_ON_GITHUB: PluginHandlerResult = {
+  ok: false,
+  error:
+    "refused: private notes are never read in a GitHub thread — it is public; ask on Discord (MEMORY-7 / MEMORY-8)",
+  exitCode: 2,
+};
+
+const FORGET_NEEDS_CONVERSATION: PluginHandlerResult = {
+  ok: false,
+  error:
+    "refused: a forget request comes from the person themself in a conversation with me (a Discord message or command), never from a schedule or another run (MEMORY-ACL-6)",
+  exitCode: 2,
+};
+
+/**
+ * Project memory (MEMORY-6): the owner and team (people who work on the
+ * repo), and the local CLI (no role session). Community — undeclared,
+ * WATCH, schedules, workers — neither reads nor writes it.
+ */
+async function mayUseProjectMemory(env: NodeJS.ProcessEnv): Promise<boolean> {
+  const role = await resolveActingRole(env);
+  return role === null || role === "owner" || role === "team";
+}
+
+/** A conversation with the acting person (chat, slash, button), not a schedule. */
+function inConversation(env: NodeJS.ProcessEnv): boolean {
+  return !!env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID?.trim();
+}
+
+type SubjectPick =
+  | { ok: true; subject: MemorySubject; self: boolean }
+  | { ok: false; result: PluginHandlerResult };
+
+/**
+ * Whose memory this call reads: the acting person's own — the Discord
+ * actor's, or in a GitHub run the commenter's declared person (MEMORY-8) —
+ * or, `--person`, owner only (MEMORY-7 / MEMORY-ACL-2), someone else's. A
+ * non-owner naming anyone but themselves gets the opaque refusal, known
+ * person or not; a GitHub run is never the owner's ADMIN run.
+ */
+async function pickSubject(env: NodeJS.ProcessEnv, ref: string | undefined): Promise<SubjectPick> {
+  const { dir } = await loadPeopleForMemory(env);
+  const actor = actingUser(env);
+  const github = actingGithub(env);
+  const self = actor
+    ? memorySubjectFor(dir, actor)
+    : github
+      ? memorySubjectForGithub(dir, github)
+      : null;
+  if (!self) {
+    if (!github) return { ok: false, result: NO_ACTOR };
+    return { ok: false, result: ref === undefined ? GITHUB_UNDECLARED : ACL_DENIED };
+  }
+  if (ref === undefined) return { ok: true, subject: self, self: true };
+  const target = memorySubjectForRef(dir, ref);
+  if (target && sameSubject(target, self)) return { ok: true, subject: self, self: true };
+  if (!actor || !(await actingIsAdmin(env, actor))) return { ok: false, result: ACL_DENIED };
+  if (!target) {
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        error: "no such person: --person takes a declared person id or a Discord user id",
+        exitCode: 1,
+      },
+    };
+  }
+  return { ok: true, subject: target, self: false };
 }
 
 function openStore(env: NodeJS.ProcessEnv) {
@@ -273,19 +432,32 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-store",
     description:
-      "Store a durable fact for the acting Discord user (MEMORY / AGENT-7). " +
-      "Categories: conversation|entity|person|personality. " +
+      "Store a durable fact for the acting Discord user (MEMORY / AGENT-7) — in their profile when they are a declared person (MEMORY-5). " +
+      "Categories: conversation|entity|person|personality, profile: project (their projects) | preference (how they like to be talked to, timezone, hours) | decision | ask | approval (their history), and private (a private note: never shown to anyone but them and the owner, MEMORY-7). " +
       'Call when the user states identity/person/project facts. argv example: ' +
-      '["--category","person","--key","identity","Leif is the owner"]. ' +
+      '["--category","person","--key","identity","Leif is the owner"]; ' +
+      '["--category","preference","--key","timezone","Europe/Oslo"]; ["--category","decision","--key","2026-09-28-release","ship weekly"]. ' +
       "Also: [\"person\",\"identity\",\"Leif is the owner\"] positional. " +
-      "Acting user comes from CORVIDINHO_ACTING_DISCORD_USER_ID (bridge sets it).",
+      'Project memory (MEMORY-6, what you learned about this repo for whoever works on it next; owner/team only): ["--project","--category","entity","--key","test-cmd","bun test"]. ' +
+      "On GitHub (a WATCH run) it saves into the commenter's profile when they are on the owner's people list; nothing is saved for anyone else there, and --project is not written from GitHub (MEMORY-8). " +
+      "Acting user comes from CORVIDINHO_ACTING_DISCORD_USER_ID (bridge sets it), or the GitHub commenter the WATCH poller sets.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
       const refused = refuseArgvIdentity(ctx.args);
       if (refused) return refused;
-      const user = actingUser(process.env);
-      if (!user) return NO_ACTOR;
+      const env = process.env;
+      if (flagPresent(ctx.args, "--person")) {
+        return {
+          ok: false,
+          error:
+            "refused: memory-store writes the acting person's own memory (or --project); --person is only for the owner reading someone's memory (MEMORY-ACL-2)",
+          exitCode: 2,
+        };
+      }
+      const project = boolFlag(ctx.args, "--project");
+      const user = actingUser(env);
+      if (!user && !actingGithub(env) && !project) return NO_ACTOR;
       const category =
         flagValue(ctx.args, "--category") ?? positionalAfterFlags(ctx.args)[0];
       const key =
@@ -310,10 +482,31 @@ export const memoryCommands: PluginCommand[] = [
           exitCode: 1,
         };
       }
-      const { store, close } = openStore(process.env);
+      let scope: string;
+      let where = "";
+      if (project) {
+        // MEMORY-8: project memory is read-only from GitHub, whoever comments.
+        if (actingGithub(env) || !(await mayUseProjectMemory(env))) return PROJECT_DENIED;
+        if (category === PRIVATE_NOTE_CATEGORY) {
+          return {
+            ok: false,
+            error: "refused: a private note belongs to a person, not a project (MEMORY-7)",
+            exitCode: 1,
+          };
+        }
+        const p = projectScopeFor(ctx.cwd || process.cwd());
+        scope = p.scope;
+        where = ` in project ${p.key}`;
+      } else {
+        const pick = await pickSubject(env, undefined);
+        if (!pick.ok) return pick.result;
+        scope = pick.subject.writeScope;
+        if (pick.subject.kind === "person") where = ` in ${pick.subject.id}'s profile`;
+      }
+      const { store, close } = openStore(env);
       try {
         const rec = store.store({
-          ownerUserId: user,
+          ownerUserId: scope,
           category,
           key,
           content,
@@ -323,7 +516,7 @@ export const memoryCommands: PluginCommand[] = [
           data: rec,
           message: ctx.json
             ? undefined
-            : `stored ${rec.category}/${rec.key} id=${rec.id}`,
+            : `stored ${rec.category}/${rec.key}${where} id=${rec.id}`,
           exitCode: 0,
         };
       } catch (err) {
@@ -336,19 +529,29 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-recall",
     description:
-      "Recall durable facts for the acting Discord user (MEMORY / AGENT-7). " +
-      "Call BEFORE claiming you do not know who the user is or facts about them/people/projects. " +
+      "Recall durable facts for the acting Discord user (MEMORY / AGENT-7), their profile when declared (MEMORY-5). " +
+      "Call BEFORE claiming you do not know who the user is or facts about them/people/projects (MEMORY-9): search with --query and the key words (names, topics); results are ranked by relevance, then recency. " +
       'argv examples: [] (all), ["--category","person"], ' +
-      '["--query","Leif"], ["--category","person","--limit","20"]. ' +
-      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID.",
+      '["--query","Leif"], ["--category","person","--limit","20"], ["--category","preference"]. ' +
+      'Project memory of this repo (MEMORY-6, owner/team; recall it before working on the repo): ["--project"]. ' +
+      'Private notes are left out unless asked for: ["--category","private"] (only that person or the owner, in a conversation with them; never repeat them to anyone else, MEMORY-7). ' +
+      'The owner may read someone else\'s memory: ["--person","tofu"] (declared person id or Discord user id). ' +
+      "On GitHub (a WATCH run) it recalls the commenter's own profile when they are on the owner's people list, and --project reads this thread's repo memory for anyone (MEMORY-8); private notes never there. " +
+      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID, or the GitHub commenter the WATCH poller sets.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
       const refused = refuseArgvIdentity(ctx.args);
       if (refused) return refused;
       const env = process.env;
+      const project = boolFlag(ctx.args, "--project");
+      const personRef = flagValue(ctx.args, "--person");
+      if (project && personRef !== undefined) {
+        return { ok: false, error: "usage: memory-recall takes --project or --person, not both", exitCode: 1 };
+      }
       const user = actingUser(env);
-      if (!user) return NO_ACTOR;
+      const github = actingGithub(env);
+      if (!user && !github && !project) return NO_ACTOR;
       // Forgotten content stays forgotten for non-admins (MEMORY-ACL-4).
       const includeDeleted = boolFlag(ctx.args, "--include-deleted");
       if (includeDeleted && !(await actingIsAdmin(env, user))) {
@@ -366,32 +569,186 @@ export const memoryCommands: PluginCommand[] = [
       const query = queryFlag ?? (queryFromPos || undefined);
       const limitRaw = flagValue(ctx.args, "--limit");
       const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+      const wantsPrivate = category === PRIVATE_NOTE_CATEGORY;
+      let scopes: string[];
+      let heading: string | null = null;
+      if (project) {
+        // MEMORY-8: in a GitHub run anyone reads the thread's repo memory
+        // (read-only); elsewhere the owner, team and the local CLI.
+        if (!github && !(await mayUseProjectMemory(env))) return PROJECT_DENIED;
+        if (wantsPrivate) {
+          return { ok: false, error: "refused: a project has no private notes (MEMORY-7)", exitCode: 1 };
+        }
+        const p = github ? projectScopeForRepo(github.repo) : projectScopeFor(ctx.cwd || process.cwd());
+        if (!p) return GITHUB_NO_REPO;
+        scopes = [p.scope];
+        heading = github
+          ? `Project memory of ${p.key} (MEMORY-6; read-only in a GitHub run, MEMORY-8):`
+          : `Project memory of ${p.key} (MEMORY-6):`;
+      } else {
+        // MEMORY-7: private notes never in a (public) GitHub thread.
+        if (wantsPrivate && github) return PRIVATE_NOT_ON_GITHUB;
+        const pick = await pickSubject(env, personRef);
+        if (!pick.ok) return pick.result;
+        // MEMORY-7: private notes only in a conversation with that person or the owner.
+        if (wantsPrivate && !inConversation(env)) return PRIVATE_NEEDS_CONVERSATION;
+        scopes = pick.subject.readScopes;
+        const label = subjectLabel(pick.subject);
+        if (wantsPrivate) {
+          heading = `Private notes of ${label} — for them and the owner only; never repeat them to anyone else or where others can read them (MEMORY-7):`;
+        } else if (!pick.self) {
+          heading = `Memory of ${label} (owner view; private to them and the owner, MEMORY-7):`;
+        }
+      }
       const { store, close } = openStore(env);
       try {
         const rows = store.recall({
-          ownerUserId: user,
+          ownerUserId: scopes[0]!,
+          scopes,
           category: category || undefined,
           query: query || undefined,
           limit: Number.isFinite(limit) ? limit : undefined,
           includeDeleted,
         });
+        const listing =
+          rows.length === 0
+            ? "(no memories)"
+            : rows
+                .map(
+                  (r) =>
+                    `${r.id}\t${r.category}\t${r.key}\t${r.content.slice(0, 80)}`,
+                )
+                .join("\n");
         return {
           ok: true,
           data: rows,
-          message: ctx.json
-            ? undefined
-            : rows.length === 0
-              ? "(no memories)"
-              : rows
-                  .map(
-                    (r) =>
-                      `${r.id}\t${r.category}\t${r.key}\t${r.content.slice(0, 80)}`,
-                  )
-                  .join("\n"),
+          message: ctx.json ? undefined : heading ? `${heading}\n${listing}` : listing,
           exitCode: 0,
         };
       } catch (err) {
         return errResult(err);
+      } finally {
+        close();
+      }
+    },
+  },
+  {
+    name: "memory-profile",
+    description:
+      "Show a person's profile (MEMORY-5): their role (from the owner's people list), projects, preferences and a history of their decisions, asks and approvals; private notes only counted. " +
+      'argv examples: [] (the acting user\'s own), ["--person","tofu"] (owner only: a declared person id or Discord user id). ' +
+      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID, or the GitHub commenter's declared person (MEMORY-8).",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      const refused = refuseArgvIdentity(ctx.args);
+      if (refused) return refused;
+      const env = process.env;
+      if (!actingUser(env) && !actingGithub(env)) return NO_ACTOR;
+      const pick = await pickSubject(env, flagValue(ctx.args, "--person"));
+      if (!pick.ok) return pick.result;
+      const { store, close } = openStore(env);
+      try {
+        const profile = buildMemoryProfile(store, pick.subject);
+        return {
+          ok: true,
+          data: profile,
+          message: ctx.json ? undefined : formatMemoryProfile(profile, pick.subject),
+          exitCode: 0,
+        };
+      } catch (err) {
+        return errResult(err);
+      } finally {
+        close();
+      }
+    },
+  },
+  {
+    name: "memory-forget-me",
+    description:
+      "The acting user asks to be forgotten (MEMORY-ACL-6). Call when the user asks you to forget them / delete what you know about them. " +
+      "It asks the owner on a Discord Approve/Deny card; nothing is forgotten until the owner approves (no answer within a day is no), and the user is told the outcome. " +
+      "argv: [] (always the acting user; never someone else).",
+    dangerous: false,
+    minTier: 0,
+    async handler(ctx) {
+      const refused = refuseArgvIdentity(ctx.args);
+      if (refused) return refused;
+      const env = process.env;
+      const user = actingUser(env);
+      // A GitHub thread is not a conversation for this (MEMORY-ACL-6).
+      if (!user) return actingGithub(env) ? FORGET_NEEDS_CONVERSATION : NO_ACTOR;
+      if (ctx.args.some((a) => a.trim() !== "")) {
+        return {
+          ok: false,
+          error: "usage: memory-forget-me takes no arguments — it is always the acting user asking about themselves",
+          exitCode: 1,
+        };
+      }
+      if (!inConversation(env)) return FORGET_NEEDS_CONVERSATION;
+      const { dir, owner } = await loadPeopleForMemory(env);
+      if (!owner) {
+        return {
+          ok: false,
+          error: "refused: no owner is configured, so nobody can approve a forget request (IDENTITY-3)",
+          exitCode: 2,
+        };
+      }
+      const subject = memorySubjectFor(dir, user);
+      if (!subject) return NO_ACTOR;
+      const { db, close } = openStore(env);
+      const audit = (outcome: "started" | "ok" | "error") =>
+        appendAudit(
+          db,
+          {
+            action: "memory-forget-request",
+            ...auditContextFromEnv(env),
+            argsDigest: argsDigest(["forget-me", subject.kind, subject.id]),
+            outcome,
+          },
+          { key: auditKeyFromEnv(env) },
+        );
+      try {
+        try {
+          audit("started");
+        } catch (err) {
+          return {
+            ok: false,
+            error: `refused: audit log unavailable for a forget request (SAFE-5): ${err instanceof Error ? err.message : String(err)}`,
+            exitCode: 2,
+          };
+        }
+        let made;
+        try {
+          made = new ForgetRequestStore({ db }).request({
+            subject,
+            requesterUserId: user,
+            originChannelId: env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID,
+            originParentChannelId: env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID,
+          });
+        } catch (err) {
+          try {
+            audit("error");
+          } catch {
+            /* the refusal stands */
+          }
+          return errResult(err);
+        }
+        try {
+          audit("ok");
+        } catch {
+          /* started row is written; the request stands */
+        }
+        const r = made.request;
+        const hours = Math.round(FORGET_REQUEST_TTL_MS / 3_600_000);
+        return {
+          ok: true,
+          data: { requestId: r.id, status: r.status, created: made.created, expiresAt: r.expiresAt },
+          message: made.created
+            ? `Asked the owner to approve forgetting what I remember about you (request ${r.id}). Nothing is forgotten until they approve on their Approve/Deny card; no answer within ${hours} h means no. You will be told the outcome.`
+            : `Already waiting for the owner on your forget request (request ${r.id}); nothing is forgotten until they approve.`,
+          exitCode: 0,
+        };
       } finally {
         close();
       }

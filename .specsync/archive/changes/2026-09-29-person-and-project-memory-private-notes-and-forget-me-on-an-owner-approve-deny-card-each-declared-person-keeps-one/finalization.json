@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one",
+  "implementation_commit": "215d9ed354543a7ff35d1ffb1b20e3ec16520e79",
+  "implementation_tree": "705589a8f7706748ee11aeb7161e90f302d61c7e",
+  "contract_digest": "31cf583a3e765cbb4db6f18e88f0b9a9313ee0b0d7d5a2e87f69a4836e1413ea",
+  "workspace_digest": "50f07f9abae993a909d9fd013c7c18d6923901e762536e5699529216f4c8eaee",
+  "closing_digest": "b17381177d4c906b5b976e6bfccc18fef05a23e7b85504a6b2979ad731b9f1dc",
+  "review_digest": "6510eed775c7cc80eb96795139ae19743b827d68e0a4428579296959360bf6a8",
+  "finalization_digest": "ccb189905c8d47f4c882eda381c6a30c0efc7849a56911e8eaaf396ba0529daf",
+  "timestamp": 1790712812
+}

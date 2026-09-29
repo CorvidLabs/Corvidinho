@@ -25,6 +25,8 @@ import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { appendPostLine, formatCollapsedPing, formatSpendWarningReply } from "./ask-ping.ts";
 import { finishSlashWithThinking, type SlashFinishThinkingOpts } from "./slash-finish.ts";
+import type { InjectionNotice } from "../agent/untrusted.ts";
+import { formatInjectionOwnerLine } from "./injection-guard.ts";
 
 export type AskPingOwner = {
   /** Owner to mention on the ask post, or null for no ping. */
@@ -144,9 +146,10 @@ export type OwnerNotice = {
 /**
  * Owner notice for a finished slash run (`/work`, `/session start`): the
  * owner ping line for a stuck or spend-cap ask (a clarify ask addresses the
- * requester in the reply, AUTONOMY-4) plus the pending SAFE-8 warning (taken
- * from the outbox here, so call it once per run). Null when there is
- * nothing to tell the owner (any cap-ping claim is then handed back).
+ * requester in the reply, AUTONOMY-4), the SAFE-13 line when a tool result
+ * in the run looked like a prompt-injection attempt, plus the pending SAFE-8
+ * warning (taken from the outbox here, so call it once per run). Null when
+ * there is nothing to tell the owner (any cap-ping claim is then handed back).
  */
 export function slashOwnerNotice(opts: {
   owner: OwnerRecord | null | undefined;
@@ -156,6 +159,8 @@ export function slashOwnerNotice(opts: {
   askOwner?: AskPingOwner | null;
   /** The run's own warning (fallback when no outbox). */
   spendWarning?: SpendWarning;
+  /** SAFE-13: a tool result in the run looked like an injection. */
+  injection?: InjectionNotice;
   /** How the run is named in the notice, e.g. "/work `work_…`". */
   label: string;
 }): OwnerNotice | null {
@@ -165,6 +170,9 @@ export function slashOwnerNotice(opts: {
   if (opts.askOwner) releases.push(opts.askOwner.release);
   if (opts.ask && opts.askOwner?.owner && ownerId && askNeedsOwner(opts.ask)) {
     lines.push(ownerAskNoticeLine(opts.ask, ownerId, opts.label));
+  }
+  if (opts.injection) {
+    lines.push(formatInjectionOwnerLine(opts.injection, opts.owner).line);
   }
   const taken = takeSpendWarning(opts.outbox, opts.spendWarning);
   if (taken) {
@@ -287,6 +295,7 @@ export async function finishSlashWithOwnerNotice(
             (await opts.thinking.finalizeContent({
               content: withNotice,
               ...(opts.components ? { components: opts.components } : {}),
+              ...(opts.keepFooter ? { keepFooter: true } : {}),
               mentionUserIds: mentions,
             })) !== null;
         } catch {

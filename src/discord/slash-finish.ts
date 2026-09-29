@@ -35,6 +35,11 @@ export type SlashFinishThinkingOpts = {
    */
   components?: unknown[];
   /**
+   * `components` is a free-text ask's Answer button, not a Choose stub
+   * (DISCORD-ASK-4.a): the collapsed answer keeps its footer-only embed.
+   */
+  keepFooter?: boolean;
+  /**
    * Called once the body is out (collapsed edit or fallback reply), before
    * the deferred reply is resolved — so a caller knows the answer went out
    * even when resolving the deferred reply then throws. `messageId` is the
@@ -59,6 +64,7 @@ export async function finishSlashWithThinking(
     ? await opts.thinking.finalizeContent({
         content: opts.body,
         ...(opts.components ? { components: opts.components } : {}),
+        ...(opts.keepFooter ? { keepFooter: true } : {}),
         ...(opts.mentionUserIds ? { mentionUserIds: opts.mentionUserIds } : {}),
         ...(opts.thinkExtras ? { extras: opts.thinkExtras } : {}),
         failed: opts.askStatus ? opts.askStatus.failed : !opts.ok,

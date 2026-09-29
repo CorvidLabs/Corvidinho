@@ -5,6 +5,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
+import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { actorIsAdmin, projectLabel } from "../list-scope.ts";
@@ -13,7 +14,7 @@ import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, clipPostSummary, formatAskReply } from "../ask-ping.ts";
-import { buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
+import { answerAskFor, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
@@ -92,6 +93,29 @@ export async function handleSessionStart(
       ? projectRaw.trim()
       : undefined;
 
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  // IDENTITY-8..12: owner (ADMIN), a declared team member, or community;
+  // the tool layer re-resolves it on every call.
+  const actingRole = resolveDiscordActingRole({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
+    mutedUsers: ctx.mutedUsers,
+    people,
+  });
+  const actingIsAdmin = actingRole === "owner";
+
+  // SAFE-13: a non-owner topic that looks like an injection attempt starts no
+  // session: a short reply, the owner pinged, an audit row.
+  const suspected = inboundInjection(topic, actingRole);
+  if (suspected) {
+    await refuseInjectedSlash(ctx, interaction, suspected, "session-topic");
+    return;
+  }
+
   await interaction.deferReply?.({ ephemeral: false });
 
   const created = await ctx.store.createWithWorktree({
@@ -129,8 +153,8 @@ export async function handleSessionStart(
     await thinking.start({ description: `Session: ${topic.slice(0, 80)}` });
   }
 
-  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
-  const idInject = enrichPromptWithIdentity(topic, {
+  // SAFE-12: a non-owner's topic goes to the model fenced as untrusted data.
+  const idInject = enrichPromptWithIdentity(fenceSpeakerText(topic, actingRole, "session-topic"), {
     userId: interaction.userId,
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
@@ -144,19 +168,6 @@ export async function handleSessionStart(
 
   let result;
   try {
-    // IDENTITY-8..12: owner (ADMIN), a declared team member, or community;
-    // the tool layer re-resolves it on every call.
-    const actingRole = resolveDiscordActingRole({
-      userId: interaction.userId,
-      roleIds: interaction.roleIds,
-      allowlist: ctx.allowlist,
-      adminUserIds: ctx.adminUserIds,
-      adminRoleIds: ctx.adminRoleIds,
-      owner: ctx.owner,
-      mutedUsers: ctx.mutedUsers,
-      people,
-    });
-    const actingIsAdmin = actingRole === "owner";
     // Busy while the agent runs: the soft-TTL purge must not park this
     // worktree mid-run (REQ-discord-204).
     result = await ctx.store.runActive(session, () =>
@@ -217,6 +228,10 @@ export async function handleSessionStart(
   const choice = result.ask
     ? buttonAskFor({ ask: result.ask, requesterDiscordId: interaction.userId })
     : null;
+  // DISCORD-ASK-4.a: otherwise a clarify or stuck ask keeps its question in
+  // the answer and gets the Answer button (a private form), as in chat; a
+  // reply still answers it. Never on a spend-cap stop.
+  const answerAsk = result.ask && !choice ? answerAskFor({ ask: result.ask }) : null;
   // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
   // pinged in a separate post (below) for stuck and spend-cap.
   const ask = choice
@@ -227,6 +242,7 @@ export async function handleSessionStart(
         owner: null,
         requesterDiscordId: interaction.userId,
         context: result.summary,
+        answerButton: Boolean(answerAsk),
       })
     : null;
   // The status (ask, not "✅ Done") is set when the answer goes out below.
@@ -241,6 +257,7 @@ export async function handleSessionStart(
     ctx.store.setPendingAsk(
       session,
       choice?.pending ??
+        answerAsk?.pending ??
         toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
     );
   }
@@ -281,6 +298,8 @@ export async function handleSessionStart(
     ask: result.ask,
     askOwner,
     spendWarning: result.spendWarning,
+    // SAFE-13: a tool result that looked like an injection tells the owner.
+    injection: result.injection,
     label: `/session \`${session.id}\``,
   });
   await finishSlashWithOwnerNotice({
@@ -298,6 +317,13 @@ export async function handleSessionStart(
           components: choice.components,
           onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
             recordSlashStub(ctx.store, session, choice.pending, messageId),
+        }
+      : answerAsk
+      ? {
+          components: answerAsk.components,
+          keepFooter: true,
+          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+            recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
         }
       : {}),
     notice,

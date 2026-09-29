@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
-import { ASK_REPLY_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
+import { ASK_ANSWER_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
@@ -175,7 +175,8 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(bridge.replies).toHaveLength(1);
     expect(bridge.replies[0]!.content).toContain("> Postgres or SQLite?");
     expect(bridge.replies[0]!.content).toContain(`<@${REQUESTER}>`);
-    expect(bridge.replies[0]!.content).toContain(ASK_REPLY_HINT);
+    // DISCORD-ASK-4.a: the restatement carries the live Answer button's hint.
+    expect(bridge.replies[0]!.content).toContain(ASK_ANSWER_HINT);
     expect(bridge.replies[0]!.content).not.toContain("ANSWERED");
     // AUTONOMY-4: a clarify restatement pings the requester only.
     expect(bridge.replies[0]!.mentionUserIds).toEqual([REQUESTER]);
@@ -206,7 +207,10 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(calls[1]!.resume).toBe(true);
     expect(calls[1]!.prompt).toContain("Prior clarifying question");
     expect(calls[1]!.prompt).toContain("Postgres or SQLite?");
-    expect(calls[1]!.prompt).toContain("Human answer:\nPostgres, with a pooled client");
+    expect(calls[1]!.prompt).toMatch(
+      // SAFE-12: a non-owner's answer rides an untrusted-data fence.
+      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nPostgres, with a pooled client\n<<<END_UNTRUSTED_DATA/,
+    );
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk ?? null).toBeNull();
     expect(
       bridge.outbound.contentEdits.some((e) => typeof e.content === "string" && e.content.includes("ANSWERED")),
@@ -241,7 +245,10 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     await bridge.handlers.onMessage(replyTo("bot_1", "SQLite"));
     expect(calls).toHaveLength(2);
     expect(calls[1]!.prompt).toContain("Postgres or SQLite?");
-    expect(calls[1]!.prompt).toContain("Human answer:\nSQLite");
+    expect(calls[1]!.prompt).toMatch(
+      // SAFE-12: a non-owner's answer rides an untrusted-data fence.
+      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nSQLite\n<<<END_UNTRUSTED_DATA/,
+    );
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk ?? null).toBeNull();
     await bridge.result.stop();
   });
@@ -261,7 +268,10 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     // Free-text semantics: a substantive reply answers and clears it.
     await bridge.handlers.onMessage(replyTo(answerId, "SQLite"));
     expect(calls).toHaveLength(2);
-    expect(calls[1]!.prompt).toContain("Human answer:\nSQLite");
+    expect(calls[1]!.prompt).toMatch(
+      // SAFE-12: a non-owner's answer rides an untrusted-data fence.
+      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nSQLite\n<<<END_UNTRUSTED_DATA/,
+    );
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk ?? null).toBeNull();
     await bridge.result.stop();
   });
