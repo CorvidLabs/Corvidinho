@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9fd712626f697631f3b7a2645b0c9554e58ab397",
+      "contract_digest": "26be939fec6a5ca44f5bc4a44ec37e8a61ec8843e7ea87ce8e461384cdf359ee",
+      "execution_digest": "f21b294da0745998efb2a60d50408965b12f041043d6431021ae0e14e1e41a45",
+      "workspace_digest": "3d74e8d6c3883480135506ea11ee2d673564111a9ea67d273efa71e643711feb",
+      "timestamp": 1790719094
+    }
+  ]
+}
