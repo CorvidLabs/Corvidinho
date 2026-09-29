@@ -834,7 +834,6 @@ Acceptance Criteria
 - Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no Fledge plugin command the same run skips verify and ends `done`.
 - `editsFilesUnreported` names `fledge-lanes-run` and `fledge-run`.
 
-<<<<<<< HEAD
 ### REQ-agent-476
 
 The tool-loop system prompt SHALL carry
@@ -880,7 +879,6 @@ Acceptance Criteria
 - Through `createTaskExecute` and a scripted provider: a team chat run offers the review tools but not `files-write` or `github-pr-create`; a team `/work` run adds the file tools; a team member on a community-stamped surface and an undeclared actor with a team stamp get read tools only.
 - The public Q&A prompt names README, docs/, STATUS, CHANGELOG and the public issues and milestones of allowed public repos, says nothing else counts, and no longer offers "the project site, and the roadmap".
 - Regression tests in `tests/roles.team.test.ts` and `tests/github.public-docs.test.ts` fail on the base sources and pass after.
-=======
 ### REQ-agent-069
 
 Persona file (PERSONA-1/2/3, issue #69). Corvidinho's voice SHALL live in one
@@ -931,5 +929,4 @@ Acceptance Criteria
 - By default the persona comes from Corvidinho's checkout: a decoy `persona.md` in the run's cwd never loads.
 - The shipped `persona.md` loads whole from this checkout, passes `scrubSecrets` unchanged and carries the persona fields, "corvid-agent", "warm", "direct", "Never a flat changelog voice", an emoji and "one message per turn".
 - End to end against a local fake provider, with a decoy `persona.md` in the cwd: `corvidinho task run`, the Discord spawn client (chat, slash commands, `/work` and schedules), the WATCH spawn client and a delegate worker (the council's worker path) each send a system prompt that starts with the shipped persona and has the PERSONA-3 rules after it.
->>>>>>> f6b06b99 (chore(lifecycle): materialize persona-one-editable-persona-md-in-corvid-agent-s-voice-loaded-into-the-system-prompt-on-every-turn-and-every-surface)
 
