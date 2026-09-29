@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "updater-changelog-extraction-stays-linear-on-a-large-utf-8-section-the-release-notes-check-no-longer-takes-seconds",
+  "implementation_commit": "76e4b2291255b0114be45757428bf31e67dc3cda",
+  "implementation_tree": "99102d4759a8d83cb0c186119460e54cd2c8aeff",
+  "contract_digest": "6c396e1573164db51716b9e2063626d10909edf1f96803bf410c10089dc800cd",
+  "workspace_digest": "943a58f1f1a22a47963d1c3ec77e1264df2ecc196cd6c8c2f2e0f64789048bf9",
+  "closing_digest": "20775f13c75283045f5b8ad882accd7307cefd1738ef533ad1e724acdf418cb3",
+  "review_digest": "212c96e421da203e88670bcc43a74388274c7c85e09b0f35a089bc0de30695ca",
+  "finalization_digest": "dd86762e4dcd3021d1c3ad75400bd3dff82e645153ee6a5b7c56e23a0aefb339",
+  "timestamp": 1790725241
+}
