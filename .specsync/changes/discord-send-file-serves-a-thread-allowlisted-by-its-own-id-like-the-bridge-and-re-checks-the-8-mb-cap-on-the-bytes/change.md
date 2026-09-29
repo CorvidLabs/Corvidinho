@@ -1,6 +1,6 @@
 ---
 id: discord-send-file-serves-a-thread-allowlisted-by-its-own-id-like-the-bridge-and-re-checks-the-8-mb-cap-on-the-bytes
-state: verifying
+state: implementing
 type: bug_fix
 base_commit: 5366fff96501327ad3bcc30f55105f2c16884b0b
 ---
