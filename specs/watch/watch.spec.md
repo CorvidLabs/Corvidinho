@@ -16,6 +16,7 @@ files:
   - src/watch/spawn-log.ts
   - src/watch/rate-limit.ts
   - src/watch/index.ts
+  - src/watch/memory-inject.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
 
@@ -40,7 +41,13 @@ own mentions in search, document org-search pagination bury risk; plus
 WATCH-RELIABILITY-1..3 — post-run summary after successful auto-ack, durable
 spawn outcome logging, and GitHub 403 rate-limit backoff. WATCH sessions
 persist in the shared SQLite DB (`watch_sessions`, schema v6) with the same
-soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037).
+soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037). Memory in GitHub
+runs (MEMORY-8/9, REQ-watch-067): the spawn passes the commenter's GitHub
+login / numeric id and the thread's repo so the memory plugins act for the
+commenter's declared person (undeclared: the repo's project memory,
+read-only), and before each run the poller searches the commenter's profile
+and the repo's project memory for the comment and prepends what it found
+(`src/watch/memory-inject.ts`).
 
 ## Public API
 
@@ -80,6 +87,16 @@ exports `buildInjectionRefusalBody(reasons, ownerLogin?)` and
 ownerLogin?)` and `maybePostWatchSummary({ ownerLogin })`; the WATCH
 `AgentSpawnResult` gains `injection?` (validated from the child's result
 frame).
+
+`AgentRunChatOpts.actingGithubLogin` / `actingGithubId` / `repo` (the
+commenter and the thread's repo, set by the poller; the spawn stamps them as
+`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`) and
+`src/watch/memory-inject.ts`: `enrichWatchPromptWithMemories(prompt, store,
+{ event, people, limit? })`, `formatWatchMemoryBlock`,
+`formatWatchProjectMemoryBlock`, `WATCH_MEMORY_INJECT_HEADER` /
+`WATCH_MEMORY_INJECT_EMPTY` / `WATCH_PROJECT_MEMORY_INJECT_HEADER`,
+`WATCH_MEMORY_INJECT_LIMIT`, `WATCH_MEMORY_ROW_MAX_CHARS` (MEMORY-8/9,
+REQ-watch-067).
 
 ## Invariants
 
@@ -185,6 +202,7 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-27 | the-verify-gate-uses-the-run-s-real-git-working-tree-diff-not-only-the-files-tools-report-so-an-edit-made-outside-the: The verify gate uses the run's real git working-tree diff, not only the files tools report, so an edit made outside the file tools is verified before done (AGENT-4, #85) |
 | 2026-09-27 | a-403-429-github-rate-limit-on-the-watch-auto-ack-or-run-summary-comment-sets-the-backoff-before-the-next-poll-cycle: A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3) |
 | 2026-09-29 | declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared: Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36) |
+| 2026-09-29 | memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run: Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67) |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |
 | 2026-09-29 | watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor: WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5) |

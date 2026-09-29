@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 36
+version: 37
 status: draft
 files:
   - src/agent/types.ts
@@ -23,6 +23,7 @@ files:
   - src/agent/spend-outbox.ts
   - src/agent/ask.ts
   - src/agent/untrusted.ts
+  - src/agent/recall-guard.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -61,6 +62,16 @@ so Discord/CLI chats trust injected facts and call memory-store/recall
 appropriately (REQ-agent-010), keep profiles and project memory, never tell
 one person what is stored about another or repeat private notes, and route a
 "forget me" to `memory-forget-me` (MEMORY-5..7 / MEMORY-ACL-6, REQ-agent-101).
+They also say to search memory before saying "I don't know" (MEMORY-9) and how
+memory works in a GitHub WATCH run (MEMORY-8, REQ-agent-067); the tool loop
+backs the rule with a guard (`src/agent/recall-guard.ts`): a final reply that
+says it doesn't know, in an attempt where the person's own memory or the
+project's was not searched yet (no injected block of that kind at the head of
+the task, no `memory-recall` call for it), makes the loop run the missing
+`memory-recall --query` / `--project --query` itself with the request's words
+through the plugin gates — nothing found, the reply stands with no extra
+model call; facts found go back to the model once for one more reply, which
+uses no tool round.
 
 ## Public API
 
@@ -624,5 +635,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
 | 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
 | 2026-09-29 | person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one: Person and project memory, private notes, and forget-me on an owner Approve/Deny card: each declared person keeps one profile keyed by person id (role, projects, preferences, history of decisions, asks and approvals), each project keeps memory keyed by its repo for whoever works on it next, a person's memory and private notes are shown only to them and the owner on every surface, and anyone can ask to be forgotten, which deletes their memories once the owner approves on a DM Approve/Deny card (MEMORY-5/6/7, MEMORY-ACL-6, #101) |
+| 2026-09-29 | memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run: Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67) |
 | 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

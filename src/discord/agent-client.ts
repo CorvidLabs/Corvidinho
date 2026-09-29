@@ -106,7 +106,8 @@ export type SpawnAgentClientOpts = {
  * CORVIDINHO_ACTING_WORK_TASK (1 for /work) for the role gate (IDENTITY-8..12),
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
- * REQ-discord-476).
+ * REQ-discord-476). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
+ * MEMORY-8) are always cleared.
  */
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
@@ -155,6 +156,11 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           // Always overwritten, never inherited from the bridge env.
           CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: replyChannelId ?? "",
           CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID: replyParentChannelId ?? "",
+          // MEMORY-8: a Discord (or schedule) run never acts for a GitHub
+          // commenter — always cleared, never inherited.
+          CORVIDINHO_ACTING_GITHUB_LOGIN: "",
+          CORVIDINHO_ACTING_GITHUB_ID: "",
+          CORVIDINHO_ACTING_GITHUB_REPO: "",
           ...(actingIsAdmin
             ? { CORVIDINHO_ACTING_IS_ADMIN: "1" }
             : { CORVIDINHO_ACTING_IS_ADMIN: "0" }),

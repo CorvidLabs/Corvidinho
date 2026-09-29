@@ -3,7 +3,9 @@
  * Does not pass --no-verify; an empty real diff (no tool-reported files and no
  * git working-tree change, REQ-agent-085) still skips verify in the loop.
  * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
- * Injectable for tests; no ProcessManager.
+ * Sets the commenter's GitHub login / numeric id and the thread's repo for
+ * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor, never ADMIN
+ * (REQ-watch-008). Injectable for tests; no ProcessManager.
  */
 
 import {
@@ -23,6 +25,15 @@ export type AgentRunChatOpts = {
    * from the NDJSON stream as frames arrive (REQ-watch-073).
    */
   onStatus?: (progress: TaskProgress) => void;
+  /**
+   * The commenter (MEMORY-8, REQ-watch-067): their GitHub login and numeric
+   * id from the GitHub API event (never a name from the text), and the
+   * thread's `owner/repo`. The memory plugins resolve them to a declared
+   * person in the owner's people list at each call.
+   */
+  actingGithubLogin?: string;
+  actingGithubId?: number | string;
+  repo?: string;
 };
 
 export type AgentClient = {
@@ -37,7 +48,7 @@ export type SpawnAgentClientOpts = {
 
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
-    async runChat({ prompt, sessionId, onStatus }) {
+    async runChat({ prompt, sessionId, onStatus, actingGithubLogin, actingGithubId, repo }) {
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
@@ -54,10 +65,19 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_WATCH_SESSION_ID: sessionId,
-          // GitHub runs have no Discord actor — memory plugins refuse (REQ-watch-008).
+          // GitHub runs have no Discord actor and are never ADMIN (REQ-watch-008).
           CORVIDINHO_ACTING_DISCORD_USER_ID: "",
           CORVIDINHO_ACTING_IS_ADMIN: "0",
           CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
+          // MEMORY-8: the commenter and the thread's repo, always overwritten
+          // (empty when unknown), never inherited from the watcher's env.
+          CORVIDINHO_ACTING_GITHUB_LOGIN: actingGithubLogin?.trim() ?? "",
+          CORVIDINHO_ACTING_GITHUB_ID:
+            actingGithubId === undefined || actingGithubId === null ? "" : String(actingGithubId).trim(),
+          CORVIDINHO_ACTING_GITHUB_REPO: repo?.trim() ?? "",
+          // No Discord conversation: files never attach, private notes never read.
+          CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: "",
+          CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID: "",
           // GitHub-triggered runs have no human at a terminal: SAFE-1 non-interactive.
           CORVIDINHO_NON_INTERACTIVE: "1",
         },

@@ -319,7 +319,9 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `fledge-lanes-list`/`-validate`,
-  `memory-store`/`-recall`/`-profile` (scoped to the acting person; no project memory),
+  `memory-store`/`-recall`/`-profile` (scoped to the acting person; no project memory — a
+  GitHub WATCH run acts for the commenter's declared person and reads its thread repo's
+  project memory, read-only, MEMORY-8),
   `memory-forget-me` (asks the owner, MEMORY-ACL-6), `discord-user-lookup` (members of
   the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never

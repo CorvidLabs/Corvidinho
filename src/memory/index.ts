@@ -1,5 +1,5 @@
 /**
- * MEMORY SQLite + ACL (MEMORY-1..7 / MEMORY-ACL-1..6).
+ * MEMORY SQLite + ACL (MEMORY-1..9 / MEMORY-ACL-1..6).
  */
 
 export {
@@ -42,16 +42,28 @@ export {
   linkedDiscordIds,
   loadPeopleForMemory,
   memorySubjectFor,
+  memorySubjectForGithub,
   memorySubjectForRef,
   personScopeId,
   projectKeyFor,
   projectScopeFor,
+  projectScopeForRepo,
   projectScopeId,
   sameSubject,
   subjectLabel,
   type LoadedPeople,
   type MemorySubject,
 } from "./scope.ts";
+export {
+  RECALL_CANDIDATE_LIMIT,
+  RECALL_MAX_TERMS,
+  RECALL_RECENCY_HALF_LIFE_MS,
+  RECALL_STOPWORDS,
+  rankMemories,
+  recallRelevantThenRecent,
+  recallTerms,
+  type RankedMemory,
+} from "./rank.ts";
 export {
   PROFILE_SECTION_LIMIT,
   buildMemoryProfile,
