@@ -14,4 +14,8 @@ artifact: requirements
   (modified: that allowlist is the bridge's union; deny still wins; see
   deltas/plugins.md).
 - REQ-plugins-006: a malformed / unreadable allowlist file still refuses.
+- REQ-discord-476 / DISCORD-17: `discord-send-file` gates its conversation
+  channel (a thread through its parent) on the channel allowlist first; that
+  allowlist is REQ-discord-004's union too (named in the REQ-discord-004
+  delta), so it can attach in every channel the bridge talks in.
 - No new hi criteria are captured (none were confirmed for this fix).

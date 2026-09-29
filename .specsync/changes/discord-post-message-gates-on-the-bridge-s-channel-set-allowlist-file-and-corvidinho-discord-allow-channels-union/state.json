@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "310861f81c5fb0314447109b959b8f37fb323578",
   "created_at": 1790696282,
-  "updated_at": 1790696369,
+  "updated_at": 1790698668,
   "affected_specs": [
     "plugins",
     "discord"
@@ -19,6 +19,8 @@
   "affected_paths": [
     "plugins/discord/index.ts",
     "tests/discord.post.plugin.test.ts",
+    "plugins/discord/send-file.ts",
+    "tests/discord.send-file.test.ts",
     "docs/discord.md",
     "specs/plugins/testing.md",
     "specs/discord/testing.md"
@@ -26,7 +28,7 @@
   "no_spec_change": false,
   "no_spec_change_rationale": null,
   "acceptance_criteria": [
-    "discord-post-message gates its --channel on the same channel set as the bridge and daemon (mergeChannelIds: allowlist file [discord].channels + CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so with no allowlist file, CORVIDINHO_DISCORD_ALLOW_CHANNELS unset and DISCORD_CHANNEL_IDS=111 a dry-run post to 111 succeeds (exit 0) and a post to a channel in no list is still refused (exit 3, not allowlisted); CORVIDINHO_DISCORD_DENY_CHANNELS=111 on top still refuses the post to 111 with exit 3 (deny wins); a malformed allowlist file still refuses (fail closed); the DISCORD_CHANNEL_IDS-only regression test fails on the base and passes after"
+    "discord-post-message gates its --channel on the same channel set as the bridge and daemon (mergeChannelIds: allowlist file [discord].channels + CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so with no allowlist file, CORVIDINHO_DISCORD_ALLOW_CHANNELS unset and DISCORD_CHANNEL_IDS=111 a dry-run post to 111 succeeds (exit 0) and a post to a channel in no list is still refused (exit 3, not allowlisted); CORVIDINHO_DISCORD_DENY_CHANNELS=111 on top still refuses the post to 111 with exit 3 (deny wins); a malformed allowlist file still refuses (fail closed); the DISCORD_CHANNEL_IDS-only regression test fails on the base and passes after; discord-send-file gates the conversation channel the bridge set (a thread through its parent) on the same union, so a channel listed only in DISCORD_CHANNEL_IDS attaches, a channel in no list is refused and a deny still wins; its DISCORD_CHANNEL_IDS-only test fails on the base and passes after"
   ],
   "selected_artifacts": [
     "context",

@@ -9,6 +9,8 @@ artifact: docs
   checks first is the bridge's set — allowlist file `[discord].channels`,
   `CORVIDINHO_DISCORD_ALLOW_CHANNELS` and `DISCORD_CHANNEL_IDS` — with deny
   lists winning.
+- `docs/discord.md` (Files and images in replies, "Gates, in order"): the
+  same channel set for `discord-send-file`, deny lists winning.
 - README.md:60, docs/DISCORD-GO-LIVE.md:19/32, `.env.example` and `--help`
   already present `DISCORD_CHANNEL_IDS` as the channel allowlist; the fix
   makes them hold for the post plugin, so they are unchanged.

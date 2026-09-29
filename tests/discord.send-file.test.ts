@@ -320,6 +320,48 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
     expect(uploads[0]!.url).toContain(`/channels/${OTHER_CHAN}/messages`);
   });
 
+  test("REQ-discord-004: a channel the bridge listens in only through DISCORD_CHANNEL_IDS attaches; a deny still wins", async () => {
+    put("shot.png", PNG);
+    const savedFile = process.env.CORVIDINHO_ALLOWLIST_FILE;
+    // No allowlist file and no CORVIDINHO_DISCORD_ALLOW_CHANNELS: the bridge's
+    // channel set is DISCORD_CHANNEL_IDS alone.
+    process.env.CORVIDINHO_ALLOWLIST_FILE = join(tempDir("corvidinho-send-file-allow-"), "missing.toml");
+    delete process.env.CORVIDINHO_DISCORD_ALLOW_CHANNELS;
+    process.env.DISCORD_CHANNEL_IDS = CHAN;
+    try {
+      const r = await send(["shot.png"]);
+      expect(r.error).toBeUndefined();
+      expect(r.ok).toBe(true);
+      expect(uploads).toHaveLength(1);
+      expect(uploads[0]!.url).toContain(`/channels/${CHAN}/messages`);
+
+      // A thread passes through a parent listed only in DISCORD_CHANNEL_IDS.
+      process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = THREAD;
+      process.env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID = CHAN;
+      const t = await send(["shot.png"]);
+      expect(t.ok).toBe(true);
+      expect(uploads[1]!.url).toContain(`/channels/${THREAD}/messages`);
+
+      // Not allow-all: a channel in no list is still refused.
+      process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = OTHER_CHAN;
+      delete process.env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID;
+      const other = await send(["shot.png"]);
+      expect(other.ok).toBe(false);
+      expect(other.error).toContain("not allowlisted");
+
+      // A deny on the same channel wins over DISCORD_CHANNEL_IDS.
+      process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = CHAN;
+      process.env.CORVIDINHO_DISCORD_DENY_CHANNELS = CHAN;
+      const denied = await send(["shot.png"]);
+      expect(denied.ok).toBe(false);
+      expect(denied.error).toContain("is denied");
+      expect(uploads).toHaveLength(2);
+    } finally {
+      if (savedFile === undefined) delete process.env.CORVIDINHO_ALLOWLIST_FILE;
+      else process.env.CORVIDINHO_ALLOWLIST_FILE = savedFile;
+    }
+  });
+
   test("SAFE-2: protected and secret paths are refused by name and by where a link points; escapes refused", async () => {
     const outside = tempDir("corvidinho-send-file-outside-");
     writeFileSync(join(outside, "leak.txt"), "outside\n");

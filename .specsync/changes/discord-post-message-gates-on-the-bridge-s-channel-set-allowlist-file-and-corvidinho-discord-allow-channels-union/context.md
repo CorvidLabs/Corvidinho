@@ -32,6 +32,11 @@ CORVIDINHO_DISCORD_DRY_RUN=1 bun src/cli.ts plugins run discord-post-message
 allowlist empty` and exited 3; the same with
 `CORVIDINHO_DISCORD_ALLOW_CHANNELS` exited 0.
 
-Out of scope: `discord-send-file` (`plugins/discord/send-file.ts`, DISCORD-17)
-has the same `checkChannel(…, loaded.config)` shape; it is left unchanged here
-(fails closed) and flagged for Leif.
+Same gap, fixed here too (found in review): `discord-send-file`
+(`plugins/discord/send-file.ts`, DISCORD-17, REQ-discord-476) gated the
+conversation channel with `checkChannel(parent || channelId, loaded.config)`,
+so in a deployment whose channels come only from `DISCORD_CHANNEL_IDS` every
+attach was refused with "allowlist empty" although the bridge talks in that
+channel. The other channel gates (bridge ingress and slash, `/schedule` create,
+scheduler ticks from the bridge and the daemon, `doctor`) already use
+`mergeChannelIds`.

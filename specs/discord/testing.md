@@ -45,6 +45,10 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   `DISCORD_CHANNEL_IDS=111`, a dry-run `discord-post-message` to `111` posts
   and one to `222` is refused (not allowlisted);
   `CORVIDINHO_DISCORD_DENY_CHANNELS=111` on top refuses `111` with exit 3.
+- `tests/discord.send-file.test.ts` — REQ-discord-004 / REQ-discord-476: with
+  no allowlist file and the conversation channel only in `DISCORD_CHANNEL_IDS`,
+  `discord-send-file` attaches there and in a thread under it; a channel in no
+  list is refused (not allowlisted) and a deny on the channel refuses.
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 
