@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor",
+  "implementation_commit": "215d9ed354543a7ff35d1ffb1b20e3ec16520e79",
+  "implementation_tree": "705589a8f7706748ee11aeb7161e90f302d61c7e",
+  "contract_digest": "85a76aa8c21797515d37d072d4174f0cb7589fc848da4f12af28053d7ded3692",
+  "workspace_digest": "50f07f9abae993a909d9fd013c7c18d6923901e762536e5699529216f4c8eaee",
+  "closing_digest": "3c2838a751f12f18fefbd3e06f4283678d589e214f6f6ddc34ad5ae3330b50b3",
+  "review_digest": "662e56784ae649f9908c3401e8e816a4d46d52306a2a4cdea9bd853674335acd",
+  "finalization_digest": "ef9d444e3186eaec45b417bf49f4c6131e579c7b505e9d7dcf5fe4ea1bf6007c",
+  "timestamp": 1790713465
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment",
+  "implementation_commit": "215d9ed354543a7ff35d1ffb1b20e3ec16520e79",
+  "implementation_tree": "705589a8f7706748ee11aeb7161e90f302d61c7e",
+  "contract_digest": "86cf37677468760625b0ab477b925bcc86f24bbdf83352a2aa6cacb28498604b",
+  "workspace_digest": "50f07f9abae993a909d9fd013c7c18d6923901e762536e5699529216f4c8eaee",
+  "closing_digest": "ecabd4bbaa9127da1857e7760413b8ee2f5a84f0be024357f72544b426421df8",
+  "review_digest": "a1bddf5c8e90df1650c10fb4f417530a811f35ff23d672b9f9718a21202d7a92",
+  "finalization_digest": "c655e0817cfed7bda0abf237476123cbc5ffde17bdbd689dc4463129b925d258",
+  "timestamp": 1790712493
+}

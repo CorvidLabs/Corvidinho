@@ -7,11 +7,11 @@
   "title": "WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5)",
   "description": "WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "5366fff96501327ad3bcc30f55105f2c16884b0b",
   "created_at": 1790701617,
-  "updated_at": 1790711296,
+  "updated_at": 1790713465,
   "affected_specs": [
     "watch"
   ],

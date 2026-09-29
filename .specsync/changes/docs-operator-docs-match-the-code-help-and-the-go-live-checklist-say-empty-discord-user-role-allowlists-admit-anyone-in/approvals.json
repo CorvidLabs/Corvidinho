@@ -124,6 +124,13 @@
         "cli": "7ce91f65a0dbd2e0010568fabc56bed6e296d5152f560a4e7d310f0ea72bac05",
         "discord": "641e83844f05ebe96b3e5e618d1b5b837ebf33e7e69a12a3a284ec883e7152b8"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790712162,
+      "digest": "d7190cfb33d2344b07618e4fcd3b7e799735e5f9a08512d69f80138bea8a9024",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []

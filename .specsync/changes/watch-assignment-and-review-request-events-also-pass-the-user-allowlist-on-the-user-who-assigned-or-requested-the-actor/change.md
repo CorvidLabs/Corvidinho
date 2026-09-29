@@ -1,6 +1,6 @@
 ---
 id: watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor
-state: implementing
+state: accepted
 type: bug_fix
 base_commit: 5366fff96501327ad3bcc30f55105f2c16884b0b
 ---

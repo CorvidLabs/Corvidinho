@@ -1,6 +1,6 @@
 ---
 id: every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment
-state: implementing
+state: accepted
 type: bug_fix
 base_commit: 0f2e2c2774635d1dcbdff599cba92dbecf8eebd9
 ---
