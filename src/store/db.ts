@@ -254,7 +254,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_forget_requests_one_pending
   WHERE status = 'pending';
 `;
 
-export const SCHEMA_VERSION = 12;
+/**
+ * v13 — retained conversations (SESSION-5/6, SESSION-3.a, AGENT-6.a;
+ * REQ-discord-472 / REQ-watch-472; src/store/conversation.ts): one row per
+ * Discord conversation (a thread, or a channel talk and the sessions resumed
+ * from it) or WATCH issue/PR thread, holding its condensed summary and last
+ * turns for 30 days after its last update. `summary` and `turns` (JSON) are
+ * SAFE-6 scrub targets; `participants` and `bot_message_ids` hold ids only;
+ * `project` is the Discord session's project directory, so a session resumed
+ * from it works there again (SESSION-WORKTREE-4).
+ */
+const SCHEMA_V13_SQL = `
+CREATE TABLE IF NOT EXISTS conversation_threads (
+  id TEXT PRIMARY KEY NOT NULL,
+  surface TEXT NOT NULL,
+  thread_key TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  session_id TEXT,
+  project TEXT,
+  summary TEXT NOT NULL DEFAULT '',
+  turns TEXT NOT NULL DEFAULT '[]',
+  participants TEXT NOT NULL DEFAULT '[]',
+  bot_message_ids TEXT NOT NULL DEFAULT '[]',
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_threads_thread
+  ON conversation_threads(surface, thread_key, user_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_threads_session
+  ON conversation_threads(session_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_threads_updated
+  ON conversation_threads(updated_at);
+`;
+
+export const SCHEMA_VERSION = 13;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -367,6 +399,11 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V12_SQL);
     db.run("UPDATE schema_meta SET value = '12' WHERE key = 'version'");
     version = 12;
+  }
+  if (version < 13) {
+    db.exec(SCHEMA_V13_SQL);
+    db.run("UPDATE schema_meta SET value = '13' WHERE key = 'version'");
+    version = 13;
   }
 }
 

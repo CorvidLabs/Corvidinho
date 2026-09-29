@@ -19,6 +19,7 @@ files:
   - src/watch/memory-inject.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
+  - tests/watch.conversation.test.ts
 
 db_tables: []
 depends_on:
@@ -98,6 +99,10 @@ commenter and the thread's repo, set by the poller; the spawn stamps them as
 `WATCH_MEMORY_INJECT_LIMIT`, `WATCH_MEMORY_ROW_MAX_CHARS` (MEMORY-8/9,
 REQ-watch-067).
 
+`WATCH_THREAD_HEADER` / `WATCH_THREAD_FOOTER` (`src/watch/poller.ts`) frame
+an issue or PR thread's replayed conversation (REQ-watch-472); the retained
+store and condensing are `src/store/conversation.ts` (REQ-discord-472).
+
 ## Invariants
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
@@ -126,7 +131,16 @@ idle past the soft TTL (`resolveSessionTtlMs`, 30–60m, default 45m) is dropped
 and the next event on that issue starts fresh; one session per
 `owner/repo#number`; stored topic is SAFE-6 scrubbed; dry-run without
 `CORVIDINHO_DATA_DIR` stays in-memory; the poller closes a DB it opened on stop
-only after the in-flight cycle ends (REQ-watch-037). Poll cycles are
+only after the in-flight cycle ends (REQ-watch-037). With a DB, each run on
+an issue or PR adds the event and the run's answer to that thread's retained
+conversation (`conversation_threads`, surface `watch`, scrubbed, last 20
+turns plus a condensed summary, participants the lowercased senders), and a
+follow-up on the same issue or PR — also after the session's TTL — gets it
+replayed in a `[Corvidinho earlier conversation on this GitHub issue or PR …]`
+block ahead of the event, condensed at about 80% of the model's window with
+the opening and latest request word for word; it is purged 30 days after its
+last update (every poll cycle purges), a conversation DB failure is logged and
+never stops the run, and another issue never sees it (REQ-watch-472). Poll cycles are
 single-flight; after stop no further event is routed, acked, or spawned; one
 failing event is logged and marked processed without aborting the cycle.
 A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
@@ -162,7 +176,9 @@ summary comment once per event id; spawn start/outcome log + JSONL row; 403
 rate-limit on the fetch, the ack or the summary comment schedules backoff and
 skips tight re-poll; a plain 403 on a comment logs the failure only. Poller restarted on the
 same data dir continues the same issue session; issue idle past TTL →
-start_session with a new id. A non-owner comment whose body claims to be the
+start_session with a new id; a follow-up on the same issue (within 30 days)
+gets the thread's earlier events and answers replayed ahead of the new event
+(REQ-watch-472). A non-owner comment whose body claims to be the
 owner and asks for the API keys → no run; one refusal comment @mentioning the
 owner's GitHub login; an `injection-suspected` audit row (REQ-watch-071).
 
@@ -172,7 +188,9 @@ Missing token; missing mention username; empty repo allowlist; not authorized
 (user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
 (bad or revoked token) stops the loop with exit 1; a non-owner title or body
 that trips the SAFE-13 detector is refused with one comment and no run
-(REQ-watch-071).
+(REQ-watch-071); a thread-conversation read, write or purge failure logs
+`[watch] conversation … failed` and the run goes on without the replay or the
+record (REQ-watch-472).
 
 ## Dependencies
 
@@ -207,3 +225,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |
 | 2026-09-29 | watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor: WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5) |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
+| 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |

@@ -1,49 +1,72 @@
 /**
  * AGENT-6 — a Discord session keeps its thread (DISCORD-2 / DISCORD-2.a;
- * REQ-discord-072).
+ * REQ-discord-072), condensed at about 80% of the model's window
+ * (SESSION-5/6; REQ-discord-472).
  *
  * Every agent run on a session records the human's own words and the answer
- * the bridge posted. A continued run gets those earlier turns replayed, oldest
- * first, in a labelled block ahead of the new message. The block has a fixed
- * character budget: the session's opening request and the newest turns are
- * kept, and middle turns that do not fit are replaced by a count marker. No
- * model summarising; no env, flag or slash surface.
+ * the bridge posted. A continued run gets the session's condensed summary and
+ * its earlier turns replayed, oldest first, in a labelled block ahead of the
+ * new message. When that prompt reaches about 80% of the model's context
+ * window, `SessionStore.threadPrompt` folds the oldest turns into the
+ * summary (`src/store/conversation.ts`): the session's opening request (the
+ * task) and its newest human turn (the latest instruction) stay word for word.
+ * No env, flag or slash surface beyond the optional window size.
  *
- * Turns live only as long as their session: they go when the session ends or
- * idles past the soft TTL (SESSION-2/3; later continuity comes from MEMORY,
- * SESSION-4), and a session belongs to one Discord user (SESSION-MULTI-1).
- * Stored text is scrubbed on write (SAFE-6). `discord_session_turns` is a
- * module-owned table (CREATE TABLE IF NOT EXISTS, no schema version bump).
+ * Live turns go when the session ends or idles past the soft TTL
+ * (SESSION-2/3); its summary and last turns are then kept for 30 days per
+ * thread (AGENT-6.a) so a reply or a message in its thread starts a new session
+ * from them (SESSION-3.a). A session belongs to one Discord user
+ * (SESSION-MULTI-1). Stored text is scrubbed on write (SAFE-6).
+ * `discord_session_turns` is a module-owned table (CREATE TABLE IF NOT EXISTS,
+ * no schema version bump).
  *
  * SAFE-12: a replayed turn is data. Invisible characters are stripped and a
  * line inside a turn that opens like one of Corvidinho's own blocks (this
  * block's footer, `[Corvidinho …`) or like a turn label (`Human:`,
  * `You (Corvidinho):`) is marked `(quoted)`, so an earlier message cannot
  * close the block early, pass for new instructions or pass for a turn of
- * Corvidinho's own.
+ * Corvidinho's own (`formatConversationBlock`, which also keeps an
+ * untrusted-data fence closed in a condensed summary point).
  */
 
 import type { Database } from "bun:sqlite";
-import { defangContextMarkers, stripInvisible } from "../agent/untrusted.ts";
+import {
+  AGENT_TURN_MAX_CHARS,
+  clipTurnText,
+  CONVERSATION_PROMPT_MAX_CHARS,
+  type ConversationRole,
+  type ConversationTurn,
+  formatConversationBlock,
+  formatOmittedTurns,
+  HUMAN_TURN_MAX_CHARS,
+  withConversationBlock,
+} from "../store/conversation.ts";
 
-export type SessionTurnRole = "human" | "agent";
+export { clipTurnText };
 
-export type SessionTurn = {
-  role: SessionTurnRole;
-  /** Scrubbed text, at most {@link SESSION_THREAD_TURN_MAX_CHARS}. */
-  content: string;
-  createdAt: number;
-};
+export type SessionTurnRole = ConversationRole;
 
-/** Whole replay block (header and footer included) never exceeds this. */
-export const SESSION_THREAD_BUDGET_CHARS = 6000;
+export type SessionTurn = ConversationTurn;
 
-/** One turn is clipped to this before it is stored or replayed. */
-export const SESSION_THREAD_TURN_MAX_CHARS = 1500;
+/**
+ * Ceiling on the whole replay block (header and footer included): the
+ * transport cap on the conversation part of the prompt. Condensation keeps the
+ * block well inside it; past it, middle turns become one count marker.
+ */
+export const SESSION_THREAD_BUDGET_CHARS = CONVERSATION_PROMPT_MAX_CHARS;
+
+/** An agent turn is clipped to this before it is stored or replayed. */
+export const SESSION_THREAD_TURN_MAX_CHARS = AGENT_TURN_MAX_CHARS;
+
+/**
+ * A human turn is clipped to this (a whole Discord message or slash option),
+ * so the task and the latest instruction replay word for word (SESSION-5).
+ */
+export const SESSION_THREAD_HUMAN_TURN_MAX_CHARS = HUMAN_TURN_MAX_CHARS;
 
 /**
  * Turns kept per session. Past it the oldest turn after the opening request
- * is dropped (the budget could never show it next to the newest turns).
+ * is folded into the session's summary.
  */
 export const SESSION_THREAD_MAX_TURNS = 200;
 
@@ -59,96 +82,48 @@ export const SESSION_THREAD_HEADER =
 
 export const SESSION_THREAD_FOOTER = "[End of earlier conversation]";
 
-const ROLE_LABEL: Record<SessionTurnRole, string> = {
-  human: "Human",
-  agent: "You (Corvidinho)",
-};
-
 /** Marker for middle turns left out of the replay block. */
 export function formatSessionThreadOmitted(count: number): string {
-  return `(${count} earlier turn${count === 1 ? "" : "s"} omitted)`;
+  return formatOmittedTurns(count);
 }
 
 /**
- * Clip one turn's text to `max` characters (ellipsis when cut), never ending
- * on half a surrogate pair.
- */
-export function clipTurnText(text: string, max = SESSION_THREAD_TURN_MAX_CHARS): string {
-  const t = text.trim();
-  if (t.length <= max) return t;
-  let end = Math.max(0, max - 1);
-  const last = t.charCodeAt(end - 1);
-  if (end > 0 && last >= 0xd800 && last <= 0xdbff) end -= 1;
-  return `${t.slice(0, end)}…`;
-}
-
-/** Blank lines inside a turn, collapsed so the block stays one paragraph. */
-const BLANK_LINES_RE = /\r?\n(?:[ \t]*\r?\n)+/g;
-
-/** A line inside a turn that opens like a turn label (`Human:`, `You (Corvidinho):`). */
-const TURN_LABEL_LINE_RE = /^([ \t]{0,16})((?:human|you[ \t]{0,3}\([ \t]{0,3}corvidinho[ \t]{0,3}\))[ \t]{0,3}:)/gimu;
-
-function turnLine(turn: Pick<SessionTurn, "role" | "content">): string {
-  const text = defangContextMarkers(stripInvisible(clipTurnText(turn.content)))
-    .replace(TURN_LABEL_LINE_RE, "$1(quoted) $2")
-    .replace(BLANK_LINES_RE, "\n");
-  return `${ROLE_LABEL[turn.role]}: ${text}`;
-}
-
-/**
- * The replay block for `turns` (oldest first), or "" when there are none.
- * Pure. One paragraph (no blank line), opened by {@link SESSION_THREAD_HEADER}.
- * The opening turn (the session's opening request) is always kept, then
- * as many of the newest turns as fit in `budgetChars`; anything between is one
- * omitted-count marker. With the default budget and per-turn clip the block
- * always fits and always holds the newest turn.
+ * The replay block for `turns` (oldest first) and the session's condensed
+ * `summary`, or "" when there are neither. Pure. One paragraph (no blank
+ * line), opened by {@link SESSION_THREAD_HEADER}; the summary (when any) comes
+ * first. Past `budgetChars` (default {@link SESSION_THREAD_BUDGET_CHARS}) the
+ * opening turn and as many of the newest turns as fit are kept and anything
+ * between is one omitted-count marker.
  */
 export function formatSessionThread(
   turns: ReadonlyArray<Pick<SessionTurn, "role" | "content">>,
-  opts: { budgetChars?: number } = {},
+  opts: { budgetChars?: number; summary?: string } = {},
 ): string {
-  const lines = turns.filter((t) => t.content.trim()).map(turnLine);
-  if (lines.length === 0) return "";
-  const budget = opts.budgetChars ?? SESSION_THREAD_BUDGET_CHARS;
-  const wrap = (body: string[]) =>
-    [SESSION_THREAD_HEADER, ...body, SESSION_THREAD_FOOTER].join("\n");
-
-  const whole = wrap(lines);
-  if (whole.length <= budget) return whole;
-
-  const [opening, ...rest] = lines as [string, ...string[]];
-  // Room for the header, footer, opening turn and the widest marker, each on
-  // its own line.
-  let room =
-    budget -
-    SESSION_THREAD_HEADER.length -
-    SESSION_THREAD_FOOTER.length -
-    opening.length -
-    formatSessionThreadOmitted(rest.length).length -
-    3;
-  const newest: string[] = [];
-  for (let i = rest.length - 1; i >= 0; i -= 1) {
-    const line = rest[i]!;
-    if (line.length + 1 > room) break;
-    newest.unshift(line);
-    room -= line.length + 1;
-  }
-  const omitted = rest.length - newest.length;
-  return wrap([
-    opening,
-    ...(omitted > 0 ? [formatSessionThreadOmitted(omitted)] : []),
-    ...newest,
-  ]);
+  return formatConversationBlock(
+    { summary: opts.summary, turns },
+    {
+      header: SESSION_THREAD_HEADER,
+      footer: SESSION_THREAD_FOOTER,
+      budgetChars: opts.budgetChars ?? SESSION_THREAD_BUDGET_CHARS,
+    },
+  );
 }
 
-/** `prompt` with the session's earlier turns ahead of it (unchanged when none). */
+/** `prompt` with the session's summary and earlier turns ahead of it (unchanged when none). */
 export function withSessionThread(
   prompt: string,
   turns: ReadonlyArray<Pick<SessionTurn, "role" | "content">>,
-  opts: { budgetChars?: number } = {},
+  opts: { budgetChars?: number; summary?: string } = {},
 ): string {
-  const block = formatSessionThread(turns, opts);
-  return block ? `${block}\n\n${prompt}` : prompt;
+  return withConversationBlock(
+    prompt,
+    { summary: opts.summary, turns },
+    {
+      header: SESSION_THREAD_HEADER,
+      footer: SESSION_THREAD_FOOTER,
+      budgetChars: opts.budgetChars ?? SESSION_THREAD_BUDGET_CHARS,
+    },
+  );
 }
 
 const SESSION_TURNS_SQL = `

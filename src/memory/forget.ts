@@ -8,13 +8,16 @@
  * Approve before the ask expires: no answer, a late answer or Deny is no.
  * On approve every memory row of that person is deleted for good (their
  * profile, notes and private notes, including soft-deleted history) with the
- * turns of their open Discord sessions. MEMORY-ACL-4's owner-only
- * `memory-forget` by id stays as it was.
+ * turns of their open Discord sessions and their kept conversations (the
+ * 30-day condensed summaries and last turns in `conversation_threads`,
+ * AGENT-6.a / REQ-discord-472). MEMORY-ACL-4's owner-only `memory-forget` by
+ * id stays as it was.
  */
 
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import type { PeopleDirectory } from "../identity/people.ts";
+import { forgetConversations } from "../store/conversation.ts";
 import { linkedDiscordIds, personScopeId, type MemorySubject } from "./scope.ts";
 import { MemoryStore } from "./store.ts";
 
@@ -224,25 +227,37 @@ export class ForgetRequestStore {
 }
 
 /**
+ * GitHub logins that resolve to `personId` now (a login declared for two
+ * people matches nobody, IDENTITY-7).
+ */
+function linkedGithubLogins(dir: PeopleDirectory, personId: string): string[] {
+  const person = dir.people.find((p) => p.id === personId);
+  return (person?.githubLogins ?? []).filter((login) => dir.byGithubLogin.get(login) === personId);
+}
+
+/**
  * What an approved ask deletes: the recorded person's scope and their
  * Discord ids (as linked now, plus the id that asked), or the undeclared
  * asker's Discord id. A person the owner re-linked since is not widened to
- * whoever their id points at now.
+ * whoever their id points at now. `githubLogins` (a declared person's, as
+ * linked now) reach their kept WATCH conversations (AGENT-6.a).
  */
 export function forgetTargets(
   req: Pick<ForgetRequest, "subjectKind" | "subjectId" | "requesterUserId">,
   dir: PeopleDirectory | null | undefined,
-): { scopes: string[]; discordIds: string[] } {
+): { scopes: string[]; discordIds: string[]; githubLogins: string[] } {
   const discordIds = new Set<string>([req.requesterUserId]);
   const scopes = new Set<string>();
+  const githubLogins: string[] = [];
   if (req.subjectKind === "person") {
     scopes.add(personScopeId(req.subjectId));
     for (const id of dir ? linkedDiscordIds(dir, req.subjectId) : []) discordIds.add(id);
+    if (dir) githubLogins.push(...linkedGithubLogins(dir, req.subjectId));
   } else {
     discordIds.add(req.subjectId);
   }
   for (const id of discordIds) scopes.add(id);
-  return { scopes: [...scopes], discordIds: [...discordIds] };
+  return { scopes: [...scopes], discordIds: [...discordIds], githubLogins };
 }
 
 function tableExists(db: Database, table: string): boolean {
@@ -252,16 +267,23 @@ function tableExists(db: Database, table: string): boolean {
 }
 
 /**
- * Delete, for good, every memory row of `scopes` and the stored turns of the
- * Discord sessions of `discordIds` (their conversations, MEMORY-1), in one
- * transaction. Returns what was deleted.
+ * Delete, for good, every memory row of `scopes`, the stored turns of the
+ * Discord sessions of `discordIds` (their conversations, MEMORY-1) and their
+ * kept conversations (`conversation_threads`: Discord ids, GitHub logins, or
+ * holding their words; AGENT-6.a), in one transaction. Returns what was
+ * deleted.
  */
 export function forgetMemoryTargets(
   db: Database,
-  targets: { scopes: readonly string[]; discordIds: readonly string[] },
-): { memories: number; turns: number } {
+  targets: {
+    scopes: readonly string[];
+    discordIds: readonly string[];
+    githubLogins?: readonly string[];
+  },
+): { memories: number; turns: number; conversations: number } {
   let memories = 0;
   let turns = 0;
+  let conversations = 0;
   db.transaction(() => {
     memories = new MemoryStore({ db }).purgeScopes(targets.scopes);
     const ids = [...new Set(targets.discordIds.map((s) => s.trim()).filter(Boolean))];
@@ -273,6 +295,12 @@ export function forgetMemoryTargets(
       );
       turns = Number(res.changes);
     }
+    if (tableExists(db, "conversation_threads")) {
+      conversations = forgetConversations(db, {
+        discordUserIds: ids,
+        githubLogins: targets.githubLogins ?? [],
+      });
+    }
   }).immediate();
-  return { memories, turns };
+  return { memories, turns, conversations };
 }

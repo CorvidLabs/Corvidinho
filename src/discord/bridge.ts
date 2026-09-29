@@ -23,7 +23,10 @@
  * takes the same gates and resumes like a reply (a reply still works);
  * SESSION-MULTI: per-user sessions.
  * AGENT-6: each run is recorded with its session and a continued run gets the
- * earlier turns replayed ahead of the new message (session-thread.ts).
+ * earlier turns replayed ahead of the new message (session-thread.ts),
+ * condensed at about 80% of the model's window (SESSION-5/6); an expired
+ * session's conversation is kept 30 days so a reply resumes it (SESSION-3.a,
+ * AGENT-6.a; src/store/conversation.ts).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -111,7 +114,7 @@ import {
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
 import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
 import { SessionStore } from "./session-store.ts";
-import { answerTurnText, withSessionThread } from "./session-thread.ts";
+import { answerTurnText } from "./session-thread.ts";
 import { handleSlashInteraction } from "./slash-dispatch.ts";
 import type { SlashContext } from "./slash-types.ts";
 import {
@@ -131,7 +134,11 @@ import {
   type InflightReply,
 } from "./inflight-replies.ts";
 import { type BackupTicker, consoleBackupLog, createBackupTicker } from "../store/backup.ts";
-import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
+import {
+  openCorvidinhoDb,
+  resolveContextWindowTokens,
+  resolveSessionTtlMs,
+} from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
 import {
   appendAudit,
@@ -375,6 +382,8 @@ export async function startBridge(
       ttlMs,
       defaultProjectRoot: config.projectRoot,
       allowlist: config.allowlist,
+      // SESSION-5: condense at about 80% of the model's window.
+      contextWindowTokens: resolveContextWindowTokens(env),
     });
   const workStore = opts.workStore ?? new WorkStore({ db });
   if (!opts.workStore && db) {
@@ -752,10 +761,14 @@ export async function startBridge(
       }
       // AGENT-6 (REQ-discord-072): the session's earlier turns, oldest first,
       // go ahead of the new message and any pending-ask block, so a continued
-      // run keeps the thread. A new session has none. The human's own words
-      // (before enrichment) join the thread now, so a run that throws or a
-      // bridge that dies mid-run still keeps the request.
-      agentPrompt = withSessionThread(agentPrompt, store.threadFor(session));
+      // run keeps the thread. A new session has none (one resumed after the
+      // TTL begins from its retained conversation, SESSION-3.a). At about 80%
+      // of the model's window the oldest turns are condensed into the
+      // session's summary, the task and latest instruction kept word for word
+      // (SESSION-5/6). The human's own words (before enrichment) join the
+      // thread now, so a run that throws or a bridge that dies mid-run still
+      // keeps the request.
+      agentPrompt = store.threadPrompt(session, agentPrompt);
       store.recordTurn(session, "human", prompt);
 
       const outbound = resolveOutbound();
@@ -1322,10 +1335,11 @@ export async function startBridge(
       const channelId = session.threadId ?? session.channelId;
       // AGENT-6 (REQ-discord-072): the earlier turns (the original request
       // included) go ahead of the answered question, as on a chat reply; the
-      // answer joins the thread as the run starts.
-      const agentPrompt = withSessionThread(
+      // answer (a pick or an Answer form submit) joins the thread as the run
+      // starts. SESSION-5/6: condensed at about 80% of the window, as in chat.
+      const agentPrompt = store.threadPrompt(
+        session,
         `${priorBlock}\n\nHuman answer:\n${answer}`,
-        store.threadFor(session),
       );
       store.recordTurn(session, "human", answer);
 
@@ -1795,6 +1809,13 @@ export async function startBridge(
     );
   }
   scheduler?.start();
+  // AGENT-6.a: retained conversations go 30 days after their last update,
+  // also while the bridge sits idle (reads and writes purge too).
+  const conversationPurge = setInterval(
+    () => store.purgeExpiredConversations(),
+    CONVERSATION_PURGE_INTERVAL_MS,
+  );
+  conversationPurge.unref?.();
   console.log(
     "[discord] HEAR bridge ready (session stub + thinking status + slash + schedule ticker + announce + rate/mute; no ProcessManager).",
   );
@@ -1813,6 +1834,7 @@ export async function startBridge(
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
+      clearInterval(conversationPurge);
       scheduler?.stop();
       // OPS-1: no further backup notice is taken; one in flight is waited
       // for below, and handed back if it outlasts the grace (never lost).
@@ -1840,5 +1862,8 @@ export async function startBridge(
     },
   };
 }
+
+/** How often a running bridge purges retained conversations past 30 days (AGENT-6.a). */
+export const CONVERSATION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
 
 export { goLiveChecklist, loadBridgeConfig, memoryThinkingOutbound };

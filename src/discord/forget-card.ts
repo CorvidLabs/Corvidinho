@@ -16,8 +16,8 @@
  * is a no. Approve writes a SAFE-5 `started` row first (no row ⇒ nothing is
  * deleted, fail closed), then — in one transaction that also closes the ask —
  * deletes every memory row of that person (profile, notes, private notes,
- * soft-deleted history) and the stored turns of their Discord sessions, and
- * confirms to both. Deny closes it as a no. Every step is audited (ids and
+ * soft-deleted history), the stored turns of their Discord sessions and their
+ * kept conversations (30-day summaries, AGENT-6.a), and confirms to both. Deny closes it as a no. Every step is audited (ids and
  * digests only). The people list entry is never touched (only the owner
  * edits it, IDENTITY-6).
  */
@@ -110,7 +110,7 @@ export function forgetCardText(req: ForgetRequest, dir: PeopleDirectory | null, 
     title: FORGET_CARD_TITLE,
     lines: [
       `Who: ${who(req, dir)} — asked by <@${req.requesterUserId}>${where}`,
-      `Approve deletes, for good, their memory: their profile (projects, preferences, history), notes and private notes${stored === null ? "" : ` (${stored} stored)`}, and the turns of their open Discord sessions`,
+      `Approve deletes, for good, their memory: their profile (projects, preferences, history), notes and private notes${stored === null ? "" : ` (${stored} stored)`}, the turns of their open Discord sessions, and their kept conversations (30-day summaries)`,
       "Kept: their entry on your people list (only you edit it), project memory, what others stored in their own memory, their schedules and /work records, and the audit trail",
       `Request: ${req.id}`,
     ],
@@ -121,7 +121,7 @@ export function forgetCardText(req: ForgetRequest, dir: PeopleDirectory | null, 
 /** The asker's outcome notice. */
 export function forgetOutcomeText(req: ForgetRequest): string {
   if (req.status === "approved") {
-    return `Your forget request (${req.id}) was approved: I deleted your memory (${req.forgottenCount ?? 0} stored memories) and the turns of your open conversations with me.`;
+    return `Your forget request (${req.id}) was approved: I deleted your memory (${req.forgottenCount ?? 0} stored memories) and the turns of your open conversations with me and of the ones I kept.`;
   }
   if (req.status === "denied") {
     return `The owner did not approve your forget request (${req.id}), so nothing was forgotten.`;
@@ -320,7 +320,7 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
         });
         return;
       }
-      let deleted: { memories: number; turns: number } | null = null;
+      let deleted: { memories: number; turns: number; conversations: number } | null = null;
       let forgotIds: readonly string[] = [];
       try {
         const targets = forgetTargets(req, deps.people());
@@ -345,7 +345,7 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
         await update(formatDecidedCard(cardNow(), "Already closed."));
         return;
       }
-      const done: { memories: number; turns: number } = deleted;
+      const done: { memories: number; turns: number; conversations: number } = deleted;
       auditBestEffort("memory-forget-approve", actor, req, "ok");
       // What the running bridge still holds of their conversations goes too.
       try {
@@ -353,7 +353,9 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
       } catch (err) {
         console.error(`[discord] forget card: could not drop live session turns: ${err instanceof Error ? err.message : err}`);
       }
-      await settle(`Approved by you — forgot ${done.memories} memories and ${done.turns} conversation turns.`);
+      // AGENT-6.a: kept conversations (30-day summaries) are counted when any went.
+      const kept = done.conversations > 0 ? ` and ${done.conversations} kept conversations` : "";
+      await settle(`Approved by you — forgot ${done.memories} memories and ${done.turns} conversation turns${kept}.`);
     },
   };
 }

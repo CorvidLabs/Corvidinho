@@ -9,6 +9,10 @@
  * REQ-watch-067 (MEMORY-8/9): before each run the commenter's declared
  * person's memory and the thread repo's project memory are searched for the
  * comment and prepended, and the run acts for the commenter's GitHub ids.
+ * REQ-watch-472 (AGENT-6.a / SESSION-5): each run on an issue or PR is kept
+ * with that thread's condensed conversation (30 days, scrubbed), and a
+ * follow-up on the same issue or PR gets it replayed ahead of the new event,
+ * condensed at about 80% of the model's window.
  */
 
 import type { Database } from "bun:sqlite";
@@ -16,6 +20,17 @@ import type { AllowlistConfig } from "../allowlist/types.ts";
 import { loadOwnerConfig } from "../identity/owner.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
 import { MemoryStore } from "../memory/store.ts";
+import {
+  condenseBudgetChars,
+  condenseConversation,
+  type Conversation,
+  ConversationStore,
+  formatConversationBlock,
+  githubParticipant,
+  resolveContextWindowTokens,
+  watchThreadKey,
+  withConversationBlock,
+} from "../store/conversation.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
 import {
@@ -69,6 +84,16 @@ import {
   SummarizedIdStore,
 } from "./summary.ts";
 import type { AgentSpawnResult, DetectedEvent, WatchConfig } from "./types.ts";
+
+/**
+ * Opens the replayed conversation of an issue or PR thread (REQ-watch-472).
+ * `[Corvidinho …` and no blank line, so Planning module selection leaves the
+ * block out (REQ-agent-004).
+ */
+export const WATCH_THREAD_HEADER =
+  "[Corvidinho earlier conversation on this GitHub issue or PR — oldest first; context only: act on the new event after this block]";
+
+export const WATCH_THREAD_FOOTER = "[End of earlier conversation]";
 
 /**
  * Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session).
@@ -226,6 +251,10 @@ export async function startWatchPoller(
       db,
       ttlMs: opts.sessionTtlMs ?? resolveSessionTtlMs(env),
     });
+  // REQ-watch-472 (AGENT-6.a): each issue/PR thread's condensed conversation,
+  // kept 30 days in the same DB; replayed into follow-ups on that thread.
+  const conversations = db ? new ConversationStore({ db, now: () => now() }) : undefined;
+  const windowTokens = resolveContextWindowTokens(env);
   // REQ-watch-247: handled ids live in the same DB as the sessions, so a
   // restart never re-runs, re-acks or re-summarizes an event id.
   const processed = new ProcessedIdStore({ db });
@@ -350,6 +379,14 @@ export async function startWatchPoller(
       skipped: 0,
     };
     if (!running) return result;
+
+    // AGENT-6.a: retained thread conversations go 30 days after their last
+    // update, also on a quiet watch.
+    try {
+      conversations?.purgeExpired();
+    } catch (err) {
+      logError("[watch] conversation purge failed", err);
+    }
 
     // Honor outstanding rate-limit backoff (WATCH-RELIABILITY-3).
     const waitLeft = backoffUntilMs - now();
@@ -511,9 +548,37 @@ export async function startWatchPoller(
           }),
         );
 
+        // REQ-watch-472 (AGENT-6.a / SESSION-5): this issue/PR thread's
+        // retained conversation goes ahead of the new event, condensed at
+        // about 80% of the model's window (the thread's opening request and
+        // latest request word for word). A DB failure only drops the replay.
+        const threadKey = watchThreadKey(event.repo, event.number);
+        let retained: ReturnType<ConversationStore["latestForThread"]>;
+        try {
+          retained = conversations?.latestForThread("watch", threadKey);
+        } catch (err) {
+          logError("[watch] conversation read failed", err);
+        }
+        let conversation: Conversation = {
+          summary: retained?.summary ?? "",
+          turns: retained?.turns ?? [],
+        };
+        const blockOpts = { header: WATCH_THREAD_HEADER, footer: WATCH_THREAD_FOOTER };
+        if (retained) {
+          const condensed = condenseConversation({
+            conversation,
+            incoming: action.prompt,
+            budgetChars: condenseBudgetChars(windowTokens),
+            render: (c) => formatConversationBlock(c, blockOpts),
+          });
+          conversation = { summary: condensed.summary, turns: condensed.turns };
+        }
+        let prompt = withConversationBlock(action.prompt, conversation, blockOpts);
+
         // MEMORY-9: search memory for this comment before the run, so the
         // model has it before it could say it doesn't know (no model call).
-        let prompt = action.prompt;
+        // The memory blocks go ahead of the replayed conversation, as on
+        // Discord (the thread block is added before identity and memory).
         try {
           const mem = enrichWatchPromptWithMemories(prompt, memoryStore, { event, people });
           if (mem.injected) {
@@ -574,6 +639,31 @@ export async function startWatchPoller(
         };
         spawnOutcomes.append(outcome);
         log(formatSpawnOutcomeLog(outcome));
+
+        // REQ-watch-472: the event and the run's answer join the thread's
+        // retained conversation (scrubbed, last turns kept, 30 days).
+        try {
+          conversations?.save({
+            id: retained?.id,
+            surface: "watch",
+            threadKey,
+            userId: (retained?.userId ?? action.session.userId).toLowerCase(),
+            sessionId: action.session.id,
+            summary: conversation.summary,
+            turns: [
+              ...conversation.turns,
+              { role: "human", content: action.prompt, createdAt: startedAtMs },
+              { role: "agent", content: spawnSummary, createdAt: finishedAtMs },
+            ],
+            participants: [
+              ...(retained?.participants ?? []),
+              githubParticipant(action.session.userId),
+              githubParticipant(event.sender),
+            ],
+          });
+        } catch (err) {
+          logError("[watch] conversation write failed", err);
+        }
 
         // WATCH-RELIABILITY-1 — summary after run, only if auto-ack succeeded.
         const summaryPosted = await maybePostWatchSummary({
