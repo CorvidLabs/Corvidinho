@@ -87,9 +87,13 @@ team: `github-issue-comment` / `github-pr-review` run (dry-run) on an
 allowlisted repo, a non-allowlisted one gets GITHUB-6, every other mutating
 tool the role refusal, `files-write` only with the `/work` flag (SAFE-2 still
 refuses `.env`), a demotion refuses the next call, memory store/recall stay in
-the actor's scope and forget/override are refused; `checkRepoGateForActingRole`
-by role (team reads allowlisted or public, writes allowlisted only; community
-writes refused; deny wins). Fixture files, dry-run GitHub, no network.
+the actor's scope and forget/override are refused; team `github-pr-review`
+runs as `COMMENT` and `APPROVE` / `REQUEST_CHANGES` get the role refusal (the
+owner runs all three); a team `/work` `files-write` / `files-edit` refuses
+secret-looking paths without revealing a match (the owner edits them);
+`checkRepoGateForActingRole` by role (team reads allowlisted or public, writes
+allowlisted only; community writes refused; deny wins). Fixture files,
+dry-run GitHub, no network.
 
 ## Community site / roadmap readers (REQ-plugins-066, ROLES-CHAT-8.a)
 
@@ -101,7 +105,9 @@ community role session: README, `STATUS.md` and a `docs/` file are read
 (secrets scrubbed, untrusted note), a `docs/` directory lists its entries, a
 doc over 64 KiB is truncated, a binary doc is refused, any other path is
 refused with exit 2 before GitHub is called (CLI too), a private / unconfirmed
-/ denied repo is refused before any read; milestones map state, due date,
+/ denied repo is refused before any read, a secret-looking doc path is
+refused and left out of a `docs/` listing for a community session (the owner
+reads and lists it); milestones map state, due date,
 issue counts, a 500-char description, and `--state` / `--limit` reach the
 API; bad flags are refused. The community catalog offers the readers and never
 `web-fetch`. No network, no token.

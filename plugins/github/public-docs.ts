@@ -11,8 +11,10 @@
  * - `github-docs-read` reads one doc of a repo's default branch — the README
  *   (default), a root `STATUS*` / `CHANGELOG*` file, or anything under
  *   `docs/` (a directory lists its entries). Any other path is refused, for
- *   every role: it is a docs reader, not a file reader. Text is scrubbed
- *   (SAFE-6), capped, and labelled as data.
+ *   every role: it is a docs reader, not a file reader. Non-owner role
+ *   sessions also refuse (and never list) secret-looking paths, as the file
+ *   tools do (ROLES-CHAT-8). Text is scrubbed (SAFE-6), capped, and labelled
+ *   as data.
  * - `github-milestone-list` lists a repo's milestones (issues are
  *   `github-issue-list`).
  *
@@ -25,6 +27,7 @@ import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole, type VisibilityLookup } from "../../src/plugins/githubPublic.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
+import { isSecretPath, secretPathsRefused, secretRefuseMessage } from "../files/protectedPaths.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { capUtf8 } from "./review.ts";
 
@@ -171,6 +174,12 @@ function makeDocsReadCommand(deps: PublicDocsDeps): PluginCommand {
       const readme = asked === undefined || /^readme$/i.test(asked.trim());
       const path = readme ? undefined : publicDocPath(asked);
       if (!readme && !path) return { ok: false, error: `${DOCS_PATH_REFUSAL}; ${DOCS_USAGE}`, exitCode: 2 };
+      // ROLES-CHAT-8: non-owner role sessions refuse secret paths (`.env*`,
+      // keys, keystores) here too, and never see them listed.
+      const hideSecrets = await secretPathsRefused();
+      if (hideSecrets && path && isSecretPath(path)) {
+        return { ok: false, error: secretRefuseMessage(path), exitCode: 2 };
+      }
 
       const octokit = clientFrom(deps);
       if (!(octokit instanceof Octokit)) return octokit;
@@ -188,6 +197,7 @@ function makeDocsReadCommand(deps: PublicDocsDeps): PluginCommand {
         // A docs/ directory: list what is under it (never outside docs/).
         const entries = (data as ContentEntry[])
           .filter((e) => typeof e.path === "string" && publicDocPath(e.path) !== undefined)
+          .filter((e) => !(hideSecrets && isSecretPath(e.path!)))
           .slice(0, DOCS_MAX_ENTRIES)
           .map((e) => ({ name: scrubSecrets(e.name ?? ""), path: scrubSecrets(e.path ?? ""), type: e.type ?? "file" }));
         const out = { repo: t.repo, path, untrusted: true, note: DOCS_UNTRUSTED_NOTE, entries };
@@ -203,6 +213,9 @@ function makeDocsReadCommand(deps: PublicDocsDeps): PluginCommand {
       const docPath = entry.path ?? path ?? "README";
       if (!readme && publicDocPath(docPath) === undefined) {
         return { ok: false, error: DOCS_PATH_REFUSAL, exitCode: 2 };
+      }
+      if (hideSecrets && isSecretPath(docPath)) {
+        return { ok: false, error: secretRefuseMessage(docPath), exitCode: 2 };
       }
       if (entry.type !== undefined && entry.type !== "file") {
         return { ok: false, error: `not a text doc: ${docPath} is a ${entry.type}`, exitCode: 1 };

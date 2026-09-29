@@ -430,6 +430,68 @@ describe("IDENTITY-10/11: runPlugin by role", () => {
     expect(existsSync(join(dir, "c.txt"))).toBe(false);
   });
 
+  test("team reviews post as COMMENT: APPROVE and REQUEST_CHANGES stay the owner's (IDENTITY-10)", async () => {
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    const allowlist = ["github-pr-review"];
+    const review = (event: string) =>
+      runPlugin({
+        name: "github-pr-review",
+        args: ["12", "--repo", REPO, "--body", "Reviewed", "--event", event],
+        nonInteractive: true,
+        allowlist,
+        cwd: dir,
+      });
+    session(TOFU, { role: "team" });
+    expect((await review("COMMENT")).ok).toBe(true);
+    for (const event of ["APPROVE", "approve", "REQUEST_CHANGES"]) {
+      const r = await review(event);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error ?? "").toContain(ROLE_REFUSED_MESSAGE);
+      expect(r.error ?? "").toContain("IDENTITY-10");
+    }
+    session(OWNER_ID, { admin: true, role: "owner" });
+    for (const event of ["APPROVE", "REQUEST_CHANGES", "COMMENT"]) {
+      const r = await review(event);
+      expect(r.ok).toBe(true);
+      expect((r.data as { event?: string }).event).toBe(event);
+    }
+  });
+
+  test("a team /work run never writes or edits a secret-looking path; the owner still can (ROLES-CHAT-8)", async () => {
+    writeFileSync(join(dir, "credentials.json"), '{"token":"abc123"}');
+    session(TOFU, { role: "team", work: true });
+    for (const p of ["credentials.json", "id_rsa", "deploy.pem", ".ssh/config"]) {
+      const w = await runPlugin({ name: "files-write", args: [p, "x"], nonInteractive: true, allowlist: [], cwd: dir });
+      expect(w.ok).toBe(false);
+      expect(w.exitCode).toBe(2);
+      expect(w.error ?? "").toContain("ROLES-CHAT-8");
+    }
+    // files-edit is not a read oracle for a secret file.
+    const probe = await runPlugin({
+      name: "files-edit",
+      args: ["credentials.json", "--old", "abc", "--new", "abc"],
+      nonInteractive: true,
+      allowlist: [],
+      cwd: dir,
+    });
+    expect(probe.ok).toBe(false);
+    expect(probe.error ?? "").toContain("ROLES-CHAT-8");
+    expect(probe.error ?? "").not.toContain("no match");
+    expect(readFileSync(join(dir, "credentials.json"), "utf8")).toBe('{"token":"abc123"}');
+    expect(existsSync(join(dir, "id_rsa"))).toBe(false);
+    session(OWNER_ID, { admin: true, role: "owner", work: true });
+    const own = await runPlugin({
+      name: "files-edit",
+      args: ["credentials.json", "--old", "abc123", "--new", "rotated"],
+      nonInteractive: true,
+      allowlist: [],
+      cwd: dir,
+    });
+    expect(own.ok).toBe(true);
+    expect(readFileSync(join(dir, "credentials.json"), "utf8")).toBe('{"token":"rotated"}');
+  });
+
   test("a demotion in the file refuses the team member's next call (IDENTITY-12)", async () => {
     process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
     session(TOFU, { role: "team" });

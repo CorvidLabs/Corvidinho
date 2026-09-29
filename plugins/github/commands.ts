@@ -3,6 +3,7 @@ import { attribution } from "../../src/attribution.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
+import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "../../src/plugins/roles.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
 
@@ -509,6 +510,19 @@ export const githubCommands: PluginCommand[] = [
           error: `--event must be COMMENT, APPROVE, or REQUEST_CHANGES (got ${eventFlag})`,
           exitCode: 1,
         };
+      }
+      // IDENTITY-10 (#65): a team member's review is feedback, posted as
+      // COMMENT; APPROVE and REQUEST_CHANGES count toward (or block) a merge,
+      // so they stay the owner's. The role is re-resolved at this call.
+      if (event !== "COMMENT") {
+        const role = await resolveActingRole();
+        if (role !== null && role !== "owner") {
+          return {
+            ok: false,
+            error: `Denied: github-pr-review --event ${event} is ${ROLE_REFUSED_MESSAGE} (IDENTITY-10: team reviews post as COMMENT).`,
+            exitCode: 2,
+          };
+        }
       }
       if (githubDryRun()) {
         return okResult(ctx, {

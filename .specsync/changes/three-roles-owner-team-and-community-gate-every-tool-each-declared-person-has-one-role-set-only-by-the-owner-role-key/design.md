@@ -60,7 +60,9 @@ criterion.
    a `/work` run (work tasks); team gets no shell / runners (SAFE-3.a says
    non-owners never), no git or other GitHub writes, no `discord-post-message`
    / `discord-send-file`, no `web-fetch`, no `delegate` / `council`. The `/work`
-   PR itself is opened by the handler for team as for the owner.
+   PR itself is opened by the handler for team as for the owner. A team
+   `github-pr-review` posts as `COMMENT` only: `APPROVE` counts toward a merge
+   and `REQUEST_CHANGES` can block one, so both stay the owner's.
 2. Team GitHub writes only on GITHUB-6-allowlisted repos; team reads on
    allowlisted or confirmed-public repos (never less than community).
 3. WATCH (GitHub), schedules and `delegate` / `council` workers stay community
@@ -83,7 +85,11 @@ criterion.
    changed only through `[owner]` / env on the VM (IDENTITY-1), and the
    owner's own person cannot be given another role there.
 9. Team sessions keep community's secret-path refusals (`.env*`, keys) for
-   reads; SAFE-2 still refuses protected paths for their `/work` writes.
+   reads, and their `/work` `files-write` / `files-edit` refuse the same
+   secret-looking paths (an edit would otherwise tell whether a string is in
+   a secret file); SAFE-2 still refuses protected paths. `github-docs-read`
+   refuses and hides secret-looking doc paths for every non-owner session
+   (ROLES-CHAT-8 "refuse ... secret paths").
 10. ROLES-CHAT-8.a "allowed public repos" = public repos that pass the
     community gate (deny lists win, visibility confirmed public), as
     ROLES-CHAT-8 already reads "any public GitHub"; `github-docs-read` is
@@ -93,3 +99,14 @@ criterion.
     `CORVIDINHO_ACTING_WORK_TASK`) carry the per-surface cap, like
     `CORVIDINHO_ACTING_IS_ADMIN`; they are not operator config and can only
     lower a role.
+12. A team `/work` is verified like the owner's (AGENT-4): the verify lane
+    runs the project's own checks on the team member's edits in the
+    worktree (its env drops tokens, keys and the acting identity), and the
+    pushed branch runs the repo's CI. That is code the team member's run
+    wrote executing on the box and in CI; SAFE-2 does not protect
+    `.github/workflows` or test files. The guard is the owner's consent: the
+    repo must be GITHUB-6-allowlisted and `git-push` / `github-pr-create`
+    allowlisted for any `/work` PR.
+13. ROLES-CHAT-8.a sits under ROLES-CHAT-8 in `hi/roles.md` by hand: `hi`
+    rejects a multi-part prefix as a subcommand, and `hi/roles.md` declares
+    `families: [ROLES]`, so `hi` does not count the ROLES-CHAT ids at all.

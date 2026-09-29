@@ -63,11 +63,12 @@ deny_users = []
 # (owner-only, audited) — never through chat (IDENTITY-6). Read live (no
 # restart). Declare yourself by putting the owner's discord_id in your entry.
 # Roles (IDENTITY-8..12): role = "team" (work tasks: /work edits + draft PR;
-# reviews: github-issue-comment / github-pr-review on [github]-allowlisted
-# repos; their own memory) or role = "community" (Q&A, read tools only). No
-# role = community; the owner is always owner ([owner] above); anyone not
-# declared here is community. Set it here or with /admin people role
-# (owner-only, audited, ADMIN-3.b); re-read on every tool call.
+# reviews: github-issue-comment / github-pr-review as COMMENT on
+# [github]-allowlisted repos; their own memory) or role = "community" (Q&A,
+# read tools only). No role = community; the owner is always owner ([owner]
+# above); anyone not declared here is community. Set it here or with
+# /admin people role (owner-only, audited, ADMIN-3.b); re-read on every tool
+# call.
 # [people.tofu]
 # display = "Tofu"
 # role = "team"

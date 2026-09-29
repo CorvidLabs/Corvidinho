@@ -349,6 +349,11 @@ declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
 `files-edit`); `community` (everyone else: undeclared, declared community,
 WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
 (IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+A team `github-pr-review` posts as `COMMENT` only: `--event APPROVE` /
+`REQUEST_CHANGES` get the role refusal (exit 2) unless the role, re-resolved
+at the call, is owner or there is no role session. In a team `/work` run
+`files-write` / `files-edit` refuse a secret-looking path (`isSecretPath`,
+exit 2) like the read tools, so an edit is never a read oracle (ROLES-CHAT-8).
 `roleAllowsPlugin(role, cmd, workTask)` is the one rule for `runPlugin` and
 the catalog (REQ-agent-065); with no stamp the ADMIN bit alone caps at owner
 (`actingRoleCap`), and a stamp never raises the role.
@@ -366,8 +371,10 @@ community site / roadmap sources are the public repo docs and the public
 issues and milestones of allowed public repos, read with
 `github-docs-read` (README by default, a root `STATUS*` / `CHANGELOG*` file or
 anything under `docs/`, a directory listed; any other path refused with exit
-2 for every role before GitHub is called, `publicDocPath`; text SAFE-6
-scrubbed, capped at 64 KiB, labelled untrusted) and `github-milestone-list`
+2 for every role before GitHub is called, `publicDocPath`; non-owner role
+sessions also refuse a secret-looking doc path and never list one,
+`isSecretPath`; text SAFE-6 scrubbed, capped at 64 KiB, labelled untrusted)
+and `github-milestone-list`
 (`issues.listMilestones`, `--state`, `--limit` ≤100) — both read-only,
 minTier 0, behind the acting role's repo gate. `web-fetch` stays dangerous,
 so no site URL is a community source.

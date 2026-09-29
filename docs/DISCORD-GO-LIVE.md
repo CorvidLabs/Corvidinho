@@ -281,8 +281,10 @@ Who is who in an allowlisted channel:
 - A declared person with `role = "team"` ⇒ **team** (IDENTITY-10), in Discord chat, button picks,
   `/session start` and `/work`: the read tools below plus `github-issue-comment` and
   `github-pr-review` (still allowlisted in `CORVIDINHO_ALLOWLIST`, and only on repos the
-  GITHUB-6 `[github]` allowlist admits), plus `files-write` / `files-edit` in their `/work`
-  run's own worktree; their `/work` can open the draft PR like the owner's. Memory stays their
+  GITHUB-6 `[github]` allowlist admits; their reviews post as `COMMENT`, while `APPROVE` and
+  `REQUEST_CHANGES` stay the owner's), plus `files-write` / `files-edit` in their `/work`
+  run's own worktree (never on a secret-looking path); their `/work` can open the draft PR
+  like the owner's. Memory stays their
   own (`memory-store` / `-recall`; forget/override stay owner-only). No shell, runners, git
   writes, other GitHub writes, Discord posts, `web-fetch`, `delegate` or `council`. Briefings
   (#102) do not exist yet.

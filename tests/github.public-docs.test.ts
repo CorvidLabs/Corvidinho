@@ -193,6 +193,41 @@ describe("github-docs-read (ROLES-CHAT-8.a)", () => {
     expect(c.calls).toHaveLength(0);
   });
 
+  test("non-owner sessions refuse secret-looking doc paths and never list them; the owner reads them (ROLES-CHAT-8)", async () => {
+    const c = commands((u) => {
+      if (u.pathname === "/repos/CorvidLabs/Corvidinho/contents/docs") {
+        return json([
+          { type: "file", name: "discord.md", path: "docs/discord.md" },
+          { type: "file", name: ".env.example", path: "docs/.env.example" },
+          { type: "file", name: "deploy.pem", path: "docs/deploy.pem" },
+        ]);
+      }
+      if (u.pathname === "/repos/CorvidLabs/Corvidinho/contents/docs/.env.example") {
+        return json({ type: "file", path: "docs/.env.example", encoding: "base64", content: b64("A=1\n") });
+      }
+      return undefined;
+    });
+    const ls = await run(c.docs, ["docs", "--repo", REPO]);
+    expect((ls.data as { entries: Array<{ path: string }> }).entries.map((e) => e.path)).toEqual(["docs/discord.md"]);
+    const before = c.calls.length;
+    for (const p of ["docs/.env.example", "docs/deploy.pem", "docs/.ssh/config", "docs/keystore/a.json"]) {
+      const r = await run(c.docs, [p, "--repo", REPO]);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toContain("ROLES-CHAT-8");
+    }
+    expect(c.calls.length).toBe(before);
+    // The owner (ADMIN) keeps them, on the GITHUB-6 allowlist.
+    process.env.CORVIDINHO_ACTING_IS_ADMIN = "1";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = OWNER_ID;
+    process.env.CORVIDINHO_ACTING_ROLE = "owner";
+    process.env.CORVIDINHO_GITHUB_ALLOW_REPOS = REPO;
+    const owner = await run(c.docs, ["docs/.env.example", "--repo", REPO]);
+    expect(owner.ok).toBe(true);
+    const ownerLs = await run(c.docs, ["docs", "--repo", REPO]);
+    expect((ownerLs.data as { entries: unknown[] }).entries).toHaveLength(3);
+  });
+
   test("community: a private, unconfirmed or denied repo is refused before any read", async () => {
     for (const vis of ["private", "unknown"] as const) {
       const c = commands(() => json({}), vis);
