@@ -61,6 +61,46 @@ describe("audit chain (SAFE-5)", () => {
     expect(formatAuditLine(v)).toContain("BROKEN at #2");
   });
 
+  test("without a key a tampered unkeyed row reads BROKEN at #N; only a keyed row reads cannot verify", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    appendAudit(db, entry("a"));
+    appendAudit(db, entry("b"));
+    appendAudit(db, entry("c"));
+    expect(formatAuditLine(verifyAudit(db))).toBe(
+      "Audit: 3 entries · chain OK (unkeyed — set CORVIDINHO_AUDIT_HMAC_KEY)",
+    );
+    db.exec("DROP TRIGGER audit_log_no_update");
+    db.run("UPDATE audit_log SET actor = 'someone-else' WHERE seq = 2");
+    const v = verifyAudit(db);
+    expect(v).toMatchObject({ ok: false, count: 3, keyedRows: 0, keyAvailable: false, brokenAtSeq: 2 });
+    expect(formatAuditLine(v)).toBe("Audit: 3 entries · chain BROKEN at #2");
+    // The same line as with a key: the break needs no key to be seen.
+    expect(formatAuditLine(verifyAudit(db, "k"))).toBe("Audit: 3 entries · chain BROKEN at #2");
+
+    // Unkeyed prefix, then keyed rows (key set later).
+    const mixed = openCorvidinhoDb({ memory: true });
+    appendAudit(mixed, entry("a"));
+    appendAudit(mixed, entry("b"));
+    appendAudit(mixed, entry("c"), { key: "k" });
+    const keyedLine = "Audit: 3 entries · cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)";
+    // Intact prefix: without the key the keyed row cannot be verified.
+    expect(formatAuditLine(verifyAudit(mixed))).toBe(keyedLine);
+    // A tampered unkeyed row before the first keyed row is a break any reader sees.
+    mixed.exec("DROP TRIGGER audit_log_no_update");
+    mixed.run("UPDATE audit_log SET actor = 'someone-else' WHERE seq = 1");
+    expect(formatAuditLine(verifyAudit(mixed))).toBe("Audit: 3 entries · chain BROKEN at #1");
+
+    // A keyed chain without the key still cannot be verified (fail closed).
+    const keyed = openCorvidinhoDb({ memory: true });
+    appendAudit(keyed, entry("a"), { key: "k" });
+    appendAudit(keyed, entry("b"), { key: "k" });
+    const k = verifyAudit(keyed);
+    expect(k).toMatchObject({ ok: false, keyedRows: 1, keyAvailable: false, brokenAtSeq: 1 });
+    expect(formatAuditLine(k)).toBe(
+      "Audit: 2 entries · cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)",
+    );
+  });
+
   test("status line and context", () => {
     expect(formatAuditLine({ ok: true, count: 0, keyedRows: 0, unkeyedRows: 0, keyAvailable: false })).toBe("Audit: 0 entries");
     expect(formatAuditLine({ ok: true, count: 3, keyedRows: 0, unkeyedRows: 3, keyAvailable: false })).toContain("unkeyed");

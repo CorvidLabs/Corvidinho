@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 52
+version: 53
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -378,7 +378,12 @@ append after a keyed row (a dangerous run is then refused, fail closed), and
 break. An unkeyed prefix followed by keyed rows still verifies as mixed.
 Rewriting every keyed row as unkeyed (from the first keyed row on) or dropping
 the newest rows is not detectable from the DB alone; it needs an anchor kept
-outside the DB.
+outside the DB. `formatAuditLine` (the bridge start log and `/status`) reads
+`chain BROKEN at #N` for any break verify finds with the key, and also
+without the key when the break comes before any keyed row (`keyedRows` is
+counted up to the break, so it is 0): a tampered unkeyed row needs no key to
+be seen. Only a verify that stops at a keyed row without the key reads
+`cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
 
 SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
 PLUGIN-1, REQ-plugins-008).
@@ -762,3 +767,4 @@ and current rows for plugins host evolution.
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
+| 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |

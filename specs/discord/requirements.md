@@ -1934,6 +1934,15 @@ pass ping the owner:
   auto-pause the schedule, the pause ask SHALL stay pending until the gate
   passes, like any pending ask.
 
+Every schedule post in the channel — the `✅` / `❌` result line and every
+ask post, in-process or from the delivery pass, including the stuck asks
+above — SHALL start with the schedule prefix
+`Schedule **<name>** (<id>) on <project>`, where the project is shown by
+name (`projectLabel`: the last segment of an absolute path, a relative name
+as given), never as an absolute host path (REQ-discord-418, SAFE-6): the
+whole channel reads it. The run row SHALL keep the full error and the
+model's prompt SHALL keep the stored project.
+
 No new slash command, env var, config key, table, column or schema version;
 `/schedule resume` is the existing ADMIN subcommand.
 
@@ -1947,6 +1956,8 @@ Acceptance Criteria
 - A daemon run whose project cannot be resolved spawns no agent, keeps `project resolve failed: …` (with the host path) on the row and stores the fixed question; the bridge posts it with the owner ping and without the host path; the same failure again posts without a ping.
 - A bridge run whose worktree cannot be created keeps `worktree failed: …` on the row and posts the fixed question at once with the owner ping, once; so does one whose worktree step throws.
 - The pause ask is chosen by the failure count in SQL: a store handle whose cache is stale stores it when SQL reaches 5; a success stores no ask and resets the count.
+- A schedule whose project is an absolute host path posts its `✅` and `❌` result lines, its clarify and stuck asks (bridge-claimed and daemon-claimed) and its pre-run stuck ask (an absolute sibling project that cannot be resolved) with the project's name in the prefix and never the absolute path; the run row keeps `project resolve failed: …` with the path and the model's prompt keeps the stored project.
+
 ### REQ-discord-431
 
 Channel autocomplete on the STRING `channel` options (`/admin channels add|remove`, `/announce channel`) SHALL list channels only for ADMIN invoking from an allowlisted channel (DISCORD-DENY-3 / ADMIN-4). The check SHALL be re-run on every autocomplete request, never trusted from registration, in the slash gate order: the interaction's channel passes the channel allowlist (`gateChannel`), the actor passes `gateActor` (deny users/roles win; a non-empty user/role allowlist applies), and `resolvePermissionLevel` with the live mute set is ADMIN (the configured owner; no owner means nobody, IDENTITY-3). Otherwise the gateway SHALL answer an empty choice list, so no channel name, id or allowlist entry reaches a non-admin. The gateway SHALL also answer an empty list when no gate is wired or the gate throws (fail closed). An allowed request SHALL keep today's choices: guild text channels for `add` and `/announce channel`, and the live allowlist for `remove`. Autocomplete SHALL NOT consume a rate-limit slot. No new slash command, option, env key or schema version.

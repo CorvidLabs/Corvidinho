@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790701431,
+      "commit": "16fec359c4566c77c6c6384bded724bdcc75c453",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "660f3d21566f1fda052af0be9f0cef4df1413097155fd2163a6701d402ae6f78",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790701439,
+      "commit": "81bec76cd8a429860340863757a66ba1571c3717",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "660f3d21566f1fda052af0be9f0cef4df1413097155fd2163a6701d402ae6f78",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790705590,
+      "commit": "4ef62bedcd453c7355beedfd2986f07fa29a6ff8",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "3c567cb99453152eb7d263aaf4fa9d0794f07adba167a6c81272f3aea7a90d53",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790705593,
+      "commit": "839498aafb1c6cb9a4ceba9c67255942098e8c48",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "3c567cb99453152eb7d263aaf4fa9d0794f07adba167a6c81272f3aea7a90d53",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790706026,
+      "commit": "3084e84852d4c463bff6078efb6ac6109e7f4cbd",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "0ef0bc484f69c84b3ff04a33d4424e95b7261b4b65a5f76f677fe806853c75ab",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
+    },
+    {
+      "timestamp": 1790706030,
+      "commit": "fa419cd6c92d2609da40b3e7270991340a7d5325",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "0ef0bc484f69c84b3ff04a33d4424e95b7261b4b65a5f76f677fe806853c75ab",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
+    }
+  ]
+}
