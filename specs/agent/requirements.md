@@ -903,11 +903,15 @@ In the read-tier and tool-loop system prompts the persona block SHALL come
 first, under `PERSONA_HEADER` (tone and personality only: not a source of
 facts, tools or permissions; the rules after it win), and Corvidinho's rules
 SHALL follow it, including `PERSONA_RULES_SYSTEM_INSTRUCTIONS` (PERSONA-3:
-one message per turn, no spam, no unchecked claims; the persona never
-overrides these or any other rule in the prompt), whether or not a persona
-loaded. Project instructions (REQ-agent-084) SHALL stay after the rules. The
-finishing instruction SHALL ask for one message in the persona's voice,
-never a flat changelog (PERSONA-1). A missing, empty or refused persona file
+one message per turn, meaning the whole answer is one final reply, never
+split across posts or sent as extra chat messages through tools, while a
+DISCORD-17 file attachment stays allowed; no spam; no unchecked claims; the
+persona never overrides these or any other rule in the prompt), whether or
+not a persona loaded. The DISCORD-17 attach block (REQ-agent-476), when
+present, SHALL also come after the persona block. Project instructions
+(REQ-agent-084) SHALL stay after the rules. The finishing instruction SHALL
+ask for one message in the persona's voice, never a flat changelog
+(PERSONA-1). A missing, empty or refused persona file
 SHALL NOT stop a run: the prompt has no persona block and one `Text` event
 per run SHALL say why, naming only the file; a truncated file or a committed
 copy with working-tree changes SHALL also get one note; a clean load SHALL
@@ -924,6 +928,7 @@ Acceptance Criteria
 - In a git checkout a working-tree edit is not loaded (the committed text is, with one "working-tree changes not loaded" note) and an untracked `persona.md` is refused as not committed.
 - A token in the file is scrubbed and a `</persona>` or `</ Persona >` in it cannot close the block; an over-cap file is cut with a marker and a note; an empty file gives no persona and a note.
 - Tool loop and read tier, on every attempt: the system prompt starts with the persona block, the PERSONA-3 rules and "You are Corvidinho" come after the block, and the project's AGENTS.md block comes after the rules; the finishing rule says "never a flat changelog (PERSONA-1)".
+- A tool-loop run offered `discord-send-file` with a conversation channel: the persona block is first, the DISCORD-17 attach block comes after it, and the one-message rule says never to split the answer or send extra chat messages through tools while allowing an attachment.
 - A committed edit to the persona shows on the next run and the old text is gone.
 - No persona file: the prompt starts with "You are Corvidinho", still carries the PERSONA-3 rules, and exactly one "Persona: persona.md not found" note is emitted across attempts.
 - By default the persona comes from Corvidinho's checkout: a decoy `persona.md` in the run's cwd never loads.
