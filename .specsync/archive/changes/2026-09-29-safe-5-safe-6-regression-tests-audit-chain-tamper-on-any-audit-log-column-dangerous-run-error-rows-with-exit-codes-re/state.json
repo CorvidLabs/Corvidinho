@@ -7,11 +7,11 @@
   "title": "SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key",
   "description": "SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "0f2e2c2774635d1dcbdff599cba92dbecf8eebd9",
   "created_at": 1790697606,
-  "updated_at": 1790704120,
+  "updated_at": 1790704761,
   "affected_specs": [
     "plugins",
     "discord"
