@@ -152,6 +152,25 @@
         "REQ-discord-353",
         "REQ-plugins-095"
       ]
+    },
+    {
+      "timestamp": 1790706158,
+      "commit": "1e8e794273e7b28b63798a3d7cb9d275c6282b56",
+      "contract_digest": "1f5049f2aeb9e84b521ebb1963ec5fa0e8bc6d195e17a420376acf6d43b0fb17",
+      "execution_digest": "234764b348630f466d7b3b22bab135ebafc0b0e3edf562c7de8f18d8c0a59928",
+      "workspace_digest": "3dc17655dae413a20b0da7909630e713101f217bb8b9e1b587308dfbfe5dd5eb",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-353",
+        "REQ-plugins-095"
+      ]
     }
   ]
 }
