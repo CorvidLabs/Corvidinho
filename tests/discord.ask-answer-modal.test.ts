@@ -55,6 +55,7 @@ import {
   type BridgeConfig,
   type InboundMessage,
 } from "../src/discord/types.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
 
 const OWNER_ID = "111122223333444455";
 const USER_ID = "222233334444555566";
@@ -665,7 +666,8 @@ describe("replying in the channel still works (DISCORD-ASK-4.a)", () => {
 
 describe("/work free-text answer: Answer form resumes the slash session", () => {
   test("the /work answer carries the Answer button; its submit resumes that session in the answer message", async () => {
-    const b = await askBridge();
+    // IDENTITY-11.a: the requester is declared team (community can't start /work).
+    const b = await askBridge({ env: { CORVIDINHO_ALLOWLIST_FILE: teamPeopleFile(USER_ID) } });
     const replies: SlashReplyPayload[] = [];
     const ix: SlashInteraction = {
       id: "ix_work",

@@ -116,7 +116,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   never changed through chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
 - Roles (IDENTITY-8..12): give each declared person `role = "team"` or `role = "community"`
   (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
-  is always owner; anyone undeclared is community. See E.6.
+  is always owner; anyone undeclared is community. Only the owner and team can start `/work`
+  (IDENTITY-11.a), so with no owner and nobody declared as team nobody can. See E.6.
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -300,7 +301,7 @@ Who is who in an allowlisted channel:
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
-  chat and on every slash command).
+  chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
 - WATCH runs, scheduled runs and `delegate` / `council` workers are community whoever triggered
   them.
 - The role is re-read from the people list on every tool call (IDENTITY-12): a
@@ -346,8 +347,9 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
   of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
   source (`web-fetch` is never offered to community).
-- `/session start` and `/work` run for community too, as read-only sessions. `/work` never
-  opens a PR for community.
+- `/session start` runs for community too, as a read-only session. `/work` does not
+  (IDENTITY-11.a): a community member, or anyone undeclared, gets the ephemeral
+  `not authorized` and nothing starts — no worktree, branch, work task, run or PR.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
   there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and

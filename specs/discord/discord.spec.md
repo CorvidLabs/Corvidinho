@@ -87,6 +87,8 @@ files:
   - src/work/pr.ts
   - src/work/pr-body.ts
   - tests/work.pr.test.ts
+  - tests/roles.community-no-work.test.ts
+  - tests/fixtures/team-people.ts
   - src/discord/command-handlers/mute.ts
   - tests/discord.rate-mute-limits.test.ts
   - src/discord/command-handlers/schedule.ts
@@ -523,8 +525,14 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 `team` only when asked, else `community` — schedules pass none) and
 `CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
-it. `/work` ships its PR for the owner or a team member (re-resolved after the
-run); community keeps the branch. `/admin people role person:<id>
+it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+inbound check the handler refuses a community caller (declared community, no
+role, undeclared, muted or deny-listed, everyone with no owner) with the
+ephemeral `not authorized` of the owner-only commands, before any deferred
+reply, session, worktree, `talk/*` branch, work task, run or PR step; the role
+comes from the owner config and the people list re-read for the command.
+`/work` ships its PR for the owner or a team member (re-resolved after the
+run); a team member demoted during the run keeps the branch. `/admin people role person:<id>
 role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
 SAFE-5 audited like the other people mutations; `/admin people list` shows
 each role and `config show` counts them.

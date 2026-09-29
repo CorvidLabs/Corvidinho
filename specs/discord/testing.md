@@ -671,7 +671,8 @@ community; muted or deny-listed team ⇒ community); the spawn client stamps
 (schedules pass no role ⇒ community); through `startBridge` chat stamps each
 speaker's role and a file edit applies to the next message; `/work` runs a
 team member with `actingRole: "team"` + `workTask: true` and reaches the PR
-step, the owner is unchanged, community / undeclared never reach it, and a
+step, the owner is unchanged, community / undeclared get the ephemeral
+`not authorized` and never run (IDENTITY-11.a), and a
 team member demoted mid-run gets no PR; `/session start` stamps the role
 without the work flag; `/admin people role` promotes / demotes with
 `admin-people-role` `started`/`ok` rows, no-change on the same role, refuses
@@ -681,6 +682,23 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Community can't start /work (IDENTITY-11.a, REQ-discord-065 / REQ-discord-088):
+`tests/roles.community-no-work.test.ts` — a temp git repo as the project and a
+temp worktree base; through `handleSlashInteraction`, a `/work` by declared
+community, a declared person with no role and an undeclared user (also with a
+`project` option, and with no owner and nobody declared) gets exactly one
+ephemeral `not authorized` reply, no deferred reply, no session, work task,
+agent run or PR step, and the repo keeps one worktree and no `talk/*` branch;
+a muted or deny-listed team member is refused the same way at the handler;
+the owner and a team member still run with a worktree under the base,
+`workTask: true` and the PR step; a demotion / promotion written to the
+people file applies to the next `/work`; through `startBridge` a community
+`/work` spawns nothing while the owner's runs. `tests/work.pr.test.ts`,
+`tests/discord.actor-gate.test.ts` and `tests/roles.team.test.ts` expect the
+refusal for community; `tests/safe.injection.test.ts` keeps the SAFE-13
+refusal for a stranger's injected `/work`. Tests that drive `/work` as a
+non-owner declare the invoker team with `tests/fixtures/team-people.ts`.
 
 Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
 `tests/discord.forget-card.test.ts` — the Approve/Deny card helper

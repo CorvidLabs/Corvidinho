@@ -285,7 +285,8 @@ describe("Discord button-pick resumes recognise declared people (IDENTITY-14)", 
 
 describe("Discord slash runs recognise declared people (IDENTITY-14)", () => {
   test("/session start and /work name the declared person by the invoker's Discord id", async () => {
-    const b = await bridge(FILE);
+    // IDENTITY-11.a: Tofu is team here (community can't start /work).
+    const b = await bridge(FILE.replace('[people.tofu]\n', '[people.tofu]\nrole = "team"\n'));
     for (const [n, command] of [[1, "session"], [2, "work"]] as const) {
       const edits: SlashReplyPayload[] = [];
       await b.handlers.onSlash!({
