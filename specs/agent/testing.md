@@ -155,3 +155,9 @@ comes from Corvidinho's checkout, never a decoy in the cwd. The shipped
 persona shape and voice. End to end against a 127.0.0.1 fake provider:
 `corvidinho task run`, the Discord spawn client, the WATCH spawn client and
 a delegate worker each send the shipped persona first and the rules after it.
+A Discord run offered `discord-send-file` keeps the attach block after the
+persona, and the PERSONA-3 one-message rule allows an attachment. Tests that
+assert a run's exact events (project instructions, spend warning, NDJSON
+running totals) pass `personaRoot` = `tests/fixtures/persona` (a plain
+folder, a clean load), so an uncommitted edit to the checkout's `persona.md`
+never breaks them or the verify lane.

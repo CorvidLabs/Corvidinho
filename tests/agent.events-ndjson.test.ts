@@ -3,6 +3,7 @@
  * Fixture-only: fake secrets are built at runtime, fetch is mocked, no network.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
   NDJSON_LIMITS,
@@ -31,6 +32,9 @@ import {
 import { CORVIDINHO_PROTOCOL_VERSION as DISCORD_PROTOCOL } from "../src/discord/protocol-version.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
+
+/** Plain persona folder: a clean load, so no `Persona: …` note joins a run's exact events (PERSONA-2). */
+const PERSONA_FIXTURE = join(import.meta.dir, "fixtures", "persona");
 
 // Runtime-built fake secrets (never literal vendor keys in the repo).
 const FAKE_GH = `ghp_${"A1b2C3d4".repeat(5)}`;
@@ -535,6 +539,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       onEvent: (e) => events.push(e),
       onUsage: (u) => usage.push(u),
       maxToolRounds: 4,
+      personaRoot: PERSONA_FIXTURE,
     });
     const r = await exec({ attempt: 1, signal: new AbortController().signal });
     expect(r.summary).toBe("Listed.");
