@@ -7,11 +7,11 @@
   "title": "Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72)",
   "description": "Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "d589638c38f27503373601bb256ee6207fb822f9",
   "created_at": 1790696736,
-  "updated_at": 1790720108,
+  "updated_at": 1790720280,
   "affected_specs": [
     "discord",
     "watch"
