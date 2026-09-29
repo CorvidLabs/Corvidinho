@@ -16,6 +16,7 @@ import { openCorvidinhoDb } from "../src/store/db.ts";
 import {
   ERROR_LINE_MAX,
   SCRUB_RULES_VERSION,
+  SCRUB_TARGETS,
   ensureScrubbed,
   formatErrorLine,
   rescrubDatabase,
@@ -208,6 +209,85 @@ describe("automatic re-scrub when rules tighten", () => {
       const v = db2.query("SELECT value FROM schema_meta WHERE key = 'scrub_rules_version'").get() as { value: string };
       expect(Number(v.value)).toBe(SCRUB_RULES_VERSION);
       expect(ensureScrubbed(db2)).toEqual({ ran: false, rowsUpdated: 0 });
+      expect(rescrubDatabase(db2).rowsUpdated).toBe(0);
+      db2.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("re-scrub covers every column REQ-discord-066 lists", () => {
+  // [table, column, fake secret, stored after the re-scrub] — a different
+  // vendor kind per column (all ten kinds once), so a column dropped from
+  // SCRUB_TARGETS (or read from the wrong row) shows up.
+  const r = (kind: string) => `[redacted:${kind}]`;
+  const LISTED: ReadonlyArray<[table: string, column: string, secret: string, stored: string]> = [
+    ["discord_sessions", "topic", FAKE.discord, r("discord-token")],
+    ["discord_work_tasks", "description", FAKE.github, r("github-token")],
+    ["discord_work_tasks", "summary", FAKE.openai, r("openai-key")],
+    ["schedules", "name", FAKE.slack, r("slack-token")],
+    ["schedules", "description", FAKE.aws, r("aws-key")],
+    ["schedules", "prompt", FAKE.google, r("google-key")],
+    ["schedule_runs", "summary", FAKE.jwt, r("jwt")],
+    ["schedule_runs", "error", FAKE.anthropic, r("anthropic-key")],
+    ["memories", "key", "Bearer " + a(32), `Bearer ${r("bearer")}`],
+    ["memories", "content", FAKE.pem, r("private-key")],
+  ];
+
+  test("SCRUB_TARGETS lists each of them", () => {
+    for (const [table, column] of LISTED) {
+      const target = SCRUB_TARGETS.find((t) => t.table === table);
+      expect({ table, column, listed: target?.columns.includes(column) ?? false }).toEqual({
+        table,
+        column,
+        listed: true,
+      });
+    }
+  });
+
+  test("raw work task, schedule, run summary/error and memory rows are scrubbed on next open", () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-scrub-cols-"));
+    const raw = (table: string, column: string) => {
+      const hit = LISTED.find(([t, c]) => t === table && c === column)!;
+      return `old ${hit[2]}`;
+    };
+    try {
+      const path = join(dir, "corvidinho.db");
+      const db1 = openCorvidinhoDb({ path });
+      // Rows saved before the current rules, written around the stores.
+      db1.run(
+        "INSERT INTO discord_sessions (id, channel_id, user_id, topic, created_at, last_activity_at) VALUES ('s1','c','u',?,1,1)",
+        [raw("discord_sessions", "topic")],
+      );
+      db1.run(
+        `INSERT INTO discord_work_tasks (id, description, user_id, channel_id, status, created_at, updated_at, summary)
+         VALUES ('w1', ?, 'u', 'c', 'done', 1, 1, ?)`,
+        [raw("discord_work_tasks", "description"), raw("discord_work_tasks", "summary")],
+      );
+      db1.run(
+        `INSERT INTO schedules (id, name, description, cron_expression, project, prompt, created_by_user_id, created_at, updated_at)
+         VALUES ('sc1', ?, ?, '0 * * * *', 'p', ?, 'u', 1, 1)`,
+        [raw("schedules", "name"), raw("schedules", "description"), raw("schedules", "prompt")],
+      );
+      db1.run(
+        `INSERT INTO schedule_runs (id, schedule_id, status, summary, error, started_at)
+         VALUES ('r1', 'sc1', 'failed', ?, ?, 1)`,
+        [raw("schedule_runs", "summary"), raw("schedule_runs", "error")],
+      );
+      db1.run(
+        "INSERT INTO memories (id, owner_user_id, category, key, content, created_at, updated_at) VALUES ('m1','u','person',?,?,1,1)",
+        [raw("memories", "key"), raw("memories", "content")],
+      );
+      db1.run("UPDATE schema_meta SET value = '0' WHERE key = 'scrub_rules_version'");
+      db1.close();
+
+      const db2 = openCorvidinhoDb({ path });
+      for (const [table, column, secret, stored] of LISTED) {
+        const row = db2.query(`SELECT ${column} AS v FROM ${table}`).get() as { v: string };
+        expect({ table, column, value: row.v }).toEqual({ table, column, value: `old ${stored}` });
+        expect(row.v).not.toContain(secret.slice(0, 20));
+      }
       expect(rescrubDatabase(db2).rowsUpdated).toBe(0);
       db2.close();
     } finally {

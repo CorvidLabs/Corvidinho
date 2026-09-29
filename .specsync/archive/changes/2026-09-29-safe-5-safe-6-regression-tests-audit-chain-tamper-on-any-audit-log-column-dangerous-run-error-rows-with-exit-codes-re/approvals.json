@@ -1,0 +1,51 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790698576,
+      "digest": "a60a71d9b43556712ca8de67a7bbedb79b9e5954a7fc499a1fa09f7850327843",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re",
+        "title": "SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key",
+        "description": "SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key",
+        "kind": "feature",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "specs/discord/discord.spec.md",
+          "tests/audit.log.test.ts",
+          "tests/discord.status-audit.test.ts",
+          "tests/store.scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Test-only (no product code change): tests/audit.log.test.ts breaks a 3-row keyed chain at row 2 when any one of ts, action, actor, surface, args_digest, outcome, exit_code, keyed, prev_hash or hash is edited behind the dropped trigger (verifyAudit brokenAtSeq 2, 'chain BROKEN at #2'), and asserts that a dangerous plugin returning {ok:false, exitCode:3} records started(null) then error(3) and one that throws records started(null) then error(1) while the throw still propagates (REQ-plugins-095); tests/store.scrub.test.ts asserts SCRUB_TARGETS lists and a rules-version bump re-scrubs each REQ-discord-066 column written raw (session topic, work task description and summary, schedule name, description and prompt, schedule run summary and error, memory key and content) to [redacted:<kind>]; tests/discord.status-audit.test.ts asserts the bridge start log and /status show 'Audit: 2 entries · chain OK (keyed)' from its own DB with CORVIDINHO_AUDIT_HMAC_KEY, 'chain BROKEN at #1' after tampering, and the unverifiable line without the key (REQ-discord-095). Each new test fails under the mutation that the base suite misses and passes on main."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "fa12402e1da2b34551c9c59ede210b6b7ad52a8a5fbf72a58a0b9737b39513aa",
+        "plugins": "0d9f03885bd84515bc4e82b6487006e75a5aeee866dbf0f346f434ae063233a3"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790704499,
+      "digest": "d3923388772bb1b4cc88e4d3b6d7d41d2bc65ec68fbbab5d13997166c1330a55",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

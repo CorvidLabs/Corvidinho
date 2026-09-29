@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re",
+  "implementation_commit": "23e33d547dd13f4bd302d96f21f4cc5b71728847",
+  "implementation_tree": "1fc33fbb7e620208f99e9a3570ead9f0a1fdcf8c",
+  "contract_digest": "a60a71d9b43556712ca8de67a7bbedb79b9e5954a7fc499a1fa09f7850327843",
+  "workspace_digest": "6663ca92d408101d7cb6d906b8d101acde774e18e7d6cd23573f4570aebabf00",
+  "closing_digest": "d3923388772bb1b4cc88e4d3b6d7d41d2bc65ec68fbbab5d13997166c1330a55",
+  "review_digest": "eb9f50d9207db4042165569ea3587ffee885621787169bc3f63cbfb656ead054",
+  "finalization_digest": "03eda70880f00c9f88db946aa3f896490a535fc9853bbd3697c038658fe7f1a7",
+  "timestamp": 1790704499
+}
