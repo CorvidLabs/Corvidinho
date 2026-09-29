@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790697775,
+      "commit": "ad20a5fdd3fbdc942c77f7255e9550a5f99538e2",
+      "contract_digest": "792b092396b9eb65f87845deaa2d4750f40730b0affdf2f61d32300a8e8bc4ea",
+      "execution_digest": "185761a900d0dd11d0e22690960bf265f576610d13bdc060451fe2c481719499",
+      "workspace_digest": "56c6ed7965c0f736f0fd73bd09b20fdf1479625ab401843649685edcc25fa799",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-212",
+        "REQ-discord-311",
+        "REQ-discord-476",
+        "REQ-plugins-005"
+      ]
+    }
+  ]
+}

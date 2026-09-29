@@ -1,6 +1,6 @@
 ---
 id: a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 0f2e2c2774635d1dcbdff599cba92dbecf8eebd9
 ---

@@ -7,10 +7,11 @@
   "title": "A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005)",
   "description": "A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "0f2e2c2774635d1dcbdff599cba92dbecf8eebd9",
   "created_at": 1790697278,
-  "updated_at": 1790697760,
+  "updated_at": 1790697775,
   "affected_specs": [
     "discord",
     "plugins"
