@@ -7,10 +7,11 @@
   "title": "Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies \"that choice expired\" with no agent run (DISCORD-ASK-5, REQ-discord-045)",
   "description": "Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies \"that choice expired\" with no agent run (DISCORD-ASK-5, REQ-discord-045)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "310861f81c5fb0314447109b959b8f37fb323578",
   "created_at": 1790696105,
-  "updated_at": 1790696118,
+  "updated_at": 1790696294,
   "affected_specs": [
     "discord"
   ],

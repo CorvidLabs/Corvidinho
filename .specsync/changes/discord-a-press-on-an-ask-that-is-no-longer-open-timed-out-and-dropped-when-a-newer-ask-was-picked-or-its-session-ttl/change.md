@@ -1,6 +1,6 @@
 ---
 id: discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl
-state: draft
+state: implementing
 type: feature
 base_commit: 310861f81c5fb0314447109b959b8f37fb323578
 ---
