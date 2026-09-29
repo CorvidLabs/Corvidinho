@@ -7,11 +7,11 @@
   "title": "Discord-send-file serves a thread allowlisted by its own id like the bridge and re-checks the 8 MB cap on the bytes read (DISCORD-17 review follow-up)",
   "description": "discord-send-file serves a thread allowlisted by its own id like the bridge and re-checks the 8 MB cap on the bytes read (DISCORD-17 review follow-up)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "5366fff96501327ad3bcc30f55105f2c16884b0b",
   "created_at": 1790701597,
-  "updated_at": 1790705410,
+  "updated_at": 1790705794,
   "affected_specs": [
     "discord"
   ],
