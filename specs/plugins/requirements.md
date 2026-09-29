@@ -378,6 +378,14 @@ SHALL still verify. Rewriting every keyed row, from the first keyed row on, as
 unkeyed links, or dropping the newest rows, is not detectable from the DB
 alone; catching it needs an anchor kept outside the DB.
 
+The one-line chain summary (`formatAuditLine`: the bridge start log and
+`/status`, REQ-discord-095) SHALL read `chain BROKEN at #N` for every break
+`verifyAudit` reports at a row it could check: with the key, and also without
+the key when the first tampered row comes before any keyed row (a tampered
+unkeyed chain, or a tampered unkeyed prefix), since a SHA-256 link needs no key
+to check. Only a verify that stops at a keyed row because no key is set SHALL
+read `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
+
 Acceptance Criteria
 - Allowed dangerous run appends started + ok rows; raw args are not stored.
 - Non-interactive denial appends a denied row; safe plugins append nothing.
@@ -385,6 +393,7 @@ Acceptance Criteria
 - Tampering is detected at the first bad row; wrong/missing key fails verify.
 - A keyed row that follows a keyed row, edited and relinked with the rows after it as unkeyed SHA-256 links, fails verify with the key at that row (`chain BROKEN at #N`).
 - Without the key, appending after a keyed row is refused, so a keyless dangerous run fails closed and the chain stays keyed; an unkeyed prefix followed by keyed rows still verifies (`mixed keyed/unkeyed`).
+- Without `CORVIDINHO_AUDIT_HMAC_KEY`, a tampered unkeyed chain (no keyed rows) reads `Audit: N entries · chain BROKEN at #n` at the first tampered row, the same line as with a key, and so does a tampered unkeyed prefix before keyed rows; an intact unkeyed prefix before keyed rows, or a keyed chain, read without the key still reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
 
 ### REQ-plugins-042
 
