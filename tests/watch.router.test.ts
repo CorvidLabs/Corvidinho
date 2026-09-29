@@ -140,4 +140,93 @@ describe("watch routeEvent (ALLOW-1)", () => {
     }
     expect(store.bySessionId.size).toBe(0);
   });
+
+  // ALLOW-1/2: an assignment or review request is made by the user who
+  // assigned / requested (actor), who must pass the user gate too.
+  describe("assignment / review_request actor gate", () => {
+    const assign = (actor?: string): DetectedEvent => ({
+      ...baseEvent({ id: "assign-CorvidLabs/Corvidinho#42", type: "assignment" }),
+      ...(actor ? { actor } : {}),
+    });
+    const reviewReq = (actor?: string): DetectedEvent => ({
+      ...baseEvent({
+        id: "reviewreq-CorvidLabs/Corvidinho#42",
+        type: "review_request",
+        isPullRequest: true,
+      }),
+      ...(actor ? { actor } : {}),
+    });
+
+    for (const [name, mk] of [
+      ["assignment", assign],
+      ["review_request", reviewReq],
+    ] as const) {
+      test(`${name} by a non-allowlisted actor on an allowlisted author's thread is refused`, () => {
+        const store = new SessionStore();
+        const action = routeEvent(mk("stranger"), { store, allowlist: allowCfg() });
+        expect(action.kind).toBe("refuse");
+        if (action.kind === "refuse") {
+          expect(action.reason).toBe("actor_not_allowlisted");
+          expect(action.reply).toBe(NOT_AUTHORIZED);
+        }
+        expect(store.bySessionId.size).toBe(0);
+      });
+
+      test(`${name} with no actor is refused (fail closed)`, () => {
+        const store = new SessionStore();
+        const action = routeEvent(mk(), { store, allowlist: allowCfg() });
+        expect(action.kind).toBe("refuse");
+        if (action.kind === "refuse") {
+          expect(action.reason).toBe("actor_not_allowlisted");
+        }
+        expect(store.bySessionId.size).toBe(0);
+      });
+
+      test(`${name} by a deny-listed actor is refused even when allowlisted`, () => {
+        const store = new SessionStore();
+        const cfg = allowCfg({ users: ["0xLeif", "mallory"] });
+        cfg.github.denyUsers = ["mallory"];
+        const action = routeEvent(mk("Mallory"), { store, allowlist: cfg });
+        expect(action.kind).toBe("refuse");
+        expect(store.bySessionId.size).toBe(0);
+      });
+
+      test(`${name} by an allowlisted actor starts a session for the author`, () => {
+        const store = new SessionStore();
+        const cfg = allowCfg({ users: ["0xLeif", "alice"] });
+        const action = routeEvent(mk("Alice"), { store, allowlist: cfg });
+        expect(action.kind).toBe("start_session");
+        if (action.kind === "start_session") {
+          expect(action.session.userId).toBe("0xLeif");
+        }
+        expect(store.bySessionId.size).toBe(1);
+      });
+
+      test(`${name} by an allowlisted actor on a non-allowlisted author's thread is refused`, () => {
+        const store = new SessionStore();
+        const action = routeEvent(
+          { ...mk("0xLeif"), sender: "stranger" },
+          { store, allowlist: allowCfg() },
+        );
+        expect(action.kind).toBe("refuse");
+        if (action.kind === "refuse") {
+          expect(action.reason).toBe("user_not_allowlisted");
+        }
+        expect(store.bySessionId.size).toBe(0);
+      });
+    }
+
+    test("mentions and comments do not need an actor", () => {
+      const store = new SessionStore();
+      expect(routeEvent(baseEvent(), { store, allowlist: allowCfg() }).kind).toBe(
+        "start_session",
+      );
+      expect(
+        routeEvent(baseEvent({ id: "issue-x", type: "issues", number: 43 }), {
+          store,
+          allowlist: allowCfg(),
+        }).kind,
+      ).toBe("start_session");
+    });
+  });
 });

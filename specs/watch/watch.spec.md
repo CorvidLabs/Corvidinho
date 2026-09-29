@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 19
+version: 20
 status: draft
 files:
   - src/watch/types.ts
@@ -17,6 +17,7 @@ files:
   - src/watch/rate-limit.ts
   - src/watch/index.ts
   - tests/watch.auth-stop.test.ts
+  - tests/watch.request-actor.test.ts
 
 db_tables: []
 depends_on:
@@ -58,12 +59,19 @@ computeRateLimitBackoffMs), `StartWatchResult.fatal` / `WatchFatal`
 rate-limit `headers` (`retry-after`, `x-ratelimit-remaining`,
 `x-ratelimit-reset`) of the failed post; `maybePostWatchAck` /
 `maybePostWatchSummary` take an optional `onPostFailed(res)` called after the
-`ack failed` / `summary failed` line (REQ-watch-011).
+`ack failed` / `summary failed` line (REQ-watch-011). `gateEvent` /
+`EventGateResult` (repo, author and, for assignment / review_request, actor
+gates; REQ-watch-302); `DetectedEvent.actor`, `SearchClient.findRequestActor`,
+`newestRequestActor`, fixture `assigners` / `review_requesters`
+(REQ-watch-302).
 
 ## Invariants
 
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
-allowlist BEFORE session spawn; denied refuse quietly (no session); processed-id
+allowlist BEFORE session spawn; assignment / review_request also gate the
+user who assigned / requested (actor; missing actor refused, deny wins) in the
+router and before the poller's per-issue dedupe; denied refuse quietly (no
+session); processed-id
 dedup; with a DB, processed / acked / summarized ids persist per kind in
 `watch_event_ids` so a restart never replays a handled event id, and denied
 ids are kept apart in memory so they never evict a handled id (REQ-watch-247);
@@ -141,3 +149,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-27 | a-403-429-github-rate-limit-on-the-watch-auto-ack-or-run-summary-comment-sets-the-backoff-before-the-next-poll-cycle: A 403/429 GitHub rate limit on the WATCH auto-ack or run-summary comment sets the backoff before the next poll cycle (WATCH-RELIABILITY-3) |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment: Every cap on the way to a post keeps the closing ROLES-CHAT-3 (not allowed for your role) note: the WATCH summary comment, scheduled-run posts and run rows, /work and /session start answers, and the SAFE-8 80% warning append |
+| 2026-09-29 | watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor: WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5) |

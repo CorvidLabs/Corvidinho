@@ -69,5 +69,11 @@
       "corvid-agent",
       "someone-else"
     ]
+  },
+  "assigners": {
+    "corvidlabs/corvidinho#48": "0xLeif"
+  },
+  "review_requesters": {
+    "corvidlabs/corvidinho#7": "0xLeif"
   }
 }
