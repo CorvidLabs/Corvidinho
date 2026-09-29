@@ -105,6 +105,7 @@ files:
   - src/discord/ask-ping.ts
   - src/discord/spend-post.ts
   - tests/discord.spend.test.ts
+  - tests/discord.status-audit.test.ts
   - tests/discord.ask-ping.test.ts
   - src/discord/thin-ack.ts
   - tests/discord.thin-ack.test.ts
