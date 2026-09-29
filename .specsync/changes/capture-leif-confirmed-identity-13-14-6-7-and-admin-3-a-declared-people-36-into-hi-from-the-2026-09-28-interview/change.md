@@ -1,6 +1,6 @@
 ---
 id: capture-leif-confirmed-identity-13-14-6-7-and-admin-3-a-declared-people-36-into-hi-from-the-2026-09-28-interview
-state: approved
+state: implementing
 type: documentation
 base_commit: 5c867fdd04756f336b6611c0967d462701306711
 ---
