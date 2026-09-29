@@ -15,7 +15,7 @@ that shipped after go-live.
 1. Open [Discord Developer Portal](https://discord.com/developers/applications) → **New Application** (name e.g. Corvidinho).
 2. **Bot** tab → Add Bot → Reset Token → copy token into the VM secret store only (`DISCORD_TOKEN` or `DISCORD_BOT_TOKEN`). Do not commit.
 3. **Privileged Gateway Intents:** enable **Message Content Intent** (required for mention text). The bridge's gateway requests only Guilds, GuildMessages and MessageContent, and role gates read the member roles already on messages and interactions. Enable **Server Members Intent** only if you use the DISCORD-8 requester check: it runs on every `discord-post-message` and `discord-send-file` in a run the bridge started (so whenever `CORVIDINHO_ALLOWLIST` names either tool, E.3), for the Discord user the run acts for, and elsewhere when `--requesting-user-id` is passed (required under `CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1`). It logs in a short-lived client with the Guild Members intent, so without the portal toggle that login is refused and nothing is posted.
-4. **OAuth2 → URL Generator:** scopes `bot`; bot permissions at least `View Channels`, `Send Messages`, `Read Message History`, `Create Public Threads` (optional for 2.a). Generate invite URL → add bot to the target guild.
+4. **OAuth2 → URL Generator:** scopes `bot`; bot permissions at least `View Channels`, `Send Messages`, `Read Message History`, `Create Public Threads` (optional for 2.a), `Attach Files` (uploads need it: `discord-send-file`, DISCORD-17; without it Discord refuses the upload). Generate invite URL → add bot to the target guild.
 5. In Discord: User Settings → Advanced → **Developer Mode** ON → right-click channel → **Copy Channel ID**. Those snowflakes go in `DISCORD_CHANNEL_IDS` / allowlist `[discord].channels` (non-empty required).
 
 ## B. Bot VM paths
@@ -40,6 +40,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
 # optional SAFE-1: CORVIDINHO_ALLOWLIST=…   # dangerous tool names allowed non-interactive (E.3)
 # optional SAFE-5: CORVIDINHO_AUDIT_HMAC_KEY=…   # keys the audit chain (E.7)
+# optional OPS-1/2: CORVIDINHO_BACKUP_DIR=/var/backups/corvidinho   # nightly DB backup + weekly restore test (E.7)
 # LLM: CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY), CORVIDINHO_LLM_BASE_URL, CORVIDINHO_LLM_MODEL,
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool)
 ```
@@ -237,8 +238,8 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
 [`DAEMON.md`](DAEMON.md). What an operator needs to know:
 
 - It uses the bridge's environment and adds no variables: `CORVIDINHO_DATA_DIR`,
-  `CORVIDINHO_BIN`, the allowlists, the LLM key. Put them in the unit's `EnvironmentFile`
-  (mode 600, not in git).
+  `CORVIDINHO_BIN`, the allowlists, the LLM key, and `CORVIDINHO_BACKUP_DIR` when the nightly
+  backup is on. Put them in the unit's `EnvironmentFile` (mode 600, not in git).
 - One daemon per data dir: `<data dir>/daemon.lock`. A second one logs `daemon.lock_held` and exits 1.
 - It can run next to the bridge on the same DB. Each due run is claimed once. Runs the daemon
   claims are recorded in the run history; the daemon itself never posts to Discord. A daemon
@@ -326,7 +327,10 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never
   offered, is refused with `not allowed for your role` (ROLES-CHAT-3) and nothing runs. The
   refusal is not posted on its own; the reply ends with a short `(not allowed for your role)`
-  line instead, kept when a long reply is cut to fit. A run that ends by asking a question
+  line instead, kept when a long reply is cut to fit: chat replies, `/session start` and
+  `/work` answers, schedule posts and the run history they come from, a reply shortened for
+  the SAFE-8 80% spend warning, and the WATCH summary comment all lose the end of the text,
+  never the line. A run that ends by asking a question
   posts the question, which can leave the line out. A call to a name that is not a plugin at
   all keeps the plain "not offered" refusal and adds no line. ADMIN is re-checked on every
   call against the live owner config; the prompt never grants it.
@@ -356,13 +360,14 @@ All paths default to the data dir `~/.local/share/corvidinho` (`CORVIDINHO_DATA_
 | What | Where | How to read |
 |------|-------|-------------|
 | SAFE-5 audit chain (dangerous plugin runs incl. denials, `/admin` mutations, `/schedule delete`) | table `audit_log` in `<data dir>/corvidinho.db` (append-only; rows hold action, actor, surface, args digest, outcome, exit code, never raw args) | bridge start log `[discord] Audit: N entries · chain OK (keyed)`, `/status`, `/admin config show`; or any SQLite client, e.g. `sqlite3 ~/.local/share/corvidinho/corvidinho.db 'SELECT seq, ts, action, actor, surface, outcome, exit_code FROM audit_log ORDER BY seq DESC LIMIT 20'` |
-| Audit key | `CORVIDINHO_AUDIT_HMAC_KEY` (env only, never in the DB) | set the **same** key on every process that shares the data dir; without it the chain is plain SHA-256 and the line says `unkeyed — set CORVIDINHO_AUDIT_HMAC_KEY`. Once the chain holds a keyed row, a process without the key refuses dangerous plugin runs, `/admin` changes and `/schedule delete` (`audit log unavailable … (SAFE-5)`), and an unkeyed row after a keyed row reads as `chain BROKEN at #N` |
+| Audit key | `CORVIDINHO_AUDIT_HMAC_KEY` (env only, never in the DB) | set the **same** key on every process that shares the data dir; without it the chain is plain SHA-256 and the line says `unkeyed — set CORVIDINHO_AUDIT_HMAC_KEY`. Once the chain holds a keyed row, a process without the key refuses dangerous plugin runs, `/admin` changes and `/schedule delete` (`audit log unavailable … (SAFE-5)`), and an unkeyed row after a keyed row reads as `chain BROKEN at #N`. Without the key, a tampered unkeyed row before any keyed row still reads `chain BROKEN at #N` (no key is needed to see it); only reaching a keyed row reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)` |
 | WATCH spawn outcomes | `<data dir>/watch-spawn.jsonl` (override `CORVIDINHO_WATCH_SPAWN_LOG`) plus `[watch] spawn start …` / `[watch] spawn outcome …` lines on stdout | one JSON object per run: start/finish time, repo#number, exit code, error class, duration |
 | Daemon | JSON lines on stdout (journald under systemd) | `journalctl -u corvidinho-daemon -o cat \| jq 'select(.event == "run.finished")'` |
 | Bridge | stdout/stderr (`[discord] …`): journald under systemd, or `/tmp/corvidinho-discord-bridge.log` (`CORVIDINHO_BRIDGE_LOG`) when `scripts/corvidinho-update.sh` starts it in pidfile mode | protocol check, audit line, admin-list and owner warnings |
 | Schedule run history | tables `schedules` / `schedule_runs` in `corvidinho.db` | `/schedule list` (last run, run count); the daemon's `run.finished` events |
 | Discord sessions and `/work` tasks | tables `discord_sessions` / `discord_work_tasks` in `corvidinho.db` | `/session list`, `/status` |
 | Per-session worktrees | `.corvid-worktrees` next to the project (override `WORKTREE_BASE_DIR`) | `git worktree list` in the project |
+| Nightly backup (OPS-1/2) | `corvidinho-<UTC time>.db` snapshots in `CORVIDINHO_BACKUP_DIR` (unset = no backup; mode 0600, newest 7 kept); state in `schema_meta` `ops_*` keys | `corvidinho doctor` (`backup` line: snapshots, last backup / restore test, failure reason, whether the owner was told), `corvidinho backup list`; events `backup.ok` / `backup.failed` / `restore_test.ok` / `restore_test.failed` in the daemon log or `[backup] …` bridge lines. Restore: stop the bridge and daemon, then `corvidinho backup restore <snapshot> <data dir>/corvidinho.db --force` ([`DAEMON.md`](DAEMON.md#nightly-backup-ops-12)) |
 
 Free-text columns in `corvidinho.db` and every string value in the daemon's log lines are
 scrubbed for secrets before they are written (SAFE-6). The audit chain stores an args digest,

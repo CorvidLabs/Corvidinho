@@ -18,6 +18,7 @@
 
 import { createHash } from "node:crypto";
 import { formatSpendWarningLine } from "../agent/spend-notice.ts";
+import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
@@ -27,6 +28,8 @@ export { defangMassMentions };
 
 /** Discord hard limit is 2000; the gateway slices at 1900. */
 export const ASK_REPLY_MAX = 1900;
+/** Run-summary chars a `/work`, `/session start` or schedule post shows. */
+export const POST_SUMMARY_MAX = 1500;
 /** Question chars shown in the post. */
 export const ASK_REPLY_QUESTION_MAX = 1200;
 /** Stuck-run context chars shown (e.g. the verify failure summary). */
@@ -201,12 +204,30 @@ export function withSpendWarningPost<
   };
 }
 
-/** `content` + a blank line + `line`, cutting `content` so the post stays ≤ max. */
+/**
+ * `content` + a blank line + `line`, cutting `content` so the post stays ≤ max.
+ * The cut keeps a closing "(not allowed for your role)" note (ROLES-CHAT-3,
+ * REQ-discord-734): the body loses its end, never the note.
+ */
 export function appendPostLine(content: string, line: string, max = ASK_REPLY_MAX): string {
   const room = max - line.length - 2;
   if (room <= 0) return line.slice(0, max);
-  const head = content.length <= room ? content : `${content.slice(0, room - 1)}…`;
+  const head = clipKeepingRoleNote(content, room, (text, n) =>
+    n > 0 ? `${text.slice(0, n - 1)}…` : "",
+  );
   return head ? `${head}\n\n${line}` : line;
+}
+
+/**
+ * A run summary clipped for a post (REQ-discord-734, ROLES-CHAT-3): at most
+ * POST_SUMMARY_MAX chars and no more than fits after a `headLength`-char post
+ * head within ASK_REPLY_MAX, so the gateway's 1900 cut never reaches it. A
+ * closing "(not allowed for your role)" note is kept (clipKeepingRoleNote,
+ * REQ-agent-333); a summary without it is cut where a plain head cut would.
+ */
+export function clipPostSummary(summary: string, headLength = 0): string {
+  const max = Math.max(0, Math.min(POST_SUMMARY_MAX, ASK_REPLY_MAX - headLength));
+  return clipKeepingRoleNote(summary, max, (text, n) => text.slice(0, n));
 }
 
 /** Pointer for the user a collapsed answer asks a question (AUTONOMY-4). */

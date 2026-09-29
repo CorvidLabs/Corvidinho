@@ -84,7 +84,7 @@ import {
   gateActor,
   gateChannel,
   gateRateOrMute,
-  isMonitoredChannel,
+  isMonitoredConversation,
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
   PermissionLevel,
@@ -114,6 +114,7 @@ import {
   recoverInterruptedReplies,
   type InflightReply,
 } from "./inflight-replies.ts";
+import { type BackupTicker, consoleBackupLog, createBackupTicker } from "../store/backup.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
 import {
@@ -207,6 +208,8 @@ export type StartBridgeOptions = {
   disableScheduler?: boolean;
   /** Scheduler poll interval override (tests). */
   schedulerPollIntervalMs?: number;
+  /** Scheduler (and nightly backup) clock override (tests). */
+  schedulerNow?: () => number;
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
@@ -457,8 +460,7 @@ export async function startBridge(
           !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
         // DISCORD-5: the fallback notice only in a conversation still allowlisted.
         mayPost: (channelId, parentChannelId) =>
-          isMonitoredChannel(channelId, config.allowlist) ||
-          (parentChannelId != null && isMonitoredChannel(parentChannelId, config.allowlist)),
+          isMonitoredConversation(channelId, parentChannelId, config.allowlist),
         // An approved forget also drops the session threads this process
         // still holds for them, so no later run replays those turns.
         onForgotten: ({ discordIds }) => {
@@ -590,6 +592,20 @@ export async function startBridge(
 
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
+
+      // DISCORD-ASK-5 / REQ-discord-044: a button ask past its timeout is
+      // cleared here, before the thin-ack gate, so its dead Choose button is
+      // never restated. The newest open ask that has not timed out takes its
+      // place (earlier timed-out ones are dropped), or none is left and the
+      // message runs the agent. A cancel keeps its ack below.
+      if (
+        action.kind === "continue_session" &&
+        session.pendingAsk?.options?.length &&
+        isAskExpired(session.pendingAsk) &&
+        !isCancelAsk(promptBodyForAskGate(prompt))
+      ) {
+        store.clearPendingAsk(session, session.pendingAsk.askId);
+      }
 
       // AUTONOMY-5/6: while waiting on an ask, thin acks restate the newest
       // one; cancel clears every open ask of the session (SESSION-MULTI-3).
@@ -1038,13 +1054,23 @@ export async function startBridge(
       // not only the newest one.
       const pressed = store.findPendingAsk(parsed.askId);
       const session = pressed?.session;
+      // DISCORD-ASK-5 / REQ-discord-045 — an ask that is no longer open (timed
+      // out and dropped, or its session TTL-purged) still knows where its talk
+      // lived, so a press on it passes the same channel gate as a live one.
+      const closed = pressed ? undefined : store.findClosedAsk(parsed.askId);
 
       // DISCORD-5 / DISCORD-DENY-2/3 / REQ-discord-212 — a press counts only in
       // an allowlisted channel (inside the session's thread, its allowlisted
       // parent counts, DISCORD-2.a), and only while the session's own channel
       // is still allowlisted, since the resumed run posts there. Otherwise the
       // ack is ephemeral only: the tip for an admin, zero-width for anyone else.
-      if (!componentChannelAllowlisted(interaction.channelId, session, config.allowlist)) {
+      if (
+        !componentChannelAllowlisted(
+          interaction.channelId,
+          session ?? closed,
+          config.allowlist,
+        )
+      ) {
         const admin =
           resolvePermissionLevel({
             userId: interaction.userId,
@@ -1098,6 +1124,16 @@ export async function startBridge(
       }
 
       const pending = pressed?.ask ?? null;
+
+      // DISCORD-ASK-5 / REQ-discord-045 — the requester's press on an ask that
+      // is no longer open because it timed out (dropped, not promoted, when a
+      // newer ask was picked) or its session was TTL-purged is a late press:
+      // "that choice expired", no agent run. Another user's press on it still
+      // gets the not-for-you reply below, as on a live ask.
+      if (!pending && closed && closed.userId === interaction.userId) {
+        await interaction.reply({ content: ASK_CHOICE_EXPIRED, ephemeral: true });
+        return;
+      }
 
       // Wrong user or unknown ask → short ephemeral, do not leak.
       if (!session || !pending || session.userId !== interaction.userId) {
@@ -1512,17 +1548,43 @@ export async function startBridge(
     });
 
   let scheduler: SchedulerService | null = null;
+  let backup: BackupTicker | undefined;
   if (!opts.disableScheduler) {
+    // OPS-1/2 (#68): nightly backup + restore test on the scheduler tick
+    // (CORVIDINHO_BACKUP_DIR; off when unset). A failure tells the owner once
+    // per failure streak: fixed text in the announcements channel
+    // (DISCORD-ANNOUNCE) with only the owner pinged; with no channel set the
+    // notice waits (logged once, shown by doctor) and is retried every tick.
+    backup = db
+      ? createBackupTicker({
+          db,
+          env,
+          log: consoleBackupLog,
+          notify: async ({ content }) => {
+            const channelId = announceStore?.getChannelId();
+            if (!channelId || !replyRef.fn) return false;
+            const ownerId = config.owner?.discordId;
+            const sent = await replyRef.fn({
+              channelId,
+              content: ownerId ? `<@${ownerId}> ${content}` : content,
+              ...(ownerId ? { mentionUserIds: [ownerId] } : {}),
+            });
+            return sent !== null;
+          },
+        })
+      : undefined;
     scheduler = new SchedulerService({
       store: scheduleStore,
       agent,
       allowlist: config.allowlist,
       pollIntervalMs: opts.schedulerPollIntervalMs,
+      ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
       spendAlerts,
       // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices.
       ...(forgetCards ? { onTick: () => void forgetCards.deliver() } : {}),
+      backup,
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
           if (!replyRef.fn) return false;
@@ -1573,11 +1635,10 @@ export async function startBridge(
     const r = await recoverInterruptedReplies({
       store: inflightReplies,
       rows: interruptedReplies,
-      // DISCORD-5: only channels (or a thread's parent) still allowlisted now.
+      // DISCORD-5: only channels (or a thread's parent) still allowlisted
+      // now; a deny on the thread or its parent wins (REQ-plugins-005).
       mayPost: (row) =>
-        isMonitoredChannel(row.channelId, config.allowlist) ||
-        (row.parentChannelId != null &&
-          isMonitoredChannel(row.parentChannelId, config.allowlist)),
+        isMonitoredConversation(row.channelId, row.parentChannelId, config.allowlist),
       editEmbed: (o) => outbound.editEmbed(o),
       reply: replyRef.fn,
     });
@@ -1605,6 +1666,9 @@ export async function startBridge(
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       scheduler?.stop();
+      // OPS-1: no further backup notice is taken; one in flight is waited
+      // for below, and handed back if it outlasts the grace (never lost).
+      backup?.stop();
       if (scheduler) {
         // REQ-discord-346: like the daemon, a schedule run still going is
         // recorded failed and its agent tree killed, then gets a short
@@ -1623,6 +1687,7 @@ export async function startBridge(
         // or handed back for the next start, not left taken and unposted.
         await scheduler.settleAskDelivery(ABANDONED_SETTLE_MS);
       }
+      await backup?.settle(ABANDONED_SETTLE_MS);
       await gateway.stop();
     },
   };

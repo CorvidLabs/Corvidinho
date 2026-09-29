@@ -60,10 +60,11 @@ afterEach(() => {
 });
 
 /** Agent whose next run ends as `steps.next` (the task run's result shapes). */
-function stepAgent(steps: { next: Step; calls?: number }): AgentClient {
+function stepAgent(steps: { next: Step; calls?: number; prompt?: string }): AgentClient {
   return {
-    async runChat({ sessionId }) {
+    async runChat({ sessionId, prompt }) {
       steps.calls = (steps.calls ?? 0) + 1;
+      steps.prompt = prompt;
       const step = steps.next;
       if (step === "ok") return { ok: true, sessionId, summary: "done", exitCode: 0 };
       if (step === "fail") return { ok: false, sessionId, summary: "boom", exitCode: 1 };
@@ -133,7 +134,7 @@ function pair(
     channelId: CHANNEL,
     now: clock.now,
   });
-  const steps: { next: Step; calls?: number } = { next: "ok" };
+  const steps: { next: Step; calls?: number; prompt?: string } = { next: "ok" };
   const workspace = opts.projectRoot
     ? { useWorktrees: true, defaultProjectRoot: opts.projectRoot }
     : { useWorktrees: false };
@@ -749,6 +750,58 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
       if (saved === undefined) delete process.env.WORKTREE_BASE_DIR;
       else process.env.WORKTREE_BASE_DIR = saved;
     }
+  });
+
+  test("a daemon run whose absolute project cannot be resolved posts its stuck ask naming the project, never the host path", async () => {
+    const base = tempRoot("corvidinho-prerun-abs-");
+    const root = join(base, "root");
+    mkdirSync(root);
+    // An absolute sibling of the root is in reach: resolve looks for it and fails.
+    const project = join(base, "gone");
+    const h = pair({ projectRoot: root, project });
+    await h.daemonRun("ok");
+    expect(h.steps.calls ?? 0).toBe(0);
+    const row = h.lastRun();
+    expect(row).toMatchObject({
+      status: "failed",
+      ask_reason: "stuck",
+      ask_question: PROJECT_RESOLVE_FAILED_QUESTION,
+      ask_posted_at: null,
+    });
+    // The full error (with the host path) stays on the run row.
+    expect(row.error).toStartWith(`project resolve failed: project path not found: ${project}`);
+
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(1);
+    const post = h.posts[0]!;
+    expect(post.content.split("\n")[0]).toBe(
+      `Schedule **Nightly** (\`${h.schedule.id.slice(0, 12)}\`) on \`gone\`:`,
+    );
+    expect(post.content).toContain(`> ${PROJECT_RESOLVE_FAILED_QUESTION}`);
+    expect(post.content).not.toContain(base);
+    expect(pinged(post, OWNER_ID)).toBe(true);
+  });
+
+  test("result and ask posts of a schedule on an absolute project name the project, never the host path; the model's prompt keeps it", async () => {
+    const project = "/srv/host-only/acme/Widget";
+    const h = pair({ project });
+    const title = `Schedule **Nightly** (\`${h.schedule.id.slice(0, 12)}\`) on \`Widget\`:`;
+    await h.bridgeRun("ok");
+    expect(h.steps.prompt).toContain(`on project: ${project}`);
+    await h.bridgeRun("fail");
+    await h.bridgeRun(CLARIFY);
+    await h.bridgeRun(STUCK);
+    // A daemon-claimed ask goes out through the bridge's delivery pass.
+    await h.daemonRun({ reason: "stuck", question: "Which branch should I rebase onto?" });
+    await h.bridgeTick();
+    expect(h.posts.map((p) => p.content.split("\n")[0])).toEqual([
+      `✅ ${title}`,
+      `❌ ${title}`,
+      title,
+      title,
+      title,
+    ]);
+    for (const p of h.posts) expect(p.content).not.toContain("/srv/host-only");
   });
 });
 

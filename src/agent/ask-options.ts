@@ -32,17 +32,36 @@ function toOption(id: string, label: string): AskOption | null {
 }
 
 /**
+ * Claim `id` for one option of an ask, or, when an earlier option already
+ * holds it, the first unused position number ("1", "2", …). Each id rides in
+ * its button's custom_id (`cvask:pick:<askId>:<id>`), which Discord requires
+ * to be unique, and a pick is matched to its label by id (DISCORD-ASK-1/3).
+ */
+function claimOptionId(id: string, used: Set<string>): string {
+  let unique = id;
+  for (let n = 1; used.has(unique); n++) unique = String(n);
+  used.add(unique);
+  return unique;
+}
+
+/**
  * Normalize structured options from the ask-human tool (array of strings or
- * `{id,label}` objects). Caps at ASK_OPTIONS_MAX; drops empties.
+ * `{id,label}` objects). Caps at ASK_OPTIONS_MAX; drops empties. Ids come out
+ * unique: a repeated id (explicit, cut to 32 chars, or a position fallback)
+ * takes the first unused position number. Options whose ids are already
+ * unique come out unchanged, so normalizing a stored ask again is a no-op.
  */
 export function normalizeAskOptions(raw: unknown): AskOption[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   const out: AskOption[] = [];
+  const used = new Set<string>();
+  const add = (o: AskOption | null) => {
+    if (o) out.push({ id: claimOptionId(o.id, used), label: o.label });
+  };
   for (let i = 0; i < raw.length && out.length < ASK_OPTIONS_MAX; i++) {
     const item = raw[i];
     if (typeof item === "string") {
-      const o = toOption(String(i + 1), item);
-      if (o) out.push(o);
+      add(toOption(String(i + 1), item));
       continue;
     }
     if (item && typeof item === "object" && !Array.isArray(item)) {
@@ -65,8 +84,7 @@ export function normalizeAskOptions(raw: unknown): AskOption[] | undefined {
       // the button to work after a restart. So one that looks like a secret
       // falls back to its position instead of being redacted at rest (SAFE-6).
       const id = cleanId && scrubSecrets(cleanId) === cleanId ? cleanId : String(i + 1);
-      const o = toOption(id, label);
-      if (o) out.push(o);
+      add(toOption(id, label));
     }
   }
   return out.length >= 2 ? out : undefined;

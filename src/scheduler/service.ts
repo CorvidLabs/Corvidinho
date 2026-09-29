@@ -18,16 +18,21 @@
  * worktree failure) and a run that auto-pauses its schedule record a stuck
  * ask the same way, so the owner hears about it instead of the schedule
  * dying silently.
+ * OPS-1/2 (#68): the nightly backup and weekly restore test (src/store/
+ * backup.ts) ride the same tick in the bridge and the daemon; the backup
+ * claims its night in SQLite, so two tickers on one data dir back up once.
  */
 
 import { basename } from "node:path";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
+import { projectLabel } from "../discord/list-scope.ts";
 import { gateActor } from "../discord/permissions.ts";
 import {
   ASK_NO_OWNER_WARNING,
   askPingKey,
+  clipPostSummary,
   formatAskReply,
   withSpendWarningPost,
 } from "../discord/ask-ping.ts";
@@ -35,6 +40,7 @@ import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
+import type { BackupTicker } from "../store/backup.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
   ensureTalkWorkspace,
@@ -89,9 +95,16 @@ function runWorktreeKey(scheduleId: string, runId: string): string {
   return `schedule_${scheduleId}_${runId}`.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
-/** Leading line of a schedule's Discord post. */
+/**
+ * Leading line of a schedule's Discord post (result and ask posts). The whole
+ * channel reads it, so the project is shown by name (`projectLabel`: the last
+ * segment of an absolute path, a relative name as given), never as an
+ * absolute host path (REQ-discord-353, REQ-discord-418, SAFE-6). The model's
+ * prompt keeps the stored project.
+ */
 function scheduleTitle(schedule: Schedule): string {
-  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
+  const project = projectLabel(schedule.project) ?? "";
+  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${project}\``;
 }
 
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
@@ -211,6 +224,11 @@ export type SchedulerServiceOpts = {
    * cards, MEMORY-ACL-6). A throw is logged; the tick goes on.
    */
   onTick?: () => void;
+  /**
+   * OPS-1/2: nightly backup + restore test, run from each tick after the due
+   * runs are claimed (it claims its own night; never throws).
+   */
+  backup?: Pick<BackupTicker, "tick">;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -243,6 +261,7 @@ export class SchedulerService {
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private readonly onTick?: () => void;
+  private readonly backup?: Pick<BackupTicker, "tick">;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -269,6 +288,7 @@ export class SchedulerService {
     this.spendAlerts = opts.spendAlerts;
     this.onRunFinished = opts.onRunFinished;
     this.onTick = opts.onTick;
+    this.backup = opts.backup;
     if (!opts.manual) {
       this.start();
     }
@@ -363,6 +383,9 @@ export class SchedulerService {
       // REQ-discord-347: post asks another ticker (the daemon) left pending.
       // Fire-and-forget like the runs: a slow post never delays a tick.
       this.deliverPendingAsks();
+      // OPS-1/2: the nightly backup / restore test when due, after the runs
+      // are claimed; its owner notice post is fire-and-forget too.
+      this.backup?.tick(now);
     } finally {
       this.tickInFlight = false;
     }
@@ -653,8 +676,10 @@ export class SchedulerService {
         signal,
       });
 
+      // ROLES-CHAT-3 (REQ-discord-734): the run row's summary and the post
+      // keep a closing role note when they cap a long summary.
       const summary = result.ok
-        ? result.summary.slice(0, 1500)
+        ? clipPostSummary(result.summary)
         : `failed (exit ${result.exitCode})`;
 
       const done = this.finish(schedule, run, {
@@ -693,11 +718,12 @@ export class SchedulerService {
           let posted: void | boolean = false;
           try {
             const status = result.ok ? "✅" : "❌";
+            const head = `${status} ${scheduleTitle(schedule)}:\n`;
             posted = await this.outbound.post(
               withSpendWarningPost(
                 {
                   channelId: schedule.channelId,
-                  content: `${status} ${scheduleTitle(schedule)}:\n${summary.slice(0, 1500)}`,
+                  content: `${head}${clipPostSummary(summary, head.length)}`,
                 },
                 pending?.warning,
                 this.owner,
