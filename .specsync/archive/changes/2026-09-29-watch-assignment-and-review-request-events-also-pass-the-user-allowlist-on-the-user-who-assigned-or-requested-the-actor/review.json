@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "change_id": "discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl",
+  "change_id": "watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor",
   "reviewer": "corvid-agent",
   "provenance": {
     "schema_version": 1,
@@ -9,8 +9,8 @@
   },
   "verdict": "pass",
   "implementation_commit": "53f2e5df126fb01632b641ba57f51997aea8660e",
-  "contract_digest": "3f7435ffc3e7978931e89ba4d42f8d978e10787ff1925268fd1ee34a27c08cdd",
-  "execution_digest": "f422840965eaa2cf41f88af4a67751e4a306e161e204098d266c8aa794e935bf",
+  "contract_digest": "85a76aa8c21797515d37d072d4174f0cb7589fc848da4f12af28053d7ded3692",
+  "execution_digest": "7da016997ba11c8e8f68e7e067d07051372c18c9c5fb777ad13103db32d26e94",
   "workspace_digest": "6284ba7e1b3363472b53a23506076d7f600396f92395df26888c7b68fef9dfc3",
-  "timestamp": 1790711219
+  "timestamp": 1790711595
 }

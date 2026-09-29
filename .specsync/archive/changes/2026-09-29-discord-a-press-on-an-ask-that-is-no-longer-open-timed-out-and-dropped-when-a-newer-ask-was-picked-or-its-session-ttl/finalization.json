@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
   "change_id": "discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl",
-  "implementation_commit": "215d9ed354543a7ff35d1ffb1b20e3ec16520e79",
-  "implementation_tree": "705589a8f7706748ee11aeb7161e90f302d61c7e",
+  "implementation_commit": "53f2e5df126fb01632b641ba57f51997aea8660e",
+  "implementation_tree": "6ed47598f334304d9c48d1281a40e2eb5c22f739",
   "contract_digest": "3f7435ffc3e7978931e89ba4d42f8d978e10787ff1925268fd1ee34a27c08cdd",
-  "workspace_digest": "50f07f9abae993a909d9fd013c7c18d6923901e762536e5699529216f4c8eaee",
-  "closing_digest": "84f74e764edd6bdf7bc7c6e3efa6357f8d81170eb66829884c20fb6b57375e09",
-  "review_digest": "82b48b5d4d9cdb8a91e50db58c250382738eb4a17738044c1f172008a678162b",
-  "finalization_digest": "54b439378585d944c95386e1279bd64831a97066bfbc2dd9eb5d082a6d49cd95",
-  "timestamp": 1790711495
+  "workspace_digest": "6284ba7e1b3363472b53a23506076d7f600396f92395df26888c7b68fef9dfc3",
+  "closing_digest": "0a1460335d2ed81ad8b3f3a0ad429ffa80248a9e192f335612451949f66c4ad1",
+  "review_digest": "9b1d5e352cf8fb41df8983299f1a76d6735d2ae438ecab4bb35fecde34e10923",
+  "finalization_digest": "cc1ddd38f3fc92ba241ba74ed5ea060488a17a2c5a3458bad2a28d3353871c58",
+  "timestamp": 1790711227
 }

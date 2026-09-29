@@ -79,8 +79,8 @@
     {
       "gate": "finalization",
       "actor": "specsync:finalization",
-      "timestamp": 1790711495,
-      "digest": "84f74e764edd6bdf7bc7c6e3efa6357f8d81170eb66829884c20fb6b57375e09",
+      "timestamp": 1790711227,
+      "digest": "0a1460335d2ed81ad8b3f3a0ad429ffa80248a9e192f335612451949f66c4ad1",
       "note": "Same-PR finalization closing digest"
     }
   ],

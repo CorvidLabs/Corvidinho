@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "change_id": "discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl",
+  "change_id": "every-cap-on-the-way-to-a-post-keeps-the-closing-roles-chat-3-not-allowed-for-your-role-note-the-watch-summary-comment",
   "reviewer": "corvid-agent",
   "provenance": {
     "schema_version": 1,
@@ -9,8 +9,8 @@
   },
   "verdict": "pass",
   "implementation_commit": "53f2e5df126fb01632b641ba57f51997aea8660e",
-  "contract_digest": "3f7435ffc3e7978931e89ba4d42f8d978e10787ff1925268fd1ee34a27c08cdd",
-  "execution_digest": "f422840965eaa2cf41f88af4a67751e4a306e161e204098d266c8aa794e935bf",
+  "contract_digest": "86cf37677468760625b0ab477b925bcc86f24bbdf83352a2aa6cacb28498604b",
+  "execution_digest": "83e3c34d38ed165944ea847df4695738b50b95b7234ad402106706f2deb76f9f",
   "workspace_digest": "6284ba7e1b3363472b53a23506076d7f600396f92395df26888c7b68fef9dfc3",
-  "timestamp": 1790711219
+  "timestamp": 1790711409
 }

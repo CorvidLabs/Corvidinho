@@ -13,7 +13,7 @@ Synthesise from what actually happened below; do not restate the change descript
 
 ## Evidence
 
-- Verification commit: `215d9ed354543a7ff35d1ffb1b20e3ec16520e79`
+- Verification commit: `53f2e5df126fb01632b641ba57f51997aea8660e`
 - Base commit: `310861f81c5fb0314447109b959b8f37fb323578`
 - Verified by: `specsync check --spec discord`
 
