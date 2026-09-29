@@ -570,3 +570,45 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
+`tests/discord.forget-card.test.ts` — the Approve/Deny card helper
+(`cvok:<kind>:<decision>:<id>` round trip, junk refused, Approve danger /
+Deny grey, expiry, text); `memory-forget-me` records one pending ask per
+person for a declared person, a community member and an undeclared user,
+audited `memory-forget-request` started / ok, deleting nothing; refused with
+no actor, outside a conversation, with arguments and with no owner. Through
+`startBridge` with a fake gateway: `deliverForgetCards` DMs the owner one card
+(who, count, request id, lapse; no content) with Approve / Deny; a non-owner
+press (even the asker) is refused ephemerally with a `denied` row; the owner's
+Approve deletes every memory row of that person (profile, private, superseded,
+legacy and alt Discord-id scopes) and their session turns, stored and in
+the running bridge's session thread, keeps other people's and project memory
+and the people list, writes `started` / `ok`, answers the press first
+(card without buttons, before any DM), then DMs the asker and marks the card
+told; a second press finds it closed. Deny deletes nothing and, when the DM fails, tells the asker in their
+allowlisted conversation. The chat path delivers the card after the message.
+A keyed audit chain with no key refuses Approve and leaves the ask pending
+(SAFE-5 fail closed). With a fake clock an unanswered ask expires on the pass
+(card closed, asker told) and a late Approve deletes nothing. Schema v12: a
+v11 DB migrates keeping memories, `forget_requests` has no free-text column,
+one pending ask per subject, re-running is a no-op.
+`tests/watch.session-store.durable.test.ts` and
+`tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 12.
+
+Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
+`tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question
+in plain words finds the fact it is about; a key hit outranks a newer passing
+mention and equal relevance goes to the newer row; › "the Discord inject
+searches memory for the message" — an older fact the message is about is
+injected although 25 newer rows exist (block still 20 rows); › "/work: the
+project block is searched for the description" — with 25 newer project rows
+the owner's `/work` (through `handleWorkCommand`) still carries the older
+project fact its description is about; › "Discord spawn clears inherited
+GitHub commenter keys". `tests/memory.rank.test.ts` —
+`recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
+a multi-scope search keeping the newest of a key once and no private notes, a
+question-words-only query matching as one substring, `recallRelevantThenRecent`,
+`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
+undeclared-under-`[people]` owner on their Discord id) and
+`projectScopeForRepo`.

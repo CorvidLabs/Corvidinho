@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 53
+version: 54
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -58,6 +58,8 @@ files:
   - plugins/search/commands.ts
   - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
+  - tests/memory.profiles.test.ts
+  - tests/memory.recall-github.test.ts
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/files.dangling-symlink.test.ts
@@ -213,6 +215,29 @@ only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
 `memory-forget` / `memory-override` are two-phase with an HMAC confirm token
 confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+Whose memory a call reads and writes is the acting Discord id matched in the
+owner's people list re-read at the call (MEMORY-5 / REQ-plugins-101): a
+declared person's one `person:<id>` profile (plus rows under their Discord
+ids from before), else the Discord id as before; profile categories
+`project` / `preference` / `decision` / `ask` / `approval` and private notes
+(`private`); `memory-profile` shows role (the people list's), projects,
+preferences and history, private notes counted only. `--person` reads
+someone else's memory for the owner only, opaque `not authorized` otherwise;
+private notes come back only when asked for by name, by that person or the
+owner, in a conversation (MEMORY-7). `--project` is the run's repo memory
+(`project:<owner/repo>` or the main checkout path) for owner, team and the
+local CLI, never community (MEMORY-6). `memory-forget-me` (safe, no argv)
+records the acting person's forget request from a conversation, audited;
+it deletes nothing (MEMORY-ACL-6).
+In a GitHub WATCH run (no Discord actor) the acting person is the commenter
+the poller sets (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID`, thread repo
+`_REPO`; env only) matched by GitHub numeric id / login in the people list
+(MEMORY-8 / REQ-plugins-067): a declared commenter stores and recalls their own
+profile; an undeclared one gets community scope — `memory-recall --project`
+reads the thread repo's project memory, nothing is saved; from GitHub project
+memory is never written and `--person`, private notes and `memory-forget-me`
+are refused. `memory-recall --query` is ranked by relevance, then recency
+(MEMORY-9).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
@@ -803,6 +828,8 @@ and current rows for plugins host evolution.
 | 2026-09-27 | plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and: PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |
 | 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
+| 2026-09-29 | person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one: Person and project memory, private notes, and forget-me on an owner Approve/Deny card: each declared person keeps one profile keyed by person id (role, projects, preferences, history of decisions, asks and approvals), each project keeps memory keyed by its repo for whoever works on it next, a person's memory and private notes are shown only to them and the owner on every surface, and anyone can ask to be forgotten, which deletes their memories once the owner approves on a DM Approve/Deny card (MEMORY-5/6/7, MEMORY-ACL-6, #101) |
+| 2026-09-29 | memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run: Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67) |
 | 2026-09-29 | allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer: Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |

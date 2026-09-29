@@ -1,17 +1,27 @@
 /**
- * Local SQLite MemoryStore with per-user ACL (MEMORY-1..4 / MEMORY-ACL-1..5).
+ * Local SQLite MemoryStore with per-user ACL (MEMORY-1..4 / MEMORY-ACL-1..5);
+ * a recall with a query is a ranked search (MEMORY-9, src/memory/rank.ts).
+ *
+ * `owner_user_id` holds the row's scope (src/memory/scope.ts): a Discord user
+ * id (an undeclared user, as before), `person:<id>` (a declared person's
+ * profile, MEMORY-5) or `project:<key>` (a repo's memory, MEMORY-6). Who may
+ * read a scope is decided by the callers (plugins/memory, the Discord inject);
+ * the store itself never returns private notes unless asked (MEMORY-7).
  */
 
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import { scrubSecrets } from "../store/scrub.ts";
+import { rankMemories, RECALL_CANDIDATE_LIMIT, recallTerms } from "./rank.ts";
 import {
   isMemoryCategory,
+  MEMORY_CATEGORY_LIST,
   MemoryAclError,
   MemoryNotFoundError,
   MemoryValidationError,
   type MemoryCategory,
   type MemoryRecord,
+  PRIVATE_NOTE_CATEGORY,
 } from "./types.ts";
 
 type MemoryRow = {
@@ -55,7 +65,22 @@ export type StoreMemoryInput = {
 
 export type RecallMemoryInput = {
   ownerUserId: string;
+  /**
+   * Scopes to read instead of `ownerUserId` alone (a declared person's scope
+   * plus the Discord ids their rows were stored under before they were
+   * declared). A key stored in two of them is returned once, newest first.
+   */
+  scopes?: readonly string[];
   category?: string;
+  /**
+   * MEMORY-7: private notes are left out unless `category` is "private" or
+   * this is true. Default false.
+   */
+  includePrivate?: boolean;
+  /**
+   * Search text (MEMORY-9): rows holding it or any of its terms, ranked by
+   * relevance then recency (src/memory/rank.ts). Omitted: newest first.
+   */
   query?: string;
   limit?: number;
   /** When true, include soft-deleted (admin audit). Default false. */
@@ -97,7 +122,7 @@ export class MemoryStore {
     }
     if (!isMemoryCategory(input.category)) {
       throw new MemoryValidationError(
-        `category must be one of: conversation, entity, person, personality`,
+        `category must be one of: ${MEMORY_CATEGORY_LIST}`,
       );
     }
     // SAFE-6: scrub before persist (key and content).
@@ -138,34 +163,107 @@ export class MemoryStore {
   }
 
   recall(input: RecallMemoryInput): MemoryRecord[] {
-    const owner = input.ownerUserId.trim();
-    if (!owner) return [];
+    const scopes = [
+      ...new Set(
+        (input.scopes ?? [input.ownerUserId]).map((s) => s.trim()).filter(Boolean),
+      ),
+    ];
+    if (scopes.length === 0) return [];
 
     const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
-    const params: (string | number)[] = [owner];
-    let sql = `SELECT * FROM memories WHERE owner_user_id = ?`;
+    const params: (string | number)[] = [...scopes];
+    let sql = `SELECT * FROM memories WHERE owner_user_id IN (${scopes.map(() => "?").join(", ")})`;
     if (!input.includeDeleted) {
       sql += ` AND deleted_at IS NULL`;
+    }
+    if (input.category !== PRIVATE_NOTE_CATEGORY && !input.includePrivate) {
+      sql += ` AND category <> ?`;
+      params.push(PRIVATE_NOTE_CATEGORY);
     }
     if (input.category) {
       if (!isMemoryCategory(input.category)) {
         throw new MemoryValidationError(
-          `category must be one of: conversation, entity, person, personality`,
+          `category must be one of: ${MEMORY_CATEGORY_LIST}`,
         );
       }
       sql += ` AND category = ?`;
       params.push(input.category);
     }
-    if (input.query?.trim()) {
-      sql += ` AND (key LIKE ? OR content LIKE ?)`;
-      const q = `%${input.query.trim()}%`;
-      params.push(q, q);
+    // MEMORY-9 (#67): a query is a search — rows holding the whole query or
+    // any of its terms are read (newest first, up to RECALL_CANDIDATE_LIMIT)
+    // and ranked by relevance, then recency (src/memory/rank.ts). A query
+    // with no terms (only short or question words) matches as one substring,
+    // newest first, as before.
+    const query = input.query?.trim() ?? "";
+    const terms = recallTerms(query);
+    if (query) {
+      const likes = [query, ...terms];
+      sql += ` AND (${likes.map(() => "key LIKE ? OR content LIKE ?").join(" OR ")})`;
+      for (const l of likes) {
+        const q = `%${l}%`;
+        params.push(q, q);
+      }
     }
-    sql += ` ORDER BY updated_at DESC LIMIT ?`;
-    params.push(limit);
+    sql += ` ORDER BY updated_at DESC, created_at DESC LIMIT ?`;
+    // Several scopes may hold the same key: read enough to fill `limit`
+    // after keeping only the newest of each.
+    params.push(
+      terms.length > 0
+        ? RECALL_CANDIDATE_LIMIT
+        : scopes.length > 1
+          ? limit * scopes.length
+          : limit,
+    );
 
-    const rows = this.db.query(sql).all(...params) as MemoryRow[];
-    return rows.map(rowToRecord);
+    let rows = (this.db.query(sql).all(...params) as MemoryRow[]).map(rowToRecord);
+    if (scopes.length > 1 && !input.includeDeleted) {
+      const seen = new Set<string>();
+      rows = rows.filter((r) => {
+        const k = `${r.category}\u0000${r.key}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+    if (terms.length > 0) {
+      rows = rankMemories(rows, query, this.now()).map((r) => r.record);
+    }
+    return rows.slice(0, limit);
+  }
+
+  /**
+   * Active rows per category across `scopes` (a profile's counts, MEMORY-5).
+   * Private notes are counted too — a count shows no content.
+   */
+  countByCategory(scopes: readonly string[]): Record<string, number> {
+    const list = [...new Set(scopes.map((s) => s.trim()).filter(Boolean))];
+    if (list.length === 0) return {};
+    const rows = this.db
+      .query(
+        `SELECT category, COUNT(DISTINCT category || char(0) || key) AS n FROM memories
+         WHERE owner_user_id IN (${list.map(() => "?").join(", ")}) AND deleted_at IS NULL
+         GROUP BY category`,
+      )
+      .all(...list) as Array<{ category: string; n: number }>;
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.category] = r.n;
+    return out;
+  }
+
+  /**
+   * MEMORY-ACL-6: delete every row of `scopes` for good — active and
+   * soft-deleted (a re-stored key's earlier content, a forgotten row), so
+   * nothing about them stays retrievable. Returns the rows deleted. Only
+   * the owner-approved forget request calls this (src/discord/forget-card.ts).
+   */
+  purgeScopes(scopes: readonly string[]): number {
+    const list = [...new Set(scopes.map((s) => s.trim()).filter(Boolean))];
+    if (list.length === 0) return 0;
+    const res = this.db.run(
+      `DELETE FROM memories WHERE owner_user_id IN (${list.map(() => "?").join(", ")})`,
+      list,
+    );
+    return Number(res.changes);
   }
 
   getById(id: string): MemoryRecord | undefined {

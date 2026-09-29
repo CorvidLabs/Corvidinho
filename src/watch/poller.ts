@@ -6,12 +6,16 @@
  * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL;
  * cycles are single-flight, stop() halts before the next event and waits for
  * the in-flight cycle, and one failing event never aborts the cycle.
+ * REQ-watch-067 (MEMORY-8/9): before each run the commenter's declared
+ * person's memory and the thread repo's project memory are searched for the
+ * comment and prepended, and the run acts for the commenter's GitHub ids.
  */
 
 import type { Database } from "bun:sqlite";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { loadOwnerConfig } from "../identity/owner.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
+import { MemoryStore } from "../memory/store.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
 import {
@@ -38,6 +42,7 @@ import {
   formatRateLimitLog,
   parseGithubRateLimit,
 } from "./rate-limit.ts";
+import { enrichWatchPromptWithMemories } from "./memory-inject.ts";
 import { gateEvent, routeEvent } from "./router.ts";
 import {
   createOctokitSearchClient,
@@ -208,6 +213,9 @@ export async function startWatchPoller(
         );
   const db = opts.db ?? ownedDb;
   let dbClosed = false;
+  // MEMORY-8/9 (REQ-watch-067): the same shared DB the spawned run's memory
+  // plugins use. No DB (an injected session store alone) ⇒ no inject.
+  const memoryStore = db ? new MemoryStore({ db }) : undefined;
   const store =
     opts.sessionStore ??
     new SessionStore({
@@ -399,10 +407,11 @@ export async function startWatchPoller(
       let marked = false;
 
       try {
+        const people = loadDeclaredPeople({ allowlist: config.allowlist, owner });
         const action = routeEvent(event, {
           store,
           allowlist: config.allowlist,
-          people: loadDeclaredPeople({ allowlist: config.allowlist, owner }),
+          people,
         });
         routed = true;
         processed.addMany(relatedIds);
@@ -446,15 +455,32 @@ export async function startWatchPoller(
           }),
         );
 
+        // MEMORY-9: search memory for this comment before the run, so the
+        // model has it before it could say it doesn't know (no model call).
+        let prompt = action.prompt;
+        try {
+          const mem = enrichWatchPromptWithMemories(prompt, memoryStore, { event, people });
+          if (mem.injected) {
+            prompt = mem.prompt;
+            log(`[watch] memory inject: ${mem.count} recalled for @${event.sender}${mem.declared ? "" : " (project only)"}`);
+          }
+        } catch (err) {
+          logError("[watch] memory inject failed", err);
+        }
+
         let spawnOk = false;
         let spawnExit = 1;
         let spawnSummary = "";
         let threw = false;
         try {
           const spawn = await agent.runChat({
-            prompt: action.prompt,
+            prompt,
             sessionId: action.session.id,
             resume: action.kind === "continue_session",
+            // MEMORY-8: the commenter (GitHub API ids) and the thread's repo.
+            actingGithubLogin: event.sender,
+            ...(event.senderId !== undefined ? { actingGithubId: event.senderId } : {}),
+            repo: event.repo,
           });
           spawnOk = spawn.ok;
           spawnExit = spawn.exitCode;
