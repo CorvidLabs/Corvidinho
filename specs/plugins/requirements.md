@@ -97,6 +97,16 @@ values), never a thrown error, and `corvidinho doctor` SHALL report it as a
 failing `allowlist-file` check with the same error. A missing file SHALL
 still mean env overlays only.
 
+A `CORVIDINHO_ALLOWLIST_FILE` value (trimmed) that is `~` or starts with `~/`
+SHALL resolve against the HOME the loader uses for the default path, so the
+documented `.env.example` value `~/.config/corvidinho/allowlist.toml` — which
+dotenv loaders, Bun's included, keep literally — reads the same file as the
+default path instead of a cwd-relative `~/…` that is never found (which
+silently dropped the file's deny lists and `[owner]`). `~user` and every other
+value SHALL be used as written. The allowlist loader, the owner loader, the
+`/admin` write target and `corvidinho doctor` SHALL all resolve the file this
+way. No new env var or config key.
+
 Acceptance Criteria
 - File path env and default home config paths are consulted.
 - Env overlays (e.g. `CORVIDINHO_GITHUB_ALLOW_REPOS`) merge over file.
@@ -105,6 +115,8 @@ Acceptance Criteria
 - An unterminated or malformed array or string, a bad key or a bad header in an allow/deny section throws; `loadAllowlist` rejects for a malformed TOML or JSON file.
 - A pasted U+00A0 between tokens parses; `[my notes]`, `[[rules]]` and `['x']` sections do not stop a load; a `deny_*` key at the top level or in another section, `[[discord]]`, `["github"]`, a stray `["a", "b"]` line and unbalanced brackets throw.
 - With a malformed file, `git-push` (nothing pushed) and `discord-post-message` refuse with exit 3 and the line/key error, without the list values; `corvidinho doctor` shows `[fail] allowlist-file` with the parse error, `[ok]` for a file that loads and `[info]` when there is none.
+- `CORVIDINHO_ALLOWLIST_FILE=~/.config/corvidinho/allowlist.toml` (the `.env.example` line, uncommented in a project `.env`) loads the file under HOME: its `deny_repos` refuses the repo at the GITHUB-6 gate while an env allow admits its org, and its `deny_users` / `[owner]` load; doctor and the `/admin` write target use the same path; a malformed file there fails closed and a missing one still means env overlays only.
+- A bare `~` resolves to HOME; `~user`, absolute, relative and inner-`~` values are used as written.
 
 ### REQ-plugins-007
 

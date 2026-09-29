@@ -1,0 +1,48 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790698672,
+      "digest": "3342cf9b3f2bc16273a734a6edc4171d9a4d126fc94784870a792a7f8ba5ad68",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer",
+        "title": "Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner",
+        "description": "Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "src/allowlist/load.ts",
+          "tests/allowlist.tilde-path.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "CORVIDINHO_ALLOWLIST_FILE set to ~ or to a value starting with ~/ (after trim) resolves against the HOME the loader already uses, so the documented .env.example value ~/.config/corvidinho/allowlist.toml reads the same file as the default path: loadAllowlist / tryLoadAllowlist, the GITHUB-6 repo gate, the owner loader, the /admin write target and doctor all use that file, its deny lists win over an env allow list, and a malformed file behind ~ fails closed; ~user, absolute and relative values are used as written; a missing explicit file still contributes nothing (env overlays only); .env.example says how ~ is read; regression tests fail on main; no new env var, config key, command or schema change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "08feb87b2bee797c05817ed61329a27a3c15289ae05cd633497f8d7107a0c1d8"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790702266,
+      "digest": "8bdf05fb9329c8c92174c23961738dcef22d172cda9d4adc9e262666af0f06b6",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005",
+  "implementation_commit": "685c71c8f70db72cb0e4f992ecb86712c31eba8b",
+  "implementation_tree": "9ff595b244699101fac8c665ac33be620dc727ab",
+  "contract_digest": "792b092396b9eb65f87845deaa2d4750f40730b0affdf2f61d32300a8e8bc4ea",
+  "workspace_digest": "814423058ab16d5aca9bb87a8f6f6bda47fb3bf04dadb83c8fd2a2ee7a1b4185",
+  "closing_digest": "fb6d432b4e022173972e03cd448f9670df708a389bda6a044052a235ff5f0374",
+  "review_digest": "73b4f645d939eec518269e7b052e40e88d715cd40053ca46ccd2ff2cabade2e2",
+  "finalization_digest": "44bae17f7dd6b1f9b59d7d805a856c6244b6f3173b09e33be54e620a83129e48",
+  "timestamp": 1790701914
+}
