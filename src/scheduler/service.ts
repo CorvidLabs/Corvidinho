@@ -24,10 +24,12 @@ import { basename } from "node:path";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
+import { projectLabel } from "../discord/list-scope.ts";
 import { gateActor } from "../discord/permissions.ts";
 import {
   ASK_NO_OWNER_WARNING,
   askPingKey,
+  clipPostSummary,
   formatAskReply,
   withSpendWarningPost,
 } from "../discord/ask-ping.ts";
@@ -89,9 +91,16 @@ function runWorktreeKey(scheduleId: string, runId: string): string {
   return `schedule_${scheduleId}_${runId}`.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
-/** Leading line of a schedule's Discord post. */
+/**
+ * Leading line of a schedule's Discord post (result and ask posts). The whole
+ * channel reads it, so the project is shown by name (`projectLabel`: the last
+ * segment of an absolute path, a relative name as given), never as an
+ * absolute host path (REQ-discord-353, REQ-discord-418, SAFE-6). The model's
+ * prompt keeps the stored project.
+ */
 function scheduleTitle(schedule: Schedule): string {
-  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${schedule.project}\``;
+  const project = projectLabel(schedule.project) ?? "";
+  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${project}\``;
 }
 
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
@@ -639,8 +648,10 @@ export class SchedulerService {
         signal,
       });
 
+      // ROLES-CHAT-3 (REQ-discord-734): the run row's summary and the post
+      // keep a closing role note when they cap a long summary.
       const summary = result.ok
-        ? result.summary.slice(0, 1500)
+        ? clipPostSummary(result.summary)
         : `failed (exit ${result.exitCode})`;
 
       const done = this.finish(schedule, run, {
@@ -679,11 +690,12 @@ export class SchedulerService {
           let posted: void | boolean = false;
           try {
             const status = result.ok ? "✅" : "❌";
+            const head = `${status} ${scheduleTitle(schedule)}:\n`;
             posted = await this.outbound.post(
               withSpendWarningPost(
                 {
                   channelId: schedule.channelId,
-                  content: `${status} ${scheduleTitle(schedule)}:\n${summary.slice(0, 1500)}`,
+                  content: `${head}${clipPostSummary(summary, head.length)}`,
                 },
                 pending?.warning,
                 this.owner,

@@ -103,13 +103,15 @@ Usage:
   corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
                                     and .env files, as Bun loads them there (CLI-5)
 
-Env / allowlists (ALLOW-4; empty = deny-all, never Merlin BASIC):
+Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   CORVIDINHO_NON_INTERACTIVE / FLEDGE_NON_INTERACTIVE  same as --non-interactive
   CORVIDINHO_ALLOWLIST                                  comma-separated dangerous command names
   CORVIDINHO_ALLOWLIST_FILE                             path to allowlist.toml|json on the bot VM
   CORVIDINHO_GITHUB_ALLOW_REPOS / _ORGS / _USERS        default-deny; deny wins (GITHUB-6)
   CORVIDINHO_GITHUB_DENY_REPOS / _ORGS / _USERS         always refuse these
-  CORVIDINHO_DISCORD_ALLOW_CHANNELS / _ROLES / _USERS   HEAR allowlists; empty = refuse (deny-all)
+  CORVIDINHO_DISCORD_ALLOW_CHANNELS                     HEAR channel allowlist; empty = refuse start
+  CORVIDINHO_DISCORD_ALLOW_USERS / _ROLES               both empty = anyone in an allowlisted channel;
+                                                        once either is set, only those users, role holders and the owner
   CORVIDINHO_DISCORD_DENY_CHANNELS / _ROLES / _USERS    deny overrides
   DISCORD_TOKEN / DISCORD_BOT_TOKEN                     required for discord bridge (never commit)
   DISCORD_CHANNEL_IDS                                   non-empty channel ids (union with allowlist)

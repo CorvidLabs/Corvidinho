@@ -296,7 +296,10 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never
   offered, is refused with `not allowed for your role` (ROLES-CHAT-3) and nothing runs. The
   refusal is not posted on its own; the reply ends with a short `(not allowed for your role)`
-  line instead, kept when a long reply is cut to fit. A run that ends by asking a question
+  line instead, kept when a long reply is cut to fit: chat replies, `/session start` and
+  `/work` answers, schedule posts and the run history they come from, a reply shortened for
+  the SAFE-8 80% spend warning, and the WATCH summary comment all lose the end of the text,
+  never the line. A run that ends by asking a question
   posts the question, which can leave the line out. A call to a name that is not a plugin at
   all keeps the plain "not offered" refusal and adds no line. ADMIN is re-checked on every
   call against the live owner config; the prompt never grants it.
@@ -318,7 +321,7 @@ All paths default to the data dir `~/.local/share/corvidinho` (`CORVIDINHO_DATA_
 | What | Where | How to read |
 |------|-------|-------------|
 | SAFE-5 audit chain (dangerous plugin runs incl. denials, `/admin` mutations, `/schedule delete`) | table `audit_log` in `<data dir>/corvidinho.db` (append-only; rows hold action, actor, surface, args digest, outcome, exit code, never raw args) | bridge start log `[discord] Audit: N entries · chain OK (keyed)`, `/status`, `/admin config show`; or any SQLite client, e.g. `sqlite3 ~/.local/share/corvidinho/corvidinho.db 'SELECT seq, ts, action, actor, surface, outcome, exit_code FROM audit_log ORDER BY seq DESC LIMIT 20'` |
-| Audit key | `CORVIDINHO_AUDIT_HMAC_KEY` (env only, never in the DB) | set the **same** key on every process that shares the data dir; without it the chain is plain SHA-256 and the line says `unkeyed — set CORVIDINHO_AUDIT_HMAC_KEY`. Once the chain holds a keyed row, a process without the key refuses dangerous plugin runs, `/admin` changes and `/schedule delete` (`audit log unavailable … (SAFE-5)`), and an unkeyed row after a keyed row reads as `chain BROKEN at #N` |
+| Audit key | `CORVIDINHO_AUDIT_HMAC_KEY` (env only, never in the DB) | set the **same** key on every process that shares the data dir; without it the chain is plain SHA-256 and the line says `unkeyed — set CORVIDINHO_AUDIT_HMAC_KEY`. Once the chain holds a keyed row, a process without the key refuses dangerous plugin runs, `/admin` changes and `/schedule delete` (`audit log unavailable … (SAFE-5)`), and an unkeyed row after a keyed row reads as `chain BROKEN at #N`. Without the key, a tampered unkeyed row before any keyed row still reads `chain BROKEN at #N` (no key is needed to see it); only reaching a keyed row reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)` |
 | WATCH spawn outcomes | `<data dir>/watch-spawn.jsonl` (override `CORVIDINHO_WATCH_SPAWN_LOG`) plus `[watch] spawn start …` / `[watch] spawn outcome …` lines on stdout | one JSON object per run: start/finish time, repo#number, exit code, error class, duration |
 | Daemon | JSON lines on stdout (journald under systemd) | `journalctl -u corvidinho-daemon -o cat \| jq 'select(.event == "run.finished")'` |
 | Bridge | stdout/stderr (`[discord] …`): journald under systemd, or `/tmp/corvidinho-discord-bridge.log` (`CORVIDINHO_BRIDGE_LOG`) when `scripts/corvidinho-update.sh` starts it in pidfile mode | protocol check, audit line, admin-list and owner warnings |

@@ -4,8 +4,11 @@
  *
  * REQ-watch-231 / SAFE-6 — the summary is agent output (or its stderr) and
  * the comment is public on public repos, so it is secret-scrubbed first.
+ * REQ-watch-734 / ROLES-CHAT-3 — the 1200-char clip keeps a closing
+ * "(not allowed for your role)" note.
  */
 
+import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import { attribution } from "../attribution.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import type { AckClient, AckCommentResult } from "./ack.ts";
@@ -49,8 +52,14 @@ export function buildSummaryBody(spawn: AgentSpawnResult): string {
   const status = spawn.ok
     ? `Done (exit ${spawn.exitCode}).`
     : `Failed (exit ${spawn.exitCode}).`;
-  // Scrub before clipping so a token cut at the cap leaks no prefix.
-  const preview = scrubSecrets(spawn.summary || "").trim().slice(0, 1200);
+  // Scrub before clipping so a token cut at the cap leaks no prefix. The clip
+  // keeps a closing "(not allowed for your role)" note (ROLES-CHAT-3,
+  // REQ-watch-734).
+  const preview = clipKeepingRoleNote(
+    scrubSecrets(spawn.summary || "").trim(),
+    1200,
+    (head, max) => head.slice(0, max),
+  );
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;

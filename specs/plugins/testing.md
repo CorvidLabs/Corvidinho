@@ -29,6 +29,15 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
   tier, empty allowlist, `CORVIDINHO_ACTING_IS_ADMIN=0`, stripped tokens),
   tier clamp, long decision kept past the chat-body cap, failed chair, council time cap, one-at-a-time limiter, non-ADMIN
   `runPlugin` refusal (`tests/autonomous.council.test.ts`, REQ-plugins-118).
+- SAFE-5 audit line without a key (`tests/audit.log.test.ts`,
+  REQ-plugins-095): three unkeyed rows read `chain OK (unkeyed — …)`; with
+  row 2 tampered behind the dropped trigger, `verifyAudit` without a key
+  gives `keyedRows: 0, brokenAtSeq: 2` and the line reads
+  `Audit: 3 entries · chain BROKEN at #2`, the same as with a key; an
+  unkeyed prefix before a keyed row reads `cannot verify keyed rows …`
+  intact and `chain BROKEN at #1` once row 1 is tampered; a keyed chain
+  read without the key still reads `cannot verify keyed rows …`. Against
+  the base without the fix: fails (`cannot verify keyed rows …`).
 
 ## discord-post-message (REQ-plugins-009)
 

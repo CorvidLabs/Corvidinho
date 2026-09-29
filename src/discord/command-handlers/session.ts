@@ -15,7 +15,7 @@ import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
-import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
+import { ASK_NO_OWNER_WARNING, clipPostSummary, formatAskReply } from "../ask-ping.ts";
 import { buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
@@ -243,10 +243,11 @@ export async function handleSessionStart(
     );
   }
 
+  // ROLES-CHAT-3 (REQ-discord-734): the cap keeps a closing role note.
   const summary = ask
     ? ask.content
     : result.ok
-      ? result.summary.slice(0, 1500)
+      ? clipPostSummary(result.summary)
       : `failed (exit ${result.exitCode})`;
   // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
   // its question and choices); a spend-cap stop records no answer
@@ -263,7 +264,10 @@ export async function handleSessionStart(
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
-  const body = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n${summary}`;
+  const head = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n`;
+  // REQ-discord-734: the summary fits after the head, so the gateway's 1900
+  // cut never drops its closing role note.
+  const body = `${head}${ask ? summary : clipPostSummary(summary, head.length)}`;
 
   // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
   // reply); the owner ping for the ask and the pending SAFE-8 80% warning go

@@ -202,6 +202,28 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   asks by askId in `discord_sessions.pending_ask` (one object, or an array
   when several are open) across a reopen (no live Discord).
 
+## A late press on an ask that is no longer open (REQ-discord-045, DISCORD-ASK-5/8)
+
+- `tests/discord.ask-ephemeral.test.ts` — the requester's Choose and option
+  press on an earlier ask dropped (timed out) at the newest pick, and on both
+  open asks of a session idle past its TTL, get exactly the ephemeral
+  `ASK_CHOICE_EXPIRED` with no run, no session and nothing posted; another
+  user's press on them (and on the live ask before the purge) gets the
+  not-for-you reply; a still-stored expired ask is cleared by the first press
+  and a second press is still expired; a re-press after a pick and a press
+  after `cancel` keep the not-for-you reply before and after the purge;
+  in a talk inside a thread under the allowlisted channel, the requester's
+  press in that thread on a dropped ask and on a TTL-purged session's ask get
+  `ASK_CHOICE_EXPIRED`, another thread or a non-allowlisted channel (or the
+  talk's channel leaving the allowlist) gets the zero-width ack;
+  `SessionStore.findClosedAsk` holds only askId, user, expiry and the talk's
+  channel and thread for a drop, a late clear, a runtime purge and a load
+  purge (never a pick, a cancel or a re-stored askId) and forgets the oldest
+  past `CLOSED_ASKS_MAX`.
+- `tests/discord.ask-button-gates.test.ts` — a muted or deny-listed
+  requester's press on an ask of a TTL-purged session gets `MUTED` / the
+  zero-width ack; once let through it gets `ASK_CHOICE_EXPIRED`, no run.
+
 ## Slash-started asks stay pending (REQ-discord-044, AUTONOMY-1/5/6)
 
 - `tests/discord.slash-pending-ask.test.ts` — `/work` and `/session start`
@@ -315,6 +337,15 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/scheduler.service.test.ts` — `markRunFinished` stores the pause ask
   when the SQL failure count reaches 5 even from a stale cache; a success
   stores none.
+- `tests/scheduler.ask-outbox.test.ts` — a schedule on an absolute project
+  names the project, never the host path: a daemon run whose absolute
+  sibling project cannot be resolved keeps the full error with the path on
+  the row and the first line of the bridge's stuck ask names `gone`, without
+  the temp dir; on `/srv/host-only/acme/Widget` the
+  `✅` and `❌` result posts, a bridge clarify and stuck ask and a
+  daemon-claimed stuck ask all name `Widget` and never `/srv/host-only`,
+  while the model's prompt keeps `on project: /srv/host-only/acme/Widget`.
+  Against the base without the fix: both fail.
 
 ## Schedule ticks gate the creator (REQ-discord-020, DISCORD-SCHEDULE-3)
 
@@ -449,6 +480,34 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   conversation's channel, and an ask-button pick in a thread resumes with
   `replyChannelId` = the thread and `replyParentChannelId` = its parent. Against the base without the change: 20 of 21
   fail (the "no attach promise" guard passes).
+
+## Closing role note kept on the way to a post (REQ-discord-734, ROLES-CHAT-3)
+
+- `tests/scheduler.service.test.ts` › "a long summary ending with the note
+  keeps it in the run row and the post; one without is cut as before": a
+  schedule with a 448-char name whose run returns the 1800-char
+  `chatBodyFromTaskResult` of a summary ending with the note stores a
+  1500-char run-row summary ending with the note and posts at most 1900 chars
+  ending with it; a run returning 1800 plain chars stores and posts exactly its
+  first 1500.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
+  closing role note within the 1900 cap": a `member-1` `/work` with a
+  207-char description (non-owner PR line) gets a collapsed answer of at most
+  1900 chars whose summary part is under 1500 (fitted after the head) and ends
+  with the note.
+- Same file › "/session start answer for a non-owner keeps the closing role
+  note within the 1900 cap": the answer is at most 1900 chars, its summary part
+  at most 1500, and it ends with the note.
+- `tests/discord.spend.test.ts` › "the cut for the warning line keeps a
+  closing role note": `withSpendWarningPost` on an 1800-char body ending with
+  the note gives a 1900-char post ending `y…`, the note, a blank line and the
+  owner-pinging 80% line; a body that fits is untouched. The existing
+  "a long post is cut so the warning line always fits" (no note) still ends
+  `…\n\nLINE`.
+- With `origin/main`'s `src/discord/ask-ping.ts`,
+  `src/discord/command-handlers/work.ts`, `session.ts` and
+  `src/scheduler/service.ts` swapped in, these four tests fail and every other
+  test in their files passes; on the branch all pass.
 
 ## Declared people (REQ-discord-036, IDENTITY-13/14/6/7, ADMIN-3.a)
 

@@ -9,6 +9,8 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
+import { chatBodyFromTaskResult, ROLE_REFUSED_SUMMARY_NOTE } from "../src/agent/task-summary.ts";
+import { attribution } from "../src/attribution.ts";
 import { createEchoAckClient } from "../src/watch/ack.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/watch/agent-client.ts";
 import { startWatchPoller } from "../src/watch/poller.ts";
@@ -220,4 +222,36 @@ describe("WATCH summary is secret-scrubbed before public post and JSONL (REQ-wat
     },
     30_000,
   );
+});
+
+describe("WATCH summary comment keeps the closing role note (REQ-watch-734, ROLES-CHAT-3)", () => {
+  test("a long summary is clipped before its note, after the scrub; one without a note is clipped as before", () => {
+    const tail = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+    const foot = `\n\n---\n${attribution("markdown")}`;
+    // What a non-ADMIN WATCH run hands the poller: at most 1800 chars, note last.
+    const summary = chatBodyFromTaskResult({ summary: `${"x".repeat(1500)}${tail}` });
+    expect(summary.length).toBe(1529);
+    expect(summary.endsWith(tail)).toBe(true);
+
+    const body = buildSummaryBody({ ok: true, sessionId: "s", summary, exitCode: 0 });
+    expect(body.endsWith(`${tail}${foot}`)).toBe(true);
+    const preview = body.slice(body.indexOf("\n\n") + 2, body.length - foot.length);
+    expect(preview.length).toBe(1200);
+    expect(preview).toBe(`${"x".repeat(1200 - tail.length)}${tail}`);
+
+    // The scrub still runs first: a token cut where the note makes room leaks no prefix.
+    const secret = buildSummaryBody({
+      ok: true,
+      sessionId: "s",
+      summary: `${"x".repeat(1160)} ${TOKEN} more text${tail}`,
+      exitCode: 0,
+    });
+    expect(secret).not.toContain("ghp_");
+    expect(secret.endsWith(`${tail}${foot}`)).toBe(true);
+
+    // No note: the plain head cut, unchanged.
+    const plain = buildSummaryBody({ ok: true, sessionId: "s", summary: "y".repeat(1500), exitCode: 0 });
+    expect(plain).toContain(`\n\n${"y".repeat(1200)}${foot}`);
+    expect(plain).not.toContain("y".repeat(1201));
+  });
 });

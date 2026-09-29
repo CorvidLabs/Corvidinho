@@ -83,6 +83,7 @@ When DISCORD_TOKEN and DISCORD_BOT_TOKEN are both missing, the CLI/doctor/bridge
 
 Acceptance Criteria
 - `corvidinho discord bridge` without token exits non-zero naming DISCORD_TOKEN / DISCORD_BOT_TOKEN and go-live checklist.
+- The go-live checklist (`goLiveChecklist()`, printed by `doctor` and `discord bridge`) says users and roles both empty admit anyone in an allowlisted channel and once either is set only those users, role holders and the owner (REQ-discord-043); it never says empty user/role lists are deny-all.
 
 ### REQ-discord-006
 
@@ -1160,11 +1161,43 @@ interaction listing the option buttons. Button prompts SHALL expire after
 about 30 minutes; a late press SHALL get a short "that choice expired".
 Free-text clarify SHALL be used only when options cannot be listed.
 
+A late press SHALL include the requester's Choose or option press on an ask
+that is no longer open because it timed out and was dropped, not promoted,
+when a newer ask of the session was cleared (REQ-discord-044), or because its
+session was TTL-purged (SESSION-2 / REQ-discord-019), at runtime or while the
+store loads after a restart. Such a press SHALL get the ephemeral
+`ASK_CHOICE_EXPIRED` reply, with no agent run, no new session and nothing
+posted or edited, never "This choice isn't for you (or it was already
+answered)". A still-stored ask past its timeout SHALL keep that reply and be
+cleared, and a later press on it SHALL again get `ASK_CHOICE_EXPIRED`. A
+re-press after a pick and a press after an explicit cancel SHALL stay no-ops
+with today's reply (DISCORD-ASK-8), also once the session is purged. Another
+user's press on a live ask, or on an ask that is no longer open, SHALL get
+the not-for-you reply and SHALL NOT resume anything (DISCORD-ASK-2/3). The
+channel, actor and mute/rate gates (REQ-discord-212 / REQ-discord-201 /
+REQ-discord-010) SHALL run before this reply; for an ask that is no longer
+open, the channel gate SHALL judge the press against the channel and thread
+its session had, as for a live ask, so a late press in the talk's thread
+under an allowlisted channel (DISCORD-2.a) gets `ASK_CHOICE_EXPIRED` too. To
+tell a late press from another user's, `SessionStore` SHALL keep, for each
+ask that leaves past its timeout or with its purged session, only its askId,
+the session's Discord user, the ask's expiry and the session's channel and
+thread ids (`findClosedAsk`), in memory only and bounded to the newest
+`CLOSED_ASKS_MAX` (1000), never the question or option text (SAFE-6). No new
+env var, slash command, table or column.
+
 Acceptance Criteria
 - Structured or numbered options → stub + components; ephemeral open shows choices.
 - Pick resumes the requester session with the chosen label.
 - Expired press returns ASK_CHOICE_EXPIRED and clears pending.
 - Question without listable options keeps the free-text ask-ping path.
+- When the newest ask is picked while an earlier open ask has timed out, the requester's Choose and option press on the dropped earlier ask each get exactly the ephemeral `ASK_CHOICE_EXPIRED`; the agent does not run and nothing is posted or edited; another user's press on it gets the not-for-you reply.
+- With two open asks (neither timed out) and the session idle past its TTL, the requester's Choose and option press on each get the ephemeral `ASK_CHOICE_EXPIRED`, no agent run, no session is created and nothing is posted; another user's press on each gets the not-for-you reply, as it does on the live ask before the purge.
+- A still-stored ask past its timeout: the first press gets `ASK_CHOICE_EXPIRED` and clears it; a second press by the requester gets `ASK_CHOICE_EXPIRED` again, another user's the not-for-you reply, and the agent does not run.
+- A re-press after a pick and a press after `cancel` get the not-for-you / already-answered reply with no run, before and after the session is TTL-purged.
+- A muted or deny-listed requester's press on an ask of a TTL-purged session gets `MUTED` / the zero-width ack; once let through the press gets `ASK_CHOICE_EXPIRED`, with no run and nothing posted.
+- In a talk inside a thread under an allowlisted channel, the requester's press in that thread on a dropped ask or on an ask of the TTL-purged session gets `ASK_CHOICE_EXPIRED` with no run; another user's press there gets the not-for-you reply; a press from another thread or a non-allowlisted channel, or once the talk's channel has left the allowlist, gets the zero-width ack.
+- `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt, channelId, threadId? }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.
 
 ### REQ-discord-046
 
@@ -1906,6 +1939,15 @@ pass ping the owner:
   auto-pause the schedule, the pause ask SHALL stay pending until the gate
   passes, like any pending ask.
 
+Every schedule post in the channel — the `✅` / `❌` result line and every
+ask post, in-process or from the delivery pass, including the stuck asks
+above — SHALL start with the schedule prefix
+`Schedule **<name>** (<id>) on <project>`, where the project is shown by
+name (`projectLabel`: the last segment of an absolute path, a relative name
+as given), never as an absolute host path (REQ-discord-418, SAFE-6): the
+whole channel reads it. The run row SHALL keep the full error and the
+model's prompt SHALL keep the stored project.
+
 No new slash command, env var, config key, table, column or schema version;
 `/schedule resume` is the existing ADMIN subcommand.
 
@@ -1919,6 +1961,8 @@ Acceptance Criteria
 - A daemon run whose project cannot be resolved spawns no agent, keeps `project resolve failed: …` (with the host path) on the row and stores the fixed question; the bridge posts it with the owner ping and without the host path; the same failure again posts without a ping.
 - A bridge run whose worktree cannot be created keeps `worktree failed: …` on the row and posts the fixed question at once with the owner ping, once; so does one whose worktree step throws.
 - The pause ask is chosen by the failure count in SQL: a store handle whose cache is stale stores it when SQL reaches 5; a success stores no ask and resets the count.
+- A schedule whose project is an absolute host path posts its `✅` and `❌` result lines, its clarify and stuck asks (bridge-claimed and daemon-claimed) and its pre-run stuck ask (an absolute sibling project that cannot be resolved) with the project's name in the prefix and never the absolute path; the run row keeps `project resolve failed: …` with the path and the model's prompt keeps the stored project.
+
 ### REQ-discord-431
 
 Channel autocomplete on the STRING `channel` options (`/admin channels add|remove`, `/announce channel`) SHALL list channels only for ADMIN invoking from an allowlisted channel (DISCORD-DENY-3 / ADMIN-4). The check SHALL be re-run on every autocomplete request, never trusted from registration, in the slash gate order: the interaction's channel passes the channel allowlist (`gateChannel`), the actor passes `gateActor` (deny users/roles win; a non-empty user/role allowlist applies), and `resolvePermissionLevel` with the live mute set is ADMIN (the configured owner; no owner means nobody, IDENTITY-3). Otherwise the gateway SHALL answer an empty choice list, so no channel name, id or allowlist entry reaches a non-admin. The gateway SHALL also answer an empty list when no gate is wired or the gate throws (fail closed). An allowed request SHALL keep today's choices: guild text channels for `add` and `/announce channel`, and the live allowlist for `remove`. Autocomplete SHALL NOT consume a rate-limit slot. No new slash command, option, env key or schema version.
@@ -2072,6 +2116,41 @@ Acceptance Criteria
 - A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
 - A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
 - An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+
+### REQ-discord-734
+
+A run summary that ends with the ROLES-CHAT-3 closing note
+`\n\n(not allowed for your role)` (REQ-agent-333) SHALL keep that note
+through every cap it meets after `chatBodyFromTaskResult` on its way to a
+Discord post. Each such cap SHALL use `clipKeepingRoleNote`
+(`src/agent/task-summary.ts`): the text before the note loses its end and
+the note stays last.
+
+- A scheduled run's summary SHALL be capped at `POST_SUMMARY_MAX` (1500
+  chars) for the run row's `summary` and for the `✅` / `❌` schedule post,
+  and in the post also at what fits after the post's head within
+  `ASK_REPLY_MAX` (1900), so the gateway's 1900 cut never reaches it.
+- The `/work` and `/session start` answers SHALL cap the summary at 1500
+  chars and at what fits after the answer's head (task, session, worktree,
+  description and PR lines; session, topic and worktree lines) within 1900,
+  so the gateway's 1900 cut never drops the note.
+- `appendPostLine`, which cuts a post's body so the SAFE-8 80% warning line
+  fits within 1900 (chat replies, schedule posts, a slash owner notice that
+  rides the answer), SHALL cut the body before the note, end the kept text
+  in `…`, and keep the note ahead of the warning line.
+
+`ask-ping.ts` SHALL export `POST_SUMMARY_MAX` and
+`clipPostSummary(summary, headLength = 0)` for these caps. A summary that
+does not end with the note SHALL be capped exactly as before. An ask's post
+(a question or Choose stub, including a stuck ask's 400-char context) is not
+changed. No env var, config key, flag, slash command, table or schema change.
+
+Acceptance Criteria
+- `tests/scheduler.service.test.ts` "a long summary ending with the note keeps it in the run row and the post; one without is cut as before": the run row's summary is 1500 chars ending with the note; the post (448-char schedule name) is at most 1900 chars and ends with the note; a run without the note stores and posts exactly its first 1500 chars.
+- `tests/discord.slash-ask7.test.ts` "/work answer for a non-owner keeps the closing role note within the 1900 cap": the collapsed answer is at most 1900 chars, its summary part is under 1500 (fitted after a long head) and it ends with the note.
+- Same file, "/session start answer for a non-owner keeps the closing role note within the 1900 cap": at most 1900 chars, the summary part at most 1500, ending with the note.
+- `tests/discord.spend.test.ts` "the cut for the warning line keeps a closing role note": an 1800-char body ending with the note plus the 80% line is a 1900-char post ending `y…`, the note, a blank line and the warning line; a body that fits is untouched; a long body without the note still ends `…\n\nLINE`.
+- With main's `src/discord/ask-ping.ts`, `src/discord/command-handlers/work.ts`, `src/discord/command-handlers/session.ts` and `src/scheduler/service.ts`, these four tests fail; they pass on the branch.
 
 ### REQ-discord-036
 
