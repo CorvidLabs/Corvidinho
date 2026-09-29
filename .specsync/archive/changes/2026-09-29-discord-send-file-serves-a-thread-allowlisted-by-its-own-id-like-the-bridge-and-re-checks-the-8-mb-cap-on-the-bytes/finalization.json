@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-send-file-serves-a-thread-allowlisted-by-its-own-id-like-the-bridge-and-re-checks-the-8-mb-cap-on-the-bytes",
+  "implementation_commit": "3661ed23756da6d110c0f4f6fbe9c475f3d2c969",
+  "implementation_tree": "2c9f248a023e2bea82ff0fe0ad6f8478e68d43d1",
+  "contract_digest": "0345afcc7ea62a4a1cef5829898098e588abbf8c16ffb1623f80810d3d9eeb5c",
+  "workspace_digest": "6284ba7e1b3363472b53a23506076d7f600396f92395df26888c7b68fef9dfc3",
+  "closing_digest": "5179e453a69aa20e1a0027a7ca30dd26657279226eacf29a9dba77fe0eb718cb",
+  "review_digest": "0f8fa3b9140221d40b760c4c03c68ea099684de19b75c1c394daa33f9aa486a0",
+  "finalization_digest": "05737c88707280579be6f2b9e9f4ebc93d712f85f42cb73f97d102501234aa6d",
+  "timestamp": 1790710513
+}

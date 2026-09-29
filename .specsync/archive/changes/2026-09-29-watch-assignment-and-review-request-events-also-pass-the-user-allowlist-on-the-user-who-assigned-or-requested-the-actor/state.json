@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor",
+  "slug": "watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor",
+  "title": "WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5)",
+  "description": "WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5)",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "5366fff96501327ad3bcc30f55105f2c16884b0b",
+  "created_at": 1790701617,
+  "updated_at": 1790711959,
+  "affected_specs": [
+    "watch"
+  ],
+  "affected_paths": [
+    "src/watch/types.ts",
+    "src/watch/searcher.ts",
+    "src/watch/router.ts",
+    "src/watch/poller.ts",
+    "src/watch/index.ts",
+    "tests/watch.poller.test.ts",
+    "tests/watch.router.test.ts",
+    "tests/watch.request-actor.test.ts",
+    "tests/fixtures/watch/mentions.json",
+    "docs/WATCH.md",
+    "specs/watch/watch.spec.md",
+    "specs/watch/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "An assignment or review_request WATCH event on an allowlisted author's thread starts no session, posts no ack and spawns no run when the user who assigned the watch user or requested its review (the actor) is not on the GitHub user allowlist, is on deny_users, or could not be read; it counts as refused in the cycle log; the same event with an allowlisted, undenied actor still starts a session; the live searcher reads the actor from the issue's events (newest assigned / review_requested event naming the watch user: assigner / review_requester, else the event actor) and leaves it unset on a non-rate-limit failure while a rate limit still backs off; mention and comment events are unchanged; the new poller and router tests fail on main's source and pass on the branch"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

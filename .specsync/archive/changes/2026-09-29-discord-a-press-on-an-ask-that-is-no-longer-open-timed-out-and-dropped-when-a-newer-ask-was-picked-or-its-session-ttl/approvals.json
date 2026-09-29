@@ -1,0 +1,88 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790696280,
+      "digest": "465318cd95ddc42509fb3a3dafb9b12d28c4ea081ca3ed90967dc3ad0e1f793e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl",
+        "title": "Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies \"that choice expired\" with no agent run (DISCORD-ASK-5, REQ-discord-045)",
+        "description": "Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies \"that choice expired\" with no agent run (DISCORD-ASK-5, REQ-discord-045)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/bridge.ts",
+          "src/discord/session-store.ts",
+          "tests/discord.ask-button-gates.test.ts",
+          "tests/discord.ask-ephemeral.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "DISCORD-ASK-5 (Button prompts expire after about 30 minutes; a late press gets a short 'that choice expired'): the requester's Choose or option press on an ask that timed out and was dropped, not promoted, when a newer ask of the session was picked, and on an ask whose session was TTL-purged (idle past the SESSION-2 soft TTL, at runtime or at load after a restart), gets the ephemeral ASK_CHOICE_EXPIRED ('that choice expired'), no agent run, no new session and nothing posted, instead of 'This choice isn't for you (or it was already answered)'. A still-stored ask past its timeout keeps today's ASK_CHOICE_EXPIRED reply and is cleared, and a second press on it is still ASK_CHOICE_EXPIRED. DISCORD-ASK-8 holds: a re-press after a pick and a press after cancel stay no-ops with today's reply, also after the session is purged. Another user's press on a live ask, or on an ask that is no longer open, gets the not-for-you reply and resumes nothing (DISCORD-ASK-2/3). The channel, actor and mute/rate gates (REQ-discord-212/201/010) stay ahead of the late-press reply. The session store keeps only askId, the session's user and the ask's expiry for such asks, in memory, bounded to the newest 1000 (SAFE-6: no question or option text); no new env var, command, table or column."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "9e845dc48e7f4ff8c86e8c088470118422acd2250bd719a8083efde206c6a118"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790699660,
+      "digest": "3f7435ffc3e7978931e89ba4d42f8d978e10787ff1925268fd1ee34a27c08cdd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl",
+        "title": "Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies \"that choice expired\" with no agent run (DISCORD-ASK-5, REQ-discord-045)",
+        "description": "Discord: a press on an ask that is no longer open (timed out and dropped when a newer ask was picked, or its session TTL-purged) replies \"that choice expired\" with no agent run (DISCORD-ASK-5, REQ-discord-045)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "src/discord/bridge.ts",
+          "src/discord/session-store.ts",
+          "tests/discord.ask-button-gates.test.ts",
+          "tests/discord.ask-ephemeral.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "DISCORD-ASK-5 (Button prompts expire after about 30 minutes; a late press gets a short 'that choice expired'): the requester's Choose or option press on an ask that timed out and was dropped, not promoted, when a newer ask of the session was picked, and on an ask whose session was TTL-purged (idle past the SESSION-2 soft TTL, at runtime or at load after a restart), gets the ephemeral ASK_CHOICE_EXPIRED ('that choice expired'), no agent run, no new session and nothing posted, instead of 'This choice isn't for you (or it was already answered)'. A still-stored ask past its timeout keeps today's ASK_CHOICE_EXPIRED reply and is cleared, and a second press on it is still ASK_CHOICE_EXPIRED. DISCORD-ASK-8 holds: a re-press after a pick and a press after cancel stay no-ops with today's reply, also after the session is purged. Another user's press on a live ask, or on an ask that is no longer open, gets the not-for-you reply and resumes nothing (DISCORD-ASK-2/3). The channel, actor and mute/rate gates (REQ-discord-212/201/010) stay ahead of the late-press reply, and the channel gate judges a press on an ask that is no longer open against its session's channel and thread as for a live ask, so it also holds in the talk's thread under an allowlisted channel (DISCORD-2.a). The session store keeps only askId, the session's user, the ask's expiry and the session's channel and thread ids for such asks, in memory, bounded to the newest 1000 (SAFE-6: no question or option text); no new env var, command, table or column."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "f4df4b545c97092aefe294ca71e979ebf01ae4fb237193624ec6865d4856e1a2"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790710205,
+      "digest": "9015750003868d80c56b1158add3d9a47b72fcd60ef3571f8ce8d64a6f0c86b5",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

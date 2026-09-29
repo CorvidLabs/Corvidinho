@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-a-press-on-an-ask-that-is-no-longer-open-timed-out-and-dropped-when-a-newer-ask-was-picked-or-its-session-ttl",
+  "implementation_commit": "3661ed23756da6d110c0f4f6fbe9c475f3d2c969",
+  "implementation_tree": "2c9f248a023e2bea82ff0fe0ad6f8478e68d43d1",
+  "contract_digest": "3f7435ffc3e7978931e89ba4d42f8d978e10787ff1925268fd1ee34a27c08cdd",
+  "workspace_digest": "6284ba7e1b3363472b53a23506076d7f600396f92395df26888c7b68fef9dfc3",
+  "closing_digest": "9015750003868d80c56b1158add3d9a47b72fcd60ef3571f8ce8d64a6f0c86b5",
+  "review_digest": "d7cfd601829ff54c295605f6e350bb49f3c3cd3ed00a1e4e84ea492b9d0ef46f",
+  "finalization_digest": "15fb44a21e18ec1a52d3dd619cfda4841aeca70ae591d1c9c6e082181acac8d6",
+  "timestamp": 1790710205
+}
