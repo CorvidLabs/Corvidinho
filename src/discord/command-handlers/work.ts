@@ -9,6 +9,7 @@ import {
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
+import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
@@ -108,6 +109,7 @@ export async function handleWorkCommand(
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
     owner: ctx.owner,
+    people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
   });
   // AGENT-6 (REQ-discord-072): the description opens the session's thread as
   // the run starts, so a reply to this answer carries it (even after a

@@ -14,7 +14,10 @@ files:
   - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
   - src/identity/owner.ts
+  - src/identity/people.ts
   - src/identity/index.ts
+  - tests/identity.people.test.ts
+  - tests/identity.recognise.test.ts
   - tests/identity.owner.test.ts
   - tests/discord.owner.test.ts
   - src/discord/session-store.ts
@@ -74,8 +77,10 @@ files:
   - src/discord/command-handlers/announce.ts
   - src/discord/command-handlers/admin.ts
   - src/discord/admin-allowlist.ts
+  - src/discord/admin-people.ts
   - src/discord/channel-autocomplete.ts
   - tests/discord.admin-slash.test.ts
+  - tests/discord.admin-people.test.ts
   - tests/discord.channel-autocomplete.test.ts
   - src/discord/announce-store.ts
   - src/discord/announce.ts
@@ -167,6 +172,22 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
 `setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
 `isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
+`parseJsonObject` (`admin-allowlist.ts`, shared with `/admin people`);
+`/admin people` (ADMIN-3.a, REQ-discord-036): `formatPeopleList`
+(`command-handlers/admin.ts`); `planPeopleChange`, `commitPeopleChange`,
+`setTomlPerson`, `setJsonPerson`, `renderPersonTomlLines`, `samePerson`,
+`formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
+(`admin-people.ts`, the only writer of people). Declared people
+(IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
+githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
+(the one resolver; stable ids only), `loadDeclaredPeople({ allowlist, owner })`
+(re-reads `allowlist.sourcePath`, never throws), `buildPeopleDirectory`,
+`loadPeopleDirectory`, `readPeopleFile`, `parsePeopleToml` /
+`parsePeopleJson` / `parsePeopleText`, `normalizePersonLink`,
+`normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
+`cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
+`LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
+types.
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
@@ -385,6 +406,13 @@ user id + resolved display (owner map wins for owner). Gateway fills
 `userUsername`, and `ComponentInteraction.userDisplayName` / `userUsername`
 from `componentActorNames`). Bridge (chat and button-pick resume) and slash
 handlers inject identity before memory (IDENTITY-4 / REQ-discord-446).
+With declared people (`IdentityInjectInput.people`, from `loadDeclaredPeople`
+on every run) the block also names `declared_person`, the declared display
+(winning over the Discord names), `nicknames` and `github` logins, matched on
+the acting Discord user id only (`resolveActingPerson`); once anyone is
+declared an undeclared non-owner gets `declared_person: none`; an undeclared
+owner's block and every block with nobody declared are unchanged
+(IDENTITY-14 / IDENTITY-7, REQ-discord-036).
 
 `ThinkingStatus` accepts optional `model` and `plumbing`; footer shows model
 and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/`attempts`).
@@ -725,6 +753,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |
 | 2026-09-28 | discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord: Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8) |
 | 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |
+| 2026-09-29 | declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared: Declared people: the owner declares who's who in the allowlist file, Corvidinho recognises the owner and each declared person on Discord and GitHub by stable ids only, and only the owner changes people and links with audited /admin people (IDENTITY-13/14/6/7, ADMIN-3.a, #36) |
 | 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
 | 2026-09-29 | scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so: Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge |
 | 2026-09-29 | a-deny-listed-thread-under-an-allowlisted-parent-is-refused-silently-on-every-path-deny-wins-discord-5-req-plugins-005: A deny-listed thread under an allowlisted parent is refused silently on every path: deny wins (DISCORD-5, REQ-plugins-005) |

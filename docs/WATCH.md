@@ -17,6 +17,18 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run` (prove-before-done; no `--no-verify`) or echo in dry-run
 
+**Declared people (IDENTITY-14 / IDENTITY-7, #36):** the commenter is recognised
+from the owner's `[people.<id>]` entries in the allowlist file the watch loaded
+(the file `[owner]` comes from), by GitHub numeric id and login only — never a
+name; a login whose numeric id differs from the declared one does not count. The
+run prompt then opens with a `[Corvidinho acting GitHub user …]` paragraph
+(`declared_person`, `display_name`, `nicknames`; the owner is recognised by the
+owner's GitHub login from `[owner]` / env and marked `role: owner`, still without
+ADMIN tools). Once anyone is declared, an undeclared commenter is marked
+`declared_person: none`. People are re-read per event, so VM edits and
+`/admin people` changes apply without restarting the watch. See
+[`discord.md`](discord.md) "Declared people".
+
 ## Durable sessions (REQ-watch-037, #37 slice 1)
 
 - WATCH sessions (`owner/repo#number`) persist in the shared SQLite DB

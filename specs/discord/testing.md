@@ -509,3 +509,26 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `src/scheduler/service.ts` swapped in, these four tests fail and every other
   test in their files passes; on the branch all pass.
 
+## Declared people (REQ-discord-036, IDENTITY-13/14/6/7, ADMIN-3.a)
+
+- `tests/identity.people.test.ts` — `[people.<id>]` TOML (plural + singular
+  keys) and JSON parse; the allowlist loader and `[owner]` reader load the same
+  file; unreadable entries skipped whole with id-free problems; `owner`
+  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub login / numeric
+  id, never by display or nickname, renamed-login rule, clashes match nobody;
+  the owner's built-in or declared person with `role: owner`;
+  `loadDeclaredPeople` re-reads the loaded file and never throws.
+- `tests/discord.admin-people.test.ts` — `/admin people add|link|unlink|
+  remove|list` through the slash dispatcher: file edits (TOML verbatim
+  elsewhere, comments and unread keys kept; JSON entry only), live resolve
+  after each change, SAFE-5 rows, no-change paths, refusals (clashing ids
+  incl. the owner's GitHub login, bad ids, reserved id, unreadable entry, no
+  or throwing audit trail), non-owner refused at dispatch and handler, the
+  writer imported only by the admin handler, list under 2000 chars,
+  `config show` count.
+- `tests/identity.recognise.test.ts` — Discord identity block with people;
+  through `startBridge`: chat, `/session start` and `/work` name the declared
+  person; `/admin people` and a VM edit apply on the next message; a chat
+  request to change links changes nothing (also the WATCH cases of
+  REQ-watch-036).
+

@@ -171,7 +171,12 @@ function hasUnsafeNumber(v: unknown): boolean {
   return false;
 }
 
-function parseJsonObject(text: string): Record<string, unknown> {
+/**
+ * JSON allowlist text as an object (`{}` for blank text). Throws on a
+ * non-object or on numeric ids that lose precision. Shared with
+ * `/admin people` (admin-people.ts).
+ */
+export function parseJsonObject(text: string): Record<string, unknown> {
   const raw: unknown = text.trim() ? JSON.parse(text) : {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("JSON allowlist file must be an object");

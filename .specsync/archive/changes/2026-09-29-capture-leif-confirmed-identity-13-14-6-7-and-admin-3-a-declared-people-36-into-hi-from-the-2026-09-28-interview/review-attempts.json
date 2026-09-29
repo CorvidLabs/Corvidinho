@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "capture-leif-confirmed-identity-13-14-6-7-and-admin-3-a-declared-people-36-into-hi-from-the-2026-09-28-interview",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "89a19b1217f1c36498dc140005bbf6ed896b0379",
+      "contract_digest": "831ad7a30b39079db97ae5e5ff643d82e979ed91bfd39deb67918ea1d0c3896a",
+      "execution_digest": "e8029813855ef1871ae83d6be4ad4162677837f735bd4d4d1c5a1ee472dbef45",
+      "workspace_digest": "90b66591b200378b6a73acbdeaa345abc139e3b08338d1422fc9e3c3ede05e39",
+      "timestamp": 1790704620
+    }
+  ]
+}

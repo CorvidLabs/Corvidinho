@@ -68,6 +68,7 @@ import {
   enrichPromptWithImages,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
+import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories } from "./memory-inject.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
@@ -323,6 +324,10 @@ export async function startBridge(
     console.warn("[discord] no owner configured — nobody is ADMIN (IDENTITY-3).");
   }
   const env = opts.env ?? process.env;
+  // IDENTITY-13/14 — the owner's declared people, re-read from the allowlist
+  // file on every use so `/admin people` and VM edits apply without a restart.
+  const declaredPeople = () =>
+    loadDeclaredPeople({ allowlist: config.allowlist, owner: config.owner ?? null });
   const db =
     opts.db ??
     (opts.sessionStore || opts.workStore
@@ -712,6 +717,7 @@ export async function startBridge(
             displayName: msg.authorDisplayName,
             username: msg.authorUsername,
             owner: config.owner ?? null,
+            people: declaredPeople(),
           });
           if (idInject.injected) {
             console.log(
@@ -1168,6 +1174,7 @@ export async function startBridge(
             displayName: interaction.userDisplayName,
             username: interaction.userUsername,
             owner: config.owner ?? null,
+            people: declaredPeople(),
           });
           if (idInject.injected) enrichedPrompt = idInject.prompt;
           const memInject = enrichPromptWithMemories(enrichedPrompt, memoryStore, {
