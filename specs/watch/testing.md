@@ -50,6 +50,22 @@ module: watch
   searcher carries `user_id` to `senderId`; `startWatchPoller` re-reads people
   from its allowlist file per event.
 
+## Untrusted text on WATCH (REQ-watch-071, SAFE-12/13)
+
+- `tests/safe.injection.test.ts` › "WATCH fences the title and body …":
+  `routeEvent` puts the title and body inside an `UNTRUSTED_DATA` fence after
+  the `[WATCH …]` header; a 20 000-char body that guesses the end marker is
+  clipped so the real end marker is last and the prompt stays within 8000
+  chars. › "SAFE-13 on WATCH": `watchInjectionVerdict` flags a non-owner body
+  or title and skips the owner's; through `startWatchPoller` an injected
+  comment runs nothing, posts one refusal comment @mentioning the owner's
+  GitHub login and audits one `injection-suspected` row (actor
+  `github:<login>`); the next ordinary event runs with its body fenced;
+  `buildSummaryBody` adds the owner line only when the run reports
+  `injection`; an assignment event (no ack, no summary) whose run reports
+  `injection` still gets one comment @mentioning the owner, not repeated on
+  the next poll.
+
 ## Memory in GitHub runs (REQ-watch-067 / REQ-watch-008, MEMORY-8 / MEMORY-9)
 
 - `tests/memory.recall-github.test.ts` › "REQ-watch-008 / REQ-watch-067 spawn

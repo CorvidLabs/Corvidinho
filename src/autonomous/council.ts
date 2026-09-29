@@ -34,6 +34,7 @@
  */
 
 import { TIER_RANK, type CapabilityTier } from "../agent/tier.ts";
+import type { InjectionNotice } from "../agent/untrusted.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
   DELEGATE_SUMMARY_MAX,
@@ -334,6 +335,11 @@ export type CouncilOutcome = {
   timedOut: boolean;
   aborted: boolean;
   error?: string;
+  /**
+   * SAFE-13: the first voice or chair run that reported a tool result
+   * looking like a prompt-injection attempt (tool + reason ids).
+   */
+  injection?: InjectionNotice;
 };
 
 /** Run `fn` over `items`, at most `limit` at a time, keeping input order. */
@@ -398,6 +404,7 @@ export async function runCouncil(opts: {
   const phases: CouncilPhaseSummary[] = [];
   const files = new Set<string>();
   let tokens: number | undefined;
+  let injection: InjectionNotice | undefined;
 
   const stopReason = () =>
     timedOut ? "council time cap reached" : "lead run was interrupted";
@@ -448,6 +455,7 @@ export async function runCouncil(opts: {
     }
     for (const f of out.filesChanged ?? []) files.add(f);
     if (typeof out.totalTokens === "number") tokens = (tokens ?? 0) + out.totalTokens;
+    if (out.injection && !injection) injection = out.injection;
     const finished = out.exitCode === 0 && out.state === "done";
     // A finished voice is quoted by its own result summary (up to
     // DELEGATE_SUMMARY_MAX, not the 1800-char chat body); a failed one keeps
@@ -495,6 +503,7 @@ export async function runCouncil(opts: {
       timedOut,
       aborted,
       ...(fields.error ? { error: fields.error } : {}),
+      ...(injection ? { injection } : {}),
     };
   };
 

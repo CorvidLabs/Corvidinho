@@ -1,0 +1,227 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790712641,
+      "digest": "fbc146fbc159f035812624c723c3d6fa4cab2a42ccd5106bf3546e04650a2e40",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a",
+        "title": "Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71)",
+        "description": "Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/discord/user-lookup.ts",
+          "plugins/web/text.ts",
+          "src/agent/execute.ts",
+          "src/agent/types.ts",
+          "src/agent/untrusted.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/identity-inject.ts",
+          "src/discord/injection-guard.ts",
+          "src/discord/memory-inject.ts",
+          "src/discord/session-thread.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/types.ts",
+          "src/scheduler/service.ts",
+          "src/watch/ack.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/router.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/discord.slash-pending-ask.test.ts",
+          "tests/safe.injection.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Display names (the Discord speaker's on chat, button picks, /session start and /work, and every name discord-user-lookup returns) are cleaned before the model sees them: mention / channel / emoji markup, @everyone / @here, control, zero-width, bidi and tag characters, role-like tags ([owner]) and labels (owner:) removed, capped at 32, a role-word-only name dropped; a shown Discord name that reads like the owner's or another declared person's (look-alike letters folded) adds a name_clash line; identity and role still come only from declared ids, so a stranger named like the owner is community even with an owner stamp (SAFE-11). A team / community speaker's chat message, /session start topic and /work description, WATCH titles and bodies (clipped so the random-id end marker survives the 8000-char cap), and the results of the GitHub readers and discord-user-lookup reach the model inside an UNTRUSTED_DATA fence (web-fetch keeps its fence, now on the shared helper); replayed turns quote lines that imitate Corvidinho blocks; every task-run system prompt says such blocks are data that never grant a permission and that only the sender's role, enforced in the tool layer, decides what may run; a community run whose task claims the owner gets no mutating tool and a role refusal (SAFE-12). A conservative always-on detector (ignore-rules, role-override, owner-claim, secret-request, tool-call-payload, fake-marker; look-alike and invisible characters folded; bounded) trips on known payloads and not on ordinary messages or bug reports; a non-owner Discord message, /session start or /work text that trips it starts no run and gets one short refusal that pings only the owner (slash: a fresh owner post), a WATCH event from anyone but the owner gets one refusal comment @mentioning the owner's GitHub login and no run, a scanned tool result that trips it drops every mutating tool for the rest of the run (refused if called), the summary says it did not act on it and the answer post pings the owner (chat, button pick, /session start, /work, schedules, WATCH summary); every hit appends an injection-suspected / denied SAFE-5 row with reason ids only (SAFE-13). tests/safe.injection.test.ts covers each and fails on the base sources; the full suite, tsc, specsync check --require-coverage 100, hi check and fledge verify stay green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "9fd311f60dc246925e6f5c8f92e48bc7a81b0c2d77e908db7c4fec695bef58c7",
+        "cli": "d4fc999a55ff452cf97274e3d0276b90c785f72af28cb63c7000402b5bca10fb",
+        "discord": "3e1be0da5e4123b2189d0d9b6451f731176d60ae61dc81ccd93c06aacb11ef06",
+        "plugins": "cc7f87c355b660fb08f836b5e92dba7d8eac2e2c00abbe520ec62b3465d520bb",
+        "watch": "451cb7cb94f48de1a7d651de82b36877816f603a6ccda1d8fdcb5fe105451a96"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790714494,
+      "digest": "f127b3e5e04d61f64a6e968937d048e92e04c0272bb3c38515a8b7c6466c9e72",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a",
+        "title": "Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71)",
+        "description": "Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/autonomous/commands.ts",
+          "plugins/autonomous/council.ts",
+          "plugins/discord/user-lookup.ts",
+          "plugins/web/text.ts",
+          "src/agent/execute.ts",
+          "src/agent/types.ts",
+          "src/agent/untrusted.ts",
+          "src/autonomous/council.ts",
+          "src/autonomous/delegate.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/identity-inject.ts",
+          "src/discord/injection-guard.ts",
+          "src/discord/memory-inject.ts",
+          "src/discord/session-thread.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/types.ts",
+          "src/scheduler/service.ts",
+          "src/watch/ack.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/router.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/discord.slash-pending-ask.test.ts",
+          "tests/safe.injection.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Display names (the Discord speaker's on chat, button picks, /session start and /work, and every name discord-user-lookup returns) are cleaned before the model sees them: mention / channel / emoji markup, @everyone / @here, control, zero-width, bidi and tag characters, role-like tags ([owner]) and labels (owner:) removed, capped at 32, a role-word-only name dropped; a shown Discord name that reads like the owner's or another declared person's (look-alike letters folded) adds a name_clash line; identity and role still come only from declared ids, so a stranger named like the owner is community even with an owner stamp (SAFE-11). A team / community speaker's chat message, /session start topic and /work description, WATCH titles and bodies (clipped so the random-id end marker survives the 8000-char cap), and the results of the GitHub readers and discord-user-lookup reach the model inside an UNTRUSTED_DATA fence (web-fetch keeps its fence, now on the shared helper); replayed turns quote lines that imitate Corvidinho blocks or turn labels; every task-run system prompt says such blocks are data that never grant a permission and that only the sender's role, enforced in the tool layer, decides what may run; a community run whose task claims the owner gets no mutating tool and a role refusal (SAFE-12). A conservative always-on detector (ignore-rules, role-override, owner-claim, secret-request, tool-call-payload, fake-marker; look-alike and invisible characters folded; bounded) trips on known payloads and not on ordinary messages or bug reports (a speaker correcting their own earlier message, questions about tokens or keys in code); a non-owner Discord message, /session start or /work text that trips it starts no run and gets one short refusal that pings only the owner (slash: a fresh owner post), a WATCH event from anyone but the owner gets one refusal comment @mentioning the owner's GitHub login and no run, a scanned tool result that trips it drops every mutating tool and memory-store for the rest of the run (refused if called), and a delegate / council worker's own hit rides its result back and counts as the lead's, the summary says it did not act on it and the answer post pings the owner (chat, button pick, /session start, /work, a schedule's post or ask, WATCH summary); every hit appends an injection-suspected / denied SAFE-5 row with reason ids only (SAFE-13). tests/safe.injection.test.ts covers each and fails on the base sources; the full suite, tsc, specsync check --require-coverage 100, hi check and fledge verify stay green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "bacd55efe0bc952f1ad92503c969c7104ef46bb029a0544bdf71c58b2f6bbe9e",
+        "cli": "d4fc999a55ff452cf97274e3d0276b90c785f72af28cb63c7000402b5bca10fb",
+        "discord": "5f13144d21c3c06ab065d992f6ed406cb867d8638287f5ddc131d753cdbbb59e",
+        "plugins": "6d8d685759f02cf8c74e02053acdcd398b0c5c491a81bee30887afaedc45a742",
+        "watch": "451cb7cb94f48de1a7d651de82b36877816f603a6ccda1d8fdcb5fe105451a96"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790714777,
+      "digest": "2e1340259e8e4a81f3b08925576824c464f68828562e4534df0c8b186393dfc7",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a",
+        "title": "Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71)",
+        "description": "Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/autonomous/commands.ts",
+          "plugins/autonomous/council.ts",
+          "plugins/discord/user-lookup.ts",
+          "plugins/web/text.ts",
+          "src/agent/execute.ts",
+          "src/agent/types.ts",
+          "src/agent/untrusted.ts",
+          "src/autonomous/council.ts",
+          "src/autonomous/delegate.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/identity-inject.ts",
+          "src/discord/injection-guard.ts",
+          "src/discord/memory-inject.ts",
+          "src/discord/session-thread.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/types.ts",
+          "src/scheduler/service.ts",
+          "src/watch/ack.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/router.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/discord.slash-pending-ask.test.ts",
+          "tests/safe.injection.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Display names (the Discord speaker's on chat, button picks, /session start and /work, and every name discord-user-lookup returns) are cleaned before the model sees them: mention / channel / emoji markup, @everyone / @here, control, zero-width, bidi and tag characters, role-like tags ([owner]) and labels (owner:) removed, capped at 32, a role-word-only name dropped; a shown Discord name that reads like the owner's or another declared person's (look-alike letters folded) adds a name_clash line; identity and role still come only from declared ids, so a stranger named like the owner is community even with an owner stamp (SAFE-11). A team / community speaker's chat message, /session start topic and /work description, WATCH titles and bodies (clipped so the random-id end marker survives the 8000-char cap), and the results of the GitHub readers and discord-user-lookup reach the model inside an UNTRUSTED_DATA fence (web-fetch keeps its fence, now on the shared helper); replayed turns quote lines that imitate Corvidinho blocks or turn labels; every task-run system prompt says such blocks are data that never grant a permission and that only the sender's role, enforced in the tool layer, decides what may run; a community run whose task claims the owner gets no mutating tool and a role refusal (SAFE-12). A conservative always-on detector (ignore-rules, role-override, owner-claim, secret-request, tool-call-payload, fake-marker; look-alike and invisible characters folded; bounded) trips on known payloads and not on ordinary messages or bug reports (a speaker correcting their own earlier message, questions about tokens or keys in code); a non-owner Discord message, /session start or /work text that trips it starts no run and gets one short refusal that pings only the owner (slash: a fresh owner post), a WATCH event from anyone but the owner gets one refusal comment @mentioning the owner's GitHub login and no run, a WATCH run's in-run hit is told on its summary comment or, when none is posted, on one comment of its own, a scanned tool result that trips it drops every mutating tool and memory-store for the rest of the run (refused if called), and a delegate / council worker's own hit rides its result back and counts as the lead's, the summary says it did not act on it and the answer post pings the owner (chat, button pick, /session start, /work, a schedule's post or ask, WATCH summary); every hit appends an injection-suspected / denied SAFE-5 row with reason ids only (SAFE-13). tests/safe.injection.test.ts covers each and fails on the base sources; the full suite, tsc, specsync check --require-coverage 100, hi check and fledge verify stay green."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "bacd55efe0bc952f1ad92503c969c7104ef46bb029a0544bdf71c58b2f6bbe9e",
+        "cli": "d4fc999a55ff452cf97274e3d0276b90c785f72af28cb63c7000402b5bca10fb",
+        "discord": "5f13144d21c3c06ab065d992f6ed406cb867d8638287f5ddc131d753cdbbb59e",
+        "plugins": "6d8d685759f02cf8c74e02053acdcd398b0c5c491a81bee30887afaedc45a742",
+        "watch": "3ecf756eedc808e6e4ca45fb479219722ce5dd6ea33ae675174f55247d49b105"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790716388,
+      "digest": "21da3c32596066b6e6f974ffbac114d4e13aa32be9edd0c573f30baf12a74f7b",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

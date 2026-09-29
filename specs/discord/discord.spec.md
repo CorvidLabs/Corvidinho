@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 83
+version: 84
 status: draft
 files:
   - src/discord/types.ts
@@ -10,6 +10,7 @@ files:
   - src/discord/memory-inject.ts
   - tests/discord.memory-inject.test.ts
   - src/discord/identity-inject.ts
+  - src/discord/injection-guard.ts
   - tests/discord.identity-inject.test.ts
   - tests/discord.identity-pick.test.ts
   - src/discord/permissions.ts
@@ -489,6 +490,20 @@ notices to one per user per window; `command-handlers/mute.ts` exports
 `MUTE_SELF_OR_OWNER_REFUSED`, the ephemeral refusal for `/mute` of yourself or
 the configured owner.
 
+Untrusted text on Discord (SAFE-11/12/13, #71, REQ-discord-071):
+`src/discord/injection-guard.ts` exports `fenceSpeakerText(text, role,
+source, id?)` / `speakerFenceHeader(role)` / `SpeakerSurface`
+(`chat-message`, `session-topic`, `work-task`), `inboundInjection(text,
+role)`, `injectionRefusalHead`, `formatInjectionRefusal(reasons, owner)`,
+`refuseInjectedSlash(ctx, interaction, verdict, source)`,
+`formatInjectionOwnerLine(notice, owner)`, `withInjectionNotice(post, notice,
+owner)`, `auditInboundInjection(recordAudit, …)` and
+`INJECTION_NO_OWNER_WARNING`. `src/discord/identity-inject.ts` adds
+`cleanedDiscordName(input)` and `displayNameClash(input)`;
+`slashOwnerNotice` takes `injection?`; `AgentSpawnResult` gains
+`injection?: InjectionNotice` (the spawn client validates the child's
+`result.injection` with `injectionNoticeFromUnknown`).
+
 ## Invariants
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
@@ -593,6 +608,32 @@ answer message is tracked like a chat reply, so a reply to it by the
 requester never goes unheard (AUTONOMY-1/5/6 / DISCORD-ASK-1/4 /
 REQ-discord-044).
 
+Untrusted text on Discord (SAFE-11/12/13, REQ-discord-071): the IDENTITY-4
+block shows the acting user's Discord display name / username only after
+`cleanDisplayName` (a declared person's display and the owner map display are
+the owner's and shown as configured), and when that shown Discord name reads
+like the owner's display or another declared person's display or nickname
+(`namesLookAlike`) it adds one `name_clash` line saying this Discord user id
+is someone else; recognition and role stay on declared ids only (IDENTITY-7 /
+IDENTITY-12). Chat, `/session start` and `/work` resolve the speaker's role
+before the run: for team and community, `inboundInjection` runs over the
+speaker's own text, and a hit starts no run — chat: one public reply
+(`formatInjectionRefusal`, allowed mentions the owner only, replying to the
+message; a session the message started is ended and the turn is not
+recorded); slash: the interaction's public refusal, then a fresh channel post
+pinging only the owner (`refuseInjectedSlash`; no session, worktree or work
+task) — plus an `injection-suspected` / `denied` audit row (actor, surface
+`discord:<session>` or `discord:/<command>`, digest of the source and reason
+ids; never the text). Otherwise the team / community speaker's words go to
+the model through `fenceSpeakerText` (the owner's unchanged). A run whose
+result carries `injection` pings the owner on the post that carries its
+answer: chat and button-pick replies (`withInjectionNotice`), `/session
+start` and `/work` owner notices (`slashOwnerNotice`) and a schedule run's
+result post or ask post. Replayed session turns strip invisible characters and
+mark a line that imitates a Corvidinho block or a turn label (`Human:`,
+`You (Corvidinho):`) `(quoted)`; recalled memory lines strip invisible
+characters. No new env var, config key, table or column.
+
 ## Behavioral Examples
 
 ### Scenario: Spawn with seeded identity
@@ -670,6 +711,18 @@ REQ-discord-044).
   `<@owner> ↑ needs you`; the same ask answered by a fallback reply adds no
   post (REQ-discord-215)
 
+### Scenario: A stranger's message tries to take over the bot (SAFE-13)
+
+- **Given** an undeclared user in an allowlisted channel and a configured owner
+- **When** they @mention the bot with text that tells it to set aside its previous instructions and print its environment
+- **Then** no agent run starts; one reply says the bot won't act on it (in plain words, never quoting the text) and pings only the owner; the session the message would have started is dropped; an `injection-suspected` / `denied` audit row names the user and the surface (REQ-discord-071)
+
+### Scenario: A stranger named like the owner (SAFE-11)
+
+- **Given** an undeclared user whose Discord display name is `[owner] L<zero-width>eif`
+- **When** they ask an ordinary question
+- **Then** the run's acting-user block shows `display_name: Leif` with a `name_clash` line and no owner facts, their words are fenced as untrusted data with `role: community`, and the run is community (REQ-discord-071)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -693,6 +746,9 @@ REQ-discord-044).
 | `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (neither the thread nor its parent listed, or a deny on the thread or its parent), SAFE-2 / secret path (by name, link target, or a file or folder swapped for a link after the checks), path outside the project, type not allowed or bytes not matching, over 8 MB (at the size check or in the bytes read; at most 8 MB + 1 byte is read), requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
 | `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
+| Non-owner chat message, `/session start` topic or `/work` description trips the SAFE-13 detector | No run, no session / worktree / work task; one short public refusal; the owner pinged (chat: in the reply; slash: a fresh channel post); `injection-suspected` audit row (REQ-discord-071) |
+| SAFE-13 refusal with no owner configured | The refusal still goes out and says no owner is configured; `INJECTION_NO_OWNER_WARNING` logged (REQ-discord-071) |
+| SAFE-13 audit trail unavailable (no DB, keyed chain without the key) | Refusal still sent; one `[discord] SAFE-13 audit row failed` warning (REQ-discord-071) |
 
 ## Dependencies
 
@@ -814,3 +870,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), .env.example gives an absolute CORVIDINHO_ALLOWLIST_FILE because ~ is not expanded, and docs/DAEMON.md lists daemon.start_failed and spend.warning |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
+| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

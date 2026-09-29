@@ -120,6 +120,13 @@
         "plugins": "eeb88077b18af68a789ab7f1bd63cee8ba0def802978e4f5ad8c9e843f1dae44",
         "watch": "2c9d634d91045dde181c266fb95b682c7d67475ef5032ea950bbb96e14d34910"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790716744,
+      "digest": "90ccfba5d21cedc216e781e6163ea15e270eca7e91aebc32c978eab28014c3cc",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []

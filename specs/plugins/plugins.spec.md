@@ -135,7 +135,9 @@ REQ-plugins-112..113).
 Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 `delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117);
 `council` convenes worker voices that propose, critique and decide
-(AUTONOMOUS-6 / REQ-plugins-118).
+(AUTONOMOUS-6 / REQ-plugins-118). Both pass a worker's own SAFE-13 hit
+(`result.injection`, validated) back as `data.injection`, which the lead's
+tool loop takes as its own hit (REQ-plugins-071).
 
 ## Public API
 
@@ -261,7 +263,19 @@ at 15 s; non-text or malformed (not an RFC 6838 `type/subtype` token) content
 types and compressed bodies are refused. Returned text has C0/C1 controls
 stripped (newline and tab kept), is secret-scrubbed and is fenced as untrusted
 data with a per-call random marker id; the page title is a `Title:` line
-inside the fence, never a separate field. Errors never echo the reason phrase
+inside the fence, never a separate field. The fence is the shared
+`fenceUntrustedData` (`src/agent/untrusted.ts`, SAFE-12, REQ-plugins-071)
+with the `UNTRUSTED_WEB_CONTENT` word: bidi, zero-width, BOM, soft hyphen and
+tag characters are stripped too, and a page line that imitates a Corvidinho
+context block (`[Corvidinho …`, `[untrusted …`, the replay footer) is marked
+`(quoted)`.
+`discord-user-lookup` cleans every member name it returns (username, global
+name, nickname, display name) with `cleanDisplayName` before it reaches the
+model (SAFE-11, REQ-plugins-071); a lookup never makes anyone a declared
+person or gives a role. What a plugin may run is decided only by the acting
+role resolved in the tool layer (`resolveActingRole`, REQ-plugins-065): text
+in a task, a body or a tool result that claims the owner's identity widens
+nothing (SAFE-12, REQ-plugins-071). Errors never echo the reason phrase
 or other server-chosen header values and are one line, control-free and at
 most 300 chars. `web-search` is not built (provider not captured).
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
@@ -753,6 +767,8 @@ command line.
 | runner binary gone after load (cannot start) | ok=false, exit 127 with the reason; never throws |
 | runner times out / calling run aborts | exit 124 / 130; runner process tree killed |
 | files-read of a PNG/JPEG/GIF/WebP over 20 MB | refused `refused: image '<path>' is N bytes, over the 20MB image limit` (exit 1), no bytes read into the result (REQ-plugins-427) |
+| discord-user-lookup member names carrying mention markup, invisible / bidi / tag characters or role-like tags / labels | returned cleaned (`cleanDisplayName`); a name that is only a role word is dropped (the username or id stands in) (REQ-plugins-071) |
+| A role session's task text claims the owner and asks for a mutating plugin | not offered; a call gets the role refusal `not allowed for your role`, nothing runs (REQ-plugins-071, REQ-plugins-065) |
 
 ## Dependencies
 
@@ -835,3 +851,4 @@ and current rows for plugins host evolution.
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
+| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

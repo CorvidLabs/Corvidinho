@@ -5,6 +5,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
  */
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
+import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { actorIsAdmin, projectLabel } from "../list-scope.ts";
@@ -92,6 +93,29 @@ export async function handleSessionStart(
       ? projectRaw.trim()
       : undefined;
 
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  // IDENTITY-8..12: owner (ADMIN), a declared team member, or community;
+  // the tool layer re-resolves it on every call.
+  const actingRole = resolveDiscordActingRole({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
+    mutedUsers: ctx.mutedUsers,
+    people,
+  });
+  const actingIsAdmin = actingRole === "owner";
+
+  // SAFE-13: a non-owner topic that looks like an injection attempt starts no
+  // session: a short reply, the owner pinged, an audit row.
+  const suspected = inboundInjection(topic, actingRole);
+  if (suspected) {
+    await refuseInjectedSlash(ctx, interaction, suspected, "session-topic");
+    return;
+  }
+
   await interaction.deferReply?.({ ephemeral: false });
 
   const created = await ctx.store.createWithWorktree({
@@ -129,8 +153,8 @@ export async function handleSessionStart(
     await thinking.start({ description: `Session: ${topic.slice(0, 80)}` });
   }
 
-  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
-  const idInject = enrichPromptWithIdentity(topic, {
+  // SAFE-12: a non-owner's topic goes to the model fenced as untrusted data.
+  const idInject = enrichPromptWithIdentity(fenceSpeakerText(topic, actingRole, "session-topic"), {
     userId: interaction.userId,
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
@@ -144,19 +168,6 @@ export async function handleSessionStart(
 
   let result;
   try {
-    // IDENTITY-8..12: owner (ADMIN), a declared team member, or community;
-    // the tool layer re-resolves it on every call.
-    const actingRole = resolveDiscordActingRole({
-      userId: interaction.userId,
-      roleIds: interaction.roleIds,
-      allowlist: ctx.allowlist,
-      adminUserIds: ctx.adminUserIds,
-      adminRoleIds: ctx.adminRoleIds,
-      owner: ctx.owner,
-      mutedUsers: ctx.mutedUsers,
-      people,
-    });
-    const actingIsAdmin = actingRole === "owner";
     // Busy while the agent runs: the soft-TTL purge must not park this
     // worktree mid-run (REQ-discord-204).
     result = await ctx.store.runActive(session, () =>
@@ -281,6 +292,8 @@ export async function handleSessionStart(
     ask: result.ask,
     askOwner,
     spendWarning: result.spendWarning,
+    // SAFE-13: a tool result that looked like an injection tells the owner.
+    injection: result.injection,
     label: `/session \`${session.id}\``,
   });
   await finishSlashWithOwnerNotice({

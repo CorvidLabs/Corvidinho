@@ -2210,7 +2210,12 @@ Discord user id only. Once anyone is declared, an undeclared non-owner SHALL
 be marked `declared_person: none`, so a Discord display name never passes for
 a declared person. An owner who is not declared under `[people]` keeps the
 block exactly as before, and with nobody declared the block SHALL be
-unchanged.
+unchanged. The one exception is SAFE-11 (REQ-discord-071): the
+Discord display name / username shown is cleaned first (`cleanDisplayName`),
+and a non-owner whose shown Discord name reads like the owner's display or
+another declared person's display or nickname gets one `name_clash` line
+saying this Discord user id is someone else; recognition and roles stay on
+stable ids.
 
 Only the owner changes people (IDENTITY-6, ADMIN-3.a): `/admin people
 list|add|link|unlink|remove` (owner-only; dispatcher floor ADMIN plus a
@@ -2248,6 +2253,7 @@ Acceptance Criteria
 - A non-owner is refused at dispatch and at the handler (`denied` row); `list` is owner-only too.
 - Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
 - Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
+- SAFE-11 (REQ-discord-071): a stranger named `[owner] L<zero-width>eif` is shown as `display_name: Leif` with a `name_clash` line naming the owner and no owner facts; a stranger named like a declared person gets a `name_clash` line naming that person; the owner and a declared person shown by their own declared display get none; with nobody declared a clean, non-clashing name leaves the block byte-identical to before (`tests/safe.injection.test.ts`, `tests/identity.recognise.test.ts`).
 
 ### REQ-discord-065
 
@@ -2400,6 +2406,55 @@ Acceptance Criteria
 - Without an announcements channel no reply is posted and the notice stays pending.
 - A good backup dir gets tonight's snapshot from the bridge tick and nobody is pinged.
 - `SchedulerService.tick` hands its clock to the backup ticker on every tick.
+
+### REQ-discord-071
+
+Untrusted text on Discord (SAFE-11 / SAFE-12 / SAFE-13, #71). The IDENTITY-4
+acting-user block SHALL show the acting user's Discord display name or
+username only after `cleanDisplayName` (`cleanedDiscordName`; the declared
+person's display and the owner map display are the owner's own and shown as
+configured), and SHALL add one `name_clash` line when that shown Discord name
+reads like the owner's display or another declared person's display or
+nickname (`displayNameClash`, `namesLookAlike`); who the user is and their
+role come only from the Discord user id (IDENTITY-7 / IDENTITY-12). Chat
+messages, `/session start` and `/work` SHALL resolve the speaker's role
+(`resolveDiscordActingRole`) before the run. For team and community speakers
+(never the owner) `inboundInjection` SHALL scan the speaker's own words; a hit
+SHALL start no run: on chat one public reply to the message
+(`formatInjectionRefusal`: what it won't do and why in plain words, never the
+text, pinging the owner with allowed mentions limited to the owner; without an
+owner it says nobody could be told and logs `INJECTION_NO_OWNER_WARNING`), a
+session the message started is ended and the turn is not recorded; on slash
+(`refuseInjectedSlash`) the interaction gets the public refusal and the owner a
+fresh channel post that pings only them, and no session, worktree or work task
+is created; either way one `injection-suspected` / `denied` SAFE-5 row is
+appended through the bridge's trail (actor, surface `discord:<session>` or
+`discord:/<command>`, digest of the source and reason ids; best effort).
+Otherwise a team / community speaker's words SHALL reach the model through
+`fenceSpeakerText` (the `UNTRUSTED_DATA` fence with a header naming their role
+and saying it is their request but data, not instructions); the owner's words
+are unchanged. The spawn client SHALL read the child's `result.injection`
+with `injectionNoticeFromUnknown` into `AgentSpawnResult.injection`, and the
+post that carries a run's answer SHALL then ping the owner with
+`formatInjectionOwnerLine`: chat and button-pick replies (`withInjectionNotice`,
+with the SAFE-8 warning), `/session start` and `/work` (`slashOwnerNotice`
+`injection`) and a schedule run's result post or ask post. Replayed session
+turns SHALL strip invisible characters and mark a line that imitates a
+Corvidinho block or a turn label (`Human:`, `You (Corvidinho):`) `(quoted)`,
+so an earlier message cannot close the replay block or pass for a turn of
+Corvidinho's own; recalled
+memory lines SHALL strip invisible characters. `discord-user-lookup` names are
+cleaned (REQ-plugins-071). No env var, config key, table or column.
+
+Acceptance Criteria
+- Through `startBridge` with a memory DB: a stranger's injection starts no run, gets one reply to the message that pings only the owner, ends the session it started and appends one `injection-suspected` / `denied` row with the stranger as actor; a declared team member's injection is refused too; the owner's own words run unfenced.
+- An ordinary stranger message runs with the words inside the fence (`role: community`, `source=chat-message`), the display name cleaned and a `name_clash` line; a run reporting `injection` gets the owner line and the owner in its allowed mentions.
+- `/session start` and `/work`: a stranger's injection creates no session and runs nothing, the interaction gets the refusal, the owner a fresh ping post, the trail one `denied` row; an ordinary stranger request runs fenced and the owner's unfenced.
+- `slashOwnerNotice` and `withInjectionNotice` carry the SAFE-13 owner line and the owner mention; no notice leaves a post unchanged.
+- The replay block marks a turn line that imitates its footer or a turn label `(quoted)` and still ends with its own footer.
+- A schedule run reporting `injection` pings the owner with the SAFE-13 line on its result post and, when it ends with an ask, on its ask post.
+- A non-owner's free-text answer to a pending ask reaches the model inside the fence (`tests/discord.slash-pending-ask.test.ts`).
+- Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 
 ### REQ-discord-067
 
