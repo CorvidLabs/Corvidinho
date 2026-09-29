@@ -1,6 +1,6 @@
 ---
 id: memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run
-state: approved
+state: implementing
 type: feature
 base_commit: 1a392777183f0f7f0b53d14efc2ffc8a70e277ca
 ---
