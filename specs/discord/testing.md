@@ -413,12 +413,50 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   only (REQ-agent-004); replayed and stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
   replay; another user's session never sees my turns; confirm tokens only
   from the current message (no live Discord).
-- `tests/discord.session-thread.unit.test.ts` — the renderer (budget,
-  opening request + newest turns, exact omitted count, per-turn clip that
-  never cuts a surrogate pair, one paragraph that Planning selection skips,
-  `answerTurnText`) and `SessionStore` turns (module-owned table without a
-  schema version change, reload after reopen, delete on end/TTL, orphan
-  sweep, turn cap, scrub on write, `SCRUB_TARGETS` + `rescrubDatabase`).
+- `tests/discord.session-thread.unit.test.ts` — the renderer (32000-char
+  block ceiling, opening request + newest turns, exact omitted count,
+  per-turn clip by role — agent 1500, a 4000-char human turn whole, human
+  past 6000 clipped — that never cuts a surrogate pair, one paragraph that
+  Planning selection skips, `answerTurnText`) and `SessionStore` turns
+  (module-owned table without a schema version change, reload after reopen,
+  delete on end/TTL, orphan sweep, turn cap, scrub on write, `SCRUB_TARGETS`
+  + `rescrubDatabase`).
+
+## Condensed, kept and resumed conversations (REQ-discord-472, SESSION-5/6 / SESSION-3.a / AGENT-6.a)
+
+- `tests/session.condense.test.ts` — the window (`CORVIDINHO_LLM_CONTEXT_TOKENS`,
+  default 8192, invalid → default, below 1024 → 1024) and the 80% budget with
+  its 32000-char ceiling; `condenseConversation` folds nothing under the
+  budget, folds oldest first at it (reaching it counts), keeps the task, the
+  latest instruction and the new message word for word, gives the summary
+  way when only pinned turns are left, keeps and bounds an earlier summary,
+  stays one `[Corvidinho …]` paragraph; `SessionStore.threadPrompt` replays
+  everything under 80% and condenses at it, stores the scrubbed summary with
+  the session and rewrites the turn rows, gives the same prompt after a
+  restart (no folded turn), condenses further from the summary for a smaller
+  window, and folds turns past the 200 cap into the summary.
+- `tests/store.conversation.test.ts` — the v11 → v12 forward-only migration
+  (rows kept, re-run idempotent); `ConversationStore` scrubs, keeps the
+  opening turn plus the last 20 (rest folded), the newest 100 answer ids, and
+  finds by id / session / thread + user / answer id; 30-day retention (an
+  update restarts it, purged after); `deleteForPerson` / `forgetConversations`
+  by Discord id, GitHub login (any case) and participant, nobody else's;
+  re-scrub of `summary` and JSON `turns`; `SessionStore` keeps an idled-out or
+  ended session's conversation (nothing when nothing was said) and
+  `forgetConversations` clears the user's live threads and retained records.
+- `tests/discord.session-resume.test.ts` — through `startBridge` with a fake
+  gateway: after the soft TTL a reply to the answer starts a new session
+  (new id, `resume: false`, `humanText` the new message) from the old
+  conversation and a later reply to the old answer continues that session; a
+  plain message in the thread does the same; a resumed conversation carries
+  its summary; another user's reply / thread message gets nothing of mine; a
+  muted or deny-listed user or a non-allowlisted channel gets no run; a
+  session that idled out while the bridge was down resumes after the restart;
+  after 30 days (purged) or once the person is forgotten the reply gets no
+  answer; with `CORVIDINHO_LLM_CONTEXT_TOKENS=2048` in the bridge env a long
+  chat's block stays under 80% with the task and latest instruction whole.
+  Every bridge test here fails on the base sources (no retained conversation,
+  no condensing); see the change's testing artifact for the fail-on-base run.
 ## Attached images reach the model (REQ-discord-013 modified, DISCORD-9)
 
 - `tests/discord.image-attachments.test.ts` bridge e2e now downloads a real

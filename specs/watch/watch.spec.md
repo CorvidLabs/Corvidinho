@@ -18,6 +18,7 @@ files:
   - src/watch/index.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
+  - tests/watch.conversation.test.ts
 
 db_tables: []
 depends_on:
@@ -71,6 +72,9 @@ and the search clients' `userId` (GitHub numeric id; fixture `user_id`)
 env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
 declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7).
+`WATCH_THREAD_HEADER` / `WATCH_THREAD_FOOTER` (`src/watch/poller.ts`) frame
+an issue or PR thread's replayed conversation (REQ-watch-472); the retained
+store and condensing are `src/store/conversation.ts` (REQ-discord-472).
 
 ## Invariants
 
@@ -100,7 +104,16 @@ idle past the soft TTL (`resolveSessionTtlMs`, 30–60m, default 45m) is dropped
 and the next event on that issue starts fresh; one session per
 `owner/repo#number`; stored topic is SAFE-6 scrubbed; dry-run without
 `CORVIDINHO_DATA_DIR` stays in-memory; the poller closes a DB it opened on stop
-only after the in-flight cycle ends (REQ-watch-037). Poll cycles are
+only after the in-flight cycle ends (REQ-watch-037). With a DB, each run on
+an issue or PR adds the event and the run's answer to that thread's retained
+conversation (`conversation_threads`, surface `watch`, scrubbed, last 20
+turns plus a condensed summary, participants the lowercased senders), and a
+follow-up on the same issue or PR — also after the session's TTL — gets it
+replayed in a `[Corvidinho earlier conversation on this GitHub issue or PR …]`
+block ahead of the event, condensed at about 80% of the model's window with
+the opening and latest request word for word; it is purged 30 days after its
+last update (every poll cycle purges), a conversation DB failure is logged and
+never stops the run, and another issue never sees it (REQ-watch-472). Poll cycles are
 single-flight; after stop no further event is routed, acked, or spawned; one
 failing event is logged and marked processed without aborting the cycle.
 A GitHub 401 from a poll halts the loop (no re-arm), logs one line naming
@@ -119,13 +132,17 @@ summary comment once per event id; spawn start/outcome log + JSONL row; 403
 rate-limit on the fetch, the ack or the summary comment schedules backoff and
 skips tight re-poll; a plain 403 on a comment logs the failure only. Poller restarted on the
 same data dir continues the same issue session; issue idle past TTL →
-start_session with a new id.
+start_session with a new id; a follow-up on the same issue (within 30 days)
+gets the thread's earlier events and answers replayed ahead of the new event
+(REQ-watch-472).
 
 ## Error Cases
 
 Missing token; missing mention username; empty repo allowlist; not authorized
 (user/repo); already processed; GitHub 403 rate-limit backoff; GitHub 401
-(bad or revoked token) stops the loop with exit 1.
+(bad or revoked token) stops the loop with exit 1; a thread-conversation read,
+write or purge failure logs `[watch] conversation … failed` and the run goes on
+without the replay or the record (REQ-watch-472).
 
 ## Dependencies
 

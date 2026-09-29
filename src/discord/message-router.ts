@@ -7,9 +7,13 @@
  * itself) must be allowlisted before any path — a reply/forward that
  * references a tracked bot message never pulls the session into another
  * channel.
+ * SESSION-3.a (REQ-discord-472): after a session expired, its user's reply to
+ * one of its answers, or their message in its thread, starts a new session
+ * from its retained conversation (same gates first) instead of no answer.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import { type ConversationRecord, discordThreadKey } from "../store/conversation.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import {
   claimRefusalNotice,
@@ -183,6 +187,40 @@ function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null 
 }
 
 /**
+ * SESSION-3.a (REQ-discord-472) — the message author's retained conversation
+ * (`record`, from a reply to one of its answers or from their thread) starts
+ * a new session that begins from it, after the actor and mute/rate gates (the
+ * channel gate already ran). Only the conversation's own user, and only where
+ * it was held (the same thread, or the same channel outside threads). A live
+ * session already carrying it is continued instead. Null when `record` does
+ * not apply.
+ */
+function resumeRetained(
+  msg: InboundMessage,
+  deps: RouterDeps,
+  record: ConversationRecord | undefined,
+): RouteAction | null {
+  if (!record || record.userId !== msg.authorId) return null;
+  if (record.threadKey !== discordThreadKey(msg)) return null;
+  const actorDenied = refuseActor(msg, deps);
+  if (actorDenied) return actorDenied;
+  const blocked = refuseRateOrMute(msg, deps);
+  if (blocked) return blocked;
+  const prompt = stripMentions(msg.content) || msg.content;
+  const live = record.sessionId ? deps.store.get(record.sessionId) : undefined;
+  if (live && live.userId === msg.authorId) {
+    deps.store.touch(live);
+    return { kind: "continue_session", session: live, prompt };
+  }
+  const session = deps.store.resumeFromRetained(record, {
+    channelId: msg.channelId,
+    userId: msg.authorId,
+    threadId: msg.threadId,
+  });
+  return { kind: "start_session", session, prompt };
+}
+
+/**
  * Pure router: given an inbound message, decide start/continue/refuse/ignore.
  */
 export function routeMessage(
@@ -227,6 +265,14 @@ export function routeMessage(
         prompt: stripMentions(msg.content) || msg.content,
       };
     }
+    // SESSION-3.a: my session in this thread expired — my message here
+    // starts a new one from its retained conversation.
+    const resumed = resumeRetained(
+      msg,
+      deps,
+      deps.store.retainedForThread(msg.threadId, msg.authorId),
+    );
+    if (resumed) return resumed;
     // No own thread session yet — fall through; mention may start one.
   }
 
@@ -249,6 +295,15 @@ export function routeMessage(
           prompt: stripMentions(msg.content) || msg.content,
         };
       }
+    } else {
+      // SESSION-3.a: a reply to an answer of my expired session starts a
+      // new session from its retained conversation.
+      const resumed = resumeRetained(
+        msg,
+        deps,
+        deps.store.retainedForReply(msg.referencedMessageId),
+      );
+      if (resumed) return resumed;
     }
   }
 

@@ -211,6 +211,9 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   { table: "schedule_runs", columns: ["summary", "error", "ask_question"] },
   { table: "memories", columns: ["key", "content"] },
   { table: "watch_sessions", columns: ["topic"] },
+  // SESSION-5/6, AGENT-6.a (src/store/conversation.ts): the condensed summary
+  // and the kept turns (JSON; each turn's text re-scrubbed value by value).
+  { table: "conversation_threads", columns: ["summary"], json: ["turns"] },
   { table: "spend_ledger", columns: ["provider", "model"] },
 ];
 

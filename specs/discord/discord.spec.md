@@ -24,6 +24,10 @@ files:
   - src/discord/session-thread.ts
   - tests/discord.session-thread.test.ts
   - tests/discord.session-thread.unit.test.ts
+  - src/store/conversation.ts
+  - tests/session.condense.test.ts
+  - tests/store.conversation.test.ts
+  - tests/discord.session-resume.test.ts
   - src/store/db.ts
   - src/store/index.ts
   - src/store/paths.ts
@@ -141,13 +145,42 @@ STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 Session thread (AGENT-6 / REQ-discord-072): `src/discord/session-thread.ts`
 exports `SessionTurn`, `formatSessionThread` / `withSessionThread` (the
-labelled replay block, `SESSION_THREAD_HEADER` / `SESSION_THREAD_FOOTER`,
-`formatSessionThreadOmitted`), `clipTurnText`, `answerTurnText`,
-`ensureSessionTurns` and the limits `SESSION_THREAD_BUDGET_CHARS` (6000),
-`SESSION_THREAD_TURN_MAX_CHARS` (1500) and `SESSION_THREAD_MAX_TURNS` (200);
+labelled replay block, optional `summary`, `SESSION_THREAD_HEADER` /
+`SESSION_THREAD_FOOTER`, `formatSessionThreadOmitted`), `clipTurnText`,
+`answerTurnText`, `ensureSessionTurns` and the limits
+`SESSION_THREAD_BUDGET_CHARS` (32000, the block's transport ceiling),
+`SESSION_THREAD_TURN_MAX_CHARS` (1500, agent turns),
+`SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (6000, human turns) and
+`SESSION_THREAD_MAX_TURNS` (200);
 `SessionStore.recordTurn(session, role, text)` records one turn (the
 human's words as a run starts, the posted answer or failure line when it
 ends) and `SessionStore.threadFor(session)` returns them oldest first.
+
+Condensed conversations (SESSION-5/6, SESSION-3.a, AGENT-6.a /
+REQ-discord-472): `src/store/conversation.ts` exports the window
+(`resolveContextWindowTokens(env)`, `CONTEXT_WINDOW_ENV`
+= `CORVIDINHO_LLM_CONTEXT_TOKENS`, `CONTEXT_WINDOW_DEFAULT_TOKENS` 8192,
+`CONTEXT_WINDOW_MIN_TOKENS` 1024, `CONDENSE_AT_FRACTION` 0.8,
+`CHARS_PER_TOKEN` 4, `condenseBudgetChars(window)`,
+`CONVERSATION_PROMPT_MAX_CHARS` 32000, `estimateTokens`), the pure
+condensing (`condenseConversation`, `boundConversation`,
+`pinnedTurnIndexes`, `summaryPoint`, `appendSummary`, `summaryCapChars`,
+`formatConversationBlock` / `withConversationBlock`, `SUMMARY_LABEL`,
+`clipTurnForRole`, `ConversationTurn` / `Conversation`), and the retained
+store (`ConversationStore`: `get`, `forSession`, `latestForThread`,
+`byBotMessage`, `save`, `delete`, `purgeExpired`, `deleteForPerson`;
+`forgetConversations(db, person)`; `ConversationRecord`,
+`discordThreadKey`, `watchThreadKey`, `discordParticipant`,
+`githubParticipant`, `CONVERSATION_RETENTION_MS` 30 days,
+`CONVERSATION_KEEP_TURNS` 20, `CONVERSATION_KEEP_BOT_MESSAGES` 100).
+`SessionStoreOptions.contextWindowTokens` (bridge:
+`resolveContextWindowTokens(env)`); `SessionStore.threadPrompt(session,
+prompt, { windowTokens? })` returns the prompt with the condensed block and
+stores a fold; `summaryFor(session)`; `retainedForReply(botMessageId)` /
+`retainedForThread(threadId, userId)` / `resumeFromRetained(record, where)`
+(the router's SESSION-3.a path); `forgetConversations(userId)` and
+`purgeExpiredConversations()`. `src/discord/bridge.ts` exports
+`CONVERSATION_PURGE_INTERVAL_MS` (hourly purge while running).
 
 Scrub at rest (REQ-discord-066, SAFE-6): `src/store/scrub.ts` exports
 `scrubSecrets` / `scrubOpt`, `scrubJsonText(raw)` (scrubs every string value
@@ -524,7 +557,7 @@ every @mention/reply/thread message and every slash command also passes `gateAct
 an ask button press (open or pick) passes channel → `gateActor` (with the press's role ids) → mute/rate (shared per-user state, presser's resolved level) before it opens choices or resumes; a refusal is ephemeral only — zero-width ack for an actor deny, `MUTED` / `RATE_LIMITED` for mute/rate — with no agent run, nothing sent or edited, and the pending ask kept (DISCORD-6 / DISCORD-DENY-3 / REQ-discord-201 / REQ-discord-010);
 after those gates, the requester's press on an ask that is no longer open because it timed out (dropped when a newer ask was cleared, or cleared by a late press) or its session was TTL-purged (at runtime or on load) gets only the ephemeral `ASK_CHOICE_EXPIRED` — no agent run, no session, nothing sent or edited — while another user's press, a re-press after a pick and a press after cancel keep the not-for-you reply; the channel gate judges such a press against the closed ask's session channel and thread as for a live ask, so it holds in the talk's thread under an allowlisted parent (DISCORD-2.a) and stays zero-width elsewhere or once that channel left the allowlist; the store keeps such an ask only as `{ askId, userId, expiresAt, channelId, threadId? }` in memory (no question or option text, newest `CLOSED_ASKS_MAX`) (DISCORD-ASK-5 / DISCORD-ASK-8 / SAFE-6 / REQ-discord-212 / REQ-discord-045);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
-every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
+every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message; when that prompt reaches about 80% of the model's window (`CORVIDINHO_LLM_CONTEXT_TOKENS`, default 8192 tokens, never past 32000 chars) the oldest turns fold into the session's summary (extractive points, no model call) while the opening request, the newest human turn and the new message stay word for word, and the summary is stored with the session so a restart or a smaller window picks up from it (SESSION-5/6 / REQ-discord-472); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); live turns persist in `discord_session_turns` across a restart within the soft TTL and their rows go with their session (end or TTL) after its conversation is kept 30 days in `conversation_threads`, from which only its own user's reply to one of its answers or message in its thread starts a new session after the gates (SESSION-3.a / AGENT-6.a); turns never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence (a zero cron step — `*/0`, `a-b/0`, `n/0` in any field — is a `CadenceError` refused before any field is expanded, and a range is expanded only up to its field's maximum, so no cadence can hang `/schedule create`, the store's next-run computation or the bridge), schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
@@ -551,6 +584,11 @@ from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
 scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
 no free-text column (a constant kind and integers).
+Retained conversations live in `conversation_threads` (schema v12,
+`SCHEMA_VERSION` 12, a forward-only migration; REQ-discord-472): `summary`
+and the JSON `turns` are scrubbed on write and are `SCRUB_TARGETS`;
+`participants` and `bot_message_ids` hold ids only; a record is never served
+and is purged 30 days after its last update.
 The spend warning line and `/status` spend line are built from integer
 amounts, never from child-written text; the spend-cap question is scrubbed and
 mention-defanged like every ask.
@@ -669,6 +707,9 @@ REQ-discord-044).
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |
 | `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (neither the thread nor its parent listed, or a deny on the thread or its parent), SAFE-2 / secret path (by name, link target, or a file or folder swapped for a link after the checks), path outside the project, type not allowed or bytes not matching, over 8 MB (at the size check or in the bytes read; at most 8 MB + 1 byte is read), requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
 | `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
+| A retained-conversation read or write fails (DB busy) | Warning logged (`[discord] conversation … failed`); the run goes on without the summary write or the resume (REQ-discord-472) |
+| A reply to an expired session's answer by another user, or a plain message in the thread from someone whose conversation is not there | No resume: routed as before (no mention ⇒ ignored; a mention starts their own session with nothing replayed) (REQ-discord-472) |
+| `CORVIDINHO_LLM_CONTEXT_TOKENS` unset, not a positive integer, or below 1024 | 8192 (unset / invalid) or 1024 (too small) (REQ-discord-472) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
 ## Dependencies

@@ -43,6 +43,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional OPS-1/2: CORVIDINHO_BACKUP_DIR=/var/backups/corvidinho   # nightly DB backup + weekly restore test (E.7)
 # LLM: CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY), CORVIDINHO_LLM_BASE_URL, CORVIDINHO_LLM_MODEL,
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool)
+# optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
 ```
 
 Repo templates (no secrets):

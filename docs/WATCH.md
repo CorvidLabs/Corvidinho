@@ -41,6 +41,16 @@ ADMIN tools). Once anyone is declared, an undeclared commenter is marked
   from MEMORY (SESSION-4), not from a long-lived session.
 - Stored topic (issue title) is SAFE-6 scrubbed. Dry-run without
   `CORVIDINHO_DATA_DIR` stays in-memory.
+- Thread conversation (REQ-watch-472, AGENT-6.a / SESSION-5): each run on an
+  issue or PR adds the event and the run's answer to that thread's kept
+  conversation (`conversation_threads`, schema v12; scrubbed, last 20 turns
+  plus a condensed summary). A follow-up on the same issue or PR — also after
+  the session's TTL — gets it replayed ahead of the new event in a
+  `[Corvidinho earlier conversation on this GitHub issue or PR …]` block,
+  condensed at about 80% of the model's window (`CORVIDINHO_LLM_CONTEXT_TOKENS`,
+  default 8192; the thread's opening and latest request word for word). It is
+  purged 30 days after its last update; forgetting a person deletes the
+  threads they started or commented on.
 - Shutdown and overlap: poll cycles are single-flight (an interval tick while a
   long agent run is still going is skipped). On SIGINT/SIGTERM the in-flight
   cycle stops before the next event (no new ack or agent spawn), `stop()` waits

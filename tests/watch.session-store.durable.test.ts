@@ -62,9 +62,9 @@ describe("schema v6 watch_sessions (REQ-discord-037)", () => {
     const db = openCorvidinhoDb({ memory: true });
     // v7 (AUTONOMY-2 schedule ping dedupe), v8 (pending ask), v9
     // (in-flight Discord replies, REQ-discord-311), v10 (schedule run
-    // runner, REQ-discord-346) and v11 (schedule run asks, REQ-discord-347)
-    // build on v6.
-    expect(SCHEMA_VERSION).toBe(11);
+    // runner, REQ-discord-346), v11 (schedule run asks, REQ-discord-347) and
+    // v12 (retained conversations, REQ-discord-472) build on v6.
+    expect(SCHEMA_VERSION).toBe(12);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };
