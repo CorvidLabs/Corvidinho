@@ -1,6 +1,6 @@
 ---
 id: release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall
-state: implementing
+state: archived
 type: operations
 base_commit: 20a0f5841256109511825c70604b552b3ca4b062
 ---

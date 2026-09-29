@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "341859fd8c9dddea99668ecce1bfd86766cf57b0",
+      "contract_digest": "20b17eca4215d381acb43a65a0e3049e502f9264e23e0ee828a31756f933b439",
+      "execution_digest": "c7ed5a6cd3a56927307909ff6f6cbdd093bdde63518e1c8b08ec267f6cffd0f1",
+      "workspace_digest": "2765923750ff96cbcd246b7394a71e1b8b0c5a8558ddfac22bbf703ecb4fafa0",
+      "timestamp": 1790724154
+    }
+  ]
+}
