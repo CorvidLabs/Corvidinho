@@ -291,7 +291,10 @@ Non-ADMIN sessions (every non-owner in Discord, plus all WATCH and scheduled run
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never
   offered, is refused with `not allowed for your role` (ROLES-CHAT-3) and nothing runs. The
   refusal is not posted on its own; the reply ends with a short `(not allowed for your role)`
-  line instead, kept when a long reply is cut to fit. A run that ends by asking a question
+  line instead, kept when a long reply is cut to fit: chat replies, `/session start` and
+  `/work` answers, schedule posts and the run history they come from, a reply shortened for
+  the SAFE-8 80% spend warning, and the WATCH summary comment all lose the end of the text,
+  never the line. A run that ends by asking a question
   posts the question, which can leave the line out. A call to a name that is not a plugin at
   all keeps the plain "not offered" refusal and adds no line. ADMIN is re-checked on every
   call against the live owner config; the prompt never grants it.

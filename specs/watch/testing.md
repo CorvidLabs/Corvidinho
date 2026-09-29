@@ -27,3 +27,15 @@ module: watch
   the summary backs off until the reset (reason `x-ratelimit-reset`); a
   rate-limit message with no headers uses the 60 s default; a plain 403 on the
   ack or the summary sets no backoff.
+
+## Run-summary comment keeps the closing role note (REQ-watch-734, ROLES-CHAT-3)
+
+- `tests/watch.summary-scrub.test.ts` › "a long summary is clipped before its
+  note, after the scrub; one without a note is clipped as before": the
+  1529-char `chatBodyFromTaskResult` of a summary ending with the note gives a
+  1200-char preview ending with the note right before the `---` footer; a
+  GitHub token straddling where the note makes room leaves no `ghp_` prefix
+  and the note is kept; a 1500-char summary without the note is clipped to its
+  first 1200 chars as before. With `origin/main`'s `src/watch/summary.ts` the
+  test fails; the file's other tests pass either way.
+

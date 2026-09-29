@@ -248,6 +248,16 @@ schedule post append the 80% warning line with the owner added to
 `mentionUserIds`. `SlashContext.spendLine` / `StatusReportInput.spendLine`
 carry `/status`'s 24 h spend vs cap line (`formatSpendStatusLine` over
 `readSpendSnapshot` on the bridge's shared DB); no new slash command.
+
+Closing role note on the way to a post (REQ-discord-734, ROLES-CHAT-3 /
+REQ-agent-333): `ask-ping.ts` exports `POST_SUMMARY_MAX` (1500) and
+`clipPostSummary(summary, headLength = 0)`, which caps a run summary at 1500
+chars and at what fits after a `headLength`-char post head within
+`ASK_REPLY_MAX` (1900) with `clipKeepingRoleNote`. The scheduler's run-row
+summary and schedule post, and the `/work` and `/session start` answers, use
+it; `appendPostLine` cuts the body for the SAFE-8 warning line the same way
+(ending the kept text in `…`). A closing `(not allowed for your role)` note
+stays last; a summary without it is cut exactly as before.
 The bridge builds one `createSpendAlertOutbox({ db, env })`
 (`src/agent/spend-outbox.ts`) and shares it as `SlashContext.spendAlerts` and
 `SchedulerServiceOpts.spendAlerts`; `SlashContext.post` is the gateway reply
@@ -419,6 +429,10 @@ slash reply/editReply, component reply/update, discord-post-message) parses
 no mentions from its content (`parse: []`,
 `@everyone` / `@here` defanged); only the replied-to author and the users an
 ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
+a run summary's closing `(not allowed for your role)` note survives every cap
+between the agent and the post: schedule run rows and posts, `/work` and
+`/session start` answers (fitted under 1900), and the SAFE-8 warning append
+(REQ-discord-734);
 `discord-send-file` attaches only in the channel the bridge set for the run
 (never a model-chosen one; none ⇒ refused), after the channel allowlist (a
 thread through its parent) and the acting user's DISCORD-8 check with Attach
