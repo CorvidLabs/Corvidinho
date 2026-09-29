@@ -5,18 +5,28 @@
  * prepend a clear block so the model does not claim ignorance when rows exist.
  * Empty scope still gets a one-liner nudging memory-store for new durable facts.
  * No `/memory` slash — agent/prompt behavior only (draft #67 without new HI ids).
+ * Recalled content is the user's own facts, flattened to one line with
+ * invisible characters stripped (SAFE-12); it never changes who they are or
+ * their role (SAFE-11, the system prompt says so).
  *
  * MEMORY-5..7 (#101): a declared person's block is their profile scope (plus
  * rows stored under their Discord ids before they were declared), never
  * anyone else's; private notes are never injected (the store leaves them
  * out); for the owner and team the project's own memory follows in a second
  * block (MEMORY-6), only when it holds rows.
+ *
+ * MEMORY-9 (#67): with the human's message as `query`, each block is a
+ * search — the rows most relevant to the message first (ranked by relevance,
+ * then recency), then the newest to fill the block — so the model has
+ * searched memory before it could say it doesn't know, with no model call.
  */
 
+import { stripInvisible } from "../agent/untrusted.ts";
 import type { PeopleDirectory, PersonRole } from "../identity/people.ts";
 import {
   memorySubjectFor,
   projectScopeFor,
+  recallRelevantThenRecent,
   type MemoryRecord,
   type MemoryStore,
 } from "../memory/index.ts";
@@ -51,7 +61,8 @@ export function formatMemoryInjectBlock(
     lines.push(MEMORY_INJECT_EMPTY);
   } else {
     for (const r of records) {
-      const content = String(r.content ?? "").replace(/\s+/g, " ").trim();
+      // SAFE-12: one line, invisible / bidi / tag characters out.
+      const content = stripInvisible(String(r.content ?? "")).replace(/\s+/g, " ").trim();
       lines.push(`- ${r.category}/${r.key}: ${content}`);
     }
   }
@@ -70,6 +81,11 @@ export type EnrichPromptWithMemoriesOpts = {
   project?: { scope: string; key: string };
   /** Max rows to recall (default MEMORY_INJECT_LIMIT). */
   limit?: number;
+  /**
+   * The human's message (MEMORY-9): rows relevant to it come first, then the
+   * newest. Omitted ⇒ the newest rows, as before.
+   */
+  query?: string;
 };
 
 export const PROJECT_MEMORY_INJECT_HEADER =
@@ -83,7 +99,8 @@ export function formatProjectMemoryBlock(
   if (records.length === 0) return "";
   const lines = [PROJECT_MEMORY_INJECT_HEADER, `- project: ${key}`];
   for (const r of records) {
-    const content = String(r.content ?? "").replace(/\s+/g, " ").trim();
+    // SAFE-12: one line, invisible / bidi / tag characters out.
+    const content = stripInvisible(String(r.content ?? "")).replace(/\s+/g, " ").trim();
     lines.push(`- ${r.category}/${r.key}: ${content}`);
   }
   return lines.join("\n");
@@ -132,11 +149,20 @@ export function enrichPromptWithMemories(
 
   const limit = opts.limit ?? MEMORY_INJECT_LIMIT;
   // Private notes are never injected (MEMORY-7): recall leaves them out.
-  const rows = store.recall({ ownerUserId: owner, scopes: opts.scopes, limit });
+  const rows = recallRelevantThenRecent(store, {
+    ownerUserId: owner,
+    ...(opts.scopes ? { scopes: opts.scopes } : {}),
+    query: opts.query,
+    limit,
+  });
   let block = formatMemoryInjectBlock(rows);
   let count = rows.length;
   if (opts.project) {
-    const projectRows = store.recall({ ownerUserId: opts.project.scope, limit });
+    const projectRows = recallRelevantThenRecent(store, {
+      ownerUserId: opts.project.scope,
+      query: opts.query,
+      limit,
+    });
     const projectBlock = formatProjectMemoryBlock(opts.project.key, projectRows);
     if (projectBlock) {
       block = `${block}\n\n${projectBlock}`;
@@ -150,16 +176,19 @@ export function enrichPromptWithMemories(
 /**
  * MEMORY-6 — prepend only the project block (owner / team `/work` runs,
  * which get no personal memory block). Unchanged when there is no store,
- * no project scope, or nothing stored for the project.
+ * no project scope, or nothing stored for the project. With `query` (the
+ * work description, MEMORY-9) the block is a search: the rows relevant to it
+ * first, then the newest.
  */
 export function enrichPromptWithProjectMemory(
   text: string,
   store: MemoryStore | undefined,
   project: { scope: string; key: string } | undefined,
   limit = MEMORY_INJECT_LIMIT,
+  query?: string,
 ): MemoryInjectResult {
   if (!store || !project) return { prompt: text, count: 0, injected: false };
-  const rows = store.recall({ ownerUserId: project.scope, limit });
+  const rows = recallRelevantThenRecent(store, { ownerUserId: project.scope, query, limit });
   const block = formatProjectMemoryBlock(project.key, rows);
   if (!block) return { prompt: text, count: 0, injected: false };
   const prompt = text.trim().length > 0 ? `${block}\n\n${text}` : block;

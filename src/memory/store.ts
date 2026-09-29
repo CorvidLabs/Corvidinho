@@ -1,5 +1,6 @@
 /**
- * Local SQLite MemoryStore with per-user ACL (MEMORY-1..4 / MEMORY-ACL-1..5).
+ * Local SQLite MemoryStore with per-user ACL (MEMORY-1..4 / MEMORY-ACL-1..5);
+ * a recall with a query is a ranked search (MEMORY-9, src/memory/rank.ts).
  *
  * `owner_user_id` holds the row's scope (src/memory/scope.ts): a Discord user
  * id (an undeclared user, as before), `person:<id>` (a declared person's
@@ -11,6 +12,7 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import { scrubSecrets } from "../store/scrub.ts";
+import { rankMemories, RECALL_CANDIDATE_LIMIT, recallTerms } from "./rank.ts";
 import {
   isMemoryCategory,
   MEMORY_CATEGORY_LIST,
@@ -75,6 +77,10 @@ export type RecallMemoryInput = {
    * this is true. Default false.
    */
   includePrivate?: boolean;
+  /**
+   * Search text (MEMORY-9): rows holding it or any of its terms, ranked by
+   * relevance then recency (src/memory/rank.ts). Omitted: newest first.
+   */
   query?: string;
   limit?: number;
   /** When true, include soft-deleted (admin audit). Default false. */
@@ -183,28 +189,46 @@ export class MemoryStore {
       sql += ` AND category = ?`;
       params.push(input.category);
     }
-    if (input.query?.trim()) {
-      sql += ` AND (key LIKE ? OR content LIKE ?)`;
-      const q = `%${input.query.trim()}%`;
-      params.push(q, q);
+    // MEMORY-9 (#67): a query is a search — rows holding the whole query or
+    // any of its terms are read (newest first, up to RECALL_CANDIDATE_LIMIT)
+    // and ranked by relevance, then recency (src/memory/rank.ts). A query
+    // with no terms (only short or question words) matches as one substring,
+    // newest first, as before.
+    const query = input.query?.trim() ?? "";
+    const terms = recallTerms(query);
+    if (query) {
+      const likes = [query, ...terms];
+      sql += ` AND (${likes.map(() => "key LIKE ? OR content LIKE ?").join(" OR ")})`;
+      for (const l of likes) {
+        const q = `%${l}%`;
+        params.push(q, q);
+      }
     }
     sql += ` ORDER BY updated_at DESC, created_at DESC LIMIT ?`;
     // Several scopes may hold the same key: read enough to fill `limit`
     // after keeping only the newest of each.
-    params.push(scopes.length > 1 ? limit * scopes.length : limit);
+    params.push(
+      terms.length > 0
+        ? RECALL_CANDIDATE_LIMIT
+        : scopes.length > 1
+          ? limit * scopes.length
+          : limit,
+    );
 
-    const rows = (this.db.query(sql).all(...params) as MemoryRow[]).map(rowToRecord);
-    if (scopes.length === 1 || input.includeDeleted) return rows.slice(0, limit);
-    const seen = new Set<string>();
-    const out: MemoryRecord[] = [];
-    for (const r of rows) {
-      const k = `${r.category}\u0000${r.key}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(r);
-      if (out.length >= limit) break;
+    let rows = (this.db.query(sql).all(...params) as MemoryRow[]).map(rowToRecord);
+    if (scopes.length > 1 && !input.includeDeleted) {
+      const seen = new Set<string>();
+      rows = rows.filter((r) => {
+        const k = `${r.category}\u0000${r.key}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
     }
-    return out;
+    if (terms.length > 0) {
+      rows = rankMemories(rows, query, this.now()).map((r) => r.record);
+    }
+    return rows.slice(0, limit);
   }
 
   /**

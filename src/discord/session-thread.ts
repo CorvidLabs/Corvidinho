@@ -14,9 +14,17 @@
  * SESSION-4), and a session belongs to one Discord user (SESSION-MULTI-1).
  * Stored text is scrubbed on write (SAFE-6). `discord_session_turns` is a
  * module-owned table (CREATE TABLE IF NOT EXISTS, no schema version bump).
+ *
+ * SAFE-12: a replayed turn is data. Invisible characters are stripped and a
+ * line inside a turn that opens like one of Corvidinho's own blocks (this
+ * block's footer, `[Corvidinho …`) or like a turn label (`Human:`,
+ * `You (Corvidinho):`) is marked `(quoted)`, so an earlier message cannot
+ * close the block early, pass for new instructions or pass for a turn of
+ * Corvidinho's own.
  */
 
 import type { Database } from "bun:sqlite";
+import { defangContextMarkers, stripInvisible } from "../agent/untrusted.ts";
 
 export type SessionTurnRole = "human" | "agent";
 
@@ -77,8 +85,13 @@ export function clipTurnText(text: string, max = SESSION_THREAD_TURN_MAX_CHARS):
 /** Blank lines inside a turn, collapsed so the block stays one paragraph. */
 const BLANK_LINES_RE = /\r?\n(?:[ \t]*\r?\n)+/g;
 
+/** A line inside a turn that opens like a turn label (`Human:`, `You (Corvidinho):`). */
+const TURN_LABEL_LINE_RE = /^([ \t]{0,16})((?:human|you[ \t]{0,3}\([ \t]{0,3}corvidinho[ \t]{0,3}\))[ \t]{0,3}:)/gimu;
+
 function turnLine(turn: Pick<SessionTurn, "role" | "content">): string {
-  const text = clipTurnText(turn.content).replace(BLANK_LINES_RE, "\n");
+  const text = defangContextMarkers(stripInvisible(clipTurnText(turn.content)))
+    .replace(TURN_LABEL_LINE_RE, "$1(quoted) $2")
+    .replace(BLANK_LINES_RE, "\n");
   return `${ROLE_LABEL[turn.role]}: ${text}`;
 }
 

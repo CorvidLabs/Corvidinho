@@ -161,6 +161,8 @@ export function createCouncilCommand(deps: CouncilCommandDeps = {}): PluginComma
           ...(outcome.totalTokens !== undefined ? { totalTokens: outcome.totalTokens } : {}),
           ...(outcome.timedOut ? { timedOut: true } : {}),
           ...(outcome.aborted ? { aborted: true } : {}),
+          // SAFE-13: a voice's or the chair's own hit, for the lead's tool loop.
+          ...(outcome.injection ? { injection: outcome.injection } : {}),
         };
         const head = `council (${outcome.voices} voices, tier ${tier.tier}, depth ${childDepth}; ${phases})`;
         return outcome.ok

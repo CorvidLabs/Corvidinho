@@ -162,6 +162,19 @@ bridge give each speaker only their own profile, never private notes, and the
 project block to owner / team only; a Discord id declared for two people
 joins neither profile. Fails on the stacked base (13 of 16; three tests that
 also hold there pass by design).
+
+Memory on GitHub (MEMORY-8, #67 / REQ-plugins-067, which narrows REQ-plugins-101's
+WATCH `--project` refusal to writes):
+`tests/memory.recall-github.test.ts` › "MEMORY-8 memory in GitHub (WATCH)
+runs" — with GitHub-shaped env a declared commenter (numeric id or login, any
+case) stores into `person:tofu`, recalls with a plain-words `--query` and
+reads `memory-profile`, the same profile Discord reads; the `[owner]`
+GitHub login recalls the owner's Discord-id memory; on GitHub private notes,
+`memory-forget-me` and `--person` (any ref) are refused and another person's
+rows never show; a login whose numeric id differs saves nothing; an
+undeclared commenter saves nothing (own or `--project`), has no personal
+recall and reads only the thread repo's project memory with `--project`; a
+Discord actor always wins over stale GitHub keys.
 ## Channel deny helper (REQ-plugins-005)
 
 `tests/allowlist.default-deny.test.ts` ("isChannelDenied") — a deny-listed
@@ -169,3 +182,15 @@ channel id is reported whatever its case and surrounding space, allowlisted,
 unlisted, empty and missing ids are not, and `checkChannel` reports the id as
 denied. The thread paths that use it are in `tests/discord.thread-deny.test.ts`
 (discord testing companion).
+
+## Untrusted text in plugins (REQ-plugins-071, SAFE-11/12)
+
+`tests/safe.injection.test.ts` — `lookupGuildMemberById` with a stubbed fetch
+returns the nickname, global name and display name cleaned (no mention
+markup, zero-width or bidi characters, role tags or labels) and a message
+without `<@`; a community role session whose task claims the owner gets no
+mutating tool and a role refusal for `files-write`. `tests/web.fetch.test.ts`
+(unchanged) still passes with `fenceUntrusted` on the shared fence.
+`delegate` over a fake worker bin whose result frame carries `injection`
+returns the validated `data.injection` (an unknown reason dropped, a bad
+source gives none); `runCouncil` keeps a voice's notice on its outcome.

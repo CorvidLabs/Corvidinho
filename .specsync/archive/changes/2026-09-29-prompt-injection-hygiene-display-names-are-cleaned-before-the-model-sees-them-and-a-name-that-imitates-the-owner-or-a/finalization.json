@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a",
+  "implementation_commit": "578972be9d12f94434e6612df7d33809fc0ba64d",
+  "implementation_tree": "4f039246bde41aaafb9dca097aeb8e1de328b0fd",
+  "contract_digest": "2e1340259e8e4a81f3b08925576824c464f68828562e4534df0c8b186393dfc7",
+  "workspace_digest": "4bca11d29eb1a0c8b1724e4e409e7dd71e02aa33d262dd0c5c37f8808ebd3351",
+  "closing_digest": "21da3c32596066b6e6f974ffbac114d4e13aa32be9edd0c573f30baf12a74f7b",
+  "review_digest": "d97d62ae3c8bab7ebc44ae58fb1208d61850a87e2d06bc473c33c74a9485e72b",
+  "finalization_digest": "54ccd4d48c36e03375bd12d6de1acfb5fd6ca914cd0405588151ec0421831a4f",
+  "timestamp": 1790716388
+}

@@ -135,6 +135,24 @@ checks the MEMORY-5..7 / MEMORY-ACL-6 rules (profile categories and
 one person about another, private notes never injected, `memory-forget-me`
 until the owner approves on a card), and the plugins they name are covered
 there and in `tests/discord.forget-card.test.ts` (REQ-agent-101).
+
+Recall before "I don't know" (MEMORY-9 / MEMORY-8, #67 / REQ-agent-067):
+`tests/memory.recall-github.test.ts` › "the tool loop searches memory before
+\"I don't know\"" — with a fake LLM, a final "I don't know who Tofu is." in a
+run whose actor has a stored fact makes the loop run `memory-recall` itself
+(a `ToolCall` event), send the fact back once and return the second reply;
+with nothing stored the reply stands after one model call; a task with an
+injected memory block, or a run where the model already called
+`memory-recall`, gets no second search; a task led by a project block only (a
+`/work` run) still gets one search of the person's own memory; a memory
+header quoted inside the message does not turn the search off; end to end in
+a GitHub-shaped env the model's `memory-store` → SQLite (`person:tofu`) →
+`memory-recall` → model. `tests/memory.rank.test.ts` › "recall-guard" —
+`claimsIgnorance` phrases and non-matches, `taskHasMemorySearch` /
+`injectedMemorySearches` (only the head blocks count, own and project apart),
+`memoryRecallSearchKind`, `memorySearchQuery` (harness blocks, WATCH label and
+URLs dropped) and `searchMemoryBeforeIgnorance` (own rows then project rows,
+only the searches not yet run, refusals or nothing ⇒ null).
 ## Unique ask option ids (REQ-agent-045, DISCORD-ASK-1/3)
 
 - `tests/discord.ask-buttons.test.ts` › "ask option ids are unique
@@ -143,3 +161,33 @@ there and in `tests/discord.forget-card.test.ts` (REQ-agent-101).
   take the first unused position number; a dropped empty option holds no id;
   already-unique options normalize byte-identically (again and again); an
   ask-human call with one id twice gives buttons with distinct `custom_id`s.
+
+## Untrusted text in the task run (REQ-agent-071, SAFE-11/12/13)
+
+`tests/safe.injection.test.ts` — `cleanDisplayName` drops mention markup,
+invisible / bidi / tag characters and role-like tags / labels, drops a name
+that is only a role word (also full-width or look-alike), keeps ordinary
+names and caps at 32; `namesLookAlike` folds case, homoglyphs and `1` / `l`;
+`fenceUntrustedData` keeps its random end marker last and unique, defangs the
+word inside, strips invisible characters and quotes fake Corvidinho lines;
+`detectInjection` trips on 30 known payloads (every reason id, look-alike and
+zero-width variants) and on none of 26 ordinary messages / bug reports (a
+speaker correcting their own earlier message, questions about tokens or keys
+in code, "list your instructions for …", a browser's developer mode), and a
+large hostile body scans in well under 2 s; `injectionNoticeFromUnknown`
+keeps only a tool-name source and known reason ids; the tool-loop and
+read-tier system prompts carry `UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS`;
+a community run whose task claims the owner and asks for `files-write`
+offers no mutating tool and the call gets the role refusal, nothing written;
+through `createTaskExecute` with fake `github-issue-list` / `files-write`
+plugins, an injected issue title makes the tool message start with the SAFE-13
+note and hold the fenced result, the next request offers no `files-write`, a
+`files-write` call is refused and writes nothing, `onInjection` gets the tool
+and reason once, one `injection-suspected` row is audited and the summary
+ends with the note; the web fence's own lines are not a hit. A fake
+`delegate` result, and a failed fake `council` result, carrying a worker's
+`data.injection` get the worker note and the fence, the next request offers
+no `files-write`, `memory-store` or worker tool, both calls are refused and
+never run, `onInjection` gets the worker's notice once, the summary ends with
+the note and one row is audited; at delegation depth 1 an injected issue
+title is reported but records no row.

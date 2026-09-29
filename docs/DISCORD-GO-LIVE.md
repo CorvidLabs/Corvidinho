@@ -319,7 +319,9 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `fledge-lanes-list`/`-validate`,
-  `memory-store`/`-recall`/`-profile` (scoped to the acting person; no project memory),
+  `memory-store`/`-recall`/`-profile` (scoped to the acting person; no project memory — a
+  GitHub WATCH run acts for the commenter's declared person and reads its thread repo's
+  project memory, read-only, MEMORY-8),
   `memory-forget-me` (asks the owner, MEMORY-ACL-6), `discord-user-lookup` (members of
   the configured `DISCORD_GUILD_ID` only, IDENTITY-5) and `plugins-list`.
 - **Run time:** a mutating call the model makes anyway, including one to a tool it was never
@@ -351,13 +353,31 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   surface allows) and `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`); both are internal and
   always overwritten, and the tool layer never trusts them to raise a role.
 
+### E.6.a Untrusted text and injection attempts (SAFE-11/12/13)
+
+Nothing to configure; it is always on (details in [`discord.md`](discord.md) "Untrusted
+text and injection attempts").
+
+- Discord names (the speaker's, and `discord-user-lookup` results) are cleaned before the model
+  sees them, and a name that imitates the owner's or a declared person's is flagged as someone
+  else. Identity and role come only from declared ids.
+- A non-owner's message, `/session start` topic and `/work` description, WATCH titles and
+  bodies, and GitHub / guild-member tool results reach the model fenced as untrusted data.
+- A non-owner message or WATCH event that looks like an injection attempt gets one short reply
+  (Discord) or comment (GitHub) and no run; the owner is pinged on Discord, or @mentioned on
+  GitHub when `[owner] github_login` / `CORVIDINHO_OWNER_GITHUB_LOGIN` is set. A tool result
+  that looks like one (also one a `delegate` / `council` worker read) turns the run's mutating
+  tools and `memory-store` off for the rest of that run and pings the owner on the answer. Each hit is an `injection-suspected` audit row (E.7).
+- Without an owner the refusal still goes out (it says nobody could be told) and the bridge
+  logs `[discord] SAFE-13 refusal but no owner is configured`.
+
 ### E.7 Where the logs and the audit trail live
 
 All paths default to the data dir `~/.local/share/corvidinho` (`CORVIDINHO_DATA_DIR`).
 
 | What | Where | How to read |
 |------|-------|-------------|
-| SAFE-5 audit chain (dangerous plugin runs incl. denials, `/admin` mutations, `/schedule delete`) | table `audit_log` in `<data dir>/corvidinho.db` (append-only; rows hold action, actor, surface, args digest, outcome, exit code, never raw args) | bridge start log `[discord] Audit: N entries · chain OK (keyed)`, `/status`, `/admin config show`; or any SQLite client, e.g. `sqlite3 ~/.local/share/corvidinho/corvidinho.db 'SELECT seq, ts, action, actor, surface, outcome, exit_code FROM audit_log ORDER BY seq DESC LIMIT 20'` |
+| SAFE-5 audit chain (dangerous plugin runs incl. denials, `/admin` mutations, `/schedule delete`, SAFE-13 `injection-suspected` refusals) | table `audit_log` in `<data dir>/corvidinho.db` (append-only; rows hold action, actor, surface, args digest, outcome, exit code, never raw args) | bridge start log `[discord] Audit: N entries · chain OK (keyed)`, `/status`, `/admin config show`; or any SQLite client, e.g. `sqlite3 ~/.local/share/corvidinho/corvidinho.db 'SELECT seq, ts, action, actor, surface, outcome, exit_code FROM audit_log ORDER BY seq DESC LIMIT 20'` |
 | Audit key | `CORVIDINHO_AUDIT_HMAC_KEY` (env only, never in the DB) | set the **same** key on every process that shares the data dir; without it the chain is plain SHA-256 and the line says `unkeyed — set CORVIDINHO_AUDIT_HMAC_KEY`. Once the chain holds a keyed row, a process without the key refuses dangerous plugin runs, `/admin` changes and `/schedule delete` (`audit log unavailable … (SAFE-5)`), and an unkeyed row after a keyed row reads as `chain BROKEN at #N`. Without the key, a tampered unkeyed row before any keyed row still reads `chain BROKEN at #N` (no key is needed to see it); only reaching a keyed row reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)` |
 | WATCH spawn outcomes | `<data dir>/watch-spawn.jsonl` (override `CORVIDINHO_WATCH_SPAWN_LOG`) plus `[watch] spawn start …` / `[watch] spawn outcome …` lines on stdout | one JSON object per run: start/finish time, repo#number, exit code, error class, duration |
 | Daemon | JSON lines on stdout (journald under systemd) | `journalctl -u corvidinho-daemon -o cat \| jq 'select(.event == "run.finished")'` |
