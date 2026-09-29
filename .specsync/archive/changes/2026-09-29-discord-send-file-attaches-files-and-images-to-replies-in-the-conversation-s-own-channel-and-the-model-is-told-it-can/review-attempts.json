@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "edf84b060c2aab069298b9896df9707aed3e9811",
+      "contract_digest": "fa8dfcc3bee9a31890c475724c4e128e3ee6a4db2814f1efaa0c712f5d6275be",
+      "execution_digest": "458170ec9c51a8f1a120361644250b2f25fa71142a7c33b3dca8200f1988335c",
+      "workspace_digest": "7f2c961ccec561de9150c911cc473d020327fe3344a6a393becd6be8faeb326c",
+      "timestamp": 1790696353
+    }
+  ]
+}

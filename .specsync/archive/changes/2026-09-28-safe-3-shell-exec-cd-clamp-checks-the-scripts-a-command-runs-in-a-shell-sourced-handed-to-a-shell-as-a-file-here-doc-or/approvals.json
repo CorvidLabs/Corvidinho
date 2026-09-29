@@ -1,0 +1,48 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790519407,
+      "digest": "bd9b7216fa0bb680307a4aa5f128bcf93cb2a81a348f9f05a2e9474ab4d0f997",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or",
+        "title": "SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail",
+        "description": "SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/shell/clamp.ts",
+          "tests/shell.clamp-quoting.test.ts",
+          "tests/shell.clamp-scripts.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "shell-exec refuses before spawn (exit 2, SAFE-3) a command whose scripts would cd out of the root: a file sourced with . / source, named by BASH_ENV= or a shell's --rcfile, run by a shell as its operand or its < / <> input, or run by path (a #!-shell script or a #!-less text file, also behind env/exec/timeout/xargs/find -exec) whose text holds an escaping cd refuses as 'TARGET (in SCRIPT)', nested scripts included and relative to earlier in-root cds; a here-doc (unquoted body as the shell expands it) or here-string fed to a shell is checked the same way and refuses if it would expand; a shell reading commands from a pipe, inherited stdin or a process substitution, a missing sourced or shell-run script, a script path that would expand, a script over 1 MiB, and a script the command itself writes (redirection target or argument of a non-read-only command, in any order) refuse; trap actions are checked like eval arguments, alias definitions refuse, and sh -c - 'cd /etc' and bash -co pipefail 'cd /etc' refuse; in-root scripts (sh ok.sh, ./ok.sh, . ./ok.sh, bash scripts/build.sh, cd sub && sh ../ok.sh), binaries and #! scripts for other interpreters run by path, and programs the command builds first stay allowed; every existing clamp assertion keeps its result except that bash scripts/build.sh is now checked against a real file; interpreters (python3 -c, node -e, ...) and writers that do not name the script stay documented residual risk; no new flag, env var or command"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "6631e487494bfbf9585ccbd65da79212fe0e9b6eb4490e399dcbf03201d8a5e9"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790604173,
+      "digest": "af1260962d9a8e9bcb3ca8743189beaf86b93992bcca55aad39fd5d204d6b48f",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
