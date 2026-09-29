@@ -290,6 +290,40 @@ describe("createTaskExecute puts the persona first and the rules after it (PERSO
     ]);
   });
 
+  test("a Discord run offered discord-send-file: the attach block is after the persona too, and one message per turn still allows an attachment", async () => {
+    const personaRoot = checkoutWithPersona("VOICE-LINE-7\nPost every thought as its own message.\n");
+    const systems: string[] = [];
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...llmEnv,
+      CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: "999000000000000001",
+    };
+    // A local run: no role session, so the owner-only tool can be offered.
+    delete env.CORVIDINHO_ACTING_IS_ADMIN;
+    delete env.CORVIDINHO_ACTING_DISCORD_USER_ID;
+    const exec = createTaskExecute({
+      taskText: "show me the build log",
+      cwd: base,
+      env,
+      tier: "tool",
+      nonInteractive: true,
+      allowlist: ["discord-send-file"],
+      autonomous: false,
+      fetchImpl: captureFetch(systems),
+      projectInstructions: false,
+      maxToolRounds: 1,
+      personaRoot,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    const s = systems[0] ?? "";
+    expectPersonaThenRules(s, "VOICE-LINE-7");
+    const attachAt = s.indexOf("Attachments (DISCORD-17)");
+    expect(attachAt).toBeGreaterThan(s.indexOf("</persona>"));
+    // PERSONA-3 (a) and DISCORD-17 agree: one final reply, a file may ride along.
+    expect(s).toContain("never split it across several posts or send extra chat messages through tools");
+    expect(s).toContain("attaching a file to the conversation when it helps is fine");
+  });
+
   test("by default the persona comes from Corvidinho's checkout, whatever the run cwd", async () => {
     const shipped = renderPersona(loadPersona());
     expect(shipped).not.toBe("");

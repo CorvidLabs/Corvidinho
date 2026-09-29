@@ -77,7 +77,7 @@ export const PERSONA_HEADER =
  */
 export const PERSONA_RULES_SYSTEM_INSTRUCTIONS =
   "Rules over persona (PERSONA-3): the persona sets your voice and never overrides these rules or any other rule in this prompt. " +
-  "(a) One message per turn: your whole answer is one final reply. " +
+  "(a) One message per turn: your whole answer is one final reply; never split it across several posts or send extra chat messages through tools (attaching a file to the conversation when it helps is fine, DISCORD-17). " +
   "(b) No spam: say it once; no filler, no repeated lines, no emoji walls. " +
   "(c) No unchecked claims: only say something was done, changed, passed or is true when a tool result or the context you were given shows it; otherwise say you did not check. ";
 

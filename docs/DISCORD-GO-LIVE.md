@@ -365,17 +365,22 @@ never the args.
 
 ### E.8 Persona file (PERSONA-1..3)
 
-Corvidinho's voice is `persona.md` at the root of the corvidinho checkout the bridge, WATCH
-and daemon run from, never the project a run works in. Every run reads it again (chat, slash
-commands, `/work`, schedules, WATCH, `task run`, delegate and council workers), so the next turn
-after an update uses the new text; no restart and no setting. It goes into the system prompt
-first, and Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked
-claims).
+Corvidinho's voice is `persona.md` at the root of the corvidinho checkout whose `src/cli.ts`
+runs the task (`CORVIDINHO_BIN`; by default the checkout the bridge, WATCH and daemon run from),
+never the project a run works in. Every run reads it again (chat, slash commands, `/work`,
+schedules, WATCH, `task run`, delegate and council workers), so the next turn after an update
+uses the new text; no restart and no setting. It goes into the system prompt first, and
+Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
+Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
+the model and keep their text.
 
 - Only the copy committed at `HEAD` is loaded. `scripts/corvidinho-update.sh` checks out the
   merged ref, so change the voice with a PR like any other file; a hand edit on the VM is not
-  loaded (the run's note says "working-tree changes not loaded").
+  loaded.
 - Capped at 8 KiB (longer is cut with a marker) and scrubbed for secrets (SAFE-6). Never put
   tokens, keys or private paths in it.
-- Missing, empty or refused (for example untracked): the run goes on with no persona and one
-  `Persona: …` note naming only the file.
+- Missing, empty, refused (for example untracked), truncated, or edited but not committed: the
+  run goes on (with no persona when none loaded) and emits one `Persona: …` note naming only the
+  file, for example "working-tree changes not loaded". It is a `Text` event in the run's output:
+  `bun src/cli.ts task run` prints it on stderr and `--json` / NDJSON carry it; the bridges and
+  WATCH do not post it to Discord or GitHub.
