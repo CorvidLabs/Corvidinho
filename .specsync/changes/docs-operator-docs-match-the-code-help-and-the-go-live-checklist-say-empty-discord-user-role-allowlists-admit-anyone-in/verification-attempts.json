@@ -20,6 +20,26 @@
         "REQ-cli-108",
         "REQ-discord-005"
       ]
+    },
+    {
+      "timestamp": 1790696579,
+      "commit": "37dde6f8adcf619657de97914e26b652e2789465",
+      "contract_digest": "21866ca16c12b2bdb94384b93c50c19f527893500b744af0272553d1ad6971ab",
+      "execution_digest": "6b81f445ae6a8ff2cc030f533fea8a3861651440139e5af57f373c15004a6be6",
+      "workspace_digest": "03a8fdc29aaf61b04854ce8b1c4004bcadddc108026d277a972b68c43d1ef023",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-005",
+        "REQ-cli-108",
+        "REQ-discord-005"
+      ]
     }
   ]
 }
