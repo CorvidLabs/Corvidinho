@@ -528,14 +528,14 @@ describe("non-git verify gate after a delegate worker that may have run a Fledge
     attempts: 1,
   };
 
-  async function runDelegateTask(allowlist: string[]) {
+  /** Worker script body after it logs its spawn: the failed result frame, exit 1. */
+  const WORKER_FRAME = `cat <<'EOF'\n${serializeFrame(resultFrame(WORKER_FAILED))}\nEOF\nexit 1\n`;
+
+  async function runDelegateTask(allowlist: string[], workerBody: string = WORKER_FRAME) {
     const fake = makeFledge();
     writeFileSync(join(fake.project, "fledge.toml"), "[corvidinho.autonomous]\nenabled = true\n");
     const worker = join(fake.bin, "corvidinho");
-    writeFileSync(
-      worker,
-      `#!/bin/sh\necho spawned >> "$(dirname "$0")/worker.log"\ncat <<'EOF'\n${serializeFrame(resultFrame(WORKER_FAILED))}\nEOF\nexit 1\n`,
-    );
+    writeFileSync(worker, `#!/bin/sh\necho spawned >> "$(dirname "$0")/worker.log"\n${workerBody}`);
     chmodSync(worker, 0o755);
     process.env.CORVIDINHO_BIN = worker;
     const { fetchImpl } = fakeProvider([{ name: "delegate", argv: ["--task", "run the hello plugin"] }]);
@@ -566,7 +566,7 @@ describe("non-git verify gate after a delegate worker that may have run a Fledge
       execute,
     });
     expect(existsSync(join(fake.bin, "worker.log"))).toBe(true);
-    return { result, events, verifyCwds };
+    return { fake, result, events, verifyCwds };
   }
 
   test("allowlist names fledge-hello: the lead verifies anyway after its worker, and never ends done on the failed lane", async () => {
@@ -585,5 +585,26 @@ describe("non-git verify gate after a delegate worker that may have run a Fledge
     expect(verifyCwds).toEqual([]);
     expect(result.state).toBe("done");
     expect(result.verifySkipped).toBe(true);
+  });
+
+  test("a worker that edits app.ts and dies before its result frame: the non-git lead verifies anyway, whatever the allowlist", async () => {
+    // No result frame reaches the lead (killed, timed out, crashed), so the
+    // worker's edits are reported nowhere; the delegate data has no `verified`.
+    const { fake, result, events, verifyCwds } = await runDelegateTask(
+      [],
+      `printf broken > "$PWD/app.ts"\nexit 137\n`,
+    );
+    const delegated = toolResults(events).find((r) => r.name === "delegate");
+    expect(delegated?.success).toBe(false);
+    expect(delegated?.detail ?? "").toContain("did not finish");
+    expect(readFileSync(join(fake.project, "app.ts"), "utf8")).toBe("broken");
+    expect(verifyCwds).toEqual([fake.project]);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(false);
+    const note = events.find(
+      (e) => e.type === "Text" && e.text.startsWith("Verify gate: no git working tree to diff"),
+    );
+    expect(note && "text" in note ? note.text : "").toContain("delegate");
   });
 });

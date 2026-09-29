@@ -977,8 +977,13 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         offered.has(name) &&
         (editsFilesUnreported(name) ||
           // A worker ran (a refusal carries no data) and may have run an
-          // allowlisted Fledge command (REQ-agent-502).
-          (name === DELEGATE_COMMAND_NAME && workerEditsUnreported && result.data !== undefined))
+          // allowlisted Fledge command, or it left no result frame (a frame
+          // always carries `verified`), so no file it edited was reported
+          // (REQ-agent-502).
+          (name === DELEGATE_COMMAND_NAME &&
+            result.data !== undefined &&
+            (workerEditsUnreported ||
+              typeof (result.data as { verified?: unknown }).verified !== "boolean")))
       ) {
         unreportedEditTools.add(name);
       }

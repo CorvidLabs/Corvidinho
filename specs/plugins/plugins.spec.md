@@ -203,7 +203,10 @@ register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
 `github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
 non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
-plain Made with Corvidinho attribution (no @handles). Dry-run via
+plain Made with Corvidinho attribution (no @handles) unless the body already
+holds it (`ATTRIBUTION_MARKDOWN` or `ATTRIBUTION_PLAIN`; the two words alone
+do not count). The Octokit token is `GITHUB_TOKEN`, else `GH_TOKEN`, trimmed;
+a blank one is missing and never shadows the other, as WATCH reads it. Dry-run via
 CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
@@ -851,5 +854,6 @@ and current rows for plugins host evolution.
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
+| 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re: SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

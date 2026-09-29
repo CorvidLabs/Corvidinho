@@ -27,6 +27,7 @@ Acceptance Criteria
 - The excerpt is never longer than its cap and never holds half a surrogate pair.
 - Console chatter in the failing step that only mentions a failure (`… marked failed`, `error_class=ok`, as Corvidinho's own tests log on stdout before bun's stderr report) does not crowd out that step's `error:`, `Expected:` / `Received:` and `(fail)` lines.
 - Colour escapes (FORCE_COLOR reaching the lane) are dropped from an over-cap log and hide neither fledge's markers nor passing-test lines; a failing parallel step is named `parallel(<tasks>)` and kept from its `Running parallel:` line; a log with no fledge markers is not called a failing step's output.
+- An `error:` line with emoji that the end of the error-line scan (where the kept end of the log starts) cuts between a high and a low surrogate is not kept on its high half: with the noise after it swept so the cut falls inside the emoji, the excerpt at 4000 and at runTask's 3946 cap still names the failing step and holds no lone surrogate.
 
 ### REQ-agent-003
 
@@ -813,6 +814,10 @@ plugin command (a `fledge-*` name other than the four Fledge core builtins):
 the worker gets that allowlist, so it may have run the Fledge command and its
 edits reach the lead's result as no file (a role-session worker is non-ADMIN
 and offered none).
+A `delegate` call whose worker ran but left no result frame (its data has no
+`verified`, which every result frame carries: the worker was stopped at its
+timeout or by an abort, crashed, or could not start) SHALL be named whatever
+the allowlist: whatever that worker edited reached the lead's result nowhere.
 `runTask` SHALL union these names across attempts and, when the verify gate is
 on, no git snapshot is available (the cwd is not in a git work tree, or the
 start snapshot could not be read), no file was reported and a name was
@@ -833,6 +838,7 @@ Acceptance Criteria
 - The execute result of an attempt that ran `fledge-hello` has `unreportedEditTools: ["fledge-hello"]`.
 - Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no Fledge plugin command the same run skips verify and ends `done`.
 - `editsFilesUnreported` names `fledge-lanes-run` and `fledge-run`.
+- Non-git project with autonomous mode on and an empty allowlist: a `delegate` call whose worker writes `app.ts` and exits 137 before writing any result frame makes the lead run verify once in the project dir and end `failed` (`verified=false`, `verifySkipped=false`, never `done`), and the note names `delegate`.
 
 ### REQ-agent-476
 
