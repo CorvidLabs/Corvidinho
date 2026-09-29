@@ -7,10 +7,11 @@
   "title": "Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge",
   "description": "Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "0f2e2c2774635d1dcbdff599cba92dbecf8eebd9",
   "created_at": 1790697274,
-  "updated_at": 1790697721,
+  "updated_at": 1790697746,
   "affected_specs": [
     "discord"
   ],

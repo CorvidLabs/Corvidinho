@@ -450,6 +450,14 @@ never make an unaudited delete. An unknown or missing schedule id deletes
 nothing and appends no row.
 
 Cadence SHALL enforce a minimum interval of **5 minutes** at create time.
+A cron step SHALL be 1 or more in every field: a zero step (`*/0`, `a-b/0`,
+`n/0`, also inside a comma list) SHALL be refused as a `CadenceError` before
+the field is expanded, so `/schedule create` replies with that message
+ephemerally and creates nothing, and the store's next-run computation
+(create, resume, claim) throws the same error. A range SHALL be expanded only
+up to its field's maximum, so a range whose end is past it (`0-99999999999`)
+resolves at once and the other cadence rules apply. No cadence SHALL hang the
+bridge process that parses it (DISCORD-SCHEDULE-4).
 Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
 asynchronously with a small concurrency cap so live Discord HEAR and GitHub
@@ -476,6 +484,8 @@ Acceptance Criteria
 - `/schedule` registered with list/create/pause/resume/delete bodies.
 - Admin can create with cadence + project + prompt; non-admin / empty admin denied.
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
+- A zero cron step (`*/0 * * * *`, `0-59/0 * * * *`, `0,*/0 * * * *`, `5/0 * * * *`, or `/0` in the hour, day, month or weekday field) is refused with the ephemeral `Invalid cron step in "…": the step must be 1 or more.`, nothing is created, and the bridge keeps answering; `parseCron` / `getNextCronDate` throw the same `CadenceError`.
+- A range past its field's maximum resolves at once: `0-99999999999 * * * *` is refused by the 5-minute rule and `0 0-99999999999/2 * * *` runs like `0 */2 * * *`; cadences with steps of 1 or more resolve as before.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
 - `/schedule delete` by the owner appends `started` then `ok` (action `schedule-delete`, surface `discord:schedule`, args digest only) before the schedule and its runs are gone; the reply names both row numbers and the chain verifies.
 - When the audit trail throws, the chain is keyed and the process has no key, or no trail is wired, `/schedule delete` replies `audit log unavailable (SAFE-5)` and the schedule and its run history are kept.
