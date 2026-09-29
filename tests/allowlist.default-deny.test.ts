@@ -13,6 +13,7 @@ import {
   loadAllowlist,
   parseSimpleToml,
 } from "../src/allowlist/index.ts";
+import { isChannelDenied } from "../src/allowlist/discord.ts";
 import { emptyConfig, emptyGithub } from "../src/allowlist/types.ts";
 
 describe("default-deny allowlists (ALLOW; forbid Merlin empty→BASIC)", () => {
@@ -55,6 +56,19 @@ describe("default-deny allowlists (ALLOW; forbid Merlin empty→BASIC)", () => {
     expect(checkUser("222", cfg).ok).toBe(true);
     cfg.discord.denyChannels = ["111"];
     expect(checkChannel("111", cfg).ok).toBe(false);
+  });
+
+  test("isChannelDenied: a deny_channels hit alone, case-insensitive like checkChannel (REQ-plugins-005)", () => {
+    const cfg = emptyConfig();
+    cfg.discord.channels = ["parent-1"];
+    cfg.discord.denyChannels = ["thread-denied"];
+    expect(isChannelDenied("thread-denied", cfg)).toBe(true);
+    expect(isChannelDenied(" Thread-Denied ", cfg.discord)).toBe(true);
+    expect(checkChannel("thread-denied", cfg).error).toContain("is denied");
+    // Allowlisted, unlisted, empty and missing ids are not denied.
+    for (const id of ["parent-1", "other", "", undefined, null]) {
+      expect(isChannelDenied(id, cfg)).toBe(false);
+    }
   });
 
   test("env-only configFromEnvOnly default-denies without ALLOW_*", () => {

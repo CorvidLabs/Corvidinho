@@ -134,7 +134,9 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 ## Public API
 
 Export allowlist load + github/discord gate helpers used by plugins and future
-HEAR. File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
+HEAR. `isChannelDenied` (`src/allowlist/discord.ts`) reports a `deny_channels`
+hit alone (case-insensitive, trimmed, as `checkChannel` uses it) so a thread
+gate can make a deny on the thread or its parent win (REQ-plugins-005). File/search plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 Shell plugins register via `loadShellPlugins` (`shell-exec`). Language
 runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
 which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`

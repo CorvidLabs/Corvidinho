@@ -302,6 +302,24 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
     expect(checks[0]).toMatchObject({ channelId: THREAD, userId: OWNER });
   });
 
+  test("DISCORD-5 / REQ-plugins-005: a deny-listed thread is refused even under its allowlisted parent (deny wins); nothing checked or uploaded", async () => {
+    put("shot.png", PNG);
+    process.env.CORVIDINHO_DISCORD_DENY_CHANNELS = THREAD;
+    process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = THREAD;
+    process.env.CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID = CHAN;
+    const r = await send(["shot.png"]);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain(`"${THREAD}" is denied`);
+    expect(uploads).toHaveLength(0);
+    expect(checks).toHaveLength(0);
+
+    // Another thread under the same parent still passes through it.
+    process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = OTHER_CHAN;
+    const ok = await send(["shot.png"]);
+    expect(ok.ok).toBe(true);
+    expect(uploads[0]!.url).toContain(`/channels/${OTHER_CHAN}/messages`);
+  });
+
   test("SAFE-2: protected and secret paths are refused by name and by where a link points; escapes refused", async () => {
     const outside = tempDir("corvidinho-send-file-outside-");
     writeFileSync(join(outside, "leak.txt"), "outside\n");
