@@ -19,6 +19,8 @@ Corvidinho keeps conversations, people, entities, and personality notes in a loc
 - **MEMORY-5**  For each person it keeps their role, projects, preferences, and a history of decisions, asks and approvals.
 - **MEMORY-6**  Each project has memory that is there the next time anyone works on the repo.
 - **MEMORY-7**  Memory about a person is private to them and me by default, and private notes are never shown to others.
+- **MEMORY-8**  It saves and recalls facts in Discord and GitHub conversations, filed by person or project.
+- **MEMORY-9**  It searches memory before saying it doesn't know.
 
 - **MEMORY-ACL-1**  Memories are scoped to the acting user (Discord user id / configured identity); reads and writes default to that user’s scope only.
 - **MEMORY-ACL-2**  A non-admin cannot forget, delete, overwrite, or re-attribute another user’s memories — attempts are refused without leaking the other user’s content.
