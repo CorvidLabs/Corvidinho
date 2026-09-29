@@ -37,6 +37,9 @@ import { createSpendAlertOutbox } from "../src/agent/spend-outbox.ts";
 import type { AgentEvent, SpendWarning, TaskResult } from "../src/agent/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 
+/** Plain persona folder: a clean load, so no `Persona: …` note joins a run's exact events (PERSONA-2). */
+const PERSONA_FIXTURE = join(import.meta.dir, "fixtures", "persona");
+
 const NOW = 1_800_000_000_000;
 const CAP = 1_000_000;
 const URL_ = "https://llm.test/v1/chat/completions";
@@ -282,6 +285,7 @@ describe("createTaskExecute + runTask at the cap (AUTONOMY-1/2 ask path)", () =>
         fetchImpl: mockFetch().fetch,
         loadPlugins: false,
         projectInstructions: false,
+        personaRoot: PERSONA_FIXTURE,
         onEvent: (e) => events.push(e),
         onSpendWarning: (w) => warnings.push(w),
       });

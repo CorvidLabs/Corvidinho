@@ -198,6 +198,19 @@ export type {
 } from "./project-instructions.ts";
 
 export {
+  CORVIDINHO_ROOT,
+  loadPersona,
+  PERSONA_FILE,
+  PERSONA_HEADER,
+  PERSONA_MAX_BYTES,
+  PERSONA_RULES_SYSTEM_INSTRUCTIONS,
+  personaWarning,
+  renderPersona,
+  withPersona,
+} from "./persona.ts";
+export type { LoadPersonaOptions, Persona } from "./persona.ts";
+
+export {
   normalizeAskOptions,
   parseChoicesFromQuestion,
   resolveAskOptions,

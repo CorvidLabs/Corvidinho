@@ -16,6 +16,8 @@ files:
   - src/agent/tier.ts
   - src/agent/tools.ts
   - src/agent/project-instructions.ts
+  - src/agent/persona.ts
+  - persona.md
   - src/agent/events-ndjson.ts
   - src/agent/spend.ts
   - src/agent/spend-notice.ts
@@ -30,6 +32,7 @@ files:
   - tests/agent.soft-land.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
+  - tests/agent.persona.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
   - tests/agent.spend.test.ts
@@ -189,6 +192,25 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
+`LoadProjectInstructionsOptions.exactRoot` reads at the given directory
+instead of walking up to the nearest `.git` (the persona file).
+
+Persona file (REQ-agent-069, PERSONA-1/2/3, issue #69): `src/agent/persona.ts`
+exports `PERSONA_FILE` (`persona.md`), `PERSONA_MAX_BYTES` (8 KiB),
+`CORVIDINHO_ROOT` (Corvidinho's own checkout, `import.meta.dir/../..`),
+`loadPersona(root?, { maxBytes? })`, `renderPersona`, `personaWarning`,
+`withPersona`, `PERSONA_HEADER` and `PERSONA_RULES_SYSTEM_INSTRUCTIONS`, plus
+the `Persona` / `LoadPersonaOptions` types (re-exported from
+`src/agent/index.ts`). `loadPersona` reads `persona.md` with
+`loadProjectInstructions(root, { fileNames: ["persona.md"], maxBytes: 8 KiB,
+exactRoot: true })`, so the AGENT-1 guards apply (HEAD-committed copy only in a
+git checkout, cap with marker, symlink / binary / non-UTF-8 refusal, SAFE-6
+scrub, never throws). `createTaskExecute` loads it once per run from
+`CORVIDINHO_ROOT` (`personaRoot` is a test seam) and builds both system
+prompts as persona block, then Corvidinho's rules with
+`PERSONA_RULES_SYSTEM_INSTRUCTIONS`, then project instructions. The shipped
+`persona.md` at the repo root uses corvid-agent's persona shape (Archetype,
+Personality traits, Background, Communication style, Example messages).
 
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
@@ -266,6 +288,14 @@ gains optional `injection?: InjectionNotice` (additive on the NDJSON
 `result` frame: protocol stays 2). No env var, config key or flag.
 
 ## Invariants
+
+The persona sets tone only and the rules win (REQ-agent-069, PERSONA-3): the
+persona block is always first in the system prompt and every rule
+(`PERSONA_RULES_SYSTEM_INSTRUCTIONS`, SAFE / role / memory / ask
+instructions, then project instructions) follows it, whether or not a persona
+loaded. The persona is read from Corvidinho's own checkout at `HEAD`, never
+from the run's project folder or an uncommitted working-tree copy, so a run
+cannot plant a persona for later runs. A persona problem never stops a run.
 
 The verify gate trusts the working tree, not only the tools (REQ-agent-085):
 with the gate on, any path the run changed on disk since its start snapshot
@@ -527,6 +557,11 @@ instructions for …" or a browser's developer mode do not count.
   call is refused as not offered; a non-owner run with the same allowlist is
   offered neither (REQ-agent-501)
 
+### Scenario: the persona is in every run's prompt, the rules after it
+
+- **Given** `persona.md` committed at the root of Corvidinho's checkout
+- **When** a Discord chat, a schedule, WATCH or a local `task run` spawns a run in any project
+- **Then** the system prompt starts with the persona block, then Corvidinho's rules with the PERSONA-3 rules text, then that project's AGENTS.md / CLAUDE.md block; the next run after a committed edit carries the new text (REQ-agent-069)
 ### Scenario: a fetched issue title tells the model to ignore its rules
 
 - **Given** a tool-tier run that offers `files-write` and calls `github-issue-list`
@@ -578,6 +613,10 @@ instructions for …" or a browser's developer mode do not count.
 | Git project: instruction file untracked, or HEAD unborn | refused as not committed; named in the Text note |
 | Git project: `.git` unusable (not a repo top level, git missing) | present files refused; no working-tree fallback |
 | Git project: committed symlink leaves the commit, is broken, hops a symlinked dir, or loops | refused; named in the Text note |
+| `persona.md` missing, empty, or refused (untracked, symlink out, binary) | run continues with no persona block; the rules are still in the prompt; one `Persona: persona.md …; this run has no persona (PERSONA-2)` Text note naming only the file (REQ-agent-069) |
+| `persona.md` edited in the working tree but not committed | the committed copy loads; one "working-tree changes not loaded" Text note (REQ-agent-069) |
+| `persona.md` over 8 KiB | cut on a UTF-8 boundary with a truncation marker; one Text note (REQ-agent-069) |
+| `persona.md` text tries to close its `<persona>` block or override the rules | the close tag is escaped; the block stays first and the PERSONA-3 rules after it say the rules win (REQ-agent-069) |
 | A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool and no `memory-store` offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
 | A `delegate` / `council` result carries its worker's own hit (`data.injection`) | counts as this run's hit: `injectionWorkerNote` and the fenced result in its tool message, then the same drop, report, row and note; the worker itself records no row (REQ-agent-071) |
 | Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
@@ -639,5 +678,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-29 | person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one: Person and project memory, private notes, and forget-me on an owner Approve/Deny card: each declared person keeps one profile keyed by person id (role, projects, preferences, history of decisions, asks and approvals), each project keeps memory keyed by its repo for whoever works on it next, a person's memory and private notes are shown only to them and the owner on every surface, and anyone can ask to be forgotten, which deletes their memories once the owner approves on a DM Approve/Deny card (MEMORY-5/6/7, MEMORY-ACL-6, #101) |
 | 2026-09-29 | memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run: Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67) |
 | 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
+| 2026-09-29 | persona-one-editable-persona-md-in-corvid-agent-s-voice-loaded-into-the-system-prompt-on-every-turn-and-every-surface: Persona: one editable persona.md in corvid-agent's voice loaded into the system prompt on every turn and every surface, with the rules after it and winning (PERSONA-1..3, #69) |
 | 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "exact-event-run-tests-read-a-fixture-persona-so-an-uncommitted-persona-md-edit-never-breaks-bun-test-or-the-verify-lane",
+  "implementation_commit": "e6d2cb2e0c47754a5a7a9384eeb3ab148064840e",
+  "implementation_tree": "50772f99efa3a4f0107c4ea8e356125553bdc90e",
+  "contract_digest": "9633bdfbaa336e8f2e560145be06902e265c3b62a3174fa6ad44aebf3d769d2a",
+  "workspace_digest": "1bb2f41cd44e58340dbe2ee47b88d2e6e3ae746d4c87d36afc2775384293df2d",
+  "closing_digest": "22a939ba177bbef0b34ac165e66176e1ebce3b9825130dad1511d55347feee12",
+  "review_digest": "c50a247a2080f8bf724183ada4d06d7dd8bd3ad66e6cd2103cbfc47f0b6edd0f",
+  "finalization_digest": "39561b41c3609377dbc600a3e99b19bd1519f6a06a6eb359c2330a0000e4eef5",
+  "timestamp": 1790717061
+}

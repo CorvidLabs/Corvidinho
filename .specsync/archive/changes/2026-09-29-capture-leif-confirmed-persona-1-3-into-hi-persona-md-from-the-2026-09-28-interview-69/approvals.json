@@ -1,0 +1,45 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790694142,
+      "digest": "79a29c0ddf0238d828bc247d70ee52b821edebddaca1e431719c30ade4e3ce43",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "capture-leif-confirmed-persona-1-3-into-hi-persona-md-from-the-2026-09-28-interview-69",
+        "title": "Capture Leif-confirmed PERSONA-1..3 into hi/persona.md from the 2026-09-28 interview (#69)",
+        "description": "Capture Leif-confirmed PERSONA-1..3 into hi/persona.md from the 2026-09-28 interview (#69)",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "AGENTS.md",
+          "INTENT.md",
+          "STATUS.md",
+          "hi/persona.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "HI capture only (hi/persona.md, the INTENT.md index line, and the AGENTS.md / STATUS.md hi family lists) from Leif's 2026-09-28 interview; the code and the agent spec change (REQ-agent-069) are the persona feature change in the same PR",
+        "acceptance_criteria": [
+          "hi/persona.md holds PERSONA-1, PERSONA-2 and PERSONA-3 with Leif's confirmed text verbatim (owner leif, intent citing #69 and the 2026-09-28 interview); INTENT.md indexes the persona family; AGENTS.md and STATUS.md list the persona family (19 families); hi check passes"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790716816,
+      "digest": "f927c3a2171fd4fdd69e32d66299581151637d25008edee03d930054aa7acfb0",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
