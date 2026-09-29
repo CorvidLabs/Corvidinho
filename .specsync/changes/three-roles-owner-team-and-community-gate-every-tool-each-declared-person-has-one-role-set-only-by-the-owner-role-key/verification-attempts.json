@@ -23,6 +23,29 @@
         "REQ-plugins-065",
         "REQ-plugins-066"
       ]
+    },
+    {
+      "timestamp": 1790700970,
+      "commit": "8ac7e47ccd40e9aab75b707b5479c50792fadd28",
+      "contract_digest": "4c2ffc0260e780c8cbfd3abf5e40139980fadb61d3fc727a2d40cf2a4231d565",
+      "execution_digest": "b098efba6e1c1dba45a774b9b244e71f401479d2e66158bc74cea4b63dbbc135",
+      "workspace_digest": "501ed172e48ba5198729fdd015a9b8a54038c1e8c9e2b3af17cd766940e42e80",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-065",
+        "REQ-discord-043",
+        "REQ-discord-065",
+        "REQ-discord-088",
+        "REQ-plugins-065",
+        "REQ-plugins-066"
+      ]
     }
   ]
 }
