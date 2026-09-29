@@ -36,6 +36,7 @@ import {
   type DiscordModal,
 } from "../src/discord/ask-buttons.ts";
 import { ASK_ANSWER_HINT, ASK_REPLY_HINT, formatAskReply } from "../src/discord/ask-ping.ts";
+import { ASK_CANCELLED_ACK } from "../src/discord/thin-ack.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   adaptComponent,
@@ -409,12 +410,77 @@ describe("Answer form submit resumes the requester's session like a reply", () =
     expect(normalizeAskAnswer(`k=sk-ant-${"c".repeat(30)}`)).not.toContain("c".repeat(30));
   });
 
-  test("an empty submit gets only the zero-width ack: no run, ask kept", async () => {
+  test("a thin or blank submit is not an answer (AUTONOMY-5): the question is restated privately with the Answer button, no run, nothing posted, ask kept", async () => {
+    const b = await withFreeTextAsk();
+    const before = sent(b);
+    for (const text of ["ok", "  \n ", "👍", "sure!"]) {
+      const rec = recorder();
+      await b.handlers.onComponent!(submit(b.askId, USER_ID, text, rec, { messageId: b.stubId }));
+      expect(rec.eph).toHaveLength(1);
+      const eph = rec.eph[0]!;
+      expect(eph.ephemeral).toBe(true);
+      expect(String(eph.content)).toContain(`> ${QUESTION}`);
+      expect(String(eph.content)).toContain(ASK_ANSWER_HINT);
+      expect(eph.components).toEqual(buildAnswerStubComponents(b.askId));
+      expect(rec.deleted).toBe(0);
+    }
+    expect(b.calls).toHaveLength(1);
+    expect(sent(b)).toBe(before);
+    expect(pendingAskId(b)).toBe(b.askId);
+    // The thin text never joins the session thread.
+    const thread = b.result.store.threadFor(b.result.store.list()[0]!);
+    expect(thread.some((t) => t.role === "human" && t.content === "ok")).toBe(false);
+    // A real answer afterwards still resumes the session.
+    await b.handlers.onComponent!(submit(b.askId, USER_ID, "eu-west-1", recorder(), { messageId: b.stubId }));
+    expect(b.calls).toHaveLength(2);
+    expect(b.calls[1]!.prompt).toContain(`${PRIOR_BLOCK}\n\nHuman answer:\neu-west-1`);
+    await b.result.stop();
+  });
+
+  test("an explicit cancel typed in the form drops the session's open asks like a cancel reply (AUTONOMY-6): private ack, no run, nothing posted", async () => {
     const b = await withFreeTextAsk();
     const before = sent(b);
     const rec = recorder();
-    await b.handlers.onComponent!(submit(b.askId, USER_ID, "  \n ", rec));
-    expectRefused(b, before, rec, EPHEMERAL_SILENT_ACK);
+    await b.handlers.onComponent!(submit(b.askId, USER_ID, " never mind ", rec, { messageId: b.stubId }));
+    expect(rec.eph).toEqual([{ content: ASK_CANCELLED_ACK, ephemeral: true }]);
+    expect(b.calls).toHaveLength(1);
+    expect(sent(b)).toBe(before);
+    expect(b.result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    // The Answer button and the form are then "already answered", as after a
+    // cancel reply; a later message runs as ordinary chat.
+    const again = recorder();
+    await b.handlers.onComponent!(answerPress(b.askId, USER_ID, again));
+    expect(again.modals).toHaveLength(0);
+    expect(String(again.eph[0]?.content).toLowerCase()).toContain("already answered");
+    await b.handlers.onMessage(replyTo(b.stubId, USER_ID, "us-east-2 then"));
+    expect(b.calls).toHaveLength(2);
+    expect(b.calls[1]!.prompt).not.toContain(PRIOR_BLOCK);
+    await b.result.stop();
+  });
+
+  test("a cancel in the form also drops an earlier open Choose ask of the session, as a cancel reply does (SESSION-MULTI-3)", async () => {
+    const b = await askBridge({
+      askFor: (n) =>
+        n === 1
+          ? { reason: "clarify", question: "Which DB?", options: [{ id: "1", label: "Postgres" }, { id: "2", label: "SQLite" }] }
+          : n === 2
+            ? FREE_TEXT
+            : undefined,
+    });
+    await b.handlers.onMessage(mention(USER_ID));
+    const choose = pendingAskId(b)!;
+    // Chat continues while the Choose buttons stay open; the run asks again in free text.
+    await b.handlers.onMessage(replyTo(b.result.store.list()[0]!.pendingAsk!.stubMessageId!, USER_ID, "also make a bucket"));
+    const session = b.result.store.list()[0]!;
+    const free = session.pendingAsk!;
+    expect(free.options).toBeUndefined();
+    expect(session.openAsks?.map((a) => a.askId)).toEqual([choose]);
+    const rec = recorder();
+    await b.handlers.onComponent!(submit(free.askId, USER_ID, "cancel", rec));
+    expect(rec.eph).toEqual([{ content: ASK_CANCELLED_ACK, ephemeral: true }]);
+    expect(b.calls).toHaveLength(2);
+    expect(b.result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    expect(b.result.store.list()[0]!.openAsks).toBeUndefined();
     await b.result.stop();
   });
 

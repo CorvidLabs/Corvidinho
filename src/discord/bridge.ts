@@ -1158,8 +1158,25 @@ export async function startBridge(
         }
         // SAFE-6: scrubbed before it reaches the run or the session thread.
         answer = normalizeAskAnswer(interaction.modalValues?.[ASK_ANSWER_INPUT_ID]);
-        if (!answer) {
-          await interaction.reply({ content: EPHEMERAL_SILENT_ACK, ephemeral: true });
+        // AUTONOMY-6: an explicit cancel typed in the form drops every open
+        // ask of the session, as the same word in a reply does; nothing runs
+        // and the ack stays private.
+        if (isCancelAsk(answer)) {
+          store.setPendingAsk(session, null);
+          await interaction.reply({ content: ASK_CANCELLED_ACK, ephemeral: true });
+          return;
+        }
+        // AUTONOMY-5: a thin answer (`ok`, emoji-only, blank) is not an
+        // answer — as for a thin reply, the question is restated once (here
+        // privately, with the Answer button again), the ask stays and nothing
+        // runs.
+        if (isThinAck(answer)) {
+          const restated = formatAskReply({ ask: pending, owner: null, answerButton: true });
+          await interaction.reply({
+            content: restated.content,
+            ephemeral: true,
+            components: buildAnswerStubComponents(pending.askId),
+          });
           return;
         }
         // Claim immediately so a reply or a second submit cannot resume twice.

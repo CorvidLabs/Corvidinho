@@ -29,7 +29,10 @@ Reuse the Choose-ask path end to end; no parallel system.
   pending on a late press/submit, opens the modal on an `open` press of a
   free-text ask, and takes an `answer` submit through the pick's resume code
   (parametrized: answer text + prior-question block), with the reply's block
-  for a typed answer.
+  for a typed answer. A typed answer passes the same AUTONOMY-5/6 checks a
+  reply does (`isThinAck` / `isCancelAsk`): a thin or blank one is restated
+  privately with the Answer button and runs nothing; a cancel drops every open
+  ask of the session with an ephemeral `ASK_CANCELLED_ACK`.
 - `src/discord/command-handlers/{work,session}.ts`: slash free-text answers get
   the Answer button (`recordSlashStub` stores the stub id).
 - `src/discord/thinking-status.ts` / `slash-finish.ts` / `spend-post.ts`:
@@ -52,6 +55,16 @@ Design choices pending Leif:
   description (the stub keeps the full question); title "Answer privately",
   label "Your answer".
 - Stuck free-text asks get the Answer button too; only the requester can use
-  it (the owner is pinged and can reply in the channel as before).
+  it, as only the requester's reply answers it (SESSION-MULTI-1); the owner is
+  pinged as before.
+- A thin form answer (`ok`, emoji, blank) is restated privately (ephemeral,
+  with the Answer button again) rather than publicly as for a thin reply; a
+  `cancel` typed in the form drops the open asks with a private ack rather
+  than the public one a `cancel` reply gets.
+- The resumed run's acting role is resolved as on a button pick (without the
+  presser's member role ids, so a declared team member let in only by an
+  allowed role under a non-empty user allowlist runs as community there,
+  where a chat reply would run as team) — kept fail-closed, unchanged from
+  the pick path.
 - The free-text post keeps its footer-only embed (DISCORD-3.a / DISCORD-15);
   a Choose stub still has none.

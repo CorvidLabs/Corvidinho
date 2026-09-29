@@ -14,7 +14,9 @@ round 10; no `hi/` edits in this change):
 - Still held: DISCORD-ASK-2 (only the requester sees / uses the ask UI),
   DISCORD-ASK-3 (the answer continues that requester's session, no public
   reply needed), DISCORD-ASK-4, DISCORD-ASK-5 (~30 min, "that choice
-  expired"), DISCORD-ASK-6/7/8, DISCORD-DENY-1..3, DISCORD-6, SAFE-6.
+  expired"), DISCORD-ASK-6/7/8, DISCORD-DENY-1..3, DISCORD-6, SAFE-6, and
+  AUTONOMY-5/6 (a thin answer restates, a cancel drops the ask — in the form
+  as in a reply).
 
 Canonical requirements changed (see deltas):
 

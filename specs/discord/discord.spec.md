@@ -304,8 +304,12 @@ submit gets the ephemeral `ASK_ANSWER_ACK`, and the session resumes like a
 pick in the stub (`existingMessageId`) with the prompt a reply that answers
 the ask gets (`[Prior clarifying question you asked (the human is answering
 it now): …]` + `Human answer:`), `humanText` and the thread turn being the
-scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). An
-empty submit gets `EPHEMERAL_SILENT_ACK`; a submit on a Choose ask gets the
+scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). A
+thin or blank submit (`isThinAck`, AUTONOMY-5) is not an answer: the ask
+stays, nothing runs and the question is restated in an ephemeral
+`formatAskReply` with the Answer button; a cancel submit (`isCancelAsk`,
+AUTONOMY-6) clears every open ask of the session like a cancel reply, with the
+ephemeral `ASK_CANCELLED_ACK` and no run. A submit on a Choose ask gets the
 not-for-you reply. A press or submit on a free-text ask past its timeout gets
 `ASK_CHOICE_EXPIRED` and leaves the ask pending (a reply still answers it).
 Schedule asks keep posting text without a button.
@@ -695,7 +699,9 @@ REQ-discord-044).
   prior-question block a reply gets, in the stub, the typed text scrubbed and
   never posted; another user's, a muted or deny-listed R's, or a late (~30
   min) submit is refused ephemerally with no run, and a late one leaves the
-  ask for a reply; a reply to the stub still answers it (REQ-discord-548)
+  ask for a reply; a thin submit (`ok`) is restated privately and a `cancel`
+  submit drops the ask, as the same reply would (AUTONOMY-5/6); a reply to
+  the stub still answers it (REQ-discord-548)
 
 ## Error Cases
 

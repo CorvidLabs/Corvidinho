@@ -14,4 +14,5 @@ artifact: tasks
 - [x] Tests: new `tests/discord.ask-answer-modal.test.ts`; updated `tests/discord.ask-ping.test.ts`, `tests/discord.thin-ack.test.ts`, `tests/discord.slash-pending-ask.test.ts`, `tests/discord.slash-choose-ask.test.ts`.
 - [x] Fail-on-base proof (base `src/discord` swapped in, then the helpers only, then restored).
 - [x] `docs/discord.md`; spec delta (REQ-discord-548 Added); `specs/discord/discord.spec.md` prose, scenario and `files:`; `specs/discord/testing.md`.
+- [x] Review fix: a thin / blank form answer is restated privately and a `cancel` drops the open asks, as the same reply would (AUTONOMY-5/6), with tests that fail on the pre-fix bridge.
 - [x] SpecSync approve / check / audit, coverage, `hi check`, tsc, `bun test`, fledge verify.

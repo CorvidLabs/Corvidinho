@@ -276,9 +276,14 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `ASK_ANSWER_ACK` then deleted, the stub thin-updated and edited into the
   answer, the typed text never posted, the thread turn recorded, the ask
   cleared, a second submit a no-op; the text is scrubbed before the run and
-  the thread; `normalizeAskAnswer` cuts and trims; an empty submit gets the
-  zero-width ack; a follow-up free-text ask gets its own Answer button in the
-  same stub. Another user's, a muted (then unmuted: resumes), a deny-listed
+  the thread; `normalizeAskAnswer` cuts and trims; a thin or blank submit
+  (`ok`, whitespace, emoji, `sure!`) is restated privately with the Answer
+  button, no run, ask kept, nothing in the thread, and a real submit then
+  resumes (AUTONOMY-5); a `never mind` / `cancel` submit gets only the
+  ephemeral `ASK_CANCELLED_ACK`, runs nothing and clears the free-text ask and
+  an earlier open Choose ask, after which the Answer button is already
+  answered (AUTONOMY-6); a follow-up free-text ask gets its own Answer button
+  in the same stub. Another user's, a muted (then unmuted: resumes), a deny-listed
   (user or role), an off-channel, a rate-limited and a late (past ~30 min)
   press or submit are refused ephemerally with no run and the ask kept; after
   a late one a thin reply restates without a button and a reply still
