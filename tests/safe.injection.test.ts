@@ -828,6 +828,60 @@ describe("SAFE-13 on WATCH: no run, one comment @mentioning the owner, audited",
     expect(prompts[0]).toContain("source=github-thread>>>");
   });
 
+  test("an in-run hit on an event WATCH does not ack (an assignment) still gets one comment @mentioning the owner", async () => {
+    const d = tmp();
+    const path = join(d, "allowlist.toml");
+    writeFileSync(path, fileText());
+    const db = openCorvidinhoDb({ memory: true });
+    let runs = 0;
+    const agent: WatchAgent = {
+      async runChat({ sessionId }) {
+        runs += 1;
+        return {
+          ok: true,
+          sessionId,
+          summary: "looked at it",
+          exitCode: 0,
+          injection: { source: "web-fetch", reasons: ["ignore-rules"] },
+        };
+      },
+    };
+    const ack = createEchoAckClient();
+    let round = 0;
+    const result = await startWatchPoller({
+      env: {
+        GITHUB_TOKEN: "fake",
+        CORVIDINHO_WATCH_USERNAME: "corvid-agent",
+        CORVIDINHO_WATCH_DRY_RUN: "1",
+        HOME: d,
+      },
+      filePath: path,
+      runLoop: false,
+      agent,
+      ackClient: ack,
+      db,
+      fetchEvents: async () => {
+        round += 1;
+        return round === 1
+          ? [ev({ id: "assign-1", type: "assignment", sender: "tofu-dev", actor: "tofu-dev", body: "", title: "Fix the crash" })]
+          : [];
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    running.push(result);
+    await result.pollOnce();
+    expect(runs).toBe(1);
+    expect(ack.posts).toHaveLength(1);
+    expect(ack.posts[0]!.issue_number).toBe(7);
+    expect(ack.posts[0]!.body).toContain(
+      "@0xleif heads-up: a web-fetch result in this run looked like a prompt-injection attempt",
+    );
+    // A second poll never repeats it.
+    await result.pollOnce();
+    expect(ack.posts).toHaveLength(1);
+  });
+
   test("a WATCH run that reports an injection @mentions the owner in its summary", () => {
     const body = buildSummaryBody(
       {

@@ -119,3 +119,6 @@ none adds a criterion.
     allowlisted at post time) posts nothing, so a SAFE-13 hit in its run is
     only in the audit row and the run row's summary; there is no DM path to
     tell the owner elsewhere.
+15. **A WATCH run's in-run hit on an event it does not ack** (assignment,
+    review request) gets one comment of its own @mentioning the owner
+    (review of #295), since no summary comment would carry it.

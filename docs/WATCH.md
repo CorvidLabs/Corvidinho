@@ -43,7 +43,8 @@ audit row (actor `github:<login>`, surface `watch:<session>`, `denied`), logs
 `[watch] SAFE-13 refused …`, marks the event handled and runs nothing. A run
 whose tool result trips the detector drops its mutating tools and
 `memory-store` for the rest of the run, and its summary comment @mentions the
-owner. See
+owner (an event WATCH does not ack, such as an assignment or review request,
+gets one comment of its own saying so). See
 [`discord.md`](discord.md) "Untrusted text and injection attempts".
 
 ## Durable sessions (REQ-watch-037, #37 slice 1)

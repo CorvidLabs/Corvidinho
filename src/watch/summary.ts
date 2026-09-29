@@ -64,6 +64,68 @@ export function watchInjectionLine(
   );
 }
 
+/**
+ * SAFE-13 — the comment for a run whose tool result looked like a
+ * prompt-injection attempt when no summary comment carries it (an event type
+ * WATCH does not ack, such as an assignment or review request, or an ack that
+ * did not go out): the owner line and the attribution footer.
+ */
+export function buildInjectionNoticeBody(
+  injection: NonNullable<AgentSpawnResult["injection"]>,
+  ownerLogin?: string,
+): string {
+  return `Corvidinho WATCH — ${watchInjectionLine(injection, ownerLogin)}\n\n---\n${attribution("markdown")}`;
+}
+
+/**
+ * SAFE-13 — post {@link buildInjectionNoticeBody} for a run whose summary
+ * comment was not posted, so the owner is told rather than the hit living
+ * only in the audit row. Once per event (the summary dedup store, so a
+ * restart never posts twice); skipped for a bad repo. True when a post was
+ * attempted.
+ */
+export async function maybePostWatchInjectionNotice(opts: {
+  event: DetectedEvent;
+  injection: NonNullable<AgentSpawnResult["injection"]>;
+  ownerLogin?: string;
+  ackClient: AckClient;
+  summarized: SummarizedIdStore;
+  log?: (msg: string) => void;
+  onPostFailed?: (res: AckCommentResult) => void;
+}): Promise<boolean> {
+  const { event, ackClient, summarized, log } = opts;
+  if (summarized.has(event.id)) return false;
+  const parts = splitRepo(event.repo);
+  if (!parts) {
+    log?.(`[watch] injection notice skip bad repo=${event.repo}`);
+    return false;
+  }
+  const res = await ackClient.createIssueComment({
+    owner: parts.owner,
+    repo: parts.name,
+    issue_number: event.number,
+    body: buildInjectionNoticeBody(opts.injection, opts.ownerLogin),
+  });
+  try {
+    summarized.add(event.id);
+  } catch (err) {
+    log?.(
+      `[watch] injection notice id write failed id=${event.id}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (res.ok) {
+    log?.(
+      `[watch] injection notice ${res.dryRun ? "dry-run" : "posted"} ${event.repo}#${event.number} id=${event.id}`,
+    );
+  } else {
+    log?.(
+      `[watch] injection notice failed ${event.repo}#${event.number} id=${event.id}: ${res.error ?? "unknown"}`,
+    );
+    opts.onPostFailed?.(res);
+  }
+  return true;
+}
+
 export function buildSummaryBody(spawn: AgentSpawnResult, ownerLogin?: string): string {
   const status = spawn.ok
     ? `Done (exit ${spawn.exitCode}).`

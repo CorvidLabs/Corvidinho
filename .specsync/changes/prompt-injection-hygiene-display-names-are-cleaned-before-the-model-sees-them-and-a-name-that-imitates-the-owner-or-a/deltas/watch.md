@@ -32,13 +32,19 @@ the acked store; a rate-limited post backs off like an ack), one
 retried. The WATCH spawn client SHALL read the child's `result.injection`
 (`injectionNoticeFromUnknown`) into `AgentSpawnResult.injection`, and the
 run-summary comment SHALL then add `watchInjectionLine` (@mentioning the
-owner's login when set). No env var, config key, table or column.
+owner's login when set); when no summary comment is posted for that run (an
+event type WATCH does not ack, such as an assignment or review request, or no
+successful ack), `maybePostWatchInjectionNotice` SHALL post one comment
+(`buildInjectionNoticeBody`: the same line and the attribution footer) once
+per event id (the summary dedup store; skipped for a bad repo; a rate-limited
+post backs off like the summary). No env var, config key, table or column.
 
 Acceptance Criteria
 - `routeEvent` puts the title and body inside the fence after the header; a 20 000-char body that guesses the end marker, and a body of lines that get quoted, both leave the real end marker last and the prompt within 8000 chars.
 - `watchInjectionVerdict` flags a non-owner's injected body or title and returns null for the owner's and for an ordinary body.
 - Through `startWatchPoller` with a memory DB and the echo ack client: an injected comment runs nothing, gets one comment @mentioning the owner's GitHub login and one `injection-suspected` row with actor `github:<login>`; the next ordinary event runs with its body fenced.
 - `buildSummaryBody` adds the owner line only when the run reports `injection`.
+- Through `startWatchPoller`: an assignment event whose run reports `injection` gets one comment @mentioning the owner's login with the SAFE-13 line, and a second poll does not repeat it.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 
 ## Modified

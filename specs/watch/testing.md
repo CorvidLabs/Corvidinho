@@ -62,4 +62,6 @@ module: watch
   GitHub login and audits one `injection-suspected` row (actor
   `github:<login>`); the next ordinary event runs with its body fenced;
   `buildSummaryBody` adds the owner line only when the run reports
-  `injection`.
+  `injection`; an assignment event (no ack, no summary) whose run reports
+  `injection` still gets one comment @mentioning the owner, not repeated on
+  the next poll.

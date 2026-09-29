@@ -58,6 +58,7 @@ import {
   type SpawnOutcome,
 } from "./spawn-log.ts";
 import {
+  maybePostWatchInjectionNotice,
   maybePostWatchSummary,
   SuccessfulAckStore,
   SummarizedIdStore,
@@ -550,7 +551,7 @@ export async function startWatchPoller(
         log(formatSpawnOutcomeLog(outcome));
 
         // WATCH-RELIABILITY-1 — summary after run, only if auto-ack succeeded.
-        await maybePostWatchSummary({
+        const summaryPosted = await maybePostWatchSummary({
           event,
           spawn: {
             ok: spawnOk,
@@ -566,6 +567,19 @@ export async function startWatchPoller(
           log,
           onPostFailed: backoffOnCommentFailure,
         });
+        // SAFE-13: no summary carried the in-run hit (an event type WATCH
+        // does not ack, or no successful ack): one comment tells the owner.
+        if (!summaryPosted && spawnInjection) {
+          await maybePostWatchInjectionNotice({
+            event,
+            injection: spawnInjection,
+            ownerLogin: owner?.githubLogin,
+            ackClient,
+            summarized,
+            log,
+            onPostFailed: backoffOnCommentFailure,
+          });
+        }
       } catch (err) {
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
         // retried forever ahead of later events: log, mark processed, move on.
