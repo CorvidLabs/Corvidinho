@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 75
+version: 77
 status: draft
 files:
   - src/discord/types.ts
@@ -42,6 +42,7 @@ files:
   - src/discord/message-router.ts
   - tests/discord.actor-gate.test.ts
   - tests/discord.forward-channel.test.ts
+  - tests/discord.ask-button-gates.test.ts
   - tests/discord.thread-sessions-per-user.test.ts
   - src/discord/agent-client.ts
   - src/discord/gateway.ts
@@ -107,6 +108,10 @@ files:
   - tests/discord.ask-ephemeral.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
+  - src/discord/allowed-mentions.ts
+  - tests/discord.allowed-mentions.test.ts
+  - plugins/discord/send-file.ts
+  - tests/discord.send-file.test.ts
 
 db_tables: []
 depends_on:
@@ -309,6 +314,36 @@ at the Choose stub it reuses as progress; at start, after the gateway is up, it
 marks each leftover reply interrupted where its channel (or thread parent) is
 still allowlisted.
 
+Outbound mention safety (REQ-discord-205, DISCORD-8):
+`src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
+repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
+`ask-ping.ts`). The live gateway's `Client` defaults `allowedMentions` to
+`{ parse: [], repliedUser: true }` and every `reply` / `editMessage` / embed
+send / embed edit / slash `reply` / `editReply` / component `reply` (and
+`update`) payload sets it explicitly; `reply` and `editMessage` add only
+`mentionUserIds` as `users`. `LiveGatewayOptions.discord` optionally
+injects the discord.js module (tests); default is the dynamic import.
+
+Files and images in replies (REQ-discord-476, DISCORD-17):
+`plugins/discord/send-file.ts` registers `discord-send-file` (dangerous,
+mutating, minTier 1) through `loadDiscordPlugins` and exports
+`DISCORD_SEND_FILE_NAME`, `DISCORD_UPLOAD_MAX_BYTES` (8 MB),
+`REPLY_CHANNEL_ENV` / `REPLY_PARENT_CHANNEL_ENV`,
+`SEND_FILE_ALLOWED_EXTENSIONS`, `SEND_FILE_DESCRIPTION`, `fileAttachment`
+and `gitDiffAttachment`. Args: `<path>` (or `--path`) | `--git-diff
+[--staged]`, plus `--caption <text>`; `--channel` / `-c` is refused.
+`AgentRunChatOpts.replyChannelId` / `replyParentChannelId` carry the
+conversation's channel (the thread and its parent in a thread) and the spawn
+client always writes `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` /
+`CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` (empty when unset). The bridge
+passes them on chat, reply-continue, thread and ask-button runs;
+`/session start` and `/work` pass the command's channel; schedules pass none.
+`verifyRequesterCanSend` takes `attachFiles` (also AttachFiles; the test
+checker gets `{ attachFiles: true }` as a third argument) and
+`requester-perms.ts` exports `RequesterNeeds` and `REQUESTER_CANNOT_ATTACH`.
+`src/store/scrub.ts` exports `redactSecretEnvValues` (the secret env value
+redaction `formatErrorLine` uses).
+
 `src/work/pr.ts` exports `openWorkPr` (the /work → draft PR step, never
 throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrOutcome`; `src/work/pr-body.ts` exports `workPrTitle`,
@@ -349,10 +384,13 @@ ADMIN every session with its full project path and anyone else only their own
 sessions with the project name; `/schedule list` shows a non-ADMIN member the
 project name, never an absolute host path. `/status` stays counts-only.
 
-`src/discord/permissions.ts` exports `gateActor` (the chat + slash actor gate:
-deny lists win, non-empty user/role allowlist must match or be the owner);
-`RouterDeps.owner` passes the configured owner to `routeMessage`
-(REQ-discord-201).
+`src/discord/permissions.ts` exports `gateActor` (the chat + slash + ask
+button actor gate: deny lists win, non-empty user/role allowlist must match or
+be the owner); `RouterDeps.owner` passes the configured owner to
+`routeMessage` (REQ-discord-201). `interactionRoleIds` and `RawMemberRoles`
+(`gateway.ts`) read an interaction member's role ids for slash and
+`ComponentInteraction.roleIds` (set by `adaptComponent`), so an ask button press is gated by role
+allow/deny too (REQ-discord-201).
 `replyReferenceMessageId`, `REFERENCE_TYPE_FORWARD` and
 `RawMessageReference` (`gateway.ts`) turn a MessageCreate `reference` into
 `InboundMessage.referencedMessageId` only for a same-channel reply
@@ -376,6 +414,19 @@ secrets out of repo; discord-post-message dangerous; thinking status edits one
 progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms, and in a bridge-started run always for the acting Discord user (`CORVIDINHO_ACTING_DISCORD_USER_ID`): a requesting id naming anyone else refuses and a check that cannot run refuses, nothing posted (REQ-discord-012);
+every outbound Discord post (gateway reply, message and embed sends/edits,
+slash reply/editReply, component reply/update, discord-post-message) parses
+no mentions from its content (`parse: []`,
+`@everyone` / `@here` defanged); only the replied-to author and the users an
+ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
+`discord-send-file` attaches only in the channel the bridge set for the run
+(never a model-chosen one; none ⇒ refused), after the channel allowlist (a
+thread through its parent) and the acting user's DISCORD-8 check with Attach
+Files; at most 8 MB, PNG / JPEG / GIF / WebP by magic bytes or UTF-8 txt /
+log / md / diff / patch / json / csv, text secret-scrubbed (SAFE-6), SAFE-2
+protected / `.specsync` / secret paths refused by name and by resolved
+target inside the project root, dry run posts nothing, audited as a dangerous
+plugin (REQ-discord-476);
 image attachments MIME-allowlisted (jpeg/png/gif/webp) with 20MB/5 caps and
 local files inside the session workspace (`<cwd>/.corvidinho/attachments/`,
 git-ignored, removed with the workspace on session end) so the agent's
@@ -389,6 +440,7 @@ the live discord.js Client is built with the short Custom Status from the shared
 outside allowlist MessageCreate is silent and slash is ephemeral tip (admin) or zero-width ack (non-admin) — never public not-authorized (DISCORD-DENY-1..3);
 every MessageCreate is processed only when its own channel (thread parent or the thread itself) is allowlisted — a reply or forward that references a tracked bot message never continues the session in another channel, and the gateway keeps a reference only for a same-channel reply (never a forward); an ask button press resumes only in an allowlisted channel (or the session's thread under an allowlisted parent) while the session's own channel is still allowlisted, else an ephemeral tip (admin) or zero-width ack with no resume (DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-212);
 every @mention/reply/thread message and every slash command also passes `gateActor` after the channel gate: deny-listed users/roles are refused, and when the user or role allowlist is non-empty only listed users, allowed roles or the owner pass; empty user+role lists keep the channel-only path; refusal is silent on MessageCreate and a zero-width ephemeral ack on slash (ALLOW-3/5 / DISCORD-5 / DISCORD-DENY-1..3 / REQ-discord-201);
+an ask button press (open or pick) passes channel → `gateActor` (with the press's role ids) → mute/rate (shared per-user state, presser's resolved level) before it opens choices or resumes; a refusal is ephemeral only — zero-width ack for an actor deny, `MUTED` / `RATE_LIMITED` for mute/rate — with no agent run, nothing sent or edited, and the pending ask kept (DISCORD-6 / DISCORD-DENY-3 / REQ-discord-201 / REQ-discord-010);
 SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/corvidinho with soft TTL ~45m (SESSION-1..4 / REQ-discord-019);
 every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message within 6000 characters (opening request and newest turns kept, middle turns one `(N earlier turns omitted)` marker); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); turns persist in `discord_session_turns` across a restart within the soft TTL, die with their session (end or TTL), never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
@@ -529,6 +581,8 @@ REQ-discord-044).
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |
+| `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted, SAFE-2 / secret path (by name or link target), path outside the project, type not allowed or bytes not matching, over 8 MB, requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
+| `discord-send-file`: Discord answers 413 / code 40005 (the server's limit is lower) | Refused with the server-limit reason, not retried (REQ-discord-476) |
 | Gateway login rejected (401 `TokenInvalid` / 403) or unreachable | Half-started client stopped; `startBridge` returns `{ ok: false, exitCode: 1 }` with `discord login failed (<status>): check DISCORD_TOKEN (<line>)`; no crash dump, no token value |
 
 ## Dependencies
@@ -632,3 +686,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-27 | the-collapsed-final-answer-keeps-a-footer-only-embed-with-the-model-and-state-verified-verifyskipped-attempts-while-the: The collapsed final answer keeps a footer-only embed with the model and state/verified/verifySkipped/attempts, while the Choose stub stays embed-free (DISCORD-3.a) |
 | 2026-09-27 | open-discord-asks-are-secret-scrubbed-before-the-session-row-is-saved-and-the-safe-6-re-scrub-rewrites-stored-open-asks: Open Discord asks are secret-scrubbed before the session row is saved and the SAFE-6 re-scrub rewrites stored open asks as JSON (SAFE-6) |
 | 2026-09-27 | discord-post-message-checks-the-acting-discord-user-the-bridge-set-not-only-a-model-supplied-id-discord-8: Discord-post-message checks the acting Discord user the bridge set, not only a model-supplied id (DISCORD-8) |
+| 2026-09-27 | discord-an-ask-button-press-passes-the-actor-gate-and-mute-rate-limit-like-chat-and-slash-so-a-muted-or-deny-listed: Discord: an ask button press passes the actor gate and mute/rate limit like chat and slash, so a muted or deny-listed user cannot keep a session going by buttons (REQ-discord-201, REQ-discord-010, DISCORD-6, ALLOW-5) |
+| 2026-09-28 | discord-outbound-posts-parse-no-mentions-from-model-text-so-untrusted-input-cannot-ping-roles-everyone-or-here-discord: Discord outbound posts parse no mentions from model text so untrusted input cannot ping roles, @everyone or @here (DISCORD-8) |
+| 2026-09-29 | discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can: Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17) |

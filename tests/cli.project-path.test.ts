@@ -123,7 +123,8 @@ describe("parseGlobalFlags --project (CLI-5)", () => {
   test("a plugin argument after -- and --task text are never taken", () => {
     const r = parseGlobalFlags(["plugins", "run", "x", "--", "--project", "/p"]);
     expect(r.project).toBeUndefined();
-    expect(r.rest).toEqual(["plugins", "run", "x", "--", "--project", "/p"]);
+    expect(r.rest).toEqual(["plugins", "run", "x"]);
+    expect(r.pluginArgs).toEqual(["--project", "/p"]);
     const t = parseGlobalFlags(["task", "run", "--task", "--project"]);
     expect(t.taskText).toBe("--project");
     expect(t.project).toBeUndefined();

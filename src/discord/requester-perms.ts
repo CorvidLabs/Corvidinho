@@ -1,7 +1,8 @@
 /**
  * DISCORD-8 — confused-deputy guard (Merlin-primary).
  * Verify the requesting Discord user could post to the target channel
- * (ViewChannel + SendMessages), not only that the bot could.
+ * (ViewChannel + SendMessages, plus AttachFiles for a file post), not only
+ * that the bot could.
  * Archive cross-channel-guard.ts is advisory only — not used as ACL.
  */
 
@@ -42,9 +43,19 @@ export function evaluateRequesterCanSend(
   return { ok: true };
 }
 
+/** Refusal reason when the requester may send but not attach files. */
+export const REQUESTER_CANNOT_ATTACH = "requester cannot attach files in this channel";
+
+/** What the requester must be able to do besides view + send. */
+export type RequesterNeeds = {
+  /** Attach files too (`discord-send-file`, DISCORD-17). */
+  attachFiles?: boolean;
+};
+
 export type RequesterPermChecker = (
   channelId: string,
   requestingUserId: string,
+  needs?: RequesterNeeds,
 ) => Promise<RequesterCheckResult>;
 
 let overrideChecker: RequesterPermChecker | undefined;
@@ -57,16 +68,19 @@ export function setRequesterPermCheckerForTests(
 }
 
 /**
- * Live path via discord.js permissionsFor (ViewChannel + SendMessages).
+ * Live path via discord.js permissionsFor (ViewChannel + SendMessages, and
+ * AttachFiles when `opts.attachFiles`).
  * Uses a short-lived client; fixture tests should inject overrideChecker.
  */
 export async function verifyRequesterCanSend(
   channelId: string,
   requestingUserId: string,
-  opts: { token: string; dryRun?: boolean },
+  opts: { token: string; dryRun?: boolean } & RequesterNeeds,
 ): Promise<RequesterCheckResult> {
   if (overrideChecker) {
-    return overrideChecker(channelId, requestingUserId);
+    return opts.attachFiles
+      ? overrideChecker(channelId, requestingUserId, { attachFiles: true })
+      : overrideChecker(channelId, requestingUserId);
   }
   // Dry-run / no live Discord: cannot verify channel ACL without a client.
   // Fixture tests inject setRequesterPermCheckerForTests; without injection,
@@ -156,6 +170,16 @@ export async function verifyRequesterCanSend(
         reason: "requester cannot send to this channel",
       };
     }
+    if (
+      opts.attachFiles &&
+      !perms.has(PermissionsBitField.Flags.AttachFiles)
+    ) {
+      return {
+        ok: false,
+        status: 403,
+        reason: REQUESTER_CANNOT_ATTACH,
+      };
+    }
     return { ok: true };
   } finally {
     client.destroy();
@@ -170,6 +194,9 @@ export function requesterCheckFix(
 ): string {
   if (result.status === 404) {
     return `Either the channel id (${channelId}) is wrong, or the user that triggered the agent (id ${requestingUserId}) is not in the same Discord guild as that channel. Verify the channel id, and confirm the requester is a member of the bot's guild.`;
+  }
+  if (result.reason === REQUESTER_CANNOT_ATTACH) {
+    return `The Discord user that triggered the agent (id ${requestingUserId}) doesn't have permission to attach files in channel ${channelId}. The bot only attaches a file where the requesting user could attach it themselves. Grant the requesting user Attach Files on that channel in Discord.`;
   }
   return `The Discord user that triggered the agent (id ${requestingUserId}) doesn't have permission to send to channel ${channelId}. The bridge requires the requesting user to be able to send to the target channel themselves — otherwise the bot would post on behalf of someone who normally couldn't. Grant the requesting user ViewChannel + SendMessages on that channel in Discord, or ask them to relay through a channel they already have access to.`;
 }

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "docs-discord-md-criteria-line-cites-discord-1-17-and-autonomy-1-11-after-the-2026-09-28-hi-capture",
+  "slug": "docs-discord-md-criteria-line-cites-discord-1-17-and-autonomy-1-11-after-the-2026-09-28-hi-capture",
+  "title": "Docs/discord.md criteria line cites DISCORD-1..17 and AUTONOMY-1..11 after the 2026-09-28 hi capture",
+  "description": "docs/discord.md criteria line cites DISCORD-1..17 and AUTONOMY-1..11 after the 2026-09-28 hi capture",
+  "kind": "documentation",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "9bf2bebc354203debed24f6d7b67517d1a2021a7",
+  "created_at": 1790692948,
+  "updated_at": 1790693160,
+  "affected_specs": [],
+  "affected_paths": [
+    "docs/discord.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "one docs line that lists the captured id ranges; tests/docs.operator-facts.test.ts checks it against hi/discord.md",
+  "acceptance_criteria": [
+    "docs/discord.md's criteria line cites DISCORD-1..17 (the highest captured DISCORD-N) and AUTONOMY-1..11; tests/docs.operator-facts.test.ts passes."
+  ],
+  "selected_artifacts": [
+    "context",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

@@ -36,6 +36,10 @@ See discord.spec.md, docs/DISCORD-GO-LIVE.md, and SpecSync change artifacts for 
   Server Members Intent off); a `fetch` spy proves nothing is posted. With the
   acting env empty or unset the flag / strict behaviour is unchanged
   (REQ-discord-012, no token, no network).
+- `tests/discord.allowed-mentions.test.ts` — REQ-discord-205: fake discord.js
+  injected into the live gateway; chat mention/reply-continue, `/session
+  start`, `/work`, slash, embeds, schedule tick and `discord-post-message`
+  (stubbed fetch) all send `parse: []`; ask keeps owner-only (no live token).
 
 ## Image attachments + protocol lockstep (DISCORD-9 / 10)
 
@@ -338,3 +342,29 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `normalizeAskOptions` stores the id redacted; an older row's secret-looking
   option id is redacted on the next open with askId, expiresAt and
   stubMessageId byte-identical.
+- `tests/discord.send-file.test.ts` (REQ-discord-476, DISCORD-17): stubbed
+  fetch (records the multipart `payload_json` and `files[0]`) and an injected
+  requester checker, no live Discord. `discord-send-file` is dangerous,
+  mutating, minTier 1, and its description says it can attach and never to
+  say it can't; SAFE-1 denies it unlisted and ROLES-CHAT-3 refuses a
+  non-owner run before any check; a PNG goes to the run's channel as
+  `image/png` with its bytes unchanged, `allowed_mentions.parse = []` and the
+  acting user checked with `{ attachFiles: true }`; a log is uploaded with a
+  vendor key and the bot token's value redacted; the caption is defanged and
+  scrubbed; `--channel` / `-c` / `--channel=` and a run with no conversation
+  channel or acting user are refused; a channel off the allowlist is refused
+  and a thread passes through its parent; `.env`, `.env.*`, `.git`, keystore,
+  `.specsync` (also inside a change folder), `specs/`, `.ssh`,
+  `fledge.toml`, a symlink to `.env`, a symlink into `.git`, a symlink out of
+  the project and `..` / absolute outside paths are refused; `.sh`, a
+  non-PNG `.png` and non-UTF-8 `.txt` are refused; a file over 8 MB is
+  refused before the check; a 413 / code 40005 answer is reported; a check
+  refusal (cannot attach) or a check that throws sends nothing; dry run
+  uploads nothing; `started` + `ok` audit rows are written; `--git-diff`
+  refuses an empty diff and attaches `changes.diff` with the tracked
+  change, without the `.env.local` change and with the secret scrubbed. The
+  spawn client writes the reply channel and parent env (empty when none,
+  never inherited); through `startBridge` a channel mention, a thread
+  mention (thread + parent), `/session start` and `/work` pass the
+  conversation's channel. Against the base without the change: 20 of 21
+  fail (the "no attach promise" guard passes).

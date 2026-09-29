@@ -21,6 +21,9 @@ import { formatSpendWarningLine } from "../agent/spend-notice.ts";
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import { defangMassMentions } from "./allowed-mentions.ts";
+
+export { defangMassMentions };
 
 /** Discord hard limit is 2000; the gateway slices at 1900. */
 export const ASK_REPLY_MAX = 1900;
@@ -80,11 +83,6 @@ export function askPingKey(ask: HumanAsk): string {
   return createHash("sha256")
     .update(`${ask.reason}\n${body}`)
     .digest("hex");
-}
-
-/** Break `@everyone` / `@here` so they never render as mass mentions. */
-export function defangMassMentions(text: string): string {
-  return text.replace(/@(everyone|here)\b/gi, "@​$1");
 }
 
 function clean(text: string, max: number): string {

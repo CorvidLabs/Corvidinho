@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "docs-discord-md-criteria-line-cites-discord-1-17-and-autonomy-1-11-after-the-2026-09-28-hi-capture",
+  "implementation_commit": "742d2a155b3ec19c688f007c23297420378d120b",
+  "implementation_tree": "1ab7d4e0b1ffc727b503daa3ed03c3051041e67b",
+  "contract_digest": "a46cc549e92bfbe04bb3702324cde21b9343f045529b3e4ec168e2f303f47679",
+  "workspace_digest": "61a19c76338b7448ce0327646c184a62ffd772ab8a4beeccc8bda76a32746b36",
+  "closing_digest": "59f1540e82652c99bc2509438c77a6cca7b2aafc9088c7fd16803edf2fd52205",
+  "review_digest": "3fb8fb7ce2d632b4d7b4ec93fb837bc693ce95d745b88bdf37b5f9eae4b190f6",
+  "finalization_digest": "84659856ed8899b51994c29a9fc1b7952d241f5838dfa0770f86c684ec1f8927",
+  "timestamp": 1790692983
+}

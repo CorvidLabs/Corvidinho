@@ -166,6 +166,18 @@ silent, still with no session and no agent run. Slash refusals SHALL stay
 ephemeral on every call (DISCORD-DENY / Discord's 3 s ack). No new env var,
 slash command, table or column.
 
+An ask button press (DISCORD-ASK, open or pick) SHALL run the same mute and
+rate limit check against the same per-user state as chat and slash, after the
+channel gate (REQ-discord-212) and the actor gate (REQ-discord-201). The
+level that `rateLimitByLevel` keys on for a press SHALL be the presser's
+level from `resolvePermissionLevel` (user id, role ids, allowlist, configured
+owner; mute is checked first). A press needs an ack, so a muted presser SHALL
+get the ephemeral `MUTED` reply and a rate-limited one the ephemeral
+`RATE_LIMITED` reply. On either refusal the agent SHALL NOT run, nothing
+SHALL be sent or edited, and the pending ask SHALL stay as it was, so a muted
+user cannot keep a session going by buttons. No new env var, slash command,
+table or column.
+
 Acceptance Criteria
 - Default window 60s / max 10; env override for window/max + muted seed.
 - User A rate-limited or muted → refuse A; user B still served.
@@ -178,6 +190,8 @@ Acceptance Criteria
 - A muted user who sends 5 @mentions gets exactly one public reply and no session or agent run; a rate-limited user (max 1) who sends 5 gets one public "Slow down!"; a peer is still served.
 - After a notice, a muted user's reply-to-bot in the same window is refused silently; once the window has passed since that notice, the next refusal notifies once again.
 - A muted user's `/status` gets the ephemeral `MUTED` reply on every call and nothing is posted publicly.
+- A muted session owner's ask button press (open or pick) gets only the ephemeral `MUTED` reply, press after press: the agent does not run, nothing is sent or edited, and the ask stays pending; after `/unmute` the same button resumes the session.
+- With `DISCORD_RATE_LIMIT_MAX=1`, a member's pick after their @mention gets only the ephemeral `RATE_LIMITED` reply and the ask stays pending, while another user is still served; with `DISCORD_RATE_LIMIT_BY_LEVEL={"3":100}` the owner's pick after their @mention still resumes.
 
 ### REQ-discord-011
 
@@ -1185,11 +1199,21 @@ ephemeral zero-width ack for every command, before mute/rate and any handler,
 so nothing is spawned (DISCORD-DENY-3). Mute keeps its own reply (DISCORD-6).
 No new env var, slash command, table or column.
 
+An ask button press (DISCORD-ASK, open or pick) SHALL also gate the actor
+with `gateActor`, after the channel gate (REQ-discord-212) and before
+mute/rate, using the role ids the gateway reads from the interaction's member
+(`ComponentInteraction.roleIds`, as slash reads them). A refused press SHALL
+get only the ephemeral zero-width ack (DISCORD-DENY-3), even from the session
+owner; the agent SHALL NOT run, nothing SHALL be sent or edited, and the
+pending ask SHALL stay as it was.
+
 Acceptance Criteria
 - With `users = ["leif"]` and `deny_users = ["mallory"]`, mallory and an unlisted member get a silent refuse on @mention, reply-to-bot and thread continuation, and no session is created.
 - `/work`, `/session start` and `/status` by mallory or an unlisted member return `user_not_allowlisted` with only an ephemeral zero-width ack; no agent run, work task or session is created.
 - A listed user, a member with an allowed role, and the owner not on the user list still start sessions and run slash commands.
 - With empty user and role lists any member of an allowlisted channel may chat, but a deny-listed user or role is still refused.
+- A session owner who is then deny-listed, or who presses holding a deny-listed role, gets only the ephemeral zero-width ack on an ask button (open or pick), also when muted: the agent does not run, nothing is sent or edited, and the ask stays pending.
+- With a non-empty user allowlist that leaves out the session owner, their pick gets the zero-width ack; the same member holding an allowed role (role ids from the press) resumes, and so does the owner not on the list.
 
 ### REQ-discord-202
 
@@ -1871,4 +1895,86 @@ Acceptance Criteria
 - The chat path, `/session start` and `/work` keep their identity inject unchanged.
 - No new slash command, env var, config key, table or column; SQLite schema version unchanged.
 - Regression tests in `tests/discord.identity-pick.test.ts` fail on `main` and pass after.
+
+### REQ-discord-205
+
+Every Discord post the bridge or its agent makes SHALL parse no mentions
+from its content (DISCORD-8 confused deputy; ROLES-CHAT-3 / ROLES-CHAT-8:
+text steered by a non-owner's prompt or by public GitHub content SHALL NOT
+use the bot's own mention powers). The live gateway's discord.js `Client`
+SHALL default `allowedMentions` to `{ parse: [], repliedUser: true }`, and
+every outbound payload SHALL set `allowedMentions.parse = []` explicitly:
+gateway `reply` (chat mention / reply-continue / thread replies, refusal and
+worktree-failure replies, schedule tick and announce posts), `editMessage`
+(DISCORD-ASK collapse edits), thinking embed sends and edits, slash `reply` /
+`editReply` (including the `/session start` and `/work` deferred public
+replies), and ask-button component `reply` / `update`. So `@everyone`,
+`@here`, `<@&role>` and `<@user>` in the text SHALL never ping. A reply
+SHALL still ping the author it replies to. The only other pings SHALL be
+users the caller names in `mentionUserIds`: the requester on a clarify ask
+and the owner on a stuck ask or spend-cap stop (REQ-discord-044,
+AUTONOMY-2/4, SAFE-8); an empty or missing list pings nobody else. `@everyone` / `@here` SHALL
+also be defanged (zero-width space) in all outbound text before the
+1900-character cap. The agent's `discord-post-message` REST post SHALL send
+`allowed_mentions: { parse: [] }` and the defanged text. No new slash
+command, env var, config, table or column.
+
+Acceptance Criteria
+- A chat reply (mention and reply-continue) whose summary contains `@everyone`, `@here`, `<@&id>` and `<@id>` is sent with `allowedMentions.parse` empty, no `roles` / `users`, `repliedUser: true`, and no literal `@everyone` / `@here`.
+- The `/session start` and `/work` deferred public replies (`editReply`) and ephemeral slash replies carry `allowedMentions.parse` empty and defanged text.
+- The live client default, thinking embed sends and edits, `editMessage`, ask-button component replies/updates, and schedule tick posts carry `parse: []`.
+- An ask post allows exactly the users it names (`users: mentionUserIds`, e.g. `[owner]`); an empty list allows no user.
+- `discord-post-message` sends `allowed_mentions: { parse: [] }` and defanged text.
+- Fixture tests inject a fake discord.js into the real live gateway and stub fetch for the plugin; no live Discord or network.
+
+### REQ-discord-476
+
+The agent SHALL be able to attach a file or image (screenshots, logs, diffs,
+charts) to its reply in the conversation's channel (DISCORD-17) through the
+plugin `discord-send-file`, registered by `loadDiscordPlugins` as
+dangerous (SAFE-1 allowlist, SAFE-5 audit through `runPlugin`), mutating
+(ROLES-CHAT-3: non-owner, WATCH and schedule runs are refused before it runs)
+and minTier 1. It SHALL attach only in the channel the bridge set for the run:
+the spawn client SHALL always write `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` and
+`CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` from
+`AgentRunChatOpts.replyChannelId` / `replyParentChannelId` (empty when
+unset, never inherited); chat, reply-continue, thread and ask-button runs SHALL
+pass the conversation's channel (the thread, with its parent, in a thread) and
+`/session start` / `/work` the command's channel; schedules SHALL pass none.
+A `--channel` / `-c` argument SHALL be refused, and a run with no
+conversation channel or no acting user SHALL be refused, nothing sent. The
+channel allowlist SHALL gate first (a thread through its parent, DISCORD-5),
+then the DISCORD-8 requester check SHALL run for the acting user with View
+Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
+`attachFiles`); a check that cannot run SHALL refuse. The file SHALL be at
+most 8 MB (Discord's default upload limit) and SHALL be a PNG, JPEG, GIF or
+WebP image whose magic bytes match its extension, or UTF-8 text with a
+`.txt`, `.log`, `.md`, `.diff`, `.patch`, `.json` or `.csv`
+extension; text (and the optional caption) SHALL be secret-scrubbed (SAFE-6:
+vendor-key shapes and set secret env values, `redactSecretEnvValues`) before
+upload, and the caption SHALL parse no mentions (REQ-discord-205). SAFE-2
+protected paths (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`,
+`specs`, `*.spec.md`, keystores), any `.specsync` path and secret paths
+(`.ssh`, keys, credentials) SHALL be refused, judged on the path as given and
+on where it resolves inside the project root with symlinks followed; a path
+that leaves the project SHALL be refused. `--git-diff [--staged]` SHALL
+attach the worktree (or index) diff as `changes.diff` (`staged.diff`) with
+secret paths excluded (a secret path that slips through refuses) and the text
+scrubbed, so a large diff goes as a `.diff` attachment. A Discord 413 / code
+40005 answer SHALL be reported as over the server's upload limit, not retried.
+`CORVIDINHO_DISCORD_DRY_RUN=1` SHALL post nothing. No slash command, config
+key, table or column is added; the two env vars are bridge-to-run plumbing.
+
+Acceptance Criteria
+- `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
+- SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
+- A PNG is uploaded to the run's channel as `image/png`, bytes unchanged, `allowed_mentions.parse = []`, after a requester check for the acting user with `attachFiles`.
+- A text log is uploaded with vendor keys and the bot token value redacted; the caption is defanged and scrubbed.
+- `--channel` / `-c` / `--channel=` and a run with no conversation channel or acting user are refused, nothing uploaded.
+- A channel off the allowlist is refused; a thread passes through its allowlisted parent.
+- `.env*`, `.git`, keystore, `.specsync`, `specs/`, `.ssh`, `fledge.toml`, symlinks to protected files, symlinks out of the project and outside paths are refused.
+- Disallowed types, image bytes that do not match the name and non-UTF-8 text are refused; over 8 MB is refused before any upload; a 413 / 40005 is reported.
+- A requester who cannot attach, or a check that throws, sends nothing; dry run uploads nothing; `started` and `ok` audit rows are written.
+- `--git-diff` refuses an empty diff and attaches `changes.diff` without secret paths and scrubbed.
+- The spawn client writes the reply channel env (empty when none); the bridge passes the conversation's channel on chat, thread, `/session start` and `/work` runs.
 
