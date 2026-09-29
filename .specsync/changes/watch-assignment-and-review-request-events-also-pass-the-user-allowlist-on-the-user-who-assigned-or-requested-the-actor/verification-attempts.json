@@ -396,6 +396,24 @@
       "requirement_ids": [
         "REQ-watch-302"
       ]
+    },
+    {
+      "timestamp": 1790710971,
+      "commit": "ca4064faefd19aceff6677a76cedbd25e20faa3f",
+      "contract_digest": "85a76aa8c21797515d37d072d4174f0cb7589fc848da4f12af28053d7ded3692",
+      "execution_digest": "7da016997ba11c8e8f68e7e067d07051372c18c9c5fb777ad13103db32d26e94",
+      "workspace_digest": "50f07f9abae993a909d9fd013c7c18d6923901e762536e5699529216f4c8eaee",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-watch-302"
+      ]
     }
   ]
 }
