@@ -1,6 +1,6 @@
 ---
 id: verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 5366fff96501327ad3bcc30f55105f2c16884b0b
 ---
