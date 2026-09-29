@@ -275,7 +275,6 @@ Acceptance Criteria
 - A 403 rate limit with `retry-after: 120` still backs off about 120 s and does not settle `fatal`.
 - `corvidinho github watch` with a token GitHub rejects exits 1 by itself with that line and no `HttpError` dump.
 
-<<<<<<< HEAD
 ### REQ-watch-734
 
 The WATCH run-summary comment (REQ-watch-009) SHALL keep a summary's closing
@@ -338,7 +337,6 @@ Acceptance Criteria
 - The fixture search client carries `user_id` to `senderId` on comment events.
 - `startWatchPoller` with an allowlist file recognises a declared commenter, and a person added to the file after start is recognised on the next event.
 - Regression tests in `tests/identity.recognise.test.ts` fail on the base sources and pass after.
-=======
 ### REQ-watch-472
 
 WATCH follow-ups SHALL pick up the issue or PR thread's summary (AGENT-6.a,
@@ -380,5 +378,4 @@ Acceptance Criteria
 - With a 1024-token window a long thread's prompt stays under the budget with the summary, the opening request and the latest request word for word.
 - An opening event prompt of over 7000 chars replays whole (word for word) in the follow-up's block.
 - The stored turns hold `[redacted:github-token]`, never the token; participants are the lowercased senders; forgetting a login that only commented deletes the thread.
->>>>>>> 812c4c68 (chore(lifecycle): materialize condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the)
 
