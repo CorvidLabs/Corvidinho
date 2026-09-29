@@ -13,7 +13,7 @@ import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { ASK_NO_OWNER_WARNING, clipPostSummary, formatAskReply } from "../ask-ping.ts";
-import { buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
+import { answerAskFor, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
@@ -217,6 +217,10 @@ export async function handleSessionStart(
   const choice = result.ask
     ? buttonAskFor({ ask: result.ask, requesterDiscordId: interaction.userId })
     : null;
+  // DISCORD-ASK-4.a: otherwise a clarify or stuck ask keeps its question in
+  // the answer and gets the Answer button (a private form), as in chat; a
+  // reply still answers it. Never on a spend-cap stop.
+  const answerAsk = result.ask && !choice ? answerAskFor({ ask: result.ask }) : null;
   // The reply addresses the requester on clarify (AUTONOMY-4); the owner is
   // pinged in a separate post (below) for stuck and spend-cap.
   const ask = choice
@@ -227,6 +231,7 @@ export async function handleSessionStart(
         owner: null,
         requesterDiscordId: interaction.userId,
         context: result.summary,
+        answerButton: Boolean(answerAsk),
       })
     : null;
   // The status (ask, not "✅ Done") is set when the answer goes out below.
@@ -241,6 +246,7 @@ export async function handleSessionStart(
     ctx.store.setPendingAsk(
       session,
       choice?.pending ??
+        answerAsk?.pending ??
         toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
     );
   }
@@ -298,6 +304,13 @@ export async function handleSessionStart(
           components: choice.components,
           onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
             recordSlashStub(ctx.store, session, choice.pending, messageId),
+        }
+      : answerAsk
+      ? {
+          components: answerAsk.components,
+          keepFooter: true,
+          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+            recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
         }
       : {}),
     notice,

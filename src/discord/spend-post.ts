@@ -287,6 +287,7 @@ export async function finishSlashWithOwnerNotice(
             (await opts.thinking.finalizeContent({
               content: withNotice,
               ...(opts.components ? { components: opts.components } : {}),
+              ...(opts.keepFooter ? { keepFooter: true } : {}),
               mentionUserIds: mentions,
             })) !== null;
         } catch {

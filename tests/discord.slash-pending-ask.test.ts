@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
-import { ASK_REPLY_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
+import { ASK_ANSWER_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
@@ -175,7 +175,8 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(bridge.replies).toHaveLength(1);
     expect(bridge.replies[0]!.content).toContain("> Postgres or SQLite?");
     expect(bridge.replies[0]!.content).toContain(`<@${REQUESTER}>`);
-    expect(bridge.replies[0]!.content).toContain(ASK_REPLY_HINT);
+    // DISCORD-ASK-4.a: the restatement carries the live Answer button's hint.
+    expect(bridge.replies[0]!.content).toContain(ASK_ANSWER_HINT);
     expect(bridge.replies[0]!.content).not.toContain("ANSWERED");
     // AUTONOMY-4: a clarify restatement pings the requester only.
     expect(bridge.replies[0]!.mentionUserIds).toEqual([REQUESTER]);
