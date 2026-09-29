@@ -118,8 +118,9 @@ that issue starts a fresh session; expired rows are dropped on load. At most
 one session exists per issue key. The stored topic SHALL be SAFE-6 scrubbed.
 `startWatchPoller` SHALL open the shared DB (in-memory for dry-run without
 `CORVIDINHO_DATA_DIR`), accept an injected db or SessionStore, and close a DB
-it opened on stop. Without a database the SessionStore stays in-memory. Turn
-persistence/replay and stored summaries are out of scope.
+it opened on stop. Without a database the SessionStore stays in-memory.
+The issue or PR thread's condensed conversation is kept apart from the
+session and outlives its TTL (REQ-watch-472).
 
 Acceptance Criteria
 - A session created with a file DB is found by issue after reopening the DB.
@@ -127,6 +128,7 @@ Acceptance Criteria
 - Expired rows are dropped when the store loads.
 - A poller restarted on the same DB continues the same issue session.
 - Stored topic has vendor-key-looking secrets redacted.
+- A follow-up after the session's TTL starts a new session and still gets the thread's retained conversation replayed (REQ-watch-472).
 
 ### REQ-watch-073
 
@@ -421,4 +423,50 @@ Acceptance Criteria
 - Through `startWatchPoller` a declared commenter's prompt holds their profile rows relevant to the comment and the repo's project rows, never another person's; an undeclared commenter's holds only the project rows; `runChat` receives `actingGithubLogin`, `actingGithubId` and `repo`.
 - `enrichWatchPromptWithMemories` leaves the prompt unchanged with no store, or for an undeclared commenter when the repo has no project rows.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.
+
+### REQ-watch-472
+
+WATCH follow-ups SHALL pick up the issue or PR thread's summary (AGENT-6.a,
+with SESSION-5; issue #72). With a database, `startWatchPoller` SHALL keep
+one retained conversation per issue or PR in the shared
+`conversation_threads` table (schema v13, REQ-discord-472): surface
+`watch`, thread key `issue:<owner/repo lowercased>#<number>`, the thread's
+first sender (lowercased GitHub login) as its person, and every sender whose
+event ran as a participant (`github:<login>`).
+
+After each run on an issue or PR (whether it succeeded, failed or threw),
+the event's prompt (as a human turn) and the run's summary (as an agent
+turn) SHALL be added to that thread's conversation, scrubbed (SAFE-6), its
+turns bounded to the last 20 with the opening human turn kept and the rest
+folded into the summary. A DB failure SHALL be logged and SHALL NOT stop
+the run, the ack or the run-summary comment.
+
+Before a run on an issue or PR that has a retained conversation — a
+continued session or a new one after the session's soft TTL — the poller
+SHALL put the conversation (its summary and kept turns, oldest first) in
+one block opened by `WATCH_THREAD_HEADER`
+(`[Corvidinho earlier conversation on this GitHub issue or PR — …]`) and
+closed by `[End of earlier conversation]`, ahead of the new event's prompt,
+with no blank line inside, so Planning module selection leaves it out
+(REQ-agent-004). At about 80% of the model's window
+(`CORVIDINHO_LLM_CONTEXT_TOKENS`, same budget as REQ-discord-472) the
+oldest turns SHALL be folded into the summary, the thread's opening request
+and its newest request kept word for word (a human turn is kept up to the
+8000-char WATCH event prompt, so a whole event prompt is never clipped; its
+own fence header is marked `(quoted)` like any block-like line, its fence
+markers and fenced words unchanged, SAFE-12). The commenter's and project
+memory blocks (REQ-watch-067) go ahead of this block. Another issue or PR never gets
+it. A record SHALL be purged 30 days after its last update (every read and
+write purges first, and every poll cycle purges), and forgetting a person
+(`forgetConversations(db, { githubLogins })`, case-insensitive; an approved
+forget-me of a declared person uses their linked GitHub logins,
+REQ-discord-472) SHALL delete every thread they started or commented on. No GitHub-visible surface, env
+var beyond the window, config key or CLI flag is added.
+
+Acceptance Criteria
+- A follow-up on the same issue gets the earlier event and answer replayed, oldest first, ahead of the new event; the first event and another issue get no block; `planningSelectionText` leaves the block out.
+- Two hours later (past the session's TTL) the follow-up still gets it; 30 days after the last update it is purged and the next event gets no block.
+- With a 1024-token window a long thread's prompt stays under the budget with the summary, the opening request and the latest request word for word.
+- An opening event prompt of over 7000 chars replays whole (word for word, its fence header marked `(quoted)`) in the follow-up's block.
+- The stored turns hold `[redacted:github-token]`, never the token; participants are the lowercased senders; forgetting a login that only commented deletes the thread.
 

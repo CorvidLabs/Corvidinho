@@ -2,13 +2,28 @@
  * Discord session stub maps (DISCORD-1 / 2 / 2.a) with optional SQLite
  * durability + soft TTL (SESSION-1..4 / REQ-discord-019), per-talk
  * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022) and the
- * session's thread of turns (AGENT-6 / REQ-discord-072).
+ * session's thread of turns (AGENT-6 / REQ-discord-072), condensed at about
+ * 80% of the model's window and kept 30 days per thread after the session
+ * ends, so a later reply starts a new session from it (SESSION-5/6,
+ * SESSION-3.a, AGENT-6.a / REQ-discord-472).
  * No ProcessManager.
  */
 
 import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import type { AllowlistConfig } from "../allowlist/types.ts";
+import {
+  appendSummary,
+  condenseBudgetChars,
+  condenseConversation,
+  type ConversationRecord,
+  ConversationStore,
+  discordParticipant,
+  discordThreadKey,
+  resolveContextWindowTokens,
+  summaryCapChars,
+  summaryPoint,
+} from "../store/conversation.ts";
 import { formatErrorLine, scrubOpt, scrubSecrets } from "../store/scrub.ts";
 import {
   isSessionExpired,
@@ -25,12 +40,14 @@ import { askFromUnknown } from "../agent/ask.ts";
 import type { HumanAsk } from "../agent/types.ts";
 import { isAskExpired, type PendingAsk } from "./ask-buttons.ts";
 import {
-  clipTurnText,
   ensureSessionTurns,
+  formatSessionThread,
   SESSION_THREAD_MAX_TURNS,
   type SessionTurn,
   type SessionTurnRole,
+  withSessionThread,
 } from "./session-thread.ts";
+import { clipTurnForRole } from "../store/conversation.ts";
 import type { SessionStub } from "./types.ts";
 
 /**
@@ -190,6 +207,12 @@ export type SessionStoreOptions = {
    * create for repo work. Tests may disable.
    */
   ensureWorktree?: boolean;
+  /**
+   * The model's context window in tokens (SESSION-5): a session's replayed
+   * conversation is condensed when the prompt reaches about 80% of it.
+   * Default `resolveContextWindowTokens()` (`CORVIDINHO_LLM_CONTEXT_TOKENS`).
+   */
+  contextWindowTokens?: number;
 };
 
 export class SessionStore {
@@ -216,6 +239,14 @@ export class SessionStore {
   private readonly turns = new Map<string, SessionTurn[]>();
   /** askId → an ask no longer open, for a late press (DISCORD-ASK-5). */
   private readonly closedAsks = new Map<string, ClosedAsk>();
+  /** session id → condensed summary of its folded turns (SESSION-5/6). */
+  private readonly summaries = new Map<string, string>();
+  /** session id → id of the retained conversation it carries (AGENT-6.a). */
+  private readonly conversationIds = new Map<string, string>();
+  /** Retained conversations (SESSION-6 / AGENT-6.a); only with a DB. */
+  private readonly conversations: ConversationStore | undefined;
+  /** Model context window in tokens (SESSION-5). */
+  readonly contextWindowTokens: number;
 
   constructor(opts: SessionStoreOptions = {}) {
     this.db = opts.db;
@@ -224,6 +255,10 @@ export class SessionStore {
     this.defaultProjectRoot = opts.defaultProjectRoot;
     this.allowlist = opts.allowlist;
     this.ensureWorktreeOnCreate = opts.ensureWorktree === true;
+    this.contextWindowTokens = opts.contextWindowTokens ?? resolveContextWindowTokens();
+    this.conversations = this.db
+      ? new ConversationStore({ db: this.db, now: () => this.nowMs() })
+      : undefined;
     if (this.db) {
       ensureSessionTurns(this.db);
       this.loadFromDb();
@@ -247,6 +282,8 @@ export class SessionStore {
     // A run in flight is live work in the worktree, never an idle talk.
     if (this.activeRuns.has(session.id)) return false;
     if (!this.expired(session)) return false;
+    // AGENT-6.a / SESSION-3.a: keep its conversation before the live rows go.
+    this.retainConversation(session);
     // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
     void this.parkSessionWorktree(session);
     // DISCORD-ASK-5: a later press on this talk's buttons is a late press.
@@ -259,6 +296,8 @@ export class SessionStore {
   private removeLocal(session: SessionStub): void {
     this.bySessionId.delete(session.id);
     this.turns.delete(session.id);
+    this.summaries.delete(session.id);
+    this.conversationIds.delete(session.id);
     if (session.threadId) {
       const key = threadUserKey(session.threadId, session.userId);
       if (this.byThreadUser.get(key)?.id === session.id) this.byThreadUser.delete(key);
@@ -271,6 +310,8 @@ export class SessionStore {
   private loadFromDb(): void {
     if (!this.db) return;
     const now = this.nowMs();
+    // AGENT-6.a: nothing idle past the retention window survives an open.
+    this.purgeExpiredConversations();
     const sessions = this.db
       .query(
         `SELECT id, channel_id, thread_id, user_id, topic, project,
@@ -316,6 +357,9 @@ export class SessionStore {
           createdAt: row.created_at,
           lastActivityAt: row.last_activity_at,
         };
+        // AGENT-6.a / SESSION-3.a: a session that idled out while the
+        // bridge was down keeps its conversation too.
+        this.retainConversationFromDb(doomed);
         void this.parkSessionWorktree(doomed);
         this.closeAsks(doomed, openAsksOf(doomed));
         this.deleteFromDb(row.id);
@@ -384,6 +428,132 @@ export class SessionStore {
       list.push({ role, content: row.content, createdAt: row.created_at });
       this.turns.set(row.session_id, list);
     }
+
+    // SESSION-6: a live session's condensed summary survives the restart.
+    if (this.conversations) {
+      for (const session of this.bySessionId.values()) {
+        const record = this.bestEffort("summary read", () =>
+          this.conversations!.forSession(session.id),
+        );
+        if (!record) continue;
+        this.conversationIds.set(session.id, record.id);
+        if (record.summary) this.summaries.set(session.id, record.summary);
+      }
+    }
+  }
+
+  /** Run a conversation-store step; a DB failure is logged, never thrown. */
+  private bestEffort<T>(what: string, fn: () => T): T | undefined {
+    try {
+      return fn();
+    } catch (err) {
+      console.warn(`[discord] conversation ${what} failed: ${formatErrorLine(err)}`);
+      return undefined;
+    }
+  }
+
+  /** The retained record a live session carries, if any. */
+  private carriedConversation(session: SessionStub): ConversationRecord | undefined {
+    if (!this.conversations) return undefined;
+    const id = this.conversationIds.get(session.id);
+    return id ? this.conversations.get(id) : this.conversations.forSession(session.id);
+  }
+
+  /**
+   * Write a session's conversation (summary, turns, answer ids, project) to
+   * its retained record, keeping the answer ids an earlier session of the same
+   * conversation left there (SESSION-3.a). `lastActiveAt` (default now) is
+   * when the conversation was last active. Best effort.
+   */
+  private saveConversation(
+    session: SessionStub,
+    parts: {
+      summary: string;
+      turns: readonly SessionTurn[];
+      botMessageIds?: readonly string[];
+      lastActiveAt?: number;
+    },
+  ): void {
+    const store = this.conversations;
+    if (!store) return;
+    this.bestEffort("write", () => {
+      const prior = this.carriedConversation(session);
+      const record = store.save({
+        id: prior?.id,
+        surface: "discord",
+        threadKey: discordThreadKey(session),
+        userId: session.userId,
+        sessionId: session.id,
+        // SESSION-WORKTREE-4: a session resumed from it works in this project.
+        ...(session.project ?? prior?.project
+          ? { project: session.project ?? prior?.project }
+          : {}),
+        summary: parts.summary,
+        turns: parts.turns,
+        participants: [discordParticipant(session.userId)],
+        botMessageIds: [...(prior?.botMessageIds ?? []), ...(parts.botMessageIds ?? [])],
+        ...(parts.lastActiveAt !== undefined ? { lastActiveAt: parts.lastActiveAt } : {}),
+      });
+      if (this.bySessionId.get(session.id) === session) {
+        this.conversationIds.set(session.id, record.id);
+      }
+    });
+  }
+
+  /**
+   * AGENT-6.a / SESSION-3.a — a session that ends or idles out keeps its
+   * conversation (summary, last turns, answer ids, project) for the retention
+   * window, counted from its last activity. A session with nothing said is not
+   * kept.
+   */
+  private retainConversation(session: SessionStub): void {
+    const turns = this.turns.get(session.id) ?? [];
+    const summary = this.summaries.get(session.id) ?? "";
+    if (turns.length === 0 && !summary) return;
+    const botMessageIds = [...this.byBotMessageId.entries()]
+      .filter(([, s]) => s.id === session.id)
+      .map(([id]) => id);
+    this.saveConversation(session, {
+      summary,
+      turns,
+      botMessageIds,
+      lastActiveAt: session.lastActivityAt,
+    });
+  }
+
+  /** {@link retainConversation} for a session only in the DB (expired at load). */
+  private retainConversationFromDb(session: SessionStub): void {
+    const db = this.db;
+    if (!db || !this.conversations) return;
+    this.bestEffort("retain", () => {
+      const turns = (
+        db
+          .query(
+            `SELECT role, content, created_at FROM discord_session_turns
+             WHERE session_id = ? ORDER BY id`,
+          )
+          .all(session.id) as Array<{ role: string; content: string; created_at: number }>
+      )
+        .filter((r) => r.role === "human" || r.role === "agent")
+        .map((r) => ({
+          role: r.role as SessionTurnRole,
+          content: r.content,
+          createdAt: r.created_at,
+        }));
+      const botMessageIds = (
+        db
+          .query(`SELECT bot_message_id FROM discord_session_bot_messages WHERE session_id = ?`)
+          .all(session.id) as Array<{ bot_message_id: string }>
+      ).map((r) => r.bot_message_id);
+      const summary = this.conversations!.forSession(session.id)?.summary ?? "";
+      if (turns.length === 0 && !summary) return;
+      this.saveConversation(session, {
+        summary,
+        turns,
+        botMessageIds,
+        lastActiveAt: session.lastActivityAt,
+      });
+    });
   }
 
   private persistSession(session: SessionStub): void {
@@ -493,6 +663,8 @@ export class SessionStore {
    * End/abandon a talk: park worktree, drop from maps + DB (SESSION-WORKTREE-3).
    */
   async endSession(session: SessionStub): Promise<void> {
+    // AGENT-6.a: an ended talk keeps its conversation like an idle one.
+    if (this.bySessionId.get(session.id) === session) this.retainConversation(session);
     await this.parkSessionWorktree(session);
     this.removeLocal(session);
     this.deleteFromDb(session.id);
@@ -811,17 +983,28 @@ export class SessionStore {
   recordTurn(session: SessionStub, role: SessionTurnRole, text: string): void {
     if (this.bySessionId.get(session.id) !== session) return;
     // Scrub before clipping, so a cut never leaves half a secret behind.
-    const content = clipTurnText(scrubSecrets(text));
+    const content = clipTurnForRole(role, scrubSecrets(text));
     if (!content) return;
     const turn: SessionTurn = { role, content, createdAt: this.nowMs() };
     const list = this.turns.get(session.id) ?? [];
     list.push(turn);
-    let dropped = 0;
+    const gone: SessionTurn[] = [];
     while (list.length > SESSION_THREAD_MAX_TURNS) {
-      list.splice(1, 1);
-      dropped += 1;
+      gone.push(...list.splice(1, 1));
     }
+    const dropped = gone.length;
     this.turns.set(session.id, list);
+    if (dropped > 0) {
+      // SESSION-5: a turn past the cap is folded into the summary, not lost.
+      this.setSummary(
+        session,
+        appendSummary(
+          this.summaries.get(session.id) ?? "",
+          gone.map(summaryPoint),
+          summaryCapChars(condenseBudgetChars(this.contextWindowTokens)),
+        ),
+      );
+    }
     if (!this.db) return;
     const db = this.db;
     try {
@@ -856,11 +1039,178 @@ export class SessionStore {
     return [...(this.turns.get(session.id) ?? [])];
   }
 
+  /** The session's condensed summary ("" when nothing was folded; SESSION-5/6). */
+  summaryFor(session: SessionStub): string {
+    return this.summaries.get(session.id) ?? "";
+  }
+
+  /** Store a live session's summary with it (SESSION-6), scrubbed (SAFE-6). */
+  private setSummary(session: SessionStub, summary: string): void {
+    if (this.bySessionId.get(session.id) !== session) return;
+    const clean = scrubSecrets(summary);
+    this.summaries.set(session.id, clean);
+    // The record holds the summary while the session is live; its turns are
+    // written when the session ends (the live ones are in discord_session_turns).
+    this.saveConversation(session, { summary: clean, turns: [] });
+  }
+
+  /** Replace a session's stored turn rows with `turns` (after a fold). Best effort. */
+  private rewriteTurns(sessionId: string, turns: readonly SessionTurn[]): void {
+    const db = this.db;
+    if (!db) return;
+    try {
+      db.transaction(() => {
+        db.run(`DELETE FROM discord_session_turns WHERE session_id = ?`, [sessionId]);
+        for (const t of turns) {
+          db.run(
+            `INSERT INTO discord_session_turns (session_id, role, content, created_at)
+             VALUES (?, ?, ?, ?)`,
+            [sessionId, t.role, t.content, t.createdAt],
+          );
+        }
+      })();
+    } catch (err) {
+      console.warn(
+        `[discord] session thread rewrite for ${sessionId} failed: ${formatErrorLine(err)}`,
+      );
+    }
+  }
+
+  /**
+   * SESSION-5/6 — `prompt` (the new message, pending-ask block included) with
+   * the session's condensed summary and earlier turns ahead of it. When that
+   * prompt reaches about 80% of the model's window (`windowTokens`, default
+   * the store's), the oldest turns are folded into the summary until it
+   * fits; the opening request and the newest human turn are never folded, and
+   * `prompt` is never touched. A fold is stored with the session (summary in
+   * its retained record, turn rows rewritten), so a restart or another model
+   * picks up from the summary instead of the whole history.
+   */
+  threadPrompt(session: SessionStub, prompt: string, opts: { windowTokens?: number } = {}): string {
+    const budgetChars = condenseBudgetChars(opts.windowTokens ?? this.contextWindowTokens);
+    const out = condenseConversation({
+      conversation: { summary: this.summaryFor(session), turns: this.threadFor(session) },
+      incoming: prompt,
+      budgetChars,
+      render: (c) =>
+        formatSessionThread(c.turns, { summary: c.summary, budgetChars: Number.POSITIVE_INFINITY }),
+    });
+    if (out.folded.length > 0 && this.bySessionId.get(session.id) === session) {
+      this.turns.set(session.id, out.turns);
+      // Summary first: a crash between the two writes leaves a turn both in
+      // the summary and in the rows (folded again next time), never in neither.
+      this.setSummary(session, out.summary);
+      this.rewriteTurns(session.id, out.turns);
+    }
+    return withSessionThread(prompt, out.turns, { summary: out.summary });
+  }
+
+  /**
+   * SESSION-3.a — the retained conversation one of whose answers is
+   * `botMessageId`, after its session ended or idled out.
+   */
+  retainedForReply(botMessageId: string): ConversationRecord | undefined {
+    return this.conversations
+      ? this.bestEffort("read", () => this.conversations!.byBotMessage(botMessageId))
+      : undefined;
+  }
+
+  /** SESSION-3.a — this user's retained conversation in a Discord thread. */
+  retainedForThread(threadId: string, userId: string): ConversationRecord | undefined {
+    return this.conversations
+      ? this.bestEffort("read", () =>
+          this.conversations!.latestForThread("discord", discordThreadKey({ channelId: "", threadId }), userId),
+        )
+      : undefined;
+  }
+
+  /**
+   * SESSION-3.a — start a new session for `where` that begins from a
+   * retained conversation: its summary and kept turns seed the new session,
+   * which then carries the record (the next end or idle-out updates it).
+   * The record is read again first, so turns a carrying session kept there
+   * after `record` was read (it idled out on the way here) are not lost;
+   * undefined when it is gone (purged or forgotten). The new session works in
+   * the conversation's project (SESSION-WORKTREE-4): when that project no
+   * longer resolves, binding its worktree fails honestly instead of silently
+   * switching to the default project.
+   */
+  resumeFromRetained(
+    record: ConversationRecord,
+    where: { channelId: string; userId: string; threadId?: string },
+  ): SessionStub | undefined {
+    let current = record;
+    if (this.conversations) {
+      let reread: ConversationRecord | undefined;
+      try {
+        reread = this.conversations.get(record.id);
+      } catch (err) {
+        console.warn(`[discord] conversation read failed: ${formatErrorLine(err)}`);
+        reread = record;
+      }
+      if (!reread) return undefined;
+      current = reread;
+    }
+    const session = this.create({
+      channelId: where.channelId,
+      userId: where.userId,
+      threadId: where.threadId,
+      ...(current.project ? { project: current.project } : {}),
+    });
+    if (current.project && session.project !== current.project) {
+      session.project = current.project;
+      this.persistSession(session);
+    }
+    const turns = current.turns.map((t) => ({ ...t }));
+    this.turns.set(session.id, turns);
+    this.rewriteTurns(session.id, turns);
+    if (current.summary) this.summaries.set(session.id, current.summary);
+    this.conversationIds.set(session.id, current.id);
+    // Active again: its 30 days count from now.
+    this.bestEffort("resume", () =>
+      this.conversations?.save({
+        ...current,
+        sessionId: session.id,
+      }),
+    );
+    return session;
+  }
+
+  /**
+   * AGENT-6.a / MEMORY-ACL-6 — forget a Discord user's conversations: their
+   * live sessions' turns and summaries (the sessions stay open, empty) and
+   * every retained record that is theirs. The per-person delete the forget-me
+   * flow calls once it is approved. Returns retained records deleted.
+   */
+  forgetConversations(userId: string): number {
+    // Sessions already past the TTL are retained first, so they go too.
+    this.list();
+    for (const session of [...this.bySessionId.values()]) {
+      if (session.userId !== userId) continue;
+      this.turns.delete(session.id);
+      this.summaries.delete(session.id);
+      this.conversationIds.delete(session.id);
+      this.rewriteTurns(session.id, []);
+    }
+    if (!this.conversations) return 0;
+    return this.conversations.deleteForPerson({ discordUserIds: [userId] });
+  }
+
+  /** Purge retained conversations idle past 30 days (AGENT-6.a). */
+  purgeExpiredConversations(): number {
+    return this.conversations
+      ? (this.bestEffort("purge", () => this.conversations!.purgeExpired()) ?? 0)
+      : 0;
+  }
+
   /**
    * MEMORY-ACL-6: drop the recorded turns of every session of these Discord
    * users — the in-memory thread the next run replays (REQ-discord-072) as
    * well as the stored rows — once the owner approved forgetting them. The
-   * sessions themselves stay. Returns how many sessions had a thread cleared.
+   * sessions themselves stay. Their condensed summaries (in memory) and kept
+   * conversations (`conversation_threads`) go too, so nothing of theirs is
+   * replayed or kept again (AGENT-6.a / REQ-discord-472). Returns how many
+   * sessions had a thread cleared.
    */
   forgetTurnsOfUsers(userIds: readonly string[]): number {
     const ids = new Set(userIds.map((s) => s.trim()).filter(Boolean));
@@ -869,6 +1219,8 @@ export class SessionStore {
     for (const session of this.bySessionId.values()) {
       if (!ids.has(session.userId)) continue;
       if (this.turns.delete(session.id)) cleared += 1;
+      this.summaries.delete(session.id);
+      this.conversationIds.delete(session.id);
       if (!this.db) continue;
       try {
         this.db.run(`DELETE FROM discord_session_turns WHERE session_id = ?`, [session.id]);
@@ -877,6 +1229,11 @@ export class SessionStore {
           `[discord] forget: session thread delete for ${session.id} failed: ${formatErrorLine(err)}`,
         );
       }
+    }
+    if (this.conversations) {
+      this.bestEffort("forget", () =>
+        this.conversations!.deleteForPerson({ discordUserIds: [...ids] }),
+      );
     }
     return cleared;
   }

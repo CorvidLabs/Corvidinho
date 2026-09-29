@@ -2,7 +2,9 @@
  * WATCH session stubs keyed by owner/repo#number, with optional SQLite
  * durability (`watch_sessions`) and the same soft TTL as Discord sessions
  * (SESSION-1..3 / REQ-watch-037). Without a db the store is in-memory only
- * (tests). No ProcessManager; no turn replay or summaries.
+ * (tests). No ProcessManager. The thread's condensed conversation, replayed
+ * into follow-ups, is kept apart per issue/PR (`conversation_threads`,
+ * REQ-watch-472; the poller writes it), so it outlives the session's TTL.
  */
 
 import type { Database } from "bun:sqlite";

@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the",
+  "slug": "condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the",
+  "title": "Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72)",
+  "description": "Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "d589638c38f27503373601bb256ee6207fb822f9",
+  "created_at": 1790696736,
+  "updated_at": 1790721042,
+  "affected_specs": [
+    "discord",
+    "watch"
+  ],
+  "affected_paths": [
+    "src/store/conversation.ts",
+    "src/store/db.ts",
+    "src/store/index.ts",
+    "src/store/scrub.ts",
+    "src/discord/session-store.ts",
+    "src/discord/session-thread.ts",
+    "src/discord/message-router.ts",
+    "src/discord/bridge.ts",
+    "src/watch/poller.ts",
+    "src/watch/session-store.ts",
+    "src/memory/forget.ts",
+    "src/discord/forget-card.ts",
+    "tests/session.condense.test.ts",
+    "tests/store.conversation.test.ts",
+    "tests/discord.session-resume.test.ts",
+    "tests/watch.conversation.test.ts",
+    "tests/discord.session-thread.unit.test.ts",
+    "tests/scheduler.ask-outbox.test.ts",
+    "tests/watch.session-store.durable.test.ts",
+    "tests/discord.forget-card.test.ts",
+    "docs/discord.md",
+    "docs/WATCH.md",
+    "docs/BOX-UPDATE.md",
+    "docs/DISCORD-GO-LIVE.md",
+    ".env.example",
+    "STATUS.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/testing.md",
+    "specs/watch/watch.spec.md",
+    "specs/watch/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "When a Discord session's prompt (replayed conversation plus the new message) reaches about 80% of the model's context window (CORVIDINHO_LLM_CONTEXT_TOKENS, default 8192 tokens, chars/4, never past the 32000-char transport ceiling) the oldest turns fold into a scrubbed summary stored with the session while the opening request and the newest human turn stay word for word; after a restart or with a smaller window the prompt picks up from that summary; after the soft TTL the user's reply to one of the session's answers, or their message in its thread, passes the channel, actor and mute gates and starts a new session seeded with the old session's summary and last turns instead of no answer; each Discord conversation and each WATCH issue or PR thread keeps its summary and last 20 turns scrubbed for 30 days after its last update in schema v13 conversation_threads and is then purged; WATCH follow-ups on the same issue or PR get that thread's conversation replayed; SessionStore.forgetConversations and forgetConversations(db, person) delete a person's conversations; tests/session.condense.test.ts, tests/store.conversation.test.ts, tests/discord.session-resume.test.ts and tests/watch.conversation.test.ts cover each and fail on the base sources"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

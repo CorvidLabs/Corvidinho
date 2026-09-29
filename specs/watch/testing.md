@@ -11,6 +11,7 @@ module: watch
 - `tests/watch.cli.test.ts` — missing token clean exit; help lists watch
 - `tests/watch.session-store.durable.test.ts` — schema v6, durable reload, soft TTL keep-alive/expiry, one session per issue, SAFE-6 topic scrub, poller restart continuity, stop halts mid-cycle, single-flight cycles, per-event failure isolation, second-watcher row replacement (REQ-watch-037)
 - `tests/watch.dedup-durable.test.ts` — handled ids survive a poller restart (no second run/ack/summary), a 2000-id stranger flood cannot evict a handled trusted id, a failed id write leaves the event for the next cycle (even when a retry would succeed), a failed acked/summarized write after the comment still runs the agent once, durable per-kind id stores (REQ-watch-247)
+- `tests/watch.conversation.test.ts` — a follow-up on the same issue replays the earlier event and answer ahead of the new event (another issue and the first event get no block; Planning skips it); past the session's TTL it still replays, after 30 days it is purged; with a 1024-token window a long thread stays under 80% with the opening and latest request whole; a 7000+-char opening event prompt replays whole (its fence header marked `(quoted)`, SAFE-12); stored turns scrubbed, participants the lowercased senders, forgetting a commenter's login deletes the thread (REQ-watch-472)
 
 ## Rate limit on the ack or summary comment (REQ-watch-011 modified, WATCH-RELIABILITY-3)
 
