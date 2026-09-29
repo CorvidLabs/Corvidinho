@@ -16,6 +16,7 @@ import type { HumanAsk, TaskResult } from "../src/agent/types.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/discord/agent-client.ts";
 import {
+  ASK_ANSWER_HINT,
   ASK_NO_OWNER_WARNING,
   ASK_REPLY_HINT,
   ASK_REPLY_MAX,
@@ -23,7 +24,7 @@ import {
   defangMassMentions,
   formatAskReply,
 } from "../src/discord/ask-ping.ts";
-import { toPendingAsk } from "../src/discord/ask-buttons.ts";
+import { buildAnswerStubComponents, toPendingAsk } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { THINKING_COLORS, type DiscordEmbedPayload } from "../src/discord/thinking-status.ts";
@@ -205,7 +206,10 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     expect(edit).toBeDefined();
     expect(String(edit!.content)).toContain(`<@${MENTION.authorId}>`);
     expect(String(edit!.content)).not.toContain(`<@${OWNER_ID}>`);
-    expect(String(edit!.content)).toContain(ASK_REPLY_HINT);
+    // DISCORD-ASK-4.a — the free-text question carries the Answer button (and
+    // says a reply still works).
+    expect(String(edit!.content)).toContain(ASK_ANSWER_HINT);
+    expect(String(edit!.content)).not.toContain(ASK_REPLY_HINT);
     // DISCORD-3.a — a free-text question is the turn's answer: footer-only embed.
     expect(edit!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
@@ -215,6 +219,8 @@ describe("bridge mention path asks + pings (AUTONOMY-1/2/4)", () => {
     const session = result.store.getByBotMessage(edit!.messageId);
     expect(session).toBeDefined();
     expect(session!.pendingAsk).toMatchObject(CLARIFY);
+    expect(edit!.components).toEqual(buildAnswerStubComponents(session!.pendingAsk!.askId));
+    expect(session!.pendingAsk!.stubMessageId).toBe(edit!.messageId);
     await result.stop();
   });
 
