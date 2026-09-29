@@ -13,6 +13,7 @@ import {
   type TaskProgress,
 } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import type { AgentSpawnResult } from "./types.ts";
 
 export type AgentRunChatOpts = {
@@ -81,17 +82,20 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_NON_INTERACTIVE: "1",
         },
       });
-      const { exitCode, summary } = await collectTaskRunStream({
+      const { exitCode, summary, result } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
         onProgress: onStatus,
       });
+      // SAFE-13: a tool result looked like an injection (tool + reason ids only).
+      const injection = injectionNoticeFromUnknown(result?.injection);
       return {
         ok: exitCode === 0,
         sessionId,
         summary,
         exitCode,
+        ...(injection ? { injection } : {}),
       };
     },
   };

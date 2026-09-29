@@ -28,6 +28,7 @@ import {
   createEchoAckClient,
   createOctokitAckClient,
   maybePostWatchAck,
+  postWatchInjectionRefusal,
   type AckClient,
   type AckCommentResult,
 } from "./ack.ts";
@@ -43,7 +44,9 @@ import {
   parseGithubRateLimit,
 } from "./rate-limit.ts";
 import { enrichWatchPromptWithMemories } from "./memory-inject.ts";
-import { gateEvent, routeEvent } from "./router.ts";
+import { gateEvent, routeEvent, watchInjectionVerdict } from "./router.ts";
+import { INJECTION_AUDIT_ACTION, type InjectionReason } from "../agent/untrusted.ts";
+import { appendAudit, argsDigest, auditKeyFromEnv } from "../audit/index.ts";
 import {
   createOctokitSearchClient,
   fetchWatchEvents,
@@ -60,11 +63,12 @@ import {
   type SpawnOutcome,
 } from "./spawn-log.ts";
 import {
+  maybePostWatchInjectionNotice,
   maybePostWatchSummary,
   SuccessfulAckStore,
   SummarizedIdStore,
 } from "./summary.ts";
-import type { DetectedEvent, WatchConfig } from "./types.ts";
+import type { AgentSpawnResult, DetectedEvent, WatchConfig } from "./types.ts";
 
 /**
  * Prefer allowlisted senders when collapsing per-issue (ALLOW-1 before session).
@@ -309,6 +313,33 @@ export async function startWatchPoller(
     return parsed.waitMs;
   };
 
+  /**
+   * SAFE-13 / SAFE-5: one `injection-suspected` row (`denied`) for an event
+   * WATCH will not run. Best effort: the event is refused either way.
+   */
+  const auditWatchInjection = (
+    event: DetectedEvent,
+    sessionId: string,
+    reasons: readonly InjectionReason[],
+  ): void => {
+    if (!db) return;
+    try {
+      appendAudit(
+        db,
+        {
+          action: INJECTION_AUDIT_ACTION,
+          actor: `github:${event.sender}`,
+          surface: `watch:${sessionId}`,
+          argsDigest: argsDigest(["github-thread", ...reasons]),
+          outcome: "denied",
+        },
+        { key: auditKeyFromEnv(env) },
+      );
+    } catch (err) {
+      logError("[watch] SAFE-13 audit row failed", err);
+    }
+  };
+
   const runCycle = async (): Promise<PollCycleResult> => {
     const result: PollCycleResult = {
       fetched: 0,
@@ -423,6 +454,31 @@ export async function startWatchPoller(
           continue;
         }
 
+        // SAFE-13: a title or body (from anyone but the owner) that looks like
+        // an injection attempt never reaches a run. One comment says so and
+        // @mentions the owner's GitHub login; an audit row records the
+        // sender, the session and the reason ids, never the text.
+        const suspected = watchInjectionVerdict(event, people);
+        if (suspected) {
+          result.refused += 1;
+          auditWatchInjection(event, action.session.id, suspected.reasons);
+          log(
+            `[watch] SAFE-13 refused ${event.repo}#${event.number} id=${event.id} (${suspected.reasons.join(", ")})`,
+          );
+          await postWatchInjectionRefusal({
+            event,
+            reasons: suspected.reasons,
+            ownerLogin: owner?.githubLogin,
+            mentionUsername: config.mentionUsername,
+            ackClient,
+            acked,
+            log,
+            onPostFailed: backoffOnCommentFailure,
+          });
+          opts.onAction?.({ kind: "injection_refused", event, sessionId: action.session.id });
+          continue;
+        }
+
         triggered += 1;
         if (action.kind === "start_session") result.started += 1;
         if (action.kind === "continue_session") result.continued += 1;
@@ -471,6 +527,7 @@ export async function startWatchPoller(
         let spawnOk = false;
         let spawnExit = 1;
         let spawnSummary = "";
+        let spawnInjection: AgentSpawnResult["injection"];
         let threw = false;
         try {
           const spawn = await agent.runChat({
@@ -485,6 +542,7 @@ export async function startWatchPoller(
           spawnOk = spawn.ok;
           spawnExit = spawn.exitCode;
           spawnSummary = spawn.summary;
+          spawnInjection = spawn.injection;
           opts.onAction?.({
             kind: action.kind,
             event,
@@ -518,20 +576,35 @@ export async function startWatchPoller(
         log(formatSpawnOutcomeLog(outcome));
 
         // WATCH-RELIABILITY-1 — summary after run, only if auto-ack succeeded.
-        await maybePostWatchSummary({
+        const summaryPosted = await maybePostWatchSummary({
           event,
           spawn: {
             ok: spawnOk,
             sessionId: action.session.id,
             summary: spawnSummary,
             exitCode: spawnExit,
+            ...(spawnInjection ? { injection: spawnInjection } : {}),
           },
           ackClient,
           successfulAcks,
           summarized,
+          ownerLogin: owner?.githubLogin,
           log,
           onPostFailed: backoffOnCommentFailure,
         });
+        // SAFE-13: no summary carried the in-run hit (an event type WATCH
+        // does not ack, or no successful ack): one comment tells the owner.
+        if (!summaryPosted && spawnInjection) {
+          await maybePostWatchInjectionNotice({
+            event,
+            injection: spawnInjection,
+            ownerLogin: owner?.githubLogin,
+            ackClient,
+            summarized,
+            log,
+            onPostFailed: backoffOnCommentFailure,
+          });
+        }
       } catch (err) {
         // One failing event (e.g. SQLITE_BUSY) must not abort the cycle or be
         // retried forever ahead of later events: log, mark processed, move on.

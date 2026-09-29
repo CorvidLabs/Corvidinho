@@ -7,6 +7,7 @@
  */
 
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
+import type { InjectionNotice } from "../agent/untrusted.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
@@ -140,6 +141,11 @@ export type AgentSpawnResult = {
   ask?: HumanAsk;
   /** SAFE-8: this run crossed 80% of the daily spend cap (validated amounts). */
   spendWarning?: SpendWarning;
+  /**
+   * SAFE-13: a tool result in this run looked like a prompt-injection attempt
+   * (validated tool name + reason ids); the post tells the owner.
+   */
+  injection?: InjectionNotice;
   /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).

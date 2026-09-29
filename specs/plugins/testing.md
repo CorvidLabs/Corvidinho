@@ -182,3 +182,15 @@ channel id is reported whatever its case and surrounding space, allowlisted,
 unlisted, empty and missing ids are not, and `checkChannel` reports the id as
 denied. The thread paths that use it are in `tests/discord.thread-deny.test.ts`
 (discord testing companion).
+
+## Untrusted text in plugins (REQ-plugins-071, SAFE-11/12)
+
+`tests/safe.injection.test.ts` — `lookupGuildMemberById` with a stubbed fetch
+returns the nickname, global name and display name cleaned (no mention
+markup, zero-width or bidi characters, role tags or labels) and a message
+without `<@`; a community role session whose task claims the owner gets no
+mutating tool and a role refusal for `files-write`. `tests/web.fetch.test.ts`
+(unchanged) still passes with `fenceUntrusted` on the shared fence.
+`delegate` over a fake worker bin whose result frame carries `injection`
+returns the validated `data.injection` (an unknown reason dropped, a bad
+source gives none); `runCouncil` keeps a voice's notice on its outcome.

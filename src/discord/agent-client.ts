@@ -13,6 +13,7 @@ import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
+import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import type { PersonRole } from "../identity/people.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
 import {
@@ -218,6 +219,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const ask = askFromUnknown(result?.ask);
       // SAFE-8: the 80% warning, amounts only (validated, percent recomputed).
       const spendWarning = spendWarningFromUnknown(result?.spendWarning);
+      // SAFE-13: a tool result looked like an injection (tool + reason ids only).
+      const injection = injectionNoticeFromUnknown(result?.injection);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -225,6 +228,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         exitCode,
         ...(ask ? { ask } : {}),
         ...(spendWarning ? { spendWarning } : {}),
+        ...(injection ? { injection } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {

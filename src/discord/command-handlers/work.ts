@@ -7,6 +7,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { enrichPromptWithProjectMemory, MEMORY_INJECT_LIMIT, memoryInjectOptsFor } from "../memory-inject.ts";
+import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
@@ -44,6 +45,29 @@ export async function handleWorkCommand(
     typeof projectRaw === "string" && projectRaw.trim()
       ? projectRaw.trim()
       : undefined;
+
+  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  // IDENTITY-8..12: owner (ADMIN), a declared team member (work tasks,
+  // IDENTITY-10), or community; the tool layer re-resolves it on every call.
+  const actingRole = resolveDiscordActingRole({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
+    mutedUsers: ctx.mutedUsers,
+    people,
+  });
+  const actingIsAdmin = actingRole === "owner";
+
+  // SAFE-13: a non-owner task that looks like an injection attempt starts no
+  // session or work task: a short reply, the owner pinged, an audit row.
+  const suspected = inboundInjection(description, actingRole);
+  if (suspected) {
+    await refuseInjectedSlash(ctx, interaction, suspected, "work-task");
+    return;
+  }
 
   await interaction.deferReply?.({ ephemeral: false });
 
@@ -92,21 +116,8 @@ export async function handleWorkCommand(
     });
   }
 
-  const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
-  // IDENTITY-8..12: owner (ADMIN), a declared team member (work tasks,
-  // IDENTITY-10), or community; the tool layer re-resolves it on every call.
-  const actingRole = resolveDiscordActingRole({
-    userId: interaction.userId,
-    roleIds: interaction.roleIds,
-    allowlist: ctx.allowlist,
-    adminUserIds: ctx.adminUserIds,
-    adminRoleIds: ctx.adminRoleIds,
-    owner: ctx.owner,
-    mutedUsers: ctx.mutedUsers,
-    people,
-  });
-  const actingIsAdmin = actingRole === "owner";
-  const idInject = enrichPromptWithIdentity(description, {
+  // SAFE-12: a non-owner's task goes to the model fenced as untrusted data.
+  const idInject = enrichPromptWithIdentity(fenceSpeakerText(description, actingRole, "work-task"), {
     userId: interaction.userId,
     displayName: interaction.userDisplayName,
     username: interaction.userUsername,
@@ -308,6 +319,8 @@ export async function handleWorkCommand(
     ask: result.ask,
     askOwner,
     spendWarning: result.spendWarning,
+    // SAFE-13: a tool result that looked like an injection tells the owner.
+    injection: result.injection,
     label: `/work \`${task.id}\``,
   });
   await finishSlashWithOwnerNotice({
