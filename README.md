@@ -124,6 +124,12 @@ Do not invent ACCESS/bounty/MainNet surfaces.
 
 See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, secrets out of repo.
 
+## Persona (PERSONA-1..3)
+
+Corvidinho's voice lives in one file, [`persona.md`](persona.md) at the root of this checkout: corvid-agent's voice, warm and direct, with some personality and emoji, never a flat changelog. Every run on every surface (Discord chat, slash commands, `/work`, schedules, GitHub WATCH, `task run`, delegate and council workers) reads it again into the system prompt, ahead of Corvidinho's rules. The rules come after it and win: one message per turn, no spam, no unchecked claims.
+
+To change the voice, edit the file and commit it (on the bot VM: merge it, then update). Only the committed copy is loaded, so a run cannot plant its own persona. The file is capped at 8 KiB and scrubbed for secrets (SAFE-6), but keep secrets out of it anyway. A missing, empty or refused file never stops a run: the run goes on without a persona and one note says why. There is no setting, env var or restart for it.
+
 
 ## Allowlists (bot VM)
 

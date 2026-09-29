@@ -50,6 +50,13 @@ import {
   withProjectInstructions,
 } from "./project-instructions.ts";
 import {
+  loadPersona,
+  personaWarning,
+  PERSONA_RULES_SYSTEM_INSTRUCTIONS,
+  renderPersona,
+  withPersona,
+} from "./persona.ts";
+import {
   loadTierFromEnv,
   modelForTier,
   modelKeyForTier,
@@ -249,6 +256,11 @@ export type CreateTaskExecuteOpts = {
   projectInstructions?: boolean;
   /** SAFE-8 80% spend warning (once per crossing); also emitted as a Text event. */
   onSpendWarning?: (warning: SpendWarning) => void;
+  /**
+   * Directory `persona.md` is read from (PERSONA-2). Default: Corvidinho's
+   * own checkout root, whatever the run cwd. Tests only.
+   */
+  personaRoot?: string;
 };
 
 /** One part of a multi-part user message (OpenAI-compatible chat). */
@@ -434,9 +446,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     opts.projectInstructions === false ? null : loadProjectInstructions(cwd);
   const projectBlock = project ? renderProjectInstructions(project) : "";
   let projectNote = project ? projectInstructionsWarning(project) : null;
+  // PERSONA-2: the one persona file, read for this run (one run = one turn)
+  // from Corvidinho's checkout on every surface; PERSONA-3 rules follow it.
+  const persona = loadPersona(opts.personaRoot);
+  const personaBlock = renderPersona(persona);
+  let personaNote = personaWarning(persona);
   let roleRefused = false;
 
   const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing }) => {
+    if (personaNote) {
+      emit(onEvent, { type: "Text", text: personaNote });
+      personaNote = null;
+    }
     if (projectNote) {
       emit(onEvent, { type: "Text", text: projectNote });
       projectNote = null;
@@ -461,6 +482,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         tools: [],
         onUsage,
         projectBlock,
+        personaBlock,
         specBriefing,
       });
     }
@@ -511,6 +533,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       onUsage,
       maxToolRounds,
       projectBlock,
+      personaBlock,
       specBriefing,
       roleEnv: env,
       onRoleRefusal: () => {
@@ -549,6 +572,8 @@ type LoopArgs = {
   onUsage?: (usage: AgentTokenUsage) => void;
   maxToolRounds: number;
   projectBlock: string;
+  /** PERSONA-2: the persona block, placed before the rules ("" when none). */
+  personaBlock: string;
   specBriefing?: string;
   /** Env the role session and ADMIN bit are read from (ROLES-CHAT-3/6). */
   roleEnv: NodeJS.ProcessEnv;
@@ -575,6 +600,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     onUsage,
     maxToolRounds,
     projectBlock,
+    personaBlock,
     specBriefing,
     roleEnv,
     onRoleRefusal,
@@ -590,22 +616,27 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   const offered = new Set(tools.map((t) => t.function.name));
   let lastText = "";
 
+  // PERSONA-3: the persona comes first; every rule below it wins over it.
   const system = withProjectInstructions(
-    "You are Corvidinho, a Linux-first headless agent CLI. " +
-    "Use the provided tools (project plugins) when they help complete the task. " +
-    "Prefer SpecSync plugins (list/read/check/brief) when the task is about project specs or code — not for casual Discord social chat. " +
-    "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
-    MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
-    IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
-    PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
-    DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS +
-    (offered.has(DISCORD_SEND_FILE_TOOL) &&
-    roleEnv.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID?.trim()
-      ? DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS
-      : "") +
-    ASK_AGENT_SYSTEM_INSTRUCTIONS +
-    "When finished, reply with a concise plain-text summary of what you did (no tool call). " +
-    "Do not claim files were edited unless a tool result reported filesChanged.",
+    withPersona(
+      "You are Corvidinho, a Linux-first headless agent CLI. " +
+      "Use the provided tools (project plugins) when they help complete the task. " +
+      "Prefer SpecSync plugins (list/read/check/brief) when the task is about project specs or code — not for casual Discord social chat. " +
+      "Dangerous tools may be denied in non-interactive mode unless allowlisted — do not invent ACCESS/bounty/MainNet. " +
+      PERSONA_RULES_SYSTEM_INSTRUCTIONS +
+      MEMORY_AGENT_SYSTEM_INSTRUCTIONS +
+      IDENTITY_AGENT_SYSTEM_INSTRUCTIONS +
+      PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS +
+      DISCORD_CHAT_AGENT_SYSTEM_INSTRUCTIONS +
+      (offered.has(DISCORD_SEND_FILE_TOOL) &&
+      roleEnv.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID?.trim()
+        ? DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS
+        : "") +
+      ASK_AGENT_SYSTEM_INSTRUCTIONS +
+      "When finished, reply with one concise plain-text message (no tool call) saying what you did, in the persona's voice — never a flat changelog (PERSONA-1). " +
+      "Do not claim files were edited unless a tool result reported filesChanged.",
+      personaBlock,
+    ),
     projectBlock,
   );
 
@@ -842,6 +873,7 @@ async function singleChatCompletion(opts: {
   tools: OpenAiToolDef[];
   onUsage?: (usage: AgentTokenUsage) => void;
   projectBlock: string;
+  personaBlock: string;
   specBriefing?: string;
 }): Promise<ExecuteResult> {
   const userParts = [
@@ -855,8 +887,14 @@ async function singleChatCompletion(opts: {
   const messages: ChatMessage[] = [
     {
       role: "system",
+      // PERSONA-3: the persona comes first; the rules after it win.
       content: withProjectInstructions(
-        "You are Corvidinho on the read tier (no tools). Reply with a short plain-text summary only.",
+        withPersona(
+          "You are Corvidinho on the read tier (no tools). " +
+          "Reply with one short plain-text message only, in the persona's voice — never a flat changelog (PERSONA-1). " +
+          PERSONA_RULES_SYSTEM_INSTRUCTIONS.trimEnd(),
+          opts.personaBlock,
+        ),
         opts.projectBlock,
       ),
     },

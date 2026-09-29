@@ -362,3 +362,20 @@ All paths default to the data dir `~/.local/share/corvidinho` (`CORVIDINHO_DATA_
 Free-text columns in `corvidinho.db` and every string value in the daemon's log lines are
 scrubbed for secrets before they are written (SAFE-6). The audit chain stores an args digest,
 never the args.
+
+### E.8 Persona file (PERSONA-1..3)
+
+Corvidinho's voice is `persona.md` at the root of the corvidinho checkout the bridge, WATCH
+and daemon run from, never the project a run works in. Every run reads it again (chat, slash
+commands, `/work`, schedules, WATCH, `task run`, delegate and council workers), so the next turn
+after an update uses the new text; no restart and no setting. It goes into the system prompt
+first, and Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked
+claims).
+
+- Only the copy committed at `HEAD` is loaded. `scripts/corvidinho-update.sh` checks out the
+  merged ref, so change the voice with a PR like any other file; a hand edit on the VM is not
+  loaded (the run's note says "working-tree changes not loaded").
+- Capped at 8 KiB (longer is cut with a marker) and scrubbed for secrets (SAFE-6). Never put
+  tokens, keys or private paths in it.
+- Missing, empty or refused (for example untracked): the run goes on with no persona and one
+  `Persona: …` note naming only the file.

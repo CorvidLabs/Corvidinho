@@ -16,6 +16,8 @@ files:
   - src/agent/tier.ts
   - src/agent/tools.ts
   - src/agent/project-instructions.ts
+  - src/agent/persona.ts
+  - persona.md
   - src/agent/events-ndjson.ts
   - src/agent/spend.ts
   - src/agent/spend-notice.ts
@@ -28,6 +30,7 @@ files:
   - tests/agent.soft-land.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
+  - tests/agent.persona.test.ts
   - tests/agent.events-ndjson.test.ts
   - tests/agent.ndjson-spawn.test.ts
   - tests/agent.spend.test.ts
@@ -174,6 +177,25 @@ Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `cat-file`, `diff --name-only`, hooks and fsmonitor off, env clamped with the
 git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
+`LoadProjectInstructionsOptions.exactRoot` reads at the given directory
+instead of walking up to the nearest `.git` (the persona file).
+
+Persona file (REQ-agent-069, PERSONA-1/2/3, issue #69): `src/agent/persona.ts`
+exports `PERSONA_FILE` (`persona.md`), `PERSONA_MAX_BYTES` (8 KiB),
+`CORVIDINHO_ROOT` (Corvidinho's own checkout, `import.meta.dir/../..`),
+`loadPersona(root?, { maxBytes? })`, `renderPersona`, `personaWarning`,
+`withPersona`, `PERSONA_HEADER` and `PERSONA_RULES_SYSTEM_INSTRUCTIONS`, plus
+the `Persona` / `LoadPersonaOptions` types (re-exported from
+`src/agent/index.ts`). `loadPersona` reads `persona.md` with
+`loadProjectInstructions(root, { fileNames: ["persona.md"], maxBytes: 8 KiB,
+exactRoot: true })`, so the AGENT-1 guards apply (HEAD-committed copy only in a
+git checkout, cap with marker, symlink / binary / non-UTF-8 refusal, SAFE-6
+scrub, never throws). `createTaskExecute` loads it once per run from
+`CORVIDINHO_ROOT` (`personaRoot` is a test seam) and builds both system
+prompts as persona block, then Corvidinho's rules with
+`PERSONA_RULES_SYSTEM_INSTRUCTIONS`, then project instructions. The shipped
+`persona.md` at the repo root uses corvid-agent's persona shape (Archetype,
+Personality traits, Background, Communication style, Example messages).
 
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult`, and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
@@ -233,6 +255,14 @@ Fledge plugin command allowlisted, a `delegate` call that started a worker is
 named there too. No env var, config key, flag or slash command.
 
 ## Invariants
+
+The persona sets tone only and the rules win (REQ-agent-069, PERSONA-3): the
+persona block is always first in the system prompt and every rule
+(`PERSONA_RULES_SYSTEM_INSTRUCTIONS`, SAFE / role / memory / ask
+instructions, then project instructions) follows it, whether or not a persona
+loaded. The persona is read from Corvidinho's own checkout at `HEAD`, never
+from the run's project folder or an uncommitted working-tree copy, so a run
+cannot plant a persona for later runs. A persona problem never stops a run.
 
 The verify gate trusts the working tree, not only the tools (REQ-agent-085):
 with the gate on, any path the run changed on disk since its start snapshot
@@ -458,6 +488,12 @@ no conversation channel, never promises attachments.
   call is refused as not offered; a non-owner run with the same allowlist is
   offered neither (REQ-agent-501)
 
+### Scenario: the persona is in every run's prompt, the rules after it
+
+- **Given** `persona.md` committed at the root of Corvidinho's checkout
+- **When** a Discord chat, a schedule, WATCH or a local `task run` spawns a run in any project
+- **Then** the system prompt starts with the persona block, then Corvidinho's rules with the PERSONA-3 rules text, then that project's AGENTS.md / CLAUDE.md block; the next run after a committed edit carries the new text (REQ-agent-069)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -503,6 +539,10 @@ no conversation channel, never promises attachments.
 | Git project: instruction file untracked, or HEAD unborn | refused as not committed; named in the Text note |
 | Git project: `.git` unusable (not a repo top level, git missing) | present files refused; no working-tree fallback |
 | Git project: committed symlink leaves the commit, is broken, hops a symlinked dir, or loops | refused; named in the Text note |
+| `persona.md` missing, empty, or refused (untracked, symlink out, binary) | run continues with no persona block; the rules are still in the prompt; one `Persona: persona.md …; this run has no persona (PERSONA-2)` Text note naming only the file (REQ-agent-069) |
+| `persona.md` edited in the working tree but not committed | the committed copy loads; one "working-tree changes not loaded" Text note (REQ-agent-069) |
+| `persona.md` over 8 KiB | cut on a UTF-8 boundary with a truncation marker; one Text note (REQ-agent-069) |
+| `persona.md` text tries to close its `<persona>` block or override the rules | the close tag is escaped; the block stays first and the PERSONA-3 rules after it say the rules win (REQ-agent-069) |
 
 ## Dependencies
 

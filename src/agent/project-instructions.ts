@@ -73,8 +73,14 @@ export type ProjectInstructions = {
 
 export type LoadProjectInstructionsOptions = {
   maxBytes?: number;
-  /** Override the file names (tests). */
+  /** Override the file names (tests, and the persona file: PERSONA-2). */
   fileNames?: readonly string[];
+  /**
+   * Read at `cwd` itself instead of walking up to the nearest `.git`
+   * (Corvidinho's own persona file, PERSONA-2): a `.git` in a parent
+   * directory never makes that parent the root.
+   */
+  exactRoot?: boolean;
 };
 
 /**
@@ -440,7 +446,7 @@ export function loadProjectInstructions(
 ): ProjectInstructions {
   const maxBytes = Math.max(1, opts.maxBytes ?? PROJECT_INSTRUCTIONS_MAX_BYTES);
   const names = opts.fileNames ?? PROJECT_INSTRUCTION_FILES;
-  const root = findProjectRoot(cwd);
+  const root = opts.exactRoot ? resolve(cwd) : findProjectRoot(cwd);
   const isGit = existsSync(join(root, ".git"));
   const source = isGit ? "commit" : "working-tree";
   let realRoot: string;
