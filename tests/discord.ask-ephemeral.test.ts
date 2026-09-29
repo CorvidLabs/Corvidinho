@@ -11,6 +11,7 @@ import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import {
   ASK_CHOICE_EXPIRED,
+  ASK_STUB_HINT,
   openCustomId,
   parseAskCustomId,
   pickCustomId,
@@ -650,5 +651,117 @@ describe("open button asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/** ask-human options that repeat one id (DISCORD-ASK-1/3). */
+const DUP_ID_ASK: HumanAsk = {
+  reason: "clarify",
+  question: "Which?",
+  options: [
+    { id: "x", label: "Keep" },
+    { id: "x", label: "Drop" },
+  ],
+};
+
+function pickIds(eph: Array<Record<string, unknown>>): string[] {
+  const rows = (eph[0]?.components ?? []) as Array<{
+    components: Array<{ custom_id: string }>;
+  }>;
+  return rows.flatMap((r) => r.components.map((b) => b.custom_id));
+}
+
+describe("ask option ids and expired button asks (DISCORD-ASK-1/3/5)", () => {
+  test("options with a repeated id open as distinct buttons and a pick resumes with the pressed label", async () => {
+    const { result, handlers, calls } = await bridgeWith(
+      scriptedAgent([DUP_ID_ASK, "Dropped it"]),
+    );
+    await say(handlers, "m1", "tidy the table");
+    const pending = result.store.list()[0]!.pendingAsk!;
+    expect(new Set(pending.options!.map((o) => o.id)).size).toBe(2);
+
+    const opened = await press(handlers, openCustomId(pending.askId));
+    const customIds = pickIds(opened);
+    expect(customIds).toHaveLength(2);
+    expect(new Set(customIds).size).toBe(2);
+
+    await press(handlers, customIds[1]!);
+    expect(calls).toHaveLength(2);
+    expect(calls.at(-1)!.humanText).toBe("Drop");
+    expect(calls.at(-1)!.prompt).toContain("Human answer:\nDrop");
+    await result.stop();
+  });
+
+  test("a thin reply after the button ask timed out runs the agent, not a restated Choose", async () => {
+    const { result, handlers, replies, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, "ran"]),
+    );
+    await say(handlers, "m1", "pick a db");
+    const session = result.store.list()[0]!;
+    const askId = session.pendingAsk!.askId;
+    session.pendingAsk!.expiresAt = Date.now() - 1000;
+
+    const before = replies.length;
+    await say(handlers, "m2", "ok");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.prompt).not.toContain("Which DB?]");
+    const after = replies.slice(before);
+    expect(after.some((r) => JSON.stringify(r.components ?? []).includes(openCustomId(askId)))).toBe(
+      false,
+    );
+    expect(after.some((r) => r.content.includes(ASK_STUB_HINT))).toBe(false);
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    await result.stop();
+  });
+
+  test("a thin reply after the newest button ask timed out restates the newest one still live", async () => {
+    const { result, handlers, replies, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, CACHE_ASK]),
+    );
+    await say(handlers, "m1", "set up storage");
+    const askA = result.store.list()[0]!.pendingAsk!;
+    await say(handlers, "m2", "and caching?");
+    const session = result.store.list()[0]!;
+    const askB = session.pendingAsk!;
+    session.pendingAsk!.expiresAt = Date.now() - 1000;
+
+    await say(handlers, "m3", "ok");
+    expect(calls).toHaveLength(2);
+    const restated = JSON.stringify(replies.at(-1)!.components);
+    expect(restated).toContain(openCustomId(askA.askId));
+    expect(restated).not.toContain(openCustomId(askB.askId));
+    const now = result.store.list()[0]!;
+    expect(now.pendingAsk?.askId).toBe(askA.askId);
+    expect(now.openAsks).toBeUndefined();
+    await result.stop();
+  });
+
+  test("a substantive reply after the button ask timed out runs the agent and clears it", async () => {
+    const { result, handlers, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, "ran", "ran again"]),
+    );
+    await say(handlers, "m1", "pick a db");
+    result.store.list()[0]!.pendingAsk!.expiresAt = Date.now() - 1000;
+
+    await say(handlers, "m2", "never mind, what time is it?");
+    expect(calls).toHaveLength(2);
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    await say(handlers, "m3", "ok");
+    expect(calls).toHaveLength(3);
+    await result.stop();
+  });
+
+  test("cancel after the button ask timed out still gets the short ack and no agent run", async () => {
+    const { result, handlers, replies, calls } = await bridgeWith(
+      scriptedAgent([OPTIONS_ASK, "ran"]),
+    );
+    await say(handlers, "m1", "pick a db");
+    result.store.list()[0]!.pendingAsk!.expiresAt = Date.now() - 1000;
+
+    await say(handlers, "m2", "cancel");
+    expect(calls).toHaveLength(1);
+    expect(replies.at(-1)!.content).toBe(ASK_CANCELLED_ACK);
+    expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    await result.stop();
   });
 });

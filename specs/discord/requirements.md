@@ -1105,6 +1105,16 @@ reply to it by the requester continues that session and the rules above apply
 (AUTONOMY-5/6). A SAFE-8 spend-cap stop SHALL NOT be stored as the pending
 ask and SHALL NOT get Choose buttons.
 
+A continue that is not an explicit cancel, while the session's `pendingAsk`
+is a button ask past its timeout, SHALL first clear that ask as a late press
+does (`clearPendingAsk`), before the thin-ack rule applies: the newest
+remaining open ask that has not timed out SHALL become `pendingAsk` (earlier
+timed-out asks are dropped), so a thin-ack continue restates that live ask,
+or, with none left, runs the agent, and SHALL NOT restate the timed-out ask's
+stub or its Choose button (DISCORD-ASK-5). A substantive continue then runs
+the agent as before, and an explicit cancel still clears every open ask with
+the short ack and no agent run.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
@@ -1136,6 +1146,10 @@ Acceptance Criteria
 - When the newest ask is picked while an earlier open ask has timed out, the earlier ask is dropped, not promoted: the session has no pending ask, a thin reply runs the agent, and a press on the dropped ask is a no-op.
 - `cancel` with several open asks clears all of them with the short ack and no agent run; a later press on any of them is a no-op.
 - `SessionStore`: one open ask persists as one JSON object; two persist as an array and reload as `pendingAsk` plus `openAsks` after a reopen; re-storing a held askId updates it in place; `findPendingAsk` finds an earlier open ask; clearing the newest promotes the earlier one; a new ask replaces a free-text ask but never a button ask; `null` clears all.
+- A thin reply after the session's only button ask timed out runs the agent (no prior-question block), posts no restated stub or Choose button for that ask, and leaves no pending ask.
+- A thin reply after the newest button ask timed out, while an earlier button ask is still open and not timed out, restates the earlier ask with its Choose button and does not run the agent; the earlier ask is the pending ask and no other ask stays open.
+- A substantive reply after the button ask timed out runs the agent and leaves no pending ask, so a later thin reply runs the agent too.
+- `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 
 ### REQ-discord-045
 
@@ -1997,9 +2011,9 @@ pass the conversation's channel (the thread, with its parent, in a thread) and
 `/session start` / `/work` the command's channel; schedules SHALL pass none.
 A `--channel` / `-c` argument SHALL be refused, and a run with no
 conversation channel or no acting user SHALL be refused, nothing sent. The
-channel allowlist SHALL gate first (a thread through its parent, DISCORD-5),
-then the DISCORD-8 requester check SHALL run for the acting user with View
-Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
+channel allowlist SHALL gate first (a thread as itself or through its parent,
+DISCORD-5), then the DISCORD-8 requester check SHALL run for the acting user
+with View Channel, Send Messages and Attach Files (`verifyRequesterCanSend` option
 `attachFiles`); a check that cannot run SHALL refuse. The file SHALL be at
 most 8 MB (Discord's default upload limit) and SHALL be a PNG, JPEG, GIF or
 WebP image whose magic bytes match its extension, or UTF-8 text with a
@@ -2024,6 +2038,23 @@ parent is allowlisted (deny wins, REQ-discord-212 / REQ-plugins-005), before
 the requester check, with the `checkChannel` "is denied" error; nothing is
 uploaded.
 
+The conversation's channel SHALL pass the gate the bridge serves it by:
+`isMonitoredConversation` on the bridge's channel set (allowlist file and
+`CORVIDINHO_DISCORD_ALLOW_CHANNELS` union `DISCORD_CHANNEL_IDS`,
+REQ-discord-212 / REQ-discord-004). A thread allowlisted by its own id SHALL
+pass even when its parent is not listed, and a thread SHALL be refused when
+it or its parent is on `deny_channels` (deny wins, REQ-plugins-005), before
+the requester check, nothing uploaded. The file SHALL be read once, from one
+descriptor opened without following a link at the checked path, and the file
+that descriptor holds SHALL be a regular file whose own path is inside the
+project and is not a SAFE-2 protected, `.specsync` or secret path: a file or
+folder swapped for a link after the path checks SHALL be refused (SAFE-2).
+The 8 MB cap SHALL hold for the bytes read as well as for the size first
+taken, and no more than the cap + 1 byte SHALL be read: a file that grew
+past the cap after its size was taken SHALL be refused before the requester
+check, nothing uploaded. An ask-button run in a thread SHALL carry the thread
+as the reply channel and its parent.
+
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
@@ -2037,6 +2068,10 @@ Acceptance Criteria
 - `--git-diff` refuses an empty diff and attaches `changes.diff` without secret paths and scrubbed.
 - The spawn client writes the reply channel env (empty when none); the bridge passes the conversation's channel on chat, thread, `/session start` and `/work` runs.
 - A deny-listed thread under its allowlisted parent is refused with the "is denied" error: no requester check runs and nothing is uploaded; another thread under that parent still passes.
+- A thread allowlisted by its own id, its parent not listed, attaches in the thread after the acting user's check; with its parent deny-listed it is refused ("is denied"); a deny-listed thread under an allowlisted parent is refused ("is denied"); an unlisted thread under an unlisted parent is refused (not allowlisted); nothing else is checked or uploaded.
+- A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
+- A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
+- An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
 
 ### REQ-discord-036
 
