@@ -135,3 +135,17 @@ checks the MEMORY-5..7 / MEMORY-ACL-6 rules (profile categories and
 one person about another, private notes never injected, `memory-forget-me`
 until the owner approves on a card), and the plugins they name are covered
 there and in `tests/discord.forget-card.test.ts` (REQ-agent-101).
+
+Recall before "I don't know" (MEMORY-9 / MEMORY-8, #67 / REQ-agent-067):
+`tests/memory.recall-github.test.ts` › "the tool loop searches memory before
+\"I don't know\"" — with a fake LLM, a final "I don't know who Tofu is." in a
+run whose actor has a stored fact makes the loop run `memory-recall` itself
+(a `ToolCall` event), send the fact back once and return the second reply;
+with nothing stored the reply stands after one model call; a task with an
+injected memory block, or a run where the model already called
+`memory-recall`, gets no second search; end to end in a GitHub-shaped env the
+model's `memory-store` → SQLite (`person:tofu`) → `memory-recall` → model.
+`tests/memory.rank.test.ts` › "recall-guard" — `claimsIgnorance` phrases and
+non-matches, `taskHasMemorySearch`, `memorySearchQuery` (harness blocks,
+WATCH label and URLs dropped) and `searchMemoryBeforeIgnorance` (own rows then
+project rows, refusals or nothing ⇒ null).

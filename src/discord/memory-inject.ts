@@ -11,12 +11,18 @@
  * anyone else's; private notes are never injected (the store leaves them
  * out); for the owner and team the project's own memory follows in a second
  * block (MEMORY-6), only when it holds rows.
+ *
+ * MEMORY-9 (#67): with the human's message as `query`, each block is a
+ * search — the rows most relevant to the message first (ranked by relevance,
+ * then recency), then the newest to fill the block — so the model has
+ * searched memory before it could say it doesn't know, with no model call.
  */
 
 import type { PeopleDirectory, PersonRole } from "../identity/people.ts";
 import {
   memorySubjectFor,
   projectScopeFor,
+  recallRelevantThenRecent,
   type MemoryRecord,
   type MemoryStore,
 } from "../memory/index.ts";
@@ -70,6 +76,11 @@ export type EnrichPromptWithMemoriesOpts = {
   project?: { scope: string; key: string };
   /** Max rows to recall (default MEMORY_INJECT_LIMIT). */
   limit?: number;
+  /**
+   * The human's message (MEMORY-9): rows relevant to it come first, then the
+   * newest. Omitted ⇒ the newest rows, as before.
+   */
+  query?: string;
 };
 
 export const PROJECT_MEMORY_INJECT_HEADER =
@@ -132,11 +143,20 @@ export function enrichPromptWithMemories(
 
   const limit = opts.limit ?? MEMORY_INJECT_LIMIT;
   // Private notes are never injected (MEMORY-7): recall leaves them out.
-  const rows = store.recall({ ownerUserId: owner, scopes: opts.scopes, limit });
+  const rows = recallRelevantThenRecent(store, {
+    ownerUserId: owner,
+    ...(opts.scopes ? { scopes: opts.scopes } : {}),
+    query: opts.query,
+    limit,
+  });
   let block = formatMemoryInjectBlock(rows);
   let count = rows.length;
   if (opts.project) {
-    const projectRows = store.recall({ ownerUserId: opts.project.scope, limit });
+    const projectRows = recallRelevantThenRecent(store, {
+      ownerUserId: opts.project.scope,
+      query: opts.query,
+      limit,
+    });
     const projectBlock = formatProjectMemoryBlock(opts.project.key, projectRows);
     if (projectBlock) {
       block = `${block}\n\n${projectBlock}`;

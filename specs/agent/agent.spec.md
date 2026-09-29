@@ -22,6 +22,7 @@ files:
   - src/agent/spend-alerts.ts
   - src/agent/spend-outbox.ts
   - src/agent/ask.ts
+  - src/agent/recall-guard.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -59,6 +60,14 @@ so Discord/CLI chats trust injected facts and call memory-store/recall
 appropriately (REQ-agent-010), keep profiles and project memory, never tell
 one person what is stored about another or repeat private notes, and route a
 "forget me" to `memory-forget-me` (MEMORY-5..7 / MEMORY-ACL-6, REQ-agent-101).
+They also say to search memory before saying "I don't know" (MEMORY-9) and how
+memory works in a GitHub WATCH run (MEMORY-8, REQ-agent-067); the tool loop
+backs the rule with a guard (`src/agent/recall-guard.ts`): a final reply that
+says it doesn't know, in an attempt with no memory search yet (no injected
+memory block, no `memory-recall` call), makes the loop run `memory-recall
+--query` (and `--project`) itself with the request's words through the plugin
+gates — nothing found, the reply stands with no extra model call; facts found
+go back to the model once for one more reply, which uses no tool round.
 
 ## Public API
 

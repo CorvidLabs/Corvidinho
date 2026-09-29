@@ -38,3 +38,19 @@ module: watch
   searcher carries `user_id` to `senderId`; `startWatchPoller` re-reads people
   from its allowlist file per event.
 
+## Memory in GitHub runs (REQ-watch-067 / REQ-watch-008, MEMORY-8 / MEMORY-9)
+
+- `tests/memory.recall-github.test.ts` › "REQ-watch-008 / REQ-watch-067 spawn
+  env" — the WATCH spawn stamps the commenter's login, numeric id and the
+  thread's repo over stale values, with an empty Discord actor and
+  `CORVIDINHO_ACTING_IS_ADMIN=0`; › "WATCH poller searches memory for the
+  comment" — through `startWatchPoller` with an injected DB, a declared
+  commenter's prompt holds their profile row and the repo's project row and
+  never another person's, an undeclared commenter's holds only the project
+  row, and `runChat` gets `actingGithubLogin` / `actingGithubId` / `repo`.
+- `tests/memory.rank.test.ts` › "enrichWatchPromptWithMemories" — declared:
+  the block (empty one-liner when nothing is stored); undeclared with no
+  project rows or no store: prompt unchanged; the project block names the
+  repo; long rows are clipped at `WATCH_MEMORY_ROW_MAX_CHARS`.
+- `tests/memory.spawn-env.test.ts` › "WATCH spawn clears the acting env" still
+  holds (no Discord actor, no confirm tokens, non-ADMIN, non-interactive).

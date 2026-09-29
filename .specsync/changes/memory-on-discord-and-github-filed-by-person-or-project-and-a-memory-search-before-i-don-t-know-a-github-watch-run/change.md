@@ -1,0 +1,27 @@
+---
+id: memory-on-discord-and-github-filed-by-person-or-project-and-a-memory-search-before-i-don-t-know-a-github-watch-run
+state: draft
+type: feature
+base_commit: 1a392777183f0f7f0b53d14efc2ffc8a70e277ca
+---
+
+# Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67)
+
+## Intent
+
+Memory on Discord and GitHub, filed by person or project, and a memory search before I don't know: a GitHub WATCH run saves and recalls for the commenter's declared person (people list, stable GitHub ids) with MEMORY-7 privacy while an undeclared commenter reads only the thread repo's project memory and saves nothing (REQ-watch-008 changed); a recall with a query is ranked by relevance then recency; the Discord and WATCH injects search memory for the message; the tool loop searches memory itself before a reply that says it doesn't know, costing a model call only when facts are found (MEMORY-8, MEMORY-9, #67)
+
+## Affected Canonical Specs
+
+- `agent`
+- `plugins`
+- `watch`
+- `discord`
+
+## Acceptance Criteria
+
+- In a GitHub WATCH run the memory plugins act for the commenter's declared person, matched by GitHub numeric id / login in the owner's people list re-read at the call (stable ids only; a login whose numeric id differs matches nobody), storing into and recalling from the same person:<id> profile as on Discord (the configured owner not declared under [people] on their Discord-id scope), with MEMORY-7 privacy: on GitHub --person is refused for anyone but the commenter, private notes and memory-forget-me are refused and project memory is read-only; an undeclared commenter gets community scope - memory-recall --project reads the thread repo's project memory (project:<owner/repo>), nothing is saved; the WATCH spawn passes the commenter's login, numeric id and the thread's repo (CORVIDINHO_ACTING_GITHUB_LOGIN / _ID / _REPO) with no Discord actor, non-ADMIN, and the Discord spawn clears those keys (REQ-watch-008 changed; MEMORY-8); memory-recall --query is a ranked search (terms and the whole query matched in keys and content, rarer terms and key hits weigh more, newer first among near-equals; no schema change), the Discord chat / button inject and the WATCH poller search memory for the message or comment and prepend the relevant rows first, and when the model's final reply says it doesn't know with no memory search yet in the attempt the tool loop runs memory-recall itself - nothing found keeps the reply with no extra model call, facts found go back to the model once (MEMORY-9); tests/memory.recall-github.test.ts and tests/memory.rank.test.ts cover each and fail on the stacked base sources
+
+## No-spec Rationale
+
+Not applicable

@@ -58,6 +58,7 @@ files:
   - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
   - tests/memory.profiles.test.ts
+  - tests/memory.recall-github.test.ts
   - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/files.dangling-symlink.test.ts
@@ -220,6 +221,15 @@ owner, in a conversation (MEMORY-7). `--project` is the run's repo memory
 local CLI, never community (MEMORY-6). `memory-forget-me` (safe, no argv)
 records the acting person's forget request from a conversation, audited;
 it deletes nothing (MEMORY-ACL-6).
+In a GitHub WATCH run (no Discord actor) the acting person is the commenter
+the poller sets (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID`, thread repo
+`_REPO`; env only) matched by GitHub numeric id / login in the people list
+(MEMORY-8 / REQ-plugins-067): a declared commenter stores and recalls their own
+profile; an undeclared one gets community scope — `memory-recall --project`
+reads the thread repo's project memory, nothing is saved; from GitHub project
+memory is never written and `--person`, private notes and `memory-forget-me`
+are refused. `memory-recall --query` is ranked by relevance, then recency
+(MEMORY-9).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.

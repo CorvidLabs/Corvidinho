@@ -12,12 +12,14 @@
  *   (`owner/repo` of its `origin` remote, lowercased) or, without one, the
  *   real path of its main checkout, so every worktree of it shares one scope.
  *
- * The acting person comes from the bridge-set acting Discord id matched in
- * the owner's people list re-read now (stable ids only, IDENTITY-7), never
- * from argv or the prompt. Who may read which scope is decided in
- * plugins/memory and the Discord inject: a person's memory only by them and
- * the owner (MEMORY-7); project memory by the owner and team, and by the
- * local CLI (no role session).
+ * The acting person comes from the bridge-set acting Discord id — or, in a
+ * GitHub WATCH run, the poller-set commenter's GitHub id / login (MEMORY-8,
+ * `memorySubjectForGithub`) — matched in the owner's people list re-read now
+ * (stable ids only, IDENTITY-7), never from argv or the prompt. Who may
+ * read which scope is decided in plugins/memory and the Discord / WATCH
+ * injects: a person's memory only by them and the owner (MEMORY-7); project
+ * memory by the owner and team, and by the local CLI (no role session), and
+ * read-only by anyone in a GitHub WATCH run on that repo (MEMORY-8).
  */
 
 import { realpathSync } from "node:fs";
@@ -146,6 +148,43 @@ export function memorySubjectForRef(
   const id = raw.toLowerCase();
   if (!dir || !PERSON_ID_RE.test(id)) return null;
   return personSubject(dir, id);
+}
+
+/**
+ * The subject for a GitHub commenter (MEMORY-8, #67): the declared person
+ * their GitHub numeric id / login resolves to in the owner's people list
+ * (stable ids only, IDENTITY-7; never a name), the same profile as on
+ * Discord. The configured owner while not declared under `[people]` keeps
+ * their Discord-id scope, as on Discord. Undeclared (or ids pointing at two
+ * people) ⇒ null: no personal memory on GitHub.
+ */
+export function memorySubjectForGithub(
+  dir: PeopleDirectory | null | undefined,
+  q: { login?: string | null; id?: string | number | null },
+): MemorySubject | null {
+  if (!dir) return null;
+  const resolved = resolvePerson(dir, { githubLogin: q.login, githubId: q.id });
+  if (!resolved) return null;
+  if (resolved.personId === OWNER_PERSON_ID) {
+    const ownerDiscord = dir.owner?.discordId;
+    return ownerDiscord ? memorySubjectFor(dir, ownerDiscord) : null;
+  }
+  return personSubject(dir, resolved.personId);
+}
+
+const REPO_SLUG_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/**
+ * Project scope of a GitHub `owner/repo` (MEMORY-6 / MEMORY-8): the key a
+ * checkout of that repo gets from its `origin` remote (lowercased), so a
+ * GitHub thread reads the memory the owner and team keep for that repo.
+ * Not an `owner/repo` ⇒ null.
+ */
+export function projectScopeForRepo(repo: string | null | undefined): { scope: string; key: string } | null {
+  const slug = (repo ?? "").trim();
+  if (!REPO_SLUG_RE.test(slug) || slug.split("/").some((p) => p === "." || p === "..")) return null;
+  const key = slug.toLowerCase();
+  return { scope: projectScopeId(key), key };
 }
 
 /** Same subject (same write scope)? */

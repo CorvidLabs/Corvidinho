@@ -16,6 +16,7 @@ files:
   - src/watch/spawn-log.ts
   - src/watch/rate-limit.ts
   - src/watch/index.ts
+  - src/watch/memory-inject.ts
   - tests/watch.auth-stop.test.ts
 
 db_tables: []
@@ -39,7 +40,13 @@ own mentions in search, document org-search pagination bury risk; plus
 WATCH-RELIABILITY-1..3 — post-run summary after successful auto-ack, durable
 spawn outcome logging, and GitHub 403 rate-limit backoff. WATCH sessions
 persist in the shared SQLite DB (`watch_sessions`, schema v6) with the same
-soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037).
+soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037). Memory in GitHub
+runs (MEMORY-8/9, REQ-watch-067): the spawn passes the commenter's GitHub
+login / numeric id and the thread's repo so the memory plugins act for the
+commenter's declared person (undeclared: the repo's project memory,
+read-only), and before each run the poller searches the commenter's profile
+and the repo's project memory for the comment and prepends what it found
+(`src/watch/memory-inject.ts`).
 
 ## Public API
 
@@ -66,6 +73,15 @@ and the search clients' `userId` (GitHub numeric id; fixture `user_id`)
 env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
 declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7).
+`AgentRunChatOpts.actingGithubLogin` / `actingGithubId` / `repo` (the
+commenter and the thread's repo, set by the poller; the spawn stamps them as
+`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`) and
+`src/watch/memory-inject.ts`: `enrichWatchPromptWithMemories(prompt, store,
+{ event, people, limit? })`, `formatWatchMemoryBlock`,
+`formatWatchProjectMemoryBlock`, `WATCH_MEMORY_INJECT_HEADER` /
+`WATCH_MEMORY_INJECT_EMPTY` / `WATCH_PROJECT_MEMORY_INJECT_HEADER`,
+`WATCH_MEMORY_INJECT_LIMIT`, `WATCH_MEMORY_ROW_MAX_CHARS` (MEMORY-8/9,
+REQ-watch-067).
 
 ## Invariants
 

@@ -766,12 +766,16 @@ export async function startBridge(
           const memInject = enrichPromptWithMemories(
             enrichedPrompt,
             memoryStore,
-            memoryInjectOptsFor({
-              userId: msg.authorId,
-              people,
-              role: actingRole,
-              projectDir: sessionCwd ?? config.projectRoot,
-            }),
+            {
+              ...memoryInjectOptsFor({
+                userId: msg.authorId,
+                people,
+                role: actingRole,
+                projectDir: sessionCwd ?? config.projectRoot,
+              }),
+              // MEMORY-9: search memory for this message.
+              query: prompt,
+            },
           );
           if (memInject.injected) {
             console.log(
@@ -1229,12 +1233,16 @@ export async function startBridge(
           const memInject = enrichPromptWithMemories(
             enrichedPrompt,
             memoryStore,
-            memoryInjectOptsFor({
-              userId: interaction.userId,
-              people,
-              role: actingRole,
-              projectDir: sessionCwd ?? config.projectRoot,
-            }),
+            {
+              ...memoryInjectOptsFor({
+                userId: interaction.userId,
+                people,
+                role: actingRole,
+                projectDir: sessionCwd ?? config.projectRoot,
+              }),
+              // MEMORY-9: search memory for the picked answer.
+              query: label,
+            },
           );
           if (memInject.injected) enrichedPrompt = memInject.prompt;
 

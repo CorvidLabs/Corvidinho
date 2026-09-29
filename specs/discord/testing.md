@@ -437,3 +437,17 @@ v11 DB migrates keeping memories, `forget_requests` has no free-text column,
 one pending ask per subject, re-running is a no-op.
 `tests/watch.session-store.durable.test.ts` and
 `tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 12.
+
+Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
+`tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question
+in plain words finds the fact it is about; a key hit outranks a newer passing
+mention and equal relevance goes to the newer row; › "the Discord inject
+searches memory for the message" — an older fact the message is about is
+injected although 25 newer rows exist (block still 20 rows); › "Discord spawn
+clears inherited GitHub commenter keys". `tests/memory.rank.test.ts` —
+`recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
+a multi-scope search keeping the newest of a key once and no private notes, a
+question-words-only query matching as one substring, `recallRelevantThenRecent`,
+`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
+undeclared-under-`[people]` owner on their Discord id) and
+`projectScopeForRepo`.
