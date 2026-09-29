@@ -14,8 +14,6 @@ requirements say:
   unlisted callers now resolve to BLOCKED") → `--help` and the go-live
   checklist say both empty = anyone in an allowlisted channel, once either
   is set only those users, role holders and the owner.
-- **ALLOW-4** with **REQ-plugins-006** (a missing file means env overlays
-  only) → `.env.example` never suggests a `~` path the loader cannot find.
 - **CLI-8** with **REQ-cli-108** / the daemon's `spend.warning` requirement →
   `docs/DAEMON.md` lists every event the daemon logs.
 

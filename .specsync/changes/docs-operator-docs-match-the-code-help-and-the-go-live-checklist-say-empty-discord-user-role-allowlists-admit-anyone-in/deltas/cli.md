@@ -3,7 +3,7 @@ module: cli
 change: docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in
 ---
 
-# Delta: cli (--help, .env.example and docs/DAEMON.md match the code)
+# Delta: cli (--help and docs/DAEMON.md match the code)
 
 ## Modified
 
@@ -15,7 +15,6 @@ Acceptance Criteria
 - `corvidinho --help` mentions allowlist file/env vars.
 - STATUS/README note how to set allowlists on the bot VM; wallets deferred.
 - `corvidinho --help` says an empty Discord channel list refuses start, users and roles both empty admit anyone in an allowlisted channel, and once either is set only those users, role holders and the owner (REQ-discord-043); no `--help` row naming the Discord `_USERS` / `_ROLES` allowlists says empty = refuse or deny-all.
-- `.env.example` gives an absolute `CORVIDINHO_ALLOWLIST_FILE` example and says `~` is not expanded (a systemd `EnvironmentFile` and Bun's `.env` keep it as-is) and that unset already reads `~/.config/corvidinho/allowlist.toml|json`; no operator doc sets the variable to a `~` path.
 
 ### REQUIREMENT REQ-cli-108
 

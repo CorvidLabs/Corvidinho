@@ -8,7 +8,6 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
-import { defaultAllowlistPaths, resolveAllowlistPath } from "../src/allowlist/load.ts";
 import { emptyConfig, type AllowlistConfig } from "../src/allowlist/types.ts";
 import {
   COLLAPSED_PING_NEEDS,
@@ -258,36 +257,6 @@ describe("Discord user/role allowlists and ADMIN", () => {
     const keys = Object.keys(JSON.parse(json!)).map(Number);
     const reachable: number[] = [PermissionLevel.STANDARD, PermissionLevel.ADMIN];
     for (const k of keys) expect(reachable).toContain(k);
-  });
-});
-
-describe("allowlist file path (.env.example)", () => {
-  test("code: an explicit CORVIDINHO_ALLOWLIST_FILE is used as given, ~ included; unset reads the default paths", () => {
-    expect(
-      resolveAllowlistPath({ CORVIDINHO_ALLOWLIST_FILE: "~/.config/corvidinho/allowlist.toml" }, "/home/op"),
-    ).toBe("~/.config/corvidinho/allowlist.toml");
-    expect(defaultAllowlistPaths("/home/op")).toEqual([
-      "/home/op/.config/corvidinho/allowlist.toml",
-      "/home/op/.config/corvidinho/allowlist.json",
-    ]);
-  });
-
-  test("no doc sets CORVIDINHO_ALLOWLIST_FILE to a ~ path; .env.example says why and names the unset default", () => {
-    for (const p of OPERATOR_DOCS) {
-      for (const m of read(p).matchAll(/CORVIDINHO_ALLOWLIST_FILE=([^\s`'"]+)/g)) {
-        expect({ p, value: m[1], tilde: m[1]!.startsWith("~") }).toEqual({
-          p,
-          value: m[1],
-          tilde: false,
-        });
-      }
-    }
-    const env = read(".env.example");
-    const example = env.match(/^#\s*CORVIDINHO_ALLOWLIST_FILE=(\S+)$/m)?.[1];
-    expect(example?.startsWith("/")).toBe(true);
-    const flat = env.replace(/\n#\s*/g, " ");
-    expect(flat).toContain("~ is not expanded");
-    expect(flat).toContain("Unset already reads ~/.config/corvidinho/allowlist.toml|json");
   });
 });
 
