@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the",
+  "implementation_commit": "f4ad92829f7f35f99c91125c30db48f2ea5ab8a4",
+  "implementation_tree": "14c9a41ea3754d2eace88ee403687c7902f7e5c7",
+  "contract_digest": "508be16fbf8416b3e9a806143a45ed7df9e12771f0d429940885d8602490d618",
+  "workspace_digest": "dddc3838ffdefe380c93dec5ffabf4b9f2e833081496ef6f49478bfd81fdc15d",
+  "closing_digest": "419761071c597b394063352b84dc9e168203e68c1a7f524e2027eb5a9612c418",
+  "review_digest": "4f8ddb4ed02ce744a619dc6bc1979baf86f4956d37599340bfda8d488ee7f254",
+  "finalization_digest": "619f4ad0cd2c0283a73712d2ac210f48c16671bedbc73a24abac36e4c5de00a5",
+  "timestamp": 1790721042
+}
