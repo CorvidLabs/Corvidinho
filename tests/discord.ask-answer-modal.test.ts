@@ -589,7 +589,11 @@ describe("Answer press and submit pass the same gates as a button press (DISCORD
     // A substantive reply still answers it with the prior-question block.
     await b.handlers.onMessage(replyTo(b.stubId, USER_ID, "us-east-2"));
     expect(b.calls).toHaveLength(2);
-    expect(b.calls[1]!.prompt).toContain(`${PRIOR_BLOCK}\n\nHuman answer:\nus-east-2`);
+    expect(b.calls[1]!.prompt).toContain(PRIOR_BLOCK);
+    // SAFE-12: a non-owner's channel reply is fenced as untrusted data.
+    expect(b.calls[1]!.prompt).toMatch(
+      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nus-east-2\n<<<END_UNTRUSTED_DATA/,
+    );
     expect(b.result.store.list()[0]!.pendingAsk ?? null).toBeNull();
     await b.result.stop();
   });
@@ -630,7 +634,11 @@ describe("replying in the channel still works (DISCORD-ASK-4.a)", () => {
     const b = await withFreeTextAsk();
     await b.handlers.onMessage(replyTo(b.stubId, USER_ID, "us-east-2"));
     expect(b.calls).toHaveLength(2);
-    expect(b.calls[1]!.prompt).toContain(`${PRIOR_BLOCK}\n\nHuman answer:\nus-east-2`);
+    expect(b.calls[1]!.prompt).toContain(PRIOR_BLOCK);
+    // SAFE-12: a non-owner's channel reply is fenced as untrusted data.
+    expect(b.calls[1]!.prompt).toMatch(
+      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nus-east-2\n<<<END_UNTRUSTED_DATA/,
+    );
     expect(b.result.store.list()[0]!.pendingAsk ?? null).toBeNull();
     const rec = recorder();
     await b.handlers.onComponent!(answerPress(b.askId, USER_ID, rec));

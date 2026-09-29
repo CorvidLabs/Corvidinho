@@ -1410,8 +1410,8 @@ export async function startBridge(
                 role: actingRole,
                 projectDir: sessionCwd ?? config.projectRoot,
               }),
-              // MEMORY-9: search memory for the picked answer.
-              query: label,
+              // MEMORY-9: search memory for the picked / typed answer.
+              query: answer,
             },
           );
           if (memInject.injected) enrichedPrompt = memInject.prompt;
