@@ -81,7 +81,7 @@ import {
   gateActor,
   gateChannel,
   gateRateOrMute,
-  isMonitoredChannel,
+  isMonitoredConversation,
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
   PermissionLevel,
@@ -553,6 +553,20 @@ export async function startBridge(
 
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
+
+      // DISCORD-ASK-5 / REQ-discord-044: a button ask past its timeout is
+      // cleared here, before the thin-ack gate, so its dead Choose button is
+      // never restated. The newest open ask that has not timed out takes its
+      // place (earlier timed-out ones are dropped), or none is left and the
+      // message runs the agent. A cancel keeps its ack below.
+      if (
+        action.kind === "continue_session" &&
+        session.pendingAsk?.options?.length &&
+        isAskExpired(session.pendingAsk) &&
+        !isCancelAsk(promptBodyForAskGate(prompt))
+      ) {
+        store.clearPendingAsk(session, session.pendingAsk.askId);
+      }
 
       // AUTONOMY-5/6: while waiting on an ask, thin acks restate the newest
       // one; cancel clears every open ask of the session (SESSION-MULTI-3).
@@ -1473,11 +1487,10 @@ export async function startBridge(
     const r = await recoverInterruptedReplies({
       store: inflightReplies,
       rows: interruptedReplies,
-      // DISCORD-5: only channels (or a thread's parent) still allowlisted now.
+      // DISCORD-5: only channels (or a thread's parent) still allowlisted
+      // now; a deny on the thread or its parent wins (REQ-plugins-005).
       mayPost: (row) =>
-        isMonitoredChannel(row.channelId, config.allowlist) ||
-        (row.parentChannelId != null &&
-          isMonitoredChannel(row.parentChannelId, config.allowlist)),
+        isMonitoredConversation(row.channelId, row.parentChannelId, config.allowlist),
       editEmbed: (o) => outbound.editEmbed(o),
       reply: replyRef.fn,
     });

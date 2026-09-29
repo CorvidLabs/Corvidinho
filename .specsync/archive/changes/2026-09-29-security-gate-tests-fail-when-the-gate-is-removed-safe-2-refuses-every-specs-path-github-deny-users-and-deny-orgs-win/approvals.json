@@ -1,0 +1,57 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790697834,
+      "digest": "e7a6649697065333cb2904f878e385c96c46652f90855551c6b058287d8ba58a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win",
+        "title": "Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised",
+        "description": "Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised",
+        "kind": "feature",
+        "affected_specs": [
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "specs/discord/testing.md",
+          "specs/plugins/testing.md",
+          "specs/watch/testing.md",
+          "tests/discord.requester-perms.test.ts",
+          "tests/files.plugins.test.ts",
+          "tests/git.plugins.test.ts",
+          "tests/github.public.community.test.ts",
+          "tests/watch.router.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-write/edit/delete of specs/<m>/requirements.md, specs/<m>/context.md and a new specs/notes.md are refused with SAFE-2 (exit 2) and git-commit refuses staging the deletion of specs/x/requirements.md, and these tests fail with the specs/ component rule removed; a WATCH event from a deny_users user or a deny_orgs org is refused with no session and git-push to a deny_orgs org exits 3 with nothing pushed, and these tests fail with either deny loop disabled; a community session with no injected visibility lookup is refused a private repo (no pulls call), refused an unconfirmed one (404 or no token) and allowed a public one through the Octokit lookup over a stubbed fetch, and the private test fails when the lookup always answers public; verifyRequesterCanSend with no injected checker refuses (403) a requester without View Channel + Send Messages, allows one with both, needs Attach Files for a file post, and discord-post-message in a bridge run posts nothing on a live denial, and these tests fail with the permissionsFor checks disabled; product code is unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "e04db7ed822d0ceaee9255528b0d66ff0aa58f768df548044de1f934d6c9d442",
+        "plugins": "2df2866a1b36e10dd0df1c6678b834b971653ab3dd04c46a7dd228b99a6584f6",
+        "watch": "cba2a80f799e38e8f3525b6215d0360c4ed785e9788b661e516d2d7a2b224cb3"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790703081,
+      "digest": "536731990b3acaeb797f893f19c33fb22a6806340546270adaaa82a6e496a747",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button",
+  "implementation_commit": "4813af3965c821e79a1ec59f74749b1f05ce93ce",
+  "implementation_tree": "5a60040b7931abc0ec55168a8475c7a493669310",
+  "contract_digest": "a9577adb138ca731308e7df01c7156965adb27b87caca456c1b83f1588e08d5e",
+  "workspace_digest": "1d570855f43ecec1e5f1c47eb0fbcc5ae9faddb220c9d23e99a3d4d8ab4bdc63",
+  "closing_digest": "b39cf9feaecdcc2fe0adee7e72f53e1c286894d98d454eabc9680ce1b3502dc4",
+  "review_digest": "0e4e5842e00d2cf235e039151ef46bd935a6f277899a3b73edb67718a71b8a46",
+  "finalization_digest": "5bb93e697d76c088635889744db8a4e894631754f069249f27da680a7d21073c",
+  "timestamp": 1790704449
+}

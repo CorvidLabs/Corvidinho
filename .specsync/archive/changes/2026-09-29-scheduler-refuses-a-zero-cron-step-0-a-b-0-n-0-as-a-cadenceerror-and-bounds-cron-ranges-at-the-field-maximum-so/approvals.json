@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790697721,
+      "digest": "b3454ad01fc194922b6d87296c40cd3192edeeca84222e77770593499176a894",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so",
+        "title": "Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge",
+        "description": "Scheduler refuses a zero cron step (*/0, a-b/0, n/0) as a CadenceError and bounds cron ranges at the field maximum, so /schedule create replies instead of hanging the bridge",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "src/scheduler/cron.ts",
+          "tests/discord.schedule.test.ts",
+          "tests/scheduler.cron.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A cadence with a zero cron step in any field (*/0, a-b/0, n/0, also inside a comma list) is refused with a CadenceError naming the step before any loop, so /schedule create replies with that message ephemerally and creates nothing instead of hanging the bridge; parseCron and getNextCronDate (store create/resume/claim) throw the same CadenceError; a range whose end is past the field maximum (0-99999999999) is bounded at that maximum so it resolves at once and falls to the existing 5-minute rule; every cadence accepted today with a step >= 1 resolves to the same cron; regression tests run the hang forms in a child bun with a timeout and fail on main; no new env var, config key, command, option or schema change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "53fa6f1c69820d5fbd50c53ddf60fc388d98cc3e17d3707863adca4cd9624e4c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790702839,
+      "digest": "2416ffed2d32ace45a1a076893ce329d8c6a707def315fd06767c697e1b4259e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

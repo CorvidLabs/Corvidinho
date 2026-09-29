@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "685c71c8f70db72cb0e4f992ecb86712c31eba8b",
+      "contract_digest": "e7a6649697065333cb2904f878e385c96c46652f90855551c6b058287d8ba58a",
+      "execution_digest": "2559563cb82b3e9c89365407fbaa1ddf34f6f659c2c620347f102b629ccbad34",
+      "workspace_digest": "814423058ab16d5aca9bb87a8f6f6bda47fb3bf04dadb83c8fd2a2ee7a1b4185",
+      "timestamp": 1790703068
+    }
+  ]
+}

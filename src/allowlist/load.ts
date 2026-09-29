@@ -1,6 +1,7 @@
 /**
  * ALLOW-4 — load allowlists from bot-VM file + env overlays.
- * Paths: CORVIDINHO_ALLOWLIST_FILE, else ~/.config/corvidinho/allowlist.toml|json
+ * Paths: CORVIDINHO_ALLOWLIST_FILE (a leading ~ or ~/ is HOME), else
+ * ~/.config/corvidinho/allowlist.toml|json
  */
 
 import { existsSync } from "node:fs";
@@ -385,12 +386,23 @@ export function defaultAllowlistPaths(home: string = homedir()): string[] {
   return [join(base, "allowlist.toml"), join(base, "allowlist.json")];
 }
 
+/**
+ * CORVIDINHO_ALLOWLIST_FILE, else the first default path that exists. A
+ * leading `~` or `~/` in the explicit value means `home`: dotenv loaders (Bun's
+ * included) keep `~` literally, and a cwd-relative `~/…` is never found, which
+ * would silently drop the file's deny lists. `~user` and every other value are
+ * used as written.
+ */
 export function resolveAllowlistPath(
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
 ): string | null {
   const explicit = env.CORVIDINHO_ALLOWLIST_FILE?.trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    if (explicit === "~") return home;
+    if (explicit.startsWith("~/")) return join(home, explicit.slice(2));
+    return explicit;
+  }
   for (const p of defaultAllowlistPaths(home)) {
     if (existsSync(p)) return p;
   }
