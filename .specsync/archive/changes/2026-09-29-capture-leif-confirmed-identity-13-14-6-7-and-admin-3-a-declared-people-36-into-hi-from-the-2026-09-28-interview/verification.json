@@ -1,0 +1,52 @@
+{
+  "timestamp": 1790704281,
+  "commit": "89a19b1217f1c36498dc140005bbf6ed896b0379",
+  "contract_digest": "831ad7a30b39079db97ae5e5ff643d82e979ed91bfd39deb67918ea1d0c3896a",
+  "execution_digest": "e8029813855ef1871ae83d6be4ad4162677837f735bd4d4d1c5a1ee472dbef45",
+  "workspace_digest": "90b66591b200378b6a73acbdeaa345abc139e3b08338d1422fc9e3c3ede05e39",
+  "acceptance_input_digest": "9893f9e59d3f9ad7b59f4adbb5c20e77ed7e87799eff36183a28b632e2b83209",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "INTENT.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2440721d232079c69796dff66c72187d2dea3f4e5fe29392ba56853cad49bb3f",
+        "entry_digest": "3cfaaf740820b257ff80015cb0676b0d18d8e4999e421a273ccc0660372e5ddc",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/admin.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8af2a1f7c7b09d6daf59024439cab113e388c778bf403cb4539c23b03f18d090",
+        "entry_digest": "7a5d9483a983d29e68f1e9ee914e1c65c6ab8559de897e581d250478498d0680",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/identity.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8ccbd9f5b84f17c8a53d96c09f8c877044e323d2dcd8db633fc63d109c8c77ec",
+        "entry_digest": "15db3808278c341c360437a7882d372f3bc5a361f7820d4f457573578c60915d",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "89a19b1217f1c36498dc140005bbf6ed896b0379",
+      "contract_digest": "2b761f4470b74e86628f9bf46c447b00cd1f3dc2d4a4194caf7d2eb490bf3323",
+      "execution_digest": "d4cf8d5b34ebda46a6f1c7d1b7d60bf80e24bb48a05135265d28b8218c31f341",
+      "workspace_digest": "90b66591b200378b6a73acbdeaa345abc139e3b08338d1422fc9e3c3ede05e39",
+      "timestamp": 1790704913
+    }
+  ]
+}

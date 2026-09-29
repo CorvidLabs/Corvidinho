@@ -1,6 +1,6 @@
 ---
 id: declared-people-the-owner-declares-who-s-who-in-the-allowlist-file-corvidinho-recognises-the-owner-and-each-declared
-state: implementing
+state: archived
 type: feature
 base_commit: e54ec96dbd98ee6f6f85b80d81f9780cbf5fd889
 ---
