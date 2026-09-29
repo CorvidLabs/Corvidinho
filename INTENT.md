@@ -17,6 +17,7 @@
 - [github](hi/github.md): GITHUB (8 criteria)
 - [identity](hi/identity.md): IDENTITY (5 criteria)
 - [memory](hi/memory.md): MEMORY (4 criteria)
+- [ops](hi/ops.md): OPS (2 criteria)
 - [plugin](hi/plugin.md): PLUGIN (7 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
 - [safe](hi/safe.md): SAFE (21 criteria)
