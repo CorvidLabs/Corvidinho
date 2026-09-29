@@ -7,10 +7,10 @@
   "title": "Capture Leif-confirmed IDENTITY-13/14/6/7 and ADMIN-3.a (declared people, #36) into hi/ from the 2026-09-28 interview",
   "description": "Capture Leif-confirmed IDENTITY-13/14/6/7 and ADMIN-3.a (declared people, #36) into hi/ from the 2026-09-28 interview",
   "kind": "documentation",
-  "state": "draft",
+  "state": "approved",
   "base_commit": "5c867fdd04756f336b6611c0967d462701306711",
   "created_at": 1790695155,
-  "updated_at": 1790695163,
+  "updated_at": 1790695184,
   "affected_specs": [],
   "affected_paths": [
     "hi/identity.md",
