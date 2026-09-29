@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 36
+version: 35
 status: draft
 files:
   - src/agent/types.ts
@@ -437,17 +437,27 @@ own). A successful result of a tool in `INJECTION_SCAN_TOOLS` (`web-fetch`,
 the GitHub title / docs / milestone readers, `discord-user-lookup`; never PR
 diffs or file lists) is scanned by `detectInjection` over its strings (the web
 fence's own lines left out): a hit puts `injectionToolNote` in front of that
-tool message, drops every mutating plugin (`isMutatingPlugin`) from the
-catalog sent for the rest of the run (verify retries included) and refuses
-any mutating call with `injectionToolRefusal` (exit 2, never run), reports
-the first hit once through `onInjection` (tool name + reason ids, never the
-text) after appending an `injection-suspected` / `denied` SAFE-5 row (actor
-and surface from the spawn env, digest of the tool and reasons; best effort),
-emits one `[operator]` Text line, and ends every later summary with
-`injectionSummaryNote` once, before any ROLES-CHAT-3 role note (which stays
-last). `task run` copies the notice to `TaskResult.injection`. The detector is
-bounded (capped input, bounded windows) and its patterns fold look-alike
-letters and strip invisible characters first.
+tool message, drops every mutating plugin (`isMutatingPlugin`) and
+`memory-store` (`INJECTION_BLOCKED_WRITE_TOOLS`: a stored memory is replayed
+to later runs as the user's facts) from the catalog sent for the rest of the
+run (verify retries included) and refuses any such call with
+`injectionToolRefusal` (exit 2, never run), reports the first hit once
+through `onInjection` (tool name + reason ids, never the text) after
+appending an `injection-suspected` / `denied` SAFE-5 row (actor and surface
+from the spawn env, digest of the tool and reasons; best effort; none in a
+delegate / council worker, delegation depth > 0, whose hit rides its result
+to the top-level lead, which records the one row), emits one `[operator]`
+Text line, and ends every later summary with `injectionSummaryNote` once,
+before any ROLES-CHAT-3 role note (which stays last). A `delegate` /
+`council` result, finished or not, whose `data.injection` is a valid notice
+(`WORKER_RESULT_TOOLS`: a worker's own hit, REQ-plugins-071) counts as this
+run's hit: `injectionWorkerNote` and the fenced result in its tool message,
+then the same drop, report, row and note. `task run` copies the notice to
+`TaskResult.injection`. The detector is bounded (capped input, bounded
+windows), its patterns fold look-alike letters and strip invisible characters
+first, and they aim at orders to the model: a speaker's own "ignore my
+previous …", a rules file, a question about a token in code, "list your
+instructions for …" or a browser's developer mode do not count.
 
 ## Behavioral Examples
 
@@ -555,7 +565,8 @@ letters and strip invisible characters first.
 | Git project: instruction file untracked, or HEAD unborn | refused as not committed; named in the Text note |
 | Git project: `.git` unusable (not a repo top level, git missing) | present files refused; no working-tree fallback |
 | Git project: committed symlink leaves the commit, is broken, hops a symlinked dir, or loops | refused; named in the Text note |
-| A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
+| A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool and no `memory-store` offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
+| A `delegate` / `council` result carries its worker's own hit (`data.injection`) | counts as this run's hit: `injectionWorkerNote` and the fenced result in its tool message, then the same drop, report, row and note; the worker itself records no row (REQ-agent-071) |
 | Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
 
 ## Dependencies
@@ -614,4 +625,3 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-29 | three-roles-owner-team-and-community-gate-every-tool-each-declared-person-has-one-role-set-only-by-the-owner-role-key: Three roles: owner, team and community gate every tool. Each declared person has one role set only by the owner (role key or audited /admin people role); the tool layer re-resolves the actor's role from the people registry on every run and surface (runPlugin + catalog): owner keeps everything, team gets /work edits and PR, GitHub reviews and comments on allowlisted repos and only their own memory, community (and anyone undeclared, WATCH, schedules, workers) keeps today's read/chat tools; community site/roadmap sources are the public repo docs and the public issues and milestones of allowed public repos (IDENTITY-8..12, ADMIN-3.b, ROLES-CHAT-8.a, #65) |
 | 2026-09-29 | person-and-project-memory-private-notes-and-forget-me-on-an-owner-approve-deny-card-each-declared-person-keeps-one: Person and project memory, private notes, and forget-me on an owner Approve/Deny card: each declared person keeps one profile keyed by person id (role, projects, preferences, history of decisions, asks and approvals), each project keeps memory keyed by its repo for whoever works on it next, a person's memory and private notes are shown only to them and the owner on every surface, and anyone can ask to be forgotten, which deletes their memories once the owner approves on a DM Approve/Deny card (MEMORY-5/6/7, MEMORY-ACL-6, #101) |
 | 2026-09-29 | ask-option-ids-come-out-unique-so-choose-buttons-open-and-a-pick-resumes-with-the-pressed-label-a-reply-after-a-button: Ask option ids come out unique so Choose buttons open and a pick resumes with the pressed label; a reply after a button ask expired clears it instead of restating a dead Choose button (DISCORD-ASK-1/3/5) |
-| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

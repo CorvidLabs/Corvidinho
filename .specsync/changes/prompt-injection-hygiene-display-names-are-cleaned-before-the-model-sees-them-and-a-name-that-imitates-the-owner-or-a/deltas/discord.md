@@ -38,9 +38,11 @@ with `injectionNoticeFromUnknown` into `AgentSpawnResult.injection`, and the
 post that carries a run's answer SHALL then ping the owner with
 `formatInjectionOwnerLine`: chat and button-pick replies (`withInjectionNotice`,
 with the SAFE-8 warning), `/session start` and `/work` (`slashOwnerNotice`
-`injection`) and schedule result posts. Replayed session turns SHALL strip
-invisible characters and mark a line that imitates a Corvidinho block
-`(quoted)`, so an earlier message cannot close the replay block; recalled
+`injection`) and a schedule run's result post or ask post. Replayed session
+turns SHALL strip invisible characters and mark a line that imitates a
+Corvidinho block or a turn label (`Human:`, `You (Corvidinho):`) `(quoted)`,
+so an earlier message cannot close the replay block or pass for a turn of
+Corvidinho's own; recalled
 memory lines SHALL strip invisible characters. `discord-user-lookup` names are
 cleaned (REQ-plugins-071). No env var, config key, table or column.
 
@@ -49,7 +51,8 @@ Acceptance Criteria
 - An ordinary stranger message runs with the words inside the fence (`role: community`, `source=chat-message`), the display name cleaned and a `name_clash` line; a run reporting `injection` gets the owner line and the owner in its allowed mentions.
 - `/session start` and `/work`: a stranger's injection creates no session and runs nothing, the interaction gets the refusal, the owner a fresh ping post, the trail one `denied` row; an ordinary stranger request runs fenced and the owner's unfenced.
 - `slashOwnerNotice` and `withInjectionNotice` carry the SAFE-13 owner line and the owner mention; no notice leaves a post unchanged.
-- The replay block marks a turn line that imitates its footer `(quoted)` and still ends with its own footer.
+- The replay block marks a turn line that imitates its footer or a turn label `(quoted)` and still ends with its own footer.
+- A schedule run reporting `injection` pings the owner with the SAFE-13 line on its result post and, when it ends with an ask, on its ask post.
 - A non-owner's free-text answer to a pending ask reaches the model inside the fence (`tests/discord.slash-pending-ask.test.ts`).
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 

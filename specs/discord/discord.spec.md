@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 84
+version: 83
 status: draft
 files:
   - src/discord/types.ts
@@ -624,9 +624,10 @@ ids; never the text). Otherwise the team / community speaker's words go to
 the model through `fenceSpeakerText` (the owner's unchanged). A run whose
 result carries `injection` pings the owner on the post that carries its
 answer: chat and button-pick replies (`withInjectionNotice`), `/session
-start` and `/work` owner notices (`slashOwnerNotice`) and schedule result
-posts. Replayed session turns strip invisible characters and mark a line that
-imitates a Corvidinho block `(quoted)`; recalled memory lines strip invisible
+start` and `/work` owner notices (`slashOwnerNotice`) and a schedule run's
+result post or ask post. Replayed session turns strip invisible characters and
+mark a line that imitates a Corvidinho block or a turn label (`Human:`,
+`You (Corvidinho):`) `(quoted)`; recalled memory lines strip invisible
 characters. No new env var, config key, table or column.
 
 ## Behavioral Examples
@@ -864,4 +865,3 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), .env.example gives an absolute CORVIDINHO_ALLOWLIST_FILE because ~ is not expanded, and docs/DAEMON.md lists daemon.start_failed and spend.warning |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
-| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

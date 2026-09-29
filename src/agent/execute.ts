@@ -29,17 +29,22 @@ import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
   INJECTION_AUDIT_ACTION,
+  INJECTION_BLOCKED_WRITE_TOOLS,
   INJECTION_SCAN_TOOLS,
   UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS,
   UNTRUSTED_RESULT_TOOLS,
+  WORKER_RESULT_TOOLS,
   detectInjection,
   fenceUntrustedData,
+  injectionNoticeFromUnknown,
   injectionSummaryNote,
   injectionToolNote,
   injectionToolRefusal,
+  injectionWorkerNote,
   toolResultFenceHeader,
   type InjectionNotice,
 } from "./untrusted.ts";
+import { delegateDepthFromEnv } from "../autonomous/delegate.ts";
 import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../audit/log.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import {
@@ -352,8 +357,12 @@ export function withInjectionNote(summary: string, notice: InjectionNotice): str
  * tripped the detector (actor and surface from the spawn env; the digest is
  * of the tool and reason ids, never the text). Best effort: the run already
  * dropped its mutating tools, so a missing trail never widens anything.
+ * A delegate / council worker (delegation depth > 0) records none: it has no
+ * audit key (SAFE-6), and the notice rides its result up to the top-level
+ * lead, which records the one row.
  */
 function recordInjectionAudit(env: NodeJS.ProcessEnv, notice: InjectionNotice): void {
+  if (delegateDepthFromEnv(env) > 0) return;
   try {
     const db = openCorvidinhoDb({ env });
     try {
@@ -403,8 +412,12 @@ export function toolResultScanText(result: PluginHandlerResult): string {
     .replace(/^<<<(?:END_)?UNTRUSTED_WEB_CONTENT id=[0-9a-f]{1,32}(?: source=[^\n]*)?>>>$/gm, "");
 }
 
-/** A registered plugin that mutates (SAFE-13 drops these after a hit). */
-function mutatingByName(name: string): boolean {
+/**
+ * A tool SAFE-13 drops after a hit: a registered plugin that mutates, or one
+ * that writes durable state later runs trust (`memory-store`).
+ */
+function blockedAfterInjection(name: string): boolean {
+  if (INJECTION_BLOCKED_WRITE_TOOLS.has(name)) return true;
   const cmd = getPlugin(name);
   return Boolean(cmd && isMutatingPlugin(cmd));
 }
@@ -752,9 +765,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     }
 
     // SAFE-13: after a tool result looked like an injection, the model is
-    // offered no mutating tool for the rest of the run.
+    // offered no mutating tool (and no memory-store) for the rest of the run.
     const roundTools = injectionTripped()
-      ? tools.filter((t) => !mutatingByName(t.function.name))
+      ? tools.filter((t) => !blockedAfterInjection(t.function.name))
       : tools;
     const request = () =>
       chatCompletions({
@@ -863,7 +876,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       try {
         result = asked
           ? asked.refusal
-          : offered.has(name) && injectionTripped() && mutatingByName(name)
+          : offered.has(name) && injectionTripped() && blockedAfterInjection(name)
           ? // SAFE-13: no mutating tool after a tool result looked like an injection.
             { ok: false, error: injectionToolRefusal(name), exitCode: 2 }
           : offered.has(name)
@@ -955,7 +968,10 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
  * carries third-party text (issue / PR bodies and titles, repo docs, guild
  * member names) is fenced as untrusted data; `web-fetch` fences its page
  * already. A result the detector scans that looks like an injection is
- * reported once (`onInjection`) and gets the SAFE-13 note in front.
+ * reported once (`onInjection`) and gets the SAFE-13 note in front. A
+ * `delegate` / `council` result whose worker reported a hit of its own
+ * (`data.injection`, finished or not) counts as this run's hit: the note,
+ * the worker's text fenced, the report.
  */
 function untrustedToolContent(
   name: string,
@@ -965,6 +981,19 @@ function untrustedToolContent(
   onEvent: ((event: AgentEvent) => void) | undefined,
 ): string {
   let content = stringifyToolPayload(result);
+  if (offered && WORKER_RESULT_TOOLS.has(name)) {
+    const data = result.data as { injection?: unknown } | undefined;
+    const notice = injectionNoticeFromUnknown(data?.injection);
+    if (notice) {
+      onInjection(notice);
+      emit(onEvent, {
+        type: "Text",
+        text: `[operator] SAFE-13: a ${notice.source} result inside a ${name} worker looked like a prompt-injection attempt (${notice.reasons.join(", ")}); mutating tools are off for the rest of this run`,
+      });
+      const fenced = fenceUntrustedData(content, { source: name, header: toolResultFenceHeader(name) });
+      return `${injectionWorkerNote(name, notice)}\n${fenced}`;
+    }
+  }
   if (!offered || !result.ok) return content;
   if (UNTRUSTED_RESULT_TOOLS.has(name)) {
     content = fenceUntrustedData(content, { source: name, header: toolResultFenceHeader(name) });

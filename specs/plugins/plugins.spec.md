@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 54
+version: 53
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -134,7 +134,9 @@ REQ-plugins-112..113).
 Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 `delegate` hands a subtask to a worker agent (AUTONOMOUS-5 / REQ-plugins-117);
 `council` convenes worker voices that propose, critique and decide
-(AUTONOMOUS-6 / REQ-plugins-118).
+(AUTONOMOUS-6 / REQ-plugins-118). Both pass a worker's own SAFE-13 hit
+(`result.injection`, validated) back as `data.injection`, which the lead's
+tool loop takes as its own hit (REQ-plugins-071).
 
 ## Public API
 
@@ -838,4 +840,3 @@ and current rows for plugins host evolution.
 | 2026-09-29 | discord-post-message-gates-on-the-bridge-s-channel-set-allowlist-file-and-corvidinho-discord-allow-channels-union: Discord-post-message gates on the bridge's channel set (allowlist file and CORVIDINHO_DISCORD_ALLOW_CHANNELS union DISCORD_CHANNEL_IDS), so a channel allowlisted only through DISCORD_CHANNEL_IDS can be posted to; deny lists still win |
 | 2026-09-29 | security-gate-tests-fail-when-the-gate-is-removed-safe-2-refuses-every-specs-path-github-deny-users-and-deny-orgs-win: Security gate tests fail when the gate is removed: SAFE-2 refuses every specs/ path, GitHub deny_users and deny_orgs win in WATCH and git-push, a community session is refused a private repo through the real visibility lookup, and the live DISCORD-8 requester check is exercised |
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
-| 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |

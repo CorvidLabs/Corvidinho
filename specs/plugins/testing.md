@@ -178,3 +178,6 @@ markup, zero-width or bidi characters, role tags or labels) and a message
 without `<@`; a community role session whose task claims the owner gets no
 mutating tool and a role refusal for `files-write`. `tests/web.fetch.test.ts`
 (unchanged) still passes with `fenceUntrusted` on the shared fence.
+`delegate` over a fake worker bin whose result frame carries `injection`
+returns the validated `data.injection` (an unknown reason dropped, a bad
+source gives none); `runCouncil` keeps a voice's notice on its outcome.

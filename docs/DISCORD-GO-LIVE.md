@@ -364,8 +364,8 @@ text and injection attempts").
 - A non-owner message or WATCH event that looks like an injection attempt gets one short reply
   (Discord) or comment (GitHub) and no run; the owner is pinged on Discord, or @mentioned on
   GitHub when `[owner] github_login` / `CORVIDINHO_OWNER_GITHUB_LOGIN` is set. A tool result
-  that looks like one turns the run's mutating tools off for the rest of that run and pings the
-  owner on the answer. Each hit is an `injection-suspected` audit row (E.7).
+  that looks like one (also one a `delegate` / `council` worker read) turns the run's mutating
+  tools and `memory-store` off for the rest of that run and pings the owner on the answer. Each hit is an `injection-suspected` audit row (E.7).
 - Without an owner the refusal still goes out (it says nobody could be told) and the bridge
   logs `[discord] SAFE-13 refusal but no owner is configured`.
 

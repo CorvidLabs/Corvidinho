@@ -887,18 +887,3 @@ Acceptance Criteria
 - `corvidinho daemon` logs `daemon.started` with `backup`, its tick writes one snapshot and logs `backup.ok` and `restore_test.ok`; a failing dir logs `backup.failed` (error) and leaves `ops_backup_notice`; unset logs `backup: "off"` and no backup events.
 - `backup list` / `backup restore` via the CLI; restore onto the DB the test process holds exits 1 with `is open in process <pid>`; unset dir exits 1; `--help` lists both; `doctor` prints `[warn] backup: off …` unset and `[ok] backup: <dir> — 1 snapshot(s)` set; the doctor line is `[warn]` (never failing) for invalid, in-repo and failing states and shows `owner not told yet` / `owner told`.
 
-### REQ-cli-071
-
-`task run` SHALL copy the run's SAFE-13 notice — the first tool result that
-looked like a prompt-injection attempt, as `{ source, reasons }` (the tool
-name and reason ids, never the text), reported by `createTaskExecute({
-onInjection })` (REQ-agent-071) — onto `TaskResult.injection`, the way it
-copies `spendWarning`, so `--json` and the NDJSON `result` frame carry it
-(additive; the protocol version stays 2) and the Discord, WATCH and schedule
-surfaces can tell the owner. A run with no hit leaves the field out. No flag,
-env var or config key.
-
-Acceptance Criteria
-- A run whose tool result trips the detector reports `{ source, reasons }` once through `onInjection`; the Discord and WATCH spawn clients read it back from the result frame with `injectionNoticeFromUnknown` (tool-name source, known reason ids only) and the bridge / WATCH tests drive the owner notice from it.
-- Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
-

@@ -41,8 +41,9 @@ text), @mentioning the owner's GitHub login from `[owner]` /
 `CORVIDINHO_OWNER_GITHUB_LOGIN` when set, appends an `injection-suspected`
 audit row (actor `github:<login>`, surface `watch:<session>`, `denied`), logs
 `[watch] SAFE-13 refused …`, marks the event handled and runs nothing. A run
-whose tool result trips the detector drops its mutating tools for the rest of
-the run, and its summary comment @mentions the owner. See
+whose tool result trips the detector drops its mutating tools and
+`memory-store` for the rest of the run, and its summary comment @mentions the
+owner. See
 [`discord.md`](discord.md) "Untrusted text and injection attempts".
 
 ## Durable sessions (REQ-watch-037, #37 slice 1)

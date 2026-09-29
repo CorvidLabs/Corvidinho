@@ -604,7 +604,9 @@ line and no owner facts; a stranger named like a declared person is flagged,
 the real person and the owner are not; `resolveDiscordActingRole` and the
 tool layer's `resolveActingRole` give community to a stranger named like the
 owner even with an owner stamp; the replay block quotes a turn line that
-imitates its footer. Through `startBridge` (null gateway, memory DB): a
+imitates its footer or a turn label. Through `SchedulerService` a run
+reporting `injection` pings the owner with the SAFE-13 line on its result
+post and on its ask post. Through `startBridge` (null gateway, memory DB): a
 stranger's injection starts no run, gets one reply that pings only the owner,
 drops the session and audits one `injection-suspected` / `denied` row; a
 declared team member is checked too; the owner's own words run unfenced; an

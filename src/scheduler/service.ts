@@ -38,6 +38,7 @@ import {
 } from "../discord/ask-ping.ts";
 import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
 import { withInjectionNotice } from "../discord/injection-guard.ts";
+import type { InjectionNotice } from "../agent/untrusted.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
@@ -706,6 +707,8 @@ export class SchedulerService {
         await this.postOwnRunAsk(schedule, run, done.ask, {
           context: result.ask ? result.summary : summary,
           spendWarning: result.spendWarning,
+          // SAFE-13: a run that ends with an ask still tells the owner.
+          injection: result.injection,
           handBack: done.autoPaused,
         });
       } else if (schedule.channelId && this.outbound?.post) {
@@ -815,7 +818,13 @@ export class SchedulerService {
     schedule: Schedule,
     run: ScheduleRun,
     ask: HumanAsk,
-    opts: { context?: string; spendWarning?: SpendWarning; handBack?: boolean } = {},
+    opts: {
+      context?: string;
+      spendWarning?: SpendWarning;
+      /** SAFE-13: a tool result in this run looked like an injection. */
+      injection?: InjectionNotice;
+      handBack?: boolean;
+    } = {},
   ): Promise<void> {
     if (!schedule.channelId || !this.outbound?.post) return;
     if (!this.gateTick(schedule).ok) return;
@@ -829,6 +838,7 @@ export class SchedulerService {
         ask,
         opts.context,
         opts.spendWarning,
+        opts.injection,
       );
     } finally {
       if (!posted && recorded && opts.handBack) this.store.releaseRunAsk(run.id);
@@ -852,6 +862,7 @@ export class SchedulerService {
     ask: HumanAsk,
     context: string | undefined,
     spendWarning?: SpendWarning,
+    injection?: InjectionNotice,
   ): Promise<boolean> {
     const outbound = this.outbound;
     if (!outbound?.post) return false;
@@ -885,9 +896,14 @@ export class SchedulerService {
         console.warn(ASK_NO_OWNER_WARNING);
       }
       posted = await outbound.post(
-        withSpendWarningPost(
-          { channelId, content: reply.content, mentionUserIds: reply.mentionUserIds },
-          pending?.warning,
+        // SAFE-13: a tool result that looked like an injection tells the owner.
+        withInjectionNotice(
+          withSpendWarningPost(
+            { channelId, content: reply.content, mentionUserIds: reply.mentionUserIds },
+            pending?.warning,
+            this.owner,
+          ),
+          injection,
           this.owner,
         ),
       );
