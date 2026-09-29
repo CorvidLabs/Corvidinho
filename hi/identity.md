@@ -25,6 +25,7 @@ Corvidinho knows a durable owner (Discord user id, optional GitHub / display suc
 - **IDENTITY-9**  The owner can use everything, subject to the must-ask list.
 - **IDENTITY-10**  Team members get work tasks, reviews, and only their own memory and briefings.
 - **IDENTITY-11**  Community members get Q&A and announcements only, with no mutating tools.
+  - **IDENTITY-11.a**  Community members can't start /work.
 - **IDENTITY-12**  The role is checked in the tool layer on every run and surface; anyone undeclared is community at most.
 
 ## Notes (not numbered AC)
