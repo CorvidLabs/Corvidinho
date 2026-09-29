@@ -11,7 +11,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { planningSelectionText } from "../src/agent/specLoader.ts";
+import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
+import { pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import {
@@ -117,15 +119,35 @@ function adminIx(subcommand: string, options: SlashInteraction["options"]): Slas
   };
 }
 
-async function bridge(allowlistText: string) {
+const ASK: HumanAsk = {
+  reason: "clarify",
+  question: "Which database should back it?",
+  options: [
+    { id: "1", label: "Postgres" },
+    { id: "2", label: "SQLite" },
+  ],
+};
+
+/** `askFirst`: the first run asks with buttons (for a button-pick resume). */
+async function bridge(allowlistText: string, opts: { askFirst?: boolean } = {}) {
   const d = tmp();
   const path = join(d, "allowlist.toml");
   writeFileSync(path, allowlistText);
   const prompts: string[] = [];
   const agent: AgentClient = {
-    async runChat(opts) {
-      prompts.push(opts.prompt);
-      return { ok: true, sessionId: opts.sessionId, summary: "done", exitCode: 0 };
+    async runChat(opts2) {
+      prompts.push(opts2.prompt);
+      if (opts.askFirst && prompts.length === 1) {
+        return {
+          ok: true,
+          sessionId: opts2.sessionId,
+          summary: "Needs your input",
+          exitCode: 0,
+          ask: ASK,
+          task: { verified: false, verifySkipped: true, state: "blocked" },
+        };
+      }
+      return { ok: true, sessionId: opts2.sessionId, summary: "done", exitCode: 0 };
     },
   };
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
@@ -170,7 +192,7 @@ async function bridge(allowlistText: string) {
     });
     return prompts.at(-1) ?? "";
   };
-  return { path, prompts, handlers, say };
+  return { path, prompts, handlers, say, result };
 }
 
 const FILE = `[discord]
@@ -223,6 +245,41 @@ describe("Discord chat recognises declared people live (IDENTITY-14, ADMIN-3.a)"
     const still = await b.say(ADA_DC, "Ada L");
     expect(still).toContain("declared_person: ada");
     expect(still).not.toContain("github: @tofu-dev");
+  });
+});
+
+describe("Discord button-pick resumes recognise declared people (IDENTITY-14)", () => {
+  test("an ask button pick resume names the declared presser by their Discord id, not the press's Discord name", async () => {
+    const b = await bridge(FILE, { askFirst: true });
+    await b.handlers.onMessage({
+      id: "m-pick",
+      channelId: CHAN,
+      authorId: TOFU_DC,
+      authorBot: false,
+      authorDisplayName: "not tofu",
+      content: "<@999> set up storage for the service",
+      mentionedBot: true,
+    });
+    const pending = b.result.store.list()[0]?.pendingAsk;
+    if (!pending) throw new Error("no pending ask after the first run");
+    await b.handlers.onComponent!({
+      id: "ix-pick",
+      customId: pickCustomId(pending.askId, "1"),
+      channelId: CHAN,
+      userId: TOFU_DC,
+      messageId: pending.stubMessageId,
+      reply: async () => {},
+      deleteReply: async () => {},
+      userDisplayName: "not tofu",
+      userUsername: "nottofu",
+    });
+    expect(b.prompts).toHaveLength(2);
+    const resumed = b.prompts[1]!;
+    expect(resumed).toContain("Postgres");
+    expect(resumed).toContain(IDENTITY_INJECT_HEADER);
+    expect(resumed).toContain("declared_person: tofu");
+    expect(resumed).toContain("display_name: Tofu");
+    expect(resumed).not.toContain("not tofu");
   });
 });
 
