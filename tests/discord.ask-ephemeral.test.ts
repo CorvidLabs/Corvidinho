@@ -567,8 +567,11 @@ describe("open button asks are keyed by askId (SESSION-MULTI-3 / REQ-discord-044
     expect(calls).toHaveLength(4);
     expect(calls[3]!.prompt).not.toContain("Which DB?]");
     expect(replies.slice(before).some((r) => r.content.includes("Which DB?"))).toBe(false);
+    // DISCORD-ASK-5: the dropped ask timed out, so a press on it is a late
+    // press — "that choice expired", not "already answered", and no run.
     const late = await press(handlers, openCustomId(askA.askId));
-    expect(String(late[0]!.content).toLowerCase()).toContain("already");
+    expect(late).toEqual([{ content: ASK_CHOICE_EXPIRED, ephemeral: true }]);
+    expect(calls).toHaveLength(4);
     await result.stop();
   });
 
