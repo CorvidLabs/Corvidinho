@@ -1,0 +1,38 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790696932,
+      "digest": "9633bdfbaa336e8f2e560145be06902e265c3b62a3174fa6ad44aebf3d769d2a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "exact-event-run-tests-read-a-fixture-persona-so-an-uncommitted-persona-md-edit-never-breaks-bun-test-or-the-verify-lane",
+        "title": "Exact-event run tests read a fixture persona so an uncommitted persona.md edit never breaks bun test or the verify lane (PERSONA-2, #69)",
+        "description": "Exact-event run tests read a fixture persona so an uncommitted persona.md edit never breaks bun test or the verify lane (PERSONA-2, #69)",
+        "kind": "bug_fix",
+        "affected_specs": [],
+        "affected_paths": [
+          "tests/agent.events-ndjson.test.ts",
+          "tests/agent.project-instructions.test.ts",
+          "tests/agent.spend-ask.test.ts",
+          "tests/fixtures/persona/persona.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Test isolation only: five tests that assert a run's exact events pass personaRoot = tests/fixtures/persona; product behavior and REQ-agent-069 are unchanged (the persona feature change in the same PR owns the agent spec)",
+        "acceptance_criteria": [
+          "With persona.md edited in the checkout but not committed (an extra line appended), the whole bun test suite passes: the project-instructions, spend-warning and NDJSON running-totals tests that assert a run's exact events pass personaRoot = tests/fixtures/persona (a plain folder with no .git, a clean load, no Persona note); no product code, spec requirement or event changes"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
