@@ -31,6 +31,6 @@ values as written; a missing file means env overlays only). After the fix:
 - `bunx tsc --noEmit` — passed.
 - `hi check` — passed (146 criteria, no new ids).
 - `specsync check --require-coverage 100` — 5 specs passed, file and LOC coverage 100%.
-- `bun test` — FULL_SUITE_RESULT.
-- `fledge lanes run verify --non-interactive` — green.
+- `bun test` (Bun 1.4.2, as CI pins) — 2123 passed, 2 skipped, 0 failed.
+- `fledge lanes run verify --non-interactive` — green (lint, smoke, test 2123 pass / 0 fail, spec-check 100%). Two earlier runs on the loaded box each hit one unrelated timing test (`tests/proc-group.test.ts` grandchild kill, `tests/discord.session-thread.unit.test.ts` 5 s timeout); both pass alone and in the full `bun test` run.
 - Manual: `corvidinho doctor` with a temp HOME and `CORVIDINHO_ALLOWLIST_FILE='~/.config/corvidinho/allowlist.toml'` prints `[ok] allowlist-file: <HOME>/.config/corvidinho/allowlist.toml loads (values not shown)`; on `main` it printed `[info] allowlist-file: ~/.config/corvidinho/allowlist.toml not found — env overlays only`.
