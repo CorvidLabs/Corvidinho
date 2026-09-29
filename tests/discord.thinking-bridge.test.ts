@@ -19,6 +19,14 @@ import {
   type DiscordEmbedPayload,
 } from "../src/discord/thinking-status.ts";
 
+/** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
+function answerFooterText(before: string, after?: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return expect.stringMatching(
+    new RegExp(`^${esc(before)} \\| \\d+s${after ? ` \\| ${esc(after)}` : ""}$`),
+  );
+}
+
 /** The model the bridge shows (DISCORD-3.a): same lookup as the bridge. */
 const model = () => loadLlmEnv(process.env).model;
 
@@ -91,7 +99,7 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
     // DISCORD-3.a — footer-only embed (model; no task plumbing from echo).
     expect(finalEdit!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
-      footer: { text: model() },
+      footer: { text: answerFooterText(model()) },
     });
     expect(result.store.bySessionId.size).toBe(1);
 
@@ -158,7 +166,7 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
     // DISCORD-3.a — the failure line keeps an error-colored footer-only embed.
     expect(failEdit!.embed).toStrictEqual({
       color: THINKING_COLORS.error,
-      footer: { text: model() },
+      footer: { text: answerFooterText(model()) },
     });
     await result.stop();
   });
@@ -228,7 +236,7 @@ describe("collapsed answer keeps a footer-only embed (DISCORD-3.a)", () => {
     expect(answer!.components).toBeNull();
     expect(answer!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
-      footer: { text: `${model()} | state=done verified=false verifySkipped attempts=2` },
+      footer: { text: answerFooterText(model(), "state=done verified=false verifySkipped attempts=2") },
     });
     // The plumbing never reached the body or a separate ✅ Done embed edit.
     expect(String(answer!.content)).not.toContain("state=");
@@ -299,7 +307,7 @@ describe("collapsed answer keeps a footer-only embed (DISCORD-3.a)", () => {
     expect(answer.components).toBeNull();
     expect(answer.embed).toStrictEqual({
       color: THINKING_COLORS.error,
-      footer: { text: `${model()} | state=failed verified=false attempts=3` },
+      footer: { text: answerFooterText(model(), "state=failed verified=false attempts=3") },
     });
     await result.stop();
   });

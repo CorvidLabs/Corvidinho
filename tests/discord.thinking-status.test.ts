@@ -240,10 +240,12 @@ describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
       ...(model ? { model } : {}),
       debounceMs: 0,
       tickMs: 60_000,
+      // DISCORD-15: the footer shows the time; a fixed clock keeps it "0s".
+      now: () => 1_000_000,
     });
   }
 
-  test("the final answer keeps one footer-only embed (model | plumbing, no description); the body stays as given", async () => {
+  test("the final answer keeps one footer-only embed (model | time | plumbing, no description); the body stays as given", async () => {
     const { outbound, contentEdits } = mockOutbound();
     const status = statusWith(outbound, "gpt-test");
     await status.start();
@@ -257,7 +259,7 @@ describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
     expect(contentEdits[0]!.components).toBeNull();
     expect(contentEdits[0]!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
-      footer: { text: `gpt-test | ${PLUMBING}` },
+      footer: { text: `gpt-test | 0s | ${PLUMBING}` },
     });
   });
 
@@ -272,7 +274,7 @@ describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
     });
     expect(contentEdits[0]!.embed).toStrictEqual({
       color: THINKING_COLORS.error,
-      footer: { text: "gpt-test | state=failed verified=false verifySkipped attempts=3" },
+      footer: { text: "gpt-test | 0s | state=failed verified=false verifySkipped attempts=3" },
     });
     expect(contentEdits[0]!.content).not.toContain("state=");
   });
@@ -291,7 +293,7 @@ describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
     expect(contentEdits[1]!.embed).toStrictEqual(contentEdits[0]!.embed);
     expect(contentEdits[1]!.embed).toStrictEqual({
       color: THINKING_COLORS.error,
-      footer: { text: "gpt-test | state=failed verified=false attempts=2" },
+      footer: { text: "gpt-test | 0s | state=failed verified=false attempts=2" },
     });
   });
 
@@ -307,11 +309,14 @@ describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
     expect(contentEdits[0]!.embed).toBeNull();
   });
 
-  test("with neither model nor plumbing the answer carries no embed", async () => {
+  test("with neither model nor plumbing the answer still carries the time (DISCORD-15)", async () => {
     const { outbound, contentEdits } = mockOutbound();
     const status = statusWith(outbound);
     await status.start();
     await status.finalizeContent({ content: "hi" });
-    expect(contentEdits[0]!.embed).toBeNull();
+    expect(contentEdits[0]!.embed).toStrictEqual({
+      color: THINKING_COLORS.success,
+      footer: { text: "0s" },
+    });
   });
 });

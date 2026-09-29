@@ -1,0 +1,134 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790695381,
+      "digest": "2dacf2c0cc3f04d6af36e5ec00a1a45f6ef087d46495d57c6241a6db646a82aa",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe",
+        "title": "Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16)",
+        "description": "Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/agent/agent.spec.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/events-ndjson.ts",
+          "src/agent/task-summary.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/ask-ping.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/gateway.ts",
+          "src/discord/rich-reply.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/thinking-status.ts",
+          "src/discord/types.ts",
+          "tests/discord.ask-ping.test.ts",
+          "tests/discord.inflight-replies.test.ts",
+          "tests/discord.rich-replies.test.ts",
+          "tests/discord.rich-reply.unit.test.ts",
+          "tests/discord.slash-ask7.test.ts",
+          "tests/discord.spend.test.ts",
+          "tests/discord.thinking-bridge.test.ts",
+          "tests/discord.thinking-status.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Every Discord answer (chat reply, button-pick resume, /work, /session start, and their reply fallbacks) carries a footer embed with the model and the time, plus tokens and cost only when the acting user is the configured owner; an owner run with no provider usage or no known model price shows tokens unknown / cost unknown, never $0; the live thinking status shows token use on owner runs only; an answer over 2000 characters is split into messages of at most 2000 characters that never break a fenced code block (closed at a part end, reopened with the same language), keep the ROLES-CHAT-3 role note whole in the last part, are secret-scrubbed before the split, carry the footer on the last part, and long plain prose with no code or mention that fits one embed goes out as one embed; the Discord spawn client passes the whole answer (result frame cap 4000) and the last usage frame while WATCH keeps its 1800 cap; tests/discord.rich-replies.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "a6b4a166b76a605ab589422a13b0ed6eac16dd20e4e9026bbba68fed2079a8c3",
+        "discord": "31ea9e6f205981a6ecf2d271421b925ebdd72d96d7ca0881fcfb75beef188f59"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790718429,
+      "digest": "5cf0cd49e97fddbd87f142a88b9cd40c8f5a2e64df492a48dec0c14df20fc6f5",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe",
+        "title": "Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16)",
+        "description": "Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/agent/agent.spec.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/events-ndjson.ts",
+          "src/agent/task-summary.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/ask-ping.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/gateway.ts",
+          "src/discord/injection-guard.ts",
+          "src/discord/rich-reply.ts",
+          "src/discord/slash-finish.ts",
+          "src/discord/spend-post.ts",
+          "src/discord/thinking-status.ts",
+          "src/discord/types.ts",
+          "tests/discord.allowed-mentions.test.ts",
+          "tests/discord.ask-ping.test.ts",
+          "tests/discord.inflight-replies.test.ts",
+          "tests/discord.rich-replies.test.ts",
+          "tests/discord.rich-reply.unit.test.ts",
+          "tests/discord.slash-ask7.test.ts",
+          "tests/discord.spend.test.ts",
+          "tests/discord.thinking-bridge.test.ts",
+          "tests/discord.thinking-status.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Every Discord answer (chat reply, button-pick resume, /work, /session start, and their reply fallbacks) carries a footer embed with the model and the time, plus tokens and cost only when the acting user is the configured owner; an owner run with no provider usage or no known model price shows tokens unknown / cost unknown, never $0; the live thinking status shows token use on owner runs only; an answer over 2000 characters is split into messages of at most 2000 characters that never break a fenced code block (closed at a part end, reopened with the same language), keep the ROLES-CHAT-3 role note whole in the last part, are secret-scrubbed before the split, carry the footer on the last part, and long plain prose with no code or mention that fits one embed goes out as one embed; the Discord spawn client passes the whole answer (result frame cap 4000) and the last usage frame while WATCH keeps its 1800 cap; tests/discord.rich-replies.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "a6b4a166b76a605ab589422a13b0ed6eac16dd20e4e9026bbba68fed2079a8c3",
+        "discord": "31ea9e6f205981a6ecf2d271421b925ebdd72d96d7ca0881fcfb75beef188f59"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790722038,
+      "digest": "840b8979d141a1eb6967dabff92f03443a6dc77a4d32fe518a62cacc084ac12e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

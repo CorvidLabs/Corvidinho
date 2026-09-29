@@ -91,6 +91,12 @@ import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
 import { parseApproveCardCustomId } from "./approve-card.ts";
 import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
+import {
+  DISCORD_ANSWER_MAX,
+  answerSpendFor,
+  postAnswerParts,
+} from "./rich-reply.ts";
+import { isOwnerDiscord } from "../identity/owner.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
 import {
@@ -246,6 +252,7 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
     components?: unknown[] | null;
   }>;
   deletes: Array<{ channelId: string; messageId: string }>;
+  posts: Array<{ channelId: string; content: string; embed?: unknown; messageId: string }>;
 } {
   let n = 0;
   const sends: Array<{
@@ -264,11 +271,20 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
     components?: unknown[] | null;
   }> = [];
   const deletes: Array<{ channelId: string; messageId: string }> = [];
+  const posts: Array<{ channelId: string; content: string; embed?: unknown; messageId: string }> =
+    [];
   return {
     sends,
     edits,
     contentEdits,
     deletes,
+    posts,
+    async sendMessage({ channelId, content, embed }) {
+      n += 1;
+      const messageId = `part_${n}`;
+      posts.push({ channelId, content, ...(embed ? { embed } : {}), messageId });
+      return { messageId };
+    },
     async sendEmbed({ channelId, embed, replyToMessageId }) {
       n += 1;
       const messageId = `progress_${n}`;
@@ -529,11 +545,14 @@ export async function startBridge(
   function resolveOutbound(): ThinkingOutbound {
     if (opts.thinkingOutbound) return opts.thinkingOutbound;
     if (embedRef.send && embedRef.edit) {
+      const reply = replyRef.fn;
       return {
         sendEmbed: embedRef.send,
         editEmbed: embedRef.edit,
         editMessage: embedRef.editMessage,
         deleteMessage: embedRef.deleteMessage,
+        // DISCORD-16: later parts of a long collapsed answer are fresh posts.
+        ...(reply ? { sendMessage: (o) => reply(o) } : {}),
       };
     }
     return fallbackOutbound;
@@ -773,6 +792,8 @@ export async function startBridge(
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
+      // DISCORD-15.a: tokens and cost show on the owner's own runs only.
+      const ownerRun = isOwnerDiscord(config.owner, msg.authorId);
 
       const thinking = new ThinkingStatus({
         outbound,
@@ -780,6 +801,7 @@ export async function startBridge(
         replyToMessageId: msg.id,
         sessionId: session.id,
         model: llmModel,
+        showUsage: ownerRun,
         debounceMs: opts.thinkingDebounceMs,
         tickMs: opts.thinkingTickMs,
       });
@@ -916,7 +938,12 @@ export async function startBridge(
               cancelled: result.task.cancelled,
             })
           : undefined;
-        const thinkExtras = { plumbing, model: llmModel };
+        // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.
+        const thinkExtras = {
+          plumbing,
+          model: llmModel,
+          ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel) } : {}),
+        };
         // AUTONOMY-1/2/4 / DISCORD-ASK: needs a human → buttons when options, else free-text.
         // SAFE-8: a spend-cap stop is always free text (no choice can lift the
         // cap), pings the owner once per cap episode and is never the pending ask.
@@ -1013,7 +1040,8 @@ export async function startBridge(
         const body = askBody
           ? askBody.content
           : result.ok
-            ? result.summary.slice(0, 1800)
+            ? // DISCORD-16: the whole answer; it is split into messages when long.
+              result.summary
             : `session ${session.id} failed (exit ${result.exitCode})`;
         // AGENT-6: the answer as posted joins the thread (a spend-cap stop
         // records no answer, REQ-discord-098).
@@ -1033,9 +1061,13 @@ export async function startBridge(
             },
             spend?.warning,
             config.owner,
+            DISCORD_ANSWER_MAX,
           ),
           result.injection,
           config.owner,
+          // DISCORD-16: the answer is split into messages, so the SAFE-13
+          // line never cuts it down to one message.
+          DISCORD_ANSWER_MAX,
         );
         let delivered = false;
         try {
@@ -1054,9 +1086,11 @@ export async function startBridge(
             delivered = true;
             // The thinking message is now the answer: nothing left to recover.
             inflight.end();
-            store.trackBotMessage(collapsed.messageId, session);
+            // DISCORD-2 / DISCORD-16: a reply to any part continues the session.
+            for (const id of collapsed.messageIds) store.trackBotMessage(id, session);
             if (pendingToStore && askBody?.components) {
-              pendingToStore.stubMessageId = collapsed.messageId;
+              // The Choose button rides the last part (a stub is one part).
+              pendingToStore.stubMessageId = collapsed.messageIds.at(-1) ?? collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
             // AUTONOMY-2/4, SAFE-8: an edit does not notify its mentions, so
@@ -1080,21 +1114,32 @@ export async function startBridge(
             } else {
               await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
             }
-            const sent = await replyRef.fn({
+            // DISCORD-15/16: the reply carries the answer footer on its last
+            // part and is split at 2000 characters.
+            const sentIds = await postAnswerParts(replyRef.fn, {
               channelId,
               content: out.content,
+              // A Choose stub carries no footer; an Answer button keeps it
+              // (DISCORD-ASK-4.a).
+              footer:
+                askBody?.components && !askBody.keepFooter
+                  ? null
+                  : thinking.answerFooter({
+                      extras: thinkExtras,
+                      failed: askBody ? askBody.failed : !result.ok,
+                    }),
               replyToMessageId: msg.id,
               ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
               ...(askBody?.components ? { components: askBody.components } : {}),
+              ...(askBody?.keepFooter ? { keepFooter: true } : {}),
             });
             inflight.end();
-            delivered = sent !== null;
-            if (sent?.messageId) {
-              store.trackBotMessage(sent.messageId, session);
-              if (pendingToStore && askBody?.components) {
-                pendingToStore.stubMessageId = sent.messageId;
-                store.setPendingAsk(session, pendingToStore);
-              }
+            delivered = sentIds !== null;
+            for (const id of sentIds ?? []) store.trackBotMessage(id, session);
+            const lastId = sentIds?.at(-1);
+            if (lastId && pendingToStore && askBody?.components) {
+              pendingToStore.stubMessageId = lastId;
+              store.setPendingAsk(session, pendingToStore);
             }
           } else {
             thinking.dispose();
@@ -1345,6 +1390,8 @@ export async function startBridge(
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
+      // DISCORD-15.a: tokens and cost show on the owner's own runs only.
+      const ownerRun = isOwnerDiscord(config.owner, interaction.userId);
       const stubId = pending.stubMessageId ?? interaction.messageId;
       const thinking = new ThinkingStatus({
         outbound,
@@ -1353,6 +1400,7 @@ export async function startBridge(
         existingMessageId: stubId,
         sessionId: session.id,
         model: llmModel,
+        showUsage: ownerRun,
         debounceMs: opts.thinkingDebounceMs,
         tickMs: opts.thinkingTickMs,
       });
@@ -1473,7 +1521,12 @@ export async function startBridge(
               cancelled: result.task.cancelled,
             })
           : undefined;
-        const thinkExtras = { plumbing, model: llmModel };
+        // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.
+        const thinkExtras = {
+          plumbing,
+          model: llmModel,
+          ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel) } : {}),
+        };
 
         // SAFE-8: as on a chat reply — a spend-cap stop is free text, pings the
         // owner once per cap episode and is never the pending ask.
@@ -1551,7 +1604,8 @@ export async function startBridge(
         const body = askBody
           ? askBody.content
           : result.ok
-            ? result.summary.slice(0, 1800)
+            ? // DISCORD-16: the whole answer; it is split into messages when long.
+              result.summary
             : `session ${session.id} failed (exit ${result.exitCode})`;
         // AGENT-6: the answer to the pick joins the session's thread.
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
@@ -1569,9 +1623,13 @@ export async function startBridge(
             },
             spend?.warning,
             config.owner,
+            DISCORD_ANSWER_MAX,
           ),
           result.injection,
           config.owner,
+          // DISCORD-16: the answer is split into messages, so the SAFE-13
+          // line never cuts it down to one message.
+          DISCORD_ANSWER_MAX,
         );
         let delivered = false;
         try {
@@ -1589,9 +1647,11 @@ export async function startBridge(
             delivered = true;
             // The stub/thinking message is now the answer: nothing to recover.
             inflight?.end();
-            store.trackBotMessage(collapsed.messageId, session);
+            // DISCORD-2 / DISCORD-16: a reply to any part continues the session.
+            for (const id of collapsed.messageIds) store.trackBotMessage(id, session);
             if (pendingToStore && askBody?.components) {
-              pendingToStore.stubMessageId = collapsed.messageId;
+              // The Choose button rides the last part (a stub is one part).
+              pendingToStore.stubMessageId = collapsed.messageIds.at(-1) ?? collapsed.messageId;
               store.setPendingAsk(session, pendingToStore);
             }
             // As on a chat answer: the edit's mentions get one fresh ping post.
@@ -1613,21 +1673,31 @@ export async function startBridge(
             } else {
               await thinking.fail(`❌ exit ${result.exitCode}`, thinkExtras);
             }
-            const sent = await replyRef.fn({
+            // DISCORD-15/16: footer on the last part, split at 2000 characters.
+            const sentIds = await postAnswerParts(replyRef.fn, {
               channelId,
               content: out.content,
+              // A Choose stub carries no footer; an Answer button keeps it
+              // (DISCORD-ASK-4.a).
+              footer:
+                askBody?.components && !askBody.keepFooter
+                  ? null
+                  : thinking.answerFooter({
+                      extras: thinkExtras,
+                      failed: askBody ? askBody.failed : !result.ok,
+                    }),
               replyToMessageId: pending.stubMessageId ?? interaction.messageId,
               ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
               ...(askBody?.components ? { components: askBody.components } : {}),
+              ...(askBody?.keepFooter ? { keepFooter: true } : {}),
             });
             inflight?.end();
-            delivered = sent !== null;
-            if (sent?.messageId) {
-              store.trackBotMessage(sent.messageId, session);
-              if (pendingToStore && askBody?.components) {
-                pendingToStore.stubMessageId = sent.messageId;
-                store.setPendingAsk(session, pendingToStore);
-              }
+            delivered = sentIds !== null;
+            for (const id of sentIds ?? []) store.trackBotMessage(id, session);
+            const lastId = sentIds?.at(-1);
+            if (lastId && pendingToStore && askBody?.components) {
+              pendingToStore.stubMessageId = lastId;
+              store.setPendingAsk(session, pendingToStore);
             }
           } else {
             thinking.dispose();

@@ -27,6 +27,14 @@ import {
 import { WorkStore } from "../src/discord/work-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 
+/** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
+function answerFooterText(before: string, after?: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return expect.stringMatching(
+    new RegExp(`^${esc(before)} \\| \\d+s${after ? ` \\| ${esc(after)}` : ""}$`),
+  );
+}
+
 function initGitRepo(dir: string): void {
   mkdirSync(dir, { recursive: true });
   const run = (args: string[]) => {
@@ -197,10 +205,14 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       expect(contentEdits.length).toBe(1);
       expect(contentEdits[0]!.content ?? "").toContain("Ship ASK-7 slash");
       expect(contentEdits[0]!.content ?? "").toContain("echo:");
-      // DISCORD-3.a — the answer keeps a footer-only embed (model; echo has no task).
+      // DISCORD-3.a / DISCORD-15 — the answer keeps a footer-only embed (model;
+      // echo has no task). The owner's run shows tokens and cost: echo reports
+      // no usage, so both are unknown, never 0 / $0.
       expect(contentEdits[0]!.embed).toStrictEqual({
         color: THINKING_COLORS.success,
-        footer: { text: loadLlmEnv(process.env).model },
+        footer: {
+          text: answerFooterText(`${loadLlmEnv(process.env).model} | tokens unknown | cost unknown`),
+        },
       });
       expect(getDeleted()).toBe(1);
       // Deferred reply not filled with the full body.
@@ -261,7 +273,11 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       expect(contentEdits[0]!.embed).toStrictEqual({
         color: THINKING_COLORS.error,
         footer: {
-          text: `${loadLlmEnv(process.env).model} | state=failed verified=false cancelled attempts=3`,
+          // DISCORD-15: the owner's run adds tokens and cost (unknown here).
+          text: answerFooterText(
+            `${loadLlmEnv(process.env).model} | tokens unknown | cost unknown`,
+            "state=failed verified=false cancelled attempts=3",
+          ),
         },
       });
       const [session] = store.list();
@@ -281,7 +297,7 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
     };
   }
 
-  test("/work answer for a non-owner keeps the closing role note within the 1900 cap (REQ-discord-734)", async () => {
+  test("/work answer for a non-owner keeps the closing role note in the rich answer (REQ-discord-734)", async () => {
     await withRepo(async (_project, store) => {
       const { outbound, contentEdits } = mockOutbound();
       const tracked: string[] = [];
@@ -289,19 +305,18 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       await handleWorkCommand(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
 
       expect(contentEdits.length).toBe(1);
-      const body = contentEdits[0]!.content ?? "";
-      expect(body).toContain("only the owner (ADMIN) can ship /work as a PR");
-      // The head leaves under 1500 chars for the summary: it is cut to fit.
-      expect(body.length - body.indexOf("word")).toBeLessThan(1500);
-      expect(body.length).toBeLessThanOrEqual(1900);
-      expect(body.endsWith(ROLE_TAIL)).toBe(true);
-      expect(body.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
+      const answer = contentEdits[0]!.content ?? contentEdits[0]!.embed?.description ?? "";
+      expect(answer).toContain("only the owner (ADMIN) can ship /work as a PR");
+      // DISCORD-16 may use one prose embed; the closing role note stays whole.
+      expect(answer.length).toBeLessThanOrEqual(4096);
+      expect(answer.endsWith(ROLE_TAIL)).toBe(true);
+      expect(answer.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
       const [session] = store.list();
       if (session) await store.endSession(session);
     });
   });
 
-  test("/session start answer for a non-owner keeps the closing role note within the 1900 cap (REQ-discord-734)", async () => {
+  test("/session start answer for a non-owner keeps the closing role note in the rich answer (REQ-discord-734)", async () => {
     await withRepo(async (_project, store) => {
       const { outbound, contentEdits } = mockOutbound();
       const tracked: string[] = [];
@@ -309,13 +324,11 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
       await handleSessionStart(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
 
       expect(contentEdits.length).toBe(1);
-      const body = contentEdits[0]!.content ?? "";
-      expect(body).toContain("started.\nTopic: Fix it");
-      expect(body.length).toBeLessThanOrEqual(1900);
-      expect(body.endsWith(ROLE_TAIL)).toBe(true);
-      expect(body.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
-      // The summary part is capped at 1500 like before, note included.
-      expect(body.slice(body.indexOf("word")).length).toBeLessThanOrEqual(1500);
+      const answer = contentEdits[0]!.content ?? contentEdits[0]!.embed?.description ?? "";
+      expect(answer).toContain("started.\nTopic: Fix it");
+      expect(answer.length).toBeLessThanOrEqual(4096);
+      expect(answer.endsWith(ROLE_TAIL)).toBe(true);
+      expect(answer.slice(-ROLE_TAIL.length - 10, -ROLE_TAIL.length)).toMatch(/^[word ]+$/);
       const [session] = store.list();
       if (session) await store.endSession(session);
     });

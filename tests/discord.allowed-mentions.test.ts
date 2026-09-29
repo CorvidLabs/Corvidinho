@@ -314,7 +314,7 @@ describe("live gateway parses no mentions from outbound text (REQ-discord-205)",
   test("content is capped after defang (Discord 2000 limit)", async () => {
     const { fake, handlers } = await gateway();
     await handlers.reply!({ channelId: "chan-1", content: "@everyone ".repeat(400) });
-    expect(fake.sends[0]!.payload.content!.length).toBeLessThanOrEqual(1900);
+    expect(fake.sends[0]!.payload.content!.length).toBeLessThanOrEqual(2000);
     expectSafe(fake.sends[0]!.payload);
   });
 

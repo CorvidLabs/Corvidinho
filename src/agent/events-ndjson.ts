@@ -50,7 +50,10 @@ export const NDJSON_LIMITS = {
   toolDetail: 1000,
   /** VerifyResult output (tail kept — failures print last). */
   verifyOutput: 4000,
-  /** `result` frame `result.summary` (head kept; bridges show ≤1800). */
+  /**
+   * `result` frame `result.summary` (head kept; WATCH shows ≤1800, the
+   * Discord bridge splits up to this into ≤2000-char messages, DISCORD-16).
+   */
   resultSummary: 4000,
   /** Whole ToolCall argsSummary. */
   argsSummary: 160,
@@ -660,6 +663,11 @@ export type TaskRunStreamOutcome = {
   result?: TaskResult;
   /** Last provider-reported total, when any usage frame arrived. */
   totalTokens?: number;
+  /**
+   * Last `usage` frame (running prompt / completion / total), when any
+   * arrived — what the Discord answer footer prices (DISCORD-15).
+   */
+  usage?: AgentTokenUsage;
   frames: number;
   /** Protocol the binary streamed when it differs from the bridge's. */
   protocolMismatch?: number;
@@ -674,7 +682,8 @@ export function protocolMismatchSummary(binary: number, bridge: number): string 
  * Consume a spawned `task run --output ndjson` child: stream stdout frames to
  * `onProgress`, drain stderr in parallel, and summarize from the result frame
  * (then protocol-mismatch notice, then summarizeTaskRunOutput over non-frame
- * stdout + stderr + exit).
+ * stdout + stderr + exit). `bodyMax` caps the result-frame chat body (default
+ * CHAT_BODY_MAX, 1800); the last `usage` frame comes back as `usage`.
  */
 export async function collectTaskRunStream(opts: {
   stdout: ReadableStream<Uint8Array> | null | undefined;
@@ -682,13 +691,22 @@ export async function collectTaskRunStream(opts: {
   exited: Promise<number>;
   onProgress?: (progress: TaskProgress) => void;
   protocol?: number;
+  bodyMax?: number;
 }): Promise<TaskRunStreamOutcome> {
   let totalTokens: number | undefined;
+  let usage: AgentTokenUsage | undefined;
   const expected = opts.protocol ?? CORVIDINHO_PROTOCOL_VERSION;
   const [streamed, stderr, exitCode] = await Promise.all([
     readNdjsonStream(
       opts.stdout,
       (frame) => {
+        if (frame.type === "usage") {
+          usage = {
+            promptTokens: frame.promptTokens,
+            completionTokens: frame.completionTokens,
+            totalTokens: frame.totalTokens,
+          };
+        }
         const p = progressFromFrame(frame);
         if (!p) return;
         if (p.totalTokens !== undefined) totalTokens = p.totalTokens;
@@ -700,7 +718,9 @@ export async function collectTaskRunStream(opts: {
     opts.exited,
   ]);
   // DISCORD-3.a: summary is human chat body only (no state=/verified= plumbing).
-  const fromResult = streamed.result ? chatBodyFromTaskResult(streamed.result) : "";
+  const fromResult = streamed.result
+    ? chatBodyFromTaskResult(streamed.result, opts.bodyMax)
+    : "";
   const summary =
     fromResult ||
     (streamed.protocolMismatch !== undefined
@@ -711,6 +731,7 @@ export async function collectTaskRunStream(opts: {
     summary,
     result: streamed.result,
     totalTokens,
+    ...(usage ? { usage } : {}),
     frames: streamed.frames,
   };
   if (streamed.protocolMismatch !== undefined) {
