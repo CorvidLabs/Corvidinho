@@ -52,15 +52,22 @@ Acceptance Criteria
 - Empty allowlist + any repo ⇒ deny (not authorized).
 - Denied repo exits with code 3 and clear error.
 - Allow-listed repo/org match ⇒ ok unless also denied.
+- `git-push` with `CORVIDINHO_GITHUB_ALLOW_REPOS` naming the remote's repo and `CORVIDINHO_GITHUB_DENY_ORGS` naming its owner is refused with exit 3 and an org-denied error, and the remote ref is not created (the test fails with the `deny_orgs` check removed from `isRepoAllowed`).
 
 ### REQ-plugins-005
 
 Allowlists SHALL default-deny: empty or missing allow entries refuse targeted GitHub plugin runs and Discord channel/role/user checks (ALLOW-1..5, GITHUB-6, DISCORD-5). Deny overrides always win. Empty lists MUST NOT map to allow-all or Merlin BASIC.
 
+`isChannelDenied` (`src/allowlist/discord.ts`) SHALL report a
+`deny_channels` hit alone, case-insensitively and trimmed like
+`checkChannel` (which uses it), so a thread gate can make a deny on the
+thread or its parent win over the other being allowlisted (REQ-discord-212).
+
 Acceptance Criteria
 - Empty/missing allowlist refuses GH `--repo` targets (exit 3 / not authorized).
 - Discord stub `checkChannel`/`checkRole`/`checkUser` refuse when allow lists empty.
 - Regression: empty allow never permits a target (Merlin empty→BASIC forbidden).
+- `isChannelDenied` is true for a deny-listed id (any case, surrounding space trimmed) and false for allowlisted, unlisted, empty or missing ids; `checkChannel` reports that id as denied.
 
 ### REQ-plugins-006
 
@@ -150,10 +157,23 @@ Acceptance Criteria
 
 The system SHALL register `discord-post-message` as a **dangerous** plugin (externally visible write). Non-interactive runs SHALL deny unless allowlisted (SAFE-1). Channel target MUST pass Discord channel allowlist (DISCORD-5 / ALLOW-3).
 
+That channel allowlist SHALL be the same set the bridge and daemon gate on
+(REQ-discord-004, `mergeChannelIds`): the allowlist file
+`[discord].channels` plus `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, union
+`DISCORD_CHANNEL_IDS`. So a channel allowlisted only through
+`DISCORD_CHANNEL_IDS` SHALL pass the gate. Deny lists SHALL still win: a
+channel in `CORVIDINHO_DISCORD_DENY_CHANNELS` or the file's
+`deny_channels` SHALL be refused even when it is also in
+`DISCORD_CHANNEL_IDS`. A channel in no list SHALL still be refused, and a
+malformed or unreadable allowlist file SHALL still refuse (fail closed,
+REQ-plugins-006). No env var, flag, config key or command is added.
+
 Acceptance Criteria
 - `plugins list` shows `discord-post-message` with dangerous=true.
 - Non-interactive without allowlist → deny (exit 2).
 - Missing/empty channel allowlist or non-allowlisted channel → not authorized.
+- No allowlist file, `CORVIDINHO_DISCORD_ALLOW_CHANNELS` unset, `DISCORD_CHANNEL_IDS=111`, dry run: a post to `111` succeeds (exit 0); a post to a channel in no list is refused (exit 3, not allowlisted).
+- The same with `CORVIDINHO_DISCORD_DENY_CHANNELS=111` added: the post to `111` is refused (exit 3, denied).
 
 ### REQ-plugins-048
 
@@ -270,6 +290,7 @@ Acceptance Criteria
 - files-write, files-edit and files-delete of `.specsync/config.toml`, `.specsync/registry.toml`, a new `.specsync/` top-level file or a `.specsync/archive/` file are refused with SAFE-2 (exit 2); a file under `.specsync/changes/<id>/` is still written, also when `<id>` contains `keystore`; files-write of `.specsync/changes` or `.specsync/changes/<id>` itself is refused and nothing is created.
 - In a project whose root directory name contains `keystore`, files-write (relative or absolute path) and files-edit of ordinary files succeed, and `keystore/…` inside it is still refused.
 - git-commit refuses to stage the deletion of `.specsync/config.toml` (exit 2, SAFE-2) and stages the deletion of a `.specsync/changes/<id>/` file.
+- files-write, files-edit and files-delete of a file under `specs/` that does not end in `.spec.md` (`specs/agent/requirements.md`, `specs/agent/context.md`) and files-write of a new `specs/notes.md` are refused with SAFE-2 (exit 2); the files are unchanged and the new file is not created (the test fails with the `specs` component rule removed).
 
 ### REQ-plugins-084
 
@@ -428,6 +449,7 @@ Acceptance Criteria
 - A plugin cwd that is a subdirectory of a repository (not the top level) is refused; unknown flags are refused.
 - Hooks in `.git/hooks` or a repo-local `core.hooksPath` never run on git-commit / git-push; git-status and git-commit work at the top level of a linked worktree (`.git` is a file).
 - git-push to a local bare remote is refused when OWNER/REPO is not allowlisted or is denied (exit 3) and succeeds when allowlisted; force/refspec args are refused (exit 2); a non-fast-forward push is rejected without force and the remote ref is unchanged; detached HEAD is refused.
+- git-commit refuses to stage the deletion of a tracked file under `specs/` that does not end in `.spec.md` (`specs/x/requirements.md`, `specs/notes.md`) with exit 2 and SAFE-2; the path stays in `ls-files` and nothing is staged (the test fails with the `specs` component rule removed).
 
 ### REQ-plugins-086
 
@@ -1128,4 +1150,25 @@ Acceptance Criteria
 - A discovered Fledge plugin with commands `run`, `lanes-list` and `hello` registers only `fledge-hello`; `fledge-run` and `fledge-lanes-list` are skipped with `name already registered by builtin` and `plugins list` prints the skip line.
 - `fledge.toml`, a `.fledge/lanes/*.toml` file or the `.fledge/lanes` dir linked outside the project, `fledge.toml` linked to `.env`, a `.fledge/lanes/.env.toml` and a `fledge.toml` directory are each refused by both reads (exit 2, `refused: <name>: <relative path> …`, neither the file's contents nor the link target in the result) and fledge never starts; links that stay inside the project, a non-`.toml` entry linked outside and a missing `fledge.toml` still reach fledge; the lane and task runs are not clamped.
 - Where fledge is installed: a real project's lanes are listed, validated (a lane naming an undefined task is reported) and run, `fledge-run pwd` prints the project root, an unknown task is ok=false with fledge's error, a `.fledge/lanes/y.toml` linked to a file outside the project is refused by both reads without its contents in the result, and `corvidinho plugins run fledge-lanes-list --json` in this repo lists the `verify` lane.
+
+### REQ-plugins-493
+
+In a non-ADMIN role session (`CORVIDINHO_ACTING_IS_ADMIN` set and the acting
+user not the admin owner), the GitHub repo gate (`checkRepoGateForActingRole`,
+used by the GitHub plugins and review reads) SHALL admit a repo only when its
+visibility is confirmed public (ROLES-CHAT-8), after the deny lists. Without
+an injected lookup it SHALL ask GitHub through the Octokit visibility lookup
+(`createOctokitVisibilityLookup`, token from `GITHUB_TOKEN` / `GH_TOKEN`). A
+private repo SHALL be refused with the ROLES-CHAT-8 private-repo error, and a
+repo whose visibility cannot be confirmed (not found, an API error, or no
+token) SHALL be refused as unconfirmed (fail closed); in both cases the plugin
+SHALL make no further GitHub call for that repo. ADMIN and non-role sessions
+keep the GITHUB-6 allowlist gate. No env var, flag, config key or command is
+added.
+
+Acceptance Criteria
+- A community session with no injected lookup and GitHub answering `private: true` for the repo is refused with "private GitHub repos" by `checkRepoGateForActingRole` and by `github-pr-list` (exit 3), and no pulls request is sent.
+- GitHub answering 404, or no GitHub token (no request sent), is refused with "could not confirm the repo is public".
+- GitHub answering `private: false` passes the gate and `github-pr-list` sends its pulls request.
+- Fixture tests stub `fetch` (Octokit's transport); no live token or network. The private-repo test fails when the lookup always answers public.
 
