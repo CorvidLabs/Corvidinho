@@ -392,7 +392,9 @@ export class ThinkingStatus {
    * (Choose stub or answer), replacing the thinking embed. A Choose stub
    * (`components`) carries no embed; a final answer keeps a footer-only
    * embed with the model and `extras.plumbing` (DISCORD-3.a), colored as a
-   * failure when `failed`. A later call (e.g. appending a notice) keeps the
+   * failure when `failed`. `keepFooter` keeps that embed beside components
+   * that are not a Choose stub: a free-text ask's Answer button
+   * (DISCORD-ASK-4.a), whose post stays the turn's answer. A later call (e.g. appending a notice) keeps the
    * plumbing and outcome of the first. Returns the message id on success;
    * null when editMessage is unavailable or edit fails (caller should fall
    * back to a new reply).
@@ -403,6 +405,7 @@ export class ThinkingStatus {
     mentionUserIds?: string[];
     extras?: { plumbing?: string; model?: string };
     failed?: boolean;
+    keepFooter?: boolean;
   }): Promise<{ messageId: string } | null> {
     if (this.closed && !this.messageId) return null;
     this.stopTicker();
@@ -416,7 +419,7 @@ export class ThinkingStatus {
     if (opts.extras?.model != null) this.model = opts.extras.model.trim() || undefined;
     const phase: ThinkingPhase =
       (opts.failed ?? this.phase === "error") ? "error" : "done";
-    const embed = opts.components?.length
+    const embed = opts.components?.length && !opts.keepFooter
       ? null
       : buildAnswerFooterEmbed({ phase, model: this.model, plumbing: this.plumbing });
     const ok = await this.outbound.editMessage({

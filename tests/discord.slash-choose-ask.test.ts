@@ -17,12 +17,13 @@ import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
 import {
   ASK_STUB_HINT,
+  buildAnswerStubComponents,
   buildOpenStubComponents,
   buttonAskFor,
   openCustomId,
   pickCustomId,
 } from "../src/discord/ask-buttons.ts";
-import { ASK_REPLY_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
+import { ASK_ANSWER_HINT, ASK_REPLY_HINT, COLLAPSED_PING_QUESTION } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   createLiveGateway,
@@ -371,7 +372,7 @@ describe("/work and /session start ask with Choose buttons when the options can 
     await bridge.result.stop();
   });
 
-  test("without listable options the slash answer stays free text (no Choose button), as before", async () => {
+  test("without listable options the slash answer stays free text (no Choose button) with the question and one Answer button (DISCORD-ASK-4.a)", async () => {
     const clarify: HumanAsk = { reason: "clarify", question: "Postgres or SQLite?" };
     const { agent } = askingAgent({ ask: clarify, summary: "Needs your input" });
     const bridge = await bridgeWith(agent);
@@ -379,10 +380,12 @@ describe("/work and /session start ask with Choose buttons when the options can 
     await bridge.handlers.onSlash!(ix);
     const answer = collapsedAnswer(bridge, "Postgres or SQLite?");
     expect(answer.content).not.toContain(ASK_STUB_HINT);
-    expect(answer.components ?? null).toBeNull();
+    expect(answer.content).toContain(ASK_ANSWER_HINT);
     const pending = bridge.result.store.getByBotMessage(answer.messageId)!.pendingAsk!;
     expect(pending).toMatchObject(clarify);
     expect(pending.options).toBeUndefined();
+    expect(answer.components).toEqual(buildAnswerStubComponents(pending.askId));
+    expect(pending.stubMessageId).toBe(answer.messageId);
     await bridge.result.stop();
   });
 });

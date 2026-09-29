@@ -19,6 +19,8 @@
  * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * a press passes channel → actor → mute/rate first (REQ-discord-212/201/010);
+ * ASK-4.a: a free-text ask's Answer button opens a private form whose submit
+ * takes the same gates and resumes like a reply (a reply still works);
  * SESSION-MULTI: per-user sessions.
  * AGENT-6: each run is recorded with its session and a continued run gets the
  * earlier turns replayed ahead of the new message (session-thread.ts),
@@ -38,13 +40,19 @@ import {
   withSpendWarningPost,
 } from "./ask-ping.ts";
 import {
+  ASK_ANSWER_ACK,
+  ASK_ANSWER_INPUT_ID,
   ASK_CHOICE_EXPIRED,
+  answerAskFor,
+  buildAnswerModal,
+  buildAnswerStubComponents,
   buildChoiceComponents,
   buildOpenStubComponents,
   findOptionLabel,
   formatAskEphemeralContent,
   formatAskStub,
   isAskExpired,
+  normalizeAskAnswer,
   parseAskCustomId,
   toPendingAsk,
   type PendingAsk,
@@ -648,6 +656,10 @@ export async function startBridge(
         }
         // Thin ack: restate once; do not spawn agent.
         const hasButtons = Boolean(session.pendingAsk.options?.length);
+        // DISCORD-ASK-4.a: a free-text ask restates with its Answer button
+        // while that button has not timed out (DISCORD-ASK-5); after that the
+        // restatement is the reply-only text it was before.
+        const answerButton = !hasButtons && !isAskExpired(session.pendingAsk);
         const restated = hasButtons
           ? formatAskStub({
               ask: session.pendingAsk,
@@ -659,6 +671,7 @@ export async function startBridge(
               owner: config.owner,
               requesterDiscordId: msg.authorId,
               replyHint: true,
+              answerButton,
             });
         if (replyRef.fn) {
           const sent = await replyRef.fn({
@@ -668,6 +681,8 @@ export async function startBridge(
             mentionUserIds: restated.mentionUserIds,
             ...(hasButtons
               ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
+              : answerButton
+              ? { components: buildAnswerStubComponents(session.pendingAsk.askId) }
               : {}),
           });
           if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
@@ -923,6 +938,8 @@ export async function startBridge(
           failed: boolean;
           ownerPinged?: boolean;
           components?: unknown[];
+          /** Answer button, not a Choose stub: keep the footer (DISCORD-ASK-4.a). */
+          keepFooter?: boolean;
         } | null = null;
         let pendingToStore: PendingAsk | null = null;
 
@@ -946,12 +963,17 @@ export async function startBridge(
           };
           pendingToStore = pending;
         } else if (askRaw) {
+          // DISCORD-ASK-4.a: a free-text clarify or stuck ask keeps its
+          // question in the public post and gets the Answer button (private
+          // form); a reply still answers it. Never on a spend-cap stop.
+          const answer = spendCap ? null : answerAskFor({ ask: askRaw });
           const formatted = formatAskReply({
             ask: askRaw,
             owner: askOwner?.owner,
             requesterDiscordId: msg.authorId,
             context: result.summary,
             replyHint: true,
+            answerButton: Boolean(answer),
           });
           askBody = {
             content: formatted.content,
@@ -959,11 +981,12 @@ export async function startBridge(
             status: formatted.status,
             failed: formatted.failed,
             ownerPinged: formatted.ownerPinged,
+            ...(answer ? { components: answer.components, keepFooter: true } : {}),
           };
           // AUTONOMY-5/6: a clarify or stuck ask waits for the requester's
           // answer. A spend-cap stop is not answerable by a reply, so a later
           // "ok" runs normally and a substantive reply carries no cap text.
-          pendingToStore = spendCap ? null : toPendingAsk(askRaw);
+          pendingToStore = answer?.pending ?? null;
         }
 
         // Pending ask (AUTONOMY-5/6, SESSION-MULTI-3): a new ask is stored
@@ -1022,6 +1045,7 @@ export async function startBridge(
           const collapsed = await thinking.finalizeContent({
             content: out.content,
             components: askBody?.components,
+            keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
             failed: askBody ? askBody.failed : !result.ok,
@@ -1115,6 +1139,10 @@ export async function startBridge(
       }
       const parsed = parseAskCustomId(interaction.customId);
       if (!parsed) return;
+      // DISCORD-ASK-4.a — typed text only ever comes from the Answer form's
+      // submit, and that form's custom_id only ever comes with typed text; a
+      // mix-up (a forged press or submit) is ignored.
+      if ((parsed.kind === "answer") !== (interaction.modalValues !== undefined)) return;
 
       // SESSION-MULTI-3: any open ask of the session answers by its askId,
       // not only the newest one.
@@ -1211,7 +1239,10 @@ export async function startBridge(
       }
 
       if (isAskExpired(pending)) {
-        store.clearPendingAsk(session, pending.askId);
+        // DISCORD-ASK-4.a: a late Answer press or form submit on a free-text
+        // ask leaves it pending, so a reply still answers it as before; a
+        // button ask is cleared as a late press (DISCORD-ASK-5).
+        if (pending.options?.length) store.clearPendingAsk(session, pending.askId);
         await interaction.reply({
           content: ASK_CHOICE_EXPIRED,
           ephemeral: true,
@@ -1222,6 +1253,12 @@ export async function startBridge(
       if (parsed.kind === "open") {
         const options = pending.options;
         if (!options?.length) {
+          // DISCORD-ASK-4.a — the Answer button opens the private form (a
+          // modal, interaction response type 9) for the requester only.
+          if (interaction.showModal) {
+            await interaction.showModal(buildAnswerModal(pending));
+            return;
+          }
           await interaction.reply({
             content: "No choices available — reply in the channel instead.",
             ephemeral: true,
@@ -1236,31 +1273,75 @@ export async function startBridge(
         return;
       }
 
-      // pick — claim immediately so a concurrent re-press cannot double-resume.
-      const label =
-        findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
       const prior = pending.question;
-      // Only the pressed ask: the session's other open asks stay (SESSION-MULTI-3).
-      store.clearPendingAsk(session, pending.askId);
-      // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
-      await interaction.reply({
-        content: `Got it — **${label}**. Working on it…`,
-        ephemeral: true,
-        update: true,
-        components: [],
-      });
+      // The human's answer (a chosen label or the privately typed text) and
+      // the prior-question block the resumed run gets ahead of it.
+      let answer: string;
+      let priorBlock: string;
+      if (parsed.kind === "answer") {
+        // DISCORD-ASK-4.a — the private Answer form's submit. It passed the
+        // same channel, actor, mute/rate, not-yours and expiry gates as a
+        // press above. A button ask is answered by its buttons, not a form.
+        if (pending.options?.length) {
+          await interaction.reply({
+            content: "This choice isn’t for you (or it was already answered).",
+            ephemeral: true,
+          });
+          return;
+        }
+        // SAFE-6: scrubbed before it reaches the run or the session thread.
+        answer = normalizeAskAnswer(interaction.modalValues?.[ASK_ANSWER_INPUT_ID]);
+        // AUTONOMY-6: an explicit cancel typed in the form drops every open
+        // ask of the session, as the same word in a reply does; nothing runs
+        // and the ack stays private.
+        if (isCancelAsk(answer)) {
+          store.setPendingAsk(session, null);
+          await interaction.reply({ content: ASK_CANCELLED_ACK, ephemeral: true });
+          return;
+        }
+        // AUTONOMY-5: a thin answer (`ok`, emoji-only, blank) is not an
+        // answer — as for a thin reply, the question is restated once (here
+        // privately, with the Answer button again), the ask stays and nothing
+        // runs.
+        if (isThinAck(answer)) {
+          const restated = formatAskReply({ ask: pending, owner: null, answerButton: true });
+          await interaction.reply({
+            content: restated.content,
+            ephemeral: true,
+            components: buildAnswerStubComponents(pending.askId),
+          });
+          return;
+        }
+        // Claim immediately so a reply or a second submit cannot resume twice.
+        store.clearPendingAsk(session, pending.askId);
+        await interaction.reply({ content: ASK_ANSWER_ACK, ephemeral: true });
+        // Exactly the block a reply that answers a free-text ask gets.
+        priorBlock = `[Prior clarifying question you asked (the human is answering it now):\n${prior}]`;
+      } else {
+        // pick — claim immediately so a concurrent re-press cannot double-resume.
+        answer = findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
+        // Only the pressed ask: the session's other open asks stay (SESSION-MULTI-3).
+        store.clearPendingAsk(session, pending.askId);
+        // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
+        await interaction.reply({
+          content: `Got it — **${answer}**. Working on it…`,
+          ephemeral: true,
+          update: true,
+          components: [],
+        });
+        priorBlock = `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]`;
+      }
 
       const channelId = session.threadId ?? session.channelId;
       // AGENT-6 (REQ-discord-072): the earlier turns (the original request
       // included) go ahead of the answered question, as on a chat reply; the
-      // pick joins the thread as the run starts.
-      // SESSION-5/6: condensed at about 80% of the window, as in chat.
+      // answer (a pick or an Answer form submit) joins the thread as the run
+      // starts. SESSION-5/6: condensed at about 80% of the window, as in chat.
       const agentPrompt = store.threadPrompt(
         session,
-        `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]\n\n` +
-          `Human answer:\n${label}`,
+        `${priorBlock}\n\nHuman answer:\n${answer}`,
       );
-      store.recordTurn(session, "human", label);
+      store.recordTurn(session, "human", answer);
 
       const outbound = resolveOutbound();
       const llmModel = loadLlmEnv(process.env).model;
@@ -1343,8 +1424,8 @@ export async function startBridge(
                 role: actingRole,
                 projectDir: sessionCwd ?? config.projectRoot,
               }),
-              // MEMORY-9: search memory for the picked answer.
-              query: label,
+              // MEMORY-9: search memory for the picked / typed answer.
+              query: answer,
             },
           );
           if (memInject.injected) enrichedPrompt = memInject.prompt;
@@ -1352,7 +1433,7 @@ export async function startBridge(
           result = await store.runActive(session, () =>
             agent.runChat({
               prompt: enrichedPrompt,
-              humanText: label,
+              humanText: answer,
               sessionId: session.id,
               resume: true,
               actingUserId: interaction.userId,
@@ -1414,6 +1495,8 @@ export async function startBridge(
           failed: boolean;
           ownerPinged?: boolean;
           components?: unknown[];
+          /** Answer button, not a Choose stub: keep the footer (DISCORD-ASK-4.a). */
+          keepFooter?: boolean;
         } | null = null;
         let pendingToStore: PendingAsk | null = null;
 
@@ -1437,12 +1520,16 @@ export async function startBridge(
           };
           pendingToStore = next;
         } else if (askRaw) {
+          // DISCORD-ASK-4.a: as on a chat reply — a free-text follow-up ask
+          // gets the Answer button (never a spend-cap stop).
+          const answer = spendCap ? null : answerAskFor({ ask: askRaw });
           const formatted = formatAskReply({
             ask: askRaw,
             owner: askOwner?.owner,
             requesterDiscordId: interaction.userId,
             context: result.summary,
             replyHint: true,
+            answerButton: Boolean(answer),
           });
           askBody = {
             content: formatted.content,
@@ -1450,8 +1537,9 @@ export async function startBridge(
             status: formatted.status,
             failed: formatted.failed,
             ownerPinged: formatted.ownerPinged,
+            ...(answer ? { components: answer.components, keepFooter: true } : {}),
           };
-          pendingToStore = spendCap ? null : toPendingAsk(askRaw);
+          pendingToStore = answer?.pending ?? null;
         }
 
         // The pick already cleared the answered ask; store a follow-up ask
@@ -1492,6 +1580,7 @@ export async function startBridge(
           const collapsed = await thinking.finalizeContent({
             content: out.content,
             components: askBody?.components,
+            keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
             failed: askBody ? askBody.failed : !result.ok,
