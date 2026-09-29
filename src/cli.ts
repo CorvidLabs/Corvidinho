@@ -2,7 +2,7 @@
 /**
  * Corvidinho — Bun/TS CLI (Linux).
  * Surfaces: help, version, doctor, init (report only), plugins list/run, specsync *,
- * task run (prove-before-done).
+ * task run (prove-before-done), backup list/restore (OPS-1/2).
  * Secrets stay out of the repo and out of logs (SAFE-6).
  */
 
@@ -38,6 +38,7 @@ import {
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
 import {
+  backupDoctorCheck,
   dataDirDoctorCheck,
   discordDoctorCheck,
   githubWatchDoctorCheck,
@@ -60,6 +61,12 @@ import {
 } from "./plugins/toolCost.ts";
 import { fledgeStatusLines, loadFledgePlugins } from "../plugins/fledge/index.ts";
 import { loadRunnerPlugins, runnerStatusLines } from "../plugins/runners/index.ts";
+import {
+  BACKUP_DIR_ENV,
+  listSnapshots,
+  resolveBackupConfig,
+  restoreSnapshot,
+} from "./store/backup.ts";
 import { DEFAULT_DATA_DIR_REL } from "./store/paths.ts";
 import { formatErrorLine } from "./store/scrub.ts";
 import { VERSION } from "./version.ts";
@@ -88,6 +95,11 @@ Usage:
   corvidinho github watch           Start WATCH GitHub mention poll (ALLOW-1; poll-first)
   corvidinho daemon                 Tick schedules headlessly, no Discord needed (CLI-8 / AUTONOMOUS-4;
                                     one per data dir; JSON-line logs; systemd: docs/DAEMON.md)
+  corvidinho backup list            List nightly SQLite snapshots in CORVIDINHO_BACKUP_DIR, newest first (OPS-1)
+  corvidinho backup restore <snapshot> <target> [--force]
+                                    Check a snapshot, then copy it to <target> (OPS-2); refuses a target a
+                                    process holds open (stop the bridge / daemon first); --force replaces
+                                    an existing target nobody holds
   corvidinho plugins list           List loaded plugin commands (PLUGIN-6)
   corvidinho plugins run <name> [--json] [-- ...args]
                                     Run a typed plugin command (args after -- reach it verbatim)
@@ -125,6 +137,7 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
   CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
+  CORVIDINHO_BACKUP_DIR                                 optional absolute local dir for the nightly SQLite backup + weekly restore test (OPS-1/2); unset = no backup
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
 Rules (see AGENTS.md + hi/):
@@ -535,6 +548,9 @@ async function doctor(): Promise<number> {
   // the bridge, watch, daemon and memory tools need a writable data dir.
   checks.push(llmDoctorCheck(process.env));
   checks.push(dataDirDoctorCheck(process.env));
+  // OPS-1/2 — nightly backup dir, snapshots, last backup / restore test
+  // ([warn] when off, unusable or failing; never fails doctor).
+  checks.push(backupDoctorCheck(process.env));
 
   // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
   checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
@@ -584,6 +600,65 @@ function init(): number {
   );
   console.log("Discord / GitHub keys and allowlists: run `corvidinho doctor`.");
   return allOk ? 0 : 1;
+}
+
+const BACKUP_USAGE =
+  "usage: corvidinho backup list | corvidinho backup restore <snapshot> <target> [--force]";
+
+/**
+ * `corvidinho backup list|restore` (OPS-1/2, #68). `list` prints the
+ * snapshots in CORVIDINHO_BACKUP_DIR newest first; `restore` checks a named
+ * snapshot and copies it to a target path, refusing a target a process holds
+ * open (never the live DB while the bridge / daemon run) and an existing
+ * target without --force.
+ */
+function backupCli(args: string[]): number {
+  const sub = args[0];
+  const cfg = resolveBackupConfig(process.env);
+  if (sub !== "list" && sub !== "restore") {
+    console.error(`${BACKUP_USAGE}\n`);
+    return 1;
+  }
+  if (cfg.kind !== "on") {
+    console.error(
+      cfg.kind === "off"
+        ? `${BACKUP_DIR_ENV} is not set — no nightly backup is configured (see \`corvidinho doctor\`)`
+        : cfg.error,
+    );
+    return 1;
+  }
+  if (sub === "list") {
+    const snaps = listSnapshots(cfg.dir);
+    if (snaps.length === 0) {
+      console.log(`No snapshots in ${cfg.dir} yet.`);
+      return 0;
+    }
+    console.log(`Snapshots in ${cfg.dir} (newest first):`);
+    for (const s of snaps) {
+      console.log(`  ${s.name}  ${new Date(s.takenAt).toISOString()}  ${s.bytes} bytes`);
+    }
+    return 0;
+  }
+  const positional = args.slice(1).filter((a) => a !== "--force");
+  if (positional.length !== 2) {
+    console.error(`${BACKUP_USAGE}\n`);
+    return 1;
+  }
+  const r = restoreSnapshot({
+    dir: cfg.dir,
+    name: positional[0]!,
+    target: positional[1]!,
+    force: args.includes("--force"),
+  });
+  if (!r.ok) {
+    console.error(`restore refused: ${r.error}`);
+    return 1;
+  }
+  const rows = Object.values(r.counts).reduce((a, b) => a + b, 0);
+  console.log(
+    `Restored ${r.snapshot} to ${r.target} (schema v${r.schemaVersion}, integrity ok, ${Object.keys(r.counts).length} tables, ${rows} rows).`,
+  );
+  return 0;
 }
 
 async function pluginsList(json: boolean): Promise<number> {
@@ -1029,6 +1104,9 @@ export async function main(argv: string[]): Promise<number> {
     console.error("usage: corvidinho github watch\n");
     printHelp();
     return 1;
+  }
+  if (cmd === "backup") {
+    return backupCli(rest.slice(1));
   }
   if (cmd === "daemon") {
     // CLI-8 / AUTONOMOUS-4: headless schedule ticker (src/daemon/).

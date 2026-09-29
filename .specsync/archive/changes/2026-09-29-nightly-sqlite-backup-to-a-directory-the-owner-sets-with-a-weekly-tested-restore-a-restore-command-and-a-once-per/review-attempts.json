@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9ff1216067ced9f9ff0454cde050619f68816c17",
+      "contract_digest": "9e8a0dea22361413d3db568d8015f288cb1e81663e4f81c3de4e21c70c0ff450",
+      "execution_digest": "2dea691a11ff4a0f639e355938e51db96eeb4fb7e59b3a0ee7ec13c479ca3628",
+      "workspace_digest": "0121ac9977e2341901828c2680597725a9dc39d12a6036ee0ad4d6a6ab7fc2cb",
+      "timestamp": 1790705310
+    }
+  ]
+}

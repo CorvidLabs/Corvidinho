@@ -6,8 +6,8 @@ without Discord and without anyone sitting at a REPL (**CLI-8**,
 poll, at most 2 runs at once, no catch-up, and auto-pause after 5 failures in
 a row. Each run gets its own worktree (SESSION-WORKTREE). Before each tick
 the daemon re-reads the allowlist (file and env), so `/admin` edits made in the
-bridge apply without a restart; while the file cannot be loaded, ticks are
-skipped (`tick.allowlist_failed`). A run whose channel is not on the allowlist,
+bridge apply without a restart; while the file cannot be loaded, ticks run no
+schedule (`tick.allowlist_failed`; the nightly backup still runs). A run whose channel is not on the allowlist,
 or whose creator fails the live-chat actor gate (deny-listed, or, when the user
 or role list is non-empty, not listed by user id and not the configured owner;
 a tick knows no member roles), is refused (DISCORD-SCHEDULE-3). The owner is
@@ -27,6 +27,7 @@ bun src/cli.ts daemon
 | Records each run in the schedule's run history | Post run results to Discord (only the bridge can) |
 | Refuses a second daemon on the same data dir | Restart itself: restarts are systemd's `Restart=` |
 | Stops cleanly on SIGTERM / SIGINT | Heartbeats, `/status` uptime per part, crash DMs (draft OPS-3..5) |
+| Takes the nightly backup and the weekly restore test when `CORVIDINHO_BACKUP_DIR` is set (OPS-1/2, below) | Tell the owner on Discord itself: a failure's notice waits for a bridge tick |
 
 Schedules are still created, paused, resumed and deleted from Discord
 (`/schedule`, ADMIN only). The daemon picks up those changes on its next tick.
@@ -59,9 +60,68 @@ on the same data dir:
   finished. With only the daemon running, the question waits until a bridge
   starts.
 
+## Nightly backup (OPS-1/2)
+
+Set `CORVIDINHO_BACKUP_DIR` to an absolute local directory (created with mode 0700 on the
+first backup) to back up `<data dir>/corvidinho.db` every night. Unset means no backup, as
+before, and `corvidinho doctor` prints `[warn] backup: off …`. A directory inside a git work
+tree is refused (snapshots hold private notes and must never be committed).
+
+- **When.** The scheduler tick of the bridge or the daemon, at the first tick at or after
+  03:00 local time, once per night per data dir. The night is claimed in SQLite, so a bridge
+  and a daemon on the same data dir back up once. A box that was down at 03:00 backs up at
+  its first tick that day. The daemon still backs up on a tick its allowlist file fails to
+  load (`tick.allowlist_failed`: no schedule runs, the backup reads no allowlist).
+- **How.** `VACUUM INTO`, SQLite's online snapshot: one read transaction, consistent while
+  the bridge, daemon and agents keep writing. The copy is written under a temp name with a
+  private umask, checked (`PRAGMA integrity_check`, schema version, the current schema's
+  tables, row counts), fsynced and renamed to `corvidinho-<UTC time>.db` (for example
+  `corvidinho-20260929T030001Z.db`, mode 0600). Rows are copied as stored, so the snapshot is
+  as scrubbed as the DB (SAFE-6; re-scrubbed first when the scrub rules tightened). The newest
+  7 snapshots are kept; other files in the directory are never touched, except a temp
+  snapshot (`.corvidinho-<UTC time>.db.tmp`) more than an hour old, which a crashed run left.
+  A directory that is, or sits below, a symlink into a git work tree is refused too.
+- **Restore test.** In the same night slot, when no test ran for 7 days (or the last one
+  failed), the newest snapshot is restored into a temp directory with the same code as
+  `corvidinho backup restore`, opened and checked (integrity, schema version, tables, row
+  counts equal to those recorded when that snapshot was taken), then deleted. With no
+  snapshot yet it is skipped (`restore_test.skipped`) until the first backup succeeds.
+- **Told.** Every run is logged (events below; on the bridge as `[backup] <event> {…}` lines).
+  The first failure of a streak records an owner notice. The bridge's next tick posts it to
+  the `/announce` channel with only the owner pinged, as fixed text (`⚠️ The nightly backup
+  failed (…)` / `⚠️ The restore test failed (…)`, no host path or error). Later failures of
+  the same streak are logged only; a success ends the streak. With no announcements channel
+  set, or no bridge running, the notice waits and `doctor` says `owner not told yet`. A
+  bridge stopping while the notice's post is in flight waits a short grace (3 s), then hands
+  the notice back, so the next start posts it rather than losing it. A backup or restore
+  test that never finished because its process died (crash, kill, power loss) is recorded
+  as that job's failure (`interrupted: …`, `interrupted: true` in the log) at the next tick
+  of a live bridge or daemon, and told like any other failure.
+- **Status.** `corvidinho doctor` prints a `backup` line: the directory, snapshot count and
+  newest, and the last backup and restore test, or the failure reason. It is `[warn]` while
+  no `/announce` channel is set (a failure would not reach the owner). It is `[ok]` or
+  `[warn]` and never fails doctor, so it never blocks a box update.
+
+### Restore
+
+```bash
+bun src/cli.ts backup list                     # newest first
+sudo systemctl stop corvidinho-daemon          # and the bridge: nothing may hold the DB
+bun src/cli.ts backup restore corvidinho-20260929T030001Z.db ~/.local/share/corvidinho/corvidinho.db --force
+```
+
+`backup restore <snapshot> <target>` takes a name from `backup list`, checks the snapshot,
+writes the copy next to the target (mode 0600), fsyncs it, removes the old file's
+`-journal` / `-wal` / `-shm`, and renames it into place; then checks the restored file. It
+refuses a target any process holds open (a `/proc` scan of open files, plus a live
+`daemon.lock` for `corvidinho.db`), even with `--force`, so the live DB is never overwritten
+while the bridge, daemon or an agent run uses it. Any other existing target needs `--force`.
+To look at a snapshot without touching the live DB, restore it to a new path.
+
 ## Configuration
 
-The daemon uses the same environment as the bridge. It adds no new variables.
+The daemon uses the same environment as the bridge and adds no variables of its own. The
+optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
 
 | Env | Purpose |
 |-----|---------|
@@ -69,6 +129,7 @@ The daemon uses the same environment as the bridge. It adds no new variables.
 | `CORVIDINHO_BIN` | Agent binary to spawn per run (default `<cwd>/src/cli.ts`) |
 | `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
 | `CORVIDINHO_LLM_API_KEY` / … | Provider for the spawned `task run` (never commit) |
+| `CORVIDINHO_BACKUP_DIR` | Optional absolute local directory for the nightly backup (OPS-1/2); unset = no backup |
 
 ## Single instance
 
@@ -117,7 +178,7 @@ scrubbed for secrets (SAFE-6).
 
 | Event | When |
 |-------|------|
-| `daemon.started` | Lock taken, DB open, ticker armed |
+| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable |
 | `daemon.lock_held` / `daemon.lock_failed` | Start refused (exit 1) |
 | `daemon.start_failed` | Start refused (exit 1): start-up setup failed, for example an allowlist file that cannot be read or parsed or a DB that cannot open. `message` gives the reason; nothing runs and the lock is released |
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
@@ -126,9 +187,14 @@ scrubbed for secrets (SAFE-6).
 | `spend.warning` | (warn) A schedule run crossed 80% of the rolling 24 h spend cap (`CORVIDINHO_DAILY_SPEND_CAP_USD`, SAFE-8): `spentMicroUsd`, `capMicroUsd`, `percent` and a `message` line. The daemon has no Discord: the warning stays pending for a bridge's scheduler tick to post |
 | `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it. |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
-| `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (nothing ran; due schedules stay due). Fix the file; the next tick picks it up |
+| `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (no schedule ran; due schedules stay due; the nightly backup still runs when due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |
 | `daemon.stopping` / `daemon.abandoned` / `daemon.stopped` | Shutdown steps |
+| `backup.ok` | Tonight's snapshot: `dir`, `snapshot`, `bytes`, `schemaVersion`, `counts` (rows per table), `removed` (rotated out); `recovered: true` when it ends a failure streak |
+| `backup.failed` | (error) Tonight's backup failed: `error`, `dir`; `ownerNotice` says whether this failure recorded the owner notice or the streak already has one; `interrupted: true` when a dead process left it unfinished (also on `restore_test.failed`) |
+| `restore_test.ok` / `restore_test.failed` | The weekly restore test of the newest snapshot passed / (error) failed, with `snapshot` and the counts or the `error` |
+| `restore_test.skipped` | (warn) No snapshot to test yet |
+| `backup.owner_told` / `restore_test.owner_told` | (bridge only) The owner notice was posted; `backup.owner_not_told` / `restore_test.owner_not_told` (warn, once) when its post did not go out — retried every tick |
 
 ```bash
 journalctl -u corvidinho-daemon -o cat | jq 'select(.event == "run.finished")'

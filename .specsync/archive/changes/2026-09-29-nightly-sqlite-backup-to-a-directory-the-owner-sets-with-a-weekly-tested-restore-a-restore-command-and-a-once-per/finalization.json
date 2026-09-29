@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "nightly-sqlite-backup-to-a-directory-the-owner-sets-with-a-weekly-tested-restore-a-restore-command-and-a-once-per",
+  "implementation_commit": "9ff1216067ced9f9ff0454cde050619f68816c17",
+  "implementation_tree": "10902b6dd1379f8a00e06c2e3578c6395060fdeb",
+  "contract_digest": "9e8a0dea22361413d3db568d8015f288cb1e81663e4f81c3de4e21c70c0ff450",
+  "workspace_digest": "0121ac9977e2341901828c2680597725a9dc39d12a6036ee0ad4d6a6ab7fc2cb",
+  "closing_digest": "bafc13106f268cdba146e955da43751e0142c8b1171d47d5165e87a93d7d314b",
+  "review_digest": "d11dee75afbcb80eac230391e449e1368d60fca3886219048fd88a7ea71c162c",
+  "finalization_digest": "037b2a790e653c08e98b61a9f7ad5bbe7a8cbfda098e1bd6cc29646365dd8163",
+  "timestamp": 1790705327
+}

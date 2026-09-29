@@ -18,6 +18,9 @@
  * worktree failure) and a run that auto-pauses its schedule record a stuck
  * ask the same way, so the owner hears about it instead of the schedule
  * dying silently.
+ * OPS-1/2 (#68): the nightly backup and weekly restore test (src/store/
+ * backup.ts) ride the same tick in the bridge and the daemon; the backup
+ * claims its night in SQLite, so two tickers on one data dir back up once.
  */
 
 import { basename } from "node:path";
@@ -37,6 +40,7 @@ import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
+import type { BackupTicker } from "../store/backup.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
   ensureTalkWorkspace,
@@ -215,6 +219,11 @@ export type SchedulerServiceOpts = {
   spendAlerts?: SpendAlertOutbox;
   /** Called once per run when it finishes or is abandoned (daemon logs). */
   onRunFinished?: (event: ScheduleRunFinished) => void;
+  /**
+   * OPS-1/2: nightly backup + restore test, run from each tick after the due
+   * runs are claimed (it claims its own night; never throws).
+   */
+  backup?: Pick<BackupTicker, "tick">;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -246,6 +255,7 @@ export class SchedulerService {
   private readonly owner: OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
+  private readonly backup?: Pick<BackupTicker, "tick">;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -271,6 +281,7 @@ export class SchedulerService {
     this.owner = opts.owner ?? null;
     this.spendAlerts = opts.spendAlerts;
     this.onRunFinished = opts.onRunFinished;
+    this.backup = opts.backup;
     if (!opts.manual) {
       this.start();
     }
@@ -358,6 +369,9 @@ export class SchedulerService {
       // REQ-discord-347: post asks another ticker (the daemon) left pending.
       // Fire-and-forget like the runs: a slow post never delays a tick.
       this.deliverPendingAsks();
+      // OPS-1/2: the nightly backup / restore test when due, after the runs
+      // are claimed; its owner notice post is fire-and-forget too.
+      this.backup?.tick(now);
     } finally {
       this.tickInFlight = false;
     }

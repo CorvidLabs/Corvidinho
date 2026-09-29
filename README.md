@@ -85,6 +85,16 @@ bun src/cli.ts daemon
 
 Ticks `/schedule` work on the Linux host without Discord or a REPL (CLI-8 / AUTONOMOUS-4). One daemon per data dir; JSON-line logs; SIGTERM stops it cleanly. systemd unit and details: [`docs/DAEMON.md`](docs/DAEMON.md).
 
+## Nightly backup
+
+```bash
+export CORVIDINHO_BACKUP_DIR=/var/backups/corvidinho   # absolute, local, outside any git repo
+bun src/cli.ts backup list
+bun src/cli.ts backup restore corvidinho-20260929T030001Z.db /tmp/check.db
+```
+
+With `CORVIDINHO_BACKUP_DIR` set, the bridge or daemon tick copies `corvidinho.db` once a night (from 03:00 local time) as a consistent SQLite snapshot (mode 0600, newest 7 kept) and once a week restores the newest into a temp dir to check it (OPS-1/2). A failure is logged and the owner is pinged once per failure streak in the `/announce` channel. Unset = no backup; `corvidinho doctor` says so. Restore never overwrites a DB a process holds open. Details: [`docs/DAEMON.md`](docs/DAEMON.md#nightly-backup-ops-12).
+
 ## Fledge lanes
 
 ```bash

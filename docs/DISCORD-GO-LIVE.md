@@ -40,6 +40,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
 # optional SAFE-1: CORVIDINHO_ALLOWLIST=…   # dangerous tool names allowed non-interactive (E.3)
 # optional SAFE-5: CORVIDINHO_AUDIT_HMAC_KEY=…   # keys the audit chain (E.7)
+# optional OPS-1/2: CORVIDINHO_BACKUP_DIR=/var/backups/corvidinho   # nightly DB backup + weekly restore test (E.7)
 # LLM: CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY), CORVIDINHO_LLM_BASE_URL, CORVIDINHO_LLM_MODEL,
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool)
 ```
@@ -231,8 +232,8 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
 [`DAEMON.md`](DAEMON.md). What an operator needs to know:
 
 - It uses the bridge's environment and adds no variables: `CORVIDINHO_DATA_DIR`,
-  `CORVIDINHO_BIN`, the allowlists, the LLM key. Put them in the unit's `EnvironmentFile`
-  (mode 600, not in git).
+  `CORVIDINHO_BIN`, the allowlists, the LLM key, and `CORVIDINHO_BACKUP_DIR` when the nightly
+  backup is on. Put them in the unit's `EnvironmentFile` (mode 600, not in git).
 - One daemon per data dir: `<data dir>/daemon.lock`. A second one logs `daemon.lock_held` and exits 1.
 - It can run next to the bridge on the same DB. Each due run is claimed once. Runs the daemon
   claims are recorded in the run history; the daemon itself never posts to Discord. A daemon
@@ -356,6 +357,7 @@ All paths default to the data dir `~/.local/share/corvidinho` (`CORVIDINHO_DATA_
 | Schedule run history | tables `schedules` / `schedule_runs` in `corvidinho.db` | `/schedule list` (last run, run count); the daemon's `run.finished` events |
 | Discord sessions and `/work` tasks | tables `discord_sessions` / `discord_work_tasks` in `corvidinho.db` | `/session list`, `/status` |
 | Per-session worktrees | `.corvid-worktrees` next to the project (override `WORKTREE_BASE_DIR`) | `git worktree list` in the project |
+| Nightly backup (OPS-1/2) | `corvidinho-<UTC time>.db` snapshots in `CORVIDINHO_BACKUP_DIR` (unset = no backup; mode 0600, newest 7 kept); state in `schema_meta` `ops_*` keys | `corvidinho doctor` (`backup` line: snapshots, last backup / restore test, failure reason, whether the owner was told), `corvidinho backup list`; events `backup.ok` / `backup.failed` / `restore_test.ok` / `restore_test.failed` in the daemon log or `[backup] …` bridge lines. Restore: stop the bridge and daemon, then `corvidinho backup restore <snapshot> <data dir>/corvidinho.db --force` ([`DAEMON.md`](DAEMON.md#nightly-backup-ops-12)) |
 
 Free-text columns in `corvidinho.db` and every string value in the daemon's log lines are
 scrubbed for secrets before they are written (SAFE-6). The audit chain stores an args digest,
