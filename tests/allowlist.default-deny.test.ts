@@ -64,7 +64,9 @@ describe("default-deny allowlists (ALLOW; forbid Merlin empty→BASIC)", () => {
     cfg.discord.denyChannels = ["thread-denied"];
     expect(isChannelDenied("thread-denied", cfg)).toBe(true);
     expect(isChannelDenied(" Thread-Denied ", cfg.discord)).toBe(true);
-    expect(checkChannel("thread-denied", cfg).error).toContain("is denied");
+    const gate = checkChannel("thread-denied", cfg);
+    expect(gate.ok).toBe(false);
+    if (!gate.ok) expect(gate.error).toContain("is denied");
     // Allowlisted, unlisted, empty and missing ids are not denied.
     for (const id of ["parent-1", "other", "", undefined, null]) {
       expect(isChannelDenied(id, cfg)).toBe(false);
