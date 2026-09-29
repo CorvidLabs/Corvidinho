@@ -1,6 +1,6 @@
 ---
 id: exact-event-run-tests-read-a-fixture-persona-so-an-uncommitted-persona-md-edit-never-breaks-bun-test-or-the-verify-lane
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 25924db48661c72bda92c98c6ceb2ea182385b9e
 ---

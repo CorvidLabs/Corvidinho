@@ -7,11 +7,11 @@
   "title": "Persona: one editable persona.md in corvid-agent's voice loaded into the system prompt on every turn and every surface, with the rules after it and winning (PERSONA-1..3, #69)",
   "description": "Persona: one editable persona.md in corvid-agent's voice loaded into the system prompt on every turn and every surface, with the rules after it and winning (PERSONA-1..3, #69)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "303265df9506233c8b2b6f514ecf72d3f85d3035",
   "created_at": 1790693630,
-  "updated_at": 1790716637,
+  "updated_at": 1790717307,
   "affected_specs": [
     "agent"
   ],
