@@ -102,4 +102,42 @@ describe("watch routeEvent (ALLOW-1)", () => {
     expect(action.kind).toBe("refuse");
     expect(store.bySessionId.size).toBe(0);
   });
+
+  // Deny always wins (ALLOW-2 / ALLOW-5): a user or org on a deny list is
+  // refused even when the allow list also names them.
+  test("deny_users wins over an allowlisted user: refused, no session", () => {
+    const store = new SessionStore();
+    const cfg = allowCfg({ users: ["0xLeif", "mallory"] });
+    cfg.github.denyUsers = ["mallory"];
+    const action = routeEvent(baseEvent({ sender: "Mallory" }), {
+      store,
+      allowlist: cfg,
+    });
+    expect(action.kind).toBe("refuse");
+    if (action.kind === "refuse") {
+      expect(action.reply).toBe(NOT_AUTHORIZED);
+      expect(action.reason).toBe("user_not_allowlisted");
+    }
+    expect(store.bySessionId.size).toBe(0);
+    // The allowlisted, undenied user still starts a session.
+    expect(routeEvent(baseEvent(), { store, allowlist: cfg }).kind).toBe(
+      "start_session",
+    );
+  });
+
+  test("deny_orgs wins over an allowlisted repo: refused, no session", () => {
+    const store = new SessionStore();
+    const cfg = allowCfg({ orgs: [], repos: ["EvilOrg/x"] });
+    cfg.github.denyOrgs = ["evilorg"];
+    const action = routeEvent(baseEvent({ repo: "EvilOrg/x" }), {
+      store,
+      allowlist: cfg,
+    });
+    expect(action.kind).toBe("refuse");
+    if (action.kind === "refuse") {
+      expect(action.reply).toBe(NOT_AUTHORIZED);
+      expect(action.reason).toBe("repo_not_allowlisted");
+    }
+    expect(store.bySessionId.size).toBe(0);
+  });
 });

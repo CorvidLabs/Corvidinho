@@ -256,6 +256,10 @@ Acceptance Criteria
 - Bridge run, the check cannot run (the checker throws; the live Guild Members login is refused, e.g. Server Members Intent off) → refused (exit 3) with the reason in one scrubbed line that names Server Members Intent; the bot token never appears; nothing posted.
 - Bridge run: the channel allowlist deny still wins before the acting user check.
 - Acting env empty or unset: no flag posts without a check; the flag checks the named user; strict refuses a missing id; a throwing check still throws.
+- With no injected checker, `verifyRequesterCanSend` runs its own discord.js check (gateway login stubbed to be ready on a fake guild text channel, no token or network): a requester without both View Channel and Send Messages is refused with status 403, one with both is allowed, a requester not in the guild is refused (403), and a missing or non-text channel is refused (404).
+- With `attachFiles`, the same live check refuses a requester with View Channel + Send Messages but no Attach Files (403, the attach reason) and allows one with all three (REQ-discord-476).
+- `discord-post-message` in a bridge run, through that live check, posts nothing when the acting user cannot send and posts once when they can.
+- These tests fail when the `permissionsFor` View Channel + Send Messages check (or the Attach Files check) is disabled.
 
 ### REQ-discord-013
 
