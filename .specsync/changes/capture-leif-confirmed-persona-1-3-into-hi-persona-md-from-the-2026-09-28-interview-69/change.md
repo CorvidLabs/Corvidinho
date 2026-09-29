@@ -1,6 +1,6 @@
 ---
 id: capture-leif-confirmed-persona-1-3-into-hi-persona-md-from-the-2026-09-28-interview-69
-state: approved
+state: implementing
 type: documentation
 base_commit: 8e020976d94c10e9dcf905d1e2814e07bc37d3d8
 ---
