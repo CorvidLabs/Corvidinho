@@ -37,11 +37,12 @@ Acceptance Criteria
 
 ### REQ-plugins-003
 
-Built-in read-only GitHub commands SHALL call GitHub via Octokit (`GITHUB_TOKEN`/`GH_TOKEN`), not shell `gh` (GITHUB-1/4).
+Built-in read-only GitHub commands SHALL call GitHub via Octokit (`GITHUB_TOKEN`/`GH_TOKEN`), not shell `gh` (GITHUB-1/4). The Octokit token (read and write commands alike) SHALL be `GITHUB_TOKEN`, else `GH_TOKEN`, each trimmed: a blank (whitespace-only) token SHALL count as missing, as WATCH reads it, so it never shadows the other and never reaches Octokit as the credential; with no usable token `createOctokit` SHALL refuse with its missing-token error before any request. No env var or config key is added.
 
 Acceptance Criteria
 - github-pr-list/status/ci-status/issue-list use `@octokit/rest`.
 - No `Bun.spawn(["gh", ...])` in plugin bodies.
+- `getGithubToken` with a whitespace-only `GITHUB_TOKEN` and a real `GH_TOKEN` returns the `GH_TOKEN`; `GITHUB_TOKEN` still wins when both are real; blank tokens only return no token and `createOctokit` refuses with `missing GITHUB_TOKEN or GH_TOKEN`.
 
 ### REQ-plugins-004
 
@@ -198,10 +199,11 @@ Acceptance Criteria
 
 ### REQ-plugins-051
 
-github-pr-create SHALL append plain Made with Corvidinho markdown attribution when missing and SHALL NOT insert @handles.
+github-pr-create SHALL append plain Made with Corvidinho markdown attribution when missing and SHALL NOT insert @handles. The attribution SHALL count as present only when the body holds its canonical markdown (`ATTRIBUTION_MARKDOWN`) or plain (`ATTRIBUTION_PLAIN`) form from `src/attribution.ts`; a body that merely contains the words "Made with" and "Corvidinho" SHALL still get the footer.
 
 Acceptance Criteria
 - dry-run body contains Made with Corvidinho link and no @Corvidinho.
+- A dry-run body `Made with Bun; fixes the Corvidinho watch poller.` comes back with `\n\n---\n` and `ATTRIBUTION_MARKDOWN` appended; a body that already holds `ATTRIBUTION_MARKDOWN` or `ATTRIBUTION_PLAIN` comes back unchanged (no second footer).
 
 ### REQ-plugins-052
 
@@ -394,6 +396,8 @@ Acceptance Criteria
 - A keyed row that follows a keyed row, edited and relinked with the rows after it as unkeyed SHA-256 links, fails verify with the key at that row (`chain BROKEN at #N`).
 - Without the key, appending after a keyed row is refused, so a keyless dangerous run fails closed and the chain stays keyed; an unkeyed prefix followed by keyed rows still verifies (`mixed keyed/unkeyed`).
 - Without `CORVIDINHO_AUDIT_HMAC_KEY`, a tampered unkeyed chain (no keyed rows) reads `Audit: N entries · chain BROKEN at #n` at the first tampered row, the same line as with a key, and so does a tampered unkeyed prefix before keyed rows; an intact unkeyed prefix before keyed rows, or a keyed chain, read without the key still reads `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
+- An edit to any one stored column of a keyed row made behind a dropped update trigger — `ts`, `action`, `actor`, `surface`, `args_digest`, `outcome`, `exit_code`, `keyed`, `prev_hash` or `hash` — fails verify with the key at that row (`chain BROKEN at #N`).
+- A dangerous run whose handler returns `ok: false` appends `started` (no exit code) then `error` with the handler's exit code; a dangerous run whose handler throws appends `started` then `error` with exit code 1, and the throw still reaches the caller.
 
 ### REQ-plugins-042
 

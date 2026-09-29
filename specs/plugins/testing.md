@@ -2,6 +2,14 @@
 
 See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over live `gh`.
 - memory-* plugin list + forget ACL fixtures (REQ-plugins-010).
+- github-pr-create dry run (`tests/github.write.plugin.test.ts`,
+  REQ-plugins-051): a body that only mentions "Made with" and "Corvidinho"
+  gets the `---` + `ATTRIBUTION_MARKDOWN` footer; a body that already holds
+  `ATTRIBUTION_MARKDOWN` or `ATTRIBUTION_PLAIN` is left as it is.
+- Octokit token (`tests/github.fixture.test.ts`, REQ-plugins-003): a
+  whitespace-only `GITHUB_TOKEN` does not shadow a real `GH_TOKEN`; blank
+  tokens only give no token and `createOctokit` refuses with the missing-token
+  error before any request.
 - files-* / search-grep happy path + SAFE-2 deny + path escape (REQ-plugins-081..084).
   SAFE-2 covers every path under `specs/` (`specs/agent/requirements.md`,
   `specs/agent/context.md`, a new `specs/notes.md`), not only `*.spec.md`, for

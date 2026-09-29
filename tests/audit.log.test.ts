@@ -9,11 +9,12 @@ import {
   appendAudit,
   argsDigest,
   auditContextFromEnv,
+  auditKeyFromEnv,
   formatAuditLine,
   verifyAudit,
 } from "../src/audit/index.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
-import { clearRegistry } from "../src/plugins/registry.ts";
+import { clearRegistry, register } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { formatStatusReport } from "../src/discord/command-handlers/status.ts";
@@ -100,6 +101,38 @@ describe("audit chain (SAFE-5)", () => {
       "Audit: 2 entries · cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)",
     );
   });
+  // REQ-plugins-095: every stored column is part of the link, so an edit to
+  // any one of them (behind the dropped trigger) breaks the chain at that row.
+  const TAMPER: ReadonlyArray<[column: string, sql: string]> = [
+    ["ts", "UPDATE audit_log SET ts = ts + 1 WHERE seq = 2"],
+    ["action", "UPDATE audit_log SET action = 'plugins-list' WHERE seq = 2"],
+    ["actor", "UPDATE audit_log SET actor = 'mallory' WHERE seq = 2"],
+    ["surface", "UPDATE audit_log SET surface = 'discord:sess_x' WHERE seq = 2"],
+    ["args_digest", `UPDATE audit_log SET args_digest = '${argsDigest(["--id", "y"])}' WHERE seq = 2`],
+    ["outcome", "UPDATE audit_log SET outcome = 'ok' WHERE seq = 2"],
+    ["exit_code", "UPDATE audit_log SET exit_code = 0 WHERE seq = 2"],
+    ["keyed", "UPDATE audit_log SET keyed = 0 WHERE seq = 2"],
+    ["prev_hash", `UPDATE audit_log SET prev_hash = '${"0".repeat(64)}' WHERE seq = 2`],
+    ["hash", `UPDATE audit_log SET hash = '${"f".repeat(64)}' WHERE seq = 2`],
+  ];
+  for (const [column, sql] of TAMPER) {
+    test(`tampering with ${column} on row 2 is detected at row 2`, () => {
+      const db = openCorvidinhoDb({ memory: true });
+      for (const [i, action] of ["a", "b", "c"].entries()) {
+        appendAudit(
+          db,
+          { ...entry(action), outcome: "denied", exitCode: 2 },
+          { key: "k", now: 1_000 + i },
+        );
+      }
+      expect(verifyAudit(db, "k")).toMatchObject({ ok: true, count: 3, keyedRows: 3 });
+      db.exec("DROP TRIGGER audit_log_no_update");
+      db.run(sql);
+      const v = verifyAudit(db, "k");
+      expect(v).toMatchObject({ ok: false, brokenAtSeq: 2 });
+      expect(formatAuditLine(v)).toBe("Audit: 3 entries · chain BROKEN at #2");
+    });
+  }
 
   test("status line and context", () => {
     expect(formatAuditLine({ ok: true, count: 0, keyedRows: 0, unkeyedRows: 0, keyAvailable: false })).toBe("Audit: 0 entries");
@@ -129,6 +162,8 @@ describe("runPlugin records dangerous actions (SAFE-5)", () => {
   afterEach(() => {
     process.env.CORVIDINHO_DATA_DIR = saved;
     rmSync(dir, { recursive: true, force: true });
+    clearRegistry();
+    loadBuiltins();
   });
   const rows = () => {
     const db = openCorvidinhoDb({});
@@ -151,6 +186,38 @@ describe("runPlugin records dangerous actions (SAFE-5)", () => {
     expect(denied.ok).toBe(false);
     await runPlugin({ name: "plugins-list", nonInteractive: true });
     expect(rows().map((x) => `${x.action}:${x.outcome}`)).toEqual(["danger-ping:denied"]);
+  });
+
+  test("failing and throwing dangerous runs: started + error with the exit code", async () => {
+    register({
+      name: "audit-fail-x",
+      description: "dangerous test plugin that fails",
+      dangerous: true,
+      handler: async () => ({ ok: false, error: "boom", exitCode: 3 }),
+    });
+    register({
+      name: "audit-throw-y",
+      description: "dangerous test plugin that throws",
+      dangerous: true,
+      handler: async () => {
+        throw new Error("handler threw");
+      },
+    });
+    const failed = await runPlugin({ name: "audit-fail-x", nonInteractive: false });
+    expect(failed).toMatchObject({ ok: false, exitCode: 3 });
+    await expect(runPlugin({ name: "audit-throw-y", nonInteractive: false })).rejects.toThrow("handler threw");
+    const db = openCorvidinhoDb({});
+    const got = db
+      .query("SELECT action, outcome, exit_code FROM audit_log ORDER BY seq")
+      .all() as Array<{ action: string; outcome: string; exit_code: number | null }>;
+    expect(verifyAudit(db, auditKeyFromEnv())).toMatchObject({ ok: true, count: 4 });
+    db.close();
+    expect(got).toEqual([
+      { action: "audit-fail-x", outcome: "started", exit_code: null },
+      { action: "audit-fail-x", outcome: "error", exit_code: 3 },
+      { action: "audit-throw-y", outcome: "started", exit_code: null },
+      { action: "audit-throw-y", outcome: "error", exit_code: 1 },
+    ]);
   });
 
   test("fails closed: no audit trail ⇒ dangerous plugin refused, safe plugin still runs", async () => {

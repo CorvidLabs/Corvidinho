@@ -131,7 +131,8 @@ bun src/cli.ts github watch
 Copy shape from [`allowlist.example.toml`](../allowlist.example.toml) → `~/.config/corvidinho/allowlist.toml`.
 `github watch` refuses to start when the token, the username or the repo/org allowlist is
 missing, and when an allowlist file exists but cannot be parsed (fail closed; `corvidinho doctor`
-names the line and key). `GITHUB_TOKEN` wins over `GH_TOKEN` when both are set.
+names the line and key). `GITHUB_TOKEN` wins over `GH_TOKEN` when both are set; a blank (whitespace-only) one counts as
+unset, for WATCH, the Octokit plugins and `corvidinho doctor` alike.
 
 ## CI
 

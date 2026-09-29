@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "5a07279207056a27d978066a49a6a115bacdcb32",
+  "contract_digest": "73407389b8dd5903c4330ec5546deef2f4c69a946c79d261dcebef4ad0dc3de9",
+  "execution_digest": "7a86da74cf0bb9613225aef1d14664713e8b641b07acfe63bcac20634f792cdb",
+  "workspace_digest": "f46d31d030bf5d6ad2a9c412253d5a1585d2a5d974bb0dd21bafc133de2d5726",
+  "timestamp": 1790718041
+}

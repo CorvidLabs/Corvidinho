@@ -6,6 +6,7 @@ import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { parseJsonStdout } from "../plugins/github/api.ts";
+import { ATTRIBUTION_MARKDOWN, ATTRIBUTION_PLAIN } from "../src/attribution.ts";
 
 const fixtures = import.meta.dir + "/fixtures/github";
 
@@ -161,6 +162,33 @@ describe("github write plugins (GITHUB-2/3/5)", () => {
       expect(body).toContain("Corvidinho");
       expect(body).not.toContain("@Corvidinho");
       expect(body).not.toContain("@corvid-agent");
+    });
+  });
+
+  test("dry-run pr-create: a body that only mentions \"Made with\" and \"Corvidinho\" still gets the footer; one that has it does not get a second", async () => {
+    loadBuiltins();
+    const prCreate = (body: string) =>
+      runPlugin({
+        name: "github-pr-create",
+        args: ["--repo", "CorvidLabs/Corvidinho", "--title", "t", "--body", body, "--head", "h"],
+        nonInteractive: true,
+        allowlist: ["github-pr-create"],
+      });
+    const bodyOf = (r: { data?: unknown }) => (r.data as { body?: string })?.body ?? "";
+    await withEnv({ CORVIDINHO_GITHUB_DRY_RUN: "1" }, async () => {
+      const mention = "Made with Bun; fixes the Corvidinho watch poller.";
+      const r = await prCreate(mention);
+      expect(r.ok).toBe(true);
+      expect(bodyOf(r)).toBe(`${mention}\n\n---\n${ATTRIBUTION_MARKDOWN}`);
+
+      for (const has of [
+        `Fixes the watch poller.\n\n${ATTRIBUTION_MARKDOWN}`,
+        `Fixes the watch poller.\n\n${ATTRIBUTION_PLAIN}`,
+      ]) {
+        const again = await prCreate(has);
+        expect(again.ok).toBe(true);
+        expect(bodyOf(again)).toBe(has);
+      }
     });
   });
 

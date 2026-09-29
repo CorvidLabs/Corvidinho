@@ -203,9 +203,14 @@ export {
 export { MemoryStore, type MemoryRecord, type MemoryCategory } from "../memory/index.ts";
 
 export {
+  ASK_ANSWER_LABEL,
+  ASK_ANSWER_MAX,
   ASK_BUTTON_TTL_MS,
   ASK_CHOICE_EXPIRED,
   ASK_STUB_HINT,
+  answerAskFor,
+  buildAnswerModal,
+  buildAnswerStubComponents,
   buildChoiceComponents,
   buildOpenStubComponents,
   formatAskEphemeralContent,
@@ -215,4 +220,5 @@ export {
   toPendingAsk,
   type PendingAsk,
   type DiscordActionRow,
+  type DiscordModal,
 } from "./ask-buttons.ts";

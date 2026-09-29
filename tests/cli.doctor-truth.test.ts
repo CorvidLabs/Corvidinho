@@ -246,6 +246,33 @@ describe("doctor allowlists use the bridge / WATCH loader (defect 7)", () => {
     expect(login.code).toBe(1);
   }, 30_000);
 
+  test("a blank GITHUB_TOKEN / GH_TOKEN is missing for the Octokit plugins too, not [ok] github", async () => {
+    const r = await runDoctor(
+      readyEnv({
+        GITHUB_TOKEN: "   ",
+        GH_TOKEN: "\t",
+        DISCORD_CHANNEL_IDS: CHANNEL,
+        CORVIDINHO_GITHUB_ALLOW_REPOS: REPO,
+      }),
+    );
+    expect(r.out).toContain("[missing] github: missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins");
+    expect(r.out).not.toContain("[ok] github:");
+    expect(r.out).toContain("[missing] github-watch: WATCH needs GITHUB_TOKEN/GH_TOKEN");
+    expect(r.code).toBe(1);
+
+    // A blank GITHUB_TOKEN beside a real GH_TOKEN: the GH_TOKEN counts.
+    const gh = await runDoctor(
+      readyEnv({
+        GITHUB_TOKEN: "   ",
+        GH_TOKEN: GITHUB_TOKEN,
+        DISCORD_CHANNEL_IDS: CHANNEL,
+        CORVIDINHO_GITHUB_ALLOW_REPOS: REPO,
+      }),
+    );
+    expect(gh.out).toContain("[ok] github: GITHUB_TOKEN/GH_TOKEN present for Octokit (value not shown)");
+    expectNoValues(gh.out);
+  }, 30_000);
+
   test("a repo entry WATCH cannot use (not OWNER/REPO) is not reported as deny-listed", async () => {
     const r = await runDoctor(
       readyEnv({ DISCORD_CHANNEL_IDS: CHANNEL, CORVIDINHO_GITHUB_ALLOW_REPOS: "doctor-fixture-bare-name" }),
