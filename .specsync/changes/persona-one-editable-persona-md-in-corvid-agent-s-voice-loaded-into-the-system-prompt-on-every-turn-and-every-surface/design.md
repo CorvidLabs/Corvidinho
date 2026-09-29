@@ -56,3 +56,9 @@ artifact: design
   bridges' reply handling, DISCORD-6 rate limits, the verify gate), with no
   new code-level message limiter; templated posts are not rewritten in the
   persona voice.
+- **Review follow-up (after main's #270).** DISCORD-17 lets the model post a
+  file with `discord-send-file`, which is its own Discord message. The
+  PERSONA-3 rule (a) now reads "your whole answer is one final reply; never
+  split it across several posts or send extra chat messages through tools
+  (attaching a file to the conversation when it helps is fine, DISCORD-17)",
+  and the attach block sits after the persona like every other rule.

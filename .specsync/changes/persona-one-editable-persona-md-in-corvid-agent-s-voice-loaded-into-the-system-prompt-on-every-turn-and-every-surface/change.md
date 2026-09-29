@@ -1,6 +1,6 @@
 ---
 id: persona-one-editable-persona-md-in-corvid-agent-s-voice-loaded-into-the-system-prompt-on-every-turn-and-every-surface
-state: implementing
+state: verifying
 type: feature
 base_commit: 303265df9506233c8b2b6f514ecf72d3f85d3035
 ---
