@@ -2,6 +2,7 @@
  * Cooperative scheduler ticker (DISCORD-SCHEDULE-3/4).
  */
 import { describe, expect, test } from "bun:test";
+import { chatBodyFromTaskResult, ROLE_REFUSED_SUMMARY_NOTE } from "../src/agent/task-summary.ts";
 import { emptyConfig } from "../src/allowlist/types.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
@@ -195,5 +196,84 @@ describe("SchedulerService tick (non-blocking)", () => {
     // bad channel run should have failed / not posted
     expect(store.get(badChan.id)?.consecutiveFailures).toBeGreaterThanOrEqual(1);
     svc.stop();
+  });
+});
+
+describe("scheduled run posts and run rows keep the closing role note (REQ-discord-734, ROLES-CHAT-3)", () => {
+  test("a long summary ending with the note keeps it in the run row and the post; one without is cut as before", async () => {
+    const tail = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
+    // What runChat hands a non-ADMIN scheduled run: 1800 chars, note last.
+    const noted = chatBodyFromTaskResult({ summary: `${"x".repeat(3000)}${tail}` });
+    expect(noted.length).toBe(1800);
+    const plain = "p".repeat(1800);
+    const db = openCorvidinhoDb({ memory: true });
+    const store = new ScheduleStore({ db });
+    const posts: Array<{ channelId: string; content: string }> = [];
+    let settle!: () => void;
+    const bothPosted = new Promise<void>((r) => {
+      settle = r;
+    });
+    const agent = {
+      runChat: async (input: { prompt: string }) => ({
+        ok: true as const,
+        summary: input.prompt.includes("plain run") ? plain : noted,
+        exitCode: 0,
+      }),
+    };
+    const past = Date.now() - 60_000;
+    // A long name makes the post head long: the summary still fits under 1900.
+    const long = store.create({
+      name: `Nightly ${"n".repeat(440)}`,
+      cronExpression: "0 * * * *",
+      project: "proj-a",
+      prompt: "noted run",
+      createdByUserId: "admin",
+      channelId: "chan-allowed",
+      now: past - 3_600_000,
+    });
+    long.nextRunAt = past;
+    const short = store.create({
+      name: "Plain",
+      cronExpression: "0 * * * *",
+      project: "proj-a",
+      prompt: "plain run",
+      createdByUserId: "admin",
+      channelId: "chan-allowed",
+      now: past - 3_600_000,
+    });
+    short.nextRunAt = past;
+    const svc = new SchedulerService({
+      store,
+      agent: agent as never,
+      allowlist: allowCfg(),
+      manual: true,
+      useWorktrees: false,
+      outbound: {
+        post: async (p) => {
+          posts.push(p);
+          if (posts.length === 2) settle();
+        },
+      },
+    });
+    const r = await svc.tick();
+    expect(r.started).toEqual(expect.arrayContaining([long.id, short.id]));
+    await bothPosted;
+    svc.stop();
+
+    const runSummary = (id: string) =>
+      (db.query("SELECT summary FROM schedule_runs WHERE schedule_id = ?").get(id) as { summary: string })
+        .summary;
+    const row = runSummary(long.id);
+    expect(row.length).toBe(1500);
+    expect(row).toBe(`${"x".repeat(1500 - tail.length)}${tail}`);
+    const post = posts.find((p) => p.content.includes("Nightly"))!;
+    expect(post.content.startsWith("✅ Schedule **Nightly")).toBe(true);
+    expect(post.content.length).toBeLessThanOrEqual(1900);
+    expect(post.content.endsWith(`x${tail}`)).toBe(true);
+
+    // No note: the row and the post keep the plain 1500-char head cut.
+    expect(runSummary(short.id)).toBe("p".repeat(1500));
+    const plainPost = posts.find((p) => p.content.includes("**Plain**"))!;
+    expect(plainPost.content.endsWith(`:\n${"p".repeat(1500)}`)).toBe(true);
   });
 });

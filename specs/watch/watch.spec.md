@@ -71,6 +71,9 @@ no ProcessManager; no auto-merge; secrets out of repo; fixture tests
 need no live webhook secrets; pollOnce errors logged not swallowed; own
 watch-username comments/mentions skipped; auto-ack at most once per event id;
 run summary at most once per event id and only after successful auto-ack;
+the run-summary comment clips its SAFE-6 scrubbed summary to 1200 chars and
+keeps a closing `(not allowed for your role)` note (REQ-watch-231,
+REQ-watch-734);
 spawn outcomes logged structurally and appended to durable JSONL; on a GitHub
 403/429 rate-limit on the poll fetch, the auto-ack or the run-summary comment
 back off via Retry-After/reset (default 60s) before the next poll cycle without

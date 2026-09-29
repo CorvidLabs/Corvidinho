@@ -471,3 +471,32 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   conversation's channel, and an ask-button pick in a thread resumes with
   `replyChannelId` = the thread and `replyParentChannelId` = its parent. Against the base without the change: 20 of 21
   fail (the "no attach promise" guard passes).
+
+## Closing role note kept on the way to a post (REQ-discord-734, ROLES-CHAT-3)
+
+- `tests/scheduler.service.test.ts` › "a long summary ending with the note
+  keeps it in the run row and the post; one without is cut as before": a
+  schedule with a 448-char name whose run returns the 1800-char
+  `chatBodyFromTaskResult` of a summary ending with the note stores a
+  1500-char run-row summary ending with the note and posts at most 1900 chars
+  ending with it; a run returning 1800 plain chars stores and posts exactly its
+  first 1500.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
+  closing role note within the 1900 cap": a `member-1` `/work` with a
+  207-char description (non-owner PR line) gets a collapsed answer of at most
+  1900 chars whose summary part is under 1500 (fitted after the head) and ends
+  with the note.
+- Same file › "/session start answer for a non-owner keeps the closing role
+  note within the 1900 cap": the answer is at most 1900 chars, its summary part
+  at most 1500, and it ends with the note.
+- `tests/discord.spend.test.ts` › "the cut for the warning line keeps a
+  closing role note": `withSpendWarningPost` on an 1800-char body ending with
+  the note gives a 1900-char post ending `y…`, the note, a blank line and the
+  owner-pinging 80% line; a body that fits is untouched. The existing
+  "a long post is cut so the warning line always fits" (no note) still ends
+  `…\n\nLINE`.
+- With `origin/main`'s `src/discord/ask-ping.ts`,
+  `src/discord/command-handlers/work.ts`, `session.ts` and
+  `src/scheduler/service.ts` swapped in, these four tests fail and every other
+  test in their files passes; on the branch all pass.
+
