@@ -23,7 +23,7 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, normalize, relative, resolve } from "node:path";
-import { checkChannel } from "../../src/allowlist/discord.ts";
+import { checkChannel, isChannelDenied } from "../../src/allowlist/discord.ts";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { defangMassMentions } from "../../src/discord/allowed-mentions.ts";
 import {
@@ -443,11 +443,14 @@ async function handle(ctx: { args: string[]; cwd: string }): Promise<PluginHandl
     );
   }
 
-  // DISCORD-5: a thread is allowlisted through its parent channel.
+  // DISCORD-5: a thread is allowlisted through its parent channel, but a
+  // thread on deny_channels is refused even then: deny wins (REQ-plugins-005).
   const loaded = await tryLoadAllowlist({ env: process.env });
   if (!loaded.ok) return refuse(`not authorized: ${loaded.error}`);
   const parent = process.env[REPLY_PARENT_CHANNEL_ENV]?.trim() ?? "";
-  const gate = checkChannel(parent || channelId, loaded.config);
+  const gate = isChannelDenied(channelId, loaded.config)
+    ? checkChannel(channelId, loaded.config)
+    : checkChannel(parent || channelId, loaded.config);
   if (!gate.ok) return refuse(gate.error);
 
   const attachment = args.gitDiff

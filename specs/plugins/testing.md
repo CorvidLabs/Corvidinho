@@ -71,3 +71,11 @@ round-trips, stringified result < 1 KB with no U+FFFD; JPEG / GIF / WebP heads
 sniffed whatever the name, a text `.png` stays text; > 20 MB refused (sparse
 file), exactly 20 MB read; text read unchanged; path clamp and ROLES-CHAT-8
 secret gate still refuse first. No network.
+
+## Channel deny helper (REQ-plugins-005)
+
+`tests/allowlist.default-deny.test.ts` ("isChannelDenied") — a deny-listed
+channel id is reported whatever its case and surrounding space, allowlisted,
+unlisted, empty and missing ids are not, and `checkChannel` reports the id as
+denied. The thread paths that use it are in `tests/discord.thread-deny.test.ts`
+(discord testing companion).

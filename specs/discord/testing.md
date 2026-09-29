@@ -104,6 +104,29 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   client (real `login`, socket connect stubbed) reaches `onComponent` with the
   presser's names, or neither when none is known (no live Discord).
 
+## Deny wins over an allowlisted parent (REQ-discord-212 / REQ-discord-311 / REQ-discord-476, DISCORD-5)
+
+- `tests/discord.thread-deny.test.ts` — `channels = [parent]`,
+  `deny_channels = [thread]`: `routeMessage` refuses the @mention silently and
+  ignores a plain message in the thread; a session started there before the
+  deny is not continued by a thread message, a reply to its bot message or a
+  mention; a deny on the parent wins over an allowlisted thread; the parent and
+  its other threads are still served. `componentChannelAllowlisted` is false
+  for a press in the denied thread, for a session in it pressed from the
+  parent, and for a session under a denied parent. Through `startBridge` (fake
+  gateway, dry run): the owner's @mention there runs no agent and posts
+  nothing; a talk in the thread stops once it is deny-listed; an ask button
+  there gets only the zero-width ack (the tip for an admin) and stays pending.
+  A slash command there gets only the zero-width ack (the tip for the owner),
+  `/schedule create` naming it is refused, and a schedule whose channel is the
+  thread neither runs nor posts at tick (both already gated the thread id;
+  kept as regression locks). Restart recovery edits and replies nothing for a
+  row in the denied thread or under a denied parent and deletes the row, and
+  still recovers a row in another thread under the parent.
+- `tests/discord.send-file.test.ts` — a deny-listed thread under its
+  allowlisted parent is refused `is denied` before any requester check or
+  upload; another thread under that parent still attaches.
+
 ## Interrupted replies after a restart (REQ-discord-311, DISCORD-3 / AGENT-3)
 
 - `tests/discord.inflight-replies.test.ts` — schema v9 table + v8→v9
