@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "scheduler-refuses-a-zero-cron-step-0-a-b-0-n-0-as-a-cadenceerror-and-bounds-cron-ranges-at-the-field-maximum-so",
+  "implementation_commit": "685c71c8f70db72cb0e4f992ecb86712c31eba8b",
+  "implementation_tree": "9ff595b244699101fac8c665ac33be620dc727ab",
+  "contract_digest": "b3454ad01fc194922b6d87296c40cd3192edeeca84222e77770593499176a894",
+  "workspace_digest": "814423058ab16d5aca9bb87a8f6f6bda47fb3bf04dadb83c8fd2a2ee7a1b4185",
+  "closing_digest": "2416ffed2d32ace45a1a076893ce329d8c6a707def315fd06767c697e1b4259e",
+  "review_digest": "0562d0981ebef8689e520042a90e43bcf97eb4e15406e4b6c07b7a67333b4a24",
+  "finalization_digest": "a30a03f7e21e5f906c5581f82229c83484a5f6c767847d5d78d0c6529d42d4ea",
+  "timestamp": 1790702839
+}

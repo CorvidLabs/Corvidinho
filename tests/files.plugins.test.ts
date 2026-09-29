@@ -265,6 +265,61 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     }
   });
 
+  // Every path under specs/ is protected, not only `*.spec.md`: a module's
+  // requirements.md / context.md and any new file there are refused too.
+  test("SAFE-2: write/edit/delete refuse every path under specs/, not only *.spec.md (REQ-plugins-083)", async () => {
+    expect(isProtectedPath("specs/agent/requirements.md")).toBe(true);
+    expect(isProtectedPath("specs/agent/context.md")).toBe(true);
+    expect(isProtectedPath("specs/notes.md")).toBe(true);
+    expect(isProtectedPath("./Specs/agent/tasks.md")).toBe(true);
+
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe2-specs-"));
+    try {
+      const existing = ["specs/agent/requirements.md", "specs/agent/context.md"];
+      mkdirSync(join(dir, "specs", "agent"), { recursive: true });
+      for (const rel of existing) writeFileSync(join(dir, rel), "ORIGINAL\n");
+
+      for (const target of [...existing, "specs/notes.md"]) {
+        const w = await runPlugin({
+          name: "files-write",
+          args: [target, "HACKED"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        expect(w.ok).toBe(false);
+        expect(w.exitCode).toBe(2);
+        expect(w.error).toContain("SAFE-2");
+      }
+      expect(existsSync(join(dir, "specs", "notes.md"))).toBe(false);
+
+      for (const target of existing) {
+        const e = await runPlugin({
+          name: "files-edit",
+          args: [target, "--old", "ORIGINAL", "--new", "HACKED"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        expect(e.ok).toBe(false);
+        expect(e.exitCode).toBe(2);
+        expect(e.error).toContain("SAFE-2");
+
+        const d = await runPlugin({
+          name: "files-delete",
+          args: [target],
+          cwd: dir,
+          nonInteractive: true,
+          allowlist: ["files-delete"],
+        });
+        expect(d.ok).toBe(false);
+        expect(d.exitCode).toBe(2);
+        expect(d.error).toContain("SAFE-2");
+        expect(readFileSync(join(dir, target), "utf8")).toBe("ORIGINAL\n");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("SAFE-2: write/edit/delete refuse files in a keystore directory and .specsync/ state (REQ-plugins-083)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe2-dirs-"));
     try {

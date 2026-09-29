@@ -59,6 +59,13 @@ intended and every other list and key (`[owner]` included) is unchanged — so
 a file it rewrites always reloads with every existing entry and every other
 list intact.
 
+The agent's `discord-post-message` SHALL gate its target channel on this
+same union, deny lists first (REQ-plugins-009), so a channel the bridge
+listens in through `DISCORD_CHANNEL_IDS` alone can also be posted to.
+`discord-send-file` SHALL gate the conversation channel the bridge set (a
+thread through its parent, REQ-discord-476) on the same union, deny lists
+first, so it can attach in every channel the bridge talks in.
+
 Acceptance Criteria
 - DISCORD_CHANNEL_IDS and/or file/env channels union; empty → empty_channels error.
 - A malformed allowlist file → `allowlist` error; the bridge does not start.
@@ -67,6 +74,8 @@ Acceptance Criteria
 - `/admin users add` on a file whose `[discord]` has only a multi-line `channels` array (LF and CRLF), and `/admin channels add` after a multi-line `deny_users`, put the new key after the closing `]`; the file reloads with every list intact.
 - A `]` or `#` inside a quoted item survives an `/admin` rewrite; the comment on the edited key's first line is kept.
 - A rewrite that would not reload as intended (an entry the one-line writer cannot quote) is refused and the file is left byte-for-byte unchanged.
+- `discord-post-message` to a channel listed only in `DISCORD_CHANNEL_IDS` passes the channel gate (dry run exit 0); a deny on that channel still refuses (exit 3).
+- `discord-send-file` in a conversation channel listed only in `DISCORD_CHANNEL_IDS`, or a thread whose parent is, attaches; a channel in no list is refused (not allowlisted) and a deny on that channel still refuses (is denied).
 
 ### REQ-discord-005
 
@@ -247,6 +256,10 @@ Acceptance Criteria
 - Bridge run, the check cannot run (the checker throws; the live Guild Members login is refused, e.g. Server Members Intent off) → refused (exit 3) with the reason in one scrubbed line that names Server Members Intent; the bot token never appears; nothing posted.
 - Bridge run: the channel allowlist deny still wins before the acting user check.
 - Acting env empty or unset: no flag posts without a check; the flag checks the named user; strict refuses a missing id; a throwing check still throws.
+- With no injected checker, `verifyRequesterCanSend` runs its own discord.js check (gateway login stubbed to be ready on a fake guild text channel, no token or network): a requester without both View Channel and Send Messages is refused with status 403, one with both is allowed, a requester not in the guild is refused (403), and a missing or non-text channel is refused (404).
+- With `attachFiles`, the same live check refuses a requester with View Channel + Send Messages but no Attach Files (403, the attach reason) and allows one with all three (REQ-discord-476).
+- `discord-post-message` in a bridge run, through that live check, posts nothing when the acting user cannot send and posts once when they can.
+- These tests fail when the `permissionsFor` View Channel + Send Messages check (or the Attach Files check) is disabled.
 
 ### REQ-discord-013
 
@@ -450,6 +463,14 @@ never make an unaudited delete. An unknown or missing schedule id deletes
 nothing and appends no row.
 
 Cadence SHALL enforce a minimum interval of **5 minutes** at create time.
+A cron step SHALL be 1 or more in every field: a zero step (`*/0`, `a-b/0`,
+`n/0`, also inside a comma list) SHALL be refused as a `CadenceError` before
+the field is expanded, so `/schedule create` replies with that message
+ephemerally and creates nothing, and the store's next-run computation
+(create, resume, claim) throws the same error. A range SHALL be expanded only
+up to its field's maximum, so a range whose end is past it (`0-99999999999`)
+resolves at once and the other cadence rules apply. No cadence SHALL hang the
+bridge process that parses it (DISCORD-SCHEDULE-4).
 Schedules SHALL persist in the shared Corvidinho SQLite database. The bridge
 SHALL run a cooperative ~60s ticker that fires due active schedules
 asynchronously with a small concurrency cap so live Discord HEAR and GitHub
@@ -476,6 +497,8 @@ Acceptance Criteria
 - `/schedule` registered with list/create/pause/resume/delete bodies.
 - Admin can create with cadence + project + prompt; non-admin / empty admin denied.
 - Cadence `<5m` refused; `>=5m` / `@hourly` accepted.
+- A zero cron step (`*/0 * * * *`, `0-59/0 * * * *`, `0,*/0 * * * *`, `5/0 * * * *`, or `/0` in the hour, day, month or weekday field) is refused with the ephemeral `Invalid cron step in "…": the step must be 1 or more.`, nothing is created, and the bridge keeps answering; `parseCron` / `getNextCronDate` throw the same `CadenceError`.
+- A range past its field's maximum resolves at once: `0-99999999999 * * * *` is refused by the 5-minute rule and `0 0-99999999999/2 * * *` runs like `0 */2 * * *`; cadences with steps of 1 or more resolve as before.
 - list/pause/resume/delete behave; pause skips ticks; resume recomputes next_run.
 - `/schedule delete` by the owner appends `started` then `ok` (action `schedule-delete`, surface `discord:schedule`, args digest only) before the schedule and its runs are gone; the reply names both row numbers and the chain verifies.
 - When the audit trail throws, the chain is keyed and the process has no key, or no trail is wired, `/schedule delete` replies `audit log unavailable (SAFE-5)` and the schedule and its run history are kept.
@@ -1417,6 +1440,10 @@ channel with the same text; then delete the row. Recovery SHALL NOT throw out
 of bridge start and SHALL NOT touch any other channel or message. No slash
 command or env var is added.
 
+A row whose channel (the thread) or parent channel is on `deny_channels`
+SHALL count as not allowlisted even when the other is allowlisted (deny wins,
+REQ-discord-212): nothing is edited or posted and the row is deleted.
+
 Acceptance Criteria
 - A running reply has exactly one row whose progress id is the sent embed; the row is gone after success, failed exit, ask, thrown error and worktree refusal; ignored or refused messages never add one.
 - A reply in a thread records the thread as its channel and the allowlisted parent channel; a button pick's resumed run records a row (request id = the ask stub message) and clears it after.
@@ -1426,6 +1453,7 @@ Acceptance Criteria
 - Edit and reply both failing still lets the bridge start; the row is deleted.
 - With no rows, bridge start sends, edits and replies nothing.
 - A fresh DB is schema 9 with the table; a v8 DB migrates to 9 and keeps its rows.
+- A row in a deny-listed thread under an allowlisted parent, or in an allowlisted thread under a deny-listed parent, gets no edit and no reply; the row is deleted. A row in another thread under the allowlisted parent is still recovered in that thread.
 
 ### REQ-discord-212
 
@@ -1455,12 +1483,31 @@ anyone else (DISCORD-DENY-2/3) — and SHALL NOT resume the session, run the
 agent, or send or edit anything. No slash command, env var, table or column
 is added.
 
+Deny SHALL always win over an allowlisted parent (REQ-plugins-005): when a
+thread or its parent channel is on `deny_channels`, the thread SHALL count as
+not allowlisted on every path, even when the other id is allowlisted. An
+@mention, a thread continuation and a reply to a tracked bot message there
+SHALL be refused silently as above; an ask button pressed there, or for a
+session whose channel or thread is deny-listed, SHALL get only the ephemeral
+ack and SHALL NOT resume; a slash command there and a schedule whose channel
+is that thread SHALL be refused (both gate the thread id itself); restart
+recovery (REQ-discord-311) SHALL post and edit nothing there; and
+`discord-send-file` (REQ-discord-476) SHALL upload nothing there.
+`isMonitoredConversation` (`permissions.ts`: the thread or its parent is
+allowlisted and neither is deny-listed) SHALL be the shared check for
+MessageCreate, ask buttons and restart recovery.
+
 Acceptance Criteria
 - The owner forwards a tracked bot message from an allowlisted channel into a non-allowlisted channel (with or without an @mention): `routeMessage` returns a silent `ignore` / `refuse` with no reply, the agent is not spawned, and nothing is sent, edited or deleted in that channel.
 - A thread message under a non-allowlisted parent does not continue a session whose recorded channel is allowlisted.
 - `replyReferenceMessageId` returns undefined for a forward-type reference and for a reference to another channel; it returns the message id for a same-channel reply (default or missing type) and, inside a thread, for a reference to the thread or its parent.
 - A reply to a tracked bot message in the same allowlisted channel still continues the same session; a thread under an allowlisted parent still continues its session.
 - An ask button pressed in a non-allowlisted channel, or after the session's channel left the allowlist, gets only the ephemeral zero-width ack (the allowlist tip for an admin): the ask stays pending, the agent is not run, and nothing is sent or edited; a press in the allowlisted channel, or in the session's thread under an allowlisted parent, still resumes (DISCORD-ASK-3).
+- With `channels = [parent]` and `deny_channels = [thread]`, an @mention in the thread is refused silently (no reply): no session is started, the agent is not run and nothing is posted; a session started there before the deny is not continued by a thread message, a reply to its bot message or a mention.
+- A thread under a deny-listed parent is refused even when the thread itself is allowlisted.
+- `componentChannelAllowlisted` is false for a press in the deny-listed thread and for a session in it (also when pressed in the parent); the bridge answers only the zero-width ack (the allowlist tip for an admin), the ask stays pending and nothing is sent.
+- A slash command in the deny-listed thread gets only the zero-width ack (the tip for the owner); `/schedule create` naming the thread as its channel is refused, and a schedule whose channel is the thread neither runs nor posts at tick.
+- The allowlisted parent itself and its other threads are still served (DISCORD-2.a).
 
 ### REQ-discord-215
 
@@ -1972,6 +2019,11 @@ scrubbed, so a large diff goes as a `.diff` attachment. A Discord 413 / code
 `CORVIDINHO_DISCORD_DRY_RUN=1` SHALL post nothing. No slash command, config
 key, table or column is added; the two env vars are bridge-to-run plumbing.
 
+A conversation thread on `deny_channels` SHALL be refused even when its
+parent is allowlisted (deny wins, REQ-discord-212 / REQ-plugins-005), before
+the requester check, with the `checkChannel` "is denied" error; nothing is
+uploaded.
+
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
@@ -1984,6 +2036,7 @@ Acceptance Criteria
 - A requester who cannot attach, or a check that throws, sends nothing; dry run uploads nothing; `started` and `ok` audit rows are written.
 - `--git-diff` refuses an empty diff and attaches `changes.diff` without secret paths and scrubbed.
 - The spawn client writes the reply channel env (empty when none); the bridge passes the conversation's channel on chat, thread, `/session start` and `/work` runs.
+- A deny-listed thread under its allowlisted parent is refused with the "is denied" error: no requester check runs and nothing is uploaded; another thread under that parent still passes.
 
 ### REQ-discord-036
 

@@ -82,7 +82,7 @@ import {
   gateActor,
   gateChannel,
   gateRateOrMute,
-  isMonitoredChannel,
+  isMonitoredConversation,
   muteUser as muteUserImpl,
   unmuteUser as unmuteUserImpl,
   PermissionLevel,
@@ -1480,11 +1480,10 @@ export async function startBridge(
     const r = await recoverInterruptedReplies({
       store: inflightReplies,
       rows: interruptedReplies,
-      // DISCORD-5: only channels (or a thread's parent) still allowlisted now.
+      // DISCORD-5: only channels (or a thread's parent) still allowlisted
+      // now; a deny on the thread or its parent wins (REQ-plugins-005).
       mayPost: (row) =>
-        isMonitoredChannel(row.channelId, config.allowlist) ||
-        (row.parentChannelId != null &&
-          isMonitoredChannel(row.parentChannelId, config.allowlist)),
+        isMonitoredConversation(row.channelId, row.parentChannelId, config.allowlist),
       editEmbed: (o) => outbound.editEmbed(o),
       reply: replyRef.fn,
     });

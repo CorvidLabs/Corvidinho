@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer",
+  "implementation_commit": "685c71c8f70db72cb0e4f992ecb86712c31eba8b",
+  "implementation_tree": "9ff595b244699101fac8c665ac33be620dc727ab",
+  "contract_digest": "3342cf9b3f2bc16273a734a6edc4171d9a4d126fc94784870a792a7f8ba5ad68",
+  "workspace_digest": "814423058ab16d5aca9bb87a8f6f6bda47fb3bf04dadb83c8fd2a2ee7a1b4185",
+  "closing_digest": "8bdf05fb9329c8c92174c23961738dcef22d172cda9d4adc9e262666af0f06b6",
+  "review_digest": "eb07bd24b1e9d7435ad939671cae28dacdd70f524a681bce5dcbb7ffda5e222f",
+  "finalization_digest": "78c868ae89454a27bba5871100b59b7aabcf8a08a3e173b7f4e34a8bb2ea9b43",
+  "timestamp": 1790702266
+}
