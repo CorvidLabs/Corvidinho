@@ -12,9 +12,9 @@ export type ApiResult<T = unknown> = {
   exitCode: number;
 };
 
+/** A blank (whitespace-only) token is missing and never shadows the other, as WATCH reads it. */
 export function getGithubToken(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const t = env.GITHUB_TOKEN || env.GH_TOKEN;
-  return typeof t === "string" && t.length > 0 ? t : undefined;
+  return env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim() || undefined;
 }
 
 export function createOctokit(env: NodeJS.ProcessEnv = process.env): Octokit | ApiResult {

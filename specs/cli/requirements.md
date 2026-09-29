@@ -43,7 +43,9 @@ and the count, never the ids, repos or tokens. An entry the gate cannot use
 at all (a repo that is not OWNER/REPO) SHALL NOT count either, and the
 failing line SHALL name deny wins only when every entry is deny-listed. A
 token or watch login SHALL count only when it is not blank, as the bridge and
-WATCH trim them. An allowlist file that exists
+WATCH trim them. This holds for the `github` line too: a
+blank `GITHUB_TOKEN` / `GH_TOKEN` is missing for the Octokit plugins, as
+they read it. An allowlist file that exists
 but does not load SHALL fail both checks, since the bridge and watch refuse to
 start on it. Doctor SHALL print an `llm` line: `[ok]` when
 `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (value not shown),
@@ -65,6 +67,7 @@ Acceptance Criteria
 - No LLM key prints `[warn] llm` naming the demo stub without changing the exit code; `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` prints `[ok] llm` without the value.
 - A writable data dir prints `[ok] data-dir`; a missing one under a writable parent prints `[info] data-dir` and is not created; a data dir that is a file, sits under a file, is a symlink to nothing or (as a non-root user) is not writable prints `[fail] data-dir` and doctor exits 1; the writable probe leaves nothing in the data dir.
 - Doctor output never contains the token, LLM key, channel ids or repo / org names.
+- A whitespace-only `GITHUB_TOKEN` and `GH_TOKEN` print `[missing] github: missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins`, never `[ok] github`; a blank `GITHUB_TOKEN` beside a real `GH_TOKEN` prints `[ok] github` without the value.
 
 ## Constraints
 

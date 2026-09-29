@@ -176,4 +176,28 @@ describe("verifyFeedbackExcerpt (AGENT-4.a, REQ-agent-002)", () => {
       }
     }
   });
+
+  test("an emoji error line cut by the end of the error-line scan is never kept on half a surrogate pair", () => {
+    // Error lines are scanned up to where the kept end of the log starts.
+    // Sweeping the noise after an emoji `error:` line moves that point across
+    // the line, so some inputs put it between a high and a low surrogate.
+    // 3946 is the cap runTask passes (4000 minus its "Verification failed" head).
+    const laneLog = (after: number) =>
+      "  ▶️ Running task: lint\n" +
+      "lint ok\n".repeat(50) +
+      "  ▶️ Running task: test\n" +
+      "console noise\n".repeat(200) +
+      "(fail) greets user\n" +
+      `error: expected "${"👋".repeat(20)}" got "hi"\n` +
+      "console noise\n".repeat(after) +
+      `${LANE_FAILED_LINE}\n`;
+    for (let after = 100; after <= 160; after++) {
+      for (const max of [3946, VERIFY_FEEDBACK_MAX_CHARS]) {
+        const out = verifyFeedbackExcerpt(laneLog(after), max);
+        expect(out.length).toBeLessThanOrEqual(max);
+        expect(out).toContain("Failing step: test (step 3 of lane 'verify')");
+        expect(LONE_SURROGATE.test(out)).toBe(false);
+      }
+    }
+  });
 });

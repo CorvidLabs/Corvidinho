@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { attribution } from "../../src/attribution.ts";
+import { ATTRIBUTION_MARKDOWN, ATTRIBUTION_PLAIN, attribution } from "../../src/attribution.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
@@ -107,7 +107,8 @@ function withAttribution(body: string | undefined): string {
   const base = (body ?? "").trimEnd();
   const foot = attribution("markdown");
   if (!base) return foot;
-  if (base.includes("Made with") && base.includes("Corvidinho")) return base;
+  // Only the attribution itself counts, not the two words anywhere in the body.
+  if (base.includes(ATTRIBUTION_MARKDOWN) || base.includes(ATTRIBUTION_PLAIN)) return base;
   return `${base}\n\n---\n${foot}`;
 }
 

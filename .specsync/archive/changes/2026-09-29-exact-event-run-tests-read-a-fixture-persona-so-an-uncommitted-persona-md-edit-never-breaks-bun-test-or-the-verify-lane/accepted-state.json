@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "exact-event-run-tests-read-a-fixture-persona-so-an-uncommitted-persona-md-edit-never-breaks-bun-test-or-the-verify-lane",
+  "slug": "exact-event-run-tests-read-a-fixture-persona-so-an-uncommitted-persona-md-edit-never-breaks-bun-test-or-the-verify-lane",
+  "title": "Exact-event run tests read a fixture persona so an uncommitted persona.md edit never breaks bun test or the verify lane (PERSONA-2, #69)",
+  "description": "Exact-event run tests read a fixture persona so an uncommitted persona.md edit never breaks bun test or the verify lane (PERSONA-2, #69)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "25924db48661c72bda92c98c6ceb2ea182385b9e",
+  "created_at": 1790696900,
+  "updated_at": 1790717061,
+  "affected_specs": [],
+  "affected_paths": [
+    "tests/agent.events-ndjson.test.ts",
+    "tests/agent.project-instructions.test.ts",
+    "tests/agent.spend-ask.test.ts",
+    "tests/fixtures/persona/persona.md"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Test isolation only: five tests that assert a run's exact events pass personaRoot = tests/fixtures/persona; product behavior and REQ-agent-069 are unchanged (the persona feature change in the same PR owns the agent spec)",
+  "acceptance_criteria": [
+    "With persona.md edited in the checkout but not committed (an extra line appended), the whole bun test suite passes: the project-instructions, spend-warning and NDJSON running-totals tests that assert a run's exact events pass personaRoot = tests/fixtures/persona (a plain folder with no .git, a clean load, no Persona note); no product code, spec requirement or event changes"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

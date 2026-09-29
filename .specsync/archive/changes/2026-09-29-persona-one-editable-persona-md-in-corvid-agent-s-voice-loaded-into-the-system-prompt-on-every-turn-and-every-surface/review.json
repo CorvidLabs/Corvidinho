@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "persona-one-editable-persona-md-in-corvid-agent-s-voice-loaded-into-the-system-prompt-on-every-turn-and-every-surface",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "e6d2cb2e0c47754a5a7a9384eeb3ab148064840e",
+  "contract_digest": "0cc9a2014ebb048410bd4e1333d8d6a4251d1a0f04bcc6da88540c2eb4d15597",
+  "execution_digest": "de3e2b39bee0935c66edf3f35ae16af047836c43032b902e3debd38c56f517fc",
+  "workspace_digest": "1bb2f41cd44e58340dbe2ee47b88d2e6e3ae746d4c87d36afc2775384293df2d",
+  "timestamp": 1790717293
+}
