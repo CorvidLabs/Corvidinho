@@ -7,11 +7,11 @@
   "title": "Discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17)",
   "description": "discord-send-file attaches files and images to replies in the conversation's own channel, and the model is told it can (DISCORD-17)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "8dd5714b4e441275c939ca40d362bb513caaea0b",
   "created_at": 1790694403,
-  "updated_at": 1790696074,
+  "updated_at": 1790696365,
   "affected_specs": [
     "discord",
     "agent"

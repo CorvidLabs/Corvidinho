@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can",
+  "implementation_commit": "edf84b060c2aab069298b9896df9707aed3e9811",
+  "implementation_tree": "c9e325b6f355cfac5c7655d70c62dda041e6d46f",
+  "contract_digest": "fa8dfcc3bee9a31890c475724c4e128e3ee6a4db2814f1efaa0c712f5d6275be",
+  "workspace_digest": "7f2c961ccec561de9150c911cc473d020327fe3344a6a393becd6be8faeb326c",
+  "closing_digest": "d9aec6c483d45fd3a410690933c54a3da36bceb81080dceca90a7d17a2dcddea",
+  "review_digest": "18f545f02953835264c49003adef037fc3eebaf44944ab0db0bdb2b0f4ee7fc3",
+  "finalization_digest": "bc61f6c24f80beff2b55f8c183e67b7b8fc84173389bd2b355350beb3825b74e",
+  "timestamp": 1790696365
+}

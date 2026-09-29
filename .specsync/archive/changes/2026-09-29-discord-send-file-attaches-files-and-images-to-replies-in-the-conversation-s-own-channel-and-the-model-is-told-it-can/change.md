@@ -1,6 +1,6 @@
 ---
 id: discord-send-file-attaches-files-and-images-to-replies-in-the-conversation-s-own-channel-and-the-model-is-told-it-can
-state: implementing
+state: archived
 type: feature
 base_commit: 8dd5714b4e441275c939ca40d362bb513caaea0b
 ---
