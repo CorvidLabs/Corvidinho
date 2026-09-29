@@ -31,16 +31,21 @@ artifact: design
   no schema bump, no migration. A query of only question words keeps the old
   substring behaviour.
 - **Search before the model speaks (no model call).** Discord chat / button
-  and WATCH already prepend memory blocks; they now search for the message
+  and WATCH already prepend memory blocks, and owner / team `/work` a project
+  block; they now search for the message (the `/work` description)
   (`recallRelevantThenRecent`: relevant rows first, the newest to fill), so
   the model has searched memory before it could say it doesn't know.
 - **Guard in the loop (a model call only on a hit).** `src/agent/recall-guard.ts`:
   a final reply matching an "I don't know / don't remember / no information"
-  heuristic, in an attempt with no injected block and no `memory-recall`
-  call, makes the loop run `memory-recall --query` and `--project --query`
-  itself through `runPlugin` (same gates). Nothing ⇒ the reply stands.
-  Found ⇒ one user message with the facts and one more model reply (not
-  counted as a tool round), once per attempt.
+  heuristic, in an attempt where the person's own memory or the project's
+  was not searched yet — no injected block of that kind at the head of the
+  task (a header quoted in the message does not count) and no
+  `memory-recall` call for it — makes the loop run the missing
+  `memory-recall --query` / `--project --query` itself through `runPlugin`
+  (same gates); a `/work` run, with only the project block, still gets the
+  person's own search. Nothing ⇒ the reply stands. Found ⇒ one user message
+  with the facts and one more model reply (not counted as a tool round), once
+  per attempt.
 
 ## Design choices pending Leif
 
