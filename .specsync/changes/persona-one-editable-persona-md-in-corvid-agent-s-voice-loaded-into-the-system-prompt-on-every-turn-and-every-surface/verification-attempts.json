@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790693849,
+      "commit": "c0f65e04178bfd399fe5637017665b89ca3cf36c",
+      "contract_digest": "0cc9a2014ebb048410bd4e1333d8d6a4251d1a0f04bcc6da88540c2eb4d15597",
+      "execution_digest": "08aabf096b9fc0789ae40c52cb6259ded48811915a9f4e5f1092df56c7f9ff86",
+      "workspace_digest": "17d01c06c9367fec20eca004ff9426ed178fdda82a4e79d6ab5009ac54468d65",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-069"
+      ]
+    }
+  ]
+}
