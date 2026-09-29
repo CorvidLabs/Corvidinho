@@ -123,6 +123,7 @@ files:
   - src/discord/ask-buttons.ts
   - src/agent/ask-options.ts
   - tests/discord.ask-buttons.test.ts
+  - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
@@ -220,7 +221,7 @@ mute set) ≥ ADMIN.
 
 Questions and owner/requester ping (REQ-discord-044, issue #44, AUTONOMY-1/2/4..6 /
 DISCORD-ASK / SESSION-MULTI): `src/discord/ask-ping.ts` exports `formatAskReply`,
-`defangMassMentions`, `ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_REPLY_MAX`.
+`defangMassMentions`, `ASK_NO_OWNER_WARNING`, `ASK_REPLY_HINT`, `ASK_ANSWER_HINT`, `ASK_REPLY_MAX`.
 Clarify mentions `requesterDiscordId`; stuck mentions the configured owner.
 When an ask has structured options (or a numbered list in the question),
 `src/discord/ask-buttons.ts` posts a public Choose stub (no MCQ body) and opens
@@ -285,6 +286,45 @@ of a live session), so the chat `onComponent` open/pick path
 resumes the session in that message. Otherwise the answer is the free-text
 ask: a thin reply restates, cancel clears, a substantive reply resumes with
 the question.
+
+Free-text asks answer privately (REQ-discord-548, DISCORD-ASK-4.a): a clarify
+or stuck ask whose choices cannot be listed gets `answerAskFor`
+(`ask-buttons.ts`; an `AnswerAsk` — the free-text `PendingAsk`, any lone
+option dropped, and `buildAnswerStubComponents`, one Primary **Answer**
+button on the `open` custom_id — or null for a `spend-cap` stop or listable
+options). The post stays `formatAskReply` with the question quoted and
+`answerButton: true` (`ASK_ANSWER_HINT` in place of `ASK_REPLY_HINT`), on the
+chat reply, a pick or form resume's follow-up ask, a thin-reply restatement
+while the ask has not timed out, and the `/work` / `/session start` answer
+(`recordSlashStub` records its id); it keeps its footer embed
+(`finalizeContent` / `finishSlashWithThinking` `keepFooter`) and its message
+id becomes the ask's `stubMessageId`. The requester's press on it (an `open`
+press on an ask without options) calls `ComponentInteraction.showModal` with
+`buildAnswerModal` (interaction response type 9: `custom_id`
+`cvask:answer:<askId>`, title `ASK_ANSWER_MODAL_TITLE`, one Label (type 18)
+whose description is the scrubbed start of the question, ≤100 chars, around
+one required paragraph text input `ASK_ANSWER_INPUT_ID`, max
+`ASK_ANSWER_MAX` = min(`ASK_QUESTION_MAX`, `DISCORD_MODAL_INPUT_MAX` 4000)).
+The live gateway routes a MODAL_SUBMIT (interaction type 5) to `onComponent`
+through `adaptModalSubmit` (text values by input id in
+`ComponentInteraction.modalValues`, via `modalTextValues`; replies parse no
+mentions). `parseAskCustomId` reads `answer`; only an `answer` id with
+`modalValues` (and never a press id with them) is taken. The submit passes the
+channel, actor, mute/rate, not-yours and expiry gates a press passes;
+`normalizeAskAnswer` scrubs (SAFE-6) and trims it; the ask is cleared, the
+submit gets the ephemeral `ASK_ANSWER_ACK`, and the session resumes like a
+pick in the stub (`existingMessageId`) with the prompt a reply that answers
+the ask gets (`[Prior clarifying question you asked (the human is answering
+it now): …]` + `Human answer:`), `humanText` and the thread turn being the
+scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). A
+thin or blank submit (`isThinAck`, AUTONOMY-5) is not an answer: the ask
+stays, nothing runs and the question is restated in an ephemeral
+`formatAskReply` with the Answer button; a cancel submit (`isCancelAsk`,
+AUTONOMY-6) clears every open ask of the session like a cancel reply, with the
+ephemeral `ASK_CANCELLED_ACK` and no run. A submit on a Choose ask gets the
+not-for-you reply. A press or submit on a free-text ask past its timeout gets
+`ASK_CHOICE_EXPIRED` and leaves the ask pending (a reply still answers it).
+Schedule asks keep posting text without a button.
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
 AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
@@ -459,7 +499,8 @@ keeps a footer-only embed from `buildAnswerFooterEmbed`
 error color; tokens and cost only when `extras.spend` is given, which callers
 do for the owner's runs only, `tokens unknown` / `cost unknown` when not
 known, never $0 — DISCORD-15/15.a, SAFE-16), a Choose stub (`components`)
-carries none, and a later re-edit keeps the first footer (time frozen by
+carries none unless `keepFooter` (a free-text ask's Answer button,
+REQ-discord-548), and a later re-edit keeps the first footer (time frozen by
 `elapsedMs` / `answerFooter`) and outcome (REQ-discord-457). The bridge chat
 and button-pick paths and `finishSlashWithThinking` pass the run's
 `thinkExtras` (with `spend: answerSpendFor(result.usage, model)` when
@@ -476,7 +517,8 @@ keeping a role note; one plain message within 2000, one
 embed for long plain prose with no fence or mention, else split parts with the
 footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
-first mentioned in them, so a mention past the first part still pings once)
+first mentioned in them, so a mention past the first part still pings once;
+`keepFooter` keeps the footer beside an Answer button, DISCORD-ASK-4.a)
 and `answerSpendFor` (tokens and cost from the run's
 `usage` and `priceForModel`). `finalizeContent` edits the first part into the
 progress message, posts later parts with the optional
@@ -530,7 +572,9 @@ source, id?)` / `speakerFenceHeader(role)` / `SpeakerSurface`
 role)`, `injectionRefusalHead`, `formatInjectionRefusal(reasons, owner)`,
 `refuseInjectedSlash(ctx, interaction, verdict, source)`,
 `formatInjectionOwnerLine(notice, owner)`, `withInjectionNotice(post, notice,
-owner)`, `auditInboundInjection(recordAudit, …)` and
+owner, max?)` (`max` defaults to `ASK_REPLY_MAX`; the chat and button-pick
+answers pass `DISCORD_ANSWER_MAX`, so the line never cuts a split answer,
+DISCORD-16), `auditInboundInjection(recordAudit, …)` and
 `INJECTION_NO_OWNER_WARNING`. `src/discord/identity-inject.ts` adds
 `cleanedDiscordName(input)` and `displayNameClash(input)`;
 `slashOwnerNotice` takes `injection?`; `AgentSpawnResult` gains
@@ -744,6 +788,21 @@ characters. No new env var, config key, table or column.
   `<@owner> ↑ needs you`; the same ask answered by a fallback reply adds no
   post (REQ-discord-215)
 
+### Scenario: A free-text ask is answered privately (DISCORD-ASK-4.a)
+
+- **Given** a run for requester R stops with a clarify ask whose choices
+  cannot be listed
+- **When** R presses the stub's **Answer** button, types an answer in the
+  form and submits it
+- **Then** the stub showed the question and one Answer button; the press
+  opened a modal (no post, no run); the submit resumed R's session with the
+  prior-question block a reply gets, in the stub, the typed text scrubbed and
+  never posted; another user's, a muted or deny-listed R's, or a late (~30
+  min) submit is refused ephemerally with no run, and a late one leaves the
+  ask for a reply; a thin submit (`ok`) is restated privately and a `cancel`
+  submit drops the ask, as the same reply would (AUTONOMY-5/6); a reply to
+  the stub still answers it (REQ-discord-548)
+
 ### Scenario: A stranger's message tries to take over the bot (SAFE-13)
 
 - **Given** an undeclared user in an allowlisted channel and a configured owner
@@ -903,5 +962,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | schedule-result-and-ask-posts-name-the-project-never-its-absolute-host-path-a-tampered-unkeyed-audit-chain-reads-chain: Schedule result and ask posts name the project, never its absolute host path; a tampered unkeyed audit chain reads chain BROKEN at #N without an HMAC key |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), .env.example gives an absolute CORVIDINHO_ALLOWLIST_FILE because ~ is not expanded, and docs/DAEMON.md lists daemon.start_failed and spend.warning |
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
+| 2026-09-29 | free-text-asks-post-a-short-public-stub-with-the-question-and-one-answer-button-that-opens-a-private-form-its-submit: Free-text asks post a short public stub with the question and one Answer button that opens a private form; its submit passes the same gates as a button press and resumes the requester's session like a reply; replying in the channel still works (DISCORD-ASK-4.a) |
+
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |

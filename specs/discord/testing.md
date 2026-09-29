@@ -119,7 +119,8 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   the SAFE-8 warning line, once; a SAFE-13 injection line keeps the whole
   split answer, pings the owner once on the part holding it (fallback) or by
   one ping post (collapsed), with the role note whole in the last part;
-  owner vs non-owner footer and live token use; Discord spawn
+  owner vs non-owner footer and live token use; a free-text ask's Answer
+  button keeps the footer collapsed and on the fallback reply; Discord spawn
   client passes the whole answer and `usage`, WATCH keeps 1800; live gateway
   sends 2000 characters with the embed). Footer assertions elsewhere expect the
   time segment (`model | Ns`).
@@ -267,12 +268,54 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   nobody and the owner notice is the one fresh post; when that notice post
   fails the re-edited stub keeps its Choose button; without `editMessage` the
   deferred reply carries the stub and button and its id is `stubMessageId`;
-  without listable options the answer stays free text with no button;
+  without listable options the answer stays free text with no Choose button
+  but one Answer button, the Answer hint and its `stubMessageId`
+  (REQ-discord-548);
   `recordSlashStub` records the stub id only on a still-pending ask of a live
   session (not after a pick took it, not after the session ended); the live
   gateway adapter forwards the Choose button on `editReply` and `reply`. The
   bridge-level tests fail on the base sources (free-text answer, options
   dropped).
+
+## Free-text asks answered privately (REQ-discord-548, DISCORD-ASK-4.a)
+
+- `tests/discord.ask-answer-modal.test.ts` (bridge harness: fake gateway,
+  injected agent, memory outbound, no token) — the free-text stub quotes the
+  question, carries `ASK_ANSWER_HINT`, exactly one Answer button and its
+  footer embed, and is the ask's `stubMessageId`; a spend-cap stop has no
+  button and no pending ask; `answerAskFor` is null for listable options and
+  spend-cap, drops a lone option; `formatAskReply` swaps the hint. The
+  requester's press opens `buildAnswerModal` (type 18 label, type 4 paragraph
+  input, `ASK_ANSWER_MAX` ≤ 4000, short title, scrubbed ≤100-char question
+  description) with no post and no run; another user's press gets
+  not-for-you. The submit resumes the same session (`resume: true`) with the
+  reply's prior-question block, `humanText` the trimmed answer, ephemeral
+  `ASK_ANSWER_ACK` then deleted, the stub thin-updated and edited into the
+  answer, the typed text never posted, the thread turn recorded, the ask
+  cleared, a second submit a no-op; the text is scrubbed before the run and
+  the thread; `normalizeAskAnswer` cuts and trims; a thin or blank submit
+  (`ok`, whitespace, emoji, `sure!`) is restated privately with the Answer
+  button, no run, ask kept, nothing in the thread, and a real submit then
+  resumes (AUTONOMY-5); a `never mind` / `cancel` submit gets only the
+  ephemeral `ASK_CANCELLED_ACK`, runs nothing and clears the free-text ask and
+  an earlier open Choose ask, after which the Answer button is already
+  answered (AUTONOMY-6); a follow-up free-text ask gets its own Answer button
+  in the same stub. Another user's, a muted (then unmuted: resumes), a deny-listed
+  (user or role), an off-channel, a rate-limited and a late (past ~30 min)
+  press or submit are refused ephemerally with no run and the ask kept; after
+  a late one a thin reply restates without a button and a reply still
+  answers with the prior-question block; a press/submit id mix-up is
+  ignored; a submit on a Choose ask is refused. A reply answers the ask as
+  before and the Answer button then says already answered; a thin reply
+  restates with the live button. A `/work` free-text answer's Answer form
+  resumes that session in the answer message. Gateway: `parseAskCustomId`
+  reads `answer`; `adaptComponent.showModal` calls discord.js `showModal`;
+  `adaptModalSubmit` maps text inputs, ephemeral flag 64 and no parsed
+  mentions; a MODAL_SUBMIT interaction on the live client reaches
+  `onComponent` with its text. `tests/discord.ask-ping.test.ts`,
+  `tests/discord.thin-ack.test.ts`, `tests/discord.slash-pending-ask.test.ts`
+  and `tests/discord.slash-choose-ask.test.ts` now expect the Answer button
+  and hint on free-text asks. These fail on the base sources.
 
 ## Unique option ids and expired button asks (REQ-discord-044 / REQ-discord-045 / REQ-agent-045, DISCORD-ASK-1/3/5)
 

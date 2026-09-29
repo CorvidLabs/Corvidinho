@@ -516,16 +516,18 @@ export class ThinkingStatus {
    * (`components`) carries no embed; a final answer keeps a footer-only
    * embed with the model, the time, tokens and cost on the owner's runs
    * (`extras.spend`, DISCORD-15/15.a) and `extras.plumbing` (DISCORD-3.a),
-   * colored as a failure when `failed`. DISCORD-16: an answer over 2000
-   * characters is split fence-safe (rich-reply.ts) — the first part is the
-   * progress message, later parts are fresh posts (`sendMessage`, no pings),
-   * the footer and any `components` ride the last part; plain prose that
-   * fits one embed goes out as that embed instead. A later call (e.g.
-   * appending a notice) keeps the footer, time and outcome of the first and
-   * edits (or adds) only the parts that changed. Returns the answer's
-   * message ids on success; null when editMessage is unavailable, the first
-   * edit fails, or more parts are needed than `sendMessage` can post (caller
-   * should fall back to a new reply).
+   * colored as a failure when `failed`. `keepFooter` keeps that embed beside
+   * components that are not a Choose stub: a free-text ask's Answer button
+   * (DISCORD-ASK-4.a), whose post stays the turn's answer. DISCORD-16: an
+   * answer over 2000 characters is split fence-safe (rich-reply.ts) — the
+   * first part is the progress message, later parts are fresh posts
+   * (`sendMessage`, no pings), the footer and any `components` ride the last
+   * part; plain prose that fits one embed goes out as that embed instead. A
+   * later call (e.g. appending a notice) keeps the footer, time and outcome
+   * of the first and edits (or adds) only the parts that changed. Returns the
+   * answer's message ids on success; null when editMessage is unavailable,
+   * the first edit fails, or more parts are needed than `sendMessage` can
+   * post (caller should fall back to a new reply).
    */
   async finalizeContent(opts: {
     content: string;
@@ -533,6 +535,7 @@ export class ThinkingStatus {
     mentionUserIds?: string[];
     extras?: AnswerExtras;
     failed?: boolean;
+    keepFooter?: boolean;
   }): Promise<FinalizedAnswer | null> {
     if (this.closed && !this.messageId) return null;
     this.stopTicker();
@@ -545,7 +548,9 @@ export class ThinkingStatus {
       (opts.failed ?? this.phase === "error") ? "error" : "done";
     const footer = this.answerFooter({ extras: opts.extras, failed: opts.failed });
     const parts = planAnswerParts(opts.content, {
-      footer: hasComponents ? null : footer,
+      // A Choose stub carries no footer; a free-text ask's Answer button
+      // keeps it (DISCORD-ASK-4.a) — the post is still the turn's answer.
+      footer: hasComponents && !opts.keepFooter ? null : footer,
       allowEmbed: !hasComponents && !opts.mentionUserIds?.length,
     });
     if (parts.length > Math.max(1, this.answerMessages.length) && !this.outbound.sendMessage) {

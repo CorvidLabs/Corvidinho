@@ -263,8 +263,9 @@ export type AnswerPost = (p: {
  * answer's allowed mentions, as a single reply did; each later part allows
  * only the users of `mentionUserIds` first mentioned in it (none by default,
  * so model text never pings), so a mention that landed past the first part
- * still pings. `components` ride the last part. Returns the posted message ids in
- * order, or null when the first part did not go out.
+ * still pings. `components` ride the last part; they drop the footer unless
+ * `keepFooter` (a free-text ask's Answer button, DISCORD-ASK-4.a). Returns the
+ * posted message ids in order, or null when the first part did not go out.
  */
 export async function postAnswerParts(
   post: AnswerPost,
@@ -275,13 +276,15 @@ export async function postAnswerParts(
     replyToMessageId?: string;
     mentionUserIds?: string[];
     components?: unknown[];
+    /** `components` is an Answer button, not a Choose stub: keep the footer. */
+    keepFooter?: boolean;
     /** Post parts after the first only (the first went out another way). */
     skipFirst?: boolean;
   },
 ): Promise<string[] | null> {
   const hasComponents = Boolean(opts.components?.length);
   const parts = planAnswerParts(opts.content, {
-    footer: hasComponents ? null : opts.footer,
+    footer: hasComponents && !opts.keepFooter ? null : opts.footer,
     allowEmbed: !hasComponents && !opts.mentionUserIds?.length,
   });
   const ids: string[] = [];

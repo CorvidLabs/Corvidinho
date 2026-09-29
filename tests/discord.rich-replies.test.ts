@@ -411,6 +411,34 @@ describe("answer footer: model and time for everyone, tokens and cost on the own
     await result.stop();
   });
 
+  test("a free-text ask's Answer button keeps the answer footer, collapsed and on the fallback reply (DISCORD-ASK-4.a)", async () => {
+    const ask: HumanAsk = { reason: "clarify", question: "Which database should I target?" };
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "Needs your input", exitCode: 0, ask };
+      },
+    };
+    const footerRe = new RegExp(`^${esc(model())} \\| \\d+s$`);
+
+    const collapsed = await bridgeWith(agent);
+    await collapsed.handlers.onMessage(mention(OTHER_ID));
+    const edit = collapsed.outbound.contentEdits.at(-1)!;
+    expect(edit.components?.length).toBe(1);
+    expect((edit.embed as DiscordEmbedPayload).footer!.text).toMatch(footerRe);
+    await collapsed.result.stop();
+
+    const base = memoryThinkingOutbound();
+    const noEdit: ThinkingOutbound = { sendEmbed: base.sendEmbed, editEmbed: base.editEmbed };
+    const fallback = await bridgeWith(agent, { outbound: noEdit });
+    await fallback.handlers.onMessage(mention(OTHER_ID));
+    const reply = fallback.replies.at(-1)! as (typeof fallback.replies)[number] & { components?: unknown[] };
+    expect(reply.components?.length).toBe(1);
+    expect(reply.embed!.footer!.text).toMatch(footerRe);
+    const pending = fallback.result.store.list()[0]!.pendingAsk!;
+    expect(pending.stubMessageId).toBe(reply.messageId);
+    await fallback.result.stop();
+  });
+
   test("the live status shows token use on the owner's runs only", async () => {
     const agent = createEchoAgentClient({
       delayMs: 10,

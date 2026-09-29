@@ -41,6 +41,11 @@ export type SlashFinishThinkingOpts = {
    */
   components?: unknown[];
   /**
+   * `components` is a free-text ask's Answer button, not a Choose stub
+   * (DISCORD-ASK-4.a): the collapsed answer keeps its footer-only embed.
+   */
+  keepFooter?: boolean;
+  /**
    * Called once the body is out (collapsed edit or fallback reply), before
    * the deferred reply is resolved — so a caller knows the answer went out
    * even when resolving the deferred reply then throws. `messageId` is the
@@ -71,6 +76,7 @@ export async function finishSlashWithThinking(
     ? await opts.thinking.finalizeContent({
         content: opts.body,
         ...(opts.components ? { components: opts.components } : {}),
+        ...(opts.keepFooter ? { keepFooter: true } : {}),
         ...(opts.mentionUserIds ? { mentionUserIds: opts.mentionUserIds } : {}),
         ...(opts.thinkExtras ? { extras: opts.thinkExtras } : {}),
         failed: opts.askStatus ? opts.askStatus.failed : !opts.ok,
@@ -111,8 +117,9 @@ export async function finishSlashWithThinking(
   // split at 2000 characters; the deferred reply holds the first part and
   // `post` sends the rest.
   const hasComponents = Boolean(opts.components?.length);
+  // A Choose stub carries no footer; an Answer button keeps it (DISCORD-ASK-4.a).
   const footer =
-    opts.thinking && !hasComponents
+    opts.thinking && (!hasComponents || opts.keepFooter)
       ? opts.thinking.answerFooter({
           extras: opts.thinkExtras,
           failed: opts.askStatus ? opts.askStatus.failed : !opts.ok,
@@ -147,6 +154,7 @@ export async function finishSlashWithThinking(
       footer,
       mentionUserIds: opts.mentionUserIds,
       components: opts.components,
+      ...(opts.keepFooter ? { keepFooter: true } : {}),
       skipFirst: true,
     });
     for (const id of rest ?? []) opts.trackBotMessage?.(id, opts.sessionId);
