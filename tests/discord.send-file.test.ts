@@ -21,6 +21,7 @@ import * as fs from "node:fs";
 import {
   mkdirSync,
   mkdtempSync,
+  renameSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -469,32 +470,132 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
     expect(checks).toHaveLength(0);
   });
 
-  test("the 8 MB cap holds for the bytes read: a file that grew past it after its size was checked is refused", async () => {
-    // A PNG over the cap on disk whose stat still reports the size it had
-    // before it grew (the file grew between the stat and the read).
-    const grown = new Uint8Array(UPLOAD_MAX + 1);
-    grown.set(PNG);
-    put("grew.png", grown);
+  test("the 8 MB cap holds for the bytes read: a file that grew past it after its size was checked is refused, reading no more than the cap + 1 byte", async () => {
+    // A PNG of twice the cap on disk whose size, as the plugin takes it (a
+    // path stat or the open descriptor's fstat), is still the size it had
+    // before it grew: the file grew between the size check and the read.
+    const abs = put("grew.png", PNG);
+    const grownSize = 2 * UPLOAD_MAX;
+    truncateSync(abs, grownSize);
     const realStat = fs.statSync;
+    const realFstat = fs.fstatSync;
+    const realReadFile = fs.readFileSync;
+    const realRead = fs.readSync;
+    const shrink = <T,>(st: T): T => {
+      const s = st as unknown as fs.Stats | undefined;
+      if (s && s.size === grownSize) Object.defineProperty(s, "size", { value: PNG.byteLength });
+      return st;
+    };
     const stat = spyOn(fs, "statSync").mockImplementation(((
       p: fs.PathLike,
       o?: fs.StatSyncOptions,
     ) => {
       const st = realStat(p, o);
-      if (st && String(p).endsWith("grew.png")) {
-        Object.defineProperty(st, "size", { value: PNG.byteLength });
-      }
-      return st;
+      return String(p).endsWith("grew.png") ? shrink(st) : st;
     }) as typeof fs.statSync);
+    let lied = false;
+    const fstat = spyOn(fs, "fstatSync").mockImplementation(((
+      fd: number,
+      o?: fs.StatOptions,
+    ) => {
+      // Only the first look (the size check) is stale; later ones see the truth.
+      const st = realFstat(fd, o as undefined);
+      if (lied || st.size !== grownSize) return st;
+      lied = true;
+      return shrink(st);
+    }) as typeof fs.fstatSync);
+    // Bytes the plugin pulls from the file, however it reads it.
+    let bytesRead = 0;
+    const readFile = spyOn(fs, "readFileSync").mockImplementation(((
+      p: fs.PathOrFileDescriptor,
+      o?: unknown,
+    ) => {
+      const out = realReadFile(p, o as undefined);
+      if (String(p).endsWith("grew.png")) bytesRead += out.length;
+      return out;
+    }) as typeof fs.readFileSync);
+    const read = spyOn(fs, "readSync").mockImplementation(((...a: unknown[]) => {
+      const n = (realRead as (...x: unknown[]) => number)(...a);
+      bytesRead += n;
+      return n;
+    }) as typeof fs.readSync);
     try {
       const r = await send(["grew.png"]);
       expect(r.ok).toBe(false);
       expect(r.error).toContain("upload limit");
-      expect(r.error).toContain(`${UPLOAD_MAX + 1} bytes`);
+      expect(r.error).toContain(`${grownSize} bytes`);
+      expect(bytesRead).toBeGreaterThan(UPLOAD_MAX);
+      expect(bytesRead).toBeLessThanOrEqual(UPLOAD_MAX + 1);
       expect(uploads).toHaveLength(0);
       expect(checks).toHaveLength(0);
     } finally {
       stat.mockRestore();
+      fstat.mockRestore();
+      readFile.mockRestore();
+      read.mockRestore();
+    }
+  });
+
+  test("SAFE-2: a file swapped after the path checks (for a link to .env, or its folder for a link into .ssh) is refused; what is read is what was checked", async () => {
+    put(".env", `TOKEN=${SECRET}\nLEAK_MARKER=env\n`);
+    put(".ssh/out.log", "LEAK_MARKER=ssh\n");
+    put("notes.txt", "harmless\n");
+    put("logs/out.log", "harmless\n");
+    // Swap each target once, right after the plugin has checked it: at the
+    // first stat or open of the checked path (the plugin does no fs call on it
+    // between the name checks and the read).
+    const swaps: Record<string, () => void> = {
+      [join(project, "notes.txt")]: () => {
+        rmSync(join(project, "notes.txt"));
+        symlinkSync(join(project, ".env"), join(project, "notes.txt"));
+      },
+      [join(project, "logs", "out.log")]: () => {
+        renameSync(join(project, "logs"), join(project, "logs.old"));
+        symlinkSync(join(project, ".ssh"), join(project, "logs"));
+      },
+    };
+    const swapOnce = (p: fs.PathLike | number): void => {
+      if (typeof p !== "string") return;
+      const swap = swaps[p];
+      if (!swap) return;
+      delete swaps[p];
+      swap();
+    };
+    const realStat = fs.statSync;
+    const realOpen = fs.openSync;
+    const stat = spyOn(fs, "statSync").mockImplementation(((
+      p: fs.PathLike,
+      o?: fs.StatSyncOptions,
+    ) => {
+      swapOnce(p);
+      return realStat(p, o);
+    }) as typeof fs.statSync);
+    const open = spyOn(fs, "openSync").mockImplementation(((
+      p: fs.PathLike,
+      flags: fs.OpenMode,
+      mode?: fs.Mode | null,
+    ) => {
+      swapOnce(p);
+      return realOpen(p, flags, mode);
+    }) as typeof fs.openSync);
+    try {
+      for (const [p, why] of [
+        // The checked path itself is now a link: not followed (O_NOFOLLOW).
+        ["notes.txt", "became a symlink after it was checked"],
+        // Its folder is now a link: the opened file's own path is refused.
+        ["logs/out.log", "now opens a protected, secret or outside path"],
+      ] as const) {
+        const r = await send([p]);
+        expect(`${p}: ${r.ok}`).toBe(`${p}: false`);
+        expect(r.error ?? "").toContain("refused (SAFE-2)");
+        expect(r.error ?? "").toContain(why);
+      }
+      expect(Object.keys(swaps)).toEqual([]);
+      expect(uploads).toHaveLength(0);
+      expect(checks).toHaveLength(0);
+    } finally {
+      stat.mockRestore();
+      open.mockRestore();
     }
   });
 

@@ -20,6 +20,10 @@ only the review's remaining minors, re-derived against current `main`:
 - The 8 MB cap was checked on `statSync(...).size` only; a file that grew
   between the stat and the read was uploaded whole (an image has no later
   size check; text is re-checked after scrubbing).
+- The read itself: `statSync` then `readFileSync(real)` read the whole file
+  into memory before any re-check, and followed links at read time, so a
+  file (or a folder on its path) swapped for a link after the SAFE-2 path
+  checks was read and sent (for example a link to `.env`).
 - The ask-button path's reply channel (thread + parent) was wired but had
   no test.
 - The go-live bot invite did not list **Attach Files**, which uploads need.

@@ -1,6 +1,6 @@
 /**
- * `discord-send-file` (DISCORD-17): attach a file or image to a reply in the
- * conversation's own Discord channel.
+ * `discord-send-file` (DISCORD-17, REQ-discord-476 / REQ-discord-506): attach
+ * a file or image to a reply in the conversation's own Discord channel.
  *
  * - Dangerous (externally visible write): SAFE-1 allowlist, SAFE-5 audit via
  *   runPlugin, and mutating, so ROLES-CHAT-3 refuses it in non-owner runs.
@@ -13,19 +13,27 @@
  *   (REQ-discord-212), and a deny on the thread or its parent wins.
  * - DISCORD-8: the acting user the bridge set must be able to view, send and
  *   attach files there too; a check that cannot run refuses.
- * - Caps: Discord's upload limit (8 MB, on the size and on the bytes read)
- *   and a type allowlist (PNG / JPEG / GIF / WebP by magic bytes; UTF-8 txt /
- *   log / md / diff / patch / json / csv). Text is secret-scrubbed (SAFE-6)
- *   before upload.
+ * - Caps: Discord's upload limit (8 MB, on the size and on the bytes read;
+ *   never more than the cap + 1 byte is read) and a type allowlist (PNG /
+ *   JPEG / GIF / WebP by magic bytes; UTF-8 txt / log / md / diff / patch /
+ *   json / csv). Text is secret-scrubbed (SAFE-6) before upload.
  * - SAFE-2 protected and secret paths are refused, checked on the path as
- *   given and on where it resolves inside the project root (symlinks
- *   followed; an escape is refused).
+ *   given, on where it resolves inside the project root (symlinks followed;
+ *   an escape is refused) and on the file actually opened (one descriptor,
+ *   final link not followed), so a swap after the checks is refused.
  * - `--git-diff` attaches the worktree diff as a `.diff` file (secret paths
  *   excluded, scrubbed), so a large diff is a file, not a wall of text.
  * - `CORVIDINHO_DISCORD_DRY_RUN=1` posts nothing.
  */
 
-import { readFileSync, statSync } from "node:fs";
+import {
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  openSync,
+  readlinkSync,
+  readSync,
+} from "node:fs";
 import { basename, extname, isAbsolute, normalize, relative, resolve } from "node:path";
 import { checkChannel, isChannelDenied } from "../../src/allowlist/discord.ts";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
@@ -247,6 +255,82 @@ function tooLarge(what: string, size: number): SendFileRefused {
   );
 }
 
+/** Bytes read per `readSync` call while filling the capped buffer. */
+const READ_CHUNK_BYTES = 64 * 1024;
+
+/**
+ * The bytes of `real` (already resolved and checked), read from one
+ * descriptor so what is sent is what was checked. The final component is
+ * opened without following a link (`real` is resolved, so a link there was
+ * swapped in after the checks), and the file the descriptor holds must be a
+ * regular file whose own path (from `/proc/self/fd`, which also sees a
+ * directory swapped for a link) is still inside the project and not refused.
+ * At most the cap + 1 bytes are read: a file over 8 MB, or one that grew past
+ * it after its size was taken, is refused without being read into memory.
+ */
+function readCheckedFile(root: string, real: string, raw: string): Uint8Array {
+  let fd: number;
+  try {
+    fd = openSync(
+      real,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK,
+    );
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ELOOP") {
+      throw new SendFileRefused(
+        `refused (SAFE-2): '${raw}' became a symlink after it was checked and is not attached. Nothing was sent.`,
+        2,
+      );
+    }
+    throw new SendFileRefused(formatErrorLine(e, { max: 200 }), 1);
+  }
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile()) {
+      throw new SendFileRefused(`refused: '${raw}' is not a regular file. Nothing was sent.`, 2);
+    }
+    let opened: string;
+    try {
+      opened = readlinkSync(`/proc/self/fd/${fd}`);
+    } catch {
+      throw new SendFileRefused(
+        `refused: could not confirm which file '${raw}' opened, so it is not attached. Nothing was sent.`,
+        2,
+      );
+    }
+    // Linux names an unlinked file "<path> (deleted)": judge both spellings.
+    const openedPaths = [opened, opened.replace(/ \(deleted\)$/, "")];
+    if (openedPaths.some((o) => !isInsideRoot(root, o) || refusedPath(root, o))) {
+      throw new SendFileRefused(
+        `refused (SAFE-2): '${raw}' changed after it was checked and now opens a protected, secret or outside path; it is never attached. Nothing was sent.`,
+        2,
+      );
+    }
+    if (st.size > DISCORD_UPLOAD_MAX_BYTES) throw tooLarge(`'${raw}'`, st.size);
+    // It may grow after the fstat: read at most one byte past the cap.
+    const limit = DISCORD_UPLOAD_MAX_BYTES + 1;
+    let buf = Buffer.alloc(Math.min(Math.max(st.size + 1, READ_CHUNK_BYTES), limit));
+    let n = 0;
+    for (;;) {
+      if (n === buf.length) {
+        if (buf.length >= limit) break;
+        const grown = Buffer.alloc(Math.min(buf.length * 2, limit));
+        buf.copy(grown, 0, 0, n);
+        buf = grown;
+      }
+      const got = readSync(fd, buf, n, buf.length - n, null);
+      if (got === 0) break;
+      n += got;
+    }
+    if (n > DISCORD_UPLOAD_MAX_BYTES) {
+      throw tooLarge(`'${raw}'`, Math.max(n, fstatSync(fd).size));
+    }
+    return new Uint8Array(buf.buffer, buf.byteOffset, n);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** A project file as an attachment, after every path and type check. */
 export function fileAttachment(cwd: string, userPath: string): Attachment {
   const raw = userPath.trim();
@@ -294,11 +378,7 @@ export function fileAttachment(cwd: string, userPath: string): Attachment {
       2,
     );
   }
-  const size = statSync(real).size;
-  if (size > DISCORD_UPLOAD_MAX_BYTES) throw tooLarge(`'${raw}'`, size);
-  const data = new Uint8Array(readFileSync(real));
-  // It may have grown since the stat: the cap holds for the bytes read.
-  if (data.byteLength > DISCORD_UPLOAD_MAX_BYTES) throw tooLarge(`'${raw}'`, data.byteLength);
+  const data = readCheckedFile(root, real, raw);
 
   if (imageType) {
     const sniffed = sniffImageMediaType(data.subarray(0, 12));

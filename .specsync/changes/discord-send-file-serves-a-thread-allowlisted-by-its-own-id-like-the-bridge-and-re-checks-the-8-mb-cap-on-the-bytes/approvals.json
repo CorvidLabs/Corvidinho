@@ -38,6 +38,45 @@
       "approved_delta_digests": {
         "discord": "8db9acb4012192d42f32292b25bbbcb8cad534eb6aecde4c0c65fc9300b7a62c"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790704074,
+      "digest": "0345afcc7ea62a4a1cef5829898098e588abbf8c16ffb1623f80810d3d9eeb5c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "discord-send-file-serves-a-thread-allowlisted-by-its-own-id-like-the-bridge-and-re-checks-the-8-mb-cap-on-the-bytes",
+        "title": "Discord-send-file serves a thread allowlisted by its own id like the bridge and re-checks the 8 MB cap on the bytes read (DISCORD-17 review follow-up)",
+        "description": "discord-send-file serves a thread allowlisted by its own id like the bridge and re-checks the 8 MB cap on the bytes read (DISCORD-17 review follow-up)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "plugins/discord/send-file.ts",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "tests/discord.send-file.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "discord-send-file attaches in a thread allowlisted by its own id whose parent is not listed, as the router serves it (REQ-discord-212), and still refuses a deny-listed thread under an allowlisted parent and an allowlisted thread under a deny-listed parent (deny wins); a file whose stat was under 8 MB but whose bytes read are over it is refused with nothing checked or uploaded; an ask-button pick in a thread resumes with the thread as reply channel and its parent; DISCORD-GO-LIVE step 4 lists the bot's Attach Files permission"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "ff73e0b895518e8ece53ba6809e1be7b4e02ca41fb7b0b3e9e186549154ed787"
+      }
     }
   ],
   "reopenings": []

@@ -2017,15 +2017,6 @@ parent is allowlisted (deny wins, REQ-discord-212 / REQ-plugins-005), before
 the requester check, with the `checkChannel` "is denied" error; nothing is
 uploaded.
 
-The conversation's channel SHALL pass the gate the bridge serves it by
-(`isMonitoredConversation` on the bridge's channel set, REQ-discord-212 /
-REQ-discord-004): a thread allowlisted by its own id SHALL pass even when its
-parent is not listed, and a thread SHALL be refused when it or its parent is
-on `deny_channels` (deny wins), before the requester check, nothing uploaded.
-The 8 MB cap SHALL hold for the bytes actually read as well as for the size
-first checked: a file that grew past it after that check SHALL be refused
-before the requester check, nothing uploaded.
-
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
@@ -2039,7 +2030,4 @@ Acceptance Criteria
 - `--git-diff` refuses an empty diff and attaches `changes.diff` without secret paths and scrubbed.
 - The spawn client writes the reply channel env (empty when none); the bridge passes the conversation's channel on chat, thread, `/session start` and `/work` runs.
 - A deny-listed thread under its allowlisted parent is refused with the "is denied" error: no requester check runs and nothing is uploaded; another thread under that parent still passes.
-- A thread allowlisted by its own id, its parent not listed, attaches in the thread after the acting user's check; with its parent deny-listed it is refused ("is denied"); an unlisted thread under an unlisted parent is refused; nothing else is checked or uploaded.
-- A file whose size check saw it under 8 MB but whose bytes read are over it is refused with the upload-limit error: no requester check runs and nothing is uploaded.
-- An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
 

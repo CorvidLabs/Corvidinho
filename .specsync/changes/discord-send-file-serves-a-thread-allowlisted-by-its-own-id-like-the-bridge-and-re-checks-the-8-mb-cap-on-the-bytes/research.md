@@ -15,8 +15,16 @@ artifact: research
   thread)` — a self-allowlisted thread under an unlisted parent is refused;
   a denied parent already refused (via `checkChannel(parent)`).
 - `fileAttachment`: `statSync(real).size` then `readFileSync(real)`; only
-  text is re-measured (after the scrub). Bun's `spyOn` on the `node:fs`
-  namespace reaches the plugin's named `statSync` import, so a test can
-  report a stale size deterministically.
+  text is re-measured (after the scrub), the whole file is read into memory
+  first, and the read follows links, so a swap after the path checks is
+  read. Bun's `spyOn` on the `node:fs` namespace reaches the plugin's named
+  imports (`statSync`, `fstatSync`, `openSync`, `readSync`), so a test can
+  report a stale size, count the bytes read, or swap the file at the first
+  `stat` / `open` of the checked path, deterministically.
+- `resolveProjectPath` returns the realpath of an existing file, so the
+  checked path has no link in it: `O_NOFOLLOW` refuses a link swapped in at
+  the last component (`ELOOP`), and `/proc/self/fd/<fd>` names the file the
+  descriptor really holds (a folder on the path swapped for a link shows
+  there).
 - Discord needs the bot's own Attach Files permission to upload a file (else
   the API refuses the upload); the go-live invite list did not name it.

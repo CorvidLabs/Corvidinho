@@ -7,11 +7,14 @@ artifact: plan
 
 1. Regression tests in `tests/discord.send-file.test.ts`: self-allowlisted
    thread (+ deny on parent / thread, unlisted), grown file (stale stat),
-   ask-button pick in a thread. Prove the first two fail with `main`'s
-   `send-file.ts` swapped in.
-2. `send-file.ts`: gate through `isMonitoredConversation`; re-check the cap
-   on the bytes read.
-3. Spec prose / Error Cases / testing; delta REQ-discord-476 (Modified);
+   ask-button pick in a thread, a file or folder swapped for a link after
+   the path checks. Prove the gate, grown-file and swap tests fail with
+   `main`'s `send-file.ts` swapped in.
+2. `send-file.ts`: gate through `isMonitoredConversation`; read once from
+   one descriptor (`O_NOFOLLOW`, opened path re-checked), capped at the
+   limit + 1 byte.
+3. Spec prose / Error Cases / testing; delta REQ-discord-506 (Added, beside
+   REQ-discord-476, which #276's still-open change also modifies);
    `docs/discord.md`, `docs/DISCORD-GO-LIVE.md`.
 4. `specsync change approve` → `specsync change check --commit` → audit,
    coverage 100, `hi check`, `bunx tsc --noEmit`, `bun test`,
