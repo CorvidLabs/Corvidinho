@@ -1,6 +1,6 @@
 ---
 id: allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 0f2e2c2774635d1dcbdff599cba92dbecf8eebd9
 ---

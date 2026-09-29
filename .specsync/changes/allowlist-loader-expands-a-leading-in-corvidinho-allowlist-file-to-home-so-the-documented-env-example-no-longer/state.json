@@ -7,10 +7,11 @@
   "title": "Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner",
   "description": "Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "0f2e2c2774635d1dcbdff599cba92dbecf8eebd9",
   "created_at": 1790698465,
-  "updated_at": 1790698672,
+  "updated_at": 1790699483,
   "affected_specs": [
     "plugins"
   ],

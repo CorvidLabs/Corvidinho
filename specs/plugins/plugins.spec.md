@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 51
+version: 52
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -755,3 +755,4 @@ and current rows for plugins host evolution.
 | 2026-09-27 | safe-2-file-tools-refuse-any-keystore-file-or-directory-inside-the-project-and-specsync-s-specsync-config-registry-and: SAFE-2: file tools refuse any keystore file or directory inside the project and SpecSync's .specsync/ config, registry and archive (active change folders stay writable) |
 | 2026-09-27 | plugin-1-fledge-itself-as-typed-builtins-fledge-lanes-list-and-fledge-lanes-validate-read-only-and-fledge-lanes-run-and: PLUGIN-1 Fledge itself as typed builtins: fledge-lanes-list and fledge-lanes-validate (read-only) and fledge-lanes-run and fledge-run (dangerous, code tier) wrap the local fledge CLI in the project root |
 | 2026-09-27 | safe-3-shell-exec-cd-clamp-checks-the-scripts-a-command-runs-in-a-shell-sourced-handed-to-a-shell-as-a-file-here-doc-or: SAFE-3 shell-exec cd clamp checks the scripts a command runs in a shell (sourced, handed to a shell as a file, here-doc or here-string, or run by path) and trap actions, refuses alias definitions and shells reading commands from an unknown input, and reads sh -c - and option clusters like -co pipefail |
+| 2026-09-29 | allowlist-loader-expands-a-leading-in-corvidinho-allowlist-file-to-home-so-the-documented-env-example-no-longer: Allowlist loader expands a leading ~ in CORVIDINHO_ALLOWLIST_FILE to HOME so the documented .env example no longer silently drops the file's deny lists and owner |
