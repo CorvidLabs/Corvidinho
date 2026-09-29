@@ -38,7 +38,9 @@ extract_changelog_section() {
   )"
   # Trim trailing blank lines
   out="$(printf '%s\n' "$out" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
-  [[ -n "${out// }" ]] || return 1
+  # Any character other than a space (a regex match is linear; "${out// }" is
+  # quadratic in a UTF-8 locale and took seconds on a large section).
+  [[ "$out" =~ [^\ ] ]] || return 1
   printf '%s\n' "$out"
 }
 
