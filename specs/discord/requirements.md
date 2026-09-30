@@ -2272,7 +2272,10 @@ The agent SHALL be able to attach a file or image (screenshots, logs, diffs,
 charts) to its reply in the conversation's channel (DISCORD-17) through the
 plugin `discord-send-file`, registered by `loadDiscordPlugins` as dangerous
 (SAFE-1 allowlist, SAFE-5 audit through `runPlugin`), mutating (ROLES-CHAT-3:
-non-owner, WATCH and schedule runs are refused before it runs) and minTier 1.
+non-owner, WATCH and other people's schedule runs are refused before it
+runs; the owner's own schedule, DISCORD-SCHEDULE-1.a, passes that check and
+is refused below because a schedule passes no conversation channel) and
+minTier 1.
 It SHALL attach only in the channel the bridge set for the run: the spawn
 client SHALL always write `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` and
 `CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` from
@@ -2333,6 +2336,7 @@ a thread SHALL carry the thread as the reply channel and its parent.
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
+- In the owner's own scheduled run (owner stamp, `schedule_*` session, no reply channel) it passes the role check and is refused as a run with no conversation channel, nothing sent (`tests/scheduler.owner-role.test.ts`).
 - A PNG is uploaded to the run's channel as `image/png`, bytes unchanged, `allowed_mentions.parse = []`, after a requester check for the acting user with `attachFiles`.
 - A text log is uploaded with vendor keys and the bot token value redacted; the caption is defanged and scrubbed.
 - `--channel` / `-c` / `--channel=` and a run with no conversation channel or acting user are refused, nothing uploaded.

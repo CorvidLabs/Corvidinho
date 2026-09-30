@@ -1380,9 +1380,11 @@ or other run), labelled for that person and the owner only.
 `--project` on `memory-store` / `memory-recall` SHALL use the run's
 project scope (`projectScopeFor(cwd)`, REQ-discord-101) and SHALL be allowed
 only when `resolveActingRole` is owner, team or null (the local CLI);
-community (undeclared, declared community, WATCH, schedules, workers) SHALL
-get the role refusal (exit 2); a project SHALL have no private notes, and
-`--project` SHALL NOT combine with `--person`.
+community (undeclared, declared community, WATCH, schedules other people
+create, workers; the owner's own schedule resolves owner,
+DISCORD-SCHEDULE-1.a) SHALL get the role refusal (exit 2); a project
+SHALL have no private notes, and `--project` SHALL NOT combine with
+`--person`.
 
 `memory-forget-me` (safe, minTier 0, not mutating, so every role may call
 it) SHALL take no arguments and record a forget request for the acting
@@ -1403,6 +1405,7 @@ Acceptance Criteria
 - `--project` works for owner, team and the local CLI and is refused for community, undeclared and a community-stamped team member; `--project --category private` and `--project --person` are refused.
 - `memory-forget-me` records one pending ask per person (audited), deletes nothing, and refuses with no actor, outside a conversation, with arguments, and with no owner.
 - `tests/memory.profiles.test.ts` and `tests/discord.forget-card.test.ts` cover each and fail on the stacked base sources.
+- In the owner's own scheduled run (owner stamp, `schedule_*` session, no reply channel) `memory-store --project` and `memory-recall --project` work, while `memory-recall --category private`, `memory-recall --person <id>` and `memory-profile` are refused with no private place to show them and no `privateText` (`tests/scheduler.owner-role.test.ts`).
 
 ### REQ-plugins-067
 
