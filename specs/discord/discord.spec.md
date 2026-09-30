@@ -101,6 +101,7 @@ files:
   - src/discord/announce-store.ts
   - src/discord/announce.ts
   - tests/discord.announce.test.ts
+  - tests/discord.update-post.test.ts
   - src/scheduler/cron.ts
   - src/scheduler/store.ts
   - src/scheduler/service.ts
@@ -219,6 +220,8 @@ Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 `formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
 `formatRegisterCommandsFailure` (`register-commands.ts`) words a failed slash
 registration (CLI `register-commands` and the bridge's registration on ready).
+
+Update post (DISCORD-ANNOUNCE-4, PERSONA-1.a / REQ-discord-025): `formatBridgeLiveAnnouncement(version?)` (`src/discord/announce.ts`) returns the one-line note the bridge posts on every ClientReady through `postAnnouncement` (announcements channel only): a fixed template in persona.md's voice naming the running version with a `<…>`-wrapped link to that version's GitHub Release (`https://github.com/CorvidLabs/Corvidinho/releases/tag/v<version>`, from `CORVIDINHO_URL`), under 200 characters, no bullets, no model call, nothing read from CHANGELOG.md, scrubbed (SAFE-6) and mass mentions defanged; a version that is not a plain `X.Y.Z` is never echoed and the note links the Releases page instead.
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via

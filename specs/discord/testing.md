@@ -746,3 +746,28 @@ question-words-only query matching as one substring, `recallRelevantThenRecent`,
 `memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
 undeclared-under-`[people]` owner on their Discord id) and
 `projectScopeForRepo`.
+
+## Update post in the persona's voice (REQ-discord-025 / REQ-discord-024 modified, PERSONA-1.a, DISCORD-ANNOUNCE-4)
+
+- `tests/discord.update-post.test.ts` › "the bridge's update post on
+  ClientReady": `startBridge` with a null gateway capturing replies, an
+  in-memory DB with the announcements channel set and `version` 0.0.34 (a
+  version with a long section in the real CHANGELOG.md). After `onReady`:
+  exactly one reply, to the announcements channel, no pinged users, equal to
+  `formatBridgeLiveAnnouncement("0.0.34")`; under 400 characters; carries
+  `**v0.0.34**`, the `<…/releases/tag/v0.0.34>` link and the persona's 🐦‍⬛;
+  no `bridge live` header, no bullet or heading line, no newline, no
+  "changelog", none of the version's CHANGELOG bullets; `scrubSecrets` leaves
+  it unchanged. With no announcements channel nothing is posted.
+- Same file › "formatBridgeLiveAnnouncement": the exact template for 0.0.34;
+  a leading `v` and spaces dropped; the default is the package version; the
+  longest plain version (six-digit parts) stays under 400 characters with the
+  full link; an empty or blank version, a pre-release, `@everyone`, `@here`,
+  a runtime-built fake key, a newline bullet, markdown link text and a 20-digit
+  part all give the fixed Releases-page note, never echoing the input;
+  `postAnnouncement` sends the note once, as is, to the announcements channel.
+- `tests/discord.announce.test.ts`: default-deny and announce-channel-only
+  posting unchanged; its CHANGELOG-bullet tests were removed with the bullets.
+- Fails on the base sources (main 5aaf7f0 `src/discord/announce.ts`): 5 of 7
+  (the bridge posted an 838-character `bridge live **v0.0.34**` + bullets
+  note); passes after.

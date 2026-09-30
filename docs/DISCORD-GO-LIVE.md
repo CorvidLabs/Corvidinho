@@ -402,7 +402,9 @@ schedules, WATCH, `task run`, delegate and council workers), so the next turn af
 uses the new text; no restart and no setting. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
-the model and keep their text.
+the model and keep their text. The bridge-live note in the `/announce` channel is written in the
+persona's voice: one short line with the version and a link to its GitHub Release notes, never a
+changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
 
 - Only the copy committed at `HEAD` is loaded. `scripts/corvidinho-update.sh` checks out the
   merged ref, so change the voice with a PR like any other file; a hand edit on the VM is not
