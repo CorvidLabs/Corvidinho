@@ -1,6 +1,6 @@
 ---
 id: a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers
-state: implementing
+state: verifying
 type: feature
 base_commit: f7258afa99d485a8b93d3950dd890ac02fe2f59c
 ---

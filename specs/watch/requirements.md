@@ -668,8 +668,10 @@ row per thread, a newer ask replacing it, the question SAFE-6 scrubbed) when
 an owner Discord id is configured and the poller has its DB, so the bridge
 DMs the owner the stop's details (REQ-discord-199). Its log lines SHALL say
 `spend-cap stop`, the owner's Discord DM and `AUTONOMY-8`, SHALL say that
-GitHub shows only that work is paused for budget (SAFE-14.a), and SHALL name
-no amount; the no-owner, no-DB and no-bridge variants are as for stuck asks.
+GitHub shows only that work is paused for budget (SAFE-14.a) when the run
+summary comment was posted, else that no comment on GitHub carries it, and
+SHALL name no amount; the no-owner, no-DB and no-bridge variants are as for
+stuck asks.
 The run summary comment on GitHub stays the generic "Work is paused for
 budget." (no amounts, caps, scopes or setting names). A later run on the
 thread that is not stopped drops it.
@@ -677,5 +679,6 @@ thread that is not stopped drops it.
 Acceptance Criteria
 - With a live bridge mark, an issue comment whose run ends with a spend-cap stop records one `spend-cap` row whose question keeps `Stopped at cap: total.`; the log line is `[watch] spend-cap stop CorvidLabs/Corvidinho#7 id=comment-1: queued for the owner's Discord DM (AUTONOMY-8)` with no `$` amount; the summary comment carries "Work is paused for budget." and no comment names an amount, `CORVIDINHO_DAILY` or the cap marker.
 - No owner: `not-sent` / `no-owner`; no bridge: `no-bridge`, the log saying GitHub shows only that work is paused for budget, with no amount; a later run with no ask drops the row.
+- An event with no summary comment (summary not posted): the no-bridge log says no comment on GitHub carries it and never that GitHub shows the pause, with no amount.
 - These tests fail on main's sources (the stop is never recorded).
 

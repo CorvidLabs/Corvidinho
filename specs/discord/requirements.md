@@ -3877,8 +3877,11 @@ bridge's side:
   <link>` as its second line and no mention. A stop whose episode was already
   told SHALL be taken and dropped with one log line, not DMed. A DM that does
   not go out SHALL hand back both the episode claim and the ask (retried after
-  `WATCH_ASK_RETRY_MS`). The GitHub side, the one-day limit, the no-owner and
-  no-gateway waits and the stop grace are as for stuck asks (REQ-discord-086);
+  `WATCH_ASK_RETRY_MS`), and so SHALL a stop that hands back a DM still in
+  flight after its grace, so the next start DMs it instead of dropping it as
+  already told (a DM that then goes out after all takes both again). The
+  GitHub side, the one-day limit, the no-owner and no-gateway waits and the
+  stop grace are as for stuck asks (REQ-discord-086);
   log lines say `WATCH spend-cap stop` and `AUTONOMY-8` and name no amount.
 - Unknown-price card. The `spend` kind SHALL answer an approved card whose
   amount is unknown (`isUnknownSpendAmount`) with
@@ -3891,6 +3894,7 @@ No new env var, config key, slash command, table or schema version.
 Acceptance Criteria
 - A recorded WATCH spend-cap stop: a failed DM hands back the ask (still pending) and the episode claim; the next pass DMs the owner once: the first line is `SPEND_STOP_DM_HEAD`, the second `GitHub CorvidLabs/Corvidinho#7: <link>`, then the quoted `Daily spend cap reached (SAFE-8): $4.9990 spent …`, with no `<@` mention.
 - Another thread's spend-cap stop in the same cap episode is taken and not DMed; the log says the owner was already told about this cap episode.
+- A stop while the spend-cap DM is in flight hands back the ask and its episode claim: the next start DMs the owner once (not dropped as already told), and a later stop in that episode is then not DMed.
 - The engine DMs an unknown-price card with `Amount: unknown (…)` and answers Approve plus the code with `SPEND_CARD_UNKNOWN_APPROVED`.
 - These tests fail on main's sources.
 
