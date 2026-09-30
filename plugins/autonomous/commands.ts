@@ -130,6 +130,8 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
           ...(outcome.aborted ? { aborted: true } : {}),
           // SAFE-13: the worker's own hit, for the lead's tool loop.
           ...(outcome.injection ? { injection: outcome.injection } : {}),
+          // AGENT-11: the worker's model failovers, for the lead's result.
+          ...(outcome.modelFallback ? { modelFallback: outcome.modelFallback } : {}),
         };
         const label = parsed.value.skill ? ` [${parsed.value.skill}]` : "";
         return ok

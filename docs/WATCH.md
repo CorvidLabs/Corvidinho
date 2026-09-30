@@ -106,6 +106,7 @@ gets one comment of its own saying so). See
 - **Spawn outcome log (WATCH-RELIABILITY-2):** each spawn emits structured  
   `[watch] spawn start …` / `[watch] spawn outcome event=… exit=… error_class=… duration_ms=…`  
   and appends a JSONL record (default `<data dir>/watch-spawn.jsonl` — data dir = `CORVIDINHO_DATA_DIR` or `~/.local/share/corvidinho`; override `CORVIDINHO_WATCH_SPAWN_LOG`) so ops can read outcomes without Discord.
+- **Model fallback (AGENT-11):** a run whose model failed and fell back to the next configured model logs one warn line, `[watch] llm.fallback: <a> failed (<reason>), fell back to <b> (session <id>)`, and its summary comment ends with the `(model fallback: …)` note, which the comment's clip keeps. No DM.
 - **GitHub 403 rate-limit backoff (WATCH-RELIABILITY-3):** on 403 rate-limit (or 429) from the poll fetch, the auto-ack comment or the run-summary comment, WATCH backs off using `Retry-After` or `x-ratelimit-reset`, else a documented **60s** default; skips tight re-poll while backing off; logs  
   `[watch] github rate-limit backoff ms=… until=… reason=…`  
   (for a comment, right after its `[watch] ack failed …` / `[watch] summary failed …` line). A plain 403 on a comment (no rate-limit signal) only logs the failure. A failed ack or summary is not retried.

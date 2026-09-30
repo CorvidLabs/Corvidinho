@@ -231,21 +231,22 @@ in the owner's tool catalog, see below). The allowlist file
 
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
-`corvidinho plugins run` run the tool and offers it to the model in the owner's runs, except
-`shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` (see
-"What an entry unlocks" below):
+`corvidinho plugins run` run the tool and offers it to the model in the owner's runs;
+`shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` only in
+the owner's own chat, `/session start`, `/work` and their ask answers, inside that talk's own
+worktree (SAFE-3.a, see "What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
-| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do; never offered to the model from the allowlist until the SAFE-3 decision |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); never offered to the model from the allowlist until the SAFE-3 decision |
-| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
@@ -280,10 +281,31 @@ What an entry unlocks **today**:
   voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
-- Never from the allowlist: `shell-exec`, `node-exec`, `python-exec`, `cargo-exec` and the
-  Fledge core runs `fledge-lanes-run` and `fledge-run` stay out of the model's catalog even
-  when listed, until the SAFE-3 question (can the shell and the runners be kept from leaving
-  the project root) is decided. They still run through `corvidinho plugins run`.
+- The shell, the runners and the Fledge core runs (SAFE-3.a): `shell-exec`, `node-exec`,
+  `python-exec`, `cargo-exec`, `fledge-lanes-run` and `fledge-run` reach the model's catalog
+  only when all of these hold, checked again at every attempt of the run:
+  - the allowlist names the tool, and the run is at code tier (`CORVIDINHO_LLM_TIER=code`, or
+    `--tier code`; at the default `tool` tier they are never offered);
+  - the run is the owner's own chat message, `/session start`, `/work`, or an ask-button pick
+    or Answer form that continues one of those talks (the spawn stamps an internal
+    `CORVIDINHO_ACTING_SURFACE` that you never set yourself); WATCH runs, schedules, non-owner
+    runs (team included), a muted or deny-listed owner and `delegate` / `council` workers never
+    get them;
+  - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
+    base). A non-git project (its scoped folder), the main checkout and another talk's
+    worktree are refused.
+  A local `corvidinho task run` does not get them yet: it runs in the current checkout, not a
+  talk worktree of its own. When the allowlist names one of them and the run is refused, the
+  run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
+  line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
+  the must-ask Approve card for prod and deploy commands (AUTONOMY-9), the SAFE-5 audit trail
+  and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env (the Fledge runs
+  included: no GitHub tokens, no global git config or credential helper, no ssh agent, gh
+  logged out). Known limits: the runners' own code (and a Fledge lane or task) can still
+  change directory, read files or write files inside or outside the worktree as the bot's own
+  user, which no lexical check sees; keep the allowlist file and other secrets outside every
+  talk worktree.
+  They all still run through `corvidinho plugins run`.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
   one and the run is not a non-ADMIN session. Naming a Fledge core builtin (`fledge-lanes-list`,
   `fledge-lanes-validate`, `fledge-lanes-run`, `fledge-run`) starts no discovery. Fledge
@@ -421,8 +443,10 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
   there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and
   the Discord bridge `CORVIDINHO_ACTING_ROLE` (`owner` / `team` / `community`, the most that
-  surface allows) and `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`); both are internal and
-  always overwritten, and the tool layer never trusts them to raise a role.
+  surface allows), `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`) and
+  `CORVIDINHO_ACTING_SURFACE` (`chat`, `ask`, `session`, `work`, `schedule`; WATCH sets
+  `watch`); all are internal and always overwritten, and the tool layer never trusts them to
+  raise a role (the surface only narrows who gets the shell, SAFE-3.a).
 
 ### E.6.a Untrusted text and injection attempts (SAFE-11/12/13, SAFE-12.a)
 
@@ -513,11 +537,39 @@ and goes through the same SAFE-8 spend cap:
 | `anthropic` | `anthropic:<model>` | `https://api.anthropic.com/v1` (Anthropic's OpenAI-compatible API) | `ANTHROPIC_API_KEY` |
 
 A prefix that is not one of these kinds is part of the model name (`qwen3:30b` is an
-OpenAI-compatible model). A comma list is accepted, but only its first entry is called for now;
-falling back to the next one (AGENT-11) comes later. A headless agent CLI as a model is not
-built yet.
+OpenAI-compatible model). A headless agent CLI as a model is not built yet.
 
-With no usable model for a tier (nothing set, or the kind's key is missing) it says so:
+A comma list is a fallback chain (AGENT-11), e.g.
+`CORVIDINHO_LLM_MODEL=openai:gpt-4.1,anthropic:claude-sonnet-5,ollama:qwen3:30b`. A run calls the
+first entry; when that model fails — an HTTP error (404 or 410 for a retired or missing model
+included), a network error, a timeout (the 10-minute request cap) or a malformed reply — it goes
+on at once with the next entry, with no retry or backoff, and keeps that model for the rest of
+the run (later rounds, verify retries). A next entry whose key is not set is skipped the same
+way. Nothing is remembered between runs: each `task run` process tries the first entry once
+again. A stop at the spend cap is not a model failure: the run stops and asks (SAFE-8) and never
+routes around the cap to another model; a Deny or a lapsed card on a tool is the tool's answer,
+and your own stop is a stop. It tells you on every surface:
+
+- the run's answer ends with a note that clips and message splits keep, e.g.
+  `(model fallback: gpt-4.1 failed (HTTP 404), fell back to anthropic:claude-sonnet-5)`
+  (chat, button answers, `/session start`, `/work`, schedule posts, WATCH comments, `task run`);
+- `task run` prints `[operator] gpt-4.1 failed (HTTP 404); falling back to anthropic:claude-sonnet-5`
+  as it happens (a `Text` frame in `--output ndjson`); its result (`--json`, the NDJSON `result`
+  frame) carries `model` (the one that answered), `usageByModel` and `modelFallback`, and each
+  NDJSON `usage` frame names its `model` and the running `byModel` totals;
+- the Discord answer footer names the model that answered, `anthropic:claude-sonnet-5 (fell back
+  from gpt-4.1)`; on your own runs the cost prices each model's tokens at its own price (a model
+  with no known price makes it `cost unknown`); everyone else sees model and time only;
+- every run that fell back (yours too) also logs one warn line, which is how you hear of one in a
+  run that is not yours (someone else's chat, WATCH, a schedule): the
+  bridge `[discord] llm.fallback: …`, `github watch` `[watch] llm.fallback: …`, the daemon an
+  `llm.fallback` event. There is no DM for it.
+
+A `delegate` or `council` worker that fell back is reported by its lead the same way, marked
+`delegate worker:` / `council worker:`. The fallback order is yours: there is no ranking by
+price or benchmark and no setting beyond the list itself.
+
+With no usable model for a tier (nothing set, or its first entry's key is missing) it says so:
 
 - at startup: a `[discord] No model provider is configured …` line from the bridge, a
   `[watch] …` line from `github watch` (not in a dry run), an `llm.no_provider` warn line and

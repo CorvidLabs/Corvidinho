@@ -22,6 +22,7 @@ import {
   type TaskResult,
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
+import type { ModelFallback, ModelUsage } from "./agent/types.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
 import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
@@ -858,7 +859,20 @@ async function taskRun(opts: {
     nonInteractive: opts.nonInteractive,
     allowlist: allowlistFromEnv(),
     onEvent: handleEvent,
-    onUsage: ndjson ? (u) => ndjson.usage(u) : undefined,
+    // AGENT-11: usage per model rides the usage frames and the result, so
+    // each model is priced at its own price.
+    onUsage: (u, detail) => {
+      usageByModel = detail.byModel;
+      ndjson?.usage(u, detail);
+    },
+    // AGENT-11: the model that answered and every failover ride the result
+    // (--json / ndjson); each failover is also a Text event (stderr here).
+    onModel: (m) => {
+      answeredBy = m;
+    },
+    onModelFallback: (hop) => {
+      modelFallback.push(hop);
+    },
     // SAFE-8: the 80% warning rides the result (--json / ndjson) for bridges.
     onSpendWarning: (w) => {
       spendWarning = w;
@@ -879,6 +893,9 @@ async function taskRun(opts: {
   let spendWarning: SpendWarning | undefined;
   let injection: InjectionNotice | undefined;
   const privateReplies: string[] = [];
+  let answeredBy: string | undefined;
+  let usageByModel: ModelUsage[] | undefined;
+  const modelFallback: ModelFallback[] = [];
   // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
   // and tool loop stop and the cancelled result below is still printed (exit
   // 130). `once`: a second signal takes the default action. A signal this
@@ -921,6 +938,9 @@ async function taskRun(opts: {
   // large private reads cannot push the result frame past the parser's line
   // cap and lose the whole answer.
   if (privateReplies.length > 0) result.privateReplies = boundPrivateReplies(privateReplies);
+  if (answeredBy) result.model = answeredBy;
+  if (usageByModel && usageByModel.length > 0) result.usageByModel = usageByModel;
+  if (modelFallback.length > 0) result.modelFallback = modelFallback;
 
   if (ndjson) {
     ndjson.result(result);

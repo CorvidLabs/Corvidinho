@@ -29,7 +29,9 @@
 
 import { join } from "node:path";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
+import { modelFallbackFromUnknown } from "../agent/providers.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import type { ModelFallback } from "../agent/types.ts";
 import { injectionNoticeFromUnknown, type InjectionNotice } from "../agent/untrusted.ts";
 import {
   TIER_RANK,
@@ -347,6 +349,11 @@ export type DelegateChildOutcome = {
    * result frame). The lead treats it as its own hit.
    */
   injection?: InjectionNotice;
+  /**
+   * AGENT-11: the worker's own model failovers (validated from its result
+   * frame). The lead reports them as its own run's, marked `via`.
+   */
+  modelFallback?: ModelFallback[];
 };
 
 /** After a worker exits (or is killed), how long its pipes may still drain. */
@@ -523,6 +530,8 @@ export async function runDelegateChild(opts: {
     if (typeof r?.verified === "boolean") outcome.verified = r.verified;
     const injection = injectionNoticeFromUnknown(r?.injection);
     if (injection) outcome.injection = injection;
+    const modelFallback = modelFallbackFromUnknown(r?.modelFallback);
+    if (modelFallback) outcome.modelFallback = modelFallback;
     if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
     if (typeof r?.summary === "string") {
       outcome.resultText = scrubSecrets(r.summary).trim().slice(0, DELEGATE_SUMMARY_MAX);

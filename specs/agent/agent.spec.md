@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 41
+version: 42
 status: draft
 files:
   - src/agent/types.ts
@@ -28,6 +28,7 @@ files:
   - src/agent/untrusted.ts
   - src/agent/recall-guard.ts
   - src/agent/loop-guards.ts
+  - src/agent/shell-gate.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -57,7 +58,10 @@ files:
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
   - tests/agent.providers.test.ts
+  - tests/agent.fallback.test.ts
   - tests/fixtures/fake-llm.ts
+  - tests/agent.safe3a-gate.test.ts
+  - tests/agent.safe3a-owner-shell.test.ts
 
 db_tables: []
 depends_on:
@@ -75,10 +79,25 @@ the operator configures every model, and none is built in as a default.
 `CORVIDINHO_LLM_MODEL` and the per-tier keys hold `kind:model` entries
 (`openai`, `ollama`, `anthropic`; a bare or unknown prefix is
 OpenAI-compatible), each with its vendor endpoint and key, all over the one
-OpenAI-compatible chat transport and the SAFE-8 guard. Only a tier's first
-entry is called (the AGENT-11 fallback is a later change; no headless-CLI kind
+OpenAI-compatible chat transport and the SAFE-8 guard (no headless-CLI kind
 yet). With no usable provider for the run's tier the attempt calls nothing and
 fails with the no-provider notice; there is no demo stub.
+
+Model fallback (AGENT-11, REQ-agent-080; `callChain` in
+`src/agent/providers.ts`): a tier's list is a chain. A run calls its first
+entry; when that model fails (an HTTP error, 404 / 410 for a retired model
+included, a network error, a timeout or a malformed reply) the run goes on at
+once with the next entry — no retry, no backoff — and keeps it for the rest of
+the process; a new `task run` process tries the head again (nothing stored). A
+SAFE-8 spend-cap stop, the run's own stop, and a Deny or lapsed card on a
+must-ask tool are not model failures and never fail over. Each failover is an
+`[operator] <a> failed (<reason>); falling back to <b>` Text event, a closing
+`(model fallback: …)` note on every later summary (clips keep it, like the
+role note), and `TaskResult.modelFallback`; the result names the model that
+answered (`model`) and the usage per model (`usageByModel`), and each NDJSON
+`usage` frame names its `model` and the running `byModel`. A delegate or
+council worker's failovers reach its lead's result the same way, marked
+`via`.
 
 Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
 so Discord/CLI chats trust injected facts and call memory-store/recall
@@ -141,7 +160,14 @@ owner's OK on an Approve card" — REQ-agent-097). Frames:
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
-totals; `extractUsage` reads OpenAI-compatible `usage`. `collectTaskRunStream`
+totals with `{ model, byModel }` (the model that reported it and the running
+totals per configured model, AGENT-11); `usageFrame(u, detail?)` adds them to
+the frame as `model` / `byModel` (validated when parsed), and
+`collectTaskRunStream` returns the last frame's `byModel` as `usageByModel`.
+`createTaskExecute({ onModelFallback, onModel })` reports each failover and
+the model each reply came from; `task run` puts `model`, `usageByModel` and
+`modelFallback` on its `TaskResult` (REQ-agent-080). `extractUsage` reads
+OpenAI-compatible `usage`. `collectTaskRunStream`
 returns the last `usage` frame as `usage` (the Discord answer footer prices
 it, DISCORD-15) and takes an optional `bodyMax` for the result-frame chat body
 (default `CHAT_BODY_MAX`, 1800; the Discord spawn client passes a larger cap
@@ -167,7 +193,20 @@ key `ANTHROPIC_API_KEY`; `usable` false when the kind's key is missing),
 `providerId` (the endpoint host, as the SAFE-8 ledger records it),
 `providerForTier`, `entryLabel`, `defaultProviderLabel`, `providerNotice(env,
 tiers?)` (starts with `NO_PROVIDER_NOTICE`, names the tiers and the missing
-setting or key, never a value), and `providerStatus`. The chat transport sends
+setting or key, never a value), and `providerStatus`. The fallback chain
+(REQ-agent-080, AGENT-11): `modelChain(env, tier)` (the tier's entries,
+resolved, with the current `index` and its `fallbacks`), `callChain(chain, fn,
+onFallback?)` (`ChainCall` results; `failure: null` never fails over; a next
+entry without its key is skipped with `<KEY> is not set`), `ModelFailure` /
+`modelFailureReason` (`HTTP <status>`, `timed out`, `network error`,
+`malformed reply`), `modelFallbackEventText`, `MODEL_FALLBACK_NOTE_PREFIX`,
+`modelFallbackNote`, `withModelFallbackNote`, `formatModelFallbackLog`
+(`llm.fallback: …`), `answeredModelLabel` (`b (fell back from a)`),
+`modelIdOfLabel`, `modelFallbackFromUnknown` / `modelUsageFromUnknown` /
+`modelLabelFromUnknown` (a child's result read back: scrubbed, one line,
+bounded, at most `MODEL_FALLBACK_MAX` 16), `mergeModelFallbacks` and
+`addModelUsage`. `ModelUsage` and `ModelFallback` are in
+`src/agent/types.ts`. The chat transport sends
 `authorization: Bearer <key>` only when the kind has a key. `modelKeyForTier(env, tier)` names the key that set a tier's
 model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
 and `perTierModels(env)` lists each tier's model when any per-tier key is set
@@ -276,7 +315,9 @@ Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `COUNCIL_DEFAULT_TIER` read, `COUNCIL_MAX_VOICE_TIER` tool).
 `DelegateChildOutcome` gains optional `resultText` (the worker's own result
 summary, scrubbed and capped at `DELEGATE_SUMMARY_MAX` rather than the
-1800-char chat body).
+1800-char chat body) and `modelFallback` (the worker's own failovers from its
+result frame, validated, AGENT-11); `CouncilOutcome.modelFallback` holds its
+voices' and chair's, each once (REQ-agent-080).
 
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
@@ -315,7 +356,9 @@ Personality traits, Background, Communication style, Example messages).
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult` (optional
 `max`, default `CHAT_BODY_MAX` 1800), and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
-`ROLE_REFUSED_SUMMARY_NOTE` and `clipKeepingRoleNote` (REQ-agent-333). Discord/NDJSON
+`ROLE_REFUSED_SUMMARY_NOTE`, `closingNotesTail` and `clipKeepingRoleNote`
+(REQ-agent-333; it keeps the AGENT-11 `(model fallback: …)` note before the
+role note too, REQ-agent-080). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
 appears in the final chat reply (DISCORD-3.a).
 
@@ -365,11 +408,14 @@ the LLM execute (tool loop and read-tier chat) caps feedback with it instead
 of a head cut. No flag, env var or config key.
 
 Allowlisted dangerous tools (REQ-agent-501, CLI-3 / SAFE-1): `src/agent/tools.ts`
-exports `SAFE3_PENDING_TOOLS` (`shell-exec`, `node-exec`, `python-exec`,
+exports `SAFE3A_TOOLS` (`shell-exec`, `node-exec`, `python-exec`,
 `cargo-exec`, and the Fledge core runs `fledge-lanes-run` and
-`fledge-run`), `allowlistOffers(allowlist, name)` (named and not SAFE-3
-pending) and `editsFilesUnreported(name)` (a Fledge command or a SAFE-3-pending
-tool, REQ-agent-502). `BuildToolsOpts` gains `allowlist?: ReadonlySet<string>`;
+`fledge-run`; `SAFE3_PENDING_TOOLS` before SAFE-3.a),
+`allowlistOffers(allowlist, name, safe3a = false)` (named, and for a
+`SAFE3A_TOOLS` name only with the attempt's SAFE-3.a grant) and
+`editsFilesUnreported(name)` (a Fledge command or a `SAFE3A_TOOLS` name,
+REQ-agent-502). `BuildToolsOpts` gains `allowlist?: ReadonlySet<string>` and
+`safe3a?: boolean` (default false);
 `createTaskExecute` passes its effective allowlist (the `allowlist` option,
 else `CORVIDINHO_ALLOWLIST`) and loads Fledge plugins when `includeDangerous`
 is set or the allowlist names a Fledge plugin command (a `fledge-*` name that
@@ -378,6 +424,23 @@ non-ADMIN role session (the ADMIN check runs first). `ExecuteResult` gains
 optional `unreportedEditTools?: string[]`; outside a role session, with a
 Fledge plugin command allowlisted, a `delegate` call that started a worker is
 named there too. No env var, config key, flag or slash command.
+
+Owner shell grant (REQ-agent-503, SAFE-3.a): `src/agent/shell-gate.ts` exports
+`shellToolsGate({ env, cwd })` → `ShellToolsVerdict` (`{ granted: true }` or
+`{ granted: false, reason }`), `isOwnTalkWorktree(cwd, sessionId)`,
+`shellToolsRefusedLine(names, reason)`, `ACTING_SURFACE_ENV`
+(`CORVIDINHO_ACTING_SURFACE`), `ACTING_SURFACES` / `ActingSurface` (`chat`,
+`ask`, `session`, `work`, `watch`, `schedule`), `SAFE3A_SURFACES` (the first
+four) and `actingSurface(env)`. `createTaskExecute` calls the gate once per
+tool-loop attempt when its allowlist names a `SAFE3A_TOOLS` name (never with
+`includeDangerous`), passes `safe3a` to `buildOpenAiTools`, and emits the
+refusal line once per run. The gate grants only at delegation depth 0, in a
+role session, with no WATCH or schedule marker, a `chat` / `ask` / `session`
+/ `work` stamp, the owner role resolved now and a cwd that is the top of this
+session's own linked talk worktree. The stamp is internal: each spawning
+client always overwrites it (REQ-discord-735, REQ-watch-735), and delegate
+workers and the verify lane drop it with the `CORVIDINHO_ACTING_` prefix. No
+config key, flag, slash command or schema.
 
 Untrusted text (SAFE-11/12/13, #71, REQ-agent-071): `src/agent/untrusted.ts`
 exports `cleanDisplayName(raw, max?)` / `DISPLAY_NAME_MAX` (32),
@@ -398,6 +461,16 @@ gains optional `injection?: InjectionNotice` (additive on the NDJSON
 `result` frame: protocol stays 2). No env var, config key or flag.
 
 ## Invariants
+
+A failed model hands the run to the next configured one and says so (AGENT-11,
+REQ-agent-080): one `ModelChain` per `createTaskExecute` (every surface's
+`task run`, workers included), shared by every round and attempt; only an
+HTTP error, a network error, a timeout or a malformed reply moves it on, at
+once and once per failure; a spend-cap stop (`SpendCapRefusal`), the run's own
+abort, a Deny or a lapsed card never does, so a cap stop asks and never routes
+around the cap. Each failover is one Text event, one `onModelFallback` call
+and a part of the closing note on every later summary of the run; reasons are
+fixed short texts, never provider output.
 
 A repeated failing call is steered, then asks (AGENT-16, REQ-agent-086): one
 guard per `createTaskExecute` (every surface's `task run`, workers included)
@@ -460,9 +533,11 @@ naming the tools; other non-git runs keep tool-reported files only
 (REQ-agent-502).
 
 A task run offers the model a dangerous tool only when the run's allowlist
-names it (SAFE-1 consent, CLI-3), never `shell-exec`, the language runners
-or the Fledge core runs (`fledge-lanes-run`, `fledge-run`) until the SAFE-3
-decision, and never to a non-ADMIN role session: the role,
+names it (SAFE-1 consent, CLI-3), `shell-exec`, the language runners and the
+Fledge core runs (`fledge-lanes-run`, `fledge-run`) only with the attempt's
+SAFE-3.a grant (the owner's own chat, `/session start`, `/work` or ask
+answer, inside that talk's own worktree, REQ-agent-503), and never to a
+non-ADMIN role session: the role,
 tier and SAFE-9 filters apply first, and every runtime gate still runs
 (REQ-agent-501). An empty allowlist gives the same catalog as before.
 
@@ -742,11 +817,23 @@ instructions for …" or a browser's developer mode do not count.
 - **When** the run starts
 - **Then** the no-provider notice is the first stderr line (text output), no provider is called, and the run ends `failed` with that notice as its summary and no files; there is no `gpt-4o-mini` default and no demo answer (REQ-agent-179)
 
+### Scenario: the configured model is retired
+
+- **Given** `CORVIDINHO_LLM_MODEL=ollama:gone-model, ollama:fake-model` and a provider that answers `gone-model` with HTTP 404
+- **When** `task run --output ndjson` runs
+- **Then** it calls `gone-model` once, then `fake-model`; a Text frame says `[operator] ollama:gone-model failed (HTTP 404); falling back to ollama:fake-model`; the result is `done`, its summary ends with `(model fallback: ollama:gone-model failed (HTTP 404), fell back to ollama:fake-model)`, and it carries `model` `ollama:fake-model`, `usageByModel` and `modelFallback` (REQ-agent-080)
+
 ### Scenario: the model repeats a failing call
 
 - **Given** a tool-tier run whose model calls `files-read` on a missing file
 - **When** it makes the same call a second time, then a third after seeing the steer
 - **Then** the 2nd tool result ends with the AGENT-16 harness steer quoting the error, the 3rd call never runs, and the run ends `blocked` with the stuck question `The same files-read call keeps failing with nothing changed in between. How should I proceed?` (REQ-agent-086)
+
+### Scenario: the owner's chat uses the shell in its own talk worktree
+
+- **Given** `CORVIDINHO_ALLOWLIST=shell-exec`, a code-tier run spawned by the bridge for the owner's chat message (`CORVIDINHO_ACTING_SURFACE=chat`) in the talk worktree made for its session
+- **When** the model calls `shell-exec`
+- **Then** the tool is offered and runs in that worktree; a prod command (`kubectl get pods`) still waits for the owner's Approve card and a deny runs nothing; the same run in the main checkout, another talk's worktree, for a team member, on WATCH or a schedule, in a delegate worker or from the local CLI is not offered it, the call is refused and one `[operator] SAFE-3.a` line says why (REQ-agent-503)
 
 ## Error Cases
 
@@ -761,7 +848,8 @@ instructions for …" or a browser's developer mode do not count.
 | Talk worktree whose last run ended blocked / failed / cancelled or died | baseline is the talk branch's merge-base: its edits are verified before done; one carried note; a base git cannot find verifies anyway (REQ-agent-015) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a Fledge plugin command allowlisted, or a `delegate` whose worker left no result frame), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
-| `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
+| `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
+| The same, and the gate grants (the owner's own chat, `/session start`, `/work` or ask answer in its own talk worktree) | offered at code tier (never at tool tier); each call still goes through `runPlugin` (role re-check, SAFE-1, the must-ask Approve card for prod, SAFE-5) and the tool's own clamp, SAFE-21 refusals and credential-free env (REQ-agent-503) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Verify lane passes but prints no recognised test summary, or no test ran (all skipped / todo) | not verified: a failed verify whose note names the verify lane (or says no test ran); retried, then `failed` (REQ-agent-185) |
 | A test at the baseline was deleted or retitled (even a conditional or skipped one), or a running test was skipped, made todo or conditional, or silenced by `.only`, or a conditional one turned off | not verified: the note names each (up to 10, `"name" (file)`), retried, then `failed`; a renamed file or a moved test keeps its name and passes (REQ-agent-185) |
@@ -769,6 +857,9 @@ instructions for …" or a browser's developer mode do not count.
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | No usable provider for the run's tier (no entry, or the kind's key unset) | no provider call; `ExecuteResult.error` with the no-provider notice as summary; state failed, no files, no verify; `task run` exits 1 (REQ-agent-179) |
+| The current model fails (HTTP error incl. 404 / 410, network error, timeout, malformed reply) and a next entry exists | the same request goes to the next entry at once; the chain keeps it for the process; Text event, `onModelFallback`, closing note (REQ-agent-080) |
+| Every configured model failed | the last model's error is the summary with the note after it; `error: true`, state failed (REQ-agent-080) |
+| A call stops at the spend cap, the run is stopped, or a must-ask call is denied or its card lapses | no failover; the cap stop asks as before, the stop stops, the tool gets its refusal (REQ-agent-080) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
@@ -882,3 +973,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its: 'Verified' requires that tests actually ran and none were deleted (AGENT-15): a passing verify lane counts only when its output has a recognised test summary (bun test, jest, vitest, cargo test, pytest, go test) with at least one executed test and no test active at the baseline was deleted, retitled or turned off (skip, todo, silenced by only), by name across the repo root; non-git projects walk their test files at run start; /work checks the tree against the merge-base before commit and push |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
+| 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
+| 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |

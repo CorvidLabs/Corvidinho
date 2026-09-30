@@ -11,6 +11,14 @@
 
 import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
+import {
+  formatModelFallbackLog,
+  modelFallbackFromUnknown,
+  modelLabelFromUnknown,
+  modelUsageFromUnknown,
+} from "../agent/providers.ts";
+import { ACTING_SURFACE_ENV, type ActingSurface } from "../agent/shell-gate.ts";
+import type { ModelFallback } from "../agent/types.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
@@ -62,6 +70,14 @@ export type AgentRunChatOpts = {
   /** A `/work` run: team work tools apply (IDENTITY-10). */
   workTask?: boolean;
   /**
+   * SAFE-3.a: the surface this run was started from — `chat` (a chat
+   * message), `ask` (an ask-button pick or Answer form continuing a talk),
+   * `session` (`/session start`), `work` (`/work`) or `schedule` (a schedule
+   * tick). Always written to `CORVIDINHO_ACTING_SURFACE` (empty when omitted,
+   * which the shell gate refuses), never inherited.
+   */
+  surface?: ActingSurface;
+  /**
    * Per-call working directory (SESSION-WORKTREE-1). When set, overrides the
    * client default cwd so talks/schedules do not share a mutable checkout.
    */
@@ -95,7 +111,19 @@ export type SpawnAgentClientOpts = {
   cwd: string;
   /** Extra env (never log secrets). */
   env?: NodeJS.ProcessEnv;
+  /**
+   * AGENT-11: called when a run's result reports failovers — how the owner
+   * hears of one in a run that is not theirs, besides the reply's note.
+   * Default: one `[discord] llm.fallback: …` warn line on stderr (the
+   * daemon passes its structured logger).
+   */
+  onModelFallback?: (hops: ModelFallback[], sessionId: string) => void;
 };
+
+/** The default `llm.fallback` warn line of a bridge-spawned run (AGENT-11). */
+export function warnModelFallback(hops: ModelFallback[], sessionId: string): void {
+  console.warn(`[discord] ${formatModelFallbackLog(hops)} (session ${sessionId})`);
+}
 
 /**
  * Spawns: `<bin> task run --task <prompt> --output ndjson` (no --no-verify;
@@ -108,6 +136,8 @@ export type SpawnAgentClientOpts = {
  * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011),
  * CORVIDINHO_ACTING_ROLE (owner | team | community) and
  * CORVIDINHO_ACTING_WORK_TASK (1 for /work) for the role gate (IDENTITY-8..12),
+ * CORVIDINHO_ACTING_SURFACE (chat | ask | session | work | schedule, empty
+ * when the caller named none) for the SAFE-3.a shell gate,
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
  * REQ-discord-476). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
@@ -124,6 +154,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       actingIsAdmin,
       actingRole,
       workTask,
+      surface,
       cwd,
       onStatus,
       signal,
@@ -177,6 +208,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             ? "team"
             : "community",
           CORVIDINHO_ACTING_WORK_TASK: workTask ? "1" : "0",
+          // SAFE-3.a: the surface this run came from; always overwritten,
+          // never inherited (none ⇒ empty, which the shell gate refuses).
+          [ACTING_SURFACE_ENV]: surface ?? "",
         },
         // Own process group, so a stop reaches its tools and workers too.
         detached: true,
@@ -193,7 +227,14 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         killProcessTree(proc.pid, { known: atExit });
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-      const { exitCode, summary, totalTokens, usage, result } = await collectTaskRunStream({
+      const {
+        exitCode,
+        summary,
+        totalTokens,
+        usage,
+        usageByModel: streamedByModel,
+        result,
+      } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
@@ -232,6 +273,12 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const injection = injectionNoticeFromUnknown(result?.injection);
       // MEMORY-7.a: text for the asker's eyes only, sent by DM (validated).
       const privateReplies = privateRepliesFromUnknown(result?.privateReplies);
+      // AGENT-11: the model that answered, its failovers and usage per model
+      // (validated); a failover is also logged for the owner (llm.fallback).
+      const model = modelLabelFromUnknown(result?.model);
+      const modelFallback = modelFallbackFromUnknown(result?.modelFallback);
+      const usageByModel = modelUsageFromUnknown(result?.usageByModel) ?? streamedByModel;
+      if (modelFallback) (opts.onModelFallback ?? warnModelFallback)(modelFallback, sessionId);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -243,6 +290,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(privateReplies ? { privateReplies } : {}),
         // DISCORD-15: provider-reported usage for the answer footer.
         ...(usage ? { usage } : {}),
+        ...(usageByModel ? { usageByModel } : {}),
+        ...(model ? { model } : {}),
+        ...(modelFallback ? { modelFallback } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {

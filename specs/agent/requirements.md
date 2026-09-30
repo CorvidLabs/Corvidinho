@@ -94,13 +94,14 @@ Acceptance Criteria
 
 ### REQ-agent-007
 
-The execute hook for `task run` SHALL call the OpenAI-compatible chat completions endpoint of the model provider the operator configured for the run's capability tier (AGENT-13, REQ-agent-179: the tier's first `kind:model` entry from `CORVIDINHO_LLM_MODEL_*` / `CORVIDINHO_LLM_MODEL`, with that kind's endpoint and key; the model per REQ-agent-079). There SHALL be no demo execute stub and no built-in default model: when the run's tier has no usable provider (no entry, or the kind's key is unset) the attempt SHALL make no provider call and SHALL return `error: true` with the no-provider notice as its summary and no files (AGENT-10), so the run ends `failed`. Secrets SHALL stay in env and SHALL never be committed.
+The execute hook for `task run` SHALL call the OpenAI-compatible chat completions endpoint of the model provider the operator configured for the run's capability tier (AGENT-13, REQ-agent-179: the tier's first `kind:model` entry from `CORVIDINHO_LLM_MODEL_*` / `CORVIDINHO_LLM_MODEL`, with that kind's endpoint and key, and after a model failure the next entry of that list, AGENT-11 / REQ-agent-080; the model per REQ-agent-079). There SHALL be no demo execute stub and no built-in default model: when the run's tier has no usable provider (no entry, or the kind's key is unset) the attempt SHALL make no provider call and SHALL return `error: true` with the no-provider notice as its summary and no files (AGENT-10), so the run ends `failed`. Secrets SHALL stay in env and SHALL never be committed.
 
 Acceptance Criteria
 - No usable provider (nothing set, a key with no model, or a model whose kind has no key) → no fetch; `error: true`, the summary starts `No model provider is configured`, `filesChanged` `[]`; never a demo summary or `gpt-4o-mini`.
 - Usable provider → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
 - Fixture tests cover the no-provider path; provider paths mock fetch or use a localhost fake provider (no live API in CI).
 - Provider set → every request's `model` is the run tier's model without its `kind:` prefix (REQ-agent-079); with no per-tier model key it is `CORVIDINHO_LLM_MODEL`'s first entry.
+- The first entry failing (HTTP error, network error, timeout, malformed reply) → the next request goes to the list's next entry (REQ-agent-080).
 
 ### REQ-agent-008
 
@@ -651,7 +652,7 @@ The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / 
 
 ### REQ-agent-079
 
-`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else no model at all (AGENT-5; AGENT-13: there is no built-in default, and the run fails with the no-provider notice, REQ-agent-179). Each key holds `kind:model` entries (REQ-agent-179); the tier's model is its first entry. Every chat request of the run SHALL carry that model, without its `kind:` prefix, in `body.model`, so SAFE-8 spend pricing prices the tier's model. The endpoint and the API key SHALL come from the entry's kind (REQ-agent-179), so tiers of one kind share them (`openai` entries share `CORVIDINHO_LLM_BASE_URL` and its key). Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before. A tier with no model calls nothing, so it SHALL NOT be flagged as unpriced.
+`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else no model at all (AGENT-5; AGENT-13: there is no built-in default, and the run fails with the no-provider notice, REQ-agent-179). Each key holds `kind:model` entries (REQ-agent-179); the tier's model is its first entry, and its later entries are the models the run falls back to (AGENT-11, REQ-agent-080). Every chat request of the run SHALL carry the model of the entry it goes to — the tier's first entry until that one fails — without its `kind:` prefix, in `body.model`, so SAFE-8 spend pricing prices the model actually called. The endpoint and the API key SHALL come from the entry's kind (REQ-agent-179), so tiers of one kind share them (`openai` entries share `CORVIDINHO_LLM_BASE_URL` and its key). Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before. A tier with no model calls nothing, so it SHALL NOT be flagged as unpriced.
 
 Acceptance Criteria
 - `CORVIDINHO_LLM_MODEL=big`, `CORVIDINHO_LLM_MODEL_READ=cheap`: a read run sends `cheap`, tool and code runs send `big`; adding `CORVIDINHO_LLM_MODEL_CODE=big2` / `CORVIDINHO_LLM_MODEL_TOOL=mid` makes code send `big2` and tool `mid`.
@@ -661,6 +662,7 @@ Acceptance Criteria
 - Under a cap with a priced configured model and `CORVIDINHO_LLM_MODEL_READ` unpriced, doctor prints `[warn] spend: … model "<m>" has no known price, so read-tier runs stop and ask before calling the provider` and `/status` flags the read-tier model; with every tier priced or no per-tier key the lines read as before.
 - No per-tier keys → every tier sends `CORVIDINHO_LLM_MODEL`; a blank per-tier key falls back; no model at all → no model (`model` `""` and the no-provider notice), never `gpt-4o-mini`.
 - Fixture tests mock fetch; no live API.
+- After the first entry failed, requests carry the next entry's model, which the SAFE-8 guard prices (an unpriced one stops at the cap and asks, REQ-agent-080).
 
 ### REQ-agent-085
 
@@ -848,34 +850,37 @@ catalog only when the operator allowlisted it; an unlisted dangerous plugin
 stays out and a call to it is refused as not offered (REQ-agent-128).
 `shell-exec`, `node-exec`, `python-exec`, `cargo-exec` and the Fledge core
 runs `fledge-lanes-run` and `fledge-run` (PLUGIN-1, REQ-plugins-461)
-(`SAFE3_PENDING_TOOLS`) SHALL NOT be offered from the allowlist, even when
-named, until the SAFE-3 decision on the shell and runners is taken: each
+(`SAFE3A_TOOLS`, formerly `SAFE3_PENDING_TOOLS`) SHALL be offered from the
+allowlist only to an attempt the SAFE-3.a gate granted (REQ-agent-503): each
 starts in the project dir, which is not a clamp, and a Fledge lane or task
-runs whatever commands the project gives it. They still run through
+runs whatever commands the project gives it. `allowlistOffers(allowlist,
+name, safe3a = false)` and `BuildToolsOpts.safe3a` (default false) carry the
+grant; without it they stay out even when named. They still run through
 `corvidinho plugins run`. The tier filter (`minTier`), the
 ROLES-CHAT-2 role filter (a community role session gets no dangerous or
 mutating tool, whatever the allowlist; a team session only what
 REQ-agent-065 allows), the SAFE-9 autonomous filter,
 catalog-only dispatch and the SAFE-1 / SAFE-4 / SAFE-5 / GITHUB-6 runtime
 gates in `runPlugin` and the handlers SHALL be unchanged. With an empty
-allowlist the catalog SHALL be exactly as before. No env var, config key,
-flag, slash command or schema is added.
+allowlist the catalog SHALL be exactly as before. No config key, flag, slash
+command or schema is added (the internal surface stamp is REQ-agent-503's).
 
 Acceptance Criteria
 - At tool tier, an allowlist naming `github-issue-create`, `github-issue-comment`, `github-pr-create`, `github-pr-review`, `memory-forget` and `memory-override` offers all six; `danger-ping`, `web-fetch` and `discord-post-message` (dangerous, not named) are not offered; with no allowlist no dangerous plugin is offered.
 - Every dangerous tool offered at tool or code tier is one the allowlist names.
 - `files-delete` allowlisted is offered at code tier and not at tool tier.
-- An allowlist naming `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run`, `fledge-run` and `files-delete` at code tier offers `files-delete` and none of the six; `fledge-lanes-run` and `fledge-run` are registered, dangerous, offered by `includeDangerous` at code tier, and `editsFilesUnreported` names them.
+- An allowlist naming `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run`, `fledge-run` and `files-delete` at code tier offers `files-delete` and none of the six without the SAFE-3.a grant; `fledge-lanes-run` and `fledge-run` are registered, dangerous, offered by `includeDangerous` at code tier, and `editsFilesUnreported` names them.
 - A code-tier task run whose allowlist names the four Fledge core builtins offers only `fledge-lanes-list` and `fledge-lanes-validate` as `fledge-` tools; the model's call to `fledge-run` is refused as not offered, no fledge process starts and `unreportedEditTools` is absent.
 - `actingIsAdmin: false` with every dangerous plugin allowlisted offers no dangerous or mutating tool.
 - `task run` path (`createTaskExecute` without an `allowlist` option, non-interactive, GitHub dry run): with `CORVIDINHO_ALLOWLIST=github-pr-review` the model is offered `github-pr-review`, its call succeeds as a dry run, and its call to the unlisted `github-issue-create` is refused as not offered.
 - An ADMIN role session (owner) with that allowlist is offered and runs `github-pr-review`; a community (non-ADMIN, not team) role session with the same allowlist is not offered it and no call succeeds.
+- With `safe3a: true` and the owner role, the same allowlist at code tier offers every registered one of the six plus `files-delete`; at tool tier none of the six; an unlisted one of the six is never offered, and a team `/work` catalog gets none of them (`tests/agent.safe3a-gate.test.ts`).
 
 ### REQ-agent-502
 
 Non-git verify gate after unreported edits (AGENT-4). A tool whose file edits
 no tool result reports (`editsFilesUnreported`: a Fledge command, whose
-`origin` starts with `fledge:`, and every `SAFE3_PENDING_TOOLS` name: the
+`origin` starts with `fledge:`, and every `SAFE3A_TOOLS` name: the
 shell, the runners and the Fledge core runs) that the tool loop dispatched
 from the offered catalog SHALL be named in the attempt's
 `ExecuteResult.unreportedEditTools` (absent when none ran).
@@ -910,6 +915,7 @@ Acceptance Criteria
 - Non-git project with autonomous mode on, allowlist `["fledge-hello"]`: a `delegate` call whose worker failed its own verify and reported no files makes the lead run verify, end `failed` (never `done`), and the note names `delegate`; with an allowlist naming no Fledge plugin command the same run skips verify and ends `done`.
 - `editsFilesUnreported` names `fledge-lanes-run` and `fledge-run`.
 - Non-git project with autonomous mode on and an empty allowlist: a `delegate` call whose worker writes `app.ts` and exits 137 before writing any result frame makes the lead run verify once in the project dir and end `failed` (`verified=false`, `verifySkipped=false`, never `done`), and the note names `delegate`.
+- The owner's chat that ran the granted `shell-exec` in its own talk worktree has `unreportedEditTools: ["shell-exec"]` (`tests/agent.safe3a-owner-shell.test.ts`).
 
 ### REQ-agent-476
 
@@ -1408,8 +1414,9 @@ and in /status (AGENT-10). Both were captured in `hi/agent.md` from Leif's
 entries (blanks skipped); an entry is `kind:model` with kind `openai`,
 `ollama` or `anthropic` (case-insensitive, split on the first `:` only when
 the prefix is a kind), and a bare entry or one whose prefix is not a kind
-(`qwen3:30b`) is OpenAI-compatible. Only the first entry of a tier SHALL be
-called; the AGENT-11 fallback chain is a later change. Each kind SHALL use
+(`qwen3:30b`) is OpenAI-compatible. The list SHALL be a fallback chain
+(AGENT-11, REQ-agent-080): a run calls the tier's first entry, and the next
+entry only when the one before it failed. Each kind SHALL use
 its vendor endpoint (the endpoint of a provider the operator chose, not a
 default model) and its own key, never another kind's: `openai` →
 `CORVIDINHO_LLM_BASE_URL` (else `https://api.openai.com/v1`) with
@@ -1424,7 +1431,7 @@ unchanged; the request's `body.model` SHALL be the entry's model without its
 `kind:` prefix, and `authorization: Bearer <key>` SHALL be sent only when the
 kind has a key. There SHALL be no built-in default model and no demo stub. A
 tier's provider is usable when it has an entry and, for `openai` /
-`anthropic`, its key is set; a keyless `ollama` entry is usable. With no
+`anthropic`, its first entry's key is set; a keyless `ollama` entry is usable. With no
 usable provider for a run's tier, `loadLlmEnv` SHALL carry the no-provider
 notice (`providerNotice`, starting with `NO_PROVIDER_NOTICE` "No model
 provider is configured") and the execute attempt SHALL make no provider call
@@ -1451,10 +1458,131 @@ Acceptance Criteria
 - A tier's own key wins, a blank or `,`-only key falls back to `CORVIDINHO_LLM_MODEL`, and nothing set is `[]`; `modelForTier` is the model without its kind, `""` when none.
 - `resolveEntry`: openai default `https://api.openai.com/v1`, `CORVIDINHO_LLM_BASE_URL` wins (trailing `/` dropped), `CORVIDINHO_LLM_API_KEY` over `OPENAI_API_KEY`, unusable without a key; ollama `http://127.0.0.1:11434/v1`, no key even when `OPENAI_API_KEY` is set, usable; anthropic `https://api.anthropic.com/v1` with `ANTHROPIC_API_KEY` only, unusable without it; `providerId` is the host.
 - `OLLAMA_HOST` `gpu-box` → `http://gpu-box:11434`, `gpu-box:9000`, `0.0.0.0` → `127.0.0.1:11434`, `https://…/` and `http://10.0.0.5:11434` as given.
-- Mock fetch: an `ollama:qwen3:30b` run posts to `http://gpu-box:9000/v1/chat/completions` with no authorization header and `model` `qwen3:30b`; an `anthropic:` run posts to `https://api.anthropic.com/v1/chat/completions` with `Bearer <ANTHROPIC_API_KEY>`, never the OpenAI key; `openai:gpt-4.1, ollama:later` calls only `gpt-4.1` at the base URL with its key.
+- Mock fetch: an `ollama:qwen3:30b` run posts to `http://gpu-box:9000/v1/chat/completions` with no authorization header and `model` `qwen3:30b`; an `anthropic:` run posts to `https://api.anthropic.com/v1/chat/completions` with `Bearer <ANTHROPIC_API_KEY>`, never the OpenAI key; `openai:gpt-4.1, ollama:later` calls only `gpt-4.1` at the base URL with its key while `gpt-4.1` answers.
 - `providerNotice({})` and with only `OPENAI_API_KEY` is the "CORVIDINHO_LLM_MODEL is not set" notice with how to set it; `anthropic:c` without its key names `ANTHROPIC_API_KEY`; only `_READ` set names the tool and code tiers; one run's own tier with a provider is null; the key value never appears.
 - `runTask` over `createTaskExecute` with only a key: `failed`, summary the notice, `filesChanged` `[]`, one attempt, no verify, no provider call.
 - The real `task run` with a keyless `ollama:` model pointed at a localhost fake server ends `done` with the server's reply; the server saw no authorization header and `model` `fake-model`.
 - `redactSecretEnvValues` / `formatErrorLine` redact an `ANTHROPIC_API_KEY` value.
 - On the base sources `tests/agent.providers.test.ts` fails 15 of 18 (the three that pass are pure units of the new module); on the branch all pass.
+- A failed first entry hands the call to the next entry (REQ-agent-080, `tests/agent.fallback.test.ts`); no note says only the first entry is called.
+
+### REQ-agent-080
+
+If a model fails or is retired, it falls back to my next configured model and
+tells me (AGENT-11, captured in `hi/agent.md` from Leif's 2026-09-28
+interview). A tier's configured entries (REQ-agent-179, in their order) SHALL
+be a fallback chain: `createTaskExecute` SHALL build one `ModelChain`
+(`modelChain(env, tier)`, `src/agent/providers.ts`) for the process and send
+every model call of the run — every tool-loop round, the read tier's single
+chat, every verify-retry attempt — through `callChain` to the chain's current
+entry. When that call fails as a model — an HTTP error of any status (404 or
+410 for a retired or missing model included), a network error, the
+per-request timeout (REQ-agent-244) or a malformed reply (not JSON, or no
+assistant message) — and a next entry exists, the same request SHALL go to the
+next entry at once, with no retry and no backoff, and the chain SHALL keep that
+entry for every later call of the process. A next entry whose kind needs a key
+that is not set SHALL be skipped without a call, its reason naming the key. A
+call that is not a model failure SHALL never fail over: a SAFE-8 spend-cap stop
+(`SpendCapRefusal`, so a cap stop asks as before and never routes around the
+cap to another model), the run's own abort, and a Deny or lapsed card on a
+must-ask tool call (the tool's refusal, REQ-plugins-097). A failure on the last
+entry SHALL end the attempt as before (`error: true`, the last model's error
+as the summary). Nothing SHALL be stored: each `task run` process tries the
+head once. The image-refusal retry (REQ-agent-428) SHALL run on a model before
+it fails over. Each failover SHALL be told: one `[operator] <a> failed
+(<reason>); falling back to <b>` `Text` event (`modelFallbackEventText`;
+`<a>` and `<b>` are entry labels, `<reason>` one of `HTTP <status>`,
+`timed out`, `network error`, `malformed reply` or `<KEY> is not set`,
+never provider output), one `onModelFallback(hop)` call, and a closing note
+`(model fallback: <a> failed (<reason>), fell back to <b>[; …])`
+(`withModelFallbackNote`, once) on every later summary of the run, after a
+SAFE-13 note and before the role note, which stays last. `clipKeepingRoleNote`
+(`closingNotesTail`) SHALL keep that note whole, with the role note after it,
+so `resultFrame`, `chatBodyFromTaskResult` and every surface clip that uses
+it keeps it (REQ-agent-333). `createTaskExecute` SHALL report `onModel(label)`
+for each reply and pass `onUsage(totals, { model, byModel })` (the running
+totals per configured model). `TaskResult` SHALL gain optional `model` (the
+entry label that answered), `usageByModel` (`ModelUsage[]`) and
+`modelFallback` (`ModelFallback[]`: `from`, `to`, `reason`, optional `via`);
+`usageFrame(u, detail?)` SHALL add `model` and `byModel` to a `usage` frame,
+the parser SHALL keep them only when well-formed (`modelLabelFromUnknown`,
+`modelUsageFromUnknown`), and `collectTaskRunStream` SHALL return the last
+frame's `byModel` as `usageByModel`; all optional, so protocol 2 is
+unchanged. A delegate or council worker's failovers SHALL reach its lead:
+`runDelegateChild` SHALL return the worker result frame's `modelFallback`
+(validated by `modelFallbackFromUnknown`: scrubbed, one line, bounded, at most
+`MODEL_FALLBACK_MAX`), `runCouncil` SHALL collect its voices' and chair's
+once each (`mergeModelFallbacks`), and the lead's tool loop SHALL take a
+`delegate` / `council` result's `data.modelFallback` as its own run's
+failovers marked `via` (a Text event `[operator] <via> worker: …`,
+`onModelFallback`, the note), each once. No env var, config key, flag, slash
+command or schema change is added.
+
+Acceptance Criteria
+- `callChain`: the head failing with HTTP 404 hands the call to the next entry (called once each); a second call goes straight to it; `fallbacks` holds one hop `{ from, to, reason: "HTTP 404" }`; `failure: null` returns as it is with no hop; a failure on the last entry comes back with the earlier hop only; `model-a, anthropic:claude-x, ollama:local` with no `ANTHROPIC_API_KEY` skips `anthropic:claude-x` uncalled (`ANTHROPIC_API_KEY is not set`).
+- For HTTP 404, 410 and 500, a thrown network error, a timeout (`llmTimeoutMs` 40), a non-JSON reply and a reply with no assistant message: requests go `model-a` then `model-b`; the summary is `model-b`'s reply plus `(model fallback: model-a failed (<reason>), fell back to model-b)`; one `[operator] model-a failed (<reason>); falling back to model-b` Text event; `onModelFallback` once; `onModel` `model-b`.
+- A tool loop that failed over in round 1 sends round 2 and attempt 2 to `model-b` (`model-a` called once); a new `createTaskExecute` calls `model-a` first again; the read tier fails over too.
+- Every model failing: `runTask` ends `failed`, summary the last model's error plus the note listing each failover.
+- Usage per model: `onUsage`'s last detail is `{ model: "model-b", byModel: [model-a's tokens, model-b's tokens] }` with the totals summed.
+- Under a SAFE-8 cap an unpriced head sends nothing, asks `spend-cap` and adds no note; a cap stop on the entry it fell back to never calls the entry after it.
+- The run's own abort during the head's request: no hop, the next entry never called; a must-ask call that is denied or whose card lapses: the same model answers next, no hop.
+- A `delegate` result with `data.modelFallback` gives one `via: "delegate"` hop, the Text event `[operator] delegate worker: w-a failed (HTTP 410); falling back to w-b` and the note; a repeat is not added again; `runDelegateChild` and `runCouncil` carry a worker's failovers (validated, each once).
+- `resultFrame`, `chatBodyFromTaskResult` (with a role note after the note) and `splitDiscordMessage` keep the note whole on a long answer.
+- `usageFrame` with the detail round-trips `model` and `byModel` through `parseNdjsonLine`; without it the frame is unchanged.
+- The real `task run --output ndjson` with `ollama:gone-model, ollama:fake-model` against a localhost provider answering 404 streams the Text frame, usage frames with `model` / `byModel`, and a `done` result with the note, `model`, `usageByModel` and `modelFallback`.
+- On the base sources `tests/agent.fallback.test.ts` fails 26 of 35 (the 9 that pass are the providers module's pure units and the never-fails-over cases); on the branch all pass.
+
+### REQ-agent-503
+
+SAFE-3.a owner shell grant (#83, #124). The model SHALL be offered the
+allowlisted `SAFE3A_TOOLS` (the shell, the language runners and the Fledge
+core runs) only in the owner's own interactive runs, only when the run's
+allowlist names them (REQ-agent-501; the tier still filters, so code tier),
+and only inside that talk's own worktree; non-owners, WATCH and schedules
+SHALL never get them. `src/agent/shell-gate.ts` SHALL export
+`shellToolsGate({ env, cwd })`, and `createTaskExecute` SHALL call it for
+every tool-loop attempt whose effective allowlist names at least one
+`SAFE3A_TOOLS` name (never with `includeDangerous`) and pass its verdict to
+`buildOpenAiTools` as `safe3a`. The gate SHALL grant only when all of these
+hold, each read again at that call:
+
+- delegation depth 0 (`delegateDepthFromEnv`): a delegate or council worker
+  never gets them;
+- a role session (`CORVIDINHO_ACTING_IS_ADMIN` present): a local CLI run has
+  no per-run talk worktree yet and is refused (the CLI half of SAFE-3.a is
+  later work);
+- `CORVIDINHO_WATCH_SESSION_ID` empty and not a scheduled run
+  (`isScheduleRunEnv`), whatever the stamp says;
+- the surface stamp `CORVIDINHO_ACTING_SURFACE` (`ACTING_SURFACE_ENV`,
+  `actingSurface(env)`) is `chat`, `ask`, `session` or `work`
+  (`SAFE3A_SURFACES`); `watch`, `schedule`, an unknown value and no stamp are
+  refused;
+- `resolveActingRole(env)` is `owner` (owner match, the bridge's ADMIN bit,
+  not muted, not deny-listed in the live file; IDENTITY-12);
+- the cwd, resolved through symlinks, is the top of the linked talk worktree
+  made for `CORVIDINHO_DISCORD_SESSION_ID` (`isOwnTalkWorktree`): its
+  basename is `talkWorktreeId(sessionId)`, `talkWorktreeGitDir` finds its
+  `worktrees/talk-*` admin dir, and that dir's `gitdir` file points back at
+  it. The main checkout, another talk's worktree, a subdirectory, a non-git
+  scoped dir or project folder, and a run with no session id SHALL be
+  refused.
+
+When the allowlist names one of them and the gate refuses, the attempt SHALL
+leave them out of its catalog (a model call is refused as not offered, or
+with the ROLES-CHAT-3 role refusal for a non-owner) and the run SHALL emit
+one `Text` event per run, `[operator] SAFE-3.a: <names> allowlisted but not
+offered: <reason>` (`shellToolsRefusedLine`), never part of the summary.
+A granted call SHALL still go through `runPlugin` (role re-check, SAFE-1,
+the must-ask gate: a prod or deploy command waits for the owner's Approve
+card and a deny runs nothing, AUTONOMY-9; SAFE-5 audit) and the tool's own
+SAFE-3 clamp, SAFE-21 refusals and credential-free env (SAFE-21 / SAFE-21.a,
+unchanged). The stamp is internal: each spawning client always overwrites it
+(REQ-discord-735, REQ-watch-735), and delegate workers and the verify lane
+drop it with the `CORVIDINHO_ACTING_` prefix. No config key, flag, slash
+command, table or schema change.
+
+Acceptance Criteria
+- `tests/agent.safe3a-gate.test.ts`: granted for the owner's `chat`, `session`, `work` and `ask` in the session's own talk worktree; refused for `watch`, `schedule`, unknown and missing stamps, a WATCH or `schedule_` marker, team, community, a forged owner id without the ADMIN bit, the ADMIN bit for a non-owner, a muted or deny-listed owner, no owner, delegation depth > 0, no role session, and every cwd but the own worktree top (main checkout, another talk's worktree, scoped dir, subdirectory, look-alike dirs, missing dir, no session id); `isWorkerEnvDropped` and `isVerifyEnvDropped` drop the stamp.
+- `tests/agent.safe3a-owner-shell.test.ts`: the owner's chat in its own talk worktree is offered `shell-exec` at code tier and runs it there (so do `session`, `work` and `ask`); `kubectl get pods; touch ran.marker` raises exactly one `mustask` destructive card, a deny runs nothing and an approval runs it once; the main checkout, a team member, WATCH, a schedule, a delegate worker and a local CLI run are not offered it, the call is refused and nothing runs, with one `[operator] SAFE-3.a` line per run over two attempts and none in the summaries; muting the owner after attempt 1 removes it from attempt 2.
+- With the base's sources, the gate test cannot load and 8 of 9 end-to-end tests fail; they pass on the branch.
 

@@ -3,8 +3,11 @@
  * Calls the configured model (AGENT-13, src/agent/providers.ts: openai,
  * ollama or anthropic entries, all over the OpenAI-compatible chat API); at
  * tier≠read it runs a thin tool loop over allowlisted plugins (AGENT-3/5).
- * With no usable provider the attempt fails with the no-provider notice
- * (AGENT-10); there is no built-in default model and no stub.
+ * The tier's entries are a fallback chain (AGENT-11, `callChain`): a model
+ * that fails hands the run to the next one, with a `Text` event and a
+ * closing note in the summary. With no usable provider the attempt fails
+ * with the no-provider notice (AGENT-10); there is no built-in default model
+ * and no stub.
  * Secrets stay in env — never commit.
  */
 
@@ -26,7 +29,7 @@ import {
 import { runPlugin } from "../plugins/run.ts";
 import type { PluginHandlerResult, PluginImage } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import { createSpendGuard } from "./spend.ts";
+import { createSpendGuard, SpendCapRefusal } from "./spend.ts";
 import { formatSpendWarningLine } from "./spend-notice.ts";
 import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
@@ -81,6 +84,8 @@ import type {
   AgentTokenUsage,
   ExecuteFn,
   ExecuteResult,
+  ModelFallback,
+  ModelUsage,
   SpendWarning,
 } from "./types.ts";
 import {
@@ -101,13 +106,31 @@ import {
   modelKeyForTier,
   type CapabilityTier,
 } from "./tier.ts";
-import { providerForTier, providerNotice, type ProviderKind } from "./providers.ts";
+import {
+  addModelUsage,
+  callChain,
+  entryLabel,
+  mergeModelFallbacks,
+  modelChain,
+  modelFallbackEventText,
+  modelFallbackFromUnknown,
+  providerForTier,
+  providerNotice,
+  withModelFallbackNote,
+  type ChainCall,
+  type ModelChain,
+  type ModelFailure,
+  type ProviderKind,
+  type ResolvedProvider,
+} from "./providers.ts";
+import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
   allowlistOffers,
   argvFromToolArguments,
   buildOpenAiTools,
   editsFilesUnreported,
   filesChangedFromToolData,
+  SAFE3A_TOOLS,
   type OpenAiToolDef,
 } from "./tools.ts";
 
@@ -131,7 +154,9 @@ export type LlmEnv = {
 /**
  * Provider settings for one run. `tier` (e.g. `--tier`) overrides
  * `CORVIDINHO_LLM_TIER`, and the provider is the first entry configured for
- * the resulting tier (AGENT-5 / AGENT-13, {@link providerForTier}).
+ * the resulting tier (AGENT-5 / AGENT-13, {@link providerForTier}): the head
+ * a run calls first. Calls go through the tier's whole chain (AGENT-11,
+ * `callChain`), so a later entry answers when the head fails.
  */
 export function loadLlmEnv(
   env: NodeJS.ProcessEnv = process.env,
@@ -291,9 +316,23 @@ export type CreateTaskExecuteOpts = {
   onEvent?: (event: AgentEvent) => void;
   /**
    * Running provider token totals across rounds and attempts, called after
-   * each OpenAI-compatible response that carries `usage` (REQ-agent-073).
+   * each OpenAI-compatible response that carries `usage` (REQ-agent-073),
+   * with the model that reported it and the running totals per model
+   * (AGENT-11: each model is priced at its own price).
    */
-  onUsage?: (totals: AgentTokenUsage) => void;
+  onUsage?: (
+    totals: AgentTokenUsage,
+    detail: { model: string; byModel: ModelUsage[] },
+  ) => void;
+  /**
+   * AGENT-11: called once per failover — this run's own model chain moving
+   * to its next configured model, or (`via`) one a delegate or council
+   * worker reported. The run also emits a `Text` event for each and ends its
+   * summary with the failover note.
+   */
+  onModelFallback?: (hop: ModelFallback) => void;
+  /** AGENT-11: the configured model (entry label) each reply came from. */
+  onModel?: (model: string) => void;
   /** Cap LLM↔tool rounds per execute attempt (default 8). */
   maxToolRounds?: number;
   /** Per-request LLM timeout (default {@link LLM_REQUEST_TIMEOUT_MS}). */
@@ -301,7 +340,8 @@ export type CreateTaskExecuteOpts = {
   /**
    * When true, expose every dangerous plugin in the catalog (still SAFE-1
    * gated). Test seam: without it the catalog offers only the dangerous
-   * plugins `allowlist` names, never the SAFE-3-pending ones (CLI-3).
+   * plugins `allowlist` names (CLI-3), the shell, runners and Fledge core
+   * runs only with the attempt's SAFE-3.a grant (`shellToolsGate`).
    */
   includeDangerous?: boolean;
   /**
@@ -574,14 +614,40 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     completionTokens: 0,
     totalTokens: 0,
   };
+  // AGENT-11: the same totals per configured model, so each is priced at its own price.
+  const byModel: ModelUsage[] = [];
   const onUsage = opts.onUsage
-    ? (u: AgentTokenUsage) => {
+    ? (u: AgentTokenUsage, model: string) => {
         totals.promptTokens += u.promptTokens;
         totals.completionTokens += u.completionTokens;
         totals.totalTokens += u.totalTokens;
-        opts.onUsage?.({ ...totals });
+        addModelUsage(byModel, model, u);
+        opts.onUsage?.({ ...totals }, { model, byModel: byModel.map((r) => ({ ...r })) });
       }
     : undefined;
+  // AGENT-11: the tier's configured models as one chain for this process
+  // (every attempt and round): the head is tried once; a model that fails
+  // hands every later call to the next one. Its failovers, and those a
+  // delegate or council worker reports, each get a Text event and end every
+  // later summary in one note.
+  const chain = modelChain(env, opts.tier ?? loadTierFromEnv(env, "tool"));
+  const fallbacks: ModelFallback[] = [];
+  const noteFallback = (hop: ModelFallback) => {
+    fallbacks.push(hop);
+    emit(opts.onEvent, { type: "Text", text: modelFallbackEventText(hop) });
+    opts.onModelFallback?.(hop);
+  };
+  const models: ModelCalls = {
+    chain,
+    onFallback: noteFallback,
+    onModel: opts.onModel,
+    onWorkerFallback: (via, hops) => {
+      for (const h of hops) {
+        const hop: ModelFallback = { from: h.from, to: h.to, reason: h.reason, via };
+        if (mergeModelFallbacks(fallbacks, [hop]).length > fallbacks.length) noteFallback(hop);
+      }
+    },
+  };
   if (opts.loadPlugins !== false) {
     loadBuiltins();
   }
@@ -600,6 +666,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   let injection: InjectionNotice | null = null;
   // AGENT-16: failing-call counts for the whole run (verify retries included).
   const repeatGuard = createRepeatFailureGuard();
+  // SAFE-3.a: the allowlisted shell, runners and Fledge core runs, and whether
+  // this run already said once why the gate held them back.
+  const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
+  let safe3aNoted = false;
 
   const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing }) => {
     if (personaNote) {
@@ -622,7 +692,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
 
     if (tier === "read" || maxToolRounds <= 0) {
       return singleChatCompletion({
-        llm,
+        models,
         fetchImpl,
         taskText,
         attempt,
@@ -651,6 +721,19 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       // names one and the session is not a non-ADMIN one (ROLES-CHAT-2).
       await loadFledgePlugins({ cwd, env });
     }
+    // SAFE-3.a: the allowlisted shell, runners and Fledge core runs only in
+    // the owner's own chat, /session start, /work or ask answer, inside that
+    // talk's own worktree; role, surface and cwd re-read for every attempt.
+    // A refusal is one operator Text line per run, never reply text.
+    let safe3a = false;
+    if (safe3aNamed.length > 0 && !includeDangerous) {
+      const verdict = await shellToolsGate({ env, cwd });
+      safe3a = verdict.granted;
+      if (!verdict.granted && !safe3aNoted) {
+        safe3aNoted = true;
+        emit(onEvent, { type: "Text", text: shellToolsRefusedLine(safe3aNamed, verdict.reason) });
+      }
+    }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
@@ -662,6 +745,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         // dangerous tool; role (ROLES-CHAT-2 / IDENTITY-9..11) and tier
         // filters still apply.
         allowlist,
+        safe3a,
         actingRole,
         workTask: actingWorkTask(env),
         autonomous,
@@ -669,6 +753,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     );
     return runToolLoop({
       llm,
+      models,
       fetchImpl,
       taskText,
       attempt,
@@ -710,17 +795,37 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // ROLES-CHAT-3: once a call in this run was refused for the caller's role,
   // every summary after it ends with the short role note (last, so a clip
   // keeps it).
+  // AGENT-11: once a model failed over in this run, every summary after it
+  // carries the failover note (before the role note, which stays last).
   return async (ctx) => {
     let result = spend.finish(await run(ctx));
     if (injection) result = { ...result, summary: withInjectionNote(result.summary, injection) };
+    if (fallbacks.length > 0) {
+      result = { ...result, summary: withModelFallbackNote(result.summary, fallbacks) };
+    }
     return roleRefused
       ? { ...result, summary: withRoleRefusalNote(result.summary) }
       : result;
   };
 }
 
+/**
+ * AGENT-11: the run's model chain and its hooks, shared by every model call
+ * of the run (`callModels`).
+ */
+type ModelCalls = {
+  chain: ModelChain;
+  /** This run's own chain moved to its next configured model. */
+  onFallback: (hop: ModelFallback) => void;
+  /** The configured model a reply came from. */
+  onModel?: (model: string) => void;
+  /** Failovers a delegate or council worker reported in its tool data. */
+  onWorkerFallback: (via: "delegate" | "council", hops: ModelFallback[]) => void;
+};
+
 type LoopArgs = {
   llm: LlmEnv;
+  models: ModelCalls;
   fetchImpl: FetchLike;
   taskText: string;
   attempt: number;
@@ -732,7 +837,7 @@ type LoopArgs = {
   nonInteractive: boolean;
   allowlist: Set<string>;
   onEvent?: (event: AgentEvent) => void;
-  onUsage?: (usage: AgentTokenUsage) => void;
+  onUsage?: (usage: AgentTokenUsage, model: string) => void;
   maxToolRounds: number;
   projectBlock: string;
   /** PERSONA-2: the persona block, placed before the rules ("" when none). */
@@ -757,6 +862,7 @@ type LoopArgs = {
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   const {
     llm,
+    models,
     fetchImpl,
     taskText,
     attempt,
@@ -857,9 +963,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     const roundTools = injectionTripped()
       ? tools.filter((t) => !blockedAfterInjection(t.function.name))
       : tools;
-    const request = () =>
+    const request = (provider: ResolvedProvider) =>
       chatCompletions({
-        llm,
+        provider,
         fetchImpl,
         messages,
         tools: roundTools,
@@ -867,32 +973,36 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         timeoutMs,
         onUsage,
       });
-    let completion = await request();
-
-    if (
-      !completion.ok &&
-      completion.status !== undefined &&
-      IMAGE_REFUSED_HTTP_STATUSES.has(completion.status) &&
-      imageMessages.length > 0
-    ) {
-      // A model (or gateway) that will not take the images: drop the image
-      // user messages, put a text note in each image's tool message and retry
-      // this request once; later images get the note too. No user message is
-      // left after tool messages, so providers that require the assistant
-      // turn right after tool results accept the retry.
-      for (const { message, opened } of imageMessages) {
-        const at = messages.indexOf(message);
-        if (at >= 0) messages.splice(at, 1);
-        for (const o of opened) o.tool.content = imageRefusedToolContent(o.result);
+    // AGENT-11: the chain's current model; one that fails (after its own
+    // image retry below) hands this and every later call to the next one.
+    const completion = await callModels(models, async (provider) => {
+      let reply = await request(provider);
+      if (
+        !reply.ok &&
+        reply.status !== undefined &&
+        IMAGE_REFUSED_HTTP_STATUSES.has(reply.status) &&
+        imageMessages.length > 0
+      ) {
+        // A model (or gateway) that will not take the images: drop the image
+        // user messages, put a text note in each image's tool message and retry
+        // this request once; later images get the note too. No user message is
+        // left after tool messages, so providers that require the assistant
+        // turn right after tool results accept the retry.
+        for (const { message, opened } of imageMessages) {
+          const at = messages.indexOf(message);
+          if (at >= 0) messages.splice(at, 1);
+          for (const o of opened) o.tool.content = imageRefusedToolContent(o.result);
+        }
+        imageMessages.length = 0;
+        imagesRefused = true;
+        emit(onEvent, {
+          type: "Text",
+          text: `[operator] the model refused image input (HTTP ${reply.status}); retried once with a text note`,
+        });
+        reply = await request(provider);
       }
-      imageMessages.length = 0;
-      imagesRefused = true;
-      emit(onEvent, {
-        type: "Text",
-        text: `[operator] the model refused image input (HTTP ${completion.status}); retried once with a text note`,
-      });
-      completion = await request();
-    }
+      return reply;
+    });
 
     if (!completion.ok) {
       return {
@@ -1057,6 +1167,14 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         result = { ok: false, error: errMsg, exitCode: 1 };
       }
       if (isRoleRefusal(name, result)) onRoleRefusal();
+      // AGENT-11: a delegate or council worker that failed over, finished or
+      // not, is this run's failover too (validated from its tool data).
+      if (offered.has(name) && (name === "delegate" || name === "council")) {
+        const hops = modelFallbackFromUnknown(
+          (result.data as { modelFallback?: unknown } | undefined)?.modelFallback,
+        );
+        if (hops) models.onWorkerFallback(name, hops);
+      }
       // MEMORY-7.a (REQ-agent-710): private text goes to the run result for
       // the bridge to send privately — never into the tool message, the
       // ToolResult event or the model's context (stringifyToolPayload
@@ -1208,7 +1326,7 @@ function unreportedEdits(tools: Set<string>): Pick<ExecuteResult, "unreportedEdi
 }
 
 async function singleChatCompletion(opts: {
-  llm: LlmEnv;
+  models: ModelCalls;
   fetchImpl: FetchLike;
   taskText: string;
   attempt: number;
@@ -1216,7 +1334,7 @@ async function singleChatCompletion(opts: {
   signal: AbortSignal;
   timeoutMs: number;
   tools: OpenAiToolDef[];
-  onUsage?: (usage: AgentTokenUsage) => void;
+  onUsage?: (usage: AgentTokenUsage, model: string) => void;
   projectBlock: string;
   personaBlock: string;
   specBriefing?: string;
@@ -1246,15 +1364,17 @@ async function singleChatCompletion(opts: {
     },
     { role: "user", content: userParts.join("") },
   ];
-  const completion = await chatCompletions({
-    llm: opts.llm,
-    fetchImpl: opts.fetchImpl,
-    messages,
-    tools: opts.tools,
-    signal: opts.signal,
-    timeoutMs: opts.timeoutMs,
-    onUsage: opts.onUsage,
-  });
+  const completion = await callModels(opts.models, (provider) =>
+    chatCompletions({
+      provider,
+      fetchImpl: opts.fetchImpl,
+      messages,
+      tools: opts.tools,
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      onUsage: opts.onUsage,
+    }),
+  );
   if (!completion.ok) {
     return { summary: completion.error, filesChanged: [], error: true };
   }
@@ -1265,20 +1385,49 @@ async function singleChatCompletion(opts: {
   };
 }
 
+/**
+ * One chat completions reply, or why there is none. `failure` says how the
+ * model failed (AGENT-11: the chain fails over), or null when the call was
+ * not a model failure (a SAFE-8 spend-cap stop, the run's own abort).
+ */
+type Completion =
+  | { ok: true; message: AssistantMessage }
+  | { ok: false; error: string; status?: number; failure: ModelFailure | null };
+
+/**
+ * AGENT-11: `request` against the run's model chain (`callChain`): the
+ * current model, and on a model failure the next configured one at once.
+ */
+async function callModels(
+  models: ModelCalls,
+  request: (provider: ResolvedProvider) => Promise<Completion>,
+): Promise<Completion> {
+  const r = await callChain<AssistantMessage>(
+    models.chain,
+    async (provider): Promise<ChainCall<AssistantMessage>> => {
+      const reply = await request(provider);
+      return reply.ok
+        ? { ok: true, value: reply.message }
+        : { ok: false, error: reply.error, failure: reply.failure };
+    },
+    models.onFallback,
+  );
+  if (!r.ok) return { ok: false, error: r.error, failure: r.failure };
+  if (r.provider) models.onModel?.(entryLabel(r.provider.entry));
+  return { ok: true, message: r.value };
+}
+
 async function chatCompletions(opts: {
-  llm: LlmEnv;
+  provider: ResolvedProvider;
   fetchImpl: FetchLike;
   messages: ChatMessage[];
   tools: ChatToolDef[];
   signal: AbortSignal;
   timeoutMs: number;
-  onUsage?: (usage: AgentTokenUsage) => void;
-}): Promise<
-  | { ok: true; message: AssistantMessage }
-  | { ok: false; error: string; status?: number }
-> {
+  onUsage?: (usage: AgentTokenUsage, model: string) => void;
+}): Promise<Completion> {
   const body: Record<string, unknown> = {
-    model: opts.llm.model,
+    model: opts.provider.entry.model,
     messages: opts.messages,
     temperature: 0.2,
   };
@@ -1292,19 +1441,26 @@ async function chatCompletions(opts: {
   const timer = setTimeout(() => timeout.abort(), opts.timeoutMs);
   const signal = AbortSignal.any([opts.signal, timeout.signal]);
   const timedOut = () => timeout.signal.aborted && !opts.signal.aborted;
-  const timeoutError = {
-    ok: false as const,
+  const timeoutError: Completion = {
+    ok: false,
     error: `LLM request timed out after ${opts.timeoutMs}ms`,
+    failure: { kind: "timeout" },
   };
+  // The run's own stop is never a model failure (AGENT-3 / AGENT-11).
+  const malformed = (error: string): Completion => ({
+    ok: false,
+    error,
+    failure: opts.signal.aborted ? null : { kind: "malformed" },
+  });
   let data: unknown;
   try {
-    const url = `${opts.llm.baseUrl}/chat/completions`;
+    const url = `${opts.provider.baseUrl}/chat/completions`;
     let resp: Response;
     try {
       // AGENT-13: every kind speaks the OpenAI-compatible API; a keyless
       // kind (ollama) sends no authorization header.
       const headers: Record<string, string> = { "content-type": "application/json" };
-      if (opts.llm.apiKey) headers.authorization = `Bearer ${opts.llm.apiKey}`;
+      if (opts.provider.apiKey) headers.authorization = `Bearer ${opts.provider.apiKey}`;
       resp = await opts.fetchImpl(url, {
         method: "POST",
         headers,
@@ -1314,7 +1470,11 @@ async function chatCompletions(opts: {
     } catch (err) {
       if (timedOut()) return timeoutError;
       const msg = err instanceof Error ? err.message : String(err);
-      return { ok: false, error: `LLM request failed: ${msg}` };
+      // SAFE-8: a call stopped at the spend cap was never sent — not a model
+      // failure, so it never fails over (a cap stop asks, AUTONOMY-8).
+      const failure: ModelFailure | null =
+        err instanceof SpendCapRefusal || opts.signal.aborted ? null : { kind: "network" };
+      return { ok: false, error: `LLM request failed: ${msg}`, failure };
     }
 
     if (!resp.ok) {
@@ -1323,6 +1483,9 @@ async function chatCompletions(opts: {
         ok: false,
         error: `LLM HTTP ${resp.status}: ${text || resp.statusText}`,
         status: resp.status,
+        // AGENT-11: any HTTP error, 404 / 410 for a retired model included —
+        // unless the run's own stop landed meanwhile (never a model failure).
+        failure: opts.signal.aborted ? null : { kind: "http", status: resp.status },
       };
     }
 
@@ -1330,7 +1493,7 @@ async function chatCompletions(opts: {
       data = await resp.json();
     } catch {
       if (timedOut()) return timeoutError;
-      return { ok: false, error: "LLM response was not JSON" };
+      return malformed("LLM response was not JSON");
     }
   } finally {
     clearTimeout(timer);
@@ -1338,11 +1501,11 @@ async function chatCompletions(opts: {
 
   // Tokens were spent even if the message shape is off — report first.
   const usage = extractUsage(data);
-  if (usage) opts.onUsage?.(usage);
+  if (usage) opts.onUsage?.(usage, entryLabel(opts.provider.entry));
 
   const message = extractAssistantMessage(data);
   if (!message) {
-    return { ok: false, error: "LLM response missing assistant message" };
+    return malformed("LLM response missing assistant message");
   }
   return { ok: true, message };
 }

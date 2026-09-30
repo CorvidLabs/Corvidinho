@@ -160,6 +160,7 @@ files:
   - tests/discord.allowed-mentions.test.ts
   - plugins/discord/send-file.ts
   - tests/discord.send-file.test.ts
+  - tests/discord.safe3a-surface.test.ts
 
 db_tables: []
 depends_on:
@@ -660,7 +661,14 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 `team` only when asked, else `community` — schedules pass none) and
 `CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
-it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+it. Surface stamp (SAFE-3.a, REQ-discord-735): `AgentRunChatOpts` gains
+`surface?: ActingSurface` (`src/agent/shell-gate.ts`), which the spawn client
+always writes to `CORVIDINHO_ACTING_SURFACE` (empty when omitted): the
+bridge's chat path passes `chat`, its ask continuation (button pick or
+Answer form) `ask`, `/session start` `session`, `/work` `work` and the
+scheduler's `runOne` `schedule`. The agent's shell gate (REQ-agent-503)
+offers the allowlisted shell, runners and Fledge runs only on the first four,
+for the owner, in the talk's own worktree. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
 inbound check the handler refuses a community caller (declared community, no
 role, undeclared; muted or deny-listed callers too, though the dispatcher's
 mute and actor gates stop them first) with the ephemeral `not authorized` of
@@ -711,7 +719,9 @@ carries none unless `keepFooter` (a free-text ask's Answer button,
 REQ-discord-548), and a later re-edit keeps the first footer (time frozen by
 `elapsedMs` / `answerFooter`) and outcome (REQ-discord-457). The bridge chat
 and button-pick paths and `finishSlashWithThinking` pass the run's
-`thinkExtras` (with `spend: answerSpendFor(result.usage, model)` when
+`thinkExtras` (`model: answerModelFor(result, model)` — the configured model
+that answered, `b (fell back from a)` after a failover, AGENT-11 — with
+`spend: answerSpendFor(result.usage, model, result.usageByModel)` when
 `isOwnerDiscord(owner, actor)`) and the same failed/done outcome as their
 fallback status; their fallback replies carry `answerFooter` on the last part.
 `DiscordEmbedPayload.description` is optional (omitted on that embed).
@@ -719,7 +729,8 @@ fallback status; their fallback replies carry `answerFooter` on the last part.
 Rich replies (REQ-discord-075, DISCORD-16): `src/discord/rich-reply.ts`
 exports `DISCORD_MESSAGE_MAX` (2000), `DISCORD_EMBED_DESCRIPTION_MAX` (4096),
 `DISCORD_ANSWER_MAX` (6000), `splitDiscordMessage` (fence-safe line split,
-role note kept whole in the last part), `readsBetterAsEmbed` /
+the closing notes — the AGENT-11 `(model fallback: …)` note and the role note —
+kept whole in the last part), `readsBetterAsEmbed` /
 `planAnswerParts` (scrub first, SAFE-6, then cut to `DISCORD_ANSWER_MAX`
 keeping a role note; one plain message within 2000, one
 embed for long plain prose with no fence or mention, else split parts with the
@@ -727,15 +738,21 @@ footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
 first mentioned in them, so a mention past the first part still pings once;
 `keepFooter` keeps the footer beside an Answer button, DISCORD-ASK-4.a)
-and `answerSpendFor` (tokens and cost from the run's
-`usage` and `priceForModel`). `finalizeContent` edits the first part into the
+`answerSpendFor` (tokens and cost from the run's
+`usage` and `priceForModel`; with `usageByModel` each model's tokens at its own
+price, one unpriced model making the cost unknown, REQ-discord-080) and
+`answerModelFor` (the footer's model, REQ-discord-080). `finalizeContent` edits the first part into the
 progress message, posts later parts with the optional
 `ThinkingOutbound.sendMessage` (no pings; wired to the gateway reply) and
 returns `FinalizedAnswer { messageId, messageIds, complete }`; a re-edit edits
 only changed parts. `finishSlashWithThinking` takes optional `post` for the
 parts after the deferred reply; `finishSlashWithOwnerNotice` appends the
 notice without cutting a split answer. The Discord spawn client passes
-`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`; the
+`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`, and from
+the result frame `model`, `modelFallback` and `usageByModel` (validated); a run
+that failed over calls `onModelFallback(hops, sessionId)` — by default one
+`[discord] llm.fallback: …` warn line (`warnModelFallback`), the daemon passes
+its structured logger (REQ-discord-080, AGENT-11); the
 gateway `reply` takes an optional `embed`, and gateway / slash adapters cap
 content at 2000.
 
@@ -940,6 +957,11 @@ notice, `/work` PR line, schedule post or pending-ask post — and no one else's
 "Work is paused for budget." (`SPEND_PAUSED_TEXT`), and `/status` shows them
 that only while runs stop at the cap. The owner's answer footers keep tokens
 and cost (DISCORD-15.a).
+The answer footer names the configured model that answered, for everyone
+(DISCORD-15.a), with `(fell back from …)` when the run's own chain failed over
+(AGENT-11); a run that failed over is told to its requester by the answer's
+closing note and to the owner by the `llm.fallback` log line, never by a DM
+(REQ-discord-080).
 Recording a SAFE-8 warning and delivering it are separate: whichever process
 crossed 80% records it, and the bridge DMs it to the configured owner only
 (`src/discord/spend-dm.ts`, after each run and on every scheduler tick),
@@ -1346,3 +1368,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
 | 2026-09-30 | shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to: Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows |
 | 2026-09-30 | shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take: Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way |
+| 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
+| 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |

@@ -1159,7 +1159,11 @@ path is not passed on and parsed text SHALL be cleaned of control characters
 and length-capped. A lane or task run SHALL return ok only on exit 0, else
 ok=false with fledge's exit code and output. The child SHALL get the verify
 lane's scrubbed env (no Discord config, GitHub tokens, audit key, acting
-identity or LLM keys) without `CDPATH` / `OLDPWD`, with
+identity or LLM keys) without `CDPATH` / `OLDPWD` and without the owner's
+GitHub or git credentials (SAFE-21.a: `withoutGitCredentials`, the env
+`shell-exec` and the runners get, REQ-plugins-495; the model may be offered
+the lane and task runs under SAFE-3.a, REQ-agent-503, so pushes, PRs and
+merges go only through the checked GitHub tools), with
 `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`, stdin closed, a
 timeout (30 s for list / validate, 10 minutes for a run; exit 124),
 per-stream output caps, and its process group killed on timeout or the
@@ -1183,6 +1187,7 @@ Acceptance Criteria
 - With a fake fledge, `fledge-lanes-list` runs `--non-interactive lanes list --json` in the project root and returns `{count, lanes}` typed, control characters cleaned; any arg is a usage error and nothing is spawned; a fledge error (no fledge.toml) or non-JSON output is ok=false with the reason.
 - `fledge-lanes-validate` runs `lanes validate --json` (`--strict` passed through); valid lanes are ok with `{valid:true, laneCount, errors:[], warnings:[]}`; lanes with errors are ok=false, exit 1, with each error and warning and without fledge's path; a path or any other arg is a usage error and nothing is spawned.
 - Non-interactive with an empty allowlist `fledge-lanes-run` and `fledge-run` are denied (exit 2, SAFE-1) and fledge never starts; allowlisted, `fledge-lanes-run verify` runs `--non-interactive lanes run verify` in the project root with no GitHub / Discord / LLM / audit / acting keys, no CDPATH / OLDPWD, `FLEDGE_NON_INTERACTIVE=1`, `CORVIDINHO_PROJECT_ROOT` = the root and other keys kept.
+- With `GH_TOKEN`, `GIT_ASKPASS`, `SSH_AUTH_SOCK` and a `GH_CONFIG_DIR` holding `hosts.yml` in the env and a credential helper in `~/.gitconfig`, `fledge-run` and `fledge-lanes-run` start fledge with none of those keys, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`, `GIT_CONFIG_COUNT=3` with an empty `credential.helper`, a key-less `GIT_SSH_COMMAND` and a `GH_CONFIG_DIR` with no `hosts.yml`; `git config --get-all credential.helper` there does not show the owner's helper (`tests/fledge.core.test.ts`).
 - `fledge-run` with `["test","--bail","a b","$(id)","--","; rm -rf /"]` reaches fledge as `run test -- --bail "a b" "$(id)" -- "; rm -rf /"` word for word; with only a task name no `--` is added.
 - Lane or task names `--init`, `-l`, `--list`, `--lang`, `--dry-run`, `a b`, `../x`, `x/y` and empty, and extra `fledge-lanes-run` args, are usage errors and fledge never starts.
 - A lane or task exiting 3 returns ok=false, exitCode 3 with fledge's output; a `sk-ant-…` key in the output is redacted; a run past a 200 ms timeout returns 124; an aborted calling run returns 130.
@@ -1799,4 +1804,20 @@ Acceptance Criteria
 - `git -C . push`, `gh workflow -R o/r run`, a git alias for a push, `bun <script>` / `bun x` / `bun exec` / `bun <file>` of a prod command, `npx -c`, a prod install script and a package-manager option that picks another package.json ask; `main` pushed while `develop` is the recorded default asks.
 - A run stopped just as the owner approves runs nothing; the wait line and refusals carry no secret.
 - Only the must-ask builtins carry a class; every other builtin passes the gate with no card.
+
+### REQ-plugins-080
+
+If a model fails or is retired, it falls back to my next configured model and
+tells me (AGENT-11, captured in `hi/agent.md` from Leif's 2026-09-28
+interview; the chain is REQ-agent-080). The `delegate` command SHALL pass the
+worker's model failovers (`DelegateChildOutcome.modelFallback`, validated from
+its result frame) back as `data.modelFallback`, and the `council` command its
+voices' and chair's (`CouncilOutcome.modelFallback`, each once), finished or
+not, so the lead's tool loop reports them as its own run's (`via`
+`delegate` / `council`). Absent when no worker failed over. No flag, env var or
+config key is added.
+
+Acceptance Criteria
+- `createCouncilCommand` with a fake bin whose result frames report one failover returns `ok` with `data.modelFallback` holding it once.
+- `runDelegateChild` over a fake bin returns the worker's failovers (an invalid entry dropped), which the `delegate` data carries.
 

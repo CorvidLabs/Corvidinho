@@ -48,8 +48,9 @@ REQ-plugins-494).
 PATH, GitHub dry run; no network): the catalog offers the allowlisted GitHub
 writes and memory forget/override at tool tier and leaves unlisted dangerous
 tools out; every offered dangerous tool is allowlisted; `files-delete` needs
-code tier; `shell-exec` and the runners are never offered from the allowlist;
-a non-ADMIN session gets no dangerous or mutating tool. Through
+code tier; `shell-exec`, the runners and the Fledge core runs (`SAFE3A_TOOLS`)
+are not offered from the allowlist without the SAFE-3.a grant (a local run
+never has it); a non-ADMIN session gets no dangerous or mutating tool. Through
 `createTaskExecute` with `CORVIDINHO_ALLOWLIST=github-pr-review` the review
 runs (dry run) and an unlisted `github-issue-create` is refused; ADMIN gets
 it, non-ADMIN does not. An allowlisted `fledge-hello` is discovered, offered
@@ -389,7 +390,8 @@ one that says it is waiting) as nothing.
 unknown prefixes are OpenAI-compatible, comma lists), per-tier resolution with
 no default, each kind's endpoint and key (`resolveEntry`, `OLLAMA_HOST`
 forms, `providerId`), the transport per kind over a mock fetch (ollama: no
-authorization header; anthropic: its own key; only a list's head is called),
+authorization header; anthropic: its own key; a list calls only its head
+while the head answers),
 the no-provider notice per case, `runTask` ending `failed` with the notice and
 no provider call, the real `task run` against a localhost keyless `ollama:`
 fake, and the `ANTHROPIC_API_KEY` SAFE-6 redaction.
@@ -401,3 +403,78 @@ picks no model; an attempt with no provider fails with the notice.
   `tests/fixtures/fake-llm.ts` (a localhost fake, an injected fetch, or a
   configured model for bridge footers).
 
+## Model fallback (REQ-agent-080, REQ-agent-179, REQ-agent-007, REQ-agent-079; AGENT-11)
+
+`tests/agent.fallback.test.ts` — mock providers only (an injected fetch keyed
+by `body.model`, a localhost `Bun.serve` for the real CLI, fake `corvidinho`
+sh bins), no network, no key:
+- `callChain`: the head fails once and the next entry answers; the chain keeps
+  it (no retry of the head); `failure: null` never fails over; the last
+  entry's failure comes back; a next entry without its key is skipped
+  uncalled with `ANTHROPIC_API_KEY is not set`. The operator line, the note
+  (idempotent), the log line and `answeredModelLabel`; child failovers and
+  usage validated, scrubbed and bounded; `mergeModelFallbacks` dedupes.
+- The tool loop fails over on HTTP 404, 410 and 500, a network error, a
+  timeout (`llmTimeoutMs` 40), a non-JSON reply and a reply with no assistant
+  message: requests go `model-a` then `model-b`, the summary ends with the
+  note, one `[operator] model-a failed (<reason>); falling back to model-b`
+  Text event, `onModelFallback` and `onModel` report it. Later rounds and a
+  second attempt stay on `model-b` (the head is called once); a fresh
+  `createTaskExecute` tries the head again. The read tier fails over too.
+  Every model failing ends `failed` with the last error and the note listing
+  each failover. Usage is kept per model (`onUsage` `{ model, byModel }`).
+- Never a failover: an unpriced head under a SAFE-8 cap (nothing sent, the
+  spend-cap ask, no note); a cap stop on the model it fell back to (the next
+  entry is never called); the run's own abort; a must-ask call that is denied
+  or whose card lapses (the same model answers next).
+- Workers: a `delegate` result's `modelFallback` is the lead's (`via:
+  "delegate"`, one Text event, the note; a second identical report is not
+  added again); `runDelegateChild` reads a worker's failovers from its result
+  frame (validated); `runCouncil` and the `council` tool data carry each
+  voice's failover once.
+- Clips: `resultFrame`, `chatBodyFromTaskResult` (with and without a role note
+  after it) and `splitDiscordMessage` keep the note whole.
+- NDJSON: `usageFrame` with the model detail round-trips (and is unchanged
+  without it); the real `task run --output ndjson` against a localhost
+  provider answering `gone-model` 404 streams the Text frame, usage frames
+  with `model` / `byModel`, and a result with `model`, `usageByModel` and
+  `modelFallback`; text mode with a 410 head prints the line on stderr and the
+  note in the answer.
+- Fail on base: with the base's (507d97b) sources swapped in
+  (`src/agent/providers.ts` and `src/agent/types.ts` kept so imports resolve),
+  26 of 35 fail; the 9 that pass are the 5 pure units of the providers module
+  and the 4 "never fails over" cases (the base never fails over at all).
+
+## Owner shell grant (REQ-agent-503, REQ-agent-501; SAFE-3.a)
+
+`tests/agent.safe3a-gate.test.ts` — `shellToolsGate` over temp git projects
+and talk worktrees made by `ensureTalkWorkspace`: granted for the owner's
+`chat`, `session`, `work` and `ask` in the session's own worktree; refused for
+`watch`, `schedule`, an unknown or missing stamp, a WATCH or `schedule_`
+session marker, team, community, a forged owner id without the ADMIN bit, the
+ADMIN bit for a non-owner, a muted or deny-listed owner, no configured owner,
+delegation depth 1 / 2 / junk, no role session (local CLI), and any cwd but
+the talk's own linked worktree top (main checkout, another talk's worktree,
+scoped non-git dir, a subdirectory, a look-alike dir whose `.git` points at
+the main repo or borrows the talk's admin dir, a missing dir, no session id);
+a symlink to the own worktree resolves to it. The catalog with `safe3a`
+offers the registered allowlisted six at code tier only, none without it,
+never an unlisted one or to team. Workers and the verify lane drop
+`CORVIDINHO_ACTING_SURFACE`.
+`tests/agent.safe3a-owner-shell.test.ts` — through `createTaskExecute` (fake
+provider): the owner's chat in its own talk worktree is offered `shell-exec`
+at code tier and runs it there (`unreportedEditTools: ["shell-exec"]`), and
+so do `session`, `work` and `ask`; a prod command (`kubectl get pods; touch
+ran.marker`) raises one `mustask` destructive card, a deny runs nothing and
+an approval runs it once; the main checkout, a team member, WATCH, a
+schedule, a delegate worker and a local CLI run are not offered it (the
+call refused, no marker), with exactly one `[operator] SAFE-3.a` line per run
+across two attempts and none in the summary; muting the owner after attempt 1
+removes the shell from attempt 2; an allowlist without the six runs no gate.
+`tests/agent.allowlisted-dangerous.test.ts` uses `SAFE3A_TOOLS`.
+- Fail on base: with the base's (507d97b) `src/agent/{tools,execute}.ts`,
+  `src/discord/{agent-client,bridge}.ts`, `src/discord/command-handlers/{session,work}.ts`,
+  `src/scheduler/service.ts` and `src/watch/agent-client.ts` swapped in and
+  `src/agent/shell-gate.ts` removed, `agent.safe3a-gate` cannot load, 8 of 9
+  `agent.safe3a-owner-shell` tests fail (the no-gate guard passes) and the
+  renamed `SAFE3A_TOOLS` test fails; all pass on the branch.
