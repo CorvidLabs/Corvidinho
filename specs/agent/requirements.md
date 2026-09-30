@@ -698,46 +698,6 @@ hooks off, repo-locating env stripped, discovery clamped to the root,
 optional locks off) with fsmonitor off, and fingerprints are hashed in
 process: nothing is written to the index or object store (the talk marker of
 REQ-agent-015 lives in the worktree's own git dir, outside both). No flag,
-
-Real-diff verify gate (AGENT-4, issue #85). When the verify gate is on,
-`runTask` SHALL snapshot the run's git project before the first attempt:
-`HEAD`, `git status --porcelain=v1 -z --untracked-files=all --no-renames`
-and a fingerprint of every dirty or untracked path (SHA-256 of the file up
-to 4 MiB while a 64 MiB content budget lasts, stat identity past either, link
-target for a symlink, never followed). Later diffs SHALL fingerprint again
-only the paths dirty at the start (with the same kind); a path that became
-dirty or untracked is a change by itself. The
-project root is the nearest directory at or above the run cwd that holds
-`.git` (as in REQ-agent-084); a cwd below the root SHALL read only its own
-subtree and report paths relative to the cwd. After each attempt that ends
-without an ask, a provider error or an abort, and before deciding whether to
-verify, `runTask` SHALL add to `filesChanged` every path that differs from the
-snapshot: paths changed between the start `HEAD` and the current `HEAD`
-(including a first commit on an unborn `HEAD`), paths that became dirty or
-untracked, paths already dirty whose status or fingerprint changed, and
-dirty paths that became clean. These join the tool-reported files and the
-union across attempts (REQ-agent-242), so an edit no tool reported
-(code-tier `shell-exec`, a delegate worker, a commit made through a shell)
-runs the verify lane and the run ends `done` only when it passes, or fails
-plainly. Paths dirty before the run and left untouched, and gitignored paths,
-SHALL NOT count. When the cwd is not inside a git work tree, or the start
-snapshot cannot be read, the gate SHALL use tool-reported files only (the
-behaviour before this requirement), except that a run that called a tool
-whose file edits no result reports SHALL verify anyway (REQ-agent-502). When the start snapshot was read but a
-later diff cannot be, the gate SHALL fail closed: verify runs and one `Text`
-event says the diff could not be read. When the real diff adds paths no tool
-reported, one `Text` event SHALL say how many and name up to five. At most
-`WORKSPACE_DIFF_MAX_FILES` (1000) real-diff paths per run SHALL join
-`filesChanged` (the note still gives the full count and how many were
-listed), so the NDJSON `result` line stays under the parser's line cap and a
-bridge still gets the summary; the gate is unaffected because `filesChanged`
-is non-empty either way. An empty
-real diff with no tool-reported files SHALL still skip verify with
-`verifySkipped=true` (REQ-agent-003). `--no-verify` / `verify_before_complete
-= false` SHALL take no snapshot. Git SHALL run read-only through `runGit`
-(argv, no shell, hooks off, repo-locating env stripped, discovery clamped to
-the root, optional locks off) with fsmonitor off, and fingerprints are hashed
-in process: nothing is written to the index or object store. No flag,
 environment variable, config key or slash command is added. `RunTaskOptions`
 has a `workspaceDiff` test seam (like `verifyRunner`), not a product surface.
 
@@ -755,8 +715,6 @@ Acceptance Criteria
 - A tool that claims `dist/out.js` (gitignored, written), `app.ts` (edited) and `ghost.ts` (never written) in a git repo: `filesChanged` is `["app.ts"]`, the lane runs, and one note names `dist/out.js, ghost.ts`; a run whose only change is such a claim still runs the lane, and its retry after the failed verify runs it again.
 - The demo execute reports `filesChanged: []`.
 - End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
-- With the gate off no snapshot is taken.
-- End to end: the tool loop runs the real code-tier `shell-exec` with `cp broken.ts app.ts` in a temp git repo (a `>` or `tee` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write is a copy); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
 
 ### REQ-agent-428
 
