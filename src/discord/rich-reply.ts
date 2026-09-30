@@ -171,9 +171,10 @@ function splitBody(text: string, max: number): string[] {
 /**
  * DISCORD-16 — split an answer at Discord's 2000-character limit without
  * breaking code fences. Text within `max` comes back as is (one part). The
- * closing notes — the AGENT-11 model fallback note and the ROLES-CHAT-3 role
- * note — stay whole in the last part. Callers scrub first (SAFE-6);
- * `planAnswerParts` does.
+ * closing notes — the AGENT-11 model fallback note, the REQ-agent-318
+ * attribution line ("Search by Brave") and the ROLES-CHAT-3 role note — stay
+ * whole in the last part. Callers scrub first (SAFE-6); `planAnswerParts`
+ * does.
  */
 export function splitDiscordMessage(text: string, max = DISCORD_MESSAGE_MAX): string[] {
   if (text.length <= max) return [text];

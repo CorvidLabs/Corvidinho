@@ -33,9 +33,56 @@ const FALLBACK_NOTE_TAIL_RE = new RegExp(
 );
 
 /**
+ * REQ-agent-318 (PLUGIN-7, #318; Leif's go on #318): the short visible line a
+ * reply ends with when its run used a tool whose provider's terms ask for
+ * one, by tool name. A `web-search` that Brave answered makes the reply end
+ * with "Search by Brave". The tool loop reports each such successful call
+ * and `createTaskExecute` adds the line once to the run's summary as a
+ * closing note (`withReplyAttribution`), so it is never in a tool result, the
+ * untrusted fence or anything else the model reads, and every clip keeps it.
+ */
+export const REPLY_ATTRIBUTION_BY_TOOL: ReadonlyMap<string, string> = new Map([
+  ["web-search", "Search by Brave"],
+]);
+
+/** Every attribution line, in the order a closing note lists them. */
+const ATTRIBUTION_LINES: readonly string[] = [...new Set(REPLY_ATTRIBUTION_BY_TOOL.values())];
+
+/**
+ * The attribution note for `lines` (REQ-agent-318): the known lines among
+ * them, one per line in {@link REPLY_ATTRIBUTION_BY_TOOL} order; "" when none.
+ */
+export function replyAttributionNote(lines: Iterable<string>): string {
+  const want = new Set(lines);
+  return ATTRIBUTION_LINES.filter((line) => want.has(line)).join("\n");
+}
+
+/**
+ * `summary` with the attribution note for `lines` after it (a blank line
+ * first), added once: a summary that already ends with that note comes back
+ * as is (REQ-agent-318).
+ */
+export function withReplyAttribution(summary: string, lines: Iterable<string>): string {
+  const note = replyAttributionNote(lines);
+  if (!note) return summary;
+  const body = summary.trim();
+  if (body === note || body.endsWith(`\n\n${note}`)) return summary;
+  return body ? `${body}\n\n${note}` : note;
+}
+
+/** A closing attribution paragraph at the end of `text` (with its blank line), or "". */
+function attributionTail(text: string): string {
+  const at = text.lastIndexOf("\n\n");
+  if (at < 0) return "";
+  const lines = text.slice(at + 2).split("\n");
+  return lines.every((line) => ATTRIBUTION_LINES.includes(line)) ? text.slice(at) : "";
+}
+
+/**
  * The closing notes `text` ends with, as they stand (each after a blank
- * line): the model fallback note (AGENT-11), then the role note
- * (REQ-agent-333), either or both; "" when none.
+ * line): the model fallback note (AGENT-11), then the attribution note
+ * (REQ-agent-318), then the role note (REQ-agent-333), any of them; "" when
+ * none.
  */
 export function closingNotesTail(text: string): string {
   let rest = text;
@@ -44,15 +91,21 @@ export function closingNotesTail(text: string): string {
     tail = ROLE_NOTE_TAIL;
     rest = rest.slice(0, rest.length - ROLE_NOTE_TAIL.length);
   }
+  const credit = attributionTail(rest);
+  if (credit) {
+    tail = `${credit}${tail}`;
+    rest = rest.slice(0, rest.length - credit.length);
+  }
   const fallback = FALLBACK_NOTE_TAIL_RE.exec(rest);
   return fallback ? `${fallback[0]}${tail}` : tail;
 }
 
 /**
  * Clip already-scrubbed `text` longer than `max` with `clip`, keeping its
- * closing notes (`closingNotesTail`: the model fallback note, AGENT-11, and
- * the role note, REQ-agent-333): a long reply loses the end of its body,
- * never a note. Text within `max` is returned as is.
+ * closing notes (`closingNotesTail`: the model fallback note, AGENT-11, the
+ * attribution note, REQ-agent-318, and the role note, REQ-agent-333): a long
+ * reply loses the end of its body, never a note. Text within `max` is
+ * returned as is.
  */
 export function clipKeepingRoleNote(
   text: string,

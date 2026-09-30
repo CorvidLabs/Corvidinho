@@ -36,9 +36,10 @@
  * route around a cap.
  *
  * Tool calls with a flat price per call (a Brave `web-search`, #318) count
- * toward the same total cap: `reserveFlatSpend` reserves the price in the same
- * ledger before the call, and a stopped call hands the tool loop the same
- * `spend-cap` ask (`PluginHandlerResult.spendAsk`, src/agent/execute.ts).
+ * toward the same total cap and are recorded while any cap is set:
+ * `reserveFlatSpend` reserves the price in the same ledger before the call,
+ * and a stopped call hands the tool loop the same `spend-cap` ask
+ * (`PluginHandlerResult.spendAsk`, src/agent/execute.ts).
  *
  * Assumptions (see specs/agent REQ-agent-098):
  *  - "Daily" is the last 24 hours (rolling), not a calendar day.
@@ -1229,16 +1230,19 @@ export type FlatSpendHold =
 /**
  * SAFE-8 for a tool call with a flat price per call (REQ-agent-098), such as
  * a Brave `web-search` (about $0.005, #318): the same rolling 24 h ledger and
- * total cap as the model calls. No cap ⇒ `off` and the DB is never opened.
- * With a cap, the price is reserved in the IMMEDIATE ledger transaction
- * before the call; a call that would pass the cap (or cannot be counted: an
- * invalid cap value, an unavailable ledger) is `stopped` with the same
- * `spend-cap` ask a model call gets, and must not be sent. `settle` records
- * the outcome once: `billed` keeps the price as the call's actual cost,
- * `not-billed` (refused before connecting, or an HTTP error reply) counts 0,
- * `unknown` (network error, timeout, abort, unreadable reply) keeps it
- * counted at the estimate. The 80% warning is noted by the next model call's
- * settle, which sees this row in the window.
+ * total cap as the model calls. No cap at all (neither the total cap nor
+ * SAFE-14's provider caps) ⇒ `off` and the DB is never opened. While any cap
+ * is set the price is reserved in the IMMEDIATE ledger transaction before the
+ * call, so the call is recorded like a provider call; it counts against the
+ * total cap only (a provider cap is keyed on a configured model provider,
+ * REQ-agent-114, so none covers it). A call that would pass the total cap, or
+ * cannot be counted (a spend-cap setting that is not valid, an unavailable
+ * ledger), is `stopped` with the same `spend-cap` ask a model call gets, and
+ * must not be sent. `settle` records the outcome once: `billed` keeps the
+ * price as the call's actual cost, `not-billed` (refused before connecting,
+ * or an HTTP error reply) counts 0, `unknown` (network error, timeout, abort,
+ * unreadable reply) keeps it counted at the estimate. The 80% warning is
+ * noted by the next model call's settle, which sees this row in the window.
  */
 export function reserveFlatSpend(opts: {
   env?: NodeJS.ProcessEnv;
@@ -1252,9 +1256,10 @@ export function reserveFlatSpend(opts: {
   now?: () => number;
 }): FlatSpendHold {
   const env = opts.env ?? process.env;
-  const cap = parseSpendCap(env);
-  if (cap.kind === "off") return { kind: "off" };
-  if (cap.kind === "invalid") return { kind: "stopped", ask: spendCapInvalidAsk() };
+  const caps = parseSpendCaps(env);
+  if (caps.kind === "off") return { kind: "off" };
+  if (caps.kind === "invalid") return { kind: "stopped", ask: spendCapInvalidAsk(caps.keys) };
+  const total = caps.totalMicroUsd ?? undefined;
   const now = opts.now ?? Date.now;
   const cost = Math.max(0, Math.ceil(opts.costMicroUsd));
   let db: Database | undefined;
@@ -1275,7 +1280,7 @@ export function reserveFlatSpend(opts: {
       provider: opts.provider,
       model: opts.model,
       estimateMicroUsd: cost,
-      capMicroUsd: cap.capMicroUsd,
+      ...(total !== undefined ? { capMicroUsd: total } : {}),
       now: now(),
     });
   } catch (err) {
@@ -1284,14 +1289,7 @@ export function reserveFlatSpend(opts: {
   }
   if (!hold.ok) {
     close();
-    return {
-      kind: "stopped",
-      ask: spendCapReachedAsk({
-        spentMicroUsd: hold.spentMicroUsd,
-        estimateMicroUsd: cost,
-        capMicroUsd: cap.capMicroUsd,
-      }),
-    };
+    return { kind: "stopped", ask: spendCapReachedAsk({ estimateMicroUsd: cost, trips: hold.trips }) };
   }
   const id = hold.id;
   let settled = false;

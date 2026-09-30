@@ -18,7 +18,8 @@ default tool catalog, offered and run non-interactively only when
 `CORVIDINHO_ALLOWLIST` names it, never at the read tier) and every run SHALL
 be audited (SAFE-5, through `runPlugin`). It SHALL be for the owner and the
 team only (PLUGIN-9, REQ-plugins-065 `TEAM_SEARCH_TOOLS`), never community,
-WATCH or schedules; `delegate` / `council` workers never get the key
+WATCH or schedules other people created (a schedule the owner created runs
+as the owner, DISCORD-SCHEDULE-1.a); `delegate` / `council` workers never get the key
 (REQ-agent-117), so a search there answers not configured. It never posts, so it carries no must-ask entry
 (AUTONOMY-11); a post a search run makes still goes through its own tool's
 gate. Deep research is not built.
@@ -85,14 +86,16 @@ a request header or the pinned address: every returned string SHALL pass
 `scrubSecrets` and `redactSecretEnvValues` (the key is a SAFE-6 secret env
 name, REQ-discord-417) as its last step, after the fence and any control or
 invisible-character strip, so a key split by such a character is never
-rebuilt. The Brave attribution is in the tool result only (`data` and the
-summary the model reads); no reply footer adds it. No table, column or schema version; one new env var,
+rebuilt. Brave's "Powered by Brave Search" is in the tool result the model
+reads (`data` and the summary); the visible reply line "Search by Brave" is
+added by the reply path only, never inside the fence or a tool result
+(REQ-agent-318). No table, column or schema version; one new env var,
 `BRAVE_SEARCH_API_KEY` (documented in `.env.example` and
 `docs/DISCORD-GO-LIVE.md` E.3.a).
 
 Acceptance Criteria
 - `plugins list` shows `web-search` with dangerous=true, minTier=1 next to `web-fetch`; the catalog offers it at tool/code tier only when the allowlist names it, never at read tier; a non-interactive run without the allowlist entry is denied (SAFE-1) with a `denied` audit row, and an allowlisted run records `started` then its outcome (SAFE-5).
-- The owner, no role session and team (chat and `/work`) are offered it when allowlisted; community never is; a community role session's `runPlugin web-search` gets the role refusal while a team one reaches the handler.
+- The owner, no role session and team (chat and `/work`) are offered it when allowlisted; community never is; a schedule the owner created is offered it and a team member's schedule is not; a community role session's `runPlugin web-search` gets the role refusal while a team one reaches the handler.
 - With a fake key, one request goes to the pinned address of `api.search.brave.com` at `/res/v1/web/search` with `q`, `count=5`, `safesearch=moderate` and the key only in `X-Subscription-Token`; `--count 20 --freshness pw` and `--query` are passed.
 - A count of 0, 21, 5.5, `abc`, `-3` or `1e1`, a missing count value, an unknown freshness or flag, query words together with `--query` (either order), a `--verbose` term outside `--query`, a missing, blank, 401-character or 51-word query are usage errors (exit 1) with no DNS or request; the usage line says a term that starts with `--` needs `--query`, and `--query "what does --verbose do"` is taken whole.
 - No key, a blank key and a malformed key give the `not-configured` error, starting `web-search not-configured: web search is not configured` and naming `BRAVE_SEARCH_API_KEY`, no DNS and no request, never an empty success; the malformed value is not echoed.
@@ -218,8 +221,14 @@ the acting Discord user id, matched in the owner's people list re-read now
 (`loadDeclaredPeople` + `resolvePerson`, stable ids only), is a person whose
 role is team, not muted (`DISCORD_MUTED_USER_IDS`) and not on
 `[discord].deny_users`; else `community` — undeclared, declared community or
-without a role, WATCH / schedules / workers (community stamp or no actor), and
-any read failure. A stamp never raises the role. `roleAllowsPlugin(role, cmd,
+without a role, WATCH / schedules other people create / workers (community
+stamp or no actor), and any read failure. A stamp never raises the role. In a
+scheduled run (`isScheduleRunEnv`: `CORVIDINHO_DISCORD_SESSION_ID` starts
+with `schedule_`) `resolveActingRole` SHALL return `owner` only through the
+ADMIN re-check above (the scheduler stamps the ADMIN bit only for the live
+owner's own schedule, DISCORD-SCHEDULE-1.a) and otherwise `community`, never
+`team`, whatever `CORVIDINHO_ACTING_ROLE` says, so schedules other people
+create stay read-only. `roleAllowsPlugin(role, cmd,
 workTask)` SHALL be the one rule: read plugins for every role; mutating
 plugins (`isMutatingPlugin`) for the owner and `null`; for team only
 `TEAM_REVIEW_TOOLS` (`github-issue-comment`, `github-pr-review`) and
@@ -266,6 +275,7 @@ Acceptance Criteria
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
 - In a scheduled run a public repo off the allowlist is refused for every role before any visibility lookup, and the role rules still apply to an allowlisted one (`tests/github.schedule-repo-gate.test.ts`).
+- In a scheduled run the owner stamp for the owner resolves `owner`, runs `github-issue-comment` (dry run) and `files-write`, and is offered its allowlisted owner tools but not `shell-exec`; a team member's scheduled run with a community, team or owner stamp resolves `community`, gets the role refusal for `github-issue-comment` and is offered no mutating tool; the same team stamp outside a schedule still resolves `team` (`tests/roles.team.test.ts`, failing on the base sources).
 
 ### REQUIREMENT REQ-plugins-113
 

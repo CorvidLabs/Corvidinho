@@ -17,8 +17,13 @@ artifact: plan
    `docs/discord.md`), spec prose and testing notes, deltas.
 8. `specsync check --require-coverage 100`, `hi check`, `bun test`, fledge
    verify; fail-on-main proof on a main worktree; draft PR.
-9. On Leif's go (orc comment on #318: definition approvals only on his go):
-   `specsync change approve` (actor corvid-agent, a note linking the go),
-   `specsync change check --commit`, `specsync change review --reviewer
-   corvid-agent`, `specsync change finalize`; green Linux CI; then ready for
-   review. Never merge before finalize.
+9. Rebase onto main 0aeb345; regenerate the modified-REQ deltas from main's
+   text; `reserveFlatSpend` on `parseSpendCaps` (SAFE-14).
+10. The "Search by Brave" reply line (REQ-agent-318, Leif's go): a closing
+    note added by `createTaskExecute` once a `web-search` in the run was
+    answered, kept by every clip; tests in `tests/web.search.test.ts`.
+11. Leif's go is recorded (https://github.com/CorvidLabs/Corvidinho/issues/318#issuecomment-5918616747):
+    `specsync change approve` (actor corvid-agent, the go's link as the
+    note), `specsync change check --commit`, the gates, `specsync change
+    review --reviewer corvid-agent`, `specsync change ship`; commit the
+    archive; green Linux CI. Never merge before the archive.

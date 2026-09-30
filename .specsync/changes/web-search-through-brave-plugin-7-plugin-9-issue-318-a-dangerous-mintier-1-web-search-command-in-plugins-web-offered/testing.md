@@ -53,6 +53,22 @@ answering like Brave, fake key `test-key-not-real`, in-memory ledger DBs):
   the attempt ends with `SPEND_CAP_SUMMARY` and the ask after one model call.
 - The two `createTaskExecute` tests configure `CORVIDINHO_LLM_MODEL:
   "test-model"` (AGENT-13 on main: no built-in default model).
+- SAFE-14 (after the rebase onto #328): with only
+  `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=llm.test=1` set (that provider already
+  at its cap) a search is sent and settles `actual` at 5000; an entry keyed on
+  `api.search.brave.com` makes the setting not valid: nothing sent, the ask
+  names the setting, never its value.
+- DISCORD-SCHEDULE-1.a (after the rebase onto #330): a schedule the owner
+  created is offered `web-search`; a team member's schedule is not.
+- The "Search by Brave" reply line (REQ-agent-318, Leif's go on #318): the
+  map holds only `web-search`; two answered searches and a retry end the
+  reply with the line once, and no model request contains it; an answer that
+  already ends with it is not doubled; no line with no search, no key, a 429
+  or a refused query; a team member's reply carries it; a run stopped at the
+  spend cap after a search ends `SPEND_CAP_SUMMARY` plus the line, while the
+  ask's question and `formatSpendStopDm` never carry it; `closingNotesTail`,
+  `chatBodyFromTaskResult`, `resultFrame` and `planAnswerParts` keep it whole
+  at the end (after the fallback note, before the role note).
 
 Updated: `tests/web.fetch.test.ts` (web-search now exists),
 `tests/roles.team.test.ts` (team search rule, team catalog),
@@ -60,6 +76,31 @@ Updated: `tests/web.fetch.test.ts` (web-search now exists),
 (a child `bun test` never sees `BRAVE_SEARCH_API_KEY`).
 
 ## Fail on main
+
+### After the rebase onto main 0aeb345
+
+- The pre-change `src/agent/execute.ts`, `src/agent/task-summary.ts` and
+  `src/agent/spend.ts` (the rebased branch before this step) swapped in:
+  `tests/web.search.test.ts` 36 pass, 6 fail — the SAFE-14 test and the five
+  "Search by Brave" tests that need the line (the map, the answered search,
+  the team reply, the spend-cap stop, the clips). The "no line" test and the
+  owner-schedule test pass there too: they pin what must not appear, and
+  main's #330 behaviour.
+- Mutations, each caught: the line added for a failed call (`result.ok`
+  dropped in the tool loop) fails the "no line" test; `closingNotesTail`
+  not knowing the line fails the clip test; `reserveFlatSpend` back on
+  `parseSpendCap` fails the SAFE-14 test.
+- Branch test files on main 0aeb345's sources (`tests/web.search.test.ts`,
+  `tests/web.fetch.test.ts`, `tests/roles.team.test.ts`,
+  `tests/preload.operator-data-dir.test.ts` and
+  `tests/fixtures/preload-probe.ts` copied into a main worktree): 257 pass, 5
+  fail, 1 error. `tests/web.search.test.ts` cannot load (no
+  `plugins/web/api.ts`); `web.fetch` fails "registered as a typed builtin";
+  `roles.team` fails the catalog by role and `roleAllowsPlugin`;
+  `preload.operator-data-dir` fails because the child sees
+  `BRAVE_SEARCH_API_KEY`.
+
+### Before the rebase (main 507d97b)
 
 On a worktree of untouched main 507d97b, measured on macOS:
 
@@ -115,6 +156,27 @@ On a worktree of untouched main 507d97b, measured on macOS:
 
 ## Results (macOS host; the repo is Linux-only)
 
+On main 0aeb345, after the rebase and the "Search by Brave" line:
+
+- `bun test` on the branch: 3167 pass, 1 skip, 96 fail, 7 errors. Untouched
+  main 0aeb345 on the same host: 3126 pass, 1 skip, 95 fail, 7 errors. The
+  95 main failures are the list below (the same 95 names as on 507d97b), and
+  the branch fails exactly those plus one flaky test, "schedule tick uses
+  project worktree … > tick spawns with cwd under schedule project worktree
+  then parks" (`tests/discord.session-worktree.test.ts`: it sleeps 100 ms and
+  then expects the worktree gone). That test flakes on untouched main too:
+  run alone five times it failed 3 of 5 on main 0aeb345 and 3 of 5 on the
+  branch; this change touches neither the scheduler nor worktrees.
+- `bunx tsc --noEmit`: clean.
+- `hi check`: 182 criteria, 20 families, 19 files, 5 retired.
+- `specsync check --require-coverage 100 --no-cache`: 5 specs, 5 passed, 0
+  failed; file coverage 208/208 and LOC coverage 100%.
+- `tests/web.search.test.ts`: 42/42.
+- Tool surface: builtins 8078 tokens (main 7951), under
+  `TOOL_SURFACE_BUDGET_TOKENS` 9000 (#329); no schema changed in this step.
+
+Before the rebase, on main 507d97b:
+
 - `bun test` on the branch: 3025 pass, 1 skip, 95 fail, 7 errors. Untouched
   main 507d97b on the same host: 2991 pass, 1 skip, 95 fail, 7 errors. The
   two failure sets are identical (`comm` of the sorted `(fail)` lines shows
@@ -131,7 +193,7 @@ On a worktree of untouched main 507d97b, measured on macOS:
   and running `specsync change check` gave `verified` for all 12 REQs and a
   passing audit, and `specsync check --require-coverage 100` still passed.
 
-### macOS-only failures (the same set on the branch and on main 507d97b)
+### macOS-only failures (the same set on the branch and on main 0aeb345, and on main 507d97b before the rebase)
 
 - abort after the agent exited kills what it left holding the output pipe
 - bridge stop and start (REQ-discord-346) > start fails a run a killed process left running and removes its worktree; a live process's run is untouched
@@ -233,7 +295,7 @@ On a worktree of untouched main 507d97b, measured on macOS:
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-plugins-318` | `tests/web.search.test.ts` | Registration (dangerous, minTier 1), catalog only when allowlisted and never at read tier, SAFE-1 deny + SAFE-5 rows, role gate at `runPlugin`; the Brave request (host, path, `q` / `count` / `safesearch=moderate` / `freshness`, key only in `X-Subscription-Token`, pinned address); usage errors, `not-configured`, SAFE-6 query refusal with nothing sent; fenced hostile hits, count cap, dropped URLs, `(no results)`; the key and the request URL never in any result, error or audit row, a split key never rebuilt (scrub last); Brave error mapping (403 included); abort, unexpected-failure and `--query` usage cases. Fails on the base source. |
+| `REQ-plugins-318` | `tests/web.search.test.ts` | Registration (dangerous, minTier 1), catalog only when allowlisted and never at read tier, SAFE-1 deny + SAFE-5 rows, role gate at `runPlugin`; the Brave request (host, path, `q` / `count` / `safesearch=moderate` / `freshness`, key only in `X-Subscription-Token`, pinned address); usage errors, `not-configured`, SAFE-6 query refusal with nothing sent; fenced hostile hits, count cap, dropped URLs, `(no results)`; the key and the request URL never in any result, error or audit row, a split key never rebuilt (scrub last); Brave error mapping (403 included); abort, unexpected-failure and `--query` usage cases; the owner's own schedule is offered it, a team member's schedule is not. Fails on the base source. |
 | `REQ-plugins-3181` | `tests/web.search.test.ts` | http / other host / port / credentials refused before DNS; non-public answers refused before connecting; every redirect refused after one dial, Location not echoed; content type, encoding, byte cap, JSON validity, timeout, abort; network / TLS / DNS failures name the host and a fixed reason only; web-fetch unchanged for any public host. New module (cannot load on main). |
 | `REQ-plugins-111` | `tests/web.fetch.test.ts`, `tests/web.search.test.ts` | "registered as a typed builtin" now expects `web-search` to exist as its own command; web-fetch keeps its fixed headers for any public host and every other web-fetch test passes unchanged. Fails on the base source. |
 | `REQ-plugins-065` | `tests/roles.team.test.ts`, `tests/web.search.test.ts` | `roleAllowsPlugin` over every plugin with `TEAM_SEARCH_TOOLS` (`web-search` only); the team catalog offers `web-search` (allowlisted) and not `web-fetch`, community never; a community role session is refused at `runPlugin`, a team one reaches the handler. Fails on the base source. |
@@ -242,6 +304,7 @@ On a worktree of untouched main 507d97b, measured on macOS:
 | `REQ-agent-117` | `tests/web.search.test.ts`, `tests/autonomous.delegate.test.ts` | `isWorkerEnvDropped` and `buildDelegateSpawn` drop `BRAVE_SEARCH_API_KEY` (no value anywhere in the spawn); existing delegate env tests pass. Fails on the base source. |
 | `REQ-agent-071` | `tests/web.search.test.ts`, `tests/safe.injection.test.ts` | `web-search` is in `INJECTION_SCAN_TOOLS`; through `createTaskExecute` an injected description notes the tool message, drops `web-search`, `web-fetch` and `files-write` from the next request, refuses the write, reports one notice and ends the summary with the note; the existing SAFE-13 tests pass. Fails on the base source. |
 | `REQ-agent-086` | `tests/agent.loop-guards.test.ts` | Every dangerous or mutating builtin, `web-search` included, is in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS` (`web-search` in the second). Fails on the base source's sets once `web-search` is registered. |
-| `REQ-agent-098` | `tests/web.search.test.ts`, `tests/agent.spend-ask.test.ts`, `tests/agent.spend.test.ts` | No cap opens no DB; reserve 5000 micro-USD before the request, settle `actual` / `failed` 0 / `estimated` (network, timeout, unreadable 2xx, abort after sending), no row for a run already stopped; at the cap, with an invalid value and with an unavailable ledger nothing is sent and `spendAsk` carries the ask; in the tool loop the attempt ends with `SPEND_CAP_SUMMARY` and the ask after one model call; the existing spend tests pass. Fails on the base source. |
+| `REQ-agent-318` | `tests/web.search.test.ts` | "a reply whose run used web-search ends with 'Search by Brave' …": the map holds only `web-search`; answered searches (two, and a retry) end the reply with the line once and no model request contains it; no line with no search, no key, a 429 or a refused query; a team member's reply carries it; a spend-cap stop after a search shows `SPEND_CAP_SUMMARY` and the line while the ask's question and the owner's stop DM never do; `closingNotesTail`, `chatBodyFromTaskResult`, `resultFrame` and `planAnswerParts` keep it at the end. Fails on the base source. |
+| `REQ-agent-098` | `tests/web.search.test.ts`, `tests/agent.spend-ask.test.ts`, `tests/agent.spend.test.ts` | With only `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set a search is recorded and sent, and a setting that is not valid stops it (SAFE-14); no cap opens no DB; reserve 5000 micro-USD before the request, settle `actual` / `failed` 0 / `estimated` (network, timeout, unreadable 2xx, abort after sending), no row for a run already stopped; at the cap, with an invalid value and with an unavailable ledger nothing is sent and `spendAsk` carries the ask; in the tool loop the attempt ends with `SPEND_CAP_SUMMARY` and the ask after one model call; the existing spend tests pass. Fails on the base source. |
 | `REQ-discord-417` | `tests/web.search.test.ts` | `redactSecretEnvValues` and `formatErrorLine` redact the `BRAVE_SEARCH_API_KEY` value. Fails on the base source. |
 | `REQ-cli-262` | `tests/preload.operator-data-dir.test.ts` | A child `bun test` started with `BRAVE_SEARCH_API_KEY` set sees none of the run settings (the probe lists the key). Fails on the base source. |

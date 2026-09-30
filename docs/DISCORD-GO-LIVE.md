@@ -376,9 +376,10 @@ two places, like `web-fetch`:
    `web-search not-configured: web search is not configured: set BRAVE_SEARCH_API_KEY …` and
    sends nothing.
 2. `web-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
-   tiers to the owner's runs and to declared team members' Discord runs (chat, button picks,
-   `/session start`, `/work`). Community, WATCH and schedules never get it, `delegate` /
-   `council` workers never get the key, and `web-fetch` stays the owner's.
+   tiers to the owner's runs (a schedule the owner created included, DISCORD-SCHEDULE-1.a) and
+   to declared team members' Discord runs (chat, button picks, `/session start`, `/work`).
+   Community, WATCH and schedules anyone else created never get it, `delegate` / `council`
+   workers never get the key, and `web-fetch` stays the owner's.
 
 What one search does:
 
@@ -394,17 +395,25 @@ What one search does:
 - A query carrying a secret-looking value is refused and sent nowhere. The key never appears in
   a reply, an error, an audit row or a log line. Delegate workers, the verify lane, the shell,
   the language runners and Fledge plugins never get it.
-- Spend (SAFE-8): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, each search reserves $0.005 against
-  the same total cap as the model calls before it is sent. A search that would pass the cap is
-  not sent, and the run stops with the spend-cap ask, as a model call does. Prepay the Brave
-  account with a usage limit as a hard backstop too.
+- Spend (SAFE-8, SAFE-14): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, each search reserves
+  $0.005 against the same total cap as the model calls before it is sent. With only
+  `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set, each search is still recorded, but no provider cap
+  covers it (a provider cap names a configured model provider, so `api.search.brave.com=…` makes
+  the whole setting invalid and stops every call). A search that would pass the total cap, or
+  that runs while a spend-cap setting is not valid, is not sent, and the run stops with the
+  spend-cap ask, as a model call does. Prepay the Brave account with a usage limit as a hard
+  backstop too.
 - Each call is on the audit trail like any dangerous tool (SAFE-5).
-- Brave's "Powered by Brave Search" attribution is in the tool result the model reads (its
-  summary line and `data.attribution`), not in the reply people see in Discord or the CLI.
-  Nothing adds it to a reply yet. Two questions are still open for you: whether replies should
-  show the attribution (Brave's free credit asks for it; a prepaid account may not), and
-  whether a reply that quotes search results is fine to keep in chat history and condensed
-  summaries, given Brave's terms against storing results beyond transient use.
+- Attribution (your go on #318, to meet Brave's terms): a reply whose run got an answer from
+  Brave ends with the line `Search by Brave`, once, after a blank line. It shows on every reply
+  people see, yours and team members' (Discord chat, button picks, `/session start`, `/work`, a
+  schedule post, `corvidinho task run`), and stays at the end when a long reply is split or cut.
+  A run whose search failed, was refused or was stopped at the spend cap, or that made no
+  search, has no such line. The line is added to the reply, never to what the model reads (the
+  tool result keeps Brave's own "Powered by Brave Search" for the model), and it never carries
+  an amount; the owner's spend DMs never include it.
+- Still open for you: whether a reply that quotes search results is fine to keep in chat history
+  and condensed summaries, given Brave's terms against storing results beyond transient use.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 

@@ -317,8 +317,10 @@ in the shared DB), `SpendCapRefusal` (carries a `spend-cap` `HumanAsk`),
 `createSpendGuard` (`{ fetch, finish }`: the capped provider fetch plus the
 hook that turns a stopped call into the attempt's ask), `withSpendCap` (the
 fetch alone; unchanged when no cap is set), `reserveFlatSpend` (a
-flat-priced tool call's reservation in the same ledger — `off` / `held` with
-`settle(billed | not-billed | unknown)` / `stopped` with the spend-cap ask;
+flat-priced tool call's reservation in the same ledger — `off` with no cap at
+all / `held` with `settle(billed | not-billed | unknown)` / `stopped` with the
+spend-cap ask; recorded while any cap is set and counted against the total cap
+only, since a SAFE-14 provider cap is keyed on a configured model provider;
 `FlatSpendHold`, `FlatSpendOutcome`; a Brave `web-search` is 5000 micro-USD,
 #318), `readSpendSnapshot` and
 `spendDoctorCheck` (doctor line). `src/agent/spend-notice.ts` holds the
@@ -529,7 +531,10 @@ Personality traits, Background, Communication style, Example messages).
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
 `ROLE_REFUSED_SUMMARY_NOTE`, `closingNotesTail` and `clipKeepingRoleNote`
 (REQ-agent-333; it keeps the AGENT-11 `(model fallback: …)` note before the
-role note too, REQ-agent-080). Discord/NDJSON
+role note too, REQ-agent-080, and the REQ-agent-318 attribution note between
+them), and `REPLY_ATTRIBUTION_BY_TOOL` (tool name → the visible line its
+provider's terms ask a reply to end with: `web-search` → "Search by Brave"),
+`replyAttributionNote` and `withReplyAttribution` (REQ-agent-318). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
 appears in the final chat reply (DISCORD-3.a).
 
@@ -969,6 +974,22 @@ exported as `ROLE_REFUSED_SUMMARY_NOTE` / `withRoleRefusalNote` from
 a long summary (`clipKeepingRoleNote`, REQ-agent-333). Event names and progress
 lines stay as they are.
 
+A reply whose run used a tool whose provider's terms ask for attribution
+ends with that provider's short visible line (REQ-agent-318, PLUGIN-7, Leif's
+go on #318): once an offered tool in `REPLY_ATTRIBUTION_BY_TOOL` returns
+`ok` in a task run (a `web-search` that Brave answered), every summary of that
+run ends with its line ("Search by Brave") once, as a closing paragraph after
+the model fallback note and before the role note (`withReplyAttribution`,
+applied by `createTaskExecute` after each attempt). A failed, refused or
+stopped call adds nothing, and a run with no such call gets no line. The line
+is never part of a tool message, the untrusted web fence or any other request
+the model gets, and it carries nothing else (no amount, no cap, SAFE-14.a); a
+`spend-cap` ask's question (the owner's spend DM) never carries it.
+`closingNotesTail` recognises it, so `resultFrame`, `chatBodyFromTaskResult`,
+the post clips and Discord's split (`splitDiscordMessage`) keep it whole at
+the end on every surface (owner and team replies, `/session start`, `/work`,
+the owner's schedule posts, the CLI's `task run` output).
+
 An abort stops the work, not only the bookkeeping (AGENT-3, REQ-agent-244):
 the default verify runner runs fledge in its own process group and an abort
 kills the lane's whole tree (then waits at most 250 ms for its output
@@ -1302,6 +1323,7 @@ A change the run did not open is never touched.
 | A cap covers a call to a model with no known price, an owner is configured, and its unknown-price card comes to no (deny, lapse, late code, stop, timeout, unavailable) | call not sent, nothing recorded; run ends `blocked` with the unpriced `spend-cap` ask naming the card, the amount shown as unknown, and both ways on (a new card, or a priced model / the cap), no reply note; generic summary (REQ-agent-199) |
 | `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
 | A flat-priced tool call (`web-search`) would pass the total cap, or a spend-cap setting is invalid, or the ledger is unavailable | not sent; the tool returns the ask in `spendAsk`; the attempt ends `blocked` with that `spend-cap` ask and `SPEND_CAP_SUMMARY`, no further model call (REQ-agent-098) |
+| A `web-search` call failed, was refused or was stopped (no key, usage error, secret query, HTTP error, spend cap), or the run made none | no attribution line on the reply; one call that Brave answered puts "Search by Brave" on every later summary of the run, once (REQ-agent-318) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Non-ADMIN caller (checked at the call) names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once, and the result frame / chat body caps keep it (ROLES-CHAT-3, REQ-agent-333) |

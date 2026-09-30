@@ -13,7 +13,10 @@ import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 import { createTaskExecute } from "../src/agent/execute.ts";
 import { SPEND_CAP_SUMMARY } from "../src/agent/spend-notice.ts";
-import { SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
+import { PROVIDER_SPEND_CAPS_ENV, SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
+import * as taskSummaryModule from "../src/agent/task-summary.ts";
+import { chatBodyFromTaskResult, closingNotesTail } from "../src/agent/task-summary.ts";
+import { resultFrame } from "../src/agent/events-ndjson.ts";
 import { buildOpenAiTools } from "../src/agent/tools.ts";
 import type { InjectionNotice } from "../src/agent/untrusted.ts";
 import { INJECTION_SCAN_TOOLS } from "../src/agent/untrusted.ts";
@@ -22,7 +25,7 @@ import { buildDelegateSpawn, isWorkerEnvDropped } from "../src/autonomous/delega
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, list, register } from "../src/plugins/registry.ts";
 import * as rolesModule from "../src/plugins/roles.ts";
-import { TEAM_REVIEW_TOOLS, roleAllowsPlugin } from "../src/plugins/roles.ts";
+import { ACTING_ROLE_ENV, TEAM_REVIEW_TOOLS, resolveActingRole, roleAllowsPlugin } from "../src/plugins/roles.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../src/plugins/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
@@ -31,6 +34,8 @@ import { fledgeChildEnv } from "../plugins/fledge/spawn.ts";
 import { API_MAX_BYTES, API_TIMEOUT_MS, ApiRequestError, apiGetJson } from "../plugins/web/api.ts";
 import { REQUEST_HEADERS, webFetch, type Resolver } from "../plugins/web/fetch.ts";
 import { createWebCommands } from "../plugins/web/index.ts";
+import { planAnswerParts } from "../src/discord/rich-reply.ts";
+import { formatSpendStopDm } from "../src/discord/spend-dm.ts";
 import {
   BRAVE_SEARCH_API_KEY_ENV,
   BRAVE_SEARCH_COST_MICRO_USD,
@@ -47,6 +52,16 @@ import type { Transport, TransportRequest } from "../plugins/web/transport.ts";
 /** Read through the namespace so base sources fail on behaviour, not on import. */
 const TEAM_SEARCH_TOOLS: ReadonlySet<string> =
   (rolesModule as { TEAM_SEARCH_TOOLS?: ReadonlySet<string> }).TEAM_SEARCH_TOOLS ?? new Set<string>();
+
+/** REQ-agent-318, read the same way: the base sources have no attribution note. */
+const summaryHelpers = taskSummaryModule as {
+  REPLY_ATTRIBUTION_BY_TOOL?: ReadonlyMap<string, string>;
+  withReplyAttribution?: (summary: string, lines: Iterable<string>) => string;
+};
+const REPLY_ATTRIBUTION_BY_TOOL: ReadonlyMap<string, string> = summaryHelpers.REPLY_ATTRIBUTION_BY_TOOL ?? new Map();
+const withReplyAttribution = summaryHelpers.withReplyAttribution ?? ((summary: string) => summary);
+/** The visible line Brave's terms ask a reply that used web-search to end with (Leif's go, #318). */
+const BRAVE_LINE = "Search by Brave";
 
 const KEY = "test-key-not-real";
 const PUBLIC_V4 = "93.184.216.34";
@@ -137,7 +152,9 @@ const ENV_KEYS = [
   "CORVIDINHO_ACTING_IS_ADMIN",
   "CORVIDINHO_ACTING_DISCORD_USER_ID",
   "CORVIDINHO_ACTING_ROLE",
+  "CORVIDINHO_ACTING_WORK_TASK",
   "CORVIDINHO_ALLOWLIST_FILE",
+  "CORVIDINHO_DISCORD_SESSION_ID",
 ] as const;
 let saved: Record<string, string | undefined> = {};
 beforeEach(() => {
@@ -247,6 +264,31 @@ describe("web-search is a dangerous tool-tier command, offered only when allowli
     const team = await run();
     expect(team.error).not.toContain("not allowed for your role");
     expect(team.error).toContain("not configured");
+  });
+
+  test("DISCORD-SCHEDULE-1.a: a schedule the owner created is offered it (it runs as the owner); a team member's schedule is not", async () => {
+    const dir = tmp();
+    const file = join(dir, "allowlist.toml");
+    await Bun.write(
+      file,
+      `[discord]\nchannels = ["600000000000000006"]\n\n[owner]\ndiscord_id = "181969874455756800"\n\n` +
+        `[people.tofu]\nrole = "team"\ndiscord_ids = ["200000000000000002"]\n`,
+    );
+    process.env.CORVIDINHO_ALLOWLIST_FILE = file;
+    process.env.CORVIDINHO_DISCORD_SESSION_ID = "schedule_sched_0123456789ab";
+    const offered = async () =>
+      buildOpenAiTools({ tier: "code", allowlist: new Set(["web-search"]), actingRole: await resolveActingRole() }).map(
+        (t) => t.function.name,
+      );
+    process.env.CORVIDINHO_ACTING_IS_ADMIN = "1";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = "181969874455756800";
+    process.env[ACTING_ROLE_ENV] = "owner";
+    expect(await offered()).toContain("web-search");
+    // A team member's schedule runs as community, whatever its stamp.
+    process.env.CORVIDINHO_ACTING_IS_ADMIN = "0";
+    process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = "200000000000000002";
+    process.env[ACTING_ROLE_ENV] = "team";
+    expect(await offered()).not.toContain("web-search");
   });
 });
 
@@ -958,6 +1000,44 @@ describe("each search counts toward the SAFE-8 total daily cap (about $0.005 res
     db.close();
   });
 
+  test("SAFE-14: with only provider caps set a search is recorded and sent (no provider cap covers Brave); a spend-cap setting that is not valid stops it", async () => {
+    const model = {
+      CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+      CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+      CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+    };
+    const db = openCorvidinhoDb({ memory: true });
+    // The model provider is at its own cap; the search counts against no provider cap.
+    new SpendLedger(db).reserve({ provider: "llm.test", model: "gpt-4o-mini", estimateMicroUsd: 1_000_000, now: Date.now() - 1000 });
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    const ok = await search(["bun"], {
+      resolver: fakeResolver().resolver,
+      transport: t.transport,
+      env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, ...model, [PROVIDER_SPEND_CAPS_ENV]: "llm.test=1" },
+      spendDb: db,
+    });
+    expect(ok.ok).toBe(true);
+    expect(t.calls).toHaveLength(1);
+    expect(ledgerRows(db).filter((x) => x.provider === BRAVE_SEARCH_HOST)).toEqual([
+      { provider: BRAVE_SEARCH_HOST, model: "brave-web-search", status: "actual", est: 5_000, cost: 5_000 },
+    ]);
+    // A provider cap keyed on Brave's host names no configured model provider: the
+    // whole setting is not valid, so every call stops, this search included.
+    const bad = await search(["bun"], {
+      resolver: fakeResolver().resolver,
+      transport: t.transport,
+      env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, ...model, [PROVIDER_SPEND_CAPS_ENV]: `${BRAVE_SEARCH_HOST}=1` },
+      spendDb: db,
+    });
+    expect(bad.ok).toBe(false);
+    expect((bad.data as { code: string }).code).toBe("spend-cap");
+    expect(bad.error).toBe("web-search spend-cap: refused: Work is paused for budget. (SAFE-8)");
+    expect(bad.spendAsk?.question).toContain(PROVIDER_SPEND_CAPS_ENV);
+    expect(bad.spendAsk?.question).not.toContain(`${BRAVE_SEARCH_HOST}=1`);
+    expect(t.calls).toHaveLength(1);
+    db.close();
+  });
+
   test("in the tool loop a search stopped at the cap ends the attempt with the spend-cap ask (blocked), like a model call; no further model call", async () => {
     const db = openCorvidinhoDb({ memory: true });
     new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 998_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
@@ -990,5 +1070,173 @@ describe("each search counts toward the SAFE-8 total daily cap (about $0.005 res
     expect(r.ask?.reason).toBe("spend-cap");
     expect(r.ask?.question).toContain("Daily spend cap reached (SAFE-8)");
     db.close();
+  });
+});
+
+describe("a reply whose run used web-search ends with 'Search by Brave' (REQ-agent-318, Leif's go on #318)", () => {
+  type Body = { messages: Array<{ role: string; content: string }> };
+  type Step = { search: string[] } | { answer: string };
+
+  /** A tool loop whose model follows `steps` (a web-search call or a final answer), one per request. */
+  function loop(opts: {
+    steps: Step[];
+    deps?: WebSearchDeps;
+    env?: Record<string, string>;
+  }) {
+    clearRegistry();
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    register(
+      searchCommand(
+        opts.deps ?? { resolver: fakeResolver().resolver, transport: t.transport, env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY } },
+      ),
+    );
+    const bodies: Body[] = [];
+    let n = 0;
+    const exec = createTaskExecute({
+      taskText: "what is bun?",
+      env: {
+        CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+        CORVIDINHO_DATA_DIR: tmp(),
+        ...opts.env,
+      },
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+      allowlist: ["web-search"],
+      fetchImpl: async (_u, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        const step = opts.steps[Math.min(n, opts.steps.length - 1)]!;
+        n += 1;
+        const message =
+          "search" in step
+            ? { tool_calls: [{ id: `c${n}`, type: "function", function: { name: "web-search", arguments: JSON.stringify({ argv: step.search }) } }] }
+            : { content: step.answer };
+        return new Response(JSON.stringify({ choices: [{ message }] }), { status: 200 });
+      },
+    });
+    const attempt = (i = 1) => exec({ attempt: i, signal: new AbortController().signal });
+    return { attempt, bodies, transport: t };
+  }
+
+  test("the line is one fixed constant for web-search", () => {
+    expect(REPLY_ATTRIBUTION_BY_TOOL.get("web-search")).toBe(BRAVE_LINE);
+    expect([...REPLY_ATTRIBUTION_BY_TOOL.keys()]).toEqual(["web-search"]);
+  });
+
+  test("a search that Brave answered puts the line on the reply once (two searches, a retry, or a model that already wrote it); the model never sees it", async () => {
+    const run = loop({ steps: [{ search: ["bun"] }, { search: ["bun", "docs"] }, { answer: "Bun is a fast JavaScript runtime." }] });
+    const first = await run.attempt(1);
+    expect(run.transport.calls).toHaveLength(2);
+    expect(first.summary).toBe(`Bun is a fast JavaScript runtime.\n\n${BRAVE_LINE}`);
+    // Not in any request the model got: not in the fenced results, the tool message or the prompt.
+    for (const b of run.bodies) expect(JSON.stringify(b)).not.toContain(BRAVE_LINE);
+    const toolMsg = run.bodies[1]!.messages.find((m) => m.role === "tool")!;
+    expect(toolMsg.content).toContain("UNTRUSTED_WEB_CONTENT");
+    // A later attempt of the same run (a verify retry) still carries it, once.
+    const again = await run.attempt(2);
+    expect(again.summary).toBe(`Bun is a fast JavaScript runtime.\n\n${BRAVE_LINE}`);
+
+    const echoed = loop({ steps: [{ search: ["bun"] }, { answer: `Bun is fast.\n\n${BRAVE_LINE}` }] });
+    expect((await echoed.attempt()).summary).toBe(`Bun is fast.\n\n${BRAVE_LINE}`);
+  });
+
+  test("no line when the run did not use it: no search, a search with no key, an HTTP error or a refused query", async () => {
+    const none = loop({ steps: [{ answer: "Bun is a runtime." }] });
+    expect((await none.attempt()).summary).toBe("Bun is a runtime.");
+
+    const noKey = loop({
+      steps: [{ search: ["bun"] }, { answer: "Search is not set up." }],
+      deps: { resolver: fakeResolver().resolver, transport: fakeTransport(() => ({ json: braveJson(HITS) })).transport, env: {} },
+    });
+    expect((await noKey.attempt()).summary).toBe("Search is not set up.");
+
+    const limited = fakeTransport(() => ({ status: 429, json: {} }));
+    const http = loop({
+      steps: [{ search: ["bun"] }, { answer: "Brave is busy." }],
+      deps: { resolver: fakeResolver().resolver, transport: limited.transport, env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY } },
+    });
+    expect((await http.attempt()).summary).toBe("Brave is busy.");
+    expect(limited.calls).toHaveLength(1);
+
+    const secret = loop({ steps: [{ search: ["why", KEY] }, { answer: "Refused." }] });
+    expect((await secret.attempt()).summary).toBe("Refused.");
+    expect(secret.transport.calls).toHaveLength(0);
+  });
+
+  test("a declared team member's reply carries it too (PLUGIN-9)", async () => {
+    const dir = tmp();
+    const file = join(dir, "allowlist.toml");
+    await Bun.write(
+      file,
+      `[discord]\nchannels = ["600000000000000006"]\n\n[owner]\ndiscord_id = "181969874455756800"\n\n` +
+        `[people.tofu]\nrole = "team"\ndiscord_ids = ["200000000000000002"]\n`,
+    );
+    const team = {
+      CORVIDINHO_ALLOWLIST_FILE: file,
+      CORVIDINHO_ACTING_IS_ADMIN: "0",
+      CORVIDINHO_ACTING_DISCORD_USER_ID: "200000000000000002",
+      [ACTING_ROLE_ENV]: "team",
+      CORVIDINHO_ACTING_WORK_TASK: "0",
+    };
+    Object.assign(process.env, team);
+    const run = loop({ steps: [{ search: ["bun"] }, { answer: "Bun is fast." }], env: team });
+    const r = await run.attempt();
+    expect(run.transport.calls).toHaveLength(1);
+    expect(r.summary).toBe(`Bun is fast.\n\n${BRAVE_LINE}`);
+  });
+
+  test("SAFE-14.a: a run stopped at the cap after a search shows only the paused text and the line; the owner's spend DM never carries it", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    // $1 cap, $0.991 spent: the first search fits, the second would pass the cap.
+    new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 991_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    const run = loop({
+      steps: [{ search: ["bun"] }, { search: ["bun", "docs"] }, { answer: "unreachable" }],
+      deps: { resolver: fakeResolver().resolver, transport: t.transport, env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, [SPEND_CAP_ENV]: "1" }, spendDb: db },
+    });
+    const r = await run.attempt();
+    expect(t.calls).toHaveLength(1);
+    expect(r.ask?.reason).toBe("spend-cap");
+    expect(r.summary).toBe(`${SPEND_CAP_SUMMARY}\n\n${BRAVE_LINE}`);
+    expect(r.ask?.question).not.toContain(BRAVE_LINE);
+    const dm = formatSpendStopDm({ ask: r.ask!, channelId: "600000000000000006" });
+    expect(dm).not.toContain(BRAVE_LINE);
+    db.close();
+  });
+
+  test("every clip keeps it whole at the end: after the model fallback note, before the role note", () => {
+    const fallback = "(model fallback: gpt-5 failed (HTTP 404), fell back to anthropic:claude-sonnet-5)";
+    const role = "(not allowed for your role)";
+    const long = `${"Bun is fast. ".repeat(700).trim()}\n\n${fallback}\n\n${BRAVE_LINE}\n\n${role}`;
+    expect(closingNotesTail(long)).toBe(`\n\n${fallback}\n\n${BRAVE_LINE}\n\n${role}`);
+    expect(closingNotesTail(`body\n\n${BRAVE_LINE}`)).toBe(`\n\n${BRAVE_LINE}`);
+    // Model text that only mentions it is not a closing note.
+    expect(closingNotesTail(`${BRAVE_LINE} is a phrase.\n\nMore text.`)).toBe("");
+    // The chat body cap (schedule posts, WATCH) and the NDJSON result frame cap.
+    const chat = chatBodyFromTaskResult({ summary: long });
+    expect(chat.length).toBeLessThanOrEqual(1800);
+    expect(chat).toEndWith(`\n\n${BRAVE_LINE}\n\n${role}`);
+    const frame = resultFrame({
+      summary: `${"x".repeat(5000)}\n\n${BRAVE_LINE}`,
+      filesChanged: [],
+      verified: false,
+      verifySkipped: true,
+      cancelled: false,
+      state: "done",
+      attempts: 1,
+    });
+    expect(frame.truncated).toBe(true);
+    expect(frame.result.summary).toEndWith(`…\n\n${BRAVE_LINE}`);
+    // Discord's split: the last part ends with it, once.
+    const parts = planAnswerParts(`${"Bun is fast.\n".repeat(400)}\n${BRAVE_LINE}`, { footer: null });
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.at(-1)!.content).toEndWith(`\n\n${BRAVE_LINE}`);
+    expect(parts.map((p) => p.content ?? "").join("\n").split(BRAVE_LINE)).toHaveLength(2);
+    // Added once, unknown lines ignored.
+    expect(withReplyAttribution("hi", [BRAVE_LINE])).toBe(`hi\n\n${BRAVE_LINE}`);
+    expect(withReplyAttribution(`hi\n\n${BRAVE_LINE}`, [BRAVE_LINE])).toBe(`hi\n\n${BRAVE_LINE}`);
+    expect(withReplyAttribution("hi", ["Made up line"])).toBe("hi");
   });
 });

@@ -54,3 +54,12 @@ Reference clones (read only): `CorvidLabs/corvid-agent`,
   card. #320 added `ANTHROPIC_API_KEY` to the same secret and preload lists;
   the Brave key sits next to it. The builtin surface is 7569 tokens
   (7442 on main); the budget test with its fake Fledge plugin still passes.
+- After the rebase onto main 0aeb345: #329 raised `TOOL_SURFACE_BUDGET_TOKENS`
+  to 9000 for the SpecSync change tools; the builtin surface is 8078 tokens
+  with `web-search` (7951 on main), and the reply line adds no schema. #328's
+  `parseSpendCaps` makes any invalid spend-cap setting stop every call and
+  records every call while any cap is set; a provider cap key must be a
+  configured model provider, so none can name `api.search.brave.com`. #330's
+  owner schedules resolve `owner` in the tool layer. #325 added the AGENT-11
+  closing `(model fallback: …)` note that every clip keeps
+  (`closingNotesTail`); the "Search by Brave" line reuses that path.

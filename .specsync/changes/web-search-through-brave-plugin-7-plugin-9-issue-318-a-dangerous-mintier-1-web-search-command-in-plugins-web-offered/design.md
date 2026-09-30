@@ -38,9 +38,27 @@ artifact: design
 - `src/plugins/roles.ts`: `TEAM_SEARCH_TOOLS` in `roleAllowsPlugin` for team.
 - `src/plugins/types.ts`: `PluginHandlerResult.spendAsk?: HumanAsk`.
 - `src/agent/spend.ts`: `reserveFlatSpend` / `FlatSpendHold` /
-  `FlatSpendOutcome` on the existing `SpendLedger` (no schema change).
+  `FlatSpendOutcome` on the existing `SpendLedger` (no schema change). It
+  reads every cap setting (`parseSpendCaps`, SAFE-14): `off` only when no cap
+  is set; a setting that is not valid stops the call
+  (`spendCapInvalidAsk(keys)`); otherwise it reserves against the total cap
+  (if set) and names the tripped scope (`spendCapReachedAsk({ trips })`).
 - `src/agent/execute.ts`: an offered tool's `spend-cap` `spendAsk` ends the
-  attempt with `SPEND_CAP_SUMMARY` and the ask.
+  attempt with `SPEND_CAP_SUMMARY` and the ask. An offered tool in
+  `REPLY_ATTRIBUTION_BY_TOOL` that returns `ok` reports its line
+  (`onReplyAttribution`); `createTaskExecute` keeps the run's lines and, after
+  each attempt, adds them once with `withReplyAttribution` (after the model
+  fallback note, before the role note).
+- `src/agent/task-summary.ts` (REQ-agent-318): `REPLY_ATTRIBUTION_BY_TOOL`
+  (`web-search` → "Search by Brave"), `replyAttributionNote`,
+  `withReplyAttribution`; `closingNotesTail` peels the role note, then the
+  attribution paragraph (only known lines), then the fallback note, so every
+  clip (`clipKeepingRoleNote`: `resultFrame`, `chatBodyFromTaskResult`, the
+  post clips, `planAnswerParts`) and Discord's split keep the line at the
+  end. Chosen over a Discord-only footer: every surface (Discord replies,
+  schedule posts, the CLI) already carries the closing notes, and the line
+  never enters anything the model reads. The GIPHY line (#331) is one more
+  map entry.
 - `src/agent/untrusted.ts`: `web-search` in `INJECTION_SCAN_TOOLS` and in the
   tool-call payload names; `src/agent/loop-guards.ts`: in
   `NO_STATE_CHANGE_TOOLS`.

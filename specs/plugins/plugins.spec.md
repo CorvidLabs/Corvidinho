@@ -413,8 +413,9 @@ or other server-chosen header values and are one line, control-free and at
 most 300 chars.
 `web-search` (REQ-plugins-318) is dangerous + minTier 1 like `web-fetch`:
 SAFE-1 allowlist, SAFE-5 audit, never at the read tier, and for the owner and
-team only (`TEAM_SEARCH_TOOLS`, PLUGIN-9; community never; `web-fetch` stays
-the owner's). The key is `BRAVE_SEARCH_API_KEY` from the run's env only (no
+team only (`TEAM_SEARCH_TOOLS`, PLUGIN-9; community, WATCH and schedules other
+people created never; a schedule the owner created runs as the owner,
+DISCORD-SCHEDULE-1.a; `web-fetch` stays the owner's). The key is `BRAVE_SEARCH_API_KEY` from the run's env only (no
 default; missing is a `not configured` error, never an empty success) and
 goes out only as the `X-Subscription-Token` header, through the keyed JSON
 GET (REQ-plugins-3181: https only, `api.search.brave.com` only, default port,
@@ -424,7 +425,9 @@ is always sent; `--count` is a whole number 1–20 (default 5) and
 `--freshness` `pd|pw|pm|py`. A query carrying a secret-looking value or a set
 secret env value is refused before anything is sent (SAFE-6). Each search
 reserves $0.005 against the SAFE-8 total cap before the request
-(`reserveFlatSpend`); a search stopped at the cap is not sent and ends the
+(`reserveFlatSpend`; recorded while any cap is set, SAFE-14's provider caps
+included, and counted against the total cap only); a search stopped at the
+cap, or while a spend-cap setting is not valid, is not sent and ends the
 tool-loop attempt with the spend-cap ask. Titles, URLs and descriptions
 reach the model only inside the untrusted web fence, and SAFE-13 scans the
 result: one suspicious snippet switches off every mutating tool, `web-search`
@@ -435,8 +438,11 @@ pinned address (every string passes `scrubSecrets` and
 invisible-character strip, so a key split by such a character is never
 rebuilt). Query words together with `--query` are a usage error, and a term
 that starts with `--` goes in `--query`. A run already stopped reserves and
-sends nothing; an unexpected failure is one fixed line. Brave's attribution
-is in the tool result only (no reply footer). It never posts, so it has no
+sends nothing; an unexpected failure is one fixed line. The tool result
+carries Brave's "Powered by Brave Search" for the model, and the run's reply
+ends with the visible line "Search by Brave" once whenever a search in that
+run was answered (REQ-agent-318, Leif's go on #318); the line is added by the
+reply path, never inside the fence or any tool result. It never posts, so it has no
 must-ask entry (AUTONOMY-11). Deep research is not built.
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
 stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
@@ -1072,6 +1078,12 @@ command line.
 - **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD` is set and the last 24 h of spend plus $0.005 would pass it
 - **When** the model calls `web-search`
 - **Then** nothing is sent, the result says only "Work is paused for budget.", and the run stops with the spend-cap ask like a model call
+
+### Scenario: a reply that used web-search credits Brave
+
+- **Given** `web-search` is allowlisted and keyed, in the owner's or a team member's run
+- **When** Brave answers a search and the model replies "Bun is a fast JavaScript runtime."
+- **Then** the reply (Discord, the CLI, a schedule post) reads "Bun is a fast JavaScript runtime." then a blank line and "Search by Brave", once, even when it is split or clipped; a run whose search failed, was refused or was stopped, or that made none, has no such line (REQ-agent-318)
 
 ### Scenario: a scheduled run cannot read a public repo off the allowlist (DISCORD-SCHEDULE-3.a)
 

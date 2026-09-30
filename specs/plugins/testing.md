@@ -478,7 +478,8 @@ DBs):
   never, team still without `web-fetch`; `TEAM_SEARCH_TOOLS` is `web-search`
   only; SAFE-1 deny with a `denied` audit row, allowlisted runs audited
   `started` / outcome; a community role session is refused at `runPlugin`, a
-  team one reaches the handler.
+  team one reaches the handler; a schedule the owner created is offered it,
+  a team member's schedule is not (DISCORD-SCHEDULE-1.a).
 - Request: one GET to the pinned public address of `api.search.brave.com`
   `/res/v1/web/search` with `q`, `count` (default 5, `--count 20`),
   `safesearch=moderate` and `freshness` when given, the key only in
@@ -490,7 +491,8 @@ DBs):
 - Output: hostile hits only inside the untrusted web fence (unique end
   marker, HTML / entities / controls reduced), nothing of a hit outside it,
   attribution in the summary, at most `count` hits, non-http and
-  credentialed URLs dropped, `(no results)`.
+  credentialed URLs dropped, `(no results)`; the visible reply line "Search
+  by Brave" is the reply path's (REQ-agent-318, `specs/agent/testing.md`).
 - SAFE-6: the key echoed by results, error bodies, a non-JSON body, a
   transport error or a DNS error never comes back; through `runPlugin` the
   result and the audit rows hold neither the key, the request path, the
@@ -520,5 +522,6 @@ exists as its own command), `tests/roles.team.test.ts` (REQ-plugins-065:
 `roleAllowsPlugin` over every plugin with the team search rule; the team
 catalog offers `web-search`, the community catalog does not).
 `tests/fledge.plugins.test.ts` keeps the whole tool surface (builtins plus a
-fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` with `web-search`'s
-short description (builtins alone: 7569 tokens, 7442 on main 507d97b).
+fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` (9000 on main since
+AGENT-18) with `web-search`'s short description (builtins alone: 8078 tokens,
+7951 on main 0aeb345; the reply line adds nothing to any tool schema).

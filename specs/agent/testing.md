@@ -946,7 +946,45 @@ In `tests/web.search.test.ts`:
   ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
   The two `createTaskExecute` tests set `CORVIDINHO_LLM_MODEL` (AGENT-13: no
   built-in default model).
+- SAFE-14 (REQ-agent-098, "SAFE-14: with only provider caps set …"): with
+  only `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=llm.test=1` set (that provider
+  already at its cap) a search is sent and its row settles `actual` at 5000;
+  with `api.search.brave.com=1` (no configured model provider) the whole
+  setting is not valid, nothing is sent and the ask names the setting, never
+  its value. Fail on base: with the pre-rebase `reserveFlatSpend` (the total
+  cap only) the search under provider caps alone is sent unrecorded, so the
+  test fails.
 
 `tests/agent.loop-guards.test.ts` keeps every dangerous or mutating builtin
 in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`;
 `web-search` is in the second (REQ-agent-086).
+
+## A reply that used web-search ends with "Search by Brave" (REQ-agent-318 added, #318)
+
+In `tests/web.search.test.ts` › "a reply whose run used web-search ends with
+'Search by Brave' …" (no network: the fake transport and a fake provider,
+`CORVIDINHO_LLM_MODEL` set):
+
+- `REPLY_ATTRIBUTION_BY_TOOL` maps only `web-search` to "Search by Brave".
+- Two answered searches then the answer "Bun is a fast JavaScript runtime."
+  give that answer, a blank line and the line, once; no request the model
+  got (fenced results, tool messages, prompts) contains the line; a second
+  attempt of the same run (a verify retry) still ends with it once; a model
+  answer that already ends with it is not doubled.
+- No line with no search, a search with no key, a 429 from Brave, or a query
+  refused for carrying the key (nothing sent).
+- A declared team member's run (role session, PLUGIN-9) gets the line too.
+- SAFE-14.a: a run whose second search is stopped at the cap ends
+  `SPEND_CAP_SUMMARY`, a blank line and the line; the `spend-cap` ask's
+  question and the owner's stop DM (`formatSpendStopDm`) never carry it.
+- Clips: `closingNotesTail` returns the fallback note, the line and the role
+  note in that order; a mere mention is no closing note;
+  `chatBodyFromTaskResult` (1800) and `resultFrame` (4000, `truncated`) keep
+  it at the end; `planAnswerParts` puts it at the end of the last part, once;
+  `withReplyAttribution` adds it once and ignores unknown lines.
+- Fail on base: with the pre-change `src/agent/execute.ts`,
+  `src/agent/task-summary.ts` and `src/agent/spend.ts` swapped in, the six
+  new attribution and SAFE-14 tests fail (36 pass, 6 fail) and pass on the
+  branch; mutations caught: the line added for a failed call (`result.ok`
+  dropped) fails the "no line" test, and `closingNotesTail` not knowing the
+  line fails the clip test.

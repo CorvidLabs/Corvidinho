@@ -34,11 +34,30 @@ copied); the must-ask gate (#319, now on main) is another session's work:
 neither tool posts, so no must-ask entry (AUTONOMY-11), and this change does
 not touch that gate. `web-fetch` stays as it is for any public host.
 
-Base: rebased onto main 507d97b, after #319 (must-ask gate in `runPlugin`),
+Base: rebased onto main 0aeb345, after #319 (must-ask gate in `runPlugin`),
 #320 (AGENT-13: no built-in default model, so tool-loop tests set
-`CORVIDINHO_LLM_MODEL`), #321 and #322. The REQ-agent-002 and REQ-cli-262
-deltas are regenerated from main's canonical text, which those PRs changed.
+`CORVIDINHO_LLM_MODEL`), #321, #322, #323, #324 (SAFE-3.a), #325 (AGENT-11
+model fallback), #327 (v0.0.36), #328 (SAFE-14 / SAFE-15 per-provider spend
+caps), #329 (AGENT-18 SpecSync change tools) and #330 (DISCORD-SCHEDULE-1.a:
+a schedule the owner created runs as the owner). The modified REQ-agent-002,
+REQ-agent-086, REQ-agent-098, REQ-cli-262 and REQ-plugins-065 deltas start
+from main 0aeb345's canonical text (those PRs changed all five), so they keep
+main's lines and add only this change's. After #328, `reserveFlatSpend`
+reads every spend-cap setting (`parseSpendCaps`): a search is recorded while
+any cap is set and counts against the total cap only, since a SAFE-14
+provider cap is keyed on a configured model provider. After #330 the owner's
+own schedules run as the owner, so they get `web-search` when it is
+allowlisted; schedules other people create still never do.
 
-Definition approval: the orc comment on #318 says "SpecSync definition
-approvals are recorded only on Leif's go". No go is on record yet, so this
-definition waits for it; nothing is recorded as Leif.
+Leif's go (2026-09-30, https://github.com/CorvidLabs/Corvidinho/issues/318#issuecomment-5918616747): approve this definition (and
+gif-search's, #331) as `corvid-agent` per PROCESS-3; replies that used web
+search end with a short visible attribution line, "Search by Brave", to meet
+Brave's terms. That line is implementation to meet the provider's terms, not
+a new `hi` criterion: it is REQ-agent-318 in this change's deltas, so the
+approved definition covers it. It is added by the reply path as a closing
+note (the pattern of the AGENT-11 fallback note and the ROLES-CHAT-3 role
+note), never inside the fence or a tool result, and never in the owner's
+spend DMs. Merge order: #326, then #331.
+
+Definition approval: recorded as `corvid-agent` on that go, with the go's
+link as the note; nothing is recorded as Leif.

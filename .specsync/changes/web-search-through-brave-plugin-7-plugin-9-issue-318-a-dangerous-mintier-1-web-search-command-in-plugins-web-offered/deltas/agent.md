@@ -4,13 +4,58 @@ change:
 web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered
 ---
 
-# Delta: agent (web-search through Brave: key drops, SAFE-13 scan, loop guard, SAFE-8 flat price, #318)
+# Delta: agent (web-search through Brave: key drops, SAFE-13 scan, loop guard, SAFE-8 flat price, the "Search by Brave" reply line, #318)
+
+## Added
+
+### REQUIREMENT REQ-agent-318
+
+A task run's reply SHALL end with the short visible attribution line a
+tool's provider asks for when that run used the tool (PLUGIN-7; Leif's go on
+#318, to meet Brave's terms): `src/agent/task-summary.ts`
+`REPLY_ATTRIBUTION_BY_TOOL` maps `web-search` to "Search by Brave" and no
+other tool. Once an offered tool in that map returns `ok` in the tool loop
+(a `web-search` that Brave answered, "(no results)" included), every summary
+`createTaskExecute` returns for the rest of that run SHALL end with its
+line once, as a closing paragraph after a blank line
+(`withReplyAttribution`: after the AGENT-11 model fallback note, before the
+ROLES-CHAT-3 role note; a summary that already ends with it is left as is).
+A call that failed, was refused or was stopped (no or a malformed key, a
+usage error, a secret-carrying query, an HTTP error, a SAFE-13 refusal, the
+spend cap) SHALL add no line, and a run without such a call SHALL get none.
+The line SHALL NOT be part of any tool message, the untrusted web fence or
+any other request the model gets, and it SHALL carry nothing else (no
+amount, cap or setting, SAFE-14.a): a `spend-cap` ask's question, and so the
+owner's spend DM built from it, never carries it. `closingNotesTail`
+SHALL recognise the line (the known lines only, as the whole last
+paragraph), so `clipKeepingRoleNote`, `resultFrame` (NDJSON, 4000),
+`chatBodyFromTaskResult` (schedule posts, WATCH, 1800), the post clips and
+Discord's split (`splitDiscordMessage` / `planAnswerParts`) keep it whole at
+the end of every reply: the owner's and team members' Discord replies,
+`/session start`, `/work`, the owner's schedule posts and the CLI's `task
+run` output. No tool schema, env var, table or setting is added.
+
+Acceptance Criteria
+- `REPLY_ATTRIBUTION_BY_TOOL` maps exactly `web-search` to "Search by Brave".
+- Two answered searches then the answer "Bun is a fast JavaScript runtime." give "Bun is a fast JavaScript runtime.", a blank line and "Search by Brave", once; no model request (fenced results, tool messages, prompts) contains the line; a later attempt of the same run still ends with it once; an answer that already ends with it is not doubled.
+- No line with no search, a search with no key, a 429 from Brave, or a query refused for carrying the key.
+- A declared team member's run (role session) that searched ends with the line too.
+- A run whose second search is stopped at the spend cap ends `SPEND_CAP_SUMMARY`, a blank line and the line; the `spend-cap` ask's question and `formatSpendStopDm` never carry it.
+- `closingNotesTail` returns the fallback note, the line and the role note in that order and ignores a mere mention; `chatBodyFromTaskResult` (1800) and `resultFrame` (4000, `truncated`) keep the line at the end; `planAnswerParts` of a long answer ends its last part with it, once; `withReplyAttribution` adds it once and ignores unknown lines.
+- The new tests in `tests/web.search.test.ts` fail on the base sources and pass after.
 
 ## Modified
 
 ### REQUIREMENT REQ-agent-002
 
 When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
+
+In a repo whose SpecSync workflow requires a change for meaningful files,
+the REQ-agent-518 coverage check SHALL come first: an uncovered path makes the
+attempt a failed verify with no lane run; and on Corvidinho, after approving
+and archiving the run's own change (REQ-agent-519), the lane SHALL run once
+more over what that wrote, with the same evidence verdict, before the run is
+done.
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
@@ -29,6 +74,7 @@ Acceptance Criteria
 - A run that changed files is verified with no option set; `RunTaskOptions` has no field that skips the gate.
 - A passing lane whose output has no recognised test summary, or whose tests were all skipped, is not verified: the attempt is retried with the `Verify gate: not verified: …` note first in its feedback, then ends `failed` (REQ-agent-185).
 - A stub lane that passes and prints a `bun test` summary (`tests/fixtures/lane-output.ts`) ends `done` verified as before.
+- In a repo whose `sdd.json` requires a change, an attempt whose real diff has a meaningful path no open change covers ends as a failed verify with no lane call, and the lane runs once a change covers it (REQ-agent-518); on Corvidinho the lane runs a second time after the own-change approve and archive, and a failure there fails the run (REQ-agent-519).
 
 ### REQUIREMENT REQ-agent-117
 
@@ -184,8 +230,10 @@ unanswered approval, an `ask-human` with no question, a thrown handler).
 `changedState(name, result)` SHALL be the single "something changed"
 predicate: true when the result's data reports `filesChanged` (ok or not), or
 when a tool in `STATE_CHANGING_TOOLS` (file writes, git writes, GitHub
-writes, Discord posts and files, memory forget / override, `delegate`, the
-shell, the language runners and `fledge-run`) or a Fledge plugin command
+writes, Discord posts and files, memory forget / override, a SpecSync
+change opened, answered, approved or archived (`specsync-change-new`,
+`-answer`, `-approve`, `-finalize`, AGENT-18), `delegate`, the shell, the
+language runners and `fledge-run`) or a Fledge plugin command
 (`origin` `fledge:`) succeeds; never for `NO_STATE_CHANGE_TOOLS`
 (`web-fetch`, `web-search`, `danger-ping`, `fledge-lanes-run`, `council`) or a read.
 Every dangerous or mutating builtin SHALL be in exactly one of the two sets.
@@ -238,7 +286,8 @@ The agent SHALL enforce an optional operator-set daily spend cap on provider
 (LLM) calls (SAFE-8, as amended on #98: warn at 80%, ask at 100%) in
 `src/agent/spend.ts`. The cap SHALL be read from
 `CORVIDINHO_DAILY_SPEND_CAP_USD` as a plain USD amount over a rolling
-24-hour window. When it is unset or blank, the capped fetch SHALL be the
+24-hour window. When it and `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
+(REQ-agent-114) are unset or blank, the capped fetch SHALL be the
 provider fetch unchanged and the database SHALL NOT be opened, so behavior
 is unchanged. When it is set, `createTaskExecute` SHALL send every
 OpenAI-compatible call through the capped fetch, which SHALL price the call
@@ -254,10 +303,14 @@ when the provider returned an HTTP error.
 Tool calls with a flat price per call SHALL count toward the same total
 cap (Leif, #318: a Brave `web-search` is about $0.005): `reserveFlatSpend({
 env, provider, model, costMicroUsd, db?, now? })` SHALL be `off` (DB never
-opened) without a cap, and otherwise reserve the price in the same IMMEDIATE
-ledger transaction before the call — `stopped` with the same `spend-cap`
-ask as below when spend plus the price would exceed the cap, the cap value
-is invalid or the ledger is unavailable (the call SHALL NOT be sent), else
+opened) when neither this cap nor `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` is
+set, and otherwise reserve the price in the same IMMEDIATE ledger
+transaction before the call, so the call is recorded while any cap is set,
+like a provider call, and counted against the total cap only (a provider
+cap is keyed on a configured model provider, REQ-agent-114) — `stopped` with
+the same `spend-cap` ask as below when spend plus the price would exceed the
+total cap, a spend-cap setting is not valid (named, never echoed) or the
+ledger is unavailable (the call SHALL NOT be sent), else
 `held`, whose `settle` records `billed` as the call's actual cost,
 `not-billed` (refused before connecting, or an HTTP error reply) as 0, and
 `unknown` (network error, timeout, abort, unreadable reply) at the estimate.
@@ -312,9 +365,11 @@ model, an invalid cap value, an unreadable ledger), and
 `formatSpendPublicStatusLine(snapshot)` is "Spend: Work is paused for budget."
 then and undefined otherwise, naming no amount, cap, model, path or setting.
 The bridge delivers the claimed warning to the owner by DM only
-(REQ-discord-098). The Approve card (#96, SAFE-18..20) and
-per-provider caps (SAFE-14, and SAFE-15 for each cap) are not part of this
-requirement; of SAFE-14 it covers only SAFE-14.a's public text.
+(REQ-discord-098). This cap is the total cap (scope `total`) of SAFE-14:
+the per-provider caps next to it, and SAFE-15's 80% warning and 100% stop
+for each cap, are REQ-agent-114, and a call is checked against this cap and
+its provider's cap in the same reservation. The Approve card (#96,
+SAFE-18..20) is not part of this requirement.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
@@ -322,10 +377,12 @@ Acceptance Criteria
 - Spend plus estimate over the cap (including a zero cap): no fetch; the attempt returns a `spend-cap` ask naming spend, estimate, cap and `CORVIDINHO_DAILY_SPEND_CAP_USD`, ending with the operator action and no question mark; the summary is `SPEND_CAP_SUMMARY` (no `$`, no `CORVIDINHO_`); `runTask` returns `blocked` with verify skipped; `task run --json` exits 0 with `result.ask.reason` `spend-cap`.
 - Spend older than 24 hours no longer counts.
 - A flat-priced `web-search` (`tests/web.search.test.ts`): no cap opens no database; under the cap a `reserved` row of 5000 micro-USD exists when the request goes out and settles `actual` at 5000; an HTTP error or a refusal before connecting settles `failed` at 0, and a network failure, a body that fails mid-read, a timeout, a non-JSON or malformed 2xx body and an abort after the request went out stay `estimated` at 5000; a run already stopped reserves nothing and sends nothing; at the cap (or with an invalid cap value, or an unavailable ledger such as a closed database, whose ask says the spend ledger is unavailable) nothing is sent, the error names no amount and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+- With only `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set (its provider already at its cap) a `web-search` is sent and its row settles `actual` at 5000; with an entry keyed on `api.search.brave.com` (no configured model provider) the setting is not valid, nothing is sent and the ask names `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, never the value.
 - Unpriced model, invalid cap value or unavailable ledger: no fetch and a `spend-cap` ask; the invalid value and secret-shaped model ids are not echoed.
 - HTTP error reply counts 0; missing usage and network errors keep the estimate.
 - Two connections on one DB file see each other's reservations and record the 80% warning once between them.
 - The call that brings spend to 80% yields exactly one `Text` warning and one `onSpendWarning`; later calls stay quiet while spend stays at or above 70%; after spend is seen under 70% (by a settle or a reservation) the next crossing warns again, including within 24 hours; 24 hours after the last warning, or with a new cap value, it warns again; `task run --json` carries `result.spendWarning` on the crossing run.
 - A warning recorded by one process is taken once by the outbox with current spend, can be released and taken again, and stays pending (not delivered, not dropped) while spend is back under 80%: 80% at T0, then 72%, then 96% delivers exactly one warning at 96% and records no second warning; without a database the outbox returns the run's own warning.
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
+- An invalid total cap reads as the snapshot `{ kind: "invalid", keys: ["CORVIDINHO_DAILY_SPEND_CAP_USD"] }`; a reservation refused at the total cap names it (`trips: [{ scope: "total", spentMicroUsd, capMicroUsd }]`), and its ask question says `Stopped at cap: total.` (REQ-agent-114).
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.

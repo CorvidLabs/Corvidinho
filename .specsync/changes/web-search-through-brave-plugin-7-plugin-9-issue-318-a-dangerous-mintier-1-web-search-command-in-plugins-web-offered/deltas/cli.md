@@ -24,7 +24,8 @@ process started with. The preload SHALL also unset the run and operator
 settings that change test outcomes on the bot box, so the suite runs as it
 does on CI: `CORVIDINHO_NON_INTERACTIVE` and `FLEDGE_NON_INTERACTIVE` (every
 Discord, WATCH and daemon task run sets the first, and its verify lane runs
-the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, the LLM API keys
+the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD` and
+`CORVIDINHO_PROVIDER_SPEND_CAPS_USD` (SAFE-14), the LLM API keys
 `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (so `bun
 test` never sends a real model call), the operator's model config
 `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`,
@@ -40,6 +41,5 @@ Acceptance Criteria
 - An operator DB that already holds an audit chain keeps the same row count and last hash after the child run, and no test row is keyed with the operator's key.
 - A CLI or shell a test spawns without an explicit `env` (`Bun.spawn(argv)`, `Bun.spawn({ cmd })`, `Bun.spawnSync(argv)`) resolves the preload's data dir and sees no audit key, WATCH spawn log or worktree base override.
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
-- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `BRAVE_SEARCH_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
+- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `BRAVE_SEARCH_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
 - With `ANTHROPIC_API_KEY`, `OLLAMA_HOST`, `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, `CORVIDINHO_LLM_BASE_URL` and `CORVIDINHO_LLM_TIER` set too, a child `bun test` sees none of them and has no usable model provider.
-
