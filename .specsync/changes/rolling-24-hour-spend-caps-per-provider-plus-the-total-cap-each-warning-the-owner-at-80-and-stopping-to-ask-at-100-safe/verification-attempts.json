@@ -22,6 +22,28 @@
         "REQ-cli-262",
         "REQ-discord-098"
       ]
+    },
+    {
+      "timestamp": 1790791163,
+      "commit": "6ff06f06f81ff63e7253fc38785187fd9cf43434",
+      "contract_digest": "5aa7b3488c55bb379ab2415aee59d5f6563f9fa007afaa13b950d0851762ad12",
+      "execution_digest": "18e8d666d113a90bc7ca40121312172aaa6c87f0887c6f2f5f775429c5fa6031",
+      "workspace_digest": "bd2e42fb14fcbcb8cb78e2bfaf7a1f8d07f2de788c6dfbb35307786bae94d2d4",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-114",
+        "REQ-cli-098",
+        "REQ-cli-262",
+        "REQ-discord-098"
+      ]
     }
   ]
 }
