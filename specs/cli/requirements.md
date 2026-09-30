@@ -925,4 +925,12 @@ Acceptance Criteria
 - An allowlist file whose `[owner]` has a `github_login` but no `github_id` and a person with only `github_logins` gives `[warn] people-github: ada, the owner: …` naming person ids only; no Discord id, GitHub id or login is printed; doctor still passes (exit 0).
 - With `[owner] github_id` and `github_ids` on everyone with a login there is no `people-github` line.
 - The tests in `tests/cli.doctor-truth.test.ts` fail on the base sources and pass after.
+### REQ-cli-425
+
+The project SHALL ship package version `0.0.34` (declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep). CLI `version` and Discord presence (DISCORD-12) report `0.0.34` after a restart. CHANGELOG SHALL include verbose 0.0.34 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.34`.
+- CLI `version` prints `0.0.34`.
+- CHANGELOG has a 0.0.34 section that the updater's changelog helper extracts exactly.
 
