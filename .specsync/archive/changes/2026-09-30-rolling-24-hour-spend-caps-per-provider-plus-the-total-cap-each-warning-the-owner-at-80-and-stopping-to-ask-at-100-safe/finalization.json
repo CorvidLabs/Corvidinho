@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe",
+  "implementation_commit": "e806f3da3ac5f54d93037b64f70157537b7a3f10",
+  "implementation_tree": "c9d17b6654bafa879c1e49f55f501383c7799900",
+  "contract_digest": "5aa7b3488c55bb379ab2415aee59d5f6563f9fa007afaa13b950d0851762ad12",
+  "workspace_digest": "6f0a83535ca1678910e3104c2ed243e22ffc754c6653df1650f01be9a02eaf4a",
+  "closing_digest": "237341e25cd94cff85c5c1177bbbabb20a33d9669abb14a1c65a683c2ca1b854",
+  "review_digest": "69c3d201691e6a47469b608d8a62da0e74e94591464344fe0608a848e8c1f1af",
+  "finalization_digest": "75f6ccf81f5957cef699eedbca5828bc0fd3b1ab5477b10d4103e5c225713e82",
+  "timestamp": 1790794380
+}

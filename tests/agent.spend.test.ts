@@ -278,7 +278,11 @@ describe("withSpendCap (SAFE-8)", () => {
       const b = new SpendLedger(openCorvidinhoDb({ path }));
       expect(a.reserve({ provider: "p", model: "m", estimateMicroUsd: 600, capMicroUsd: 1000, now: NOW }).ok).toBe(true);
       const second = b.reserve({ provider: "p", model: "m", estimateMicroUsd: 600, capMicroUsd: 1000, now: NOW });
-      expect(second).toEqual({ ok: false, spentMicroUsd: 600 });
+      expect(second).toEqual({
+        ok: false,
+        spentMicroUsd: 600,
+        trips: [{ scope: "total", spentMicroUsd: 600, capMicroUsd: 1000 }],
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

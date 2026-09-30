@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "e806f3da3ac5f54d93037b64f70157537b7a3f10",
+  "contract_digest": "5aa7b3488c55bb379ab2415aee59d5f6563f9fa007afaa13b950d0851762ad12",
+  "execution_digest": "18e8d666d113a90bc7ca40121312172aaa6c87f0887c6f2f5f775429c5fa6031",
+  "workspace_digest": "6f0a83535ca1678910e3104c2ed243e22ffc754c6653df1650f01be9a02eaf4a",
+  "timestamp": 1790794363
+}

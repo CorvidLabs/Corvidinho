@@ -1279,3 +1279,24 @@ pick continuing it (same session and cwd), `/session start` and `/work` pass
 `chat`, `ask`, `session` and `work`; a scheduler tick passes `schedule`.
 - Fail on base: with the base's (507d97b) sources swapped in, all three fail
   (no stamp; `surface` undefined).
+
+## Each spend cap on its own, owner only (REQ-discord-098 modified; SAFE-14 / SAFE-15, SAFE-14.a)
+
+`tests/agent.spend-caps.test.ts` › "delivery keeps each cap apart" and
+"spend_alerts gains its scope column in place" — the owner's DM carries one
+80% warning line per cap (a provider's names `provider:<id>`); `askPingOwner`
+pings the owner once per episode of each cap a stop tripped (another
+provider's stop and the total's each ping; a released claim pings again; a
+schedule run's stored question-only stop claims its own caps through the
+"Stopped at cap" marker); a schedule's `askPingKey` follows the provider caps
+(the total alone keys as before); the public spend-cap post names no scope,
+provider, amount or setting; `SCRUB_TARGETS` lists `spend_alerts.scope`, a
+secret-shaped provider id is stored and re-scrubbed redacted, and a re-scrub
+over a `spend_alerts` without `scope` does not throw. The owner's `/status`
+lines per cap and the public "Spend: Work is paused for budget." while any
+cap is reached are covered by "doctor and the owner's /status show each cap".
+The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
+`tests/discord.spend-dm.test.ts`, `tests/scheduler.ask-outbox.test.ts`,
+`tests/discord.collapsed-ping.test.ts`) pass unchanged.
+- Fail on base: the file cannot load on main's (7090656) sources.
+

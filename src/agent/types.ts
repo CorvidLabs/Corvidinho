@@ -80,6 +80,13 @@ export type HumanAsk = {
    * back to free-text clarify (DISCORD-ASK-4).
    */
   options?: AskOption[];
+  /**
+   * `spend-cap` only (SAFE-14 / SAFE-15): the cap scope(s) the stopped call
+   * would have passed — `total` or `provider:<id>` — so a bridge pings the
+   * owner once per episode of each cap. Never shown to anyone but the owner
+   * (SAFE-14.a). Absent: the total cap (older frames, a bad setting, no ledger).
+   */
+  spendScopes?: string[];
 };
 
 export type ExecuteResult = {
@@ -172,8 +179,8 @@ export type TaskResult = {
 };
 
 /**
- * SAFE-8 80% warning (#98): integer micro-USD so bridges format it from
- * numbers, never from child-written text.
+ * SAFE-8 / SAFE-15 80% warning (#98): integer micro-USD so bridges format it
+ * from numbers, never from child-written text.
  */
 export type SpendWarning = {
   /** Spend counted in the rolling 24 h window when the warning fired. */
@@ -181,6 +188,11 @@ export type SpendWarning = {
   capMicroUsd: number;
   /** floor(spent × 100 / cap). */
   percent: number;
+  /**
+   * SAFE-14 / SAFE-15: `provider:<id>` for a provider cap's warning (that
+   * provider's spend against its cap); absent for the total cap.
+   */
+  scope?: string;
 };
 
 /**

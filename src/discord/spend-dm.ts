@@ -9,7 +9,8 @@
  *    run on this data dir: chat, slash, schedules, WATCH, the daemon,
  *    delegate workers; the run's own warning only when the bridge has no DB)
  *    and rebuilt from its integer amounts (`formatSpendWarningLine`), never
- *    from child text;
+ *    from child text — one line per cap that crossed 80% (SAFE-15: the total
+ *    cap and each provider cap, named by scope);
  *  - a cap stop's details: the run's `spend-cap` ask question (spend, the
  *    call's estimate, the cap and the setting the operator changes), once per
  *    cap episode — whenever the stop's post claims the owner's channel ping
@@ -88,9 +89,13 @@ export function formatSpendStopDm(stop: SpendStop): string {
     .join("\n")}`;
 }
 
-/** The DM text for the 80% warning (rebuilt from its integer amounts). */
-export function formatSpendWarningDm(warning: SpendWarning): string {
-  return formatSpendWarningLine(warning);
+/**
+ * The DM text for the 80% warning (rebuilt from its integer amounts): one
+ * line per cap that crossed it (SAFE-15: the total cap and each provider cap).
+ */
+export function formatSpendWarningDm(warning: SpendWarning | readonly SpendWarning[]): string {
+  const list: readonly SpendWarning[] = Array.isArray(warning) ? warning : [warning as SpendWarning];
+  return list.map(formatSpendWarningLine).join("\n");
 }
 
 /**
@@ -149,7 +154,7 @@ export function createSpendDm(deps: SpendDmDeps): SpendDm {
     }
     const taken = takeSpendWarning(deps.outbox, opts.warning);
     if (taken) {
-      if (await send(userId, fn, formatSpendWarningDm(taken.warning))) {
+      if (await send(userId, fn, formatSpendWarningDm(taken.warnings ?? taken.warning))) {
         out.warning = "sent";
         warningFailed = false;
       } else {

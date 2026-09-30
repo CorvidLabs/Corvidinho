@@ -194,7 +194,8 @@ export function scrubJsonText(raw: string): { text: string; parsed: boolean } {
 
 /**
  * Every free-text column Corvidinho persists. Keep in sync with src/store/db.ts
- * and module-owned tables (spend_ledger: src/agent/spend.ts;
+ * and module-owned tables (spend_ledger: src/agent/spend.ts; spend_alerts:
+ * src/agent/spend-alerts.ts;
  * discord_session_turns: src/discord/session-thread.ts; watch_owner_asks:
  * src/watch/owner-ask.ts). `json` columns hold a
  * JSON document and are re-scrubbed value by value ({@link scrubJsonText}).
@@ -229,6 +230,10 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   // exact action, target, amount and diff or text.
   { table: "approval_requests", columns: ["title", "action", "target", "amount", "text"] },
   { table: "spend_ledger", columns: ["provider", "model"] },
+  // SAFE-14 (src/agent/spend-alerts.ts): the cap scope (`total` or
+  // `provider:<id>`, the id as the ledger stores it). A column added by an
+  // idempotent ALTER (older rows read `total`), so no rules version bump.
+  { table: "spend_alerts", columns: ["scope"] },
   // AGENT-16.a (src/watch/owner-ask.ts): a stuck WATCH run's question waiting
   // for the bridge's owner DM (scrubbed on write; a new table, so no rules
   // version bump: it has no rows written under older rules).
@@ -241,6 +246,18 @@ function tableExists(db: Database, table: string): boolean {
       .query("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get(table) != null
   );
+}
+
+/**
+ * The listed columns a table actually has: a module-owned table adds its
+ * newer columns when its module first opens it (e.g. `spend_alerts.scope`),
+ * so an older table may lack one; there is nothing to scrub in it yet.
+ */
+function presentColumns(db: Database, table: string, columns: readonly string[]): string[] {
+  const have = new Set(
+    (db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  return columns.filter((c) => have.has(c));
 }
 
 /**
@@ -259,8 +276,12 @@ export function rescrubDatabase(db: Database): {
   const unparsed: Record<string, number> = {};
   let rowsUpdated = 0;
   db.transaction(() => {
-    for (const { table, columns, json: jsonColumns = [] } of SCRUB_TARGETS) {
+    for (const target of SCRUB_TARGETS) {
+      const { table } = target;
       if (!tableExists(db, table)) continue;
+      const columns = presentColumns(db, table, target.columns);
+      const jsonColumns = presentColumns(db, table, target.json ?? []);
+      if (columns.length + jsonColumns.length === 0) continue;
       const rows = db
         .query(
           `SELECT rowid AS _rid, id, ${[...columns, ...jsonColumns].join(", ")} FROM ${table}`,

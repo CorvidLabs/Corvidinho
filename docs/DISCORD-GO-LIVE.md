@@ -185,11 +185,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
-- Spend is the owner's (SAFE-14.a): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, a run stopped at
-  the cap posts only "💸 Work is paused for budget." (the owner pinged once per cap episode) —
-  never the amounts, the cap or the setting name. The details (24 h spend, the next call's
-  estimate, the cap, which setting to change) and the 80% warning go to the owner by **direct
-  message** after each run and on every scheduler tick. Same DM rule as above: the owner must
+- Spend is the owner's (SAFE-14.a): with a spend cap set — the total
+  `CORVIDINHO_DAILY_SPEND_CAP_USD`, or per provider `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
+  (`provider=USD` entries keyed on the provider id, e.g. `api.openai.com=3,api.anthropic.com=2`;
+  a bad entry or a provider no configured model uses stops every call until fixed, SAFE-14/15) —
+  a run stopped at a cap posts only "💸 Work is paused for budget." (the owner pinged once per
+  episode of each cap) — never the amounts, the cap, which cap or the setting name. The details
+  (which cap, 24 h spend against it, the next call's estimate, the cap, which setting to change)
+  and each cap's 80% warning go to the owner by **direct message** after each run and on every
+  scheduler tick. Same DM rule as above: the owner must
   share a server with the bot and accept DMs from its members; until then the DM is kept and
   retried every tick, the bridge logs one
   `[discord] spend DM to the owner did not go out (SAFE-14.a) …` line per failure streak (no
