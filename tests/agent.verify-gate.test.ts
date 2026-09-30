@@ -37,6 +37,12 @@ import {
   TALK_VERIFIED_MARKER,
 } from "../src/worktree/base.ts";
 import { gitIn, makeCarriedTalk, makeProject, makeTalk } from "./fixtures/talk-worktree.ts";
+import { startFakeLlm } from "./fixtures/fake-llm.ts";
+
+// AGENT-13: there is no built-in default model or stub, so spawned runs
+// call this localhost fake provider (a keyless ollama: model).
+const fakeLlm = startFakeLlm();
+afterAll(() => fakeLlm.stop());
 
 const root = join(import.meta.dir, "..");
 const bases: string[] = [];
@@ -138,6 +144,7 @@ describe("verification can't be switched off (AGENT-14, REQ-agent-003)", () => {
         PATH: `${bin}:${process.env.PATH ?? ""}`,
         CORVIDINHO_LLM_API_KEY: "",
         OPENAI_API_KEY: "",
+        ...fakeLlm.env,
         // A top-level run, even when this suite runs inside a worker's lane.
         CORVIDINHO_DELEGATE_DEPTH: "",
       },
@@ -404,6 +411,7 @@ describe("delegate and council workers leave the marker to their lead (REQ-agent
         PATH: `${bin}:${process.env.PATH ?? ""}`,
         CORVIDINHO_LLM_API_KEY: "",
         OPENAI_API_KEY: "",
+        ...fakeLlm.env,
         CORVIDINHO_DELEGATE_DEPTH: "1",
       },
     });

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskExecute, loadLlmEnv } from "../src/agent/execute.ts";
+import { NO_PROVIDER_NOTICE } from "../src/agent/providers.ts";
 import { runTask } from "../src/agent/loop.ts";
 import { loadRelevantSpecs } from "../src/agent/specLoader.ts";
 import type { AgentEvent } from "../src/agent/types.ts";
@@ -20,25 +21,39 @@ describe("loadLlmEnv", () => {
     expect(a.baseUrl).toBe("https://example.test/v1");
     expect(a.model).toBe("m1");
 
-    const b = loadLlmEnv({ OPENAI_API_KEY: "oak" });
+    const b = loadLlmEnv({ OPENAI_API_KEY: "oak", CORVIDINHO_LLM_MODEL: "m2" });
     expect(b.apiKey).toBe("oak");
-    expect(b.model).toBe("gpt-4o-mini");
+    expect(b.model).toBe("m2");
+    expect(b.notice).toBeNull();
+
+    // AGENT-13: a key alone picks no model — there is no built-in default.
+    const c = loadLlmEnv({ OPENAI_API_KEY: "oak" });
+    expect(c.model).toBe("");
+    expect(c.notice).toStartWith(NO_PROVIDER_NOTICE);
   });
 });
 
 describe("createTaskExecute", () => {
-  test("demo path when no API key", async () => {
+  test("no provider configured: the attempt fails with the notice and calls nothing (AGENT-10)", async () => {
+    let calls = 0;
     const exec = createTaskExecute({
       taskText: "hello",
       env: {},
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response("{}");
+      },
     });
     const result = await exec({
       attempt: 2,
       signal: new AbortController().signal,
     });
-    expect(result.summary).toBe("demo task attempt 2");
+    expect(result.error).toBe(true);
+    expect(result.summary).toStartWith(NO_PROVIDER_NOTICE);
+    expect(result.summary).toContain("CORVIDINHO_LLM_MODEL");
     // It changes nothing, so it claims nothing (AGENT-15, REQ-agent-085).
     expect(result.filesChanged).toEqual([]);
+    expect(calls).toBe(0);
   });
 
   test("LLM path uses fetch when key set", async () => {
@@ -79,6 +94,7 @@ describe("stalled LLM provider (AGENT-3, REQ-agent-244)", () => {
   const env = (baseUrl: string) => ({
     CORVIDINHO_LLM_API_KEY: "secret",
     CORVIDINHO_LLM_BASE_URL: baseUrl,
+    CORVIDINHO_LLM_MODEL: "test-model",
   });
 
   /** Never answers: rejects only when its request signal aborts. */

@@ -536,6 +536,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       taskText: "list plugins",
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
         CORVIDINHO_LLM_TIER: "tool",
       },
@@ -582,6 +583,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       taskText: "try tools",
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
       },
       fetchImpl,
@@ -623,7 +625,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       );
     const usage: AgentTokenUsage[] = [];
     const exec = createTaskExecute({
-      env: { CORVIDINHO_LLM_API_KEY: "test-key-not-real", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+      env: { CORVIDINHO_LLM_API_KEY: "test-key-not-real", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
       fetchImpl,
       tier: "read",
       onUsage: (u) => usage.push(u),

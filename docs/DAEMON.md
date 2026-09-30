@@ -130,7 +130,7 @@ optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
 | `CORVIDINHO_DATA_DIR` | Data dir holding `corvidinho.db` and `daemon.lock` (default `~/.local/share/corvidinho`) |
 | `CORVIDINHO_BIN` | Agent binary to spawn per run (default `<cwd>/src/cli.ts`) |
 | `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
-| `CORVIDINHO_LLM_API_KEY` / … | Provider for the spawned `task run` (never commit) |
+| `CORVIDINHO_LLM_MODEL` (+ its key: `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`; `OLLAMA_HOST` for `ollama:`) | The model the spawned `task run` calls: `openai:<model>`, `ollama:<model>` or `anthropic:<model>` (AGENT-13). There is no built-in default: unset, every scheduled run fails (`failed (exit 1)`) and the `llm.no_provider` start line says why (never commit keys) |
 | `CORVIDINHO_BACKUP_DIR` | Optional absolute local directory for the nightly backup (OPS-1/2); unset = no backup |
 
 ## Single instance
@@ -180,7 +180,8 @@ scrubbed for secrets (SAFE-6).
 
 | Event | When |
 |-------|------|
-| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable |
+| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable; `llm` is the model runs at the default tier call (`<model> @ <host>`), or `none` (AGENT-13) |
+| `llm.no_provider` | (warn, at start) Some or every tier has no usable model provider (AGENT-10): `notice` says which and what to set (`CORVIDINHO_LLM_MODEL`, or the entry's missing key). Those scheduled runs fail (`failed (exit 1)`) until one is set; there is no built-in default |
 | `daemon.lock_held` / `daemon.lock_failed` | Start refused (exit 1) |
 | `daemon.start_failed` | Start refused (exit 1): start-up setup failed, for example an allowlist file that cannot be read or parsed or a DB that cannot open. `message` gives the reason; nothing runs and the lock is released |
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
@@ -217,7 +218,7 @@ Wants=network-online.target
 Type=simple
 User=corvid
 WorkingDirectory=/home/corvid/Corvidinho
-# LLM key, allowlists, CORVIDINHO_DATA_DIR, … (mode 600, not in git)
+# CORVIDINHO_LLM_MODEL + its key, allowlists, CORVIDINHO_DATA_DIR, … (mode 600, not in git)
 EnvironmentFile=/home/corvid/.config/corvidinho/daemon.env
 ExecStart=/home/corvid/.bun/bin/bun src/cli.ts daemon
 KillSignal=SIGTERM

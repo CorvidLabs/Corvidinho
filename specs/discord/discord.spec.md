@@ -475,6 +475,15 @@ reason only, so a schedule pings once per cap episode. `ask-ping.ts` also
 exports `appendPostLine` (a SAFE-13 line or a slash owner notice on a post).
 `AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
 `result` frame by `spendWarningFromUnknown`); no channel post carries it.
+`/status`'s LLM line (AGENT-10 / AGENT-13, REQ-discord-015): `formatLlmStatusLine(env,
+{ ownerView })` (`src/version.ts`) shows the default tier's `<model> @ <host>`
+(non-openai kinds as `kind:model`) or `LLM: none — …` when it has no usable
+provider, plus the no-provider notice when any tier has none;
+`StatusReportInput.ownerView` (the handler passes `isOwnerViewer`; default
+false) decides whether the notice names the tiers and settings (owner) or says
+only `No model provider is configured.` (anyone else, like the spend line). At
+start the bridge logs `[discord] <notice>` once with `console.warn` when any
+tier has no usable provider (REQ-discord-079).
 `SlashContext.spendLine(ownerView)` / `StatusReportInput.spendLine` carry
 `/status`'s spend line: for the owner (ADMIN, re-checked by the handler) the
 24 h spend vs cap line (`formatSpendStatusLine` over `readSpendSnapshot` on
@@ -1302,3 +1311,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14: Only the owner sees spend amounts and cap settings on Discord; everyone else sees only 'Work is paused for budget.' (SAFE-14.a): spend-cap posts, the /work PR line, the slash owner notice and SPEND_CAP_SUMMARY say only that; the question quote is dropped on every path including the daemon pending-ask pass; the 80% warning never rides a channel post and, with a cap stop's details, goes to the owner by DM (src/discord/spend-dm.ts, retried every scheduler tick); the /status spend line is owner-only |
 | 2026-09-30 | one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each: One Approve/Deny DM card engine for everything that needs the owner's OK: exact action, target and amount one line each with a diff or text sent first as verbatim quoted-data parts and buttons last, never cut; destructive and money cards also need a one-time code DMed apart and typed into a form, valid once, only for that card and action, for 2 minutes; no answer, a late answer or a gone waiter is a no; the engine's own poll delivers with the scheduler off; the forget card becomes its destructive 'forget' kind; schema v14 approval_requests / approval_codes (SAFE-18/19/20, #96) |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
+| 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |

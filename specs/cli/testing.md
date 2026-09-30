@@ -90,3 +90,21 @@ waiting for the owner's OK on an Approve card with the one-time code` line
 and the approval line; a lapse's refusal says the running bridge DMs the card
 and that with no bridge it lapses. `tests/must-ask.boundary.test.ts` — with
 no notifier set the wait line goes to stderr.
+
+## No provider: task run, daemon, doctor / init (REQ-cli-079, REQ-cli-003, REQ-cli-007, REQ-cli-098, REQ-cli-262; AGENT-10 / AGENT-13)
+
+`tests/agent.providers.test.ts` — `task run` with only a key exits 1 with the
+notice as its first stderr line and as the failed result (`--json` too); the
+daemon logs `llm: "none"` on `daemon.started` and a warn `llm.no_provider`
+(and neither with a model); `llmDoctorCheck` for ollama / anthropic / a
+partly configured env; an unset model is not unpriced under a cap.
+`tests/cli.doctor-truth.test.ts` — exact `[warn] llm` lines (model without its
+key, key without a model), `[ok] llm … @ api.openai.com`, `init` in an empty
+dir. `tests/preload.operator-data-dir.test.ts` — the operator's model config
+and provider keys never reach the suite. `tests/cli.plugins-run-argv.test.ts`,
+`tests/cli.project-path.test.ts`, `tests/agent.cli.test.ts` run `task run`
+against the localhost fake provider. `tests/docs.operator-facts.test.ts`
+checks the `llm.no_provider` Logs row.
+- Fail on base: the notice, daemon, doctor, init, preload and `--task -h`
+  cases fail with the base's sources (and the base preload).
+

@@ -150,3 +150,11 @@ blocked result frame's `ask`.
   and `src/store/scrub.ts` swapped in (the new module kept), every poller,
   spawn-client and scrub-target case fails (nothing recorded, no `ask`); the
   no-DB note and bridge-mark units pass on both.
+
+## No provider at start (REQ-watch-079; AGENT-10)
+
+`tests/agent.providers.test.ts` ("the WATCH poller prints the notice at
+start …") — a non-dry-run poller with an injected agent and no model logs
+`[watch] <notice>`; with a model, or in a dry run, no such line. Fails on the
+base sources.
+

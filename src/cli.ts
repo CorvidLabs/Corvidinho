@@ -140,8 +140,12 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   CORVIDINHO_WATCH_USERNAME                             GitHub login to listen for (WATCH)
   CORVIDINHO_WATCH_INTERVAL_MS                          poll interval (default 60000, min 30000)
   CORVIDINHO_WATCH_DRY_RUN=1                            echo agent; no spawn
-  CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               enable OpenAI-compatible execute (never commit)
-  CORVIDINHO_LLM_BASE_URL / CORVIDINHO_LLM_MODEL        provider endpoint + model
+  CORVIDINHO_LLM_MODEL                                  required: the model, as openai:<model>, ollama:<model> or anthropic:<model>
+                                                        (bare = OpenAI-compatible); no built-in default (AGENT-13)
+  CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               key for openai: models (never commit)
+  CORVIDINHO_LLM_BASE_URL                               endpoint for openai: models (default https://api.openai.com/v1)
+  OLLAMA_HOST                                           Ollama server for ollama: models (default 127.0.0.1:11434; no key)
+  ANTHROPIC_API_KEY                                     key for anthropic: models (never commit)
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
   CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
@@ -582,8 +586,8 @@ async function doctor(): Promise<number> {
     });
   }
 
-  // CLI-4 — task run without a key uses the demo stub (warn, never fails doctor);
-  // the bridge, watch, daemon and memory tools need a writable data dir.
+  // CLI-4 / AGENT-10 — no usable model provider: warn with the notice (never
+  // fails doctor); the bridge, watch, daemon and memory tools need a writable data dir.
   checks.push(llmDoctorCheck(process.env));
   checks.push(dataDirDoctorCheck(process.env));
   // OPS-1/2 — nightly backup dir, snapshots, last backup / restore test
@@ -616,10 +620,10 @@ async function doctor(): Promise<number> {
 
 /**
  * `corvidinho init` (CLI-4): report only. Says what this project (the current
- * dir) is missing before `task run` fails on it mid-task — the LLM key task
- * run uses, `fledge` / `specsync` on PATH and the project files (the same
- * lines doctor prints). Creates and changes nothing; exit 1 when an item is
- * missing (a `[warn]` line, such as no LLM key, does not fail).
+ * dir) is missing before `task run` fails on it mid-task — the model provider
+ * task run uses (AGENT-10/13), `fledge` / `specsync` on PATH and the project
+ * files (the same lines doctor prints). Creates and changes nothing; exit 1
+ * when an item is missing (a `[warn]` line, such as no provider, does not fail).
  */
 function init(): number {
   const checks: DoctorCheck[] = [
@@ -797,8 +801,10 @@ export function parseTaskOutputMode(
 }
 
 /**
- * One task through the prove-before-done loop (demo stub without an LLM
- * key). The verify gate is always on (AGENT-14, REQ-cli-085): Discord, WATCH,
+ * One task through the prove-before-done loop. With no usable model provider
+ * for the run's tier it says so on stderr (text output) and the run fails
+ * with that notice, calling nothing (AGENT-10); there is no built-in default
+ * model. The verify gate is always on (AGENT-14, REQ-cli-085): Discord, WATCH,
  * schedules, /work, delegate workers and this CLI all reach it here.
  * `ndjson` streams one frame per line (REQ-cli-073 / REQ-agent-073).
  */
@@ -837,6 +843,10 @@ async function taskRun(opts: {
       console.error(`verify: ${e.success ? "pass" : "fail"}`);
     }
   };
+  // AGENT-10: say up front that no provider is set (the failed result says
+  // it too, for the machine modes whose stderr stays quiet).
+  const noProvider = loadLlmEnv(process.env, opts.tier).notice;
+  if (noProvider && !quiet) console.error(noProvider);
   // AUTONOMY-9/10: the must-ask gate's "waiting for the owner's OK" and
   // outcome lines ride the event stream (a Text frame in ndjson, stderr in
   // text mode), so bridges and the CLI say why a call is held.
