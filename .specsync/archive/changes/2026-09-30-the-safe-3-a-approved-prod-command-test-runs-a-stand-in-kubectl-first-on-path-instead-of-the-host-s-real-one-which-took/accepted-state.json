@@ -7,11 +7,11 @@
   "title": "The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout",
   "description": "The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "635d6a9b6a32a7874e5b32a1400051c641729bd2",
   "created_at": 1790797477,
-  "updated_at": 1790799909,
+  "updated_at": 1790800096,
   "affected_specs": [
     "agent"
   ],

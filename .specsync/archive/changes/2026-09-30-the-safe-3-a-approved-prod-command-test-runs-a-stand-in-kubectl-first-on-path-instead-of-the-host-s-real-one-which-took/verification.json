@@ -1,0 +1,84 @@
+{
+  "timestamp": 1790799909,
+  "commit": "334c1da0ea155c036d7302e0d84249cadfa865c2",
+  "contract_digest": "2c21f2f941172f5aa82d8cad1e0927ea8969780ac47bf21ee1b405ecf4ff9193",
+  "execution_digest": "b1387e06d5c8afe26a36bf88078610cfb1f858cbb5f501db1757d7e49067ee76",
+  "workspace_digest": "3375982d74112d66be4939dcdafa69dc9f9f082bb975e6e4cef578d975dbf8d7",
+  "acceptance_input_digest": "d1e05bb2242a138cda82245e0b49cac7c66741c0a2d34c25fe1264982ffdf481",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "specs/agent/agent.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "02d2be2c63d4c13a1ee00a34d5b4cbcb6fe043b8f9f45dc73d8162ba16e24663",
+        "entry_digest": "08fc371f6c5090b95e37f1f2507df034fb46c11bb3cdb30000582ac4279b8560",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+        "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "8aee078e4d233f80e7cad1976afd53a0b1107dd793e926bd1aabea75a17a07e9",
+        "entry_digest": "6718a0a9c1ce0c5e4b5a8f9a2c3f2efd0042684c310661aa335bfa71b517c865",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+        "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3b25010485048964517f20e6be97cee50138998dfb48cdfd5bdb68db32ddc665",
+        "entry_digest": "7205b65d65fb0bdfee21db1f785641419c1cc934cc1e61b15788f01a995b3b11",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "tests/agent.safe3a-owner-shell.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "3830672cc0d0f91728344d4db6fb31093c5af8b8b0239c3bd2ef84fdcc67a8fa",
+        "entry_digest": "74b2dce5f4946e6c1f455674953af742fe1d106c57387a1d7535e6701b1535f6",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-503"
+  ]
+}

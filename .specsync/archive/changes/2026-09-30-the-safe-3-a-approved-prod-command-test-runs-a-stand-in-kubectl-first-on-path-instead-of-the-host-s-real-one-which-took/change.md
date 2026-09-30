@@ -1,6 +1,6 @@
 ---
 id: the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 635d6a9b6a32a7874e5b32a1400051c641729bd2
 ---

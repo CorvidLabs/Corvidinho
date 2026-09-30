@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "334c1da0ea155c036d7302e0d84249cadfa865c2",
+  "contract_digest": "2c21f2f941172f5aa82d8cad1e0927ea8969780ac47bf21ee1b405ecf4ff9193",
+  "execution_digest": "b1387e06d5c8afe26a36bf88078610cfb1f858cbb5f501db1757d7e49067ee76",
+  "workspace_digest": "3375982d74112d66be4939dcdafa69dc9f9f082bb975e6e4cef578d975dbf8d7",
+  "timestamp": 1790800078
+}
