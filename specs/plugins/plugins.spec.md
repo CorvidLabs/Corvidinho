@@ -432,9 +432,16 @@ keys; the ssh family); and, in the typed text only, an edit (`sed -i` /
 `--in-place`, and output redirections other than `/dev/null`, stdout, stderr
 and fd dups). The download, delete and secret families also read the in-root
 scripts, so a script written with files-write and run with `sh x.sh` does
-not get past them. SAFE-21 residuals: a script's own redirections (the edit
-family reads the typed text only); writers other than `sed -i` and `>`
-(`tee`, `cp`, `dd of=`, `perl -i`, an interpreter); code a program fetches
+not get past them. A shell fed a download is refused whatever its `-c`
+runs, a downloaded file run by path is refused, `find -L` / `-follow`
+deletes and `rsync --delete` outside are refused, a glob that matches a
+secret file now (`cat .en*`) is refused, wrappers that start their command
+with an env of their own (`env -i`, `exec -c`, `sudo`, `doas`, `su`,
+`runuser`, `pkexec`) and `ps e` are refused as secret reads, and `tee` /
+`sponge` to a file and `perl -i` / `ruby -i` / `awk -i inplace` are refused
+as edits. SAFE-21 residuals: a script's own redirections (the edit
+family reads the typed text only); writers that are not an edit idiom
+(`cp`, `dd of=`, `install`, an interpreter); code a program fetches
 itself (`python3 -c 'urllib…'`, `npx`, `deno run URL`) or a download saved
 under a name the command does not show and run later; deletes and secret
 reads done by another interpreter, a tool's own strings (`make`, `npm run`)
@@ -451,7 +458,12 @@ key-less `GIT_SSH_COMMAND`, gh reading an empty config dir. The spawn goes
 through `spawnCapped` with the calling run's abort signal, the runners' 10
 minute timeout (exit 124) and 64 KiB per-stream cap, its process group killed
 on timeout or abort (exit 130); a shell that cannot start returns exit 127,
-and the output is secret-scrubbed. Residual: on-disk credentials a process
+and the output is secret-scrubbed (vendor-key shapes and the literal value
+of every set secret env var). git also gets empty command-line
+`http.extraHeader` and `http.https://github.com/.extraHeader` values, so a
+stored `Authorization` header in the repo's config is not sent. Residual: a
+repo config that embeds a token in a remote URL, or includes another file
+(`include.path`, `includeIf`); on-disk credentials a process
 reads without git or gh (an interpreter opening `~/.ssh/id_*`, `ssh` started
 by a program), and tools with their own credential stores (`cargo publish`
 with `~/.cargo/credentials.toml`, npm tokens); a sandbox (G13) is deferred.

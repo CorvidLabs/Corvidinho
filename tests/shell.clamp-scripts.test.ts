@@ -179,8 +179,8 @@ describe("shell-exec SAFE-3 scripts end to end (REQ-plugins-087)", () => {
       "touch spawned; cat bad.sh | sh",
       "touch spawned; trap 'cd /etc && pwd' EXIT",
       "touch spawned; alias c=cd\nc /etc && pwd",
-      // `tee`, not `>`: a `>` edit is refused first by SAFE-21 (shell.footguns.test.ts).
-      "echo 'touch spawned; cd /etc' | tee gen.sh >/dev/null; sh gen.sh",
+      // `cp`, not `>` or `tee`: those edits are refused first by SAFE-21 (shell.footguns.test.ts).
+      "cp bad.sh gen.sh; sh gen.sh",
     ];
     for (const command of escapes) {
       const result = await run(command);

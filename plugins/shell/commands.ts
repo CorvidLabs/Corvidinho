@@ -11,7 +11,7 @@
  */
 
 import { resolve } from "node:path";
-import { scrubSecrets } from "../../src/store/scrub.ts";
+import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { spawnCapped } from "../fledge/spawn.ts";
 import {
@@ -171,7 +171,7 @@ export const shellCommands: PluginCommand[] = [
       }
 
       // Shell output is untrusted data headed for chat/logs: scrub secrets (SAFE-6).
-      let output = scrubSecrets(res.stdout + res.stderr);
+      let output = scrubSecrets(redactSecretEnvValues(res.stdout + res.stderr));
       if (res.truncated) {
         output += `\n[output truncated at ${SHELL_MAX_OUTPUT_BYTES} bytes per stream]\n`;
       }

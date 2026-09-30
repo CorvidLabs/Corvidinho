@@ -614,6 +614,7 @@ Acceptance Criteria
 - Fixture tests mock fetch; no live API.
 ### REQ-agent-085
 
+
 Real-diff verify gate (AGENT-4, issue #85). When the verify gate is on,
 `runTask` SHALL snapshot the run's git project before the first attempt:
 `HEAD`, `git status --porcelain=v1 -z --untracked-files=all --no-renames`
@@ -668,7 +669,7 @@ Acceptance Criteria
 - A tracker whose diff lists 30000 paths adds 1000 of them to `filesChanged` after the tool-reported ones, the note counts all 30000, and the NDJSON `result` line read in 64 KiB chunks still parses with the "Verification failed" summary.
 - With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
 - With the gate off no snapshot is taken.
-- End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken | tee app.ts >/dev/null` in a temp git repo (a `>` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write goes through `tee`); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
+- End to end: the tool loop runs the real code-tier `shell-exec` with `cp broken.ts app.ts` in a temp git repo (a `>` or `tee` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write is a copy); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
 
 ### REQ-agent-428
 

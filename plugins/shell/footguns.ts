@@ -31,8 +31,9 @@
  * does not get past them.
  */
 
+import { readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, normalize, resolve } from "node:path";
+import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { isVerifyEnvDropped } from "../../src/agent/verify.ts";
 import { resolveAllowlistPath } from "../../src/allowlist/load.ts";
 import { isSecretPath } from "../files/protectedPaths.ts";
@@ -190,18 +191,67 @@ function editFootgun(cmd: SimpleCommand): Footgun | null {
   if (cmd.start >= cmd.words.length) return null;
   const chain = commandChain(cmd.words, cmd.start);
   for (let n = 0; n < chain.length; n++) {
-    const name = baseName(cmd.words[chain[n]!.k]!.value);
-    if (name !== "sed" && name !== "gsed") continue;
-    if (sedInPlace(linkWords(cmd, chain, n))) {
-      return {
-        rule: "edit",
-        why: "`sed -i` edits files in place behind the file tools",
-        instead: `${INSTEAD.edit} (sed without -i only prints)`,
-        script: null,
-      };
+    const words = linkWords(cmd, chain, n);
+    const name = baseName(words[0]!.value);
+    const edit = (why: string, instead = INSTEAD.edit): Footgun => ({
+      rule: "edit",
+      why,
+      instead,
+      script: null,
+    });
+    if ((name === "sed" || name === "gsed") && sedInPlace(words)) {
+      return edit(
+        "`sed -i` edits files in place behind the file tools",
+        `${INSTEAD.edit} (sed without -i only prints)`,
+      );
+    }
+    // The same in-place edit spelled by another tool.
+    if ((name === "perl" || name === "ruby") && inPlaceFlag(words)) {
+      return edit(`\`${name} -i\` edits files in place behind the file tools`);
+    }
+    if (/^[gm]?awk$/.test(name) && awkInPlace(words)) {
+      return edit(`\`${name} -i inplace\` edits files in place behind the file tools`);
+    }
+    // `tee FILE` / `sponge FILE` are a `>` redirection spelled as a command.
+    if (name === "tee" || name === "sponge") {
+      const file = words
+        .slice(1)
+        .find((w) => !w.value.startsWith("-") && !(OK_OUTPUT_TARGETS.has(w.value) && !w.expands));
+      if (file) {
+        return edit(`${show(`${name} ${file.value}`)} writes a file behind the file tools, like \`>\``);
+      }
     }
   }
   return null;
+}
+
+/** `perl -i` / `-pi` / `-i.bak`, `ruby -i`: an option cluster holding `i` before the script. */
+function inPlaceFlag(words: readonly Word[]): boolean {
+  for (let m = 1; m < words.length; m++) {
+    const v = words[m]!.value;
+    if (v === "--" || !v.startsWith("-")) return false;
+    if (v.startsWith("--")) continue;
+    // `-e CODE` / `-I DIR` style options end the cluster; their argument is skipped.
+    const cluster = v.slice(1);
+    for (const ch of cluster) {
+      if (ch === "i") return true;
+      if ("eEIrlCFxX".includes(ch)) break;
+    }
+    if (/^-[eEIr]$/.test(v)) m++;
+  }
+  return false;
+}
+
+/** `awk -i inplace` / `--include=inplace` (gawk's in-place extension). */
+function awkInPlace(words: readonly Word[]): boolean {
+  for (let m = 1; m < words.length; m++) {
+    const v = words[m]!.value;
+    if ((v === "-i" || v === "--include") && /^inplace(\.awk)?$/.test(words[m + 1]?.value ?? "")) {
+      return true;
+    }
+    if (/^(-i|--include=)inplace(\.awk)?$/.test(v)) return true;
+  }
+  return false;
 }
 
 // ------------------------------------------------------------ download (b)
@@ -376,12 +426,25 @@ function downloadFootgun(
   const chain = commandChain(cmd.words, cmd.start);
   const fedByDownload = cmd.upstream.some(isDownloader);
   for (let n = 0; n < chain.length; n++) {
-    const name = baseName(cmd.words[chain[n]!.k]!.value);
+    const raw = cmd.words[chain[n]!.k]!;
+    const name = baseName(raw.value);
     const code = codeOf(cmd, chain, n);
     const viaXargs = chain.slice(0, n + 1).some((l) => l.via === "xargs");
     let why: string | null = null;
-    if (fedByDownload && (code?.from === "stdin" || (code && viaXargs))) {
+    // A shell fed a download is refused whatever it runs: its `-c` string can
+    // hand that input on to another shell or interpreter.
+    if (
+      fedByDownload &&
+      (code?.from === "stdin" || (code && viaXargs) || SHELLS.has(name))
+    ) {
       why = `a download is piped into ${show(name)}, which runs it as code`;
+    } else if (
+      raw.value.includes("/") &&
+      !raw.expands &&
+      downloadWrites(all, raw.value)
+    ) {
+      // A downloaded file run by path (`curl -O …/i.sh; ./i.sh`).
+      why = `${show(raw.value)} is run, and this command downloads it`;
     } else if (code?.from === "dynamic") {
       why =
         `${show(name)} runs code from ${show(code.word)}, which this command fills ` +
@@ -643,8 +706,27 @@ function deleteFootgun(cmd: SimpleCommand, root: string): Footgun | null {
       // find's expression runs on past its `-exec` command.
       const f = findParts(cmd.words.slice(chain[n]!.k));
       if (!f.deletes) continue;
+      if (f.follows) {
+        // `find -L` / `-follow` walks into symlinked dirs, so what it deletes
+        // can sit outside the worktree whatever its start paths are.
+        return hit(
+          "`find -L` / `-follow` follows symlinks, so its deletes can reach outside the worktree",
+        );
+      }
       for (const r of f.roots) {
         const why = deleteTargetWhy("find", r, cmd, root, f.follows, true);
+        if (why) return hit(why);
+      }
+      continue;
+    }
+    if (
+      name === "rsync" &&
+      words.some((w) => /^--(del|delete\S*|remove-source-files)$|^--delete/.test(w.value))
+    ) {
+      // `rsync --delete*` removes at its destination, `--remove-source-files`
+      // at its sources: every operand must stay inside.
+      for (const t of operands(words, /[eBfT]/, ["--rsh", "--filter", "--exclude", "--include"])) {
+        const why = deleteTargetWhy("rsync", t, cmd, root, false, true);
         if (why) return hit(why);
       }
       continue;
@@ -777,6 +859,42 @@ function steersCredentials(name: string): boolean {
   return isCredentialEnvKey(name);
 }
 
+/** Commands that run another command with an environment of their own (not the scrubbed one). */
+const ENV_RESETTERS = new Set(["sudo", "doas", "su", "runuser", "pkexec"]);
+
+/**
+ * The wrapper at the head of `words` that drops the child env this shell
+ * starts with (SAFE-21.a) — `env -i` / `-` / `--ignore-environment`, bash
+ * `exec -c`, or a user switcher that builds its own env — else null.
+ */
+function resetsEnv(name: string, words: readonly Word[]): string | null {
+  if (ENV_RESETTERS.has(name)) return name;
+  const opts: string[] = [];
+  for (let m = 1; m < words.length; m++) {
+    const v = words[m]!.value;
+    if (name === "env" && v === "-") return "env -";
+    if (v === "--" || !v.startsWith("-")) break;
+    opts.push(v);
+    // `env -u NAME`, `-C DIR`, `-S STR`, `--unset NAME`: skip the argument.
+    if (name === "env" && (/^-[A-Za-z]*[uCS]$/.test(v) || /^--(unset|chdir|split-string)$/.test(v))) {
+      m++;
+    }
+  }
+  if (name === "env") {
+    const hit = opts.find(
+      (v) =>
+        (v.length > 3 && "--ignore-environment".startsWith(v)) ||
+        (/^-[A-Za-z]+$/.test(v) && v.slice(1).split(/[uCS]/)[0]!.includes("i")),
+    );
+    return hit ? `env ${hit}` : null;
+  }
+  if (name === "exec") {
+    const hit = opts.find((v) => /^-[A-Za-z]*c/.test(v));
+    return hit ? `exec ${hit}` : null;
+  }
+  return null;
+}
+
 /** git `-c` keys that bring credentials back (helpers, includes, URL rewrites, ssh). */
 const GIT_CREDENTIAL_KEYS =
   /^(credential\b|include\.|includeif\.|url\.|core\.sshcommand|core\.askpass|http\..*extraheader)/i;
@@ -821,6 +939,71 @@ function placeOf(path: string, s: SecretCtx, tree: boolean): string | null {
   return null;
 }
 
+/** Most paths one glob is expanded to when it is checked for secrets. */
+const MAX_GLOB_MATCHES = 2000;
+
+/** A shell glob component as a regex (a leading `.` must be matched literally). */
+function globRegex(component: string): RegExp | null {
+  let re = "^";
+  for (let k = 0; k < component.length; k++) {
+    const c = component[k]!;
+    if (c === "*") re += "[^/]*";
+    else if (c === "?") re += "[^/]";
+    else if (c === "[") {
+      const close = component.indexOf("]", k + 2);
+      if (close < 0) {
+        re += "\\[";
+        continue;
+      }
+      let set = component.slice(k + 1, close);
+      if (set.startsWith("!")) set = `^${set.slice(1)}`;
+      re += `[${set.replace(/\\/g, "\\\\")}]`;
+      k = close;
+    } else re += c.replace(/[.+^${}()|\\]/g, "\\$&");
+  }
+  try {
+    return new RegExp(`${re}$`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The paths `pattern` matches from `base` right now, the way the shell
+ * expands it (no leading-dot match without a literal `.`), at most
+ * MAX_GLOB_MATCHES of them.
+ */
+function globMatches(pattern: string, base: string): string[] {
+  const abs = isAbsolute(pattern);
+  let paths = [abs ? "/" : base];
+  for (const part of pattern.split("/")) {
+    if (part === "" || part === ".") continue;
+    const next: string[] = [];
+    if (!/[*?[]/.test(part)) {
+      for (const p of paths) next.push(join(p, part));
+    } else {
+      const rx = globRegex(part);
+      if (!rx) return [];
+      for (const p of paths) {
+        let entries: string[] = [];
+        try {
+          entries = readdirSync(p);
+        } catch {
+          continue;
+        }
+        for (const e of entries) {
+          if (e.startsWith(".") && !part.startsWith(".")) continue;
+          if (rx.test(e)) next.push(join(p, e));
+          if (next.length >= MAX_GLOB_MATCHES) break;
+        }
+      }
+    }
+    paths = next;
+    if (paths.length === 0 || paths.length >= MAX_GLOB_MATCHES) break;
+  }
+  return paths;
+}
+
 /** Why the path-like word `raw` reads a secret, else null. */
 function secretWordWhy(raw: string, cmd: SimpleCommand, s: SecretCtx, tree: boolean): string | null {
   const v = expandKnown(raw, s);
@@ -837,8 +1020,18 @@ function secretWordWhy(raw: string, cmd: SimpleCommand, s: SecretCtx, tree: bool
     if (isSecretPath(p)) return `${show(raw)} is a secret path (.env, keys, credentials)`;
     if (PROC_ENVIRON.test(p)) return `${show(raw)} is a process's environment (the bot's holds its keys)`;
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(p)) continue; // a URL, not a path
-    // A glob reads what its literal prefix dir holds.
+    // A glob reads what it matches now: `cat .en*` is `cat .env`.
     const glob = p.search(/[*?[]/);
+    if (glob >= 0) {
+      for (const base of cmd.cwds) {
+        for (const match of globMatches(p, base)) {
+          if (isSecretPath(isAbsolute(p) ? match : relative(base, match))) {
+            return `${show(raw)} matches a secret path (.env, keys, credentials)`;
+          }
+        }
+      }
+    }
+    // A glob also reads what its literal prefix dir holds.
     const literal = glob >= 0 ? p.slice(0, p.lastIndexOf("/", glob) + 1) || "." : p;
     const paths = new Set<string>();
     for (const base of cmd.cwds) {
@@ -885,6 +1078,16 @@ function secretFootgun(cmd: SimpleCommand, s: SecretCtx): Footgun | null {
     const args = words.slice(1).map((w) => w.value);
     if (readsTrees(words)) tree = true;
     if (SSH_COMMANDS.has(name)) return hit(`${show(name)} uses the owner's ssh keys (~/.ssh)`);
+    const reset = resetsEnv(name, words);
+    if (reset) {
+      return hit(
+        `${show(reset)} starts its command with a fresh environment, which points git and gh ` +
+          "back at the owner's credentials (SAFE-21.a)",
+      );
+    }
+    if (name === "ps" && args.some((v) => !v.startsWith("-") && /^[A-Za-z]*e[A-Za-z]*$/.test(v))) {
+      return hit("`ps e` shows other processes' environments (the bot's holds its keys)");
+    }
     if (name === "rsync" && (args.some((v) => /^-[A-Za-z]*e|^--rsh/.test(v)) ||
       args.some((v) => /^[^/:]+:(?!\/\/)/.test(v)))) {
       return hit("`rsync` to a remote host uses the owner's ssh keys (~/.ssh)");

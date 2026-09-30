@@ -242,16 +242,19 @@ describe("SAFE-21.a: the runners start without GitHub / git credentials (REQ-plu
     expect(r.ok).toBe(true);
     const out = String(r.message);
     for (const k of [
-      "GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GIT_ASKPASS", "SSH_AUTH_SOCK", "GIT_CONFIG_KEY_1",
-      "GIT_CONFIG_VALUE_1", "GIT_CONFIG_PARAMETERS",
+      "GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GIT_ASKPASS", "SSH_AUTH_SOCK", "GIT_CONFIG_PARAMETERS",
     ]) {
       expect(out).not.toMatch(new RegExp(`^${k}=`, "m"));
     }
+    // The inherited `credential.helper=store` pair is gone; slots 0..2 are the resets.
+    expect(out).not.toMatch(/^GIT_CONFIG_VALUE_\d+=store$/m);
     expect(out).toMatch(/^GIT_CONFIG_GLOBAL=\/dev\/null$/m);
     expect(out).toMatch(/^GIT_CONFIG_NOSYSTEM=1$/m);
-    expect(out).toMatch(/^GIT_CONFIG_COUNT=1$/m);
+    expect(out).toMatch(/^GIT_CONFIG_COUNT=3$/m);
     expect(out).toMatch(/^GIT_CONFIG_KEY_0=credential\.helper$/m);
-    expect(out).toMatch(/^GIT_CONFIG_VALUE_0=$/m);
+    expect(out).toMatch(/^GIT_CONFIG_KEY_1=http\.extraHeader$/m);
+    expect(out).toMatch(/^GIT_CONFIG_KEY_2=http\.https:\/\/github\.com\/\.extraHeader$/m);
+    for (const n of [0, 1, 2]) expect(out).toMatch(new RegExp(`^GIT_CONFIG_VALUE_${n}=$`, "m"));
     expect(out).toMatch(/^GIT_TERMINAL_PROMPT=0$/m);
     expect(out).toMatch(/^GIT_SSH_COMMAND=ssh -F \/dev\/null .*IdentityAgent=none/m);
     expect(out).toMatch(/^CARGO_NET_GIT_FETCH_WITH_CLI=true$/m);

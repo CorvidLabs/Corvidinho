@@ -26,7 +26,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildVerifyEnv } from "../../src/agent/verify.ts";
-import { scrubSecrets } from "../../src/store/scrub.ts";
+import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { spawnCapped } from "../fledge/spawn.ts";
 
@@ -125,9 +125,14 @@ export function withoutGitCredentials(env: Record<string, string>): Record<strin
   }
   env.GIT_CONFIG_GLOBAL = "/dev/null";
   env.GIT_CONFIG_NOSYSTEM = "1";
-  env.GIT_CONFIG_COUNT = "1";
-  env.GIT_CONFIG_KEY_0 = "credential.helper";
-  env.GIT_CONFIG_VALUE_0 = "";
+  // Empty values reset a repo's own helpers and extra headers (a stored
+  // `Authorization` header, e.g. actions/checkout's) at command-line level.
+  const resets = ["credential.helper", "http.extraHeader", "http.https://github.com/.extraHeader"];
+  env.GIT_CONFIG_COUNT = String(resets.length);
+  resets.forEach((key, n) => {
+    env[`GIT_CONFIG_KEY_${n}`] = key;
+    env[`GIT_CONFIG_VALUE_${n}`] = "";
+  });
   env.GIT_TERMINAL_PROMPT = "0";
   env.GIT_SSH_COMMAND = NO_KEY_GIT_SSH;
   env.GH_CONFIG_DIR = emptyGhConfigDir();
@@ -193,7 +198,7 @@ export async function runRunner(opts: RunRunnerOptions): Promise<PluginHandlerRe
   }
 
   // Runner output is untrusted data headed for chat/logs: scrub secrets (SAFE-6).
-  let output = scrubSecrets(`${res.stdout}${res.stderr}`);
+  let output = scrubSecrets(redactSecretEnvValues(`${res.stdout}${res.stderr}`));
   if (res.truncated) output += `\n[output truncated at ${maxBytes} bytes per stream]\n`;
   const exitCode = res.timedOut ? 124 : res.aborted ? 130 : res.code;
   const data = {

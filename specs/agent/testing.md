@@ -40,7 +40,7 @@ dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
 reaches the verify gate": end to end through the real `shell-exec` plugin,
-writing with `printf broken | tee app.ts` (SAFE-21 refuses a `>` edit,
+writing with `cp broken.ts app.ts` (SAFE-21 refuses a `>` or `tee` edit,
 REQ-plugins-494).
 ## Allowlisted dangerous tools in task run (REQ-agent-501, REQ-agent-502)
 

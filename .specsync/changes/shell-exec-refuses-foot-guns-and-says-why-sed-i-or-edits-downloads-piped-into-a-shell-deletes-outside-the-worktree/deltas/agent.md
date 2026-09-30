@@ -3,7 +3,7 @@ module: agent
 change: shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree
 ---
 
-# Delta: agent (the real-diff shell edit fixture writes through tee, SAFE-21)
+# Delta: agent (the real-diff shell edit fixture writes with cp, SAFE-21)
 
 ## Modified
 
@@ -64,4 +64,4 @@ Acceptance Criteria
 - A tracker whose diff lists 30000 paths adds 1000 of them to `filesChanged` after the tool-reported ones, the note counts all 30000, and the NDJSON `result` line read in 64 KiB chunks still parses with the "Verification failed" summary.
 - With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
 - With the gate off no snapshot is taken.
-- End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken | tee app.ts >/dev/null` in a temp git repo (a `>` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write goes through `tee`); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
+- End to end: the tool loop runs the real code-tier `shell-exec` with `cp broken.ts app.ts` in a temp git repo (a `>` or `tee` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write is a copy); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
