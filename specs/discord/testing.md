@@ -1425,7 +1425,11 @@ code step. The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
   failed DM hands back the ask and the episode claim; the next pass DMs the
   owner once (`SPEND_STOP_DM_HEAD`, then `GitHub CorvidLabs/Corvidinho#7:
   <link>`, then the quoted details, no mention); another thread's stop in the
-  same cap episode is taken and not DMed, with a log line.
+  same cap episode is taken and not DMed, with a log line. ("a stop while the
+  owner's DM is in flight …") — a DM that hangs past the stop grace hands back
+  the ask and its episode claim, so the next start DMs the owner once instead
+  of dropping it as already told; a later stop in that episode is not DMed.
+  Fails on the pre-review branch source (the episode stayed claimed).
 - `tests/agent.spend-unknown.test.ts` ("the unknown-price card on the
   bridge's engine") — the owner is DMed `Amount: unknown (…)` (never `$0`);
   Approve plus the code sends the call once and answers

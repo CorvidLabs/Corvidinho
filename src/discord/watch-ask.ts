@@ -23,8 +23,9 @@
  * by the GitHub thread, and it goes out once per cap episode like the
  * channel ping of a chat or schedule stop (`claimCapPing` on the spend alert
  * outbox, keyed on the caps the stop names): a stop whose episode was already
- * told is taken and dropped with a log line. A DM that does not go out hands
- * both the episode claim and the ask back.
+ * told is taken and dropped with a log line. A DM that does not go out, or
+ * a stop's hand-back of a DM still in flight, hands both the episode claim
+ * and the ask back (a DM that then goes out after all takes both again).
  */
 
 import type { Database } from "bun:sqlite";
@@ -99,7 +100,12 @@ export function createWatchAskDelivery(opts: {
   const retryAt = new Map<string, number>();
   let stopped = false;
   let pass: Promise<WatchAskDeliveryResult> | null = null;
-  let current: { ask: WatchOwnerAsk; handedBack: boolean } | null = null;
+  /**
+   * The ask whose DM is in flight, with its spend-cap episode claim (if any):
+   * a shutdown's hand-back gives both back, so a restart DMs it instead of
+   * finding its episode already told.
+   */
+  let current: { ask: WatchOwnerAsk; handedBack: boolean; episode: { release(): void } | null } | null = null;
 
   const where = (a: WatchOwnerAsk) => `${a.repo}#${a.number} id=${a.eventId}`;
   const label = (a: WatchOwnerAsk) => (a.ask.reason === "spend-cap" ? "WATCH spend-cap stop" : "WATCH stuck ask");
@@ -133,7 +139,7 @@ export function createWatchAskDelivery(opts: {
           continue;
         }
       }
-      const entry = { ask: a, handedBack: false };
+      const entry = { ask: a, handedBack: false, episode };
       current = entry;
       let sent = false;
       try {
@@ -144,8 +150,12 @@ export function createWatchAskDelivery(opts: {
         current = null;
       }
       if (sent) {
-        // Handed back by a shutdown while the DM was in flight: take it again.
-        if (entry.handedBack) store.claim(a);
+        // Handed back by a shutdown while the DM was in flight: take it (and
+        // its cap episode, which the hand-back gave back) again.
+        if (entry.handedBack) {
+          store.claim(a);
+          if (a.ask.reason === "spend-cap") spendAlerts.claimCapPing(spendScopesOf(a.ask));
+        }
         retryAt.delete(a.id);
         out.sent += 1;
         log(`[discord] ${label(a)} ${where(a)}: owner DMed (${why(a)})`);
@@ -166,7 +176,7 @@ export function createWatchAskDelivery(opts: {
       if (pass) return pass;
       pass = run()
         .catch((err) => {
-          log(`[discord] WATCH stuck ask delivery failed: ${formatErrorLine(err)}`);
+          log(`[discord] WATCH ask delivery (stuck asks, spend-cap stops) failed: ${formatErrorLine(err)}`);
           return { sent: 0, failed: 0, expired: 0 };
         })
         .finally(() => {
@@ -189,9 +199,12 @@ export function createWatchAskDelivery(opts: {
       } finally {
         if (timer) clearTimeout(timer);
       }
-      const held = current as { ask: WatchOwnerAsk; handedBack: boolean } | null;
+      const held = current as { ask: WatchOwnerAsk; handedBack: boolean; episode: { release(): void } | null } | null;
       if (held && !held.handedBack) {
         held.handedBack = true;
+        // A spend-cap stop's episode claim goes back with it (AUTONOMY-8):
+        // otherwise the next start would drop it as already told.
+        held.episode?.release();
         try {
           store.release(held.ask);
         } catch (err) {

@@ -187,7 +187,9 @@ total.`, logs `[watch] spend-cap stop CorvidLabs/Corvidinho#7 id=comment-1:
 queued for the owner's Discord DM (AUTONOMY-8)` with no amount, and posts
 only "Work is paused for budget." in its summary comment; `noteWatchRunAsk`
 gives `not-sent` / `no-owner` and `no-bridge` with lines naming no amount, and
-a later run with no ask drops the row. `tests/watch.stuck-ask.test.ts` passes
-unchanged (a clarify ask still never records one).
+a later run with no ask drops the row; for an event with no summary comment
+the no-bridge line says no comment on GitHub carries it (never that GitHub
+shows the pause). `tests/watch.stuck-ask.test.ts` passes unchanged (a
+clarify ask still never records one).
 - Fail on base: `noteWatchRunAsk` drops every non-stuck ask, so no row is
   recorded and the three tests fail.

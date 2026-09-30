@@ -364,6 +364,62 @@ describe("WATCH: a run stopped at a spend cap is handed to the bridge, which DMs
     expect(logs.join("\n")).not.toMatch(/\$\d/);
     expect(new WatchOwnerAskStore(db).pending()).toHaveLength(1);
     expect(noteWatchRunAsk({ ...base, owner: { discordId: OWNER }, ask: undefined })).toEqual({ kind: "none", cleared: true });
+    // An event with no summary comment (an assignment, a review request): the log does not claim GitHub shows the pause.
+    logs.length = 0;
+    expect(
+      noteWatchRunAsk({ ...base, summaryPosted: false, owner: { discordId: OWNER }, ask: CAP_STOP, isAlive: () => false }),
+    ).toEqual({ kind: "no-bridge" });
+    expect(logs.join("\n")).toContain("no comment on GitHub carries it (SAFE-14.a)");
+    expect(logs.join("\n")).not.toContain("GitHub shows only");
+    expect(logs.join("\n")).not.toMatch(/\$\d/);
+  });
+
+  test("a stop while the owner's DM is in flight hands back the ask and its cap episode, so the next start DMs it instead of dropping it", async () => {
+    const db = memDb();
+    const store = new WatchOwnerAskStore(db);
+    const outbox = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" }, now: () => 10 });
+    store.record({ event: ev(), ask: CAP_STOP, now: 5 });
+    let started = false;
+    const first = createWatchAskDelivery({
+      db,
+      owner: () => ({ discordId: OWNER }),
+      sendDm: () => () => {
+        started = true;
+        return new Promise(() => {});
+      },
+      now: () => 10,
+      log: () => {},
+      spendAlerts: outbox,
+    });
+    void first.deliver();
+    await Bun.sleep(10);
+    expect(started).toBe(true);
+    expect(store.pending()).toEqual([]);
+    first.stop();
+    expect(await first.settle(20)).toBe(false);
+    expect(store.pending()).toHaveLength(1);
+    // The next start: the owner gets the DM (the episode was handed back too).
+    const dms: Array<{ userId: string; content: string }> = [];
+    const logs: string[] = [];
+    const next = createWatchAskDelivery({
+      db,
+      owner: () => ({ discordId: OWNER }),
+      sendDm: () => async (o) => {
+        dms.push(o);
+        return { channelId: "dm", messageId: `m${dms.length}` };
+      },
+      now: () => 10,
+      log: (m) => logs.push(m),
+      spendAlerts: outbox,
+    });
+    expect(await next.deliver()).toEqual({ sent: 1, failed: 0, expired: 0 });
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.content).toStartWith(SPEND_STOP_DM_HEAD);
+    expect(logs.some((l) => l.includes("already told about this cap episode"))).toBe(false);
+    // Told now: another stop in the same episode is not DMed again.
+    store.record({ event: ev({ id: "comment-3", number: 9 }), ask: CAP_STOP, now: 6 });
+    expect(await next.deliver()).toEqual({ sent: 0, failed: 0, expired: 0 });
+    expect(dms).toHaveLength(1);
   });
 
   test("the bridge DMs the owner the stop's details with the GitHub thread; a second stop in the same cap episode is not DMed again; a failed DM hands both back", async () => {

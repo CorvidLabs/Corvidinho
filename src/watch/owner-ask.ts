@@ -264,7 +264,9 @@ export function noteWatchRunAsk(opts: {
   const why = spendCap ? "AUTONOMY-8" : "AGENT-16.a";
   const where = `${event.repo}#${event.number} id=${event.id}`;
   const onGithub = spendCap
-    ? "GitHub shows only that work is paused for budget (SAFE-14.a)"
+    ? opts.summaryPosted
+      ? "GitHub shows only that work is paused for budget (SAFE-14.a)"
+      : "no comment on GitHub carries it (SAFE-14.a)"
     : opts.summaryPosted
     ? "the run summary comment carries the question"
     : "no comment on GitHub carries the question";

@@ -783,7 +783,8 @@ not show, or no owner configured is a no (SAFE-20): nothing is sent
 or recorded, and the stop is a `SpendCapRefusal` — never a model failure,
 even when the request timeout ended the wait. The wait line is a Text event
 without amounts; the card records its waiting process so a killed run's card
-closes as a no. Unpriced, invalid-setting and ledger stops never raise a card.
+closes as a no. Invalid-setting and ledger stops never raise a card; a covered
+unpriced model's call asks on its own unknown-price card (REQ-agent-199).
 Autonomous mode is off unless the project `fledge.toml` sets
 `[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
 left out of the tool catalog unless the session is allowed (enabled, depth
