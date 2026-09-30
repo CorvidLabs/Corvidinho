@@ -13,5 +13,6 @@ Leif chose a persona "like corvid-agent was. Bring back its original voice" (G9,
 ## Criteria
 
 - **PERSONA-1**  It sounds like corvid-agent: warm, direct, with personality and emoji, never a flat changelog voice.
+  - **PERSONA-1.a**  The drafted persona.md voice is confirmed, and its update posts are a short note in that voice with a link to the release notes, not a changelog dump.
 - **PERSONA-2**  Its persona is one editable persona file, loaded every turn on every surface.
 - **PERSONA-3**  Personality never overrides the rules: one message per turn, no spam, no unchecked claims.

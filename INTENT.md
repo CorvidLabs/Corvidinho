@@ -18,6 +18,7 @@
 - [identity](hi/identity.md): IDENTITY (14 criteria)
 - [memory](hi/memory.md): MEMORY (9 criteria)
 - [ops](hi/ops.md): OPS (2 criteria)
+- [persona](hi/persona.md): PERSONA (4 criteria)
 - [plugin](hi/plugin.md): PLUGIN (7 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
 - [safe](hi/safe.md): SAFE (21 criteria)
