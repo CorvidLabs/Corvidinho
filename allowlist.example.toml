@@ -48,19 +48,31 @@ deny_users = []
 # discord_id must be the numeric user snowflake (quote it). The owner is ADMIN
 # unless muted or on deny_users; empty = no owner = nobody is ADMIN
 # (CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES are ignored).
-# Matching is by discord_id or github_login only — never by display.
+# Matching is by discord_id and, on GitHub, by github_id (your numeric GitHub
+# user id: `gh api users/<login> --jq .id`) only — never by display, and never
+# by github_login (IDENTITY-7.a: a renamed or re-registered login is someone
+# else). Without github_id you are not recognised as the owner on GitHub
+# (`corvidinho doctor` warns); github_login is only used to @mention you there.
+# github_id is read from this file only (no env var).
 # [owner]
 # discord_id = "000000000000000000"
+# github_id = "0"
 # github_login = "your-github-login"
 # display = "Your Name"
 
 # Optional declared people (IDENTITY-13/14): who's who on Discord and GitHub.
 # One [people.<id>] section per person; <id> is lowercase letters, digits,
 # - or _ ("owner" is reserved). Keep each value on one line. Matching uses
-# discord_ids, github_ids and github_logins only — never display or nicknames
-# (IDENTITY-7); an id listed for two people matches nobody. Only the owner
-# changes this: here on the VM, or with /admin people add|link|unlink|remove
-# (owner-only, audited) — never through chat (IDENTITY-6). Read live (no
+# discord_ids and, on GitHub, github_ids only — never display, nicknames or
+# github_logins (IDENTITY-7 / IDENTITY-7.a: a login can be renamed or
+# re-registered, so it is only a label). An entry with github_logins but no
+# github_ids still loads and still matches on Discord, but is not recognised on
+# GitHub until an id is linked: add github_ids here, or run /admin people link
+# person:<id> github:<login>, which looks the login's numeric id up once and
+# stores it (`corvidinho doctor` lists who is missing one). An id listed for
+# two people matches nobody. Only the owner changes this: here on the VM, or
+# with /admin people add|link|unlink|remove (owner-only, audited) — never
+# through chat (IDENTITY-6). Read live (no
 # restart). Declare yourself by putting the owner's discord_id in your entry.
 # Roles (IDENTITY-8..12): role = "team" (work tasks: /work edits + draft PR;
 # reviews: github-issue-comment / github-pr-review as COMMENT on

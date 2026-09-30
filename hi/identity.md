@@ -21,6 +21,7 @@ Corvidinho knows a durable owner (Discord user id, optional GitHub / display suc
 - **IDENTITY-14**  It recognises me and each declared person on Discord and GitHub.
 - **IDENTITY-6**  Only I add, change or remove a person's links, never through chat.
 - **IDENTITY-7**  It matches people on stable ids, never on display names.
+  - **IDENTITY-7.a**  On GitHub it matches people only by their numeric user id, so a renamed or re-registered login never counts as them.
 - **IDENTITY-8**  Each declared person has exactly one role (owner, team or community), and only I set it.
 - **IDENTITY-9**  The owner can use everything, subject to the must-ask list.
 - **IDENTITY-10**  Team members get work tasks, reviews, and only their own memory and briefings.
