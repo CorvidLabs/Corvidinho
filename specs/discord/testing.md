@@ -876,6 +876,10 @@ approval cards, REQ-discord-096).
     before delivery, or on Approve after it; `waitForDecision` closes an
     unanswered or aborted request as expired and reads another connection's
     decision.
+  - The card binds what it showed: a stored request whose row changed after
+    its card went out (as a re-scrub would) is closed as changed on Approve
+    (nothing done, no code), and the fresh card shows the new amount, records
+    its hash, and its Approve with the code acts.
   - Bridge: muting the owner between Approve and the code submit refuses the
     submit (and another user's), `memory-forget-approve` `denied` rows, and
     after unmute the same code works; a press carrying typed text or a submit
@@ -883,8 +887,11 @@ approval cards, REQ-discord-096).
     poll DMs a card recorded before the bridge started, and a second bridge
     process completes Approve and the code on that card; a forget card whose
     count changed after it went out is closed as changed (nothing deleted, no
-    code) and a fresh card with the new count follows; an ask that lapsed while
-    no bridge ran is closed and its asker told on the poll.
+    code) and a fresh card with the new count follows; so is a forget card a
+    v13 bridge sent (posted, no `action_hash`): Approve on it deletes nothing
+    and sends no code, and the fresh card's Approve with the code forgets; an
+    ask that lapsed while no bridge ran is closed and its asker told on the
+    poll.
   - Schema v14: a v13 DB (no approval tables, no `forget_requests.action_hash`)
     migrates keeping its forget ask, no plain `code` column, re-running is a
     no-op; `approval_requests` fields are stored scrubbed and are in

@@ -96,7 +96,11 @@ export type ApprovalRecord = {
   expiresAt: number;
   cardChannelId?: string;
   cardMessageId?: string;
-  /** The action hash the card showed (set when it was posted). */
+  /**
+   * The action hash the card showed (set when it was posted). Missing on a
+   * card sent before it was recorded (a forget card from before schema v14):
+   * such a card binds nothing, so Approve treats it as changed.
+   */
   actionHash?: string;
 };
 
@@ -391,7 +395,9 @@ export function createApprovalCards(deps: ApprovalCardsDeps): ApprovalCards {
     let parts: string[];
     let card: string;
     let hash: string;
+    let components: unknown[];
     try {
+      components = buildApproveDenyComponents(k.kind, req.id);
       const snap = k.snapshot(req);
       hash = snap.actionHash;
       parts = snap.view.text ? formatApprovalTextParts({ requestId: req.id, ...snap.view.text }) : [];
@@ -419,11 +425,7 @@ export function createApprovalCards(deps: ApprovalCardsDeps): ApprovalCards {
         return false;
       }
     }
-    const sent = await sendDmSafe({
-      userId: ownerId,
-      content: card,
-      components: buildApproveDenyComponents(k.kind, req.id),
-    });
+    const sent = await sendDmSafe({ userId: ownerId, content: card, components });
     if (!sent) {
       retryAt.set(key, now() + retryMs);
       return false;
@@ -622,7 +624,8 @@ export function createApprovalCards(deps: ApprovalCardsDeps): ApprovalCards {
       await reply({ content: `Could not check this request now — ${k.nothingDone}; it stays open: ${errText(err)}`, ephemeral: true });
       return;
     }
-    if (req.actionHash && snap.actionHash !== req.actionHash) {
+    // A card that recorded no hash (sent before v14) binds nothing: changed.
+    if (snap.actionHash !== req.actionHash) {
       await changed();
       return;
     }
@@ -750,7 +753,8 @@ export function createApprovalCards(deps: ApprovalCardsDeps): ApprovalCards {
 /**
  * A kind whose requests live in `approval_requests` (src/approvals/store.ts):
  * the card shows the stored action, target, amount and text; the action
- * hash is the stored one, recomputed from the row; a request whose waiting
+ * hash is recomputed from the row and recorded when the card goes out, so a
+ * row changed after that gets a fresh card on Approve; a request whose waiting
  * process is gone is closed as a no. `onApprove` runs inside the engine's
  * transaction (default: nothing — the waiting process reads the approval
  * and uses it once, `ApprovalStore.consume`).
@@ -788,7 +792,8 @@ export function storedApprovalKind(opts: {
       undelivered: (t) => store.undelivered(opts.kind, t),
       expiredPending: (t) => store.expiredPending(opts.kind, t),
       pending: () => store.pending(opts.kind),
-      markCardPosted: (id, channelId, messageId) => store.markCardPosted(id, channelId, messageId),
+      markCardPosted: (id, channelId, messageId, actionHash) =>
+        store.markCardPosted(id, channelId, messageId, actionHash),
       resetCard: (id) => store.resetCard(id),
       decide: (id, status, o) => store.decide(id, status, o),
     },

@@ -394,6 +394,31 @@ describe("SAFE-19: destructive and money cards need a one-time code typed back",
   });
 });
 
+describe("SAFE-18/19: an Approve counts only for the action the card showed", () => {
+  test("a request changed after its card went out (e.g. re-scrubbed) is never acted on: a fresh card follows, and that one works", async () => {
+    const acted: string[] = [];
+    const e = engine((db, now) => [storedApprovalKind({ db, kind: "test", now, onApprove: (r) => void acted.push(r.id) })]);
+    const req = e.store.request({ kind: "test", title: "T", action: "Delete branch x", target: "repo", amount: "1 branch", ttlMs: 30 * MIN });
+    await e.cards.deliver();
+    // The row changes after the card went out (as a SAFE-6 re-scrub of it would).
+    e.db.run("UPDATE approval_requests SET amount = ? WHERE id = ?", ["2 branches", req.id]);
+    const pressed = await cardInteraction(e.handlers, OWNER_ID, approveCardCustomId("test", "approve", req.id));
+    expect(pressed.replies[0]!.content).toContain("Changed since this card was sent — nothing was done");
+    expect(pressed.replies[0]!.components).toEqual([]);
+    expect(codeDms(e.dms)).toEqual([]);
+    expect(acted).toEqual([]);
+    // The fresh card shows the row as it is now and records what it showed.
+    expect((await e.cards.deliver()).posted).toBe(1);
+    const fresh = e.dms.filter((d) => d.components).at(-1)!;
+    expect(fresh.content).toContain("Amount: 2 branches");
+    expect(e.store.get(req.id)!.actionHash).toBe(approvalActionHash(storedApprovalAction(e.store.get(req.id)!)));
+    const flow = await approveWithCode(e.handlers, e.dms, OWNER_ID, buttons(fresh.components)[0]!.custom_id);
+    expect(flow.submit[0]!.content).toBe("Approved by you.");
+    expect(acted).toEqual([req.id]);
+    e.db.close();
+  });
+});
+
 describe("SAFE-20: no answer, a late answer, or nobody waiting is a no", () => {
   test("an unanswered card expires on the pass (card marked, codes void); a press or a code after expiry does nothing", async () => {
     const acted: string[] = [];
@@ -708,6 +733,41 @@ describe("the bridge: the owner on every press and submit, typed text only from 
       expect(flow.submit[0]!.content).toContain("Approved by you — forgot 3 memories");
       expect(contents()).toEqual([]);
       expect(reqId).toMatch(/^fr_/);
+    } finally {
+      await b.result.stop();
+    }
+  });
+
+  test("a forget card sent before the upgrade (no action hash recorded) is never acted on: a fresh card with the hash follows", async () => {
+    const reqId = seedForgetAsk();
+    // A v13 bridge already DMed the card: posted, but no action hash.
+    const d = db();
+    try {
+      d.run(
+        "UPDATE forget_requests SET card_channel_id = ?, card_message_id = ?, card_posted_at = ?, action_hash = NULL WHERE id = ?",
+        [`dm-${OWNER_ID}`, "old-card", Date.now(), reqId],
+      );
+    } finally {
+      d.close();
+    }
+    const b = await bridge();
+    try {
+      const old = await cardInteraction(b.handlers, OWNER_ID, approveCardCustomId("forget", "approve", reqId), {
+        messageId: "old-card",
+      });
+      expect(old.replies[0]!.update).toBe(true);
+      expect(old.replies[0]!.content).toContain(
+        "Changed since this card was sent — nothing was forgotten; a new card with the current details follows.",
+      );
+      expect(old.replies[0]!.components).toEqual([]);
+      expect(codeDms(b.dms)).toEqual([]);
+      expect(contents()).toEqual(expect.arrayContaining(["KYN-TZ", "KYN-PRIVATE"]));
+      await waitFor(() => b.dms.some((x) => x.components), "the fresh card");
+      const fresh = b.dms.find((x) => x.components)!;
+      expect(fresh.content).toContain("Amount: 2 memories (2 stored), 0 session turns and 0 kept conversations");
+      const flow = await approveWithCode(b.handlers, b.dms, OWNER_ID, buttons(fresh.components)[0]!.custom_id);
+      expect(flow.submit[0]!.content).toContain("Approved by you — forgot 2 memories");
+      expect(contents()).toEqual([]);
     } finally {
       await b.result.stop();
     }

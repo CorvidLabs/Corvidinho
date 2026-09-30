@@ -254,11 +254,17 @@ export class ApprovalStore {
     ).map(toRequest);
   }
 
-  markCardPosted(id: string, channelId: string, messageId: string): void {
+  /**
+   * The card went out, showing the action `actionHash` binds (SAFE-18): an
+   * Approve counts only while the row still hashes to it, so a row changed
+   * after the card was sent (e.g. re-scrubbed, SAFE-6) gets a fresh card.
+   */
+  markCardPosted(id: string, channelId: string, messageId: string, actionHash?: string): void {
     this.db.run(
-      `UPDATE approval_requests SET card_channel_id = ?, card_message_id = ?, card_posted_at = ?
+      `UPDATE approval_requests SET card_channel_id = ?, card_message_id = ?, card_posted_at = ?,
+         action_hash = COALESCE(?, action_hash)
        WHERE id = ? AND status = 'pending'`,
-      [channelId, messageId, this.now(), id],
+      [channelId, messageId, this.now(), actionHash ?? null, id],
     );
   }
 
