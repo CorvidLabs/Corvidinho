@@ -191,6 +191,13 @@
         "discord": "a4ca281edb24541d0d48bc1e3750ba4d90677ebd592284d37e72cb4d1dcab51a",
         "watch": "8d2fd3dba3b86543271502252acbfd0b13606fc42d45486e1467b115b11666b2"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790778319,
+      "digest": "45b103962da5b87271d89893ed90e37729d1924d93a4984c1f35ecb47d21a4e4",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []

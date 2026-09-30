@@ -7,11 +7,11 @@
   "title": "I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10)",
   "description": "I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "156cfa975c6d269b7e3a183cef3c7fdb20cab4f9",
   "created_at": 1790774621,
-  "updated_at": 1790778151,
+  "updated_at": 1790778624,
   "affected_specs": [
     "agent",
     "cli",

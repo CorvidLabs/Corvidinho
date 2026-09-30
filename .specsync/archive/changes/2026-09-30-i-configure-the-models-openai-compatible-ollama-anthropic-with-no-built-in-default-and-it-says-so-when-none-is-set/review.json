@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "7d7ed80118d35ec4485279c3d3605418909875da",
+  "contract_digest": "c6ca3d51a0fb6b23c1c3d596c214544ae3269fd57b7236952dd48dd77df299d3",
+  "execution_digest": "94e2cf68bf66d2c82cdefff303cf545f7e7da056f02e8971c1041f7cfa8c9a13",
+  "workspace_digest": "2209e0630868c9dd26da8a4c8b464c74c93e16303b4d12ce0a01ee530f582dc8",
+  "timestamp": 1790778304
+}
