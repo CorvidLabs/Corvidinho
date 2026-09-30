@@ -351,3 +351,36 @@ frames report a failover returns `data.modelFallback` with it once;
 `runDelegateChild` returns the worker's failovers for the `delegate` data;
 the lead's tool loop reports a `delegate` result's `modelFallback` as its own
 (`via: "delegate"`). Fail on base (no field).
+
+## Schedule-run stamps in the tool layer (REQ-plugins-065; DISCORD-SCHEDULE-1.a)
+
+`tests/roles.team.test.ts` ("DISCORD-SCHEDULE-1.a: schedule-run stamps in
+the tool layer") — with `CORVIDINHO_DISCORD_SESSION_ID=schedule_…`: the
+owner stamp for the owner resolves `owner`; a team member stamped community,
+team or owner resolves `community`; the same team stamp outside a schedule is
+`team`. `runPlugin` runs the owner schedule's `github-issue-comment`
+(dry run) and `files-write`, and refuses a team member's scheduled
+`github-issue-comment` with the role refusal (exit 2). The catalog offers
+the owner's schedule its allowlisted owner tools and `files-write` but not
+`shell-exec`, and a team member's schedule no mutating tool.
+- Fail on base: with the base's (af4597e) `src/plugins/roles.ts` swapped in,
+  all three fail (a team stamp in a schedule resolves `team`); all pass on
+  the branch.
+## SpecSync change tools and own-change approve / finalize (REQ-plugins-518, REQ-plugins-519, REQ-plugins-065 / REQ-plugins-114 modified; AGENT-18, AGENT-18.a)
+
+`tests/agent.repo-ways.test.ts` ("SpecSync change tools", "Corvidinho is a
+fixed fact", "approve and finalize"): tool shapes (mutating / dangerous,
+minTier, `agentTool: false`, `TEAM_WORK_TOOLS`, role gate by work flag),
+`SDD_OFF_REFUSAL` and `--root` refusals with nothing spawned, `change new`
+recording `opened` in the run ledger, `change status`, hi citations (none,
+not captured, retired refused; captured spawns with the joined answer; other
+questions and non-hi repos unchecked), `citedHiIds`, origin URL forms, the
+checkout / worktree / look-alike rule, and every `selfLifecycleRefusal`
+branch (outside Corvidinho, not this run's change, no green lane, WATCH,
+schedule session and stamp, worker, community) plus the SAFE-1 denial and
+the approve argv. `tests/roles.team.test.ts`: `TEAM_WORK_TOOLS` and the team
+`/work` catalog (approve / finalize never offered).
+`tests/agent.loop-guards.test.ts`: the four new tools are state-changing.
+`tests/fledge.plugins.test.ts`: the builtin surface with a Fledge plugin is
+under the ~9000-token budget. The fail-on-base proof is in
+`specs/agent/testing.md`.

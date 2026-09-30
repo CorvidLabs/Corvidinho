@@ -267,8 +267,9 @@ const FORGET_ON_GITHUB: PluginHandlerResult = {
 
 /**
  * Project memory (MEMORY-6): the owner and team (people who work on the
- * repo), and the local CLI (no role session). Community — undeclared,
- * WATCH, schedules, workers — neither reads nor writes it.
+ * repo), and the local CLI (no role session) — the owner's own schedules
+ * too (DISCORD-SCHEDULE-1.a). Community — undeclared, WATCH, schedules other
+ * people create, workers — neither reads nor writes it.
  */
 async function mayUseProjectMemory(env: NodeJS.ProcessEnv): Promise<boolean> {
   const role = await resolveActingRole(env);

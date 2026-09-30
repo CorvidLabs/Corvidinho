@@ -1,27 +1,42 @@
 /**
- * SAFE-8 — optional operator-set daily spend cap on provider (LLM) calls.
+ * SAFE-8 / SAFE-14 / SAFE-15 — optional operator-set rolling 24 h spend caps
+ * on provider (LLM) calls: a total cap and one cap per provider.
  *
- * Off unless CORVIDINHO_DAILY_SPEND_CAP_USD is set. With a cap, every
- * OpenAI-compatible chat call is priced from a per-model table, its estimate is
- * reserved against a rolling 24 h ledger in the shared SQLite DB before the
- * request is sent, and the reservation is replaced by the provider-reported
- * cost once the reply arrives. No cap ⇒ the fetch comes back untouched and the
- * DB is never opened (no behavior change).
+ * Off unless CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap) or
+ * CORVIDINHO_PROVIDER_SPEND_CAPS_USD (a comma list of `provider=USD`, keyed on
+ * the configured provider id, SAFE-14) is set; every cap is optional. While
+ * any cap is set, every OpenAI-compatible chat call is priced from a
+ * per-model table, its estimate is reserved against a rolling 24 h ledger in
+ * the shared SQLite DB before the request is sent — checked against the total
+ * cap (if set) and the call's own provider cap (if set) in one transaction —
+ * and the reservation is replaced by the provider-reported cost once the reply
+ * arrives. No cap ⇒ the fetch comes back untouched and the DB is never opened
+ * (no behavior change).
  *
- * SAFE-8 as amended (#98): at 80% of the cap the run gets one warning per
- * crossing, recorded in `spend_alerts` across processes and re-armed once
- * spend is seen back under 70% (spend-alerts.ts); the Discord bridge delivers
- * recorded warnings to the owner (spend-outbox.ts). At 100% the call is not
- * sent — the guard records a `spend-cap` ask and the execute hook ends the
- * attempt with it, so the run stops `blocked` and the owner is asked through
- * the AUTONOMY-1/2 path instead of the call being refused or overspent.
+ * SAFE-8 as amended (#98), SAFE-15 for each cap: at 80% of a cap the run gets
+ * one warning per crossing of that cap, recorded in `spend_alerts` across
+ * processes and re-armed once that cap's spend is seen back under 70%
+ * (spend-alerts.ts); the Discord bridge delivers recorded warnings to the
+ * owner (spend-outbox.ts). At 100% of any cap the call is not sent — the
+ * guard records a `spend-cap` ask naming the tripped scope(s) (`total`,
+ * `provider:<id>`) and the execute hook ends the attempt with it, so the run
+ * stops `blocked` and the owner is asked through the AUTONOMY-1/2 path
+ * instead of the call being refused or overspent. The stop is thrown as
+ * SpendCapRefusal before any request, which is not a model failure: no model
+ * fallback (AGENT-11) may route around a cap.
  *
  * Assumptions (see specs/agent REQ-agent-098):
  *  - "Daily" is the last 24 hours (rolling), not a calendar day.
  *  - Prices are standard USD per 1M tokens; cached-input discounts are ignored,
  *    so the count errs high.
- *  - A model missing from the table has no known price: while a cap is set its
- *    calls stop and ask — never counted as free, never guessed.
+ *  - A model missing from the table has no known price: while a cap covers
+ *    its call (the total cap, or its provider's cap) it stops and asks —
+ *    never counted as free, never guessed. A call no cap covers runs and is
+ *    not recorded (its cost is unknown, SAFE-16).
+ *  - A provider cap key is the configured provider id (the endpoint host,
+ *    `providerId`); a malformed entry, or a key that names no configured
+ *    provider, makes the whole setting invalid: every call stops and asks, and
+ *    the value is never echoed.
  *  - Pre-call estimate: request bytes / 3 prompt tokens + a 4096-token reply
  *    reserve. A reply longer than the reserve can overshoot the cap by that one
  *    call; the next call then stops and asks.
@@ -36,19 +51,27 @@
 import type { Database } from "bun:sqlite";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import { parseModelChain, providerForTier, providerId, resolveEntry } from "./providers.ts";
 import { ensureSpendAlerts, rearmSpendAlerts, recordSpendWarning } from "./spend-alerts.ts";
 import {
   formatSpendDoctorLine,
+  formatSpendDoctorLines,
+  PROVIDER_SPEND_CAPS_ENV,
+  providerSpendScope,
   SPEND_CAP_ENV,
   SPEND_CAP_SUMMARY,
   spendCapInvalidAsk,
   spendCapLedgerAsk,
   spendCapReachedAsk,
   spendCapUnpricedAsk,
+  TOTAL_SPEND_SCOPE,
+  type NamedSpendDoctorLine,
+  type ProviderSpend,
   type SpendDoctorLine,
   type SpendSnapshot,
+  type SpendTrip,
 } from "./spend-notice.ts";
-import { perTierModels, type CapabilityTier } from "./tier.ts";
+import { loadTierFromEnv, perTierModels, TIER_MODEL_ENV, type CapabilityTier } from "./tier.ts";
 import type {
   AgentTokenUsage,
   ExecuteResult,
@@ -56,8 +79,19 @@ import type {
   SpendWarning,
 } from "./types.ts";
 
-export { formatUsd, SPEND_CAP_ENV, SPEND_WARN_PERCENT } from "./spend-notice.ts";
-export type { SpendDoctorLine, SpendSnapshot } from "./spend-notice.ts";
+export {
+  formatUsd,
+  PROVIDER_SPEND_CAPS_ENV,
+  SPEND_CAP_ENV,
+  SPEND_WARN_PERCENT,
+} from "./spend-notice.ts";
+export type {
+  NamedSpendDoctorLine,
+  ProviderSpend,
+  SpendDoctorLine,
+  SpendSnapshot,
+  SpendTrip,
+} from "./spend-notice.ts";
 
 export const SPEND_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Reply tokens reserved per call before the provider reports actual usage. */
@@ -116,14 +150,97 @@ export type SpendCap =
   | { kind: "cap"; capUsd: number; capMicroUsd: number }
   | { kind: "invalid" };
 
-/** Read the cap from env. Empty/unset = off; anything but a plain USD amount = invalid. */
+/** A plain USD amount (`5`, `2.50`, `.5`, at most 1e9) in USD, or null. */
+function parseUsd(raw: string): number | null {
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(raw)) return null;
+  const usd = Number(raw);
+  return Number.isFinite(usd) && usd <= 1e9 ? usd : null;
+}
+
+/** Read the total cap from env. Empty/unset = off; anything but a plain USD amount = invalid. */
 export function parseSpendCap(env: NodeJS.ProcessEnv = process.env): SpendCap {
   const raw = env[SPEND_CAP_ENV]?.trim();
   if (!raw) return { kind: "off" };
-  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(raw)) return { kind: "invalid" };
-  const capUsd = Number(raw);
-  if (!Number.isFinite(capUsd) || capUsd > 1e9) return { kind: "invalid" };
+  const capUsd = parseUsd(raw);
+  if (capUsd === null) return { kind: "invalid" };
   return { kind: "cap", capUsd, capMicroUsd: Math.round(capUsd * 1e6) };
+}
+
+/** A provider id as a cap key: a host, `host:port` or `[ipv6]:port`, lower-cased. */
+const PROVIDER_KEY_RE = /^[a-z0-9._~\-:\[\]]{1,255}$/;
+
+/**
+ * SAFE-14: the syntax of CORVIDINHO_PROVIDER_SPEND_CAPS_USD — comma-separated
+ * `provider=USD` entries — as provider id (lower-cased) → cap in micro-USD.
+ * Null when any entry is malformed: no `=`, a blank entry or key, a key that
+ * is not a host, a duplicate key, or an amount that is not a plain USD amount.
+ * Whether each key is a configured provider is checked by parseSpendCaps.
+ */
+export function parseProviderCapList(raw: string): Map<string, number> | null {
+  const out = new Map<string, number>();
+  for (const part of raw.split(",")) {
+    const entry = part.trim();
+    const eq = entry.indexOf("=");
+    if (eq <= 0) return null;
+    const key = entry.slice(0, eq).trim().toLowerCase();
+    const usd = parseUsd(entry.slice(eq + 1).trim());
+    if (!PROVIDER_KEY_RE.test(key) || usd === null || out.has(key)) return null;
+    out.set(key, Math.round(usd * 1e6));
+  }
+  return out;
+}
+
+/**
+ * The provider ids of every configured model entry (AGENT-13):
+ * `CORVIDINHO_LLM_MODEL` and the per-tier keys, every entry of each list
+ * (the fallback chain included), as `providerId` gives them — what the
+ * ledger records for a call to that entry (the request URL's host).
+ */
+export function configuredProviderIds(env: NodeJS.ProcessEnv): Set<string> {
+  const ids = new Set<string>();
+  for (const key of ["CORVIDINHO_LLM_MODEL", ...Object.values(TIER_MODEL_ENV)]) {
+    for (const entry of parseModelChain(env[key])) {
+      ids.add(providerId(resolveEntry(entry, env)).toLowerCase());
+    }
+  }
+  return ids;
+}
+
+/** Every spend cap (SAFE-8 total, SAFE-14 per provider). */
+export type SpendCaps =
+  | { kind: "off" }
+  /** A setting is set but not valid: every call stops and asks. `keys` names it (never the value). */
+  | { kind: "invalid"; keys: string[] }
+  | {
+      kind: "caps";
+      /** The total cap, or null when only provider caps are set. */
+      totalMicroUsd: number | null;
+      /** Provider id → its cap (empty when only the total cap is set). */
+      providers: ReadonlyMap<string, number>;
+    };
+
+/**
+ * Read every cap from env (SAFE-14). Both settings unset or blank = off. The
+ * total must be a plain USD amount; the provider list must parse
+ * (parseProviderCapList) and every key must be a configured provider id
+ * (configuredProviderIds). Any problem makes that whole setting invalid,
+ * which stops every call (fail closed).
+ */
+export function parseSpendCaps(env: NodeJS.ProcessEnv = process.env): SpendCaps {
+  const total = parseSpendCap(env);
+  const bad: string[] = [];
+  if (total.kind === "invalid") bad.push(SPEND_CAP_ENV);
+  let providers: ReadonlyMap<string, number> = new Map();
+  const raw = env[PROVIDER_SPEND_CAPS_ENV]?.trim();
+  if (raw) {
+    const list = parseProviderCapList(raw);
+    const known = list ? configuredProviderIds(env) : null;
+    if (!list || [...list.keys()].some((k) => !known?.has(k))) bad.push(PROVIDER_SPEND_CAPS_ENV);
+    else providers = list;
+  }
+  if (bad.length > 0) return { kind: "invalid", keys: bad };
+  if (total.kind === "off" && providers.size === 0) return { kind: "off" };
+  return { kind: "caps", totalMicroUsd: total.kind === "cap" ? total.capMicroUsd : null, providers };
 }
 
 /** USD/MTok equals micro-USD per token; ×1000 gives integer nano-USD per token. */
@@ -168,6 +285,7 @@ CREATE TABLE IF NOT EXISTS spend_ledger (
   settled_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_spend_ledger_ts ON spend_ledger(ts);
+CREATE INDEX IF NOT EXISTS idx_spend_ledger_provider_ts ON spend_ledger(provider, ts);
 `;
 
 /**
@@ -197,7 +315,13 @@ export type SpendWindow = {
 
 export type SpendReservation =
   | { ok: true; id: string; spentMicroUsd: number }
-  | { ok: false; spentMicroUsd: number };
+  | {
+      ok: false;
+      /** The first tripped cap's spend. */
+      spentMicroUsd: number;
+      /** Every cap the call would pass: `total` first, then `provider:<id>` (SAFE-15). */
+      trips: SpendTrip[];
+    };
 
 /** Rolling 24 h spend ledger over the shared DB. */
 export class SpendLedger {
@@ -205,16 +329,25 @@ export class SpendLedger {
     ensureSpendLedger(db);
   }
 
-  /** Spend counted in the 24 h window ending at `now`. */
-  window(now: number): SpendWindow {
+  /**
+   * Spend counted in the 24 h window ending at `now`: every provider's, or
+   * with `provider` only that provider's calls (SAFE-14; compared as stored,
+   * scrubbed).
+   */
+  window(now: number, provider?: string): SpendWindow {
+    const byProvider = provider !== undefined;
     const row = this.db
       .query(
         `SELECT COALESCE(SUM(cost_micro_usd), 0) AS spent,
                 COALESCE(SUM(CASE WHEN status != 'failed' THEN 1 ELSE 0 END), 0) AS calls,
                 COALESCE(SUM(CASE WHEN status IN ('reserved', 'estimated') THEN 1 ELSE 0 END), 0) AS estimated
-           FROM spend_ledger WHERE ts > ?`,
+           FROM spend_ledger WHERE ${byProvider ? "provider = ? AND " : ""}ts > ?`,
       )
-      .get(now - SPEND_WINDOW_MS) as { spent: number; calls: number; estimated: number };
+      .get(
+        ...(byProvider
+          ? [scrubSecrets(provider), now - SPEND_WINDOW_MS]
+          : [now - SPEND_WINDOW_MS]),
+      ) as { spent: number; calls: number; estimated: number };
     return {
       spentMicroUsd: row.spent,
       calls: row.calls,
@@ -223,23 +356,41 @@ export class SpendLedger {
   }
 
   /**
-   * Atomically check the cap and reserve the estimate. Refuses (no row) when
-   * window spend + estimate would exceed the cap. Spend seen back under the
-   * re-arm level re-arms the 80% warning and the cap ping (spend-alerts.ts).
+   * Atomically check the caps and reserve the estimate (one IMMEDIATE
+   * transaction). Refuses (no row) when window spend + estimate would exceed
+   * the total cap (`capMicroUsd`, if given) or this call's provider cap
+   * (`providerCapMicroUsd` against that provider's window, if given), and
+   * names every tripped scope. With neither cap the call is just recorded.
+   * Spend seen back under a cap's re-arm level re-arms that cap's 80% warning
+   * and cap ping (spend-alerts.ts).
    */
   reserve(opts: {
     provider: string;
     model: string;
     estimateMicroUsd: number;
-    capMicroUsd: number;
+    /** The total cap; omitted = no total cap. */
+    capMicroUsd?: number;
+    /** SAFE-14: this call's provider cap; omitted = none. */
+    providerCapMicroUsd?: number;
     now: number;
   }): SpendReservation {
     const run = this.db.transaction((): SpendReservation => {
       const { spentMicroUsd } = this.window(opts.now);
-      rearmSpendAlerts(this.db, { spentMicroUsd, capMicroUsd: opts.capMicroUsd, now: opts.now });
-      if (spentMicroUsd + opts.estimateMicroUsd > opts.capMicroUsd) {
-        return { ok: false, spentMicroUsd };
+      const trips: SpendTrip[] = [];
+      if (opts.capMicroUsd !== undefined) {
+        rearmSpendAlerts(this.db, { spentMicroUsd, capMicroUsd: opts.capMicroUsd, now: opts.now });
+        if (spentMicroUsd + opts.estimateMicroUsd > opts.capMicroUsd) {
+          trips.push({ scope: TOTAL_SPEND_SCOPE, spentMicroUsd, capMicroUsd: opts.capMicroUsd });
+        }
       }
+      if (opts.providerCapMicroUsd !== undefined) {
+        const cap = opts.providerCapMicroUsd;
+        const spent = this.window(opts.now, opts.provider).spentMicroUsd;
+        const scope = providerSpendScope(scrubSecrets(opts.provider));
+        rearmSpendAlerts(this.db, { spentMicroUsd: spent, capMicroUsd: cap, now: opts.now, scope });
+        if (spent + opts.estimateMicroUsd > cap) trips.push({ scope, spentMicroUsd: spent, capMicroUsd: cap });
+      }
+      if (trips.length > 0) return { ok: false, spentMicroUsd: trips[0]!.spentMicroUsd, trips };
       const id = crypto.randomUUID();
       this.db.run(
         `INSERT INTO spend_ledger
@@ -260,21 +411,27 @@ export class SpendLedger {
   }
 
   /**
-   * SAFE-8 80% warning, once per crossing: when 24 h spend is at or past the
-   * threshold and the warning for this cap value is armed, record one
-   * undelivered `warn` row and return it; under the re-arm level, re-arm.
-   * Armed = no warning for this cap value since the last re-arm and within
-   * 24 h, so a new crossing or a new cap value warns again. Check and insert
-   * share one IMMEDIATE transaction, so concurrent processes warn once
-   * between them. A zero cap never warns (nothing is spent).
+   * SAFE-8 / SAFE-15 80% warning, once per crossing of a cap: when that
+   * cap's 24 h spend is at or past the threshold and the warning for this
+   * cap (scope and value) is armed, record one undelivered `warn` row and
+   * return it; under the re-arm level, re-arm. Without `provider` the cap is
+   * the total cap; with it, that provider's cap against its own spend
+   * (SAFE-14), and the warning carries its `provider:<id>` scope. Armed = no
+   * warning for this cap since the last re-arm and within 24 h, so a new
+   * crossing or a new cap value warns again. Check and insert share one
+   * IMMEDIATE transaction, so concurrent processes warn once between them. A
+   * zero cap never warns (nothing is spent).
    */
-  noteWarning(opts: { capMicroUsd: number; now: number }): SpendWarning | null {
+  noteWarning(opts: { capMicroUsd: number; now: number; provider?: string }): SpendWarning | null {
     const run = this.db.transaction((): SpendWarning | null => {
-      const { spentMicroUsd } = this.window(opts.now);
+      const { spentMicroUsd } = this.window(opts.now, opts.provider);
       return recordSpendWarning(this.db, {
         spentMicroUsd,
         capMicroUsd: opts.capMicroUsd,
         now: opts.now,
+        ...(opts.provider !== undefined
+          ? { scope: providerSpendScope(scrubSecrets(opts.provider)) }
+          : {}),
       });
     });
     return run.immediate();
@@ -371,16 +528,19 @@ export type SpendGuard = {
 };
 
 /**
- * Wrap the provider fetch with the SAFE-8 cap. No cap ⇒ `fetch` is
- * `fetchImpl` itself and nothing else happens. With a cap, a call that would
- * pass it (or cannot be counted: invalid cap value, unpriced model, ledger
- * unavailable) throws SpendCapRefusal before any request is sent and leaves
- * its ask for `finish`.
+ * Wrap the provider fetch with the SAFE-8 / SAFE-14 caps. No cap ⇒ `fetch` is
+ * `fetchImpl` itself and nothing else happens. With any cap set, every call
+ * is recorded, and a call that would pass the total cap or its provider's cap
+ * (or cannot be counted: an invalid setting, an unpriced model under a cap
+ * that covers it, ledger unavailable) throws SpendCapRefusal before any
+ * request is sent and leaves its ask for `finish`. An unpriced model's call
+ * that no cap covers (no total cap, no cap for its provider) is sent
+ * unrecorded: its cost is unknown, never counted as free (SAFE-16).
  */
 export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): SpendGuard {
   const env = opts.env ?? process.env;
-  const cap = parseSpendCap(env);
-  if (cap.kind === "off") return { fetch: fetchImpl, finish: (r) => r };
+  const caps = parseSpendCaps(env);
+  if (caps.kind === "off") return { fetch: fetchImpl, finish: (r) => r };
   const now = opts.now ?? Date.now;
   let ledger: SpendLedger | undefined;
   let pending: HumanAsk | null = null;
@@ -390,61 +550,73 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     throw new SpendCapRefusal(ask);
   };
 
-  const settle = (id: string, s: SpendSettlement) => {
+  const settle = (id: string, s: SpendSettlement, provider: string, providerCap: number | undefined) => {
     try {
       ledger?.settle(id, s, now());
     } catch {
       // Ledger write failed after the call: the reservation stays counted.
     }
-    if (!opts.onWarning || cap.kind !== "cap") return;
-    let warning: SpendWarning | null = null;
+    if (!opts.onWarning || caps.kind !== "caps") return;
+    // SAFE-15: each cap this call counts against warns once per crossing.
+    const warnings: SpendWarning[] = [];
     try {
-      warning = ledger?.noteWarning({ capMicroUsd: cap.capMicroUsd, now: now() }) ?? null;
+      if (caps.totalMicroUsd !== null) {
+        const w = ledger?.noteWarning({ capMicroUsd: caps.totalMicroUsd, now: now() });
+        if (w) warnings.push(w);
+      }
+      if (providerCap !== undefined) {
+        const w = ledger?.noteWarning({ capMicroUsd: providerCap, now: now(), provider });
+        if (w) warnings.push(w);
+      }
     } catch {
       // Warning bookkeeping never breaks a call that already went out.
     }
-    if (warning) opts.onWarning(warning);
+    for (const w of warnings) opts.onWarning(w);
   };
 
   const guarded: SpendFetch = async (input, init) => {
-    if (cap.kind === "invalid") return stop(spendCapInvalidAsk());
+    if (caps.kind === "invalid") return stop(spendCapInvalidAsk(caps.keys));
     const body = typeof init?.body === "string" ? init.body : "";
     const model = modelFromRequestBody(body);
     const price = priceForModel(model);
-    if (!price) return stop(spendCapUnpricedAsk(model, cap.capMicroUsd, opts.modelKey));
+    const provider = providerOf(input);
+    const providerCap = caps.providers.get(provider);
+    const total = caps.totalMicroUsd ?? undefined;
+    if (!price) {
+      // No cap covers this call: its unknown cost counts against nothing.
+      if (total === undefined && providerCap === undefined) return fetchImpl(input, init);
+      return stop(
+        total !== undefined
+          ? spendCapUnpricedAsk(model, total, opts.modelKey)
+          : spendCapUnpricedAsk(model, providerCap!, opts.modelKey, providerSpendScope(scrubSecrets(provider))),
+      );
+    }
     let hold: SpendReservation;
     const estimate = estimateCallMicroUsd(price, Buffer.byteLength(body, "utf8"));
     try {
       ledger ??= new SpendLedger(opts.db ?? openCorvidinhoDb({ env }));
       hold = ledger.reserve({
-        provider: providerOf(input),
+        provider,
         model,
         estimateMicroUsd: estimate,
-        capMicroUsd: cap.capMicroUsd,
+        ...(total !== undefined ? { capMicroUsd: total } : {}),
+        ...(providerCap !== undefined ? { providerCapMicroUsd: providerCap } : {}),
         now: now(),
       });
     } catch (err) {
       return stop(spendCapLedgerAsk(err instanceof Error ? err.message : String(err)));
     }
-    if (!hold.ok) {
-      return stop(
-        spendCapReachedAsk({
-          spentMicroUsd: hold.spentMicroUsd,
-          estimateMicroUsd: estimate,
-          capMicroUsd: cap.capMicroUsd,
-        }),
-      );
-    }
+    if (!hold.ok) return stop(spendCapReachedAsk({ estimateMicroUsd: estimate, trips: hold.trips }));
 
     let resp: Response;
     try {
       resp = await fetchImpl(input, init);
     } catch (err) {
-      settle(hold.id, { status: "estimated" });
+      settle(hold.id, { status: "estimated" }, provider, providerCap);
       throw err;
     }
     if (!resp.ok) {
-      settle(hold.id, { status: "failed" });
+      settle(hold.id, { status: "failed" }, provider, providerCap);
       return resp;
     }
     let usage: AgentTokenUsage | null = null;
@@ -458,6 +630,8 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       usage
         ? { status: "actual", usage, costMicroUsd: costMicroUsd(price, usage) }
         : { status: "estimated" },
+      provider,
+      providerCap,
     );
     return resp;
   };
@@ -483,28 +657,36 @@ export function withSpendCap(fetchImpl: SpendFetch, opts: SpendCapOptions): Spen
 
 /**
  * AGENT-5: with per-tier model keys set, the first tier (read, tool, code)
- * whose model has no known price. Runs at that tier (e.g. read-tier delegate
+ * whose model has no known price and whose calls a cap covers (`covered`,
+ * given the tier's provider id). Runs at that tier (e.g. read-tier delegate
  * workers and council voices) stop and ask, so doctor and /status flag it up
- * front. Null when no per-tier key is set or every tier's model is priced.
+ * front. Null when no per-tier key is set or every tier's model is priced or
+ * uncovered.
  */
 function unpricedTierModel(
   env: NodeJS.ProcessEnv,
+  covered: (provider: string | null) => boolean,
 ): { tier: CapabilityTier; model: string } | null {
   const models = perTierModels(env);
   if (!models) return null;
   for (const tier of ["read", "tool", "code"] as const) {
     // AGENT-10: a tier with no model calls nothing (its runs fail with the
     // no-provider notice), so it never stops at the spend check.
-    if (models[tier] && priceForModel(models[tier]) === null) return { tier, model: models[tier] };
+    if (!models[tier] || priceForModel(models[tier]) !== null) continue;
+    const p = providerForTier(env, tier);
+    if (covered(p ? providerId(p).toLowerCase() : null)) return { tier, model: models[tier] };
   }
   return null;
 }
 
 /**
- * AUTONOMOUS-8 — rolling 24 h spend against the cap right now (doctor,
- * Discord /status). Opens the shared DB only when a cap is set and closes it
- * again unless `db` was passed in. Never throws. `model` unpriced ⇒ flagged
- * as before; else an unpriced per-tier model is flagged with its tier.
+ * AUTONOMOUS-8 / SAFE-14 — rolling 24 h spend against each cap right now
+ * (doctor, the owner's Discord /status): the total cap (if set) over every
+ * recorded call, and each provider cap over that provider's calls. Opens the
+ * shared DB only when a cap is set and closes it again unless `db` was
+ * passed in. Never throws. `model` unpriced (and covered by a cap) ⇒ flagged
+ * as before; else an unpriced, covered per-tier model is flagged with its
+ * tier.
  */
 export function readSpendSnapshot(opts: {
   env?: NodeJS.ProcessEnv;
@@ -514,20 +696,34 @@ export function readSpendSnapshot(opts: {
   now?: number;
 }): SpendSnapshot {
   const env = opts.env ?? process.env;
-  const cap = parseSpendCap(env);
-  if (cap.kind === "off") return { kind: "off" };
-  if (cap.kind === "invalid") return { kind: "invalid" };
+  const caps = parseSpendCaps(env);
+  if (caps.kind === "off") return { kind: "off" };
+  if (caps.kind === "invalid") return { kind: "invalid", keys: caps.keys };
+  // A call is covered when the total cap is set or its provider has a cap;
+  // an unknown provider counts as covered (flag rather than hide).
+  const covered = (provider: string | null) =>
+    caps.totalMicroUsd !== null || provider === null || caps.providers.has(provider);
   let db: Database | undefined;
   try {
     db = opts.db ?? openCorvidinhoDb({ env });
-    const window = new SpendLedger(db).window(opts.now ?? Date.now());
+    const ledger = new SpendLedger(db);
+    const t = opts.now ?? Date.now();
+    const window = ledger.window(t);
+    const providers: ProviderSpend[] = [...caps.providers]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([provider, capMicroUsd]) => ({ provider, capMicroUsd, window: ledger.window(t, provider) }));
     // No model configured (AGENT-10): nothing is called, nothing to price.
-    const priced = !opts.model.trim() || priceForModel(opts.model) !== null;
-    const tierGap = priced ? unpricedTierModel(env) : null;
+    const head = providerForTier(env, loadTierFromEnv(env, "tool"));
+    const headProvider =
+      head && head.entry.model === opts.model ? providerId(head).toLowerCase() : null;
+    const priced =
+      !opts.model.trim() || priceForModel(opts.model) !== null || !covered(headProvider);
+    const tierGap = priced ? unpricedTierModel(env, covered) : null;
     return {
       kind: "cap",
-      capMicroUsd: cap.capMicroUsd,
+      ...(caps.totalMicroUsd !== null ? { capMicroUsd: caps.totalMicroUsd } : {}),
       window,
+      ...(providers.length > 0 ? { providers } : {}),
       model: tierGap?.model ?? opts.model,
       priced: priced && !tierGap,
       ...(tierGap ? { tier: tierGap.tier } : {}),
@@ -546,10 +742,10 @@ export function readSpendSnapshot(opts: {
 }
 
 /**
- * AUTONOMOUS-8 — spend in the last 24 h against the cap, for `doctor`.
- * `info` when no cap is set; `warn` at the 80% warning, at the cap, for an
- * unpriced model, an invalid cap or an unreadable ledger. Informational: never
- * fails doctor.
+ * AUTONOMOUS-8 — spend in the last 24 h against the total cap, for `doctor`'s
+ * `spend` line. `info` when no cap is set; `warn` at the 80% warning, at the
+ * cap, for an unpriced model, an invalid setting or an unreadable ledger.
+ * Informational: never fails doctor.
  */
 export function spendDoctorCheck(opts: {
   env?: NodeJS.ProcessEnv;
@@ -559,4 +755,19 @@ export function spendDoctorCheck(opts: {
   now?: number;
 }): SpendDoctorLine {
   return formatSpendDoctorLine(readSpendSnapshot(opts));
+}
+
+/**
+ * AUTONOMOUS-8 / SAFE-14 — every doctor spend line: `spend` (the total cap,
+ * as spendDoctorCheck) and one `spend provider:<id>` line per provider cap.
+ * Informational: never fails doctor.
+ */
+export function spendDoctorChecks(opts: {
+  env?: NodeJS.ProcessEnv;
+  /** Configured provider model (loadLlmEnv().model). */
+  model: string;
+  db?: Database;
+  now?: number;
+}): NamedSpendDoctorLine[] {
+  return formatSpendDoctorLines(readSpendSnapshot(opts));
 }

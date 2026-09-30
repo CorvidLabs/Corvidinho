@@ -164,6 +164,7 @@ files:
   - plugins/discord/send-file.ts
   - tests/discord.send-file.test.ts
   - tests/discord.safe3a-surface.test.ts
+  - tests/scheduler.owner-role.test.ts
 
 db_tables: []
 depends_on:
@@ -478,7 +479,9 @@ with `SPEND_CAP_HEADLINE` ("💸 Work is paused for budget.") /
 question quote — the question holds the amounts, the cap and the setting, so
 it never reaches a channel (SAFE-14.a; `SPEND_PAUSED_TEXT` from
 `src/agent/spend-notice.ts`); `askPingKey` keys a `spend-cap` ask on its
-reason only, so a schedule pings once per cap episode. `ask-ping.ts` also
+reason and the provider caps it stopped at (`spendScopesOf`; the total cap
+alone keys on the reason only, as before), so a schedule pings once per
+episode of each cap (SAFE-15, REQ-agent-114). `ask-ping.ts` also
 exports `appendPostLine` (a SAFE-13 line or a slash owner notice on a post).
 `AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
 `result` frame by `spendWarningFromUnknown`); no channel post carries it.
@@ -493,10 +496,11 @@ start the bridge logs `[discord] <notice>` once with `console.warn` when any
 tier has no usable provider (REQ-discord-079).
 `SlashContext.spendLine(ownerView)` / `StatusReportInput.spendLine` carry
 `/status`'s spend line: for the owner (ADMIN, re-checked by the handler) the
-24 h spend vs cap line (`formatSpendStatusLine` over `readSpendSnapshot` on
-the bridge's shared DB, plus a note while a spend DM waits); for anyone else
-`formatSpendPublicStatusLine` ("Spend: Work is paused for budget." while runs
-stop at the cap, else no line); no new slash command. The bridge builds one
+24 h spend vs cap line and one line per provider cap (`formatSpendStatusLine`
+over `readSpendSnapshot` on the bridge's shared DB, plus a note while a spend
+DM waits); for anyone else `formatSpendPublicStatusLine` ("Spend: Work is
+paused for budget." while runs stop at any cap, else no line, never which
+cap); no new slash command. The bridge builds one
 `createSpendAlertOutbox({ db, env })` (`src/agent/spend-outbox.ts`) and shares
 it as `SlashContext.spendAlerts` and `SchedulerServiceOpts.spendAlerts`;
 `SlashContext.post` is the gateway reply (a fresh channel post).
@@ -509,7 +513,8 @@ channelId?)`, `formatSpendStopDm`, `formatSpendWarningDm`,
 owner (the gateway `sendDm`) a cap stop's details (the spend-cap question,
 scrubbed and defanged, naming the channel) when that stop's post claimed the
 episode's owner ping, and the pending 80% warning (`takeSpendWarning`: the
-outbox's, else the run's own; rebuilt with `formatSpendWarningLine`); a DM
+outbox's, else the run's own; rebuilt with `formatSpendWarningLine`, one line
+per cap that crossed 80%, a provider cap's naming its scope); a DM
 that does not go out keeps its claim (the warning released to the outbox, the
 stop held in memory, the newest replacing it) for the next pass and is logged
 once per failure streak without amounts; no owner or no DM path claims
@@ -517,7 +522,9 @@ nothing. The bridge shares it as `SlashContext.spendDm` and
 `SchedulerServiceOpts.spendDm`, and runs a pass after each chat, button-pick,
 `/work` and `/session start` run and on every scheduler tick.
 `src/discord/spend-post.ts` exports `askPingOwner` (a `spend-cap` ask pings
-once per cap episode via `claimCapPing`; its `release` hands the ping back
+once per cap episode via `claimCapPing`, per cap: the episode of each scope
+`spendScopesOf` gives — the ask's `spendScopes`, else its stored question's
+"Stopped at cap" marker, else the total cap; its `release` hands the ping back
 when the post fails), `askNeedsOwner` (stuck and spend-cap ping the owner;
 clarify addresses the requester, AUTONOMY-4), `takeSpendWarning`,
 `ownerAskNoticeLine` (a spend-cap line says only that work is paused for
@@ -652,7 +659,13 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044), and `tests-deleted`: a test
 deleted or turned off since the branch left its base, or names that could
-not be read, keeps the PR from opening (AGENT-15, REQ-discord-185).
+not be read, keeps the PR from opening (AGENT-15, REQ-discord-185), and
+`sdd-uncovered`: in a repo whose SpecSync workflow (read from the
+merge-base, HEAD and the work tree, merged fail-closed) requires a change for
+meaningful files, a meaningful path changed since the merge-base that no
+open change and no change archived on the branch covers, or a diff that
+cannot be read, keeps the PR from opening, before the pre-push lane and
+before anything is committed or pushed (AGENT-18, REQ-discord-518).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
 `openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
@@ -939,7 +952,9 @@ A schedule's question blocks it until the creator or the owner answers or cancel
 Every schedule post — the `✅` / `❌` result line and each ask post (in-process or from the delivery pass, including these stuck asks) — starts with `scheduleTitle` (`Schedule **<name>** (<id>) on <project>`; an ask about a non-owner's schedule whose stored name trips the SAFE-13 detector leaves the name out, REQ-discord-713), where the project is `projectLabel(schedule.project)` (`src/discord/list-scope.ts`: the last segment of an absolute path, a relative name as given), never an absolute host path, since the whole channel reads it (REQ-discord-353, REQ-discord-418, SAFE-6). The run row keeps the full error and the model's prompt keeps the stored project.
 Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108). A run never stays "running" forever (REQ-discord-346): `finish()` counts a run recorded only after `markRunFinished` (one IMMEDIATE transaction) succeeds, retrying a throwing write once and otherwise logging `[scheduler] run failed: could not record run …` and counting it failed; the bridge's `stop()` abandons in-flight runs like the daemon (`interrupted: bridge shutdown`); both stops wait ≤3 s (`settleAbandoned`, `ABANDONED_SETTLE_MS`) for aborted runs to park their worktree; each claimed run records its runner (`schedule_runs.runner` = `<pid>:<proc start>`, schema v10, `SCHEMA_VERSION` 10), and the bridge and daemon start with `recoverAbandoned()`, which fails runs whose runner is gone (`interrupted: process restarted`, `RUN_INTERRUPTED_BY_RESTART`) and parks leftover `talk-schedule_<schedule>_<run>` worktrees of runs this data dir recorded as no longer running, deleting a branch only when it has no commits of its own; a live runner's run and worktree are left alone, and a schedule-run worktree whose run this data dir does not know (another data dir's, e.g. `bun test` run inside it) is never touched.
 Each schedule run is gated against the live allowlist before any worktree or agent run and again before its post (DISCORD-SCHEDULE-3 / REQ-discord-020): `SchedulerService` checks the creator with `gateActor` (REQ-discord-201: deny wins; a non-empty user/role list must list the creator's id unless it is the configured `owner`; a tick has no member roles) and the channel with `checkChannel`. A refused run spawns nothing, posts nothing and is recorded failed (`creator not allowlisted: …` / `channel not allowlisted: <id>`), counting toward the 5-failure auto-pause. The bridge ticker shares the allowlist `/admin` edits in place; the daemon reloads it before each tick (REQ-cli-108).
-A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71, REQ-discord-713): `src/scheduler/service.ts` exports `scheduleInjection(text, role)` (the detector over the name, description and prompt; null for the owner or when nothing trips) and `injectedScheduleQuestion(reasons)`; `SpeakerSurface` gains `schedule-prompt`; `SchedulerServiceOpts` gains optional `recordAudit` (the bridge wires its SAFE-5 trail) and `mutedUsers` (the bridge's live mute set). `/schedule create` resolves the requester's role before the ADMIN gate (as `/work` does) and a non-owner's `name` or `prompt` that trips the detector is refused through `refuseInjectedSlash` with an ephemeral reply (the owner pinged in one fresh channel post, one `injection-suspected` / `denied` row with surface `discord:/schedule`); nothing is stored, and a non-owner create that trips nothing is still the ephemeral `NOT_AUTHORIZED`. Every tick, after the DISCORD-SCHEDULE-3 gate and before any worktree, re-resolves the creator's role (`resolveDiscordActingRole`: live allowlist, owner, mute set, people list; no Discord role ids): stored non-owner text that trips the detector runs nothing — one `denied` row (surface `scheduler:<id>`), the run recorded failed with the stuck ask `injectedScheduleQuestion` (never the text), the schedule paused, and the ask posted through the usual ask path (owner pinged once; a daemon tick leaves it pending for a bridge; titled by id alone when the name is what tripped); otherwise a non-owner creator's run gets `Scheduled work on project: <project>` and its name and prompt inside `fenceSpeakerText(…, role, "schedule-prompt")`, while the owner's schedule keeps its prompt exactly as before. Runs stay `actingIsAdmin: false` with no acting role (SAFE-3.a); posts and asks are otherwise unchanged.
+A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71, REQ-discord-713): `src/scheduler/service.ts` exports `scheduleInjection(text, role)` (the detector over the name, description and prompt; null for the owner or when nothing trips) and `injectedScheduleQuestion(reasons)`; `SpeakerSurface` gains `schedule-prompt`; `SchedulerServiceOpts` gains optional `recordAudit` (the bridge wires its SAFE-5 trail) and `mutedUsers` (the bridge's live mute set). `/schedule create` resolves the requester's role before the ADMIN gate (as `/work` does) and a non-owner's `name` or `prompt` that trips the detector is refused through `refuseInjectedSlash` with an ephemeral reply (the owner pinged in one fresh channel post, one `injection-suspected` / `denied` row with surface `discord:/schedule`); nothing is stored, and a non-owner create that trips nothing is still the ephemeral `NOT_AUTHORIZED`. Every tick, after the DISCORD-SCHEDULE-3 gate and before any worktree, re-resolves the creator's role (`resolveDiscordActingRole`: live allowlist, owner, mute set, people list; no Discord role ids): stored non-owner text that trips the detector runs nothing — one `denied` row (surface `scheduler:<id>`), the run recorded failed with the stuck ask `injectedScheduleQuestion` (never the text), the schedule paused, and the ask posted through the usual ask path (owner pinged once; a daemon tick leaves it pending for a bridge; titled by id alone when the name is what tripped); otherwise a non-owner creator's run gets `Scheduled work on project: <project>` and its name and prompt inside `fenceSpeakerText(…, role, "schedule-prompt")`, while the owner's schedule keeps its prompt exactly as before. Runs pass no acting role and `actingIsAdmin` only for the live owner's own schedule (DISCORD-SCHEDULE-1.a, REQ-discord-741; never the shell or runners, SAFE-3.a); posts and asks are otherwise unchanged.
+
+A schedule the owner creates runs as the owner; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a, REQ-discord-741): `SchedulerServiceOpts` gains optional `loadOwner` (`() => OwnerRecord | null`, sync or async), which the bridge wires to `loadOwnerConfig({ env, filePath: <allowlist source> })` and the daemon to `loadOwnerConfig({ env })`, so each run reads the owner as configured now (without it the start-time `owner`; a read that throws is logged `[scheduler] owner failed: …` and is no owner). `runOne`, after the DISCORD-SCHEDULE-3 gate, resolves the creator's role against that live owner (the SAFE-12 fence, the SAFE-13 scan and the answered-ask block use it too) and spawns with `actingIsAdmin: true` only when that role is owner and `isOwnerDiscord(liveOwner, createdByUserId)` (so not muted or deny-listed); every other schedule gets `actingIsAdmin: false`, and no schedule passes `actingRole`, so the spawn client stamps `owner` or `community`, never `team`. The run keeps its `schedule` surface and `schedule_<id>` session, so the SAFE-3.a gate still refuses the shell, runners and Fledge runs (REQ-agent-503), `createTaskExecute` discovers no Fledge plugin command (REQ-agent-741) and the repo gate stays on (DISCORD-SCHEDULE-3.a); the tool layer re-checks the owner at every call (REQ-plugins-065). A must-ask call the model starts (a `discord-post-message` included) goes through the Approve card like any owner run; a deny, a lapse or a resent deny ends the run blocked with a stuck ask naming the refused action (`mustAskRefusedAsk`, REQ-agent-741), which blocks the schedule (AUTONOMY-6.a, REQ-discord-606), so later due ticks are skipped with one wait note and raise no new card. The schedule's own posts (result, ask, wait note) go out through the scheduler's outbound, never through `runPlugin`, so they need no card (not AUTONOMY-10 announcements it starts). A non-git project still gets its own `scoped-talk-schedule_…` folder. No new env var, config key, slash option, table, column or schema version.
 
 A schedule reads and acts only on allowlisted repos, even public ones (DISCORD-SCHEDULE-3.a, REQ-discord-202): the scheduler builds each run's session id from `SCHEDULE_SESSION_PREFIX` (`schedule_<schedule id>`, `src/plugins/roles.ts`), which the spawn client writes to `CORVIDINHO_DISCORD_SESSION_ID`, so the tool layer's `isScheduleRunEnv` gates that run and its `delegate` / `council` workers to GitHub-allowlisted repos (REQ-plugins-496: the GitHub tools with no visibility lookup, `web-fetch` GitHub hops). `resolveProjectDir` takes `schedule: true` from `/schedule create` and from every tick (not from `/work`, `/session start` or start-up recovery): a directory inside the bridge root that lies in a git checkout nested there (its `--show-toplevel` is inside the root and is not the root) passes only when that checkout's `origin` OWNER/REPO passes the GitHub allowlist (deny wins; no origin or no allowlist ⇒ refused); the root's own checkout (or one enclosing it) and plain folders are unchanged. A refused create stores nothing; a stored schedule on such a checkout fails its tick through the REQ-discord-353 `project resolve failed` path (upgrade note in `docs/discord.md`).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
@@ -957,8 +972,11 @@ Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
 from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 `src/discord/session-thread.ts`, REQ-discord-072) are created with CREATE
 TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
-scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
-no free-text column (a constant kind and integers).
+scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` holds
+a constant kind, integers and its cap `scope` (`total` / `provider:<id>`,
+SAFE-14; added by an idempotent ALTER, scrubbed on write and in
+`SCRUB_TARGETS`), and a re-scrub skips a listed column an older module-owned
+table does not have yet.
 `openCorvidinhoDb` sets busy_timeout 5000 and foreign_keys on, then runs the
 migration and `ensureScrubbed` in one transaction that takes the write lock
 up front (REQ-discord-287): only its BEGIN IMMEDIATE goes through
@@ -1230,6 +1248,7 @@ failed lookup writes nothing.
 | Blank author id | Prompt unchanged; no inject |
 | `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
 | `/work` tree deleted or turned off a test since the branch left its base, or its test names cannot be read | `PR: not opened — N test(s) were deleted or turned off since the branch left …` naming each as `"name" (file)` (or "could not check …"); nothing committed or pushed; reason `tests-deleted` (REQ-discord-185) |
+| `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
 | Stuck WATCH ask with no owner Discord id or no live gateway DM | left pending, not sent; given up with a log line after a day (REQ-discord-086) |
 | Owner DM for a stuck WATCH ask fails (DMs closed) | ask handed back; retried after 10 minutes; one log line per try (REQ-discord-086) |
@@ -1419,3 +1438,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
 | 2026-09-30 | a-message-sent-while-a-run-is-going-waits-for-it-and-stop-or-cancel-stops-the-run-waiting-messages-still-run-after: A message sent while a run is going waits for it, and stop or cancel stops the run; waiting messages still run after (AGENT-3.a, AGENT-3.b) |
+| 2026-09-30 | a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and: A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a) |
+| 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
+| 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |

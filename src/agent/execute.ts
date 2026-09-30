@@ -22,6 +22,7 @@ import { get as getPlugin } from "../plugins/registry.ts";
 import {
   ROLE_REFUSED_MESSAGE,
   actingWorkTask,
+  isScheduleRunEnv,
   resolveActingRole,
   roleAllowsPlugin,
   roleSessionActive,
@@ -76,6 +77,7 @@ import {
   ASK_TOOL_RESULT_DETAIL,
   askExecuteResult,
   askFromToolArguments,
+  mustAskRefusedAsk,
   withAskTool,
   type ChatToolDef,
 } from "./ask.ts";
@@ -123,6 +125,7 @@ import {
   type ProviderKind,
   type ResolvedProvider,
 } from "./providers.ts";
+import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
   allowlistOffers,
@@ -671,7 +674,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
   let safe3aNoted = false;
 
-  const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing }) => {
+  const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing, repoWays }) => {
     if (personaNote) {
       emit(onEvent, { type: "Text", text: personaNote });
       personaNote = null;
@@ -714,7 +717,11 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     const actingIsAdmin = actingRole === null || actingRole === "owner";
     if (
       opts.loadPlugins !== false &&
-      (includeDangerous || (actingIsAdmin && allowsFledge(allowlist)))
+      (includeDangerous ||
+        // DISCORD-SCHEDULE-1.a: a scheduled run, even the owner's own, never
+        // gets a discovered Fledge plugin command (it runs arbitrary project
+        // code, like the runners SAFE-3.a keeps from schedules).
+        (actingIsAdmin && !isScheduleRunEnv(env) && allowsFledge(allowlist)))
     ) {
       // FLEDGE-4: Fledge commands are all dangerous (so mutating), so only
       // discover them when this run's catalog may offer one: the allowlist
@@ -770,6 +777,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       projectBlock,
       personaBlock,
       specBriefing,
+      repoWays,
       roleEnv: env,
       onRoleRefusal: () => {
         roleRefused = true;
@@ -843,6 +851,8 @@ type LoopArgs = {
   /** PERSONA-2: the persona block, placed before the rules ("" when none). */
   personaBlock: string;
   specBriefing?: string;
+  /** AGENT-18: the repo's ways (fixed prompt block, REQ-agent-518). */
+  repoWays?: RepoWays;
   /** Env the role session and ADMIN bit are read from (ROLES-CHAT-3/6). */
   roleEnv: NodeJS.ProcessEnv;
   /** Called for each tool call refused for the caller's role (ROLES-CHAT-3). */
@@ -879,6 +889,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     projectBlock,
     personaBlock,
     specBriefing,
+    repoWays,
     roleEnv,
     onRoleRefusal,
     injectionTripped,
@@ -917,6 +928,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         ? DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS
         : "") +
       ASK_AGENT_SYSTEM_INSTRUCTIONS +
+      // AGENT-18: the fixed block for this repo's own ways ("" when none).
+      renderRepoWaysBlock(repoWays) +
       "When finished, reply with one concise plain-text message (no tool call) saying what you did, in the persona's voice — never a flat changelog (PERSONA-1). " +
       "Do not claim files were edited unless a tool result reported filesChanged.",
       personaBlock,
@@ -1211,6 +1224,20 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         success: Boolean(result.ok),
         detail,
       });
+
+      // DISCORD-SCHEDULE-1.a / AUTONOMY-6.a: in a scheduled run, a must-ask
+      // call the owner denied or let lapse (SAFE-20: a no) ends the run with
+      // a blocking ask naming it, so the schedule's later runs wait for the
+      // answer instead of raising a new card every tick.
+      const refusedAsk =
+        offered.has(name) && isScheduleRunEnv(roleEnv) ? mustAskRefusedAsk(name, result) : null;
+      if (refusedAsk) {
+        emit(onEvent, {
+          type: "Text",
+          text: `[operator] DISCORD-SCHEDULE-1.a: ${name} was refused on its Approve card; this scheduled run stops and asks`,
+        });
+        return askExecuteResult(refusedAsk, filesChanged);
+      }
 
       const toolMessage: ChatMessage = {
         role: "tool",

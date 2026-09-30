@@ -108,7 +108,7 @@ import {
   answerSpendFor,
   postAnswerParts,
 } from "./rich-reply.ts";
-import { isOwnerDiscord } from "../identity/owner.ts";
+import { isOwnerDiscord, loadOwnerConfig } from "../identity/owner.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
 import { providerNotice } from "../agent/providers.ts";
@@ -2197,6 +2197,11 @@ export async function startBridge(
       ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
+      // DISCORD-SCHEDULE-1.a: each run re-reads the owner config (the same
+      // file and env overlay as at start), so only the owner as configured
+      // now gets the owner stamp for their own schedule.
+      loadOwner: async () =>
+        (await loadOwnerConfig({ env, filePath: config.allowlist.sourcePath })).owner,
       spendAlerts,
       // SAFE-18..20: a tick also runs a card pass (the engine's own poll is
       // the main trigger, so cards still go out with the scheduler off);

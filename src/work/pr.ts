@@ -10,6 +10,9 @@
  * - no test was deleted or turned off since the branch left its base: the
  *   tree about to be committed and pushed is compared by test name with the
  *   merge-base (AGENT-15, REQ-discord-185);
+ * - in a repo whose SpecSync workflow requires a change for meaningful files,
+ *   every such path changed since the merge-base is covered by an open
+ *   change or one archived on the branch (AGENT-18, REQ-discord-518);
  * - the operator allowed the PR path: `git-commit` (only when the tree is
  *   dirty), `git-push` and `github-pr-create` are allowlisted for
  *   non-interactive use (GITHUB-5 / SAFE-1). Nothing is committed or pushed
@@ -27,6 +30,11 @@ import {
   parseStatusPorcelainZ,
   repoSlugFromRemoteUrl,
 } from "../../plugins/git/parse.ts";
+import {
+  scanRepoWays,
+  sddRequiresChange,
+  sddUncovered,
+} from "../agent/repo-ways.ts";
 import { formatTestDrops, judgeTestEvidence } from "../agent/test-evidence.ts";
 import { defaultVerifyRunner } from "../agent/verify.ts";
 import { startWorkspaceDiffFrom } from "../agent/workspace-diff.ts";
@@ -75,6 +83,7 @@ export type WorkPrSkipReason =
   | "needs-input"
   | "verify-failed"
   | "tests-deleted"
+  | "sdd-uncovered"
   | "no-worktree"
   | "no-changes"
   | "conflicts"
@@ -244,6 +253,34 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
       "tests-deleted",
       `not opened — ${drops.length} test(s) were deleted or turned off since the branch left \`${base}\` (removed, retitled, skip, todo, or silenced by only): ${formatTestDrops(drops)}. The changes stay on branch \`${branch}\`.`,
     );
+  }
+
+  // AGENT-18 (REQ-discord-518): in a repo whose SpecSync workflow (read
+  // from the merge-base, HEAD and the work tree) requires a change for
+  // meaningful files, every one changed since the merge-base is covered by
+  // an open change or one archived on the branch. Unreadable fails closed.
+  const ways = await scanRepoWays(cwd, mergeBase);
+  if (sddRequiresChange(ways.sdd)) {
+    let changed: string[] | null = null;
+    try {
+      changed = since ? await since.changed() : null;
+    } catch {
+      changed = null;
+    }
+    if (changed === null) {
+      return skip(
+        "sdd-uncovered",
+        `not opened — could not read what changed since the branch left \`${base}\` to check SpecSync change coverage. The changes stay on branch \`${branch}\`.`,
+      );
+    }
+    const uncovered = sddUncovered(cwd, changed, ways.sdd);
+    if (uncovered.length > 0) {
+      const shown = uncovered.slice(0, 5).join(", ") + (uncovered.length > 5 ? ", …" : "");
+      return skip(
+        "sdd-uncovered",
+        `not opened — ${uncovered.length} changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (${shown}); open one with specsync change new … --path <each path> (AGENT-18). The changes stay on branch \`${branch}\`.`,
+      );
+    }
   }
 
   // AGENT-4: ship only a tree that passed the verify lane, and (AGENT-15)

@@ -959,7 +959,12 @@ The shared SQLite store SHALL treat the module-owned `spend_ledger` and
 version bump) like every other persisted table under SAFE-6: the free-text
 `provider` and `model` columns of `spend_ledger` SHALL be written through
 `scrubSecrets` and SHALL be listed in `SCRUB_TARGETS`, so a scrub-rules
-re-scrub also covers them; `spend_alerts` SHALL hold no free text.
+re-scrub also covers them; `spend_alerts` SHALL hold no free text but its
+cap `scope` (`total` or `provider:<id>`, SAFE-14; added in place by an
+idempotent ALTER, older rows `total`), which SHALL be written through
+`scrubSecrets` and listed in `SCRUB_TARGETS`. A re-scrub SHALL skip a listed
+column a module-owned table does not have yet (a `spend_alerts` created by an
+older build, before its module adds `scope`) instead of failing the open.
 
 On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8, SAFE-14.a), a run that stopped at
 the spend cap (`ask.reason` `spend-cap`) SHALL be posted through the
@@ -969,7 +974,13 @@ without the "reply to answer" hint (a reply cannot lift the cap). Like a
 stuck ask (AUTONOMY-2/4), a spend-cap ask SHALL ping the configured owner,
 once per cap episode across those surfaces (the bridge's spend alert outbox
 `claimCapPing`; a schedule also keeps its per-schedule ping key); later
-spend-cap asks in the same episode SHALL post without a ping. A spend-cap
+spend-cap asks in the same episode SHALL post without a ping. Episodes SHALL
+be kept per cap (SAFE-15, REQ-agent-114): a stop pings once per episode of
+each cap it stopped at (`spendScopesOf`: the ask's `spendScopes`, else the
+"Stopped at cap" marker of a question stored as text), so a stop at another
+provider's cap or at the total cap pings again, and a schedule's ping key for
+a spend-cap ask SHALL follow the provider caps it stopped at (the total cap
+alone keys as before). A spend-cap
 stop SHALL NOT be kept as the session's pending ask (AUTONOMY-5/6; a reply
 cannot lift the cap): a later thin reply runs the agent like any other
 message, a substantive reply carries no cap text into the prompt, and a
@@ -998,13 +1009,15 @@ whose channel left the allowlist): after each chat, button-pick, `/work` and
 pending warning from the outbox over the bridge's shared DB (the run's own
 `spendWarning`, validated by `spendWarningFromUnknown`, only when the bridge
 has no DB) and send the warning line built from integer amounts to the
-configured owner by DM only (SAFE-14.a); a DM that did not go out SHALL hand
-the warning back for the next pass. A post that did not go out (a chat
+configured owner by DM only (SAFE-14.a), one line per cap that crossed 80%
+(the total cap, and each provider cap named by its scope); a DM that did not
+go out SHALL hand the warning(s) back for the next pass. A post that did not go out (a chat
 reply, a schedule post, or a slash run's owner notice that went out neither
 as a channel post nor in the reply) SHALL hand back the cap episode's owner
 ping for the next post, and a schedule SHALL keep no ping key for a ping that
 was never posted. `/status` SHALL show the owner the rolling 24-hour spend
-against the cap with the percent, or that no cap is set, from the bridge's
+against the cap with the percent, or that no cap is set, and one line per
+provider cap (that provider's spend against its cap), from the bridge's
 shared DB, with no new slash command.
 
 Only the owner SHALL see spend amounts and cap settings; everyone else SHALL
@@ -1038,12 +1051,14 @@ only see that work is paused for budget (SAFE-14.a):
 - `/status` SHALL show the spend line only to the owner (ADMIN, IDENTITY-2,
   re-checked by the handler), with a note while a spend DM waits; anyone else
   SHALL see no spend line, and "Spend: Work is paused for budget." while runs
-  stop at the spend check (cap reached, unpriced model, invalid value,
-  unreadable ledger).
+  stop at the spend check (any cap reached, the total or a provider's,
+  unpriced model, invalid value, unreadable ledger) — never which cap.
 - The owner's answer footers keep tokens and cost and everyone else's show
   model and time (DISCORD-15.a, REQ-discord-457, unchanged). `corvidinho
   doctor`, `task run` output and the daemon's logs stay the operator's.
-- No new env var, config key, table, column or schema version.
+- No new table, slash command or schema version; the env var
+  (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`) is REQ-agent-114's and the
+  `spend_alerts.scope` column is added in place.
 
 Acceptance Criteria
 - A ledger row written with a vendor-key-looking provider or model persists redacted.
@@ -1070,6 +1085,7 @@ Acceptance Criteria
 - SAFE-14.a `createSpendDm`: a DM that returns null or throws keeps its claim (the warning pending in `spend_alerts`, the stop held) and is sent on the next pass, once; the failure is logged once per streak with no amounts; a newer stop replaces a held one; no owner or no DM path claims nothing; concurrent passes send a held stop once.
 - DISCORD-15.a unchanged: someone else's answer footer shows model and time only; the owner's shows tokens and cost.
 - These SAFE-14.a tests fail on the base sources.
+- SAFE-14 / SAFE-15 per cap: `SCRUB_TARGETS` lists `spend_alerts.scope`, a secret-shaped provider id is stored and re-scrubbed redacted, and a re-scrub over a `spend_alerts` without `scope` does not throw; `askPingOwner` pings once per episode of each cap (another provider's stop and the total's each ping; a released claim pings again; a stored question-only stop claims its own caps); the owner's DM carries one warning line per cap; the owner's `/status` lines list each provider cap; the public spend-cap post names no scope, provider, amount or setting.
 
 ### REQ-discord-088
 
@@ -2286,7 +2302,10 @@ The agent SHALL be able to attach a file or image (screenshots, logs, diffs,
 charts) to its reply in the conversation's channel (DISCORD-17) through the
 plugin `discord-send-file`, registered by `loadDiscordPlugins` as dangerous
 (SAFE-1 allowlist, SAFE-5 audit through `runPlugin`), mutating (ROLES-CHAT-3:
-non-owner, WATCH and schedule runs are refused before it runs) and minTier 1.
+non-owner, WATCH and other people's schedule runs are refused before it
+runs; the owner's own schedule, DISCORD-SCHEDULE-1.a, passes that check and
+is refused below because a schedule passes no conversation channel) and
+minTier 1.
 It SHALL attach only in the channel the bridge set for the run: the spawn
 client SHALL always write `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` and
 `CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` from
@@ -2347,6 +2366,7 @@ a thread SHALL carry the thread as the reply channel and its parent.
 Acceptance Criteria
 - `discord-send-file` is registered dangerous, mutating, minTier 1; its description says it can attach and never to say it can't.
 - SAFE-1 denies it when not allowlisted; a non-owner run is refused (ROLES-CHAT-3) before any check or upload.
+- In the owner's own scheduled run (owner stamp, `schedule_*` session, no reply channel) it passes the role check and is refused as a run with no conversation channel, nothing sent (`tests/scheduler.owner-role.test.ts`).
 - A PNG is uploaded to the run's channel as `image/png`, bytes unchanged, `allowed_mentions.parse = []`, after a requester check for the acting user with `attachFiles`.
 - A text log is uploaded with vendor keys and the bot token value redacted; the caption is defanged and scrubbed.
 - `--channel` / `-c` / `--channel=` and a run with no conversation channel or acting user are refused, nothing uploaded.
@@ -3146,9 +3166,12 @@ order) and reach the model only as untrusted data.
   the creator's role), then the closing SAFE line; the owner's schedule keeps
   exactly the prompt it had (`Scheduled work "<name>" on project: <project>`
   and the stored prompt as written).
-- Schedule runs keep `actingIsAdmin: false` and no acting role (never the
-  shell or runners, SAFE-3.a); result posts, ask posts, ping keys, auto-pause
-  and the delivery pass are otherwise unchanged. `SpeakerSurface` gains
+- Schedule runs pass no acting role, and `actingIsAdmin` only for the live
+  owner's own schedule (DISCORD-SCHEDULE-1.a, REQ-discord-741; never the
+  shell or runners, SAFE-3.a); the creator's role above is resolved against
+  the owner as configured at that run (`SchedulerServiceOpts.loadOwner`, else
+  the start-time owner); result posts, ask posts, ping keys, auto-pause and
+  the delivery pass are otherwise unchanged. `SpeakerSurface` gains
   `schedule-prompt`. No new env var, config key, slash option, table, column
   or schema version.
 
@@ -3159,6 +3182,8 @@ Acceptance Criteria
 - A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title (by id alone, without the name, when the name tripped) that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
 - A ticker with no outbound (the daemon) leaves that ask pending on the run row and a bridge tick posts it once; through `startBridge` the row lands in the bridge's `audit_log` and the schedule is paused.
 - These tests fail on the base sources (the owner and ordinary-create guards pass on both).
+- A schedule made by someone who was the owner at start but is not the owner `loadOwner` reads now is fenced as `role: community` and spawned with `actingIsAdmin: false` (`tests/scheduler.owner-role.test.ts`).
+
 ### REQ-discord-367
 
 GitHub matches people by numeric user id only (IDENTITY-7.a, #36; captured
@@ -3713,4 +3738,75 @@ Acceptance Criteria
 - A fake agent bin that raised a must-ask Approve card (itself the waiting process) and waits: after the stop the card's request is `expired` (closed as a no).
 - `routeMessage`: a reply 'stop' / '<@bot> cancel' to a running progress message that is also a tracked bot message gives `stop_run` for the requester and the owner; 'stop it', a third user, the same reply in another allowlisted channel, or a finished run route as before; a deny-listed requester is refused quietly.
 - `isStopRunText`: true for `stop`, `Stop`, ` STOP. `, `cancel`, `Cancel!`, `stop!!`; false for `stop it`, `please stop`, `cancel that`, `stopped`, empty, `nevermind`, `don't stop`.
+### REQ-discord-741
+
+A schedule the owner creates runs as the owner; schedules other people create
+stay read-only (DISCORD-SCHEDULE-1.a, #124). `SchedulerServiceOpts` SHALL
+gain an optional `loadOwner` (`() => Promise<OwnerRecord | null> |
+OwnerRecord | null`), read once per run: the bridge SHALL wire it to
+`loadOwnerConfig({ env, filePath: <the loaded allowlist's source path> })`
+and the daemon to `loadOwnerConfig({ env })` (REQ-cli-741), so a run reads
+the owner as configured now; without it the start-time `owner` is used, and a
+read that throws SHALL be logged (`[scheduler] owner failed: <scrubbed
+line>`) and count as no owner (fail closed).
+
+- `runOne` SHALL, after the DISCORD-SCHEDULE-3 creator / channel gate
+  (REQ-discord-020) and before the SAFE-13 scan, resolve the creator's role
+  against that live owner (`resolveDiscordActingRole` with the live owner, the
+  live mute set and the people list read with that owner; the SAFE-12 fence
+  and the answered-ask block use the same owner) and spawn the run with
+  `actingIsAdmin: true` only when that role is `owner` and
+  `isOwnerDiscord(liveOwner, schedule.createdByUserId)` — the owner as
+  configured now, not muted or deny-listed. Every other schedule SHALL be
+  spawned with `actingIsAdmin: false`. No schedule SHALL pass `actingRole`,
+  so the spawn client stamps `owner` or `community`, never `team`.
+- The run keeps `surface: "schedule"` and its `schedule_<id>` session id, so
+  the SAFE-3.a gate still refuses the shell, runners and Fledge runs
+  (REQ-agent-503), no Fledge plugin command is discovered (REQ-agent-741), the
+  repo gate stays on (DISCORD-SCHEDULE-3.a) and the tool layer re-checks the
+  owner at every call (REQ-plugins-065). The owner's schedule is offered the
+  dangerous tools the allowlist names; a must-ask call it starts (a
+  `discord-post-message` included) raises the owner's Approve card through
+  `runPlugin`. A deny, a lapse or a resent deny ends the run with the stuck
+  ask `mustAskRefusedAsk` builds (REQ-agent-741); `finish` records it and it
+  blocks the schedule (AUTONOMY-6.a, REQ-discord-606): it is posted once to
+  the schedule's channel (the owner pinged, with its Answer and Cancel
+  controls), and each later due run is skipped with one wait note, raising no
+  new card, until it is answered or cancelled.
+- The schedule's own posts (its result, its ask, its wait note) SHALL keep
+  going out through the scheduler's outbound, never through `runPlugin`, so
+  they are not AUTONOMY-10 announcements it starts and need no card.
+- An owner schedule on a non-git project SHALL keep its own scoped folder
+  (`scoped-talk-schedule_…`), never the project folder itself.
+- No new env var, config key, slash option, table, column or schema version.
+
+Acceptance Criteria
+- `tests/scheduler.owner-role.test.ts`: the owner's due schedule is spawned `actingIsAdmin: true` with no `actingRole`, surface `schedule`, session `schedule_<id>` and its prompt unfenced, and its result post goes straight to its channel; a declared team member's and a stranger's are spawned `actingIsAdmin: false` with no `actingRole`.
+- Same file: started with one owner while `loadOwner` names another, the old owner's schedule is community (fenced `role: community`) and the new owner's runs as the owner, one read per run; `loadOwner` returning null, throwing (logged) or a muted owner give `false`; without `loadOwner` the start-time owner is used.
+- Same file: an owner schedule on a non-git project runs in its own `scoped-talk-schedule_…` folder, never the project folder.
+- Same file: through the real spawn client, the child of the owner's schedule resolves `owner` (stamps `1` / `owner` / `schedule`, the shell gate refusing "scheduled runs never get them") and a team member's resolves `community`.
+- Same file: in process, the owner's schedule's `discord-post-message` raises one `mustask-post` card; denied, the scheduler records the stuck ask naming it, posts it once pinging the owner with its controls, and the next two due ticks run nothing, raise no new card and post one wait note.
+- Same file: `startDaemon` and `startBridge` spawn the owner's schedule as the owner, and after the allowlist file names another owner the next run of it is community.
+- With the base sources these tests fail; the read-only, owner-chat and other-person guards pass on both.
+### REQ-discord-518
+
+/work SpecSync coverage (AGENT-18, REQ-agent-518). Before `openWorkPr`
+commits or pushes anything, after the tests-deleted check (REQ-discord-185)
+and before the pre-push lane, it SHALL read the repo's SpecSync policy with
+`scanRepoWays(worktree, mergeBase)` (the merge-base, HEAD and the work tree,
+merged fail-closed) and, when it requires a change for meaningful files,
+SHALL list the paths changed since the merge-base (commits and the dirty
+tree, `startWorkspaceDiffFrom(worktree, mergeBase).changed()`) and require
+each meaningful one to be covered by an open change or by a change archived
+on the branch (`sddUncovered`). An uncovered path, or changes that cannot be
+read, SHALL keep the PR from opening with reason `sdd-uncovered` and one
+scrubbed `PR: not opened — …` line that counts and names the paths (five,
+then "…"), says to open a change with `specsync change new … --path`, and
+says the changes stay on the work branch; no plugin runs and nothing is
+committed or pushed. Turning the workflow off on the branch does not skip
+the check. No env var, config key, flag or slash command.
+
+Acceptance Criteria
+- A /work worktree of an SDD repo with `src/app.ts` edited and no change: `opened: false`, reason `sdd-uncovered`, the line names `src/app.ts`, no plugin call; after a change archived on the branch covers it: opened through `git-commit` → `git-push` → `github-pr-create`.
+- A branch that deletes `sdd.json` and commits the edit still gets `sdd-uncovered`.
 

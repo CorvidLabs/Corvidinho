@@ -478,3 +478,113 @@ removes the shell from attempt 2; an allowlist without the six runs no gate.
   `src/agent/shell-gate.ts` removed, `agent.safe3a-gate` cannot load, 8 of 9
   `agent.safe3a-owner-shell` tests fail (the no-gate guard passes) and the
   renamed `SAFE3A_TOOLS` test fails; all pass on the branch.
+
+## The owner's own schedule: no Fledge discovery, a no ends the run with an ask (REQ-agent-741; DISCORD-SCHEDULE-1.a)
+
+`tests/agent.allowlisted-dangerous.test.ts` ("the owner's own scheduled run
+… never discovers or spawns fledge …") — with the owner stamp, surface
+`schedule` and a `schedule_*` session, an allowlist naming `fledge-hello`,
+`github-pr-review`, `files-delete` and `shell-exec` offers `github-pr-review`
+and `files-delete`, not `shell-exec`, only the read-only Fledge core
+builtins, never discovers `fledge-hello` and never spawns fledge; the
+model's call to it is refused as not offered.
+`tests/scheduler.owner-role.test.ts` — denied: one `mustask-post` card with
+the exact text and the owner as requester, the post refused, the next call
+in the batch never run, one model request, the run `blocked` with no verify
+and the stuck ask naming `` `discord-post-message` ``, its why, AUTONOMY-10
+and the card, the summary `formatAskSummary(ask)` and the
+`[operator] DISCORD-SCHEDULE-1.a` line; lapsed: the ask says nobody answered
+the card in time (SAFE-20); the owner's chat with the same deny goes on
+(`done`, two model requests, no ask); another person's schedule is not
+offered the post and gets the role refusal, raising no card.
+`mustAskRefusedAsk` gives the exact question for `denied`, and for
+`expired` / `resent`, null for a call that ran, `worker` / `no-owner` /
+`unavailable` / `aborted` and plain failures, cuts a long why and scrubs a
+token in it.
+- Fail on base: with the base's (af4597e) `src/agent/execute.ts` and
+  `src/plugins/roles.ts` (and the other sources listed under REQ-discord-741)
+  swapped in, the allowlisted-dangerous test (fledge discovered and offered)
+  and the denied / lapsed / scheduler-records tests (no ask) fail; all pass
+  on the branch.
+## Repo ways, SpecSync coverage and the own-change lifecycle (REQ-agent-518, REQ-agent-519; AGENT-18, AGENT-18.a)
+
+`tests/agent.repo-ways.test.ts` (temp git repos, a fake `specsync` and a
+fake `hi` on PATH, stub verify runners; "Corvidinho itself" is a temp repo
+with origin github.com/CorvidLabs/Corvidinho named by the
+`setCorvidinhoCheckoutForTests` seam):
+
+- detection: all three ways, none in a plain repo; removed from the working
+  tree (HEAD still has them) and committed away (only the base passed in
+  still has them); a disabled `sdd.json` in the tree is not a way out; a
+  non-git project reads its working tree; the ways line.
+- policy and coverage: meaningful vs ignored (more specific wins, SpecSync
+  defaults), unparseable `sdd.json` fails closed, merged policies stay
+  strict, file and dir coverage, archived-in-this-diff covers, not required
+  covers everything.
+- the gate: an uncovered edit gets the `SpecSync gate:` note and no lane,
+  the covered retry is verified (lane once); deleting `sdd.json` and
+  committing mid-run still gates; a repo with no ways is unchanged; the tool
+  loop's system prompt carries the block only with `repoWays`.
+- the lifecycle: approve, check, review, finalize in order and the lane
+  twice on Corvidinho; elsewhere only a "stays open for a human" line; no
+  allowlist → SAFE-1 line, another change untouched; a failing second lane
+  fails the run; a failing approve leaves the change open.
+
+Fail-on-base proof: with the base's (7090656) `src/agent/{loop,execute,types,tools,loop-guards}.ts`,
+`src/plugins/{roles,types}.ts`, `src/work/pr.ts` and `plugins/specsync/{commands,api}.ts`
+swapped in (the new `src/agent/repo-ways.ts` kept so the file loads), 15 of
+its 26 tests fail (every gate, prompt, tool, approve / finalize, lifecycle
+and /work case; the pure `repo-ways.ts` units pass) and the two catalog tests
+of `tests/roles.team.test.ts` fail. Restored: all pass.
+## Spend caps per provider plus the total, each warned and stopped (REQ-agent-114 added, REQ-agent-098 modified; SAFE-14 / SAFE-15)
+
+`tests/agent.spend-caps.test.ts` (24 tests; mocked fetch, in-memory or temp
+SQLite, one spawned `corvidinho doctor`):
+
+- Setting: `configuredProviderIds` (every chain entry of every tier key, a
+  custom base URL's host); `parseSpendCaps` off / total only / providers only
+  (keys lower-cased) / both; eleven malformed lists and a well-formed key no
+  configured model uses are invalid as a whole; both settings bad name both.
+- Ledger: `window(now, provider)` per provider (older than 24 h excluded);
+  `idx_spend_ledger_provider_ts` on `(provider, ts)`; `reserve` names the
+  total, the provider, or both (`total` first) and reserves a provider under
+  its own cap with no total.
+- Guard: a provider cap stops only that provider (no fetch, `spendScopes`,
+  "Daily spend cap reached (SAFE-15): $0.9990 spent on api.openai.com …",
+  `Stopped at cap: provider:api.openai.com.`, the entry to raise, no
+  `CORVIDINHO_DAILY_SPEND_CAP_USD`; `finish` gives `SPEND_CAP_SUMMARY`) while
+  another provider is sent and recorded; the total still applies and a call
+  past both names both; a bad provider setting stops every provider, opens no
+  DB and never echoes the value; an unpriced model stops under its provider's
+  cap and runs unrecorded where no cap covers it; 80% warns once per crossing
+  of each cap (provider warning with its scope, the total's without; rows
+  carry their scopes); `createTaskExecute` with a two-model chain and the
+  head provider at a $0 cap ends with the spend-cap ask and no provider call
+  (the AGENT-11 chain never tries the next model).
+- Delivery: the outbox's `warnings` (one per cap, current spend; release
+  returns both); a cap back under 80% stays pending while the other is
+  claimed; the owner DM has one line per cap; `askPingOwner` pings per
+  episode of each cap (release pings again); a question-only stored stop
+  names its caps (`spendScopesOf`) and claims them; `askFromUnknown` keeps
+  well-formed scopes only; `askPingKey` follows provider scopes; a provider
+  warning survives `spendWarningFromUnknown`; the public post names no scope,
+  provider, amount or setting.
+- Store: an older `spend_alerts` gains `scope` (rows `total`), re-scrub before
+  the ALTER does not throw; `SCRUB_TARGETS` has `spend_alerts.scope`, stored
+  and re-scrubbed redacted.
+- Doctor and `/status`: snapshot `providers`, doctor `spend` +
+  `spend provider:<id>` lines, owner `/status` lines per cap, public line
+  paused while any cap is reached; provider caps only (no amount on `spend`,
+  unpriced model flagged only when covered); an invalid provider setting named
+  but not echoed; `corvidinho doctor` prints the provider line.
+
+Updated: `tests/agent.spend-ask.test.ts` (an invalid total's snapshot now
+carries `keys`) and `tests/agent.spend.test.ts` (a refused reservation carries
+`trips`).
+
+- Fail on base: with main's (7090656) sources swapped in,
+  `tests/agent.spend-caps.test.ts` cannot load (`configuredProviderIds` and
+  the other new exports are missing) and the two updated tests fail; a probe
+  with only `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.openai.com=0` sends the
+  provider call on base and stops it with `SpendCapRefusal` on the branch.
+

@@ -14,8 +14,14 @@
  *   declared role is team (IDENTITY-8/10). The surface's stamp can only lower
  *   the role, never raise it;
  * - community: everyone else — undeclared people, declared community, WATCH,
- *   schedules, delegate/council workers, a muted or deny-listed actor, or any
- *   read failure (IDENTITY-11/12).
+ *   schedules other people create, delegate/council workers, a muted or
+ *   deny-listed actor, or any read failure (IDENTITY-11/12).
+ *
+ * DISCORD-SCHEDULE-1.a: a schedule the owner created runs as the owner (the
+ * scheduler stamps the ADMIN bit only for the live owner's own schedule, and
+ * the ADMIN re-check above still applies at every call); anyone else's
+ * schedule is community. A scheduled run (`isScheduleRunEnv`) is never team,
+ * whatever its stamp says.
  */
 
 import { loadAllowlist } from "../allowlist/load.ts";
@@ -77,13 +83,21 @@ export const TEAM_REVIEW_TOOLS: ReadonlySet<string> = new Set([
 
 /**
  * Team work tasks (IDENTITY-10): file edits inside a `/work` run's own
- * worktree (SAFE-2 protected paths still refused). The `/work` handler ships
- * the result as a draft PR (REQ-discord-088); the shell, runners, git and
- * other writes stay owner-only.
+ * worktree (SAFE-2 protected paths still refused), and working that repo's
+ * SpecSync change for them (AGENT-18): opening and answering it, and, on
+ * Corvidinho only, the approve and archive steps the run itself takes once
+ * verify is green (AGENT-18.a; those two stay dangerous, so SAFE-1's
+ * allowlist still applies). The `/work` handler ships the result as a draft
+ * PR (REQ-discord-088); the shell, runners, git and other writes stay
+ * owner-only.
  */
 export const TEAM_WORK_TOOLS: ReadonlySet<string> = new Set([
   "files-edit",
   "files-write",
+  "specsync-change-new",
+  "specsync-change-answer",
+  "specsync-change-approve",
+  "specsync-change-finalize",
 ]);
 
 function truthy(raw: string | undefined): boolean {
@@ -162,8 +176,9 @@ export function actingWorkTask(env: NodeJS.ProcessEnv = process.env): boolean {
 
 /**
  * Resolve the acting role at this call (IDENTITY-8..12). `null` ⇒ no role
- * session (local CLI: no role gates). Never throws; any failure reads as
- * community.
+ * session (local CLI: no role gates). A scheduled run is the owner (the
+ * owner's own schedule, ADMIN re-check passed) or community, never team
+ * (DISCORD-SCHEDULE-1.a). Never throws; any failure reads as community.
  */
 export async function resolveActingRole(
   env: NodeJS.ProcessEnv = process.env,
@@ -172,6 +187,9 @@ export async function resolveActingRole(
   if (!roleSessionActive(env)) return null;
   if (await resolveActingIsAdmin(env, userId)) return "owner";
   if (actingRoleCap(env) === "community") return "community";
+  // DISCORD-SCHEDULE-1.a: schedules other people create stay read-only; a
+  // scheduled run is never team, whatever its stamp says.
+  if (isScheduleRunEnv(env)) return "community";
   const actor = (userId ?? env.CORVIDINHO_ACTING_DISCORD_USER_ID ?? "").trim();
   if (!actor) return "community";
   const id = actor.toLowerCase();

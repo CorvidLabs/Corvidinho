@@ -161,6 +161,8 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
       CORVIDINHO_NON_INTERACTIVE: "1",
       FLEDGE_NON_INTERACTIVE: "1",
       CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
+      // SAFE-14: a per-provider cap stops mock-LLM runs the same way.
+      CORVIDINHO_PROVIDER_SPEND_CAPS_USD: "127.0.0.1:11434=1",
       CORVIDINHO_LLM_API_KEY: "sk-operator-llm-key",
       OPENAI_API_KEY: "sk-operator-openai-key",
       // AGENT-13: the operator's model config (a keyless ollama: model would

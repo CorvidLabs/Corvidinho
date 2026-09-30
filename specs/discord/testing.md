@@ -1332,3 +1332,67 @@ only the two words.
   the two gate-after-waiting tests fail (the waiting message and the waiting
   pick still run); with its `work.ts`, the late-stop `/work` test fails (the PR
   step runs and the task is `completed`).
+## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
+
+`tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,
+the owner's due schedule is spawned with `actingIsAdmin: true`, no
+`actingRole`, surface `schedule`, session `schedule_<id>` and its prompt
+unfenced, and its result post goes straight to its channel; a declared team
+member's and a stranger's schedules are spawned `actingIsAdmin: false` with
+no `actingRole` (never team); started with one owner while `loadOwner`
+names another, the old owner's schedule is community (fenced
+`role: community`) and the new owner's runs as the owner (one read per run);
+`loadOwner` returning null, throwing (logged `[scheduler] owner failed: …`)
+or a muted owner give community; without `loadOwner` the start-time owner is
+used; an owner schedule on a non-git project runs in its own
+`scoped-talk-schedule_…` folder, never the project folder. Through the real
+spawn client (a fake bin that resolves the role in the child) the owner's
+schedule resolves `owner` with stamps `1` / `owner` / `schedule` and the
+shell gate says "scheduled runs never get them", and a team member's resolves
+`community`. In process, with the owner's schedule stamps, a
+`discord-post-message` the model starts raises one `mustask-post` card with
+the exact text; denied, the run ends `blocked` with the stuck ask naming the
+tool and card and the scheduler records it: the ask posts to the channel
+pinging the owner with its controls, and the next two due ticks run nothing,
+raise no new card and post one wait note. The owner's schedule stamps still
+give no private place: project memory works, but private notes, a `--person`
+view and `memory-profile` are refused with no `privateText`, and
+`discord-send-file` passes the role check and is refused for want of a
+conversation channel. The daemon (`startDaemon`) and the
+bridge (`startBridge`, null gateway) spawn the owner's schedule as the owner,
+and after the allowlist file names another owner the next run is community.
+- Fail on base: with the base's (af4597e) `src/scheduler/service.ts`,
+  `src/plugins/roles.ts`, `src/agent/execute.ts`, `src/discord/bridge.ts`,
+  `src/daemon/daemon.ts` and `src/discord/agent-client.ts` swapped in (the
+  additive `mustAskRefusedAsk` kept so the file loads), 11 of the 18 tests
+  fail; the read-only, owner-chat, other-person, no-private-place and
+  `mustAskRefusedAsk` unit guards pass on both. All pass on the branch.
+## /work checks SpecSync change coverage (REQ-discord-518, AGENT-18)
+
+`tests/agent.repo-ways.test.ts` ("/work checks SpecSync coverage before
+commit and push"): a /work worktree of an SDD repo (bare `origin`,
+`origin/HEAD` set) with `src/app.ts` edited and no change is refused with
+`sdd-uncovered` naming the path and no plugin call; a change archived on the
+branch covering it ships through `git-commit` → `git-push` →
+`github-pr-create`; deleting `sdd.json` and committing on the branch still
+gets `sdd-uncovered`. Both fail on the base (the PR opens).
+## Each spend cap on its own, owner only (REQ-discord-098 modified; SAFE-14 / SAFE-15, SAFE-14.a)
+
+`tests/agent.spend-caps.test.ts` › "delivery keeps each cap apart" and
+"spend_alerts gains its scope column in place" — the owner's DM carries one
+80% warning line per cap (a provider's names `provider:<id>`); `askPingOwner`
+pings the owner once per episode of each cap a stop tripped (another
+provider's stop and the total's each ping; a released claim pings again; a
+schedule run's stored question-only stop claims its own caps through the
+"Stopped at cap" marker); a schedule's `askPingKey` follows the provider caps
+(the total alone keys as before); the public spend-cap post names no scope,
+provider, amount or setting; `SCRUB_TARGETS` lists `spend_alerts.scope`, a
+secret-shaped provider id is stored and re-scrubbed redacted, and a re-scrub
+over a `spend_alerts` without `scope` does not throw. The owner's `/status`
+lines per cap and the public "Spend: Work is paused for budget." while any
+cap is reached are covered by "doctor and the owner's /status show each cap".
+The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
+`tests/discord.spend-dm.test.ts`, `tests/scheduler.ask-outbox.test.ts`,
+`tests/discord.collapsed-ping.test.ts`) pass unchanged.
+- Fail on base: the file cannot load on main's (7090656) sources.
+

@@ -299,7 +299,8 @@ export async function spawnSpecsync(
   args: string[],
   signal?: AbortSignal,
 ): Promise<SpawnResult> {
-  const bin = Bun.which("specsync");
+  // The PATH in effect now (Bun.which alone reads the start-up PATH).
+  const bin = Bun.which("specsync", { PATH: process.env.PATH ?? "" });
   if (!bin) {
     return {
       success: false,

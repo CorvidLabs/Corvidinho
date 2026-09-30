@@ -346,14 +346,24 @@ Acceptance Criteria
 ### REQ-cli-098
 
 `corvidinho doctor` SHALL always print a `spend` line (AUTONOMOUS-8 /
-SAFE-8). Without `CORVIDINHO_DAILY_SPEND_CAP_USD` it SHALL be `info` and say
-no daily cap is set, without opening the database. With the variable set it
+SAFE-8). Without `CORVIDINHO_DAILY_SPEND_CAP_USD` and
+`CORVIDINHO_PROVIDER_SPEND_CAPS_USD` it SHALL be `info` and say no daily cap
+is set, without opening the database; with provider caps only it SHALL say
+no total daily cap is set, with no amount (`info`, or `warn` for an unpriced
+model a provider cap covers). With the total cap set it
 SHALL show spend in the last 24 hours against the daily cap with the percent,
 the number of provider calls counted, and how many are still counted at their
 estimate, and SHALL be marked `warn` at or past the 80% warning, at the cap,
 when the cap value is not a plain USD amount, when the configured model has
 no known price, or when the ledger cannot be read (the last three stop and
-ask before every provider call). A tier with no configured model (AGENT-10)
+ask before every provider call). After it, doctor SHALL print one
+`spend provider:<id>` line per provider cap (SAFE-14 / SAFE-15,
+REQ-agent-114): that provider's 24-hour spend against its cap with the
+percent, the calls counted and those still at their estimate, marked `warn`
+at or past 80% and at the cap. When `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` is
+invalid (a malformed entry or a provider no configured model uses) the
+`spend` line SHALL be `warn` and name the setting, never its value; every
+provider call then stops and asks. A tier with no configured model (AGENT-10)
 calls nothing, so it SHALL NOT count as an unpriced model: neither this line
 nor the `/status` spend lines warn or say paused for it. The line SHALL be informational and SHALL
 NOT change the doctor exit code. `task run` SHALL copy the run's 80% spend
@@ -361,13 +371,17 @@ warning onto `TaskResult.spendWarning` in `--json` output and the NDJSON
 `result` frame, and a run stopped at the cap SHALL exit 0 with state
 `blocked`; in text output it SHALL print the generic summary and the ask
 question. `corvidinho daemon`, which has no Discord, SHALL log a `warn`
-`spend.warning` line for a schedule run that crossed 80% and a `warn`
+`spend.warning` line for a schedule run that crossed 80% of a cap (a
+provider cap's `message` names its `provider:<id>` scope) and a `warn`
 `run.needs_human` line with the ask reason for a run that stopped to ask,
 leaving the recorded warning and the ask recorded on the run row pending for
 a bridge to deliver (REQ-discord-347; AUTONOMY-2 / AUTONOMOUS-7). The daemon
 SHALL NOT post or take the ask itself and still needs no Discord token
-(REQ-cli-108). `--help` and `.env.example` SHALL list the variable and say it
-warns at 80% and stops and asks at 100%.
+(REQ-cli-108). `--help` and `.env.example` SHALL list both variables and say
+each cap warns at 80% and stops and asks at 100%; for
+`CORVIDINHO_PROVIDER_SPEND_CAPS_USD` they SHALL say it is a `provider=USD`
+comma list keyed on the provider id (the endpoint host) and that a bad entry
+or unknown provider stops every call.
 
 Acceptance Criteria
 - `bun src/cli.ts doctor` without the variable prints `[info] spend: no daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)`.
@@ -377,6 +391,8 @@ Acceptance Criteria
 - The daemon logs `spend.warning` (amounts and percent) and `run.needs_human` (`reason` `spend-cap`) as `warn` lines for a schedule run that reports them.
 - A stuck schedule run the daemon claims logs `run.needs_human` (`reason` `stuck`), is recorded with its ask pending, and a Discord bridge started later on the same data dir posts it to the owner once.
 - Under a cap with no model configured, `readSpendSnapshot` is `priced` and the public `/status` spend line is absent (not "paused for budget").
+- With `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.anthropic.com=2` and an Anthropic model, `doctor` prints `[info] spend: no total daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)` and `[ok] spend provider:api.anthropic.com: $0.00 of $2.00 daily cap for api.anthropic.com used in the last 24h (0%; 0 provider call(s); CORVIDINHO_PROVIDER_SPEND_CAPS_USD, SAFE-14)`; a provider at 80% or at its cap is `warn`; an invalid provider setting is a `warn` `spend` line naming the setting and not its value.
+- `--help` lists `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`.
 
 ### REQ-cli-085
 
@@ -627,7 +643,8 @@ process started with. The preload SHALL also unset the run and operator
 settings that change test outcomes on the bot box, so the suite runs as it
 does on CI: `CORVIDINHO_NON_INTERACTIVE` and `FLEDGE_NON_INTERACTIVE` (every
 Discord, WATCH and daemon task run sets the first, and its verify lane runs
-the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, the LLM API keys
+the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD` and
+`CORVIDINHO_PROVIDER_SPEND_CAPS_USD` (SAFE-14), the LLM API keys
 `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (so `bun
 test` never sends a real model call), the operator's model config
 `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`,
@@ -642,7 +659,7 @@ Acceptance Criteria
 - An operator DB that already holds an audit chain keeps the same row count and last hash after the child run, and no test row is keyed with the operator's key.
 - A CLI or shell a test spawns without an explicit `env` (`Bun.spawn(argv)`, `Bun.spawn({ cmd })`, `Bun.spawnSync(argv)`) resolves the preload's data dir and sees no audit key, WATCH spawn log or worktree base override.
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
-- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
+- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
 - With `ANTHROPIC_API_KEY`, `OLLAMA_HOST`, `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, `CORVIDINHO_LLM_BASE_URL` and `CORVIDINHO_LLM_TIER` set too, a child `bun test` sees none of them and has no usable model provider.
 
 ### REQ-cli-419
@@ -1109,4 +1126,19 @@ Acceptance Criteria
 - `package.json` version is `0.0.36`.
 - CLI `version` prints `0.0.36`.
 - CHANGELOG has a 0.0.36 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-741
+
+The daemon reads the owner live for each schedule run (DISCORD-SCHEDULE-1.a,
+#124). `startDaemon` SHALL pass the scheduler, besides the start-time owner
+it already passes for the creator gate (REQ-cli-108), a `loadOwner` that
+re-reads the owner config (`loadOwnerConfig({ env })`: env over the
+allowlist file's `[owner]`) at each run, so only the owner as configured now
+gets the owner stamp for their own schedule (REQ-discord-741) and an owner
+change in the file applies to the next run without a restart. No env var,
+config key, flag or log event is added.
+
+Acceptance Criteria
+- `tests/scheduler.owner-role.test.ts` ("daemon: …"): with an allowlist file naming the owner, the owner's due schedule is spawned `actingIsAdmin: true`; after the file names another owner the next due run of it is spawned `actingIsAdmin: false`, with no restart.
+- The test fails with the base sources (always `false`).
 

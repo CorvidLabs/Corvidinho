@@ -11,7 +11,11 @@ schedule (`tick.allowlist_failed`; the nightly backup still runs). A run whose c
 or whose creator fails the live-chat actor gate (deny-listed, or, when the user
 or role list is non-empty, not listed by user id and not the configured owner;
 a tick knows no member roles), is refused (DISCORD-SCHEDULE-3). The owner is
-read at start: restart the daemon after changing it. Agents it spawns run
+read at start for that gate: restart the daemon after changing it. Whether a
+run is the owner's own schedule is read again at each run (DISCORD-SCHEDULE-1.a):
+a schedule the owner created runs with the owner's allowlisted tools and asks on
+the must-ask Approve cards (never the shell, runners or Fledge commands); a
+schedule anyone else created runs read-only. Agents it spawns run
 non-interactive, so dangerous tools stay denied unless allowlisted (SAFE-1).
 
 ```bash
@@ -197,7 +201,7 @@ scrubbed for secrets (SAFE-6).
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first and runs that wait on their schedule's open question (AUTONOMY-6.a). |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
 | `llm.fallback` | (warn) A scheduled run's model failed and it fell back to the next configured model (AGENT-11): `sessionId`, `fallbacks` (`from`, `to`, `reason` each; `via` for a delegate or council worker's) and a `message` line. The post of a run that still finished carries the same note (a failed run's post stays `failed (exit N)`); there is no DM |
-| `spend.warning` | (warn) A schedule run crossed 80% of the rolling 24 h spend cap (`CORVIDINHO_DAILY_SPEND_CAP_USD`, SAFE-8): `spentMicroUsd`, `capMicroUsd`, `percent` and a `message` line. The daemon has no Discord: the warning stays pending for a bridge's scheduler tick to DM to the owner (never posted in a channel, SAFE-14.a) |
+| `spend.warning` | (warn) A schedule run crossed 80% of a rolling 24 h spend cap — the total (`CORVIDINHO_DAILY_SPEND_CAP_USD`, SAFE-8) or a provider's (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, SAFE-14/15; its `message` names `provider:<id>`): `spentMicroUsd`, `capMicroUsd`, `percent` and a `message` line. The daemon has no Discord: the warning stays pending for a bridge's scheduler tick to DM to the owner (never posted in a channel, SAFE-14.a) |
 | `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it, and the schedule's due runs wait until someone answers or cancels it on Discord (AUTONOMY-6.a). |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
 | `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (no schedule ran; due schedules stay due; the nightly backup still runs when due). Fix the file; the next tick picks it up |
