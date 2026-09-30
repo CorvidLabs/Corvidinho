@@ -158,3 +158,14 @@ start …") — a non-dry-run poller with an injected agent and no model logs
 `[watch] <notice>`; with a model, or in a dry run, no such line. Fails on the
 base sources.
 
+
+## WATCH runs stamp the watch surface (REQ-watch-735; SAFE-3.a)
+
+`tests/discord.safe3a-surface.test.ts` ("Discord: the caller's surface, else
+empty; WATCH: always watch") — the WATCH spawn client sets
+`CORVIDINHO_ACTING_SURFACE=watch` even when its own env carries another
+value; `tests/agent.safe3a-gate.test.ts` and
+`tests/agent.safe3a-owner-shell.test.ts` show `watch` (and a
+`CORVIDINHO_WATCH_SESSION_ID` marker) never gets the shell.
+- Fail on base: with the base's `src/watch/agent-client.ts` the stamp is
+  unset and the test fails.

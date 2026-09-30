@@ -5,9 +5,10 @@
  * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
  * Sets the commenter's GitHub login / numeric id and the thread's repo for
  * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor, never ADMIN
- * (REQ-watch-008). The ask a run stopped on comes back as `ask`: a stuck one
- * pings the owner on Discord (AGENT-16.a, REQ-watch-086). Injectable for
- * tests; no ProcessManager.
+ * (REQ-watch-008), and stamps the `watch` surface, which never gets the
+ * shell, runners or Fledge runs (SAFE-3.a, REQ-watch-735). The ask a run
+ * stopped on comes back as `ask`: a stuck one pings the owner on Discord
+ * (AGENT-16.a, REQ-watch-086). Injectable for tests; no ProcessManager.
  */
 
 import {
@@ -15,6 +16,7 @@ import {
   type TaskProgress,
 } from "../agent/events-ndjson.ts";
 import { askFromUnknown } from "../agent/ask.ts";
+import { ACTING_SURFACE_ENV } from "../agent/shell-gate.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import type { AgentSpawnResult } from "./types.ts";
@@ -72,6 +74,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_ACTING_DISCORD_USER_ID: "",
           CORVIDINHO_ACTING_IS_ADMIN: "0",
           CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
+          // SAFE-3.a: a WATCH run never gets the shell, runners or Fledge
+          // runs; always overwritten, never inherited.
+          [ACTING_SURFACE_ENV]: "watch",
           // MEMORY-8: the commenter and the thread's repo, always overwritten
           // (empty when unknown), never inherited from the watcher's env.
           CORVIDINHO_ACTING_GITHUB_LOGIN: actingGithubLogin?.trim() ?? "",

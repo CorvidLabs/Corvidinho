@@ -186,6 +186,9 @@ export async function handleSessionStart(
         actingUserId: interaction.userId,
         actingIsAdmin,
         actingRole,
+        // SAFE-3.a: /session start (the shell gate re-checks the owner and
+        // the talk's own worktree in the run).
+        surface: "session",
         cwd: ctx.store.cwdFor(session),
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,

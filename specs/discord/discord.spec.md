@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 90
+version: 91
 status: draft
 files:
   - src/discord/types.ts
@@ -160,6 +160,7 @@ files:
   - tests/discord.allowed-mentions.test.ts
   - plugins/discord/send-file.ts
   - tests/discord.send-file.test.ts
+  - tests/discord.safe3a-surface.test.ts
 
 db_tables: []
 depends_on:
@@ -660,7 +661,14 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 `team` only when asked, else `community` — schedules pass none) and
 `CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
-it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+it. Surface stamp (SAFE-3.a, REQ-discord-735): `AgentRunChatOpts` gains
+`surface?: ActingSurface` (`src/agent/shell-gate.ts`), which the spawn client
+always writes to `CORVIDINHO_ACTING_SURFACE` (empty when omitted): the
+bridge's chat path passes `chat`, its ask continuation (button pick or
+Answer form) `ask`, `/session start` `session`, `/work` `work` and the
+scheduler's `runOne` `schedule`. The agent's shell gate (REQ-agent-503)
+offers the allowlisted shell, runners and Fledge runs only on the first four,
+for the owner, in the talk's own worktree. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
 inbound check the handler refuses a community caller (declared community, no
 role, undeclared; muted or deny-listed callers too, though the dispatcher's
 mute and actor gates stop them first) with the ephemeral `not authorized` of
@@ -1329,3 +1337,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its: 'Verified' requires that tests actually ran and none were deleted (AGENT-15): a passing verify lane counts only when its output has a recognised test summary (bun test, jest, vitest, cargo test, pytest, go test) with at least one executed test and no test active at the baseline was deleted, retitled or turned off (skip, todo, silenced by only), by name across the repo root; non-git projects walk their test files at run start; /work checks the tree against the merge-base before commit and push |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
+| 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |

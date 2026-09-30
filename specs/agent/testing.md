@@ -48,8 +48,9 @@ REQ-plugins-494).
 PATH, GitHub dry run; no network): the catalog offers the allowlisted GitHub
 writes and memory forget/override at tool tier and leaves unlisted dangerous
 tools out; every offered dangerous tool is allowlisted; `files-delete` needs
-code tier; `shell-exec` and the runners are never offered from the allowlist;
-a non-ADMIN session gets no dangerous or mutating tool. Through
+code tier; `shell-exec`, the runners and the Fledge core runs (`SAFE3A_TOOLS`)
+are not offered from the allowlist without the SAFE-3.a grant (a local run
+never has it); a non-ADMIN session gets no dangerous or mutating tool. Through
 `createTaskExecute` with `CORVIDINHO_ALLOWLIST=github-pr-review` the review
 runs (dry run) and an unlisted `github-issue-create` is refused; ADMIN gets
 it, non-ADMIN does not. An allowlisted `fledge-hello` is discovered, offered
@@ -401,3 +402,37 @@ picks no model; an attempt with no provider fails with the notice.
   `tests/fixtures/fake-llm.ts` (a localhost fake, an injected fetch, or a
   configured model for bridge footers).
 
+
+## Owner shell grant (REQ-agent-503, REQ-agent-501; SAFE-3.a)
+
+`tests/agent.safe3a-gate.test.ts` — `shellToolsGate` over temp git projects
+and talk worktrees made by `ensureTalkWorkspace`: granted for the owner's
+`chat`, `session`, `work` and `ask` in the session's own worktree; refused for
+`watch`, `schedule`, an unknown or missing stamp, a WATCH or `schedule_`
+session marker, team, community, a forged owner id without the ADMIN bit, the
+ADMIN bit for a non-owner, a muted or deny-listed owner, no configured owner,
+delegation depth 1 / 2 / junk, no role session (local CLI), and any cwd but
+the talk's own linked worktree top (main checkout, another talk's worktree,
+scoped non-git dir, a subdirectory, a look-alike dir whose `.git` points at
+the main repo or borrows the talk's admin dir, a missing dir, no session id);
+a symlink to the own worktree resolves to it. The catalog with `safe3a`
+offers the registered allowlisted six at code tier only, none without it,
+never an unlisted one or to team. Workers and the verify lane drop
+`CORVIDINHO_ACTING_SURFACE`.
+`tests/agent.safe3a-owner-shell.test.ts` — through `createTaskExecute` (fake
+provider): the owner's chat in its own talk worktree is offered `shell-exec`
+at code tier and runs it there (`unreportedEditTools: ["shell-exec"]`), and
+so do `session`, `work` and `ask`; a prod command (`kubectl get pods; touch
+ran.marker`) raises one `mustask` destructive card, a deny runs nothing and
+an approval runs it once; the main checkout, a team member, WATCH, a
+schedule, a delegate worker and a local CLI run are not offered it (the
+call refused, no marker), with exactly one `[operator] SAFE-3.a` line per run
+across two attempts and none in the summary; muting the owner after attempt 1
+removes the shell from attempt 2; an allowlist without the six runs no gate.
+`tests/agent.allowlisted-dangerous.test.ts` uses `SAFE3A_TOOLS`.
+- Fail on base: with the base's (507d97b) `src/agent/{tools,execute}.ts`,
+  `src/discord/{agent-client,bridge}.ts`, `src/discord/command-handlers/{session,work}.ts`,
+  `src/scheduler/service.ts` and `src/watch/agent-client.ts` swapped in and
+  `src/agent/shell-gate.ts` removed, `agent.safe3a-gate` cannot load, 8 of 9
+  `agent.safe3a-owner-shell` tests fail (the no-gate guard passes) and the
+  renamed `SAFE3A_TOOLS` test fails; all pass on the branch.

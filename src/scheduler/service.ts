@@ -857,6 +857,8 @@ export class SchedulerService {
         resume: false,
         actingUserId: schedule.createdByUserId,
         actingIsAdmin: false,
+        // SAFE-3.a: schedules never get the shell, runners or Fledge runs.
+        surface: "schedule",
         cwd: workDir,
         signal,
       });

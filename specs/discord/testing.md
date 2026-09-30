@@ -1252,3 +1252,14 @@ closed) and `tests/discord.spend.test.ts` (the non-owner body still has no
 no model.
 - Fail on base: the startup and `/status` cases fail (no line; "demo stub").
 
+
+## Surface stamp for the shell gate (REQ-discord-735; SAFE-3.a)
+
+`tests/discord.safe3a-surface.test.ts` — the Discord spawn client writes the
+caller's `surface` (`chat`, `ask`, `session`, `work`, `schedule`) to
+`CORVIDINHO_ACTING_SURFACE` and an empty one when none is named, never the
+bridge's own stale value; through the bridge a chat message, an ask-button
+pick continuing it (same session and cwd), `/session start` and `/work` pass
+`chat`, `ask`, `session` and `work`; a scheduler tick passes `schedule`.
+- Fail on base: with the base's (507d97b) sources swapped in, all three fail
+  (no stamp; `surface` undefined).

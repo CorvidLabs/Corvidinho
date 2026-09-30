@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 57
+version: 58
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -759,7 +759,10 @@ task name must match `FLEDGE_NAME_RE` (`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`,
 no leading `-`), so model argv never becomes a fledge option (`--init`,
 `--list`, `--lang`, `--dry-run`, `--from`); a refused name spawns nothing
 (usage error, exit 1). The child env is the verify lane's scrub
-(`buildVerifyEnv`) minus `CDPATH` / `OLDPWD` plus `FLEDGE_NON_INTERACTIVE=1`
+(`buildVerifyEnv`) minus `CDPATH` / `OLDPWD` and without the owner's GitHub
+or git credentials (`withoutGitCredentials`, the env `shell-exec` and the
+runners get, SAFE-21.a / REQ-plugins-495; the model may be offered the lane
+and task runs under SAFE-3.a) plus `FLEDGE_NON_INTERACTIVE=1`
 and `CORVIDINHO_PROJECT_ROOT`; stdin closed, 64 KiB per-stream caps, process
 group killed on timeout (exit 124) or the calling run's abort (exit 130);
 output and parsed fields are secret-scrubbed, parsed fields control-char
@@ -1121,3 +1124,4 @@ and current rows for plugins host evolution.
 | 2026-09-30 | shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree: Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3) |
 | 2026-09-30 | scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run: Scheduled runs read and act only on repos the owner allowlists, even public ones (DISCORD-SCHEDULE-3.a): in a schedule run and its delegate/council workers (CORVIDINHO_DISCORD_SESSION_ID schedule_*, SCHEDULE_SESSION_PREFIX / isScheduleRunEnv) the GitHub tools, review readers and docs/milestone readers refuse a repo off the GITHUB-6 allowlist with no visibility lookup (deny still wins, role rules still apply on top); web-fetch refuses GitHub-host URLs that do not name an allowlisted OWNER/REPO at every hop, redirects included; a schedule project that lies in a git checkout nested inside the bridge root needs an allowlisted origin at /schedule create and every tick |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
+| 2026-09-30 | fledge-lane-and-task-runs-start-without-my-github-or-git-credentials-like-the-shell-and-the-runners-now-that-my-talks: Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a) |
