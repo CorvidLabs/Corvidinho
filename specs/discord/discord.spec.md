@@ -623,7 +623,13 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044), and `tests-deleted`: a test
 deleted or turned off since the branch left its base, or names that could
-not be read, keeps the PR from opening (AGENT-15, REQ-discord-185).
+not be read, keeps the PR from opening (AGENT-15, REQ-discord-185), and
+`sdd-uncovered`: in a repo whose SpecSync workflow (read from the
+merge-base, HEAD and the work tree, merged fail-closed) requires a change for
+meaningful files, a meaningful path changed since the merge-base that no
+open change and no change archived on the branch covers, or a diff that
+cannot be read, keeps the PR from opening, before the pre-push lane and
+before anything is committed or pushed (AGENT-18, REQ-discord-518).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
 `openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
@@ -1174,6 +1180,7 @@ failed lookup writes nothing.
 | Blank author id | Prompt unchanged; no inject |
 | `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
 | `/work` tree deleted or turned off a test since the branch left its base, or its test names cannot be read | `PR: not opened — N test(s) were deleted or turned off since the branch left …` naming each as `"name" (file)` (or "could not check …"); nothing committed or pushed; reason `tests-deleted` (REQ-discord-185) |
+| `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
 | Stuck WATCH ask with no owner Discord id or no live gateway DM | left pending, not sent; given up with a log line after a day (REQ-discord-086) |
 | Owner DM for a stuck WATCH ask fails (DMs closed) | ask handed back; retried after 10 minutes; one log line per try (REQ-discord-086) |

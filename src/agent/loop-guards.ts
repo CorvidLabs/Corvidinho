@@ -38,10 +38,10 @@ export const STEER_ERROR_EXCERPT_MAX = 200;
 
 /**
  * Builtins whose success changes state a failing call may depend on: files,
- * git, GitHub, Discord, memory ACL, a delegate worker, and the shell, the
- * language runners and Fledge core runs (they run arbitrary commands; offered
- * only once SAFE-3.a allows them). Fledge plugin commands (`origin`
- * `fledge:`) count too ({@link changedState}).
+ * git, GitHub, Discord, memory ACL, a SpecSync change (AGENT-18), a delegate
+ * worker, and the shell, the language runners and Fledge core runs (they run
+ * arbitrary commands; offered only once SAFE-3.a allows them). Fledge plugin
+ * commands (`origin` `fledge:`) count too ({@link changedState}).
  */
 export const STATE_CHANGING_TOOLS: ReadonlySet<string> = new Set([
   "files-write",
@@ -64,6 +64,11 @@ export const STATE_CHANGING_TOOLS: ReadonlySet<string> = new Set([
   "python-exec",
   "cargo-exec",
   "fledge-run",
+  // AGENT-18 / AGENT-18.a: a SpecSync change opened, answered, approved or archived.
+  "specsync-change-new",
+  "specsync-change-answer",
+  "specsync-change-approve",
+  "specsync-change-finalize",
 ]);
 
 /**

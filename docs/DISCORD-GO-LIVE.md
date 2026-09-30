@@ -253,11 +253,15 @@ worktree (SAFE-3.a, see "What an entry unlocks" below):
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
+| `specsync-change-approve` / `specsync-change-finalize` | true | 2 | true | on Corvidinho itself, the run should approve and archive (check, review, finalize) the SpecSync change it opened, right after its verify lane is green, then verify again (AGENT-18.a). Never offered to the model: the run takes these steps itself, in owner runs and team `/work` runs only, never in WATCH, schedules or workers. In any other repo they refuse (`refused: in this repo a human approves, reviews and finalizes SpecSync changes (AGENT-18.a) …`) and the run says the change stays open for a human |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit`, IDENTITY-10):
-`files-write` (minTier 2), `files-edit` (minTier 2), `delegate` and `council` (minTier 2, autonomous extras, E.5).
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+`files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
+(minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
+and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
+`council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only.
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
@@ -270,7 +274,8 @@ What an entry unlocks **today**:
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass (with a test
   summary showing tests ran), no test deleted or turned off since the branch left its base
-  (AGENT-15), the requester
+  (AGENT-15), in a repo whose SpecSync workflow requires a change for meaningful files every such
+  path changed on the branch covered by a SpecSync change (AGENT-18), the requester
   to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
   and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the

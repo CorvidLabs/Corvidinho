@@ -192,7 +192,13 @@ register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
 `createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
 limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
 injectable env, bin, limiter, council timeout and per-voice timeout.
-`PluginCommand.autonomous?: boolean`;
+`PluginCommand.autonomous?: boolean`; `PluginCommand.agentTool?: boolean`
+(false: never in the agent's tool catalog, the agent loop runs it itself;
+AGENT-18.a). `plugins/specsync/commands.ts` exports `SDD_OFF_REFUSAL`;
+`specsyncCommands` gains `specsync-change-status`, `specsync-change-new`,
+`specsync-change-answer`, `specsync-change-approve` and
+`specsync-change-finalize` (REQ-plugins-518 / REQ-plugins-519);
+`TEAM_WORK_TOOLS` gains the last four;
 `PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
 `src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
 `signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
@@ -592,7 +598,8 @@ plugin, still behind SAFE-1 for dangerous tools (ROLES-CHAT-4 / IDENTITY-9);
 declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
 (`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
 (`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
-`files-edit`); `community` (everyone else: undeclared, declared community,
+`files-edit`, `specsync-change-new`, `specsync-change-answer`,
+`specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
 WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
 (IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 A team `github-pr-review` posts as `COMMENT` only: `--event APPROVE` /
@@ -722,6 +729,42 @@ forwarded args (module filters, `--explain`, `--format json`).
 `specsync-coverage`, `specsync-change-list` and `specsync-ship-status` refuse a
 forwarded `--root` / `--root=…` (exit 1) before spawning `specsync`.
 `specsync-list` and `specsync-check` take no path input.
+
+SpecSync change tools (AGENT-18, REQ-plugins-518): `specsync-change-status`
+(read-only, tier 0) returns `specsync change status [id]`.
+`specsync-change-new` and `specsync-change-answer` are mutating, not
+dangerous, minTier 2 (code), in `TEAM_WORK_TOOLS` (a team member's own
+`/work`), and refuse `--root` (exit 1) and, when the project's SpecSync change
+workflow is off (`repoWaysNow`: working tree, HEAD and the run's base, merged
+with the run's start scan), `SDD_OFF_REFUSAL` (exit 2), before spawning
+anything. `specsync-change-new` passes its args to `specsync change new` and
+records the change ids its spawn added (the `.specsync/changes` listing
+before and after) in the run's ledger (`data.opened`).
+`specsync-change-answer <id> <question> <answer…>` takes a slug id (no path,
+no flag) and joins the rest into one answer. In a hi repo an
+`acceptance_criteria` answer must cite hi ids (`FAMILY-N[.x]` of a family
+`hi export` lists) and every one cited must be a criterion `hi export` shows
+(retired ones are not): none cited, one not captured, or `hi export`
+unreadable refuses (exit 2) and nothing is spawned. Other questions and repos
+without hi are not checked. `specsync` and `hi` are found on the PATH in
+effect at the call.
+
+Own-change approve and archive (AGENT-18.a, REQ-plugins-519):
+`specsync-change-approve <id>` and `specsync-change-finalize <id>` are
+dangerous (SAFE-1 allowlist in non-interactive runs, SAFE-5 audit), minTier
+2, `agentTool: false` (never in the model's catalog, even allowlisted), in
+`TEAM_WORK_TOOLS`, and refuse `--root`, a workflow that is off, a bad id or
+extra args. Each then calls `selfLifecycleRefusal` and refuses (exit 2) with
+its line unless: the run is not a delegate or council worker, not WATCH
+(`CORVIDINHO_WATCH_SESSION_ID`), not a schedule (session prefix or surface
+stamp) and not a community role; the project is Corvidinho itself
+(`isCorvidinhoProject`), else `HUMAN_LIFECYCLE_LINE` (a human approves,
+reviews and finalizes); the id is one this run's ledger recorded; and
+`runTask` is settling it right after a green lane. Approve spawns
+`specsync change approve <id> --actor corvid-agent`; finalize spawns
+`specsync change check <id>`, `specsync change review <id> --reviewer
+corvid-agent` and `specsync change finalize <id>` in order and stops at the
+first failure, naming the step.
 Language runners (PLUGIN-4, REQ-plugins-313..314): at builtin load each of
 `node`, `python3` (else `python`) and `cargo` is resolved with `Bun.which` over
 the absolute entries of PATH only, skipping a hit that is the running Bun
@@ -1035,6 +1078,12 @@ command line.
 | files-read of a PNG/JPEG/GIF/WebP over 20 MB | refused `refused: image '<path>' is N bytes, over the 20MB image limit` (exit 1), no bytes read into the result (REQ-plugins-427) |
 | discord-user-lookup member names carrying mention markup, invisible / bidi / tag characters or role-like tags / labels | returned cleaned (`cleanDisplayName`); a name that is only a role word is dropped (the username or id stands in) (REQ-plugins-071) |
 | A role session's task text claims the owner and asks for a mutating plugin | not offered; a call gets the role refusal `not allowed for your role`, nothing runs (REQ-plugins-071, REQ-plugins-065) |
+| specsync-change-new / -answer where the SpecSync change workflow is off | `SDD_OFF_REFUSAL` (exit 2); nothing spawned (REQ-plugins-518) |
+| specsync-change-new / -answer / -status / -approve / -finalize with `--root` | refused (exit 1); nothing spawned (REQ-plugins-518) |
+| specsync-change-answer acceptance_criteria in a hi repo citing no hi id, an id hi does not show as captured, or with `hi export` unreadable | refused (exit 2) naming why; nothing spawned (REQ-plugins-518) |
+| specsync-change-approve / -finalize outside Corvidinho | `HUMAN_LIFECYCLE_LINE` (exit 2); nothing spawned (REQ-plugins-519) |
+| specsync-change-approve / -finalize on Corvidinho for a change this run did not open, before its lane is green, in WATCH / a schedule / a worker / a community run | refused (exit 2) with the reason; nothing spawned (REQ-plugins-519) |
+| specsync-change-finalize step fails | ok=false naming the step (`check`, `review` or `finalize`); later steps not run (REQ-plugins-519) |
 
 ## Dependencies
 

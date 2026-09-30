@@ -29,6 +29,7 @@ files:
   - src/agent/recall-guard.ts
   - src/agent/loop-guards.ts
   - src/agent/shell-gate.ts
+  - src/agent/repo-ways.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -62,6 +63,7 @@ files:
   - tests/fixtures/fake-llm.ts
   - tests/agent.safe3a-gate.test.ts
   - tests/agent.safe3a-owner-shell.test.ts
+  - tests/agent.repo-ways.test.ts
 
 db_tables: []
 depends_on:
@@ -460,6 +462,24 @@ exports `withInjectionNote(summary, notice)` and `toolResultScanText(result)`;
 gains optional `injection?: InjectionNotice` (additive on the NDJSON
 `result` frame: protocol stays 2). No env var, config key or flag.
 
+Repo ways (AGENT-18 / AGENT-18.a, REQ-agent-518 / REQ-agent-519):
+`src/agent/repo-ways.ts` exports `RepoWays` (`sdd`, `hi`, `trust`),
+`SddPolicy` / `RepoWaysScan`, `detectRepoWays(root, base)`,
+`scanRepoWays(root, base)`, `repoWaysBase(root)`, `mergeScans`,
+`parseSddPolicy`, `mergeSddPolicies`, `isMeaningfulPath`,
+`sddRequiresChange`, `hasHiFrontMatter`, `activeChangeIds(root)`,
+`sddUncovered(root, changed, policy)`, `sddUncoveredNote(paths)`,
+`formatRepoWaysLine(ways)`, `renderRepoWaysBlock(ways)`, the run ledger
+`SddRun` / `beginSddRun(cwd)` / `endSddRun(run)` / `currentSddRun(cwd)` /
+`noteOpenedChange(cwd, id)` / `repoWaysNow(cwd)`, `CORVIDINHO_REPO`,
+`SELF_LIFECYCLE_ACTOR` (`corvid-agent`), `isCorvidinhoOriginUrl(url)`,
+`isCorvidinhoProject(cwd)`, `setCorvidinhoCheckoutForTests(dir)` (a code-only
+test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
+`SDD_APPROVE_TOOL` / `SDD_FINALIZE_TOOL`, `SddToolCall`,
+`settleOwnSddChanges({ cwd, run, call, onText })`, `capturedHiIds(cwd)` and
+`citedHiIds(text, families)`. `ExecuteContext` gains optional
+`repoWays?: RepoWays`. No env var, config key, flag or schema.
+
 ## Invariants
 
 A failed model hands the run to the next configured one and says so (AGENT-11,
@@ -723,7 +743,59 @@ first, and they aim at orders to the model: a speaker's own "ignore my
 previous …", a rules file, a question about a token in code, "list your
 instructions for …" or a browser's developer mode do not count.
 
+Repo ways (AGENT-18, REQ-agent-518): at planning `runTask` reads the ways
+the repo works — a SpecSync change workflow (`.specsync/sdd.json` with
+`enabled: true`), hi criteria (a `hi/*.md` with `hi:` front matter) and Trust
+(`.trust.toml`) — from the session base (`repoWaysBase`: the merge-base with
+the remote's default branch, else HEAD), HEAD and the working tree, each flag
+the union, names what it found in one Text line (none when nothing) and
+passes `repoWays` to every attempt; the tool loop appends one fixed prompt
+block for them (`renderRepoWaysBlock`: open and answer a SpecSync change for
+the edits, never approve, review or finalize one; in a hi repo never invent
+criteria and cite captured hi ids). The read tier sends no block. Before the
+lane runs, the SpecSync policy — the start scan merged with a scan now
+(enabled or required in any tree counts, meaningful paths the union, ignored
+paths the intersection, an unparseable `sdd.json` fails closed) — is checked:
+when it requires a change for meaningful files, every path of the run's real
+diff (tool-reported paths with no git snapshot) it counts as meaningful must
+be in an open change's `affected_paths` (a file, or a dir prefix) or in a
+change archived in the same diff; otherwise the attempt is a failed verify
+whose `SpecSync gate:` note (the paths, and how to open a change) is the
+retry's whole feedback, no lane runs, and after the retries the run fails
+with the stuck ask as for any failed verify. A diff that cannot be read fails
+closed the same way. Deleting or committing away `sdd.json` during the run
+does not switch the check off.
+
+Own SpecSync change (AGENT-18.a, REQ-agent-519): `runTask` keeps a per-cwd
+ledger for the run. `specsync-change-new` records the ids its own spawn added
+(listing `.specsync/changes/*/state.json` before and after, never model
+text). Right after a green, evidence-backed lane, for each recorded change
+still open: outside Corvidinho one Text line says it stays open for a human
+to approve, review and finalize; on Corvidinho (`isCorvidinhoProject`: the
+cwd shares the git common dir of the checkout this code runs from and its
+`origin` is github.com/CorvidLabs/Corvidinho — read from disk, never a flag)
+the ledger is marked verified only while `runTask` runs
+`specsync-change-approve <id>` then `specsync-change-finalize <id>` through
+`runPlugin` (non-interactive, the run's `CORVIDINHO_ALLOWLIST`: role gate,
+SAFE-1, must-ask gate and SAFE-5 all apply), one Text line per outcome; a
+refused or failed step leaves the change for a human and the run stays
+verified. When a step ran, the lane (with the AGENT-15 evidence verdict) runs
+again over what it wrote; a failure there ends the run failed with no retry.
+A change the run did not open is never touched.
+
 ## Behavioral Examples
+
+### Scenario: an edit in a SpecSync repo with no change for it
+
+- **Given** a repo whose `.specsync/sdd.json` enables the change workflow and requires a change for `src/`, and a run that edits `src/app.ts` without opening one
+- **When** the attempt ends
+- **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
+
+### Scenario: its own change on Corvidinho once verify is green
+
+- **Given** a run on Corvidinho's own checkout that opened change `bump-x` with `specsync-change-new`, and `CORVIDINHO_ALLOWLIST` naming `specsync-change-approve` and `specsync-change-finalize`
+- **When** its verify lane passes with tests shown to have run
+- **Then** it runs `specsync change approve bump-x --actor corvid-agent`, then `change check`, `change review --reviewer corvid-agent` and `change finalize`, says so in one Text line, runs the lane again and ends verified; in any other repo it only says the change stays open for a human (REQ-agent-519)
 
 ### Scenario: System prompt mentions memory-store
 
@@ -901,6 +973,13 @@ instructions for …" or a browser's developer mode do not count.
 | A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool and no `memory-store` offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
 | A `delegate` / `council` result carries its worker's own hit (`data.injection`) | counts as this run's hit: `injectionWorkerNote` and the fenced result in its tool message, then the same drop, report, row and note; the worker itself records no row (REQ-agent-071) |
 | Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
+| SpecSync workflow requires a change and a changed meaningful path has none | `SpecSync gate:` note, failed verify with no lane run, retry with the note, then failed with the stuck ask (REQ-agent-518) |
+| `sdd.json` deleted, disabled or committed away during the run | the base tree, HEAD and the start scan still count; the check stays on (REQ-agent-518) |
+| `sdd.json` present but not valid JSON | fails closed: enabled, required, every path meaningful (REQ-agent-518) |
+| Git diff unreadable in a repo whose SpecSync workflow requires a change | failed verify with the "could not read what changed" `SpecSync gate:` note (REQ-agent-518) |
+| Own change on a repo other than Corvidinho after a green lane | one Text line: it stays open for a human; nothing approved (REQ-agent-519) |
+| Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
+| Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |
 
 ## Dependencies
 
