@@ -19,9 +19,7 @@ exemption (`watchInjectionVerdict`, REQ-watch-071) — SHALL match
 `DetectedEvent.senderId` (the API's numeric `user.id`) against the owner's
 people list and SHALL NOT match `sender` (the login). An event with no
 `senderId`, or one nobody declared, SHALL resolve undeclared (community): the
-block says `declared_person: none` once anyone is declared — and, with only
-the owner configured, whenever its login is the owner's `[owner]
-github_login`, so that login never passes for the owner unsaid — only the repo's
+block says `declared_person: none` once anyone is declared, only the repo's
 project memory is injected, and the SAFE-13 detector runs on it — never the
 owner's exemption, block or memory — even when its login is the owner's
 `[owner] github_login` or a declared person's login. `WATCH_IDENTITY_HEADER`
@@ -36,7 +34,6 @@ table or column beyond REQ-discord-367.
 Acceptance Criteria
 - Through the live Octokit client over a stubbed GitHub transport: issue and comment events carry the API's numeric `user.id` as `senderId`; a comment payload without one has no `senderId`.
 - On those live events: a renamed login with a declared id is that person; the owner's login with no id or another id gets `declared_person: none`, no `role: owner`, no owner or person memory, and is flagged by `watchInjectionVerdict`; the owner's own id is the owner and exempt.
-- With only the owner configured (nobody under `[people]`): the owner's login with no id or another id still gets the block with `declared_person: none`; the owner's id gets `role: owner`; any other undeclared login gets no block (prompt as before).
 - Through `startWatchPoller` with the live client: an injection comment from the owner's login with another id is refused before any run (one comment @mentioning the owner); an ordinary one runs as undeclared without the owner's memory; the owner's id runs with `role: owner` and the owner's memory.
 - `tests/watch.github-numeric-id.test.ts` fails on the base sources and passes after.
 
@@ -71,6 +68,7 @@ Acceptance Criteria
 - A renamed login with the declared numeric id resolves; the declared login with a different numeric id, or with none, does not (`declared_person: none`).
 - The owner is recognised by `[owner] github_id` with `role: owner`, never by the `[owner]` / env GitHub login; a commenter whose login equals a declared display name is not that person.
 - With nobody declared, or without `people`, an unresolved commenter's prompt starts with `[WATCH`, unless (nobody declared) the commenter's login is the owner's, which gets `declared_person: none`.
+- With only the owner configured, live events from the owner's login with no id or another id get `declared_person: none` and no `role: owner`, the owner's id gets `role: owner`, and another undeclared login gets no block (`tests/watch.github-numeric-id.test.ts`).
 - The fixture search client carries `user_id` to `senderId` on comment events.
 - `startWatchPoller` with an allowlist file recognises a declared commenter, and a person added to the file after start is recognised on the next event.
 - Regression tests in `tests/identity.recognise.test.ts` fail on the base sources and pass after.
