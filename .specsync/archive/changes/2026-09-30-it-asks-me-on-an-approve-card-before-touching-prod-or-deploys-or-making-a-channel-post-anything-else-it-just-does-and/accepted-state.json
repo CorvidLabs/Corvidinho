@@ -7,11 +7,11 @@
   "title": "It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97)",
   "description": "It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "151e9baf38ef7e8d67ffa4271ee8c4af614c9ae6",
   "created_at": 1790774382,
-  "updated_at": 1790779546,
+  "updated_at": 1790779728,
   "affected_specs": [
     "plugins",
     "discord",

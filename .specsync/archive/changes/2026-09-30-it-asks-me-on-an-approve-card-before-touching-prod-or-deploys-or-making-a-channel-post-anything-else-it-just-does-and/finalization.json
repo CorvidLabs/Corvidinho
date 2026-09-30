@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and",
+  "implementation_commit": "a678d26bb3426e5d70d8a81a0bc9d5537bab417c",
+  "implementation_tree": "afa1e504b691398a49e82289e9d406c98dac66f9",
+  "contract_digest": "1c4177976a07bb53c9e2d9b1456525d5db531e9773d1f2e25985a2553de08e65",
+  "workspace_digest": "580e1ef6a3c519bf47620fb8f5aef27df3d665c8bceda4c555a2926f1499a9f6",
+  "closing_digest": "a732933fcf16f9a7d95c48fc9a0311ff07c4558a3582479e6520ae2347c6bf47",
+  "review_digest": "43b0f7ffd9f9dd4f043687f0a23ad513857acfa712106129072e1a16d1408170",
+  "finalization_digest": "c5fba7ea844ff22a191495308a8e06b9b920afc84f6ebc65885ec187b2ec48c1",
+  "timestamp": 1790779728
+}
