@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-36-approval-cards-and-codes-must-ask-gate-owner-only-spend-no-default-model-tests-ran-verify-schedule-asks",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9e7566c8402e3526e8c8a017cb41cb560ebcf950",
+      "contract_digest": "53cac4404a63dcae574c69c84952d5cda97818781c843ba9814c6cb17c290c97",
+      "execution_digest": "7021214031ddf44fb8355535777878d038e25487e90616539c72e66c615cfa39",
+      "workspace_digest": "dccd5f87d4b5e9f7cb0613287be16e01b7561da2e22b61fe5b84299ad633280b",
+      "timestamp": 1790785925
+    }
+  ]
+}
