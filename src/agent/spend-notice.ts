@@ -179,9 +179,11 @@ const NO_REPLY_NOTE = "Replying can't lift the cap — this needs the operator."
 /**
  * How the owner's spend card (SAFE-8 / SAFE-8.a) came to no: denied,
  * no answer in time (SAFE-20), the wait cut short (the run was stopped or its
- * request timed out), or the card could not be raised or read.
+ * request timed out), approved but the call would by then pass a cap the card
+ * did not show (`changed`: the approval counts only for what it showed), or
+ * the card could not be raised or read.
  */
-export type SpendCardOutcome = "denied" | "expired" | "aborted" | "unavailable";
+export type SpendCardOutcome = "denied" | "expired" | "aborted" | "changed" | "unavailable";
 
 /** A spend card that did not let the call through, for the ask. */
 export type SpendCardNo = {
@@ -207,6 +209,11 @@ function spendCardNoText(card: SpendCardNo): string {
       return (
         `The wait on ${which} was cut short (the run was stopped or its request timed out), so the call ` +
         "was not sent and nothing was spent."
+      );
+    case "changed":
+      return (
+        `The owner approved ${which}, but by then the call would also pass a cap the card did not show, ` +
+        "so it was not sent and nothing was spent (an approval counts only for what its card showed)."
       );
     case "unavailable": {
       const why = scrubSecrets(card.error ?? "").replace(/\s+/g, " ").trim().slice(0, 200) || "unknown error";

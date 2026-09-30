@@ -339,15 +339,19 @@ AUTONOMY-8): `src/agent/spend.ts` also exports `SPEND_CARD_KIND` (`spend`),
 `spendCardFields` (what the card shows: title, action `send one model call
 to <model> via <provider>`, target the tripped scope(s), amount that call's
 estimate, and the text — who asked where, the project label, each tripped
-cap's spend when it paused and the task excerpt), `setSpendCardTestHooks`
+cap's spend when it paused and the task excerpt, SAFE-6 scrubbed before it is
+cut), `setSpendCardTestHooks`
 (`SpendCardTestHooks`: TTL, poll and an `onRequest` hook; tests only), the
 `SpendApprovalOptions` type (`taskText`, `project`, `onNote`) taken by
 `createSpendGuard({ approval })`, the `SpendReserveInput` type, and
 `SpendLedger.reserveApproved` (one approved call recorded at its approved
 amount past the cap after a re-fit check; `trips` names the caps it still
-passes; no row for an estimate over the approved amount).
+passes; no row for an estimate over the approved amount, `reason: "amount"`,
+or for a call that would now also pass a cap outside the card's target,
+`reason: "target"`).
 `src/agent/spend-notice.ts` adds `spendScopeLabel`, the `SpendCardNo` /
-`SpendCardOutcome` types (`denied`, `expired`, `aborted`, `unavailable`) and
+`SpendCardOutcome` types (`denied`, `expired`, `aborted`, `changed`,
+`unavailable`) and
 `spendCapReachedAsk({ …, card })`, whose question says what the card came to
 and how to continue (ask again for a new card and code, or the operator
 action) without the "replying can't lift the cap" note. `createTaskExecute`
@@ -706,7 +710,8 @@ the estimate the card showed (`reserveApproved`); every later call past a cap
 raises a new card (SAFE-8.a). One card per paused call and at most one open
 per run; another run's open card never refuses this one. A deny, no answer
 before the card lapses, a late code, the call's abort signal (a stop or its
-request timeout), or no owner configured is a no (SAFE-20): nothing is sent
+request timeout), an approval whose call would by then pass a cap the card did
+not show, or no owner configured is a no (SAFE-20): nothing is sent
 or recorded, and the stop is a `SpendCapRefusal` — never a model failure,
 even when the request timeout ended the wait. The wait line is a Text event
 without amounts; the card records its waiting process so a killed run's card

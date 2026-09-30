@@ -34,8 +34,10 @@ import {
   PROVIDER_SPEND_CAPS_ENV,
   setSpendCardTestHooks,
   SPEND_CAP_ENV,
+  SPEND_CARD_TASK_MAX,
   SPEND_CARD_TTL_MS,
   SpendCapRefusal,
+  spendCardFields,
   SpendLedger,
   withSpendCap,
   type SpendFetch,
@@ -353,6 +355,62 @@ describe("at 100% the owner's spend card holds the call (SAFE-8, AUTONOMY-8)", (
   });
 });
 
+describe("the card's task text (SAFE-6 / SAFE-6.a)", () => {
+  test("is secret-scrubbed before it is cut, so a secret the cut splits never shows even in part", () => {
+    const secret = `ghp_${"A1b2C3d4E5".repeat(4).slice(0, 36)}`;
+    const task = `${"x".repeat(SPEND_CARD_TASK_MAX - 10)} ${secret} and more after it`;
+    const f = spendCardFields({
+      model: "gpt-4o",
+      provider: HOST,
+      estimateMicroUsd: 1_000,
+      trips: [{ scope: "total", spentMicroUsd: 999_000, capMicroUsd: 1_000_000 }],
+      surface: "cli",
+      requester: "local",
+      taskText: task,
+    });
+    expect(f.text).not.toContain("ghp_");
+    expect(f.text).not.toContain("A1b2C3");
+    expect(f.text).toContain("[redacted");
+    expect(f.text).toMatch(/\[… \d+ more characters not shown\]$/);
+  });
+});
+
+describe("an approval counts only for the target its card showed (SAFE-18 / SAFE-19)", () => {
+  test("a provider cap's card approved after other spend pushed the total past its cap too: nothing is sent or spent", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    // $0.0100 of llm.test's $0.0100 cap spent; the $1.00 total cap still has room.
+    expect(
+      new SpendLedger(db).reserve({ provider: HOST, model: "gpt-4o", estimateMicroUsd: 10_000, now: NOW - 1000 }).ok,
+    ).toBe(true);
+    const { g, bodies } = guard(db, {
+      env: {
+        [SPEND_CAP_ENV]: "1",
+        CORVIDINHO_LLM_MODEL: "gpt-4o",
+        CORVIDINHO_LLM_BASE_URL: `https://${HOST}/v1`,
+        [PROVIDER_SPEND_CAPS_ENV]: `${HOST}=0.01`,
+      },
+    });
+    const asked = answer((req) => {
+      // While the card is open, another provider's calls take the total past its cap.
+      expect(
+        new SpendLedger(db).reserve({ provider: "other.test", model: "gpt-4o", estimateMicroUsd: 995_000, now: NOW - 500 }).ok,
+      ).toBe(true);
+      expect(req.target).toBe(`provider:${HOST}`);
+      return "approved";
+    });
+    const r = await refusal(g.fetch(URL_, chatInit()));
+    expect(asked).toHaveLength(1);
+    expect(bodies).toEqual([]);
+    expect(requests(db)[0]!.status).toBe("used");
+    // No row for the call: only the two earlier ones.
+    expect(ledger(db)).toHaveLength(2);
+    expect(r.ask.spendScopes).toEqual(["total", `provider:${HOST}`]);
+    expect(r.ask.question).toContain(`The owner approved Approve card ${asked[0]!.id}, but by then the call would also pass a cap the card did not show`);
+    expect(r.ask.question).toContain("nothing was spent");
+    expect(r.ask.question).not.toContain(NO_REPLY);
+  });
+});
+
 describe("several paused calls: one card each, at most one open per run, none refused", () => {
   async function waitFor(cond: () => boolean): Promise<void> {
     for (let i = 0; i < 400 && !cond(); i++) await Bun.sleep(5);
@@ -402,15 +460,41 @@ describe("SpendLedger.reserveApproved (SAFE-8.a)", () => {
     const db = openCorvidinhoDb({ memory: true });
     nearCap(db);
     const l = new SpendLedger(db);
-    const base = { provider: HOST, model: "gpt-4o", capMicroUsd: 1_000_000, now: NOW };
+    const base = { provider: HOST, model: "gpt-4o", capMicroUsd: 1_000_000, now: NOW, approvedScopes: ["total"] };
     expect(l.reserve({ ...base, estimateMicroUsd: 5_000 }).ok).toBe(false);
     const passed = l.reserveApproved({ ...base, estimateMicroUsd: 5_000, approvedMicroUsd: 5_000 });
     expect(passed).toMatchObject({ ok: true, spentMicroUsd: 999_000, trips: [{ scope: "total", spentMicroUsd: 999_000, capMicroUsd: 1_000_000 }] });
-    expect(l.reserveApproved({ ...base, estimateMicroUsd: 5_001, approvedMicroUsd: 5_000 })).toEqual({ ok: false });
+    expect(l.reserveApproved({ ...base, estimateMicroUsd: 5_001, approvedMicroUsd: 5_000 })).toEqual({
+      ok: false,
+      reason: "amount",
+      trips: [],
+    });
     expect(ledger(db).map((r) => r.estimate)).toEqual([999_000, 5_000]);
     // A call that fits again is recorded the same way, with nothing tripped.
     const fits = l.reserveApproved({ ...base, capMicroUsd: 10_000_000, estimateMicroUsd: 1, approvedMicroUsd: 1 });
     expect(fits).toMatchObject({ ok: true, trips: [] });
+  });
+
+  test("refuses, with no row, a call that would now pass a cap outside the target the card showed", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    const l = new SpendLedger(db);
+    const before = ledger(db).length;
+    // The card showed only the provider cap; the total cap is passed too by now.
+    const r = l.reserveApproved({
+      provider: HOST,
+      model: "gpt-4o",
+      estimateMicroUsd: 5_000,
+      capMicroUsd: 1_000_000,
+      providerCapMicroUsd: 1_000,
+      now: NOW,
+      approvedMicroUsd: 5_000,
+      approvedScopes: [`provider:${HOST}`],
+    });
+    expect(r.ok).toBe(false);
+    expect(r).toMatchObject({ reason: "target" });
+    expect(r.trips.map((t) => t.scope)).toEqual(["total", `provider:${HOST}`]);
+    expect(ledger(db)).toHaveLength(before);
   });
 
   test("the card lapses before anything that wraps a waiting call gives up", () => {

@@ -591,7 +591,7 @@ carries `keys`) and `tests/agent.spend.test.ts` (a refused reservation carries
 
 ## The owner's spend card at a cap (REQ-agent-198 added, REQ-agent-098 / REQ-agent-114 modified; SAFE-8, SAFE-8.a, SAFE-15, SAFE-19, SAFE-20, AUTONOMY-8)
 
-`tests/agent.spend-approve.test.ts` (18 tests; mocked fetch as the fake LLM,
+`tests/agent.spend-approve.test.ts` (21 tests; mocked fetch as the fake LLM,
 in-memory or temp-dir SQLite, the owner in the run's env, the card decided in
 the store as the engine would — `tests/discord.spend-card.test.ts` drives the
 real engine):
@@ -614,11 +614,19 @@ real engine):
   and an unpriced model: no card; the plain operator ask.
 - SAFE-15: a provider cap's card targets `provider:llm.test`; past both caps,
   `total, provider:llm.test`.
+- An approval counts only for the target its card showed: a provider cap's
+  card approved after other spend took the total past its cap too sends and
+  records nothing (the request ends `used`); the ask names both caps and says
+  the approval did not stretch to the one the card did not show.
+- The card's task text is SAFE-6 scrubbed before it is cut: a GitHub token
+  straddling the `SPEND_CARD_TASK_MAX` cut shows no part of itself.
 - One card at a time per run (the second is recorded only after the first is
   decided); two runs paused at once each have a pending card.
 - `SpendLedger.reserveApproved`: the approved amount past the cap with
-  `trips`; a larger estimate refused with no row; a fitting call with `trips`
-  empty. `SPEND_CARD_TTL_MS` below the council voice and request timeouts.
+  `trips`; a larger estimate refused with no row (`reason: "amount"`); a
+  fitting call with `trips` empty; a call that would now also pass a cap
+  outside the approved scopes refused with no row (`reason: "target"`).
+  `SPEND_CARD_TTL_MS` below the council voice and request timeouts.
 - `createTaskExecute` at a $0 cap: approved — one call and both Text notes,
   the card text holds the task and never the run's directory; denied —
   `runTask` `blocked`, generic summary, verify not run; a card wait cut short
@@ -635,4 +643,6 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   configured and every pending approval approved at once) makes no provider
   call and records no card on base (`{"calls":0,"ask":"spend-cap","cards":[]}`),
   while on the branch the call goes out once on a `spend` / `money` card that
-  ends `used`.
+  ends `used`. The target and scrub-before-cut tests fail on the branch's
+  first cut (`6ac2d8c`) sources, which recorded and sent the call past a cap
+  the card did not show and cut the task before scrubbing it.

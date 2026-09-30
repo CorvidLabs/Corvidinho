@@ -23,7 +23,7 @@ gateway; no network, no real key, no Discord.
 
 ## Automated coverage
 
-- `tests/agent.spend-approve.test.ts` (18 tests) and
+- `tests/agent.spend-approve.test.ts` (21 tests) and
   `tests/discord.spend-card.test.ts` (6 tests).
 - Fail on base: with main's (0aeb345) sources swapped in, both files fail to
   load (missing `setSpendCardTestHooks` and `src/discord/spend-card.ts`); a

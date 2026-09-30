@@ -423,20 +423,31 @@ export class SpendLedger {
    * transaction). The fit check runs again first — re-arming a cap seen back
    * under its re-arm level, as {@link reserve} does — and `trips` names the
    * caps the call still passes (empty when it fits now). The row is recorded
-   * at `estimateMicroUsd` either way, and settles like any other call. No row
-   * (`ok: false`) when the estimate is over `approvedMicroUsd`: that is not
-   * the call the card showed. One approval, one row: the next call past the
-   * cap is checked by {@link reserve} again.
+   * at `estimateMicroUsd`, and settles like any other call. No row (`ok:
+   * false`) when that is not the call the card showed (SAFE-18 / SAFE-19: an
+   * approval counts only for the action the card showed): the estimate is
+   * over `approvedMicroUsd` (`reason: "amount"`), or the call would now also
+   * pass a cap outside `approvedScopes`, the target the card showed (`reason:
+   * "target"`, `trips` naming every cap it now passes) — e.g. other runs
+   * pushed the total past its cap while a provider cap's card was open. One
+   * approval, one row: the next call past the cap is checked by
+   * {@link reserve} again.
    */
   reserveApproved(
     opts: SpendReserveInput & {
       /** The amount the card showed (this call's estimate when it paused). */
       approvedMicroUsd: number;
+      /** The cap scopes the card showed as its target (`total`, `provider:<id>`). */
+      approvedScopes: readonly string[];
     },
-  ): { ok: true; id: string; spentMicroUsd: number; trips: SpendTrip[] } | { ok: false } {
-    if (!(opts.estimateMicroUsd <= opts.approvedMicroUsd)) return { ok: false };
+  ):
+    | { ok: true; id: string; spentMicroUsd: number; trips: SpendTrip[] }
+    | { ok: false; reason: "amount" | "target"; trips: SpendTrip[] } {
+    if (!(opts.estimateMicroUsd <= opts.approvedMicroUsd)) return { ok: false, reason: "amount", trips: [] };
+    const approved = new Set(opts.approvedScopes);
     const run = this.db.transaction(() => {
       const { spentMicroUsd, trips } = this.fit(opts);
+      if (trips.some((t) => !approved.has(t.scope))) return { ok: false as const, reason: "target" as const, trips };
       return { ok: true as const, id: this.insertReservation(opts), spentMicroUsd, trips };
     });
     return run.immediate();
@@ -629,9 +640,13 @@ function shortLine(text: string, max: number): string {
   return one.length <= max ? one : `${one.slice(0, max - 1)}…`;
 }
 
-/** The task text shown before a card: at most SPEND_CARD_TASK_MAX characters, a cut marked. */
+/**
+ * The task text shown before a card: SAFE-6 scrubbed first, then at most
+ * SPEND_CARD_TASK_MAX characters, a cut marked — scrubbing after the cut could
+ * leave the start of a secret the cut split unrecognised (SAFE-6.a).
+ */
 function taskExcerpt(task: string): string {
-  const t = task.trim();
+  const t = scrubSecrets(task).trim();
   if (t.length <= SPEND_CARD_TASK_MAX) return t;
   return `${t.slice(0, SPEND_CARD_TASK_MAX)}\n[… ${t.length - SPEND_CARD_TASK_MAX} more characters not shown]`;
 }
@@ -823,10 +838,14 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
           const passed = ledger!.reserveApproved({
             ...call,
             approvedMicroUsd: call.estimateMicroUsd,
+            approvedScopes: trips.map((t) => t.scope),
             now: now(),
           });
           if (!passed.ok) {
-            return reached({ requestId, outcome: "unavailable", error: "the call no longer matches the card" });
+            // Not the call the card showed (it would now pass a cap the card
+            // did not name): the used approval does not stretch to it.
+            if (passed.trips.length > 0) trips = passed.trips;
+            return reached({ requestId, outcome: "changed" });
           }
           note(
             `[operator] AUTONOMY-8: the owner approved request ${req.id}; sending that one call ` +
