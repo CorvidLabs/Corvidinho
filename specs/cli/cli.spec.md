@@ -47,7 +47,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `runCli` | `argv: string[], run?: (argv) => Promise<number>` | `Promise<number>` | Top-level error boundary around `main` (REQ-cli-419) |
 | `reportCliError` | `err: unknown, opts?: { json?: boolean }` | `number` | One scrubbed error line + hint; returns the exit code (REQ-cli-419) |
 | `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error; a `ProjectDirError` carries its own) |
-| `parseGlobalFlags` | `args: string[]` | `{ rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505) |
+| `parseGlobalFlags` | `args: string[]` | `{ rest, pluginArgs, nonInteractiveFlag, json, removedFlag, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505); `removedFlag` is `--no-verify` when read as a flag, which `main` refuses (REQ-cli-085) |
 | `readStartEnv` | `path?: string` | `Record<string, string> or null` | The env this process was started with (`/proc/self/environ`), before Bun added the start directory's `.env*` values (REQ-cli-505) |
 | `enterProject` | `path: string, opts?: { startEnv? }` | `EnterProjectResult` | CLI-5 `--project`: env as Bun builds it for a process started in `path` (probe pinned to `SPAWN_BUN_CONFIG`), then `chdir`; later `Bun.spawn` / `Bun.spawnSync` without `env` pass the new `process.env`; changes nothing on failure (REQ-cli-505) |
 | `envFileFlags` | `execArgv: readonly string[]` | `string[]` | Bun's `--no-env-file` / `--env-file` flags from `execArgv`, in order, forwarded to the `--project` probe (REQ-cli-505) |
@@ -68,6 +68,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
+| `removedVerifyKeyDoctorCheck` | `cwd?` | `DoctorCheck \| null` | Doctor `[warn] verify-gate` line when `cwd`'s `fledge.toml` still sets `[corvidinho] verify_before_complete` (ignored, AGENT-14); null otherwise; never fails doctor (REQ-cli-085) |
 | `backupDoctorCheck` | `env?, opts?: { db? }` | `DoctorCheck` | Doctor `backup` line (OPS-1/2, REQ-cli-680): `[warn]` off / unusable dir / failing job (reason, owner told or not) / no `/announce` channel set, `[ok]` dir + snapshots + last backup and restore test; never fails doctor; creates nothing |
 | `resolveBackupConfig` | `env?` | `BackupConfig` | `CORVIDINHO_BACKUP_DIR`: unset → `off`, relative → `invalid`, absolute → `on` + resolved dir (src/store/backup.ts) |
 | `gitWorkTreeAbove` / `backupDirRefusal` | `dir` | `string or null` | Nearest dir holding `.git`; why a dir cannot hold backups (in a git work tree as given or with symlinks resolved, not a directory, unreadable) |
@@ -120,6 +121,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
 | `EnterProjectResult` | `{ ok: true, dir }` or `{ ok: false, error, hint }` from `enterProject` (REQ-cli-505) |
 | `ProjectDirError` | Error class for an unusable `--project`; `hint` is the operator's next step (REQ-cli-505) |
+| `RemovedFlagError` / `REMOVED_NO_VERIFY_FLAG` | Error class for the removed `--no-verify` (message and `hint`, exit 1 through `reportCliError`) and the flag it names (REQ-cli-085) |
 | `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
 | `BackupConfig` / `SnapshotInfo` / `SnapshotResult` / `DbFileCheck` / `RestoreOptions` / `RestoreResult` / `RestoreTestResult` | Backup config, snapshot, check, restore and restore-test results (REQ-cli-680) |
 | `BackupJob` / `JobStatus` / `BackupStatus` / `PendingBackupNotice` | `backup` / `restore_test` state read from `schema_meta` |
@@ -127,7 +129,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 
 ## Invariants
 
-task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
+task run honors --tier and agent config (`max_retries`); it has no verify skip (AGENT-14, REQ-cli-085): `--no-verify` read as a flag (not `--task` text, not a `plugins run` argument after `--`) is refused before anything runs with one `corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)` line or `{ ok: false, error }`, exit 1, and a `[corvidinho] verify_before_complete` key is ignored with a `[warn] verify-gate` doctor line.
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 `specsync <list|read|check|brief|coverage|score|change-list|ship-status>` runs the matching `specsync-*` plugin through `plugins run`; `score` is `specsync-score`, the local `specsync score` report (SPECSYNC-3, REQ-cli-089).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count. The `plugins list` text view also prints which PLUGIN-4 language runners loaded (with their binary) and one `<name> not loaded: <tool> not found on PATH` line per missing toolchain, and still exits 0 (REQ-cli-112).
@@ -197,6 +199,8 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 |-----------|----------|
 | Unknown command | Print error + help; exit 1 |
 | `--project` path missing, not a directory, unreadable, or no path given | `corvidinho: --project …` + `hint: pass --project the path of an existing project directory`; exit 1; no command runs; `--json` → `{ok:false,error}` (REQ-cli-505) |
+| `--no-verify` read as a Corvidinho flag (any command) | `corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)` + `hint:`; exit 1 before anything runs; `--json` → `{ok:false,error}` (REQ-cli-085) |
+| `fledge.toml` still sets `[corvidinho] verify_before_complete` | Ignored: the gate still runs; doctor prints `[warn] verify-gate` naming the key, never fails (REQ-cli-085) |
 | `--project` `.env` probe fails | `corvidinho: --project <dir>: could not load its .env files …` + hint to check the dir and its `.env` files; exit 1; nothing changed (REQ-cli-505) |
 | `specsync` with no or an unknown subcommand | Usage line naming every subcommand (`score` included); exit 1 |
 | `plugins run` unknown name (incl. `fledge-*`) | `corvidinho: Unknown plugin command: <name>` + `hint:` (`plugins list`); exit 1; `--json` → `{ok:false,error}` |

@@ -15,7 +15,7 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all. For review requests and assignments the user gate checks both the thread author and the user who requested the review / assigned the watch user (REQ-watch-302); deny lists win
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
-5. Spawn `corvidinho task run` (prove-before-done; no `--no-verify`) or echo in dry-run
+5. Spawn `corvidinho task run` (prove-before-done; verification can't be skipped, AGENT-14) or echo in dry-run
 
 **Declared people (IDENTITY-14 / IDENTITY-7, #36):** the commenter is recognised
 from the owner's `[people.<id>]` entries in the allowlist file the watch loaded

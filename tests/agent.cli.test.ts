@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { makeCarriedTalk } from "./fixtures/talk-worktree.ts";
 
 const root = import.meta.dir + "/..";
 
@@ -31,8 +32,42 @@ async function waitFor(check: () => boolean, ms: number): Promise<boolean> {
   return check();
 }
 
+/** Temp dir with a fake `fledge` on PATH that records every call, and a non-git project. */
+function recordingLane() {
+  const dir = mkdtempSync(join(tmpdir(), "corvidinho-task-cli-"));
+  const bin = join(dir, "bin");
+  const work = join(dir, "work");
+  mkdirSync(bin);
+  mkdirSync(work);
+  const calls = join(dir, "fledge.calls");
+  writeFileSync(join(bin, "fledge"), `#!/bin/sh\necho "$*" >> '${calls}'\nexit 1\n`);
+  chmodSync(join(bin, "fledge"), 0o755);
+  const env = {
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH ?? ""}`,
+    CORVIDINHO_LLM_API_KEY: "",
+    OPENAI_API_KEY: "",
+  };
+  return { dir, work, calls, env };
+}
+
+async function cliIn(cwd: string, args: string[], env: Record<string, string | undefined>) {
+  const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    env,
+  });
+  const [code, out, err] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  return { code, out, err };
+}
+
 describe("corvidinho task run CLI", () => {
-  test("help mentions task run and --no-verify", async () => {
+  test("help documents task run and no longer offers --no-verify (AGENT-14)", async () => {
     const proc = Bun.spawn(["bun", "src/cli.ts", "--help"], {
       cwd: root,
       stdout: "pipe",
@@ -42,75 +77,116 @@ describe("corvidinho task run CLI", () => {
     const out = await new Response(proc.stdout).text();
     expect(code).toBe(0);
     expect(out).toContain("task run");
-    expect(out).toContain("--no-verify");
+    expect(out).not.toContain("--no-verify");
     // REQ-cli-009 / AGENT-5: the optional per-tier model keys are documented.
     expect(out).toContain("CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE");
   });
 
-  test("task run --no-verify --json skips gate", async () => {
-    const proc = Bun.spawn(
-      ["bun", "src/cli.ts", "task", "run", "--no-verify", "--json"],
-      {
-        cwd: root,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    const code = await proc.exited;
-    const out = await new Response(proc.stdout).text();
-    expect(code).toBe(0);
-    const parsed = JSON.parse(out) as {
-      result: {
-        verifySkipped: boolean;
-        verified: boolean;
-        state: string;
-        cancelled: boolean;
+  test("task run --no-verify is refused before anything runs: exit 1, one line, no lane, no run (REQ-cli-085)", async () => {
+    const lane = recordingLane();
+    try {
+      const r = await cliIn(lane.work, ["task", "run", "--no-verify", "--task", "fix it"], lane.env);
+      expect(r.code).toBe(1);
+      expect(r.out).toBe("");
+      expect(r.err).toContain(
+        "corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)",
+      );
+      expect(r.err).toContain("hint: run the command without it");
+      expect(r.err).not.toContain("planning");
+      expect(existsSync(lane.calls)).toBe(false);
+
+      // Anywhere it is read as a Corvidinho flag, before the command too.
+      const early = await cliIn(lane.work, ["--no-verify", "doctor"], lane.env);
+      expect(early.code).toBe(1);
+      expect(early.out).toBe("");
+      expect(early.err).toContain("--no-verify was removed");
+    } finally {
+      rmSync(lane.dir, { recursive: true, force: true });
+    }
+  });
+
+  test("with --json the refusal is { ok: false, error } on stdout (REQ-cli-419 shape)", async () => {
+    const lane = recordingLane();
+    try {
+      for (const args of [
+        ["task", "run", "--no-verify", "--json"],
+        ["task", "run", "--output", "json", "--no-verify"],
+      ]) {
+        const r = await cliIn(lane.work, args, lane.env);
+        expect(r.code).toBe(1);
+        expect(JSON.parse(r.out)).toEqual({
+          ok: false,
+          error: "--no-verify was removed: verification can't be skipped (AGENT-14)",
+        });
+      }
+      expect(existsSync(lane.calls)).toBe(false);
+    } finally {
+      rmSync(lane.dir, { recursive: true, force: true });
+    }
+  });
+
+  test("task run --json that changed nothing ends done with the 'nothing to verify' note (REQ-agent-003)", async () => {
+    const lane = recordingLane();
+    try {
+      const r = await cliIn(lane.work, ["task", "run", "--json"], lane.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.out) as {
+        result: {
+          verifySkipped: boolean;
+          verified: boolean;
+          state: string;
+          cancelled: boolean;
+          filesChanged: string[];
+        };
+        events: Array<{ type: string; text?: string }>;
       };
-    };
-    expect(parsed.result.verifySkipped).toBe(true);
-    expect(parsed.result.verified).toBe(false);
-    expect(parsed.result.state).toBe("done");
-    expect(parsed.result.cancelled).toBe(false);
+      expect(parsed.result.verifySkipped).toBe(true);
+      expect(parsed.result.verified).toBe(false);
+      expect(parsed.result.state).toBe("done");
+      expect(parsed.result.cancelled).toBe(false);
+      // The demo stub changes nothing, so it claims nothing.
+      expect(parsed.result.filesChanged).toEqual([]);
+      expect(
+        parsed.events.filter((e) => e.type === "Text" && e.text === "Verify gate: no changes, nothing to verify."),
+      ).toHaveLength(1);
+      expect(existsSync(lane.calls)).toBe(false);
+    } finally {
+      rmSync(lane.dir, { recursive: true, force: true });
+    }
   });
 
   test("--json stays one pretty { result, events } document (not ndjson, #73)", async () => {
-    const proc = Bun.spawn(
-      ["bun", "src/cli.ts", "task", "run", "--no-verify", "--json"],
-      {
-        cwd: root,
-        stdout: "pipe",
-        stderr: "pipe",
-        env: { ...process.env, CORVIDINHO_LLM_API_KEY: "", OPENAI_API_KEY: "" },
-      },
-    );
-    const [code, out] = await Promise.all([
-      proc.exited,
-      new Response(proc.stdout).text(),
-    ]);
-    expect(code).toBe(0);
-    // Pretty-printed single document: starts with "{\n  " and has no per-line frames.
-    expect(out.startsWith("{\n  ")).toBe(true);
-    const parsed = JSON.parse(out) as Record<string, unknown> & {
-      events: Array<Record<string, unknown>>;
-    };
-    expect(Object.keys(parsed).sort()).toEqual(["events", "result"]);
-    expect(parsed.events[0]).toEqual({ type: "StateChanged", state: "planning" });
-    expect(parsed.events.every((e) => !("protocol" in e))).toBe(true);
-    expect(parsed.events.map((e) => e.type)).not.toContain("usage");
+    const lane = recordingLane();
+    try {
+      const { code, out } = await cliIn(lane.work, ["task", "run", "--json"], lane.env);
+      expect(code).toBe(0);
+      // Pretty-printed single document: starts with "{\n  " and has no per-line frames.
+      expect(out.startsWith("{\n  ")).toBe(true);
+      const parsed = JSON.parse(out) as Record<string, unknown> & {
+        events: Array<Record<string, unknown>>;
+      };
+      expect(Object.keys(parsed).sort()).toEqual(["events", "result"]);
+      expect(parsed.events[0]).toEqual({ type: "StateChanged", state: "planning" });
+      expect(parsed.events.every((e) => !("protocol" in e))).toBe(true);
+      expect(parsed.events.map((e) => e.type)).not.toContain("usage");
+    } finally {
+      rmSync(lane.dir, { recursive: true, force: true });
+    }
   });
 });
 
 describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
   // A fake `fledge` on PATH stands in for the verify lane: like the real one
   // it runs the lane's task as a child, records both pids, then blocks, so the
-  // signal always lands while verify is running.
+  // signal always lands while verify is running. The run's cwd is a talk
+  // worktree whose last run left an unverified edit, so the demo run (which
+  // changes nothing itself) still verifies (AGENT-15.a).
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     test(`${sig} during verify: cancelled result frame, exit 130, verify lane stopped`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "corvidinho-task-signal-"));
       const bin = join(dir, "bin");
-      const work = join(dir, "work");
       mkdirSync(bin);
-      mkdirSync(work);
+      const { work } = await makeCarriedTalk(dir);
       const pidFile = join(dir, "fledge.pid");
       const taskPidFile = join(dir, "task.pid");
       writeFileSync(
@@ -188,19 +264,21 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
     }, 30_000);
   }
 
-  /** Temp dir with a fake `fledge` (a sh script body) on PATH. */
-  function fakeLane(body: string) {
+  /**
+   * Temp dir with a fake `fledge` (a sh script body; `$DIR` is the temp dir)
+   * on PATH, and a carried talk worktree to run in (verify runs).
+   */
+  async function fakeLane(body: string) {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-task-signal-"));
     const bin = join(dir, "bin");
-    const work = join(dir, "work");
     mkdirSync(bin);
-    mkdirSync(work);
-    writeFileSync(join(bin, "fledge"), `#!/bin/sh\n${body}\n`);
+    const { work } = await makeCarriedTalk(dir);
+    writeFileSync(join(bin, "fledge"), `#!/bin/sh\nexport DIR='${dir}'\n${body}\n`);
     chmodSync(join(bin, "fledge"), 0o755);
     return { dir, bin, work };
   }
 
-  /** `task run --task demo --output ndjson` (demo tier: verify always runs). */
+  /** `task run --task demo --output ndjson` in a carried talk worktree (verify runs). */
   function spawnTaskRun(lane: { bin: string; work: string }, wrap: string[] = []) {
     return Bun.spawn(
       [...wrap, "bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--output", "ndjson"],
@@ -231,7 +309,7 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
   }
 
   test("SIGINT the run started with ignored (a background job) stays ignored; SIGTERM still cancels", async () => {
-    const lane = fakeLane(`echo $$ > "$PWD/../fledge.pid"\nexec sleep 30`);
+    const lane = await fakeLane(`echo $$ > "$DIR/fledge.pid"\nexec sleep 30`);
     const pidFile = join(lane.dir, "fledge.pid");
     // A non-interactive shell starts `cmd &` with SIGINT ignored.
     const proc = spawnTaskRun(lane, ["sh", "-c", 'trap "" INT; exec "$@"', "sh"]);
@@ -265,9 +343,9 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
   test("a lane process that escaped the tree kill and holds the output pipe does not keep the run from exiting", async () => {
     // The escaped task has its own session and was reparented before the
     // signal (out of /proc reach), and still holds the lane's stdout.
-    const lane = fakeLane(
-      `(setsid sh -c 'echo $$ > "$PWD/../escaped.pid"; exec sleep 30' &)\n` +
-        `echo $$ > "$PWD/../fledge.pid"\nexec sleep 30`,
+    const lane = await fakeLane(
+      `(setsid sh -c 'echo $$ > "$DIR/escaped.pid"; exec sleep 30' &)\n` +
+        `echo $$ > "$DIR/fledge.pid"\nexec sleep 30`,
     );
     const pidFile = join(lane.dir, "fledge.pid");
     const escapedFile = join(lane.dir, "escaped.pid");

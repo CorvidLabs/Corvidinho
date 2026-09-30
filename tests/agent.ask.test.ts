@@ -4,6 +4,9 @@
  * stuck ask. Mock HTTP / injected execute only — no network, no real keys.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ASK_AGENT_SYSTEM_INSTRUCTIONS,
   ASK_QUESTION_MAX,
@@ -200,7 +203,7 @@ describe("runTask with an ask (AUTONOMY-1 / AUTONOMY-2 / AGENT-4)", () => {
     const ask = { reason: "clarify" as const, question: "Which repo?" };
     const result = await runTask({
       cwd: process.cwd(),
-      verifyBeforeComplete: true,
+      workspaceDiff: async () => ({ changed: async () => [] }),
       maxRetries: 2,
       onEvent: (e) => events.push(e),
       verifyRunner: async () => {
@@ -230,7 +233,7 @@ describe("runTask with an ask (AUTONOMY-1 / AUTONOMY-2 / AGENT-4)", () => {
   test("verify retries exhausted → failed (AGENT-4) plus a stuck ask", async () => {
     const result = await runTask({
       cwd: process.cwd(),
-      verifyBeforeComplete: true,
+      workspaceDiff: async () => ({ changed: async () => ["a.ts"] }),
       maxRetries: 1,
       verifyRunner: async () => ({ success: false, output: "lint broke" }),
       execute: async ({ attempt }) => ({ summary: `try ${attempt}`, filesChanged: ["a.ts"] }),
@@ -245,7 +248,9 @@ describe("runTask with an ask (AUTONOMY-1 / AUTONOMY-2 / AGENT-4)", () => {
   test("a done run carries no ask", async () => {
     const result = await runTask({
       cwd: process.cwd(),
-      verifyBeforeComplete: false,
+      // Never the repo's own snapshot or lane from inside its test run.
+      workspaceDiff: async () => ({ changed: async () => [] }),
+      verifyRunner: async () => ({ success: true, output: "ok" }),
       execute: async () => ({ summary: "fine", filesChanged: [] }),
     });
     expect(result.state).toBe("done");
@@ -292,9 +297,10 @@ describe("task run CLI surfaces the question (localhost mock LLM)", () => {
     });
     try {
       const proc = Bun.spawn(
-        ["bun", "src/cli.ts", "task", "run", "--no-verify", "--task", "fix it", "--output", output],
+        ["bun", join(root, "src/cli.ts"), "task", "run", "--task", "fix it", "--output", output],
         {
-          cwd: root,
+          // A scratch non-git project: never the repo's own snapshot or lane.
+          cwd: mkdtempSync(join(tmpdir(), "corvidinho-ask-cli-")),
           stdout: "pipe",
           stderr: "pipe",
           env: {

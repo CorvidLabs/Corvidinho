@@ -83,3 +83,9 @@ module: watch
   repo; long rows are clipped at `WATCH_MEMORY_ROW_MAX_CHARS`.
 - `tests/memory.spawn-env.test.ts` › "WATCH spawn clears the acting env" still
   holds (no Discord actor, no confirm tokens, non-ADMIN, non-interactive).
+
+## One verify gate (REQ-watch-006, REQ-watch-073, REQ-watch-085)
+
+- `tests/agent.ndjson-spawn.test.ts`: the WATCH spawn argv has no
+  `--no-verify`; the gate itself (no switch, real diff, "no changes" note) is
+  covered by `tests/agent.loop.test.ts` and `tests/agent.verify-gate.test.ts`.

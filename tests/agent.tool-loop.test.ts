@@ -125,7 +125,7 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
       signal: new AbortController().signal,
     });
     expect(r.summary).toBe("demo task attempt 1");
-    expect(r.filesChanged).toEqual(["src/cli.ts"]);
+    expect(r.filesChanged).toEqual([]);
   });
 
   test("tool loop: LLM requests plugins-list then finishes", async () => {
@@ -605,7 +605,6 @@ describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", ()
     let verifyRuns = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyRuns += 1;
@@ -705,7 +704,6 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     const verifyCwds: string[] = [];
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       maxRetries: 0,
       onEvent: (e) => events.push(e),
       verifyRunner: async (cwd) => {
@@ -779,7 +777,6 @@ describe("verify retry feedback reaches the model as the failing step's output (
     let verifyN = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyN += 1;

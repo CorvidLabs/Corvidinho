@@ -499,6 +499,19 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(r.code).toBe(0);
   }, 30_000);
 
+  test("a fledge.toml that still sets verify_before_complete gets [warn] verify-gate: ignored, never fails (AGENT-14)", async () => {
+    const dir = readyProject(`${VERIFY_WITH_SPEC_CHECK}\n[corvidinho]\nverify_before_complete = false\n`);
+    const r = await runDoctor(readyEnv(allowEnv), dir);
+    expect(r.out).toContain(
+      "[warn] verify-gate: fledge.toml [corvidinho] verify_before_complete is ignored — verification can't be turned off (AGENT-14); remove the key",
+    );
+    expect(r.out).toContain("All checks passed.");
+    expect(r.code).toBe(0);
+    // Without the key there is no such line.
+    const clean = await runDoctor(readyEnv(allowEnv), readyProject());
+    expect(clean.out).not.toContain("verify-gate");
+  }, 30_000);
+
   test("doctor in this checkout: its own fledge.toml, verify lane, .specsync/ and specs/ pass", async () => {
     const r = await runDoctor(readyEnv(allowEnv));
     for (const line of okLines(REPO_ROOT)) expect(r.out).toContain(line);

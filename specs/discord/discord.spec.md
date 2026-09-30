@@ -38,6 +38,7 @@ files:
   - src/worktree/index.ts
   - src/worktree/manager.ts
   - src/worktree/cleanup.ts
+  - src/worktree/base.ts
   - tests/worktree.test.ts
   - tests/discord.session-worktree.test.ts
   - tests/worktree.project-scope.test.ts
@@ -503,6 +504,13 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `AgentSpawnResult.task` carries the run's verify facts from its result frame.
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044).
+`src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
+default branch, else `main`, and HEAD's merge-base with it; shared by
+`openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
+linked `talk-*` worktree), `takeTalkVerified` / `settleTalkVerified` and
+`TALK_VERIFIED_MARKER` (the verified marker a new talk worktree gets from
+`ensureTalkWorkspace` and a `done` run writes back; AGENT-15.a,
+REQ-agent-015 / REQ-discord-085).
 
 `image-attachments.ts` exports `attachmentCacheDir(workDir)` and
 `WORKSPACE_ATTACHMENTS_SUBDIR` (`.corvidinho/attachments`); the bridge binds the

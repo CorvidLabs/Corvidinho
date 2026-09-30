@@ -194,7 +194,7 @@ record (REQ-watch-472).
 
 ## Dependencies
 
-src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify,
+src/allowlist/github.ts, @octokit/rest (live), agent `task run` (verify gate always on, AGENT-14),
 src/store (shared SQLite DB, session TTL, SAFE-6 scrub).
 
 ## Change Log

@@ -30,9 +30,9 @@ function write(path: string, text: string): void {
 
 /**
  * A = the directory the CLI is started in: its own `.env` (a spend cap and an
- * LLM key) and a `fledge.toml` that keeps the verify gate on. P = the project
- * `--project` points at: its own `.env` / `.env.local`, a `fledge.toml` that
- * turns the verify gate off, and one SpecSync module `widget`.
+ * LLM key) and a `fledge.toml`. P = the project `--project` points at: its
+ * own `.env` / `.env.local`, a `fledge.toml`, and one SpecSync module
+ * `widget`. The verify gate has no switch in either (AGENT-14).
  */
 function fixture(): Fixture {
   const root = mkdtempSync(join(tmpdir(), "corvidinho-project-path-"));
@@ -42,11 +42,11 @@ function fixture(): Fixture {
     join(a, ".env"),
     `CORVIDINHO_DAILY_SPEND_CAP_USD=3.00\nCORVIDINHO_LLM_API_KEY=${FAKE_LLM_KEY}\nA_MARK=from-a\n`,
   );
-  write(join(a, "fledge.toml"), "[corvidinho]\nverify_before_complete = true\nmax_retries = 0\n");
+  write(join(a, "fledge.toml"), "[corvidinho]\nmax_retries = 0\n");
   // Bun's own loading: .env.local over .env, with $VAR expansion.
   write(join(p, ".env"), "P_CAP=6.50\nCORVIDINHO_DAILY_SPEND_CAP_USD=7.25\nP_MARK=from-p\n");
   write(join(p, ".env.local"), "P_CAP=8.00\nCORVIDINHO_DAILY_SPEND_CAP_USD=${P_CAP}\n");
-  write(join(p, "fledge.toml"), "[corvidinho]\nverify_before_complete = false\n");
+  write(join(p, "fledge.toml"), "[corvidinho]\nmax_retries = 1\n");
   write(join(p, ".specsync", "registry.toml"), '[specs]\nwidget = "specs/widget/widget.spec.md"\n');
   write(
     join(p, "specs", "widget", "widget.spec.md"),
@@ -170,7 +170,7 @@ describe("readStartEnv / enterProject (CLI-5)", () => {
 });
 
 describe("corvidinho --project <path> (CLI-5, REQ-cli-505)", () => {
-  test("task run reads the project's fledge.toml and specs, not the start dir's", async () => {
+  test("task run plans with the project's specs, not the start dir's", async () => {
     const f = fixture();
     for (const args of [
       ["--project", f.p, "task", "run", "--task", "touch widget", "--json"],
@@ -180,7 +180,7 @@ describe("corvidinho --project <path> (CLI-5, REQ-cli-505)", () => {
       const r = await cli(args, f.a, f.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.out) as TaskJson;
-      // P's fledge.toml turns the verify gate off (A's keeps it on).
+      // The demo run changed nothing in P: nothing to verify (REQ-agent-003).
       expect(parsed.result.state).toBe("done");
       expect(parsed.result.verifySkipped).toBe(true);
       // P's specs brief the planner.

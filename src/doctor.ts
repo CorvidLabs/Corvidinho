@@ -11,6 +11,8 @@
  * - The project files `task run`'s verify gate reads in the current dir
  *   (`fledge.toml`, its verify lane with spec-check, `.specsync/`, `specs/`),
  *   shared with the report-only `corvidinho init`.
+ * - A removed verify switch (`[corvidinho] verify_before_complete`) still set
+ *   in `fledge.toml`: ignored, so `[warn]` (AGENT-14).
  * Secret and list values are never printed (SAFE-6).
  */
 
@@ -25,6 +27,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { Database } from "bun:sqlite";
+import { removedVerifyKeys } from "./agent/config.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
 import { findProjectRoot } from "./agent/project-instructions.ts";
 import { perTierModels } from "./agent/tier.ts";
@@ -614,6 +617,22 @@ function projectDirCheck(
     );
   }
   return { name, ok: true, detail: `found in ${dir}` };
+}
+
+/**
+ * AGENT-14 (REQ-cli-085): `[warn] verify-gate` when the project's
+ * `fledge.toml` still sets a removed verify switch; the key is ignored and
+ * verification still runs. Null when none is set. Never fails doctor.
+ */
+export function removedVerifyKeyDoctorCheck(cwd: string = process.cwd()): DoctorCheck | null {
+  const keys = removedVerifyKeys(resolve(cwd));
+  if (keys.length === 0) return null;
+  return {
+    name: "verify-gate",
+    ok: true,
+    mark: "warn",
+    detail: `fledge.toml [corvidinho] ${keys.join(", ")} is ignored — verification can't be turned off (AGENT-14); remove the key`,
+  };
 }
 
 /**

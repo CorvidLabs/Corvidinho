@@ -32,3 +32,25 @@ the tool and reason ids once, which `task run` copies to
 `TaskResult.injection`; the Discord and WATCH spawn clients read it back with
 `injectionNoticeFromUnknown` (tool-name source, known reasons only), and the
 bridge / WATCH tests drive the owner notice from it.
+
+## No verify skip (REQ-cli-085, REQ-cli-006, REQ-cli-007)
+
+- `tests/agent.cli.test.ts`: help has no `--no-verify`; `task run --no-verify`
+  and `--no-verify doctor` exit 1 with the one refusal line and hint, print
+  nothing on stdout and never start the fake `fledge`; with `--json` /
+  `--output json` stdout is exactly `{ ok: false, error }`; `task run --json`
+  in a scratch project ends `done` with `filesChanged: []` and one "no
+  changes, nothing to verify" event; the SIGINT / SIGTERM cases run in a
+  carried talk worktree so the lane still starts.
+- `tests/cli.task-argv.test.ts`, `tests/cli.plugins-run-argv.test.ts`:
+  `--task --no-verify` and a `plugins run` argument after `--` never set
+  `removedFlag`.
+- `tests/cli.doctor-truth.test.ts`: a `fledge.toml` with
+  `[corvidinho] verify_before_complete = false` prints `[warn] verify-gate`
+  and doctor still passes; without the key there is no such line.
+- `tests/agent.verify-gate.test.ts`: the real CLI in a project whose
+  `fledge.toml` sets the key false runs the lane and exits 1.
+- `tests/agent.ndjson-spawn.test.ts`, `tests/agent.ask.test.ts`,
+  `tests/agent.spend-ask.test.ts`, `tests/cli.project-path.test.ts`: the real
+  CLI runs in scratch projects without `--no-verify`, never the repo's own
+  snapshot or verify lane.
