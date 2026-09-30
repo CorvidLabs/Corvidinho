@@ -1,6 +1,6 @@
 ---
 id: verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15
-state: draft
+state: implementing
 type: feature
 base_commit: 38985d86b47da69a522285b25ac198671e4567e6
 ---

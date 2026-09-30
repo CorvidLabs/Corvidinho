@@ -15,7 +15,7 @@ spec: discord.spec.md
 
 ### REQ-discord-001
 
-The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run --no-verify` (or echo); it SHALL NOT port ProcessManager.
+The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run` (or echo), which always holds the run to the verify gate (AGENT-14, REQ-cli-085); it SHALL NOT port ProcessManager.
 
 Acceptance Criteria
 - `routeMessage` on mention in allowed channel returns `kind: "start_session"` with new session id.
@@ -302,11 +302,12 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `task run` stdout is present (ndjson result frame or legacy `--json`), the
 Discord chat reply SHALL surface a parsed summary (state / verified /
 attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
-`--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
-agent loop still skips the verify lane when no tool reported files and the
-run's git working tree is unchanged (REQ-agent-085), so plain chat stays
-fast. Fixture tests SHALL cover argv shape and summary parsing without a live
-Discord token.
+`--no-verify` (the flag is removed and refused, REQ-cli-085) —
+prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always applies; a run whose
+real git diff is empty and that claimed no change ends with "no changes,
+nothing to verify" and no lane (REQ-agent-003 / REQ-agent-085), so plain
+chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
+without a live Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
@@ -847,7 +848,7 @@ Acceptance Criteria
 ### REQ-discord-073
 
 The Discord spawn agent client SHALL run
-`task run --no-verify --task <prompt> --output ndjson`, read stdout line by
+`task run --task <prompt> --output ndjson`, read stdout line by
 line while the child runs, and forward each frame's live state, current tool,
 and token counts to `onStatus` so the thinking embed shows what the agent is
 doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
@@ -868,7 +869,7 @@ Acceptance Criteria
 - Summary equals `summarizeTaskResult` of the result frame; garbage lines and stderr do not break parsing.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
 - A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
-- Spawn argv ends with `--output ndjson` (no `--json`).
+- Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
 
 ### REQ-discord-025
@@ -1022,18 +1023,29 @@ Acceptance Criteria
 ### REQ-discord-085
 
 Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
-prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
-argv MUST NOT include `--no-verify`. An empty real diff with no
-tool-reported files continues to skip verify inside the agent loop (honest
-`verifySkipped`); when tools report file changes or the run's git working
-tree changed (REQ-agent-085), `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
-of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
-Discord.
+prove-before-done gate (AGENT-4 / FLEDGE-2 / AGENT-14): spawn argv MUST NOT
+include `--no-verify` (the flag is removed and refused, REQ-cli-085), and no
+project `fledge.toml` key turns the gate off (REQ-agent-003). Chat, button
+resumes, `/session`, `/work` and schedule runs all reach the one gate of
+`task run`. A run whose real diff is empty and that claimed no change ends
+with "no changes, nothing to verify" (honest `verifySkipped`); when the
+run's git working tree changed (REQ-agent-085) or a tool claimed a change
+git does not show, `fledge lanes run verify` runs before done.
+`ensureTalkWorkspace` SHALL write the verified marker into a new talk
+worktree's own git dir, so a new talk's first run starts from its own
+snapshot; a later run in that worktree after one that did not end `done`
+verifies every edit since the talk started (AGENT-15.a, REQ-agent-015).
+The talk base (`resolveBase`: the remote's default branch, else `main`, and
+HEAD's merge-base with it) lives in `src/worktree/base.ts`, shared by the
+`/work` PR path (REQ-discord-088) and the verify gate. Package version SHALL
+bump to **0.0.13**. Fixture tests without live Discord.
 
 Acceptance Criteria
 - Discord spawn argv never includes `--no-verify`.
 - Package `0.0.13`; docs/STATUS/CHANGELOG updated.
-- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool-reported files still skips verify (REQ-agent-085).
+- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool claim ends with the "no changes, nothing to verify" note (REQ-agent-003 / REQ-agent-085).
+- A talk worktree made by `ensureTalkWorkspace` holds the verified marker in its own git dir (`talkWorktreeGitDir`), and its first run that changes nothing has nothing to verify; after that run ends blocked with an edit, the next run there verifies the edit (REQ-agent-015).
+- The `/work` PR tests still find the base and merge-base through the shared `resolveBase`.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-108
