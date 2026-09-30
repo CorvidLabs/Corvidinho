@@ -1,6 +1,6 @@
 ---
 id: a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told
-state: draft
+state: implementing
 type: feature
 base_commit: c5a37b32f21ba40f6a7d6b3c50f10900afe7c713
 ---
