@@ -19,16 +19,35 @@ artifact: design
     `node:child_process` uses `process.env`, so CLIs and shells a test
     spawns get the new `TMPDIR`. Tests that hand a custom env already pass
     `TMPDIR: tmpdir()` (now the root).
-  - Cleanup `removeRunRoot()`: `rmSync(runRoot, { recursive, force })`,
-    one retry, every error swallowed (cleanup never changes a result).
-    Registered as a preload `afterAll` (Bun runs it once after the last
-    file, on pass and fail) and `process.on("exit")`.
-- Why both hooks (probed in a scratch project on Bun 1.4.2): `bun test`
-  fires no `exit` / `beforeExit` event when it finishes, pass or fail, so
-  an exit handler alone never runs; a test calling `process.exit()` skips
-  `afterAll` but fires `exit`.
+  - Cleanup: a watcher, `/bin/sh -c 'trap "" INT HUP TERM; echo ready;
+    read -r _; exec rm -rf -- "$1"' corvidinho-test-reaper <runRoot>`,
+    spawned with its stdin a pipe only this process holds (Bun marks it
+    close-on-exec, so children a test leaves running do not keep it open),
+    `cwd` `/`, stdout read once for `ready` (top-level await, so the traps
+    are in place before the first test) and then `unref()`ed. When the
+    `bun test` process exits for any reason the kernel closes the pipe,
+    `read` returns and the watcher removes the root. `rm -rf` does not
+    follow symlinks. A process `exit` handler also removes the root
+    synchronously (a test calling `process.exit()`); every error is
+    swallowed.
+- Why not a preload `afterAll` (the first version of this change), probed on
+  Bun 1.4.2: it is not the end of the process. `--rerun-each=2` fires it
+  after the last file's first run and then reruns that file;
+  `--parallel --no-isolate` fires it after every file a worker runs. Removing
+  the root there failed those runs with `ENOENT` on the next `mkdtemp`
+  (real files: 1 and 10 failures; main's preload: none). `--bail` and a
+  signal skip it and leak the root.
+- Why a watcher: `bun test` fires no `exit` / `beforeExit` / `unload`
+  event when it finishes, pass or fail, so an in-process hook cannot see the
+  real end. The watcher ignores INT/HUP/TERM because Ctrl-C signals the
+  terminal's whole process group and `--isolate` SIGTERMs a file's leftover
+  children when the file ends; the `ready` handshake closes the window before
+  the trap is set. With `--isolate` / `--parallel` each file gets its own
+  root and watcher, all removed when the process (worker) exits.
 - Not changed: test files, `src/` (`src/store/backup.ts` restore test
   still uses `tmpdir()`, now the root under test), `bunfig.toml`.
-- Not covered: a run killed by a signal or `--bail` (neither hook runs)
-  leaves its one `corvidinho-test-run-*` root; the preload does not sweep
-  other runs' roots (a concurrent run may own them).
+- Not covered: killing the run's whole process tree (an aborted verify lane:
+  SIGSTOP + SIGKILL to every member) also kills the watcher and leaves that
+  run's one root. The preload does not sweep other runs' roots (a concurrent
+  run may own them). Bun's own `bun-node-<revision>` shim dir in the OS temp
+  dir is Bun's, one per Bun version and reused.
