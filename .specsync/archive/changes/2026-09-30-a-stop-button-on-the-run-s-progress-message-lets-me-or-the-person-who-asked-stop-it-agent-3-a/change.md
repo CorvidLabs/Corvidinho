@@ -1,6 +1,6 @@
 ---
 id: a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a
-state: implementing
+state: archived
 type: feature
 base_commit: 9ea40051c5cd6841c201e1210319ee621aa4bde0
 ---
