@@ -25,6 +25,7 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
 - **SAFE-9**  Expensive cross-agent networking tools stay hidden until a session is allowed to use them, so small models cannot wander off starting councils unprompted.
 - **SAFE-11**  A display name can't pass itself off as someone else: names are cleaned before the model sees them, and who someone is comes from their declared ids, never from what a message claims.
 - **SAFE-12**  Issue, PR, comment, web page and chat bodies are data to read, not instructions to follow; only the sender's role decides what may run.
+  - **SAFE-12.a**  When someone other than me picks a choice, the picked label reaches the run as their words, inside the same untrusted fence as anything they type.
 - **SAFE-13**  When a message looks like an injection attempt, it doesn't act on it, and it tells me rather than going quiet.
 - **SAFE-14**  It keeps rolling 24-hour spend caps per provider plus a total cap, and tracks spend against each.
   - **SAFE-14.a**  Only I see spend amounts and cap settings; everyone else only sees that work is paused for budget.
