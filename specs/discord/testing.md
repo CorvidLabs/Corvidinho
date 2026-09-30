@@ -455,6 +455,44 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
   throws still gets only `not authorized` and deletes nothing. No live Discord.
 
+## Schedule text is data (REQ-discord-713, SAFE-12/13)
+
+`tests/scheduler.injection.test.ts` (slash dispatcher with an in-memory
+context; `SchedulerService` with a memory store, a recording agent and no
+worktrees; `startBridge` with a null gateway and a memory DB; an allowlist
+file that declares one team member):
+
+- `/schedule create` by a stranger (community) and by a declared team member
+  with an injection prompt, and by a stranger with an injection name alone:
+  nothing stored; one ephemeral refusal that never quotes the text; one post
+  in the channel pinging only the owner ("a /schedule request here");
+  one `injection-suspected` / `denied` row (actor the user, surface
+  `discord:/schedule`). An ordinary stranger create: only the ephemeral
+  `NOT_AUTHORIZED`, no post, no row. The owner's create with the same words
+  is stored unscanned.
+- Tick, benign stranger schedule: the prompt starts `Scheduled work on
+  project: proj-a`, carries `role: community` and the name and prompt inside
+  the fence (`source=schedule-prompt`), the name nowhere else; the run is not
+  ADMIN; the result post is unchanged. A declared team member's schedule is
+  fenced as `role: team`, and as `role: community` when the creator is muted.
+  The owner's schedule (injection-like words included) keeps its old prompt,
+  unfenced, stays active, no row.
+- Tick, stored stranger injection prompt (and a team member's injection
+  name): no agent run; the schedule paused; one ask post with the schedule
+  title pinging only the owner ("I didn't run this schedule"), never the
+  text (for the injected name, the title is `Schedule (<id>) on <project>`
+  and the name appears nowhere in the post); one `denied` row (surface `scheduler:<id>`); a later tick posts
+  nothing more. A ticker with no outbound (the daemon) leaves the ask pending
+  on the run row and a bridge-like ticker posts it once. Through
+  `startBridge` the row lands in the bridge's `audit_log` and the schedule is
+  paused.
+
+Fail-on-base: with `src/scheduler/service.ts`,
+`src/discord/command-handlers/schedule.ts`, `src/discord/injection-guard.ts`
+and `src/discord/bridge.ts` from `origin/main` (5aaf7f0), 9 of the 12 tests
+fail; the ordinary-create, owner-create and owner-schedule guards pass on
+both.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
@@ -667,8 +705,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/identity.people.test.ts` — `[people.<id>]` TOML (plural + singular
   keys) and JSON parse; the allowlist loader and `[owner]` reader load the same
   file; unreadable entries skipped whole with id-free problems; `owner`
-  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub login / numeric
-  id, never by display or nickname, renamed-login rule, clashes match nobody;
+  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub numeric id,
+  never by GitHub login (IDENTITY-7.a), display or nickname, clashes match
+  nobody;
   the owner's built-in or declared person with `role: owner`;
   `loadDeclaredPeople` re-reads the loaded file and never throws.
 - `tests/discord.admin-people.test.ts` — `/admin people add|link|unlink|
@@ -785,6 +824,35 @@ GitHub commenter keys". `tests/memory.rank.test.ts` —
 `recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
 a multi-scope search keeping the newest of a key once and no private notes, a
 question-words-only query matching as one substring, `recallRelevantThenRecent`,
-`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
-undeclared-under-`[people]` owner on their Discord id) and
+`memorySubjectForGithub` (numeric id only: a login alone or with an id that
+differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
+github_id`, on their Discord id) and
 `projectScopeForRepo`.
+
+## GitHub by numeric user id only (REQ-discord-367, IDENTITY-7.a)
+
+- `tests/identity.github-numeric-id.test.ts` — `resolvePerson` /
+  `memorySubjectForGithub`: a login alone, or the owner's or a declared
+  person's login with another numeric id, resolves nobody; the declared id
+  resolves under any login. `[owner] github_id` from TOML (quoted or bare) and
+  JSON (string or number), an invalid one ignored with a value-free issue;
+  loaded from the file it joins the owner's person; an env-only owner login is
+  not the owner on GitHub. A login-only entry loads without an issue, matches
+  on Discord, not on GitHub, and matches once `github_ids` is added.
+  `/admin people link github:` through the slash dispatcher with an injected
+  `lookupGithubUser`: the looked-up id is written to `github_ids` (login kept),
+  `started` / `ok` rows, the reply deferred first, live at once, a second link
+  no change; a failed, missing or mismatched lookup writes nothing and audits
+  `error`; a refused request and `github_id:` links make no lookup.
+  `createGithubUserLookup` over a stubbed fetch: 200 → id + canonical login
+  (token sent as auth), 404 → no user, 500 → status only (token never in the
+  error), a payload without an id refused.
+- `tests/identity.people.test.ts`, `tests/identity.owner.test.ts`
+  (`isOwnerGithub` by numeric id only) and `tests/discord.admin-people.test.ts`
+  (fake lookup; unlinking a login says its id still matches; the owner's
+  person matched by its linked id, not the `[owner]` login) hold the rule.
+- Fail on base: with the base sources (main 20a0f58) swapped in,
+  `tests/identity.github-numeric-id.test.ts` fails 8 of 9 (the login still
+  matches; no `[owner] github_id`; `link github:` stores no id; no lookup
+  module — only "a refused request makes no lookup" holds on both) and all 9
+  pass on the branch; the updated cases in the four files above fail too.
