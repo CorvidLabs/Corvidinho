@@ -262,7 +262,15 @@ describe("IDENTITY-12: the tool layer resolves the role on every call", () => {
       expect(roleAllowsPlugin("team", e, true)).toBe(!mut || TEAM_REVIEW_TOOLS.has(e.name) || TEAM_WORK_TOOLS.has(e.name));
     }
     expect([...TEAM_REVIEW_TOOLS].sort()).toEqual(["github-issue-comment", "github-pr-review"]);
-    expect([...TEAM_WORK_TOOLS].sort()).toEqual(["files-edit", "files-write"]);
+    // AGENT-18 / AGENT-18.a: working the repo's SpecSync change is team work too.
+    expect([...TEAM_WORK_TOOLS].sort()).toEqual([
+      "files-edit",
+      "files-write",
+      "specsync-change-answer",
+      "specsync-change-approve",
+      "specsync-change-finalize",
+      "specsync-change-new",
+    ]);
   });
 });
 
@@ -303,7 +311,13 @@ describe("IDENTITY-9..11: the catalog by role", () => {
       expect(team.has(no)).toBe(false);
     }
     const teamWork = names({ tier: "code", allowlist, actingRole: "team", workTask: true, autonomous: true });
-    expect([...teamWork].filter((n) => !team.has(n)).sort()).toEqual(["files-edit", "files-write"]);
+    // The approve and finalize steps are never offered (the run takes them itself, AGENT-18.a).
+    expect([...teamWork].filter((n) => !team.has(n)).sort()).toEqual([
+      "files-edit",
+      "files-write",
+      "specsync-change-answer",
+      "specsync-change-new",
+    ]);
     // SAFE-1 still applies to team: an unallowlisted review tool is not offered.
     expect(names({ tier: "code", actingRole: "team" }).has("github-pr-review")).toBe(false);
   });

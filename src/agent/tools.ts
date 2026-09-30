@@ -130,6 +130,8 @@ export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
       if (!roleAllowsPlugin(opts.actingRole, entry, Boolean(opts.workTask))) continue;
     } else if (!actingIsAdmin && isMutatingPlugin(entry)) continue;
     if (!opts.autonomous && get(entry.name)?.autonomous) continue;
+    // AGENT-18.a: steps the agent loop runs itself are never offered.
+    if (get(entry.name)?.agentTool === false) continue;
     if (!tierAllowsPlugin(opts.tier, entry.minTier)) continue;
     out.push(toolDefForEntry(entry));
   }

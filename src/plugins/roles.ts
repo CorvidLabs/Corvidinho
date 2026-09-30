@@ -77,13 +77,21 @@ export const TEAM_REVIEW_TOOLS: ReadonlySet<string> = new Set([
 
 /**
  * Team work tasks (IDENTITY-10): file edits inside a `/work` run's own
- * worktree (SAFE-2 protected paths still refused). The `/work` handler ships
- * the result as a draft PR (REQ-discord-088); the shell, runners, git and
- * other writes stay owner-only.
+ * worktree (SAFE-2 protected paths still refused), and working that repo's
+ * SpecSync change for them (AGENT-18): opening and answering it, and, on
+ * Corvidinho only, the approve and archive steps the run itself takes once
+ * verify is green (AGENT-18.a; those two stay dangerous, so SAFE-1's
+ * allowlist still applies). The `/work` handler ships the result as a draft
+ * PR (REQ-discord-088); the shell, runners, git and other writes stay
+ * owner-only.
  */
 export const TEAM_WORK_TOOLS: ReadonlySet<string> = new Set([
   "files-edit",
   "files-write",
+  "specsync-change-new",
+  "specsync-change-answer",
+  "specsync-change-approve",
+  "specsync-change-finalize",
 ]);
 
 function truthy(raw: string | undefined): boolean {

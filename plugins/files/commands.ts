@@ -22,8 +22,10 @@ import type {
 import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
 import {
   isProtectedPath,
+  isSddRecordPath,
   isSecretPath,
   protectedRefuseMessage,
+  sddRecordRefuseMessage,
   secretPathsRefused,
   secretRefuseMessage,
 } from "./protectedPaths.ts";
@@ -56,6 +58,10 @@ function refuseProtected(
       error: protectedRefuseMessage(userPath),
       exitCode: 2,
     };
+  }
+  // AGENT-18 / AGENT-18.a: SpecSync's own records in a change folder.
+  if (isSddRecordPath(userPath) || isSddRecordPath(relative(root, absPath))) {
+    return { ok: false, error: sddRecordRefuseMessage(userPath), exitCode: 2 };
   }
   return null;
 }

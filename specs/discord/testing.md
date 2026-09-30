@@ -1280,6 +1280,15 @@ pick continuing it (same session and cwd), `/session start` and `/work` pass
 - Fail on base: with the base's (507d97b) sources swapped in, all three fail
   (no stamp; `surface` undefined).
 
+## /work checks SpecSync change coverage (REQ-discord-518, AGENT-18)
+
+`tests/agent.repo-ways.test.ts` ("/work checks SpecSync coverage before
+commit and push"): a /work worktree of an SDD repo (bare `origin`,
+`origin/HEAD` set) with `src/app.ts` edited and no change is refused with
+`sdd-uncovered` naming the path and no plugin call; a change archived on the
+branch covering it ships through `git-commit` → `git-push` →
+`github-pr-create`; deleting `sdd.json` and committing on the branch still
+gets `sdd-uncovered`. Both fail on the base (the PR opens).
 ## Each spend cap on its own, owner only (REQ-discord-098 modified; SAFE-14 / SAFE-15, SAFE-14.a)
 
 `tests/agent.spend-caps.test.ts` › "delivery keeps each cap apart" and

@@ -1,13 +1,18 @@
 /**
  * Prove-before-done task loop (Merlin agent-loop Verifying steal).
- * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5).
+ * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5), and the
+ * repo's own ways (AGENT-18, REQ-agent-518).
  * Verifying: fledge lanes run verify (includes spec-check when wired).
  * The gate has no off switch (AGENT-14, REQ-agent-003). In a git work tree
  * the real diff alone decides what changed (AGENT-15, REQ-agent-085), from
  * the talk branch's merge-base when the last run in that talk worktree did
  * not end verified (AGENT-15.a, REQ-agent-015). A passing lane is verified
  * only when its output shows tests ran and no test was deleted or turned off
- * (AGENT-15, REQ-agent-185).
+ * (AGENT-15, REQ-agent-185). In a repo whose SpecSync workflow requires a
+ * change, every changed meaningful path must be covered by one first
+ * (AGENT-18, REQ-agent-518); on Corvidinho the run then approves and
+ * archives the change it opened and verifies again (AGENT-18.a,
+ * REQ-agent-519).
  */
 
 import { relative, resolve } from "node:path";
@@ -16,7 +21,23 @@ import {
   formatAskSummary,
   stuckAfterVerifyAsk,
 } from "./ask.ts";
+import { loadBuiltins } from "../plugins/builtins.ts";
+import { allowlistFromEnv } from "../plugins/env.ts";
+import { runPlugin } from "../plugins/run.ts";
 import { loadAgentConfig } from "./config.ts";
+import {
+  beginSddRun,
+  endSddRun,
+  formatRepoWaysLine,
+  mergeScans,
+  repoWaysBase,
+  scanRepoWays,
+  sddRequiresChange,
+  sddUncovered,
+  sddUncoveredNote,
+  settleOwnSddChanges,
+  type SddRun,
+} from "./repo-ways.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
 import {
   defaultVerifyRunner,
@@ -85,15 +106,79 @@ function cancelledResult(
 }
 
 /**
+ * One verify-lane run and its AGENT-15 evidence verdict (REQ-agent-185): a
+ * passing lane counts only when its output shows tests ran and no test was
+ * deleted or turned off since the baseline; otherwise it is a failed verify
+ * whose note leads. Null when the run was aborted (a cancel, not a failed
+ * verify — AGENT-3).
+ */
+async function runLane(
+  cwd: string,
+  verifyRunner: NonNullable<RunTaskOptions["verifyRunner"]>,
+  signal: AbortSignal,
+  testCheck: TestDropCheck | null,
+  onEvent: ((e: AgentEvent) => void) | undefined,
+): Promise<{ result: { success: boolean; output: string }; laneOutput: string; evidenceNote?: string } | null> {
+  let result;
+  try {
+    result = await verifyRunner(cwd, signal);
+  } catch (err) {
+    if (isAborted(signal)) return null;
+    result = {
+      success: false,
+      output: err instanceof Error ? err.message : String(err),
+    };
+  }
+  // An aborted lane exits non-zero: that is a cancel, not a failed verify
+  // (no retry, no stuck ask) — AGENT-3.
+  if (isAborted(signal)) return null;
+
+  // AGENT-15 (REQ-agent-185): a passing lane counts as verified only when
+  // its output shows tests ran and no test was deleted or turned off since
+  // the baseline. Otherwise it is a failed verify like any other (retry
+  // with the note first, then failed), with no opt-out (AGENT-14).
+  const laneOutput = result.output;
+  let evidenceNote: string | undefined;
+  if (result.success) {
+    let drops: TestDrop[] | null;
+    try {
+      drops = testCheck ? await testCheck.testDrops() : null;
+    } catch {
+      drops = null;
+    }
+    if (isAborted(signal)) return null;
+    const verdict = judgeTestEvidence(laneOutput, drops);
+    emit(onEvent, { type: "Text", text: verdict.note });
+    if (!verdict.ok) {
+      evidenceNote = verdict.note;
+      result = { success: false, output: `${laneOutput}\n\n${verdict.note}` };
+    }
+  }
+  return { result, laneOutput, ...(evidenceNote ? { evidenceNote } : {}) };
+}
+
+/**
  * Run one task through planning → executing → verifying → done|failed.
  * Verifying is skipped only when the run changed nothing (AGENT-14).
  * Does not invent Trust/attest. Injectable execute + verifyRunner for tests.
  */
 export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let workspace: WorkspaceDiffTracker | null = null;
-  const result = await gate(opts, (w) => {
-    workspace = w;
-  });
+  // AGENT-18.a: this run's SpecSync ledger (the changes it opened, and
+  // whether its lane is green right now), for the approve and finalize tools.
+  const sdd = beginSddRun(opts.cwd);
+  let result: TaskResult;
+  try {
+    result = await gate(
+      opts,
+      (w) => {
+        workspace = w;
+      },
+      sdd,
+    );
+  } finally {
+    endSddRun(sdd);
+  }
   // AGENT-15.a (REQ-agent-015): only a `done` run (verified, or nothing to
   // verify) lets the next run in this talk worktree start from its own
   // snapshot; blocked, failed and cancelled runs carry the baseline.
@@ -103,9 +188,28 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   return result;
 }
 
+/**
+ * AGENT-18 (REQ-agent-518): the coverage note when the SpecSync workflow
+ * (read now and at the start, merged) requires a change and a changed path
+ * has none; null when covered or not required. `paths` null (the diff could
+ * not be read) fails closed.
+ */
+async function sddGateNote(cwd: string, sdd: SddRun, paths: string[] | null): Promise<string | null> {
+  const scan = mergeScans([sdd.scan, await scanRepoWays(cwd, sdd.base)]);
+  if (!sddRequiresChange(scan.sdd)) return null;
+  if (paths === null) {
+    return "SpecSync gate: could not read what changed, so SpecSync change coverage can't be checked and the run is not verified (AGENT-18).";
+  }
+  const root = resolve(cwd);
+  const rel = paths.map((p) => relative(root, resolve(root, p)));
+  const uncovered = sddUncovered(cwd, rel, scan.sdd);
+  return uncovered.length > 0 ? sddUncoveredNote(uncovered) : null;
+}
+
 async function gate(
   opts: RunTaskOptions,
   started: (w: WorkspaceDiffTracker | null) => void,
+  sdd: SddRun,
 ): Promise<TaskResult> {
   const onEvent = opts.onEvent;
   const signal = opts.signal ?? new AbortController().signal;
@@ -164,6 +268,18 @@ async function gate(
     });
   }
 
+  // AGENT-18 (REQ-agent-518): the repo's own ways, read from the session
+  // base, HEAD and the working tree; named once, and passed to every attempt.
+  try {
+    sdd.base = await repoWaysBase(opts.cwd);
+    sdd.scan = await scanRepoWays(opts.cwd, sdd.base);
+  } catch {
+    /* no ways found: the run works as before */
+  }
+  const repoWays = sdd.scan.ways;
+  const waysLine = formatRepoWaysLine(repoWays);
+  if (waysLine) emit(onEvent, { type: "Text", text: waysLine });
+
   // AGENT-15 (REQ-agent-085): snapshot the git working tree before the first
   // attempt, always; the real diff decides what changed. No git work tree
   // (or an unreadable one) ⇒ null: tool-reported files only, as before.
@@ -204,6 +320,7 @@ async function gate(
       verifyFeedback,
       signal,
       specBriefing,
+      ...(repoWays.sdd || repoWays.hi || repoWays.trust ? { repoWays } : {}),
     });
     summary = exec.summary;
     // AGENT-4: union across attempts. Files from an attempt whose verify
@@ -253,6 +370,8 @@ async function gate(
     // (fail closed). A diff git cannot read after a good snapshot fails
     // closed: verify runs.
     let diffUnreadable = false;
+    // AGENT-18: the real diff since the baseline, for SpecSync coverage.
+    let sddPaths: string[] | null = workspace ? null : filesChanged;
     if (workspace) {
       let real: string[] | null;
       try {
@@ -274,6 +393,7 @@ async function gate(
           text: "Verify gate: could not read the git working-tree diff, so verifying anyway.",
         });
       } else {
+        sddPaths = real;
         const inDiff = new Set(real);
         const claimedSet = new Set(claimed);
         const listed = new Set(filesChanged);
@@ -347,55 +467,44 @@ async function gate(
     }
 
     setState(onEvent, "verifying");
-    emit(onEvent, {
-      type: "Text",
-      text: "Running fledge lanes run verify --non-interactive (includes spec-check)…",
-    });
 
-    if (isAborted(signal)) {
-      return cancelledResult(summary, filesChanged, attempts);
-    }
-
-    let result;
+    // AGENT-18 (REQ-agent-518): in a repo whose SpecSync workflow requires a
+    // change for meaningful files, a changed one no open change covers fails
+    // this verify before the lane runs (retry with the note, then failed).
+    let sddNote: string | null;
     try {
-      result = await verifyRunner(opts.cwd, signal);
-    } catch (err) {
-      if (isAborted(signal)) {
-        return cancelledResult(summary, filesChanged, attempts);
-      }
-      result = {
-        success: false,
-        output: err instanceof Error ? err.message : String(err),
-      };
+      sddNote = await sddGateNote(opts.cwd, sdd, sddPaths);
+    } catch {
+      // Fail closed when the workflow was on at the start.
+      sddNote = sddRequiresChange(sdd.scan.sdd)
+        ? "SpecSync gate: could not check SpecSync change coverage, so the run is not verified (AGENT-18)."
+        : null;
     }
-    // An aborted lane exits non-zero: that is a cancel, not a failed verify
-    // (no retry, no stuck ask) — AGENT-3.
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
     }
 
-    // AGENT-15 (REQ-agent-185): a passing lane counts as verified only when
-    // its output shows tests ran and no test was deleted or turned off since
-    // the baseline. Otherwise it is a failed verify like any other (retry
-    // with the note first, then failed), with no opt-out (AGENT-14).
-    const laneOutput = result.output;
+    let result: { success: boolean; output: string };
+    let laneOutput: string;
     let evidenceNote: string | undefined;
-    if (result.success) {
-      let drops: TestDrop[] | null;
-      try {
-        drops = testCheck ? await testCheck.testDrops() : null;
-      } catch {
-        drops = null;
-      }
+    if (sddNote) {
+      emit(onEvent, { type: "Text", text: sddNote });
+      evidenceNote = sddNote;
+      laneOutput = "";
+      result = { success: false, output: sddNote };
+    } else {
+      emit(onEvent, {
+        type: "Text",
+        text: "Running fledge lanes run verify --non-interactive (includes spec-check)…",
+      });
+
       if (isAborted(signal)) {
         return cancelledResult(summary, filesChanged, attempts);
       }
-      const verdict = judgeTestEvidence(laneOutput, drops);
-      emit(onEvent, { type: "Text", text: verdict.note });
-      if (!verdict.ok) {
-        evidenceNote = verdict.note;
-        result = { success: false, output: `${laneOutput}\n\n${verdict.note}` };
-      }
+
+      const lane = await runLane(opts.cwd, verifyRunner, signal, testCheck, onEvent);
+      if (lane === null) return cancelledResult(summary, filesChanged, attempts);
+      ({ result, laneOutput, evidenceNote } = lane);
     }
 
     emit(onEvent, {
@@ -405,6 +514,60 @@ async function gate(
     });
 
     if (result.success) {
+      // AGENT-18.a (REQ-agent-519): right after the green lane, settle the
+      // SpecSync changes this run opened — on Corvidinho approve and archive
+      // them through the approve and finalize tools (every tool gate
+      // applies), elsewhere say a human does. What that wrote is verified
+      // again before the run is done.
+      if (sdd.opened.length > 0) {
+        const settled = await settleOwnSddChanges({
+          cwd: opts.cwd,
+          run: sdd,
+          call: (name, args) => {
+            loadBuiltins();
+            return runPlugin({
+              name,
+              args,
+              cwd: opts.cwd,
+              nonInteractive: true,
+              allowlist: allowlistFromEnv(),
+              signal,
+            });
+          },
+          onText: (text) => emit(onEvent, { type: "Text", text }),
+        });
+        if (isAborted(signal)) {
+          return cancelledResult(summary, filesChanged, attempts);
+        }
+        if (settled.changed) {
+          emit(onEvent, {
+            type: "Text",
+            text: "Running fledge lanes run verify --non-interactive again over the SpecSync records it wrote…",
+          });
+          const again = await runLane(opts.cwd, verifyRunner, signal, testCheck, onEvent);
+          if (again === null) return cancelledResult(summary, filesChanged, attempts);
+          emit(onEvent, {
+            type: "VerifyResult",
+            success: again.result.success,
+            output: again.result.output,
+          });
+          if (!again.result.success) {
+            const failure = again.evidenceNote
+              ? `${again.evidenceNote}\n\n${again.laneOutput}`
+              : again.result.output;
+            setState(onEvent, "failed");
+            return {
+              summary: `${summary}\n\nVerification failed when re-run over what approving and archiving its own SpecSync change wrote:\n${failure}`,
+              filesChanged,
+              verified: false,
+              verifySkipped: false,
+              cancelled: false,
+              state: "failed",
+              attempts,
+            };
+          }
+        }
+      }
       setState(onEvent, "done");
       return {
         summary,
@@ -418,7 +581,11 @@ async function gate(
     }
 
     // The note leads, so a summary or feedback cut to its head keeps it.
-    const failure = evidenceNote ? `${evidenceNote}\n\n${laneOutput}` : result.output;
+    const failure = evidenceNote
+      ? laneOutput
+        ? `${evidenceNote}\n\n${laneOutput}`
+        : evidenceNote
+      : result.output;
     lastVerifyFailure = failure;
     retries += 1;
     if (retries > maxRetries) {
@@ -450,11 +617,12 @@ async function gate(
     // a long log keeps the failing step and the end, never its first chars.
     if (evidenceNote) {
       // AGENT-15: the lane passed; the note says what is missing, and the
-      // rest of the cap carries the lane's output.
+      // rest of the cap carries the lane's output. AGENT-18: an uncovered
+      // SpecSync path ran no lane, so the note is the whole feedback.
       const head = `${VERIFY_FEEDBACK_HEAD}${evidenceNote}`;
       const room = VERIFY_FEEDBACK_MAX_CHARS - head.length - 2;
       verifyFeedback =
-        room > 0 ? `${head}\n\n${verifyFeedbackExcerpt(laneOutput, room)}` : head;
+        room > 0 && laneOutput ? `${head}\n\n${verifyFeedbackExcerpt(laneOutput, room)}` : head;
     } else {
       verifyFeedback = `${VERIFY_FEEDBACK_HEAD}${verifyFeedbackExcerpt(
         result.output,

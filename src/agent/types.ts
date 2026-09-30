@@ -3,6 +3,7 @@
  * Lean: OpenAI-compatible tool loop; no Trust/attest.
  */
 
+import type { RepoWays } from "./repo-ways.ts";
 import type { InjectionNotice } from "./untrusted.ts";
 
 export type AgentState =
@@ -118,6 +119,12 @@ export type ExecuteContext = {
    * the model sees them. Project data, not instructions. Absent when none.
    */
   specBriefing?: string;
+  /**
+   * AGENT-18 (REQ-agent-518): the ways this repo works, read at planning from
+   * the session base, HEAD and the working tree; the tool loop adds one fixed
+   * prompt block for them. Absent when none was found.
+   */
+  repoWays?: RepoWays;
 };
 
 export type ExecuteFn = (ctx: ExecuteContext) => Promise<ExecuteResult>;

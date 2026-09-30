@@ -629,7 +629,13 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044), and `tests-deleted`: a test
 deleted or turned off since the branch left its base, or names that could
-not be read, keeps the PR from opening (AGENT-15, REQ-discord-185).
+not be read, keeps the PR from opening (AGENT-15, REQ-discord-185), and
+`sdd-uncovered`: in a repo whose SpecSync workflow (read from the
+merge-base, HEAD and the work tree, merged fail-closed) requires a change for
+meaningful files, a meaningful path changed since the merge-base that no
+open change and no change archived on the branch covers, or a diff that
+cannot be read, keeps the PR from opening, before the pre-push lane and
+before anything is committed or pushed (AGENT-18, REQ-discord-518).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
 `openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
@@ -1198,6 +1204,7 @@ failed lookup writes nothing.
 | Blank author id | Prompt unchanged; no inject |
 | `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
 | `/work` tree deleted or turned off a test since the branch left its base, or its test names cannot be read | `PR: not opened — N test(s) were deleted or turned off since the branch left …` naming each as `"name" (file)` (or "could not check …"); nothing committed or pushed; reason `tests-deleted` (REQ-discord-185) |
+| `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
 | Stuck WATCH ask with no owner Discord id or no live gateway DM | left pending, not sent; given up with a log line after a day (REQ-discord-086) |
 | Owner DM for a stuck WATCH ask fails (DMs closed) | ask handed back; retried after 10 minutes; one log line per try (REQ-discord-086) |
@@ -1379,4 +1386,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take: Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way |
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
+| 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
 | 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |

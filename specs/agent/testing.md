@@ -479,6 +479,36 @@ removes the shell from attempt 2; an allowlist without the six runs no gate.
   `agent.safe3a-owner-shell` tests fail (the no-gate guard passes) and the
   renamed `SAFE3A_TOOLS` test fails; all pass on the branch.
 
+## Repo ways, SpecSync coverage and the own-change lifecycle (REQ-agent-518, REQ-agent-519; AGENT-18, AGENT-18.a)
+
+`tests/agent.repo-ways.test.ts` (temp git repos, a fake `specsync` and a
+fake `hi` on PATH, stub verify runners; "Corvidinho itself" is a temp repo
+with origin github.com/CorvidLabs/Corvidinho named by the
+`setCorvidinhoCheckoutForTests` seam):
+
+- detection: all three ways, none in a plain repo; removed from the working
+  tree (HEAD still has them) and committed away (only the base passed in
+  still has them); a disabled `sdd.json` in the tree is not a way out; a
+  non-git project reads its working tree; the ways line.
+- policy and coverage: meaningful vs ignored (more specific wins, SpecSync
+  defaults), unparseable `sdd.json` fails closed, merged policies stay
+  strict, file and dir coverage, archived-in-this-diff covers, not required
+  covers everything.
+- the gate: an uncovered edit gets the `SpecSync gate:` note and no lane,
+  the covered retry is verified (lane once); deleting `sdd.json` and
+  committing mid-run still gates; a repo with no ways is unchanged; the tool
+  loop's system prompt carries the block only with `repoWays`.
+- the lifecycle: approve, check, review, finalize in order and the lane
+  twice on Corvidinho; elsewhere only a "stays open for a human" line; no
+  allowlist → SAFE-1 line, another change untouched; a failing second lane
+  fails the run; a failing approve leaves the change open.
+
+Fail-on-base proof: with the base's (7090656) `src/agent/{loop,execute,types,tools,loop-guards}.ts`,
+`src/plugins/{roles,types}.ts`, `src/work/pr.ts` and `plugins/specsync/{commands,api}.ts`
+swapped in (the new `src/agent/repo-ways.ts` kept so the file loads), 15 of
+its 26 tests fail (every gate, prompt, tool, approve / finalize, lifecycle
+and /work case; the pure `repo-ways.ts` units pass) and the two catalog tests
+of `tests/roles.team.test.ts` fail. Restored: all pass.
 ## Spend caps per provider plus the total, each warned and stopped (REQ-agent-114 added, REQ-agent-098 modified; SAFE-14 / SAFE-15)
 
 `tests/agent.spend-caps.test.ts` (24 tests; mocked fetch, in-memory or temp
