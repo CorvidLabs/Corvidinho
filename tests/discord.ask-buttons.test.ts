@@ -238,3 +238,46 @@ describe("ask-buttons custom ids + expiry (DISCORD-ASK-2/5)", () => {
     expect(eph).toContain(">");
   });
 });
+
+describe("SAFE-6.a: choice labels are scrubbed before they are cut or posted", () => {
+  // A fake GitHub token, built at runtime (never a real key).
+  const token = "gh" + "p_" + "a1B2c3D4e5".repeat(4).slice(0, 36);
+  const mark = "[redacted:github-token]";
+
+  test("buildChoiceComponents posts a label that held a secret as [redacted:<kind>], cut after the scrub; custom_ids unchanged", () => {
+    const whole = `Use ${token}`;
+    // Pads the token so the 80-char cut falls inside it (on main the button
+    // showed `ghp_` plus 19 raw characters, one short of the scrub pattern).
+    const straddled = `${"x".repeat(55)} ${token} for the deploy`;
+    const row = buildChoiceComponents("ask9", [
+      { id: "1", label: whole },
+      { id: "2", label: straddled },
+      { id: "3", label: "Neither" },
+    ])[0]!.components;
+    expect(row.map((b) => b.label)).toEqual([
+      `Use ${mark}`,
+      `${"x".repeat(55)} ${mark}…`,
+      "Neither",
+    ]);
+    expect(row.map((b) => b.custom_id)).toEqual(["1", "2", "3"].map((id) => pickCustomId("ask9", id)));
+    expect(JSON.stringify(row)).not.toContain(token.slice(0, 4));
+    for (const b of row) expect(b.label.length).toBeLessThanOrEqual(80);
+  });
+
+  test("the ephemeral pick shows the scrubbed labels of an ask resolved from raw options", () => {
+    const options = resolveAskOptions({
+      options: [`${"y".repeat(60)} ${token}`, `Keep ${token}`],
+      question: "Which key?",
+    })!;
+    const posted = JSON.stringify({
+      content: formatAskEphemeralContent({ reason: "clarify", question: "Which key?", options }),
+      components: buildChoiceComponents("ask9", options),
+    });
+    expect(posted).not.toContain(token.slice(0, 4));
+    // A marker the cut itself splits stays a marker piece, never the secret.
+    expect(options.map((o) => o.label)).toEqual([
+      `${`${"y".repeat(60)} ${mark}`.slice(0, 79)}…`,
+      `Keep ${mark}`,
+    ]);
+  });
+});

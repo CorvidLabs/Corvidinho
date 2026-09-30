@@ -89,6 +89,8 @@ files:
   - src/work/pr.ts
   - src/work/pr-body.ts
   - tests/work.pr.test.ts
+  - tests/roles.community-no-work.test.ts
+  - tests/fixtures/team-people.ts
   - src/discord/command-handlers/mute.ts
   - tests/discord.rate-mute-limits.test.ts
   - src/discord/command-handlers/schedule.ts
@@ -133,6 +135,7 @@ files:
   - tests/discord.ask-buttons.test.ts
   - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
+  - tests/discord.ask-scrub-first.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
   - src/discord/allowed-mentions.ts
@@ -284,7 +287,13 @@ an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
 (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
-`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
+`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`
+and `cleanAskLabel` (whitespace collapsed, SAFE-6 scrubbed, then cut at 80, a cut
+label scrubbed once more), which
+every option label and every Choose-pick button label (`buildChoiceComponents`)
+goes through; the ask question is scrubbed before its 1500 cut
+(`normalizeQuestion`), so a question or label that held a secret shows
+`[redacted:<kind>]` even when the cut falls inside it (SAFE-6.a / REQ-discord-066).
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
@@ -545,8 +554,16 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 `team` only when asked, else `community` — schedules pass none) and
 `CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
-it. `/work` ships its PR for the owner or a team member (re-resolved after the
-run); community keeps the branch. `/admin people role person:<id>
+it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+inbound check the handler refuses a community caller (declared community, no
+role, undeclared; muted or deny-listed callers too, though the dispatcher's
+mute and actor gates stop them first) with the ephemeral `not authorized` of
+the owner-only commands, before any deferred reply, session, worktree,
+`talk/*` branch, work task, run or PR step; the role comes from the owner
+config and the people list re-read for the command. With no owner configured
+only a declared team member can start it (IDENTITY-3).
+`/work` ships its PR for the owner or a team member (re-resolved after the
+run); a team member demoted during the run keeps the branch. `/admin people role person:<id>
 role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
 SAFE-5 audited like the other people mutations; `/admin people list` shows
 each role and `config show` counts them.
@@ -831,6 +848,16 @@ failed lookup writes nothing.
   `[redacted:anthropic-key]` in valid JSON, with the same askId, option ids,
   expiresAt and stubMessageId, so the Choose button still opens the choices
 
+### Scenario: A secret the cut would split is redacted, not cut (SAFE-6.a)
+
+- **Given** a run asks with a choice label whose fake key starts near the
+  80-character cut, or a question whose fake key starts near the 1500 cut
+- **When** the ask is made, posted, stored, or reloaded after a restart
+- **Then** the Choose-pick button, the Answer stub and form, a restated ask,
+  a schedule ask post, `discord_sessions.pending_ask` and
+  `schedule_runs.ask_question` show `[redacted:github-token]`, never a raw
+  `ghp_` piece shorter than the scrub pattern; option ids are unchanged
+
 ### Scenario: A secret-looking option id never reaches a button or the row (SAFE-6)
 
 - **Given** a run asks with an option whose id is an AWS key id
@@ -1082,8 +1109,10 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
 | 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |
+| 2026-09-30 | community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply: Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |
+| 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or: A non-owner's schedule text is scanned at /schedule create and fenced at every tick: a non-owner's create whose name or prompt looks like an injection stores nothing, gets a private refusal, pings only the owner and appends an injection-suspected audit row; each tick re-resolves the creator's role, fences a non-owner's stored name and prompt as untrusted data, and stored text that trips the detector runs nothing, pauses the schedule and tells the owner once; the owner's own schedules are unchanged (SAFE-12/13) |
 | 2026-09-30 | scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run: Scheduled runs read and act only on repos the owner allowlists, even public ones (DISCORD-SCHEDULE-3.a): in a schedule run and its delegate/council workers (CORVIDINHO_DISCORD_SESSION_ID schedule_*, SCHEDULE_SESSION_PREFIX / isScheduleRunEnv) the GitHub tools, review readers and docs/milestone readers refuse a repo off the GITHUB-6 allowlist with no visibility lookup (deny still wins, role rules still apply on top); web-fetch refuses GitHub-host URLs that do not name an allowlisted OWNER/REPO at every hop, redirects included; a schedule project that lies in a git checkout nested inside the bridge root needs an allowlisted origin at /schedule create and every tick |

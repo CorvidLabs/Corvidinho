@@ -32,6 +32,10 @@ import { WorkStore } from "../src/discord/work-store.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { resolveProjectDir } from "../src/worktree/index.ts";
+import { declareTeam } from "./fixtures/team-people.ts";
+
+/** A declared team member: may start /work (IDENTITY-10 / IDENTITY-11.a). */
+const TEAM_MEMBER = "700000000000000007";
 
 function git(dir: string, args: string[]): string {
   const p = Bun.spawnSync(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
@@ -201,13 +205,22 @@ describe("slash + schedule refuse an out-of-scope project (REQ-discord-202)", ()
   test("/work and /session start by a non-admin never touch another repo", async () => {
     for (const project of [sb.privateRepo, "../../home/leif/private-repo"]) {
       const agent = recordingAgent();
-      const ctx = makeCtx(agent);
+      const ctx = makeCtx(agent, declareTeam(allowCfg(), TEAM_MEMBER));
       const work = interaction({
         commandName: "work",
         options: { description: "summarize", project },
       });
       await handleSlashInteraction(ctx, work);
       expect(work.out()).toMatch(/not authorized/i);
+
+      // A team member may start /work; the project scope still refuses it.
+      const teamWork = interaction({
+        commandName: "work",
+        userId: TEAM_MEMBER,
+        options: { description: "summarize", project },
+      });
+      await handleSlashInteraction(ctx, teamWork);
+      expect(teamWork.out()).toContain("outside the bridge project root");
 
       const start = interaction({
         commandName: "session",
@@ -226,9 +239,10 @@ describe("slash + schedule refuse an out-of-scope project (REQ-discord-202)", ()
 
   test("/work on an allowlisted sibling still runs in its own worktree", async () => {
     const agent = recordingAgent();
-    const ctx = makeCtx(agent);
+    const ctx = makeCtx(agent, declareTeam(allowCfg(), TEAM_MEMBER));
     const work = interaction({
       commandName: "work",
+      userId: TEAM_MEMBER,
       options: { description: "summarize", project: "fledge" },
     });
     await handleSlashInteraction(ctx, work);

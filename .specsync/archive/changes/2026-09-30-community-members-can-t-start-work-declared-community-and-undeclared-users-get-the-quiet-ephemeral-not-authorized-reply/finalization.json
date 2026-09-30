@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply",
+  "implementation_commit": "88eca58a74f91228b3b9ca71817ec84b94c0a9f4",
+  "implementation_tree": "2c41bdcc253f442f6d96c7b2d05be555b10fe568",
+  "contract_digest": "2775ca182e6a19603fa0455693c6734d1cbef3c8aaa130450e74a029ae96dc50",
+  "workspace_digest": "1573f6fd52f684186f4a2d29ebeef73d2796f0784fd20ffdcabb4537aebd6241",
+  "closing_digest": "f619a34328b8908fd3151c3991432af9cfc3a58d9afd11fd09467f26c6358be5",
+  "review_digest": "4e8457b33fde669ae82f454325bef9e407b1fc60fe6365d5c63cac75f048d1a8",
+  "finalization_digest": "f7f5c6b6c32320ec41c3f0102ebb8634159129e5bd3b3f0fb101b1641ceddc23",
+  "timestamp": 1790734166
+}

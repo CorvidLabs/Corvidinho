@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "98cf7091e36198eb37c638564524b49299797378",
+  "contract_digest": "35cf2f4d85d2e4cbf75bcd777c853dc509ec8b74adfc8d8ec091681b685f6b98",
+  "execution_digest": "ba3ddf86dea437ddfe3115c80861cbf02e8e1e56ce4e5f7ab9763e96a9df857b",
+  "workspace_digest": "db60c843675e94fe0d43edc8103e49e768ce73f19e19efd28c1477961af06322",
+  "timestamp": 1790733313
+}

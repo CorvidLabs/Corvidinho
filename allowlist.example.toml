@@ -77,7 +77,7 @@ deny_users = []
 # Roles (IDENTITY-8..12): role = "team" (work tasks: /work edits + draft PR;
 # reviews: github-issue-comment / github-pr-review as COMMENT on
 # [github]-allowlisted repos; their own memory) or role = "community" (Q&A,
-# read tools only). No role = community; the owner is always owner ([owner]
+# read tools only; can't start /work). No role = community; the owner is always owner ([owner]
 # above); anyone not declared here is community. Set it here or with
 # /admin people role (owner-only, audited, ADMIN-3.b); re-read on every tool
 # call.

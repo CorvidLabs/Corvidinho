@@ -124,7 +124,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
 - Roles (IDENTITY-8..12): give each declared person `role = "team"` or `role = "community"`
   (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
-  is always owner; anyone undeclared is community. See E.6.
+  is always owner; anyone undeclared is community. Only the owner and team can start `/work`
+  (IDENTITY-11.a), so with no owner and nobody declared as team nobody can. See E.6.
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -194,8 +195,8 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3); never offered to the model from the allowlist until the SAFE-3 decision |
-| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); never offered to the model from the allowlist until the SAFE-3 decision |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
@@ -218,7 +219,8 @@ What an entry unlocks **today**:
   `github-pr-create`. Without them the reply says
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass, the requester
-  to be the owner, and the repo to pass GITHUB-6.
+  to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
+  and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
@@ -314,7 +316,7 @@ Who is who in an allowlisted channel:
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
-  chat and on every slash command).
+  chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
 - WATCH runs, scheduled runs and `delegate` / `council` workers are community whoever triggered
   them.
 - The role is re-read from the people list on every tool call (IDENTITY-12): a
@@ -361,8 +363,9 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
   of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
   source (`web-fetch` is never offered to community).
-- `/session start` and `/work` run for community too, as read-only sessions. `/work` never
-  opens a PR for community.
+- `/session start` runs for community too, as a read-only session. `/work` does not
+  (IDENTITY-11.a): a community member, or anyone undeclared, gets the ephemeral
+  `not authorized` and nothing starts — no worktree, branch, work task, run or PR.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
   there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and

@@ -656,7 +656,8 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     g(dir, "config", "user.email", "fixture@example.invalid");
     g(dir, "config", "commit.gpgsign", "false");
     writeFileSync(join(dir, "app.ts"), "export const x = 1;\n");
-    g(dir, "add", "app.ts");
+    writeFileSync(join(dir, "broken.ts"), "broken");
+    g(dir, "add", "app.ts", "broken.ts");
     g(dir, "commit", "-q", "-m", "init");
   });
   afterEach(() => {
@@ -665,7 +666,9 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("shell-exec `printf broken > app.ts` reports no filesChanged, yet verify runs and the run is never done", async () => {
+  // `cp`, not `>` or `tee`: SAFE-21 refuses those edits (shell.footguns.test.ts);
+  // other shell writes still report no filesChanged.
+  test("shell-exec `cp broken.ts app.ts` reports no filesChanged, yet verify runs and the run is never done", async () => {
     let llmCalls = 0;
     const fetchImpl = async () => {
       llmCalls += 1;
@@ -679,7 +682,9 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
               type: "function",
               function: {
                 name: "shell-exec",
-                arguments: JSON.stringify({ argv: ["--command", "printf broken > app.ts"] }),
+                arguments: JSON.stringify({
+                  argv: ["--command", "cp broken.ts app.ts"],
+                }),
               },
             },
           ],
