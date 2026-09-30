@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "capture-agent-3-b-in-hi-after-a-stop-messages-that-were-waiting-still-run-in-order-leif-2026-09-30",
+  "implementation_commit": "b4dae7633c63babbcf6f8cbef7fb079a51f6a06c",
+  "implementation_tree": "0c9f81b7d30491d438351fb3b0bc969699b987e7",
+  "contract_digest": "be30514699d5215c02990f00073a50b56af89c898c788e5ffdacde337179e71c",
+  "workspace_digest": "4c4a3040646f1aa1562aa6440c6c9d97e553a1ff8a867559e4dc0b4421497d5a",
+  "closing_digest": "b477e5a5e64c8232a58044f997aca2a4e04868fcefe7510f9e07b140839f167b",
+  "review_digest": "d9539882f1dd290e0806ede82ef68c84d3767aa1b912680ac9f79f669b418f76",
+  "finalization_digest": "0834b356b3f2bbfd018c91700c43ebb4420d059e26a1296485bcd1cee2fb71d5",
+  "timestamp": 1790799097
+}

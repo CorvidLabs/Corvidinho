@@ -1280,6 +1280,58 @@ pick continuing it (same session and cwd), `/session start` and `/work` pass
 - Fail on base: with the base's (507d97b) sources swapped in, all three fail
   (no stamp; `surface` undefined).
 
+## One run at a time per session, and stop (REQ-discord-301, REQ-discord-302; AGENT-3.a, AGENT-3.b)
+
+`tests/discord.run-queue.test.ts` — dry-run bridge with stub agents that wait
+until the test finishes them: a second message in the same thread session
+starts no second run and no second progress message while the first runs,
+then runs in the same session with the first answer in its replayed thread
+and its own progress message; three messages run in the order sent; runs of
+another user's thread session and another channel are in flight at once; a
+waiting message's in-flight row exists (no progress message) while it waits
+and is gone when it finishes; a message whose session ended while it waited
+runs and posts nothing; a waiting message whose author is muted or
+deny-listed, or whose thread is deny-listed, while it waits runs and posts
+nothing and leaves no row; a Choose pick made during a chat run waits for it and
+resumes with the label and that run's answer in its thread, and one whose
+presser is muted while it waits does not resume; `/session start`
+and `/work` hold their session's turn (the requester's @mention meanwhile
+waits); the bridge's stop aborts the run going, starts nothing waiting, posts
+nothing and keeps both rows. `SessionRunControl` units: FIFO per session,
+parallel across sessions, idempotent `done`, a released turn never starts,
+`noteForgotten`, `close`.
+
+`tests/discord.stop-run.test.ts` — 'stop' from the requester in their thread
+aborts the run once, gets one `⏹ Stopping the run.` reply and the progress
+message becomes `⏹ Stopped` with the footer `<model> | <time>` (the owner's
+own run: `<model> | 2k tokens | $<cost> | <time>`), and `⏹ Stopped` (not
+`stop`) joins the thread; 'cancel' as a reply to the running progress message
+stops it; the owner's reply stops someone else's run and starts no session of
+theirs, a third user's does nothing; a second 'stop' aborts nothing more;
+two waiting messages run after a stop, in order, not aborted; with nothing
+running 'cancel' clears the ask with `ASK_CANCELLED_ACK` and 'stop' runs the
+agent; a pick's run stops by a reply to its Choose stub; `/session start` and
+`/work` stop by a reply to their progress message (the `/work` answer says
+`PR: not opened — the run was stopped.`, task `failed` / `stopped`), and so
+does a stop that lands after the `/work` agent exited, while its private
+reply's DM is still going out; 'cancel' during a chat run with a button ask
+open stops the run and leaves the ask pending; the real
+spawn client over a fake `sh` bin: the agent and its background child are
+killed; a fake `bun` bin that raised a must-ask card as its own waiter: after
+the stop the request is `expired`; `routeMessage` gives `stop_run` for the
+requester and the owner even when the progress message is a tracked bot
+message, not for other text, a third user, another channel or a finished
+run, and refuses a deny-listed requester quietly; `isStopRunText` accepts
+only the two words.
+- Fail on base: with the base's (af4597e) sources swapped in for the six
+  modified files (the new `run-control.ts` kept so imports resolve), 23 of the
+  29 tests fail; the 6 that pass are the `SessionRunControl` / `isStopRunText`
+  units, "different sessions still run in parallel" and "with nothing running
+  'cancel' … 'stop' goes to the agent as before", which hold on the base.
+- Review fixes: with the branch's pre-review (13597b4) `bridge.ts` swapped in,
+  the two gate-after-waiting tests fail (the waiting message and the waiting
+  pick still run); with its `work.ts`, the late-stop `/work` test fails (the PR
+  step runs and the task is `completed`).
 ## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
 
 `tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,

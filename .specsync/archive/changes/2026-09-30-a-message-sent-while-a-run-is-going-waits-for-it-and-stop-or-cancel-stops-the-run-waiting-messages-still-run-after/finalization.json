@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-message-sent-while-a-run-is-going-waits-for-it-and-stop-or-cancel-stops-the-run-waiting-messages-still-run-after",
+  "implementation_commit": "b4dae7633c63babbcf6f8cbef7fb079a51f6a06c",
+  "implementation_tree": "0c9f81b7d30491d438351fb3b0bc969699b987e7",
+  "contract_digest": "cd27b41267973b8c7ee8156d7b7270c3b22b3ff050bc57fb34f8e8e1a3d6b993",
+  "workspace_digest": "4c4a3040646f1aa1562aa6440c6c9d97e553a1ff8a867559e4dc0b4421497d5a",
+  "closing_digest": "99add5a5e2d5343f4d9fdf9ff0bd5ddf03acf81ecb0f59362a86e614ca0812c8",
+  "review_digest": "009bb02c76f6a0ab02bf4d1cac346f2adca06114e8a3da3700d0e1c4cace635c",
+  "finalization_digest": "969e6130a1ef38472d5f2f25b23b9e82aa75d1139cc75d0263e8514ade85478b",
+  "timestamp": 1790798675
+}
