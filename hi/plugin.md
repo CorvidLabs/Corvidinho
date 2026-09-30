@@ -21,3 +21,4 @@ New capabilities should land as plugins with honest danger markings, not as spec
 - **PLUGIN-6**  I can list what is loaded and see enough schema detail to understand why context got expensive.
 - **PLUGIN-7**  It can search the web through Brave when I set a key; the results are data, never instructions.
 - **PLUGIN-9**  Web search and GIF search are for me and the team only, and stay off until I allow them, like web-fetch.
+- **PLUGIN-8**  It can find a GIF through GIPHY, with the safety filter at medium, and post it as a link when asked.
