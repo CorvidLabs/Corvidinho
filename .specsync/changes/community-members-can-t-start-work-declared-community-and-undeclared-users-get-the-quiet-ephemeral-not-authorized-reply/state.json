@@ -7,10 +7,11 @@
   "title": "Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65)",
   "description": "Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "39767a8f72e42f1d30b9fac717708f6eb3f41b26",
   "created_at": 1790726219,
-  "updated_at": 1790726368,
+  "updated_at": 1790726406,
   "affected_specs": [
     "discord"
   ],
