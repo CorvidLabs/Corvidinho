@@ -1,7 +1,7 @@
 /**
  * Spawn corvidinho for WATCH chat with prove-before-done (AGENT-4 / FLEDGE-2 / #85).
- * Does not pass --no-verify; an empty real diff (no tool-reported files and no
- * git working-tree change, REQ-agent-085) still skips verify in the loop.
+ * Verification can't be skipped (AGENT-14); a run whose real git diff is
+ * empty ends with "no changes, nothing to verify" (REQ-agent-003 / 085).
  * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
  * Sets the commenter's GitHub login / numeric id and the thread's repo for
  * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor, never ADMIN

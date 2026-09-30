@@ -1,0 +1,55 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790727524,
+      "digest": "c8d8b572c4433b9dd65b1d17f2a92bfae85a9670d07fcdee4f74f48ffba38eb5",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-bridge-s-update-post-bridge-live-note-on-every-restart-announcements-channel-only-is-a-short-note-in-persona-md-s",
+        "title": "The bridge's update post (bridge-live note on every restart, announcements channel only) is a short note in persona.md's voice with the version and a link to that version's GitHub Release notes, never a CHANGELOG bullet dump: deterministic template, no model call, under 400 chars, one message, mass mentions defanged, scrubbed (PERSONA-1.a, #69)",
+        "description": "The bridge's update post (bridge-live note on every restart, announcements channel only) is a short note in persona.md's voice with the version and a link to that version's GitHub Release notes, never a CHANGELOG bullet dump: deterministic template, no model call, under 400 chars, one message, mass mentions defanged, scrubbed (PERSONA-1.a, #69)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "README.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/persona.md",
+          "specs/discord/discord.spec.md",
+          "src/discord/announce.ts",
+          "src/discord/bridge.ts",
+          "tests/discord.announce.test.ts",
+          "tests/discord.update-post.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PERSONA-1.a captured in hi/persona.md with hi (hi check green); on ClientReady the bridge posts exactly one message, only to the configured announcements channel, whose text is a short note in persona.md's voice (warm, direct, an emoji) naming the running version and linking that version's GitHub Release notes (https://github.com/CorvidLabs/Corvidinho/releases/tag/v<version>); no CHANGELOG bullets or bullet lines even when the CHANGELOG has a section for the version; under 400 characters; built from a fixed template with no model call; @everyone / @here defanged and the text SAFE-6 scrubbed; a version that is not a plain release version is never echoed and the note links the Releases page instead; tests/discord.update-post.test.ts drives startBridge onReady with a fake reply and asserts the posted text, and fails on the base sources"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "2cb4fe281230db34fa0e40c394a0cbca13f85102fbd49bc1d8e833a13c16f66a"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790737518,
+      "digest": "cbefe8fc358dd2dcca4f93c64b6f60d08e7293c9b557075aca07c3277f307566",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

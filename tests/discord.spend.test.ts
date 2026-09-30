@@ -48,6 +48,10 @@ import { formatStatusReport } from "../src/discord/command-handlers/status.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
+
+/** The /work and /session start requester: a declared team member. */
+const SLASH_REQUESTER = "222233334444555566";
 
 /** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
 function answerFooterText(before: string, after?: string) {
@@ -156,7 +160,9 @@ async function bridgeWith(
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: "chan-1",
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: join(mkdtempSync(join(tmpdir(), "corvidinho-spend-")), "none.toml"),
+      // IDENTITY-11.a: the slash requester is declared team (community can't
+      // start /work); nothing else is in the file.
+      CORVIDINHO_ALLOWLIST_FILE: teamPeopleFile(SLASH_REQUESTER),
       ...env,
     },
     db,
@@ -350,7 +356,7 @@ function slashInteraction(commandName: "work" | "session", options: Record<strin
     commandName,
     ...(commandName === "session" ? { subcommand: "start" } : {}),
     channelId: "chan-1",
-    userId: "222233334444555566",
+    userId: SLASH_REQUESTER,
     options,
     reply: async (p) => void edits.push(p),
     deferReply: async () => {},

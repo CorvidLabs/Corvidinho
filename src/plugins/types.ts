@@ -40,6 +40,15 @@ export type PluginHandlerResult = {
    * base64 never reaches tool text, events, ndjson or CLI output.
    */
   image?: PluginImage;
+  /**
+   * Text shown only privately to the person who asked (MEMORY-7.a,
+   * REQ-plugins-710): private notes, a profile, the owner's view of someone's
+   * memory. Kept off `data` and `message` (which then hold only a "sent
+   * privately" placeholder) so it never reaches the model, tool text or
+   * events; the tool loop hands it to the run result and the Discord bridge
+   * sends it by direct message (REQ-agent-710 / REQ-discord-710).
+   */
+  privateText?: string;
 };
 
 export type PluginCommand = {

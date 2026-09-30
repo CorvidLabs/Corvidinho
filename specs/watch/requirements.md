@@ -48,10 +48,11 @@ Acceptance Criteria
 
 WATCH `createSpawnAgentClient` SHALL spawn via `buildCorvidinhoArgv` so a
 `.ts` corvidinho bin is always invoked with `bun` (never posix_spawn alone).
-Spawns SHALL NOT pass `--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2)
-is the default for ingress runs; an empty real diff with no tool-reported
-files still skips verify inside the agent loop (REQ-agent-085). Fixture tests
-SHALL cover argv shape.
+Spawns SHALL NOT pass `--no-verify` (the flag is removed and refused,
+REQ-cli-085) — prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always
+applies to ingress runs; a run whose real diff is empty and that claimed no
+change ends with "no changes, nothing to verify" inside the agent loop
+(REQ-agent-003 / REQ-agent-085). Fixture tests SHALL cover argv shape.
 
 Acceptance Criteria
 - `.ts` → bun-prefixed argv; binary path unchanged when not `.ts`.
@@ -133,7 +134,7 @@ Acceptance Criteria
 ### REQ-watch-073
 
 The WATCH spawn agent client SHALL run
-`task run --no-verify --task <prompt> --output ndjson`, read stdout line by
+`task run --task <prompt> --output ndjson`, read stdout line by
 line, forward live state / current tool / token totals to an optional
 `onStatus` callback (AGENT-8), and take the summary from the stream's `result`
 frame, falling back to `summarizeTaskRunOutput` when no result frame parses.
@@ -142,7 +143,7 @@ No new GitHub-visible surface is added.
 Acceptance Criteria
 - Fake-bin fixture printing ndjson drives the WATCH `onStatus` and returns the result-frame summary.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
-- Spawn argv ends with `--output ndjson` (no `--json`).
+- Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 
 ### REQ-watch-009
 
@@ -178,18 +179,21 @@ Acceptance Criteria
 ### REQ-watch-085
 
 WATCH `createSpawnAgentClient` SHALL always hold ingress runs to the
-prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
-argv MUST NOT include `--no-verify`. Same skip as Discord: an empty real diff
-with no tool-reported files skips verify; a run that changed the git working
-tree is verified before done (REQ-agent-085).
-Draft AGENT-14/15 out of scope. Package **0.0.13**. Fixture tests without live
-tokens.
+prove-before-done gate (AGENT-4 / FLEDGE-2 / AGENT-14): spawn argv MUST NOT
+include `--no-verify` (the flag is removed and refused, REQ-cli-085), and no
+project `fledge.toml` key turns the gate off (REQ-agent-003). WATCH runs
+reach the same gate as chat, schedules and `/work`. Same as Discord: the real
+git diff decides what changed (AGENT-15), so a run that changed the git
+working tree, or claimed a change git does not show, is verified before done
+(REQ-agent-085), and a run whose real diff is empty and that claimed nothing
+ends with "no changes, nothing to verify" (REQ-agent-003). Package
+**0.0.13**. Fixture tests without live tokens.
 
 Acceptance Criteria
 - WATCH spawn argv never includes `--no-verify`.
 - Package `0.0.13`; docs/WATCH.md updated.
 - Fixture tests + SpecSync + fledge verify green.
-- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool-reported files still skips verify (REQ-agent-085).
+- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool claim ends with the "no changes, nothing to verify" note (REQ-agent-003 / REQ-agent-085).
 
 ### REQ-watch-231
 
@@ -477,6 +481,60 @@ Acceptance Criteria
 - An opening event prompt of over 7000 chars replays whole (word for word, its fence header marked `(quoted)`) in the follow-up's block.
 - The stored turns hold `[redacted:github-token]`, never the token; participants are the lowercased senders; forgetting a login that only commented deletes the thread.
 
+### REQ-watch-1016
+
+Someone known only on GitHub can ask there to be forgotten (MEMORY-ACL-6.a,
+#101). After the repo, user and actor allowlist gates, the poller SHALL take
+every event `isWatchForgetMeRequest` accepts out of the run path before the
+per-issue dedupe, so it starts no session, ack or model run and never hides
+another request on its issue: an `issue_comment`, `issues` or
+`pull_request_review_comment` event, not from the watch user, that
+@mentions the watch user outside quoted (`>`) lines and, with the mention,
+punctuation and case dropped, says only "forget me" / "forget about me" or
+"forget / delete / erase / remove everything / all / what (you know /
+remember / have / keep / store (stored / kept)) about / of / on me", with at
+most a greeting, please, can / could / would / will you, I want / would like
+you to, and thanks. Anything else SHALL be a normal run.
+
+For each such event the poller SHALL mark its id processed first (a failed
+write leaves it for the next cycle), then (`handleWatchForgetMe`, never
+throwing) match the sender in the owner's people list re-read now by their
+GitHub numeric id only (`forgetSubjectForGithubId`, IDENTITY-7; a login
+alone never counts; the owner's built-in entry reads the owner's Discord-id
+scope). A declared person SHALL get one `forget_requests` ask
+(`recordWatchForgetMe`: requester `github:<id>:<login>`, origin
+`github:<owner/repo>#<n>`; SAFE-5 `memory-forget-request` `started` first,
+actor `github:<login>`, surface `watch:forget-me` — no row ⇒ nothing
+recorded — then `ok`, or `error` on a store failure; one open ask per
+person) and nothing SHALL be deleted; the Discord bridge DMs the owner the
+card (REQ-discord-1016). Every such event SHALL get one reply on its thread
+(`watchForgetMeReplyBody`, attribution footer): the request went to the
+owner (or is already waiting) and nothing is forgotten unless they approve
+within 24 h; for a sender not on the list, that nothing is kept for them and
+no request was made (no card); for a login on the list without a matching
+account id, that it cannot be confirmed (no card); no owner or a recording
+failure, that nothing was recorded. A failed post SHALL feed the rate-limit
+backoff.
+
+Each poll cycle with a DB SHALL, after the rate-limit wait and before the
+fetch, post the outcome of each decided GitHub ask not yet told on its thread
+(`deliverWatchForgetOutcomes`, `watchForgetOutcomeBody`: approved /
+not approved / no answer in time, @mentioning the asker, never a count or any
+content) while its repo is still allowlisted, marking it told; an ask whose
+thread cannot be reached SHALL be given up a day after its decision; every
+failed post SHALL feed the backoff, and the pass SHALL stop at the first post
+that hits a rate limit or gets no HTTP answer, while any other failed post (a
+locked or deleted thread) SHALL not hold up the next asks' outcomes; the pass
+SHALL never throw. A run's retained conversation SHALL also keep the commenter's numeric
+id as a participant (`github-id:<n>`), so a forget reaches a person declared
+by GitHub id only.
+
+Acceptance Criteria
+- Through `startWatchPoller` a declared person's `@watch-user forget me` runs no model, records one pending ask (`github:4242:tofu-dev`, `github:<repo>#7`) with `memory-forget-request` `started` / `ok` as `github:tofu-dev`, posts one reply with the request id, and deletes nothing; after the owner approves on the bridge's card, the next poll posts "was approved" on that thread once (no count) and marks it told.
+- An undeclared sender gets "not on the owner's people list" and no ask; a login-only declared person with another numeric id gets "can't confirm"; "don't forget me …", a quoted "forget me" and an assignment event are normal runs; a forget ask and another comment on the same issue both count; a Deny is posted as "did not approve".
+- A WATCH run's kept conversation lists `github:<login>` and `github-id:<n>`.
+- With two decided asks, a rate limit (429) on the first outcome post stops the pass (neither is posted); a locked thread (a bare 403) on the first does not: the second is posted and marked told, and the first once its thread takes the post.
+- `tests/watch.forget-me.test.ts` covers each and fails on main.
 ### REQ-watch-367
 
 WATCH recognises GitHub users by numeric user id only (IDENTITY-7.a, #36,

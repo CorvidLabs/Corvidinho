@@ -237,9 +237,12 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
     OPENAI_API_KEY: "",
   };
 
+  // A scratch non-git project: never the repo's own snapshot or verify lane.
+  const scratch = mkdtempSync(join(tmpdir(), "corvidinho-ndjson-cli-"));
+
   async function run(args: string[]) {
-    const proc = Bun.spawn(["bun", "src/cli.ts", ...args], {
-      cwd: root,
+    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), ...args], {
+      cwd: scratch,
       stdout: "pipe",
       stderr: "pipe",
       env,
@@ -255,7 +258,7 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
   test(
     "prints only protocol-2 frames ending in a result equal to --json's result",
     async () => {
-      const nd = await run(["task", "run", "--no-verify", "--task", "hello", "--output", "ndjson"]);
+      const nd = await run(["task", "run", "--task", "hello", "--output", "ndjson"]);
       expect(nd.code).toBe(0);
       const lines = nd.stdout.trim().split("\n");
       const frames = lines.map(
@@ -266,7 +269,7 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
       expect(frames.at(-1)?.type).toBe("result");
       expect(frames.map((f) => f.type)).toContain("Text");
 
-      const js = await run(["task", "run", "--no-verify", "--task", "hello", "--json"]);
+      const js = await run(["task", "run", "--task", "hello", "--json"]);
       expect(js.code).toBe(0);
       const doc = JSON.parse(js.stdout) as { result: unknown; events: unknown[] };
       expect(frames.at(-1)?.result).toEqual(doc.result);
@@ -279,17 +282,17 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
   test(
     "--output=json matches --json; unknown --output exits 1 with usage",
     async () => {
-      const a = await run(["task", "run", "--no-verify", "--output=json"]);
+      const a = await run(["task", "run", "--output=json"]);
       expect(a.code).toBe(0);
       const doc = JSON.parse(a.stdout) as { result: { state: string }; events: unknown[] };
       expect(doc.result.state).toBe("done");
       expect(Array.isArray(doc.events)).toBe(true);
 
-      const bad = await run(["task", "run", "--no-verify", "--output", "yaml"]);
+      const bad = await run(["task", "run", "--output", "yaml"]);
       expect(bad.code).toBe(1);
       expect(bad.stderr).toContain("--output text|json|ndjson");
 
-      const missing = await run(["task", "run", "--no-verify", "--output"]);
+      const missing = await run(["task", "run", "--output"]);
       expect(missing.code).toBe(1);
     },
     SPAWN_TIMEOUT_MS,

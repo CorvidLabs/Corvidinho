@@ -1,0 +1,366 @@
+{
+  "timestamp": 1790740071,
+  "commit": "690bd95c61429db3a58916ee12f9232d993bd82d",
+  "contract_digest": "1b2dd6cec3d9dc8f2f25ffb447213b108b994d51ed06c13ec90a82d167d98a80",
+  "execution_digest": "651b516c17451f2a9b2ff088cfb460b99e9e915b1a2738de521dd9086e6b10dc",
+  "workspace_digest": "8be84081ba464bfa97cb8f7b7a540b569650e1563fe24b00aeaa7777598fbef5",
+  "acceptance_input_digest": "aa5c9209eb6c117d38535630443a2aa5679c5c01f1b0cd220d620fce5b6c8a3d",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "docs/DISCORD-GO-LIVE.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "9a67c74efba9cca023fc2d05f429579b27d8fa5e73953359256f6a32fa89136d",
+        "entry_digest": "a8850e770395288141f50f05485ca713e162e97c0dba309f25beeee9cc876284",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/WATCH.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5a6b4936ecf9763f25e92bdeed592fcb4abb915e7e6ce41396435edb8946217c",
+        "entry_digest": "fce96e5314a48f20ba104d2b045c967f3e6eb744fd99777e17425c7f198a101e",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "docs/discord.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2edfc06d0503db50d09b3b2b1347168b35bded76959d6f1766e546c2df6fa575",
+        "entry_digest": "2f922555b4cea77c030b7da3f682eb3716c5891954bf56dfa4c26cefee48fae1",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/memory.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5ede5cec813344bb18e207ef4bad1ecb04a57568fe7905256918c4a89f975116",
+        "entry_digest": "2cbda5013b9f603c1d829b5c9888b07da8be864d163131058e2177b9b17d4d1e",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "plugins/memory/commands.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d40e7f0d30c3d3151eca6afff89bfc08df97ccac91ad07571a9ce44563098216",
+        "entry_digest": "54e86ad146ce9b819315e97b2d045507ea228735d32dd5364f46ee6b5d6bed24",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/discord/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5959c58aadca03abe655cb690afcfb4232b04aa13ca3ca6fd3554d0ac2a8fd86",
+        "entry_digest": "d1eabe30183c4e345a24f6caf77b870adb27336be5c4bc83ee8cb7b2eeda3cef",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/discord.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a97f2388f898ac1bbaea863648746c3a876ceecc03eba8ecda06950128d6190a",
+        "entry_digest": "32d55b0a0455e30fb6121d1b989e596f7f1ed51523ab57d13a9ca60be7e4d50d",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "cb96d0ca396cdeda131eaa09d894ebccce0b1fe0a2577310a2c6ea1ff018491b",
+        "entry_digest": "155a3eb6b182f4cfaa4272215ffa4335f144ee4182f739bde250a3be15dfeb48",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0aa872cdc0f53390df90aede6279472e6356621550d2182db507584ee6d688bf",
+        "entry_digest": "fa9dbcfff2896ff46f933c60a877f0d68ff98c548e637557238ff93217dc7138",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/discord/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "45f771f977384554d2c975960c1bad84ed8af9adad97b8288ff72a9035ec4ebb",
+        "entry_digest": "52804c798b02d065ae40112033e36ce5c4d5d7420103ad834d05ada1a1df605a",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "specs/plugins/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+        "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/plugins.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2125131dc948727ebe0d1feec5f66a38fee7f3fe8e5482b7d8496b78052ded34",
+        "entry_digest": "e10795eff8b3d5e138ef575615d300db04fd70045a7e84e78188d8bc0122a42d",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4f7981ed618888e5ed6c48a37496c3b4ee5bc2d4e7db8e14550a82401fd0bf1a",
+        "entry_digest": "ae557a2c8c04a02f25a7570de521a007e8c7c4696434e537625de254eb6d0b29",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4fbcf0b7f5af3942f58ab90d5f38ebb0cf4fcd9d77112db6011bc147a6c45bcd",
+        "entry_digest": "c304de7eefe1a9a16d20288d10416125717ec528ef4ddc52ecbf82108e53e9ca",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b9a279a8de74bc8749beaa032fb7195e40ab02390b53238956108aa994725c91",
+        "entry_digest": "7a0c00aeb65d002389c5eb9639d64d4dbfc76de34867999043dd892c34b76072",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/watch/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+        "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "fc7522646c7f5f0b6ff57d4d36f119a6e247b9743cb1094d14450d93cc1afdc7",
+        "entry_digest": "ce79f026f2cd57fa7a444ae50b9bb1cc74a685aee8af3bc91b9de22ee639fbc4",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "16212d01b8757063fa74fe1f55645d5b8b9bc2c3e87a38518903e559cbe5a909",
+        "entry_digest": "c59ec320f62bd51b82ea8a4a802867dbfa86d720287f768253f83286519c2393",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "639ed672b962d8bad1c6b5a0f5f40ad66bd1b178542136efcbe9ee0c5a62f8d7",
+        "entry_digest": "0ae2e2cec89050ed09ebf92ea4bea2e92c94e2b753cde2b0ba5f520c07f05bc3",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/watch.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2f8399a1c100b5109296d87a2bdeeb53c38d47911052aa2338fa539c44c83478",
+        "entry_digest": "260d6f506a770d806fdeee7d803a56867e49c2e96a1da0b56faf4d66d294a719",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/discord/bridge.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0d6ecda08b3ef997c22427f884756059433b049c8da9771ff7fdebb7b4def0af",
+        "entry_digest": "06f325dcbde8c7af223baef093b72a7211258e22200d1628f5efc6b78c6e25f4",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/discord/command-handlers/admin.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e3bbb289c149a449d58942ad963a9458cdbb60b4b2d48ee53c136deaa21e64d2",
+        "entry_digest": "32fc72d1e0067dd07f66d38d82fb626478c53795df8fc2e0f73adc8614b46b07",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/discord/forget-card.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a5553ab8ccae14b310acc78e8f0febd7841a143fb17b473e1d73abb6a5c297db",
+        "entry_digest": "1ba7ab18c90c8cf9d1554a456abb5c9e0c4706dc2473f5d59a0e2fea2f8eaed2",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/discord/slash-commands.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "5fabfa9b8ba71b38664eb82eaccdbccf69b394f9c0650e262f77427d349c1073",
+        "entry_digest": "bc39e70b911ff521564dc1fe27d633e6a8c774f0730a2216a8d281f366aba254",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/discord/slash-types.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6953136a4a33156d8ca4043a9e8ed4306c70e89a972df0faa199a6590b38d20c",
+        "entry_digest": "cf966734404a4423ed149b35ccf1d33bfd05a93325465a5bec613439d0c72459",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/memory/forget.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a5f5bef6be95f3d83ede966b19dd977cd8c4bab76fd602f14688666fb76f947b",
+        "entry_digest": "a2ae16173ec8b5bfa9bd03c51edb72907f5586b454b42201a8947d9a50ee937c",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/memory/index.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c00efcc8b5969ad5092df6af6aa12fb0495dac17651fe50be1fef376d7b4f388",
+        "entry_digest": "b31b1fabe2f16dadc1ef9d4f2c6ba9ca490a2486aa4d61a3c86cb9158b6adf95",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/memory/scope.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "77089af704d1b875f14ad06ad1230ba9241548b02bdc03bf45b34736c86c4810",
+        "entry_digest": "c3535ed3722ed5c4376d8286de21ae37e2ae04eca2b49268324c82e0abcd2d87",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/store/conversation.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "0348153a5aac86de4fac61551192e27ec17a6465f76929af87406642d832f3ab",
+        "entry_digest": "60151109920f46b412300799b3d05b1f59b8caa5cbc19da23385d4713ec79178",
+        "owners": [
+          "discord"
+        ]
+      },
+      {
+        "path": "src/watch/forget-me.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "70120112554f922f03c944851a96a05092af0bf17ba41d62bc584907d66a49a4",
+        "entry_digest": "e139e0c0a85158cf909f18d32494222ec32d8dad36d4a0bdb23bb9d3b1a7209a",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/watch/poller.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1ad070b0361abf8295d9d38b9cf256fe26b5bfa46c358d52f0f040e3db7c79c9",
+        "entry_digest": "ca9403c938df3654e8fa6b5465c8a334e89946b7e0c727038e7ddb984f06a5f7",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "tests/discord.admin-forget.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a603e5563320865951a9b682ccf7799232b8c7158e5c9f7a9217f77104169f83",
+        "entry_digest": "95bdcf6e5696ff6f129e9dc57c3f621e7acf04446b1200a34caed71856b52d56",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/discord.admin-slash.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "198a317ee05a7db398263bd1b142bcaeaeee3aa409182b728a1f0eb7a2082974",
+        "entry_digest": "e0ab74002d2b693bd7d101f264d8ea0824e5b5392e851d047a8f02e86bb13628",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/watch.forget-me.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1cf08b706efdf574959cc6be660dac4763328290a7e8560213aff7030f9b1ca0",
+        "entry_digest": "a9cad6f4b0d0b37168709a3b5ef46c993c0796c32c3f207b35f1db6aef545d85",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec discord --spec plugins --spec watch",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-discord-1016",
+    "REQ-plugins-1016",
+    "REQ-watch-1016"
+  ]
+}

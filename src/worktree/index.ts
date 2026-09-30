@@ -25,3 +25,11 @@ export {
   type TalkWorkspace,
   type ResolveProjectOptions,
 } from "./manager.ts";
+export {
+  resolveBase,
+  settleTalkVerified,
+  takeTalkVerified,
+  talkWorktreeGitDir,
+  TALK_VERIFIED_MARKER,
+  type GitIn,
+} from "./base.ts";

@@ -20,6 +20,12 @@
  * kept conversations (30-day summaries, AGENT-6.a), and confirms to both. Deny closes it as a no. Every step is audited (ids and
  * digests only). The people list entry is never touched (only the owner
  * edits it, IDENTITY-6).
+ *
+ * MEMORY-ACL-6.a: the same card answers an ask a declared person made on
+ * GitHub (src/watch/forget-me.ts; the card says so and names the thread) and
+ * one the owner started with `/admin people forget`. A GitHub asker is told
+ * the outcome on their thread by the WATCH poller, never here; an ask the
+ * owner started tells nobody else (the card shows the outcome).
  */
 
 import type { Database } from "bun:sqlite";
@@ -30,7 +36,9 @@ import {
   FORGET_REQUEST_TTL_MS,
   ForgetRequestStore,
   forgetMemoryTargets,
+  forgetRequesterActor,
   forgetTargets,
+  githubOriginOf,
   MemoryStore,
   memorySubjectForRef,
   subjectLabel,
@@ -103,13 +111,25 @@ function who(req: ForgetRequest, dir: PeopleDirectory | null): string {
   return `<@${req.subjectId}> (not on your people list)`;
 }
 
+/** Who asked and where (MEMORY-ACL-6 / MEMORY-ACL-6.a). */
+function askedBy(req: ForgetRequest): string {
+  const r = req.requester;
+  if (r.via === "admin") return "started by you with /admin people forget";
+  if (r.via === "github") {
+    const thread = githubOriginOf(req);
+    const where = thread ? ` in ${thread.repo}#${thread.number}` : "";
+    return `asked on GitHub by @${r.login} (GitHub account id ${r.githubId})${where}`;
+  }
+  const where = req.originChannelId ? ` in <#${req.originChannelId}>` : "";
+  return `asked by <@${r.discordId}>${where}`;
+}
+
 /** Card text (counts only, never content); `stored` null once decided. */
 export function forgetCardText(req: ForgetRequest, dir: PeopleDirectory | null, stored: number | null): string {
-  const where = req.originChannelId ? ` in <#${req.originChannelId}>` : "";
   return formatApproveCard({
     title: FORGET_CARD_TITLE,
     lines: [
-      `Who: ${who(req, dir)} — asked by <@${req.requesterUserId}>${where}`,
+      `Who: ${who(req, dir)} — ${askedBy(req)}`,
       `Approve deletes, for good, their memory: their profile (projects, preferences, history), notes and private notes${stored === null ? "" : ` (${stored} stored)`}, the turns of their open Discord sessions, and their kept conversations (30-day summaries)`,
       "Kept: their entry on your people list (only you edit it), project memory, what others stored in their own memory, their schedules and /work records, and the audit trail",
       `Request: ${req.id}`,
@@ -134,6 +154,9 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
   const now = deps.now ?? Date.now;
   const store = new ForgetRequestStore({ db: deps.db, now });
   let passing: Promise<ForgetDeliveryResult> | null = null;
+
+  /** How an ask's asker was (or will be) told. */
+  type Told = "told" | "not-yet" | "github" | "owner";
 
   const audit = (action: string, actor: string, req: ForgetRequest, outcome: AuditOutcome) =>
     appendAudit(
@@ -203,13 +226,27 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
     return ok;
   };
 
+  /**
+   * Tell a decided ask's asker (MEMORY-ACL-6.a): a Discord asker by DM or
+   * in their conversation; a GitHub asker is left to the WATCH poller (their
+   * thread); an ask the owner started needs nobody told (the card says it).
+   */
+  const tellAsker = async (req: ForgetRequest): Promise<Told> => {
+    if (req.requester.via === "admin") {
+      store.markNotified(req.id);
+      return "owner";
+    }
+    if (req.requester.via === "github") return "github";
+    return (await notifyAndMark(req)) ? "told" : "not-yet";
+  };
+
   const pass = async (): Promise<ForgetDeliveryResult> => {
     const result: ForgetDeliveryResult = { posted: 0, expired: 0, notified: 0 };
     // No answer in time ⇒ no.
     for (const req of store.expiredPending(now())) {
       if (!store.decide(req.id, "expired")) continue;
       result.expired += 1;
-      auditBestEffort("memory-forget-expire", req.requesterUserId, req, "denied");
+      auditBestEffort("memory-forget-expire", forgetRequesterActor(req.requester), req, "denied");
       await closeCard(req, "Expired — no answer, so nothing was forgotten.");
     }
     const owner = deps.owner();
@@ -223,11 +260,11 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
         if (!sent) continue;
         store.markCardPosted(req.id, sent.channelId, sent.messageId);
         result.posted += 1;
-        auditBestEffort("memory-forget-card", req.requesterUserId, req, "ok");
+        auditBestEffort("memory-forget-card", forgetRequesterActor(req.requester), req, "ok");
       }
     }
     for (const req of store.unnotified()) {
-      if (await notifyAndMark(req)) result.notified += 1;
+      if ((await tellAsker(req)) === "told") result.notified += 1;
     }
     return result;
   };
@@ -272,15 +309,23 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
           console.error(`[discord] forget card: press answer failed: ${err instanceof Error ? err.message : err}`);
         }
         const closed = store.get(req.id);
-        const told = closed ? await notifyAndMark(closed) : false;
+        const told: Told = closed ? await tellAsker(closed) : "not-yet";
+        // An ask the owner started: the card already says all there is.
+        if (told === "owner") return;
         const channelId = req.cardChannelId ?? interaction.channelId;
         const messageId = req.cardMessageId ?? interaction.messageId;
         if (!deps.editMessage || !channelId || !messageId) return;
+        const tail =
+          told === "told"
+            ? " They have been told."
+            : told === "github"
+              ? " They will be told on their GitHub thread."
+              : " They could not be told yet; I keep trying for a day.";
         try {
           await deps.editMessage({
             channelId,
             messageId,
-            content: text(told ? " They have been told." : " They could not be told yet; I keep trying for a day."),
+            content: text(tail),
             components: [],
           });
         } catch {
@@ -294,11 +339,11 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
       if (isApproveCardExpired(req.expiresAt, now())) {
         // A late answer is a no.
         if (store.decide(req.id, "expired")) {
-          auditBestEffort("memory-forget-expire", req.requesterUserId, req, "denied");
+          auditBestEffort("memory-forget-expire", forgetRequesterActor(req.requester), req, "denied");
         }
         await update(formatDecidedCard(cardNow(), "Expired — no answer in time, so nothing was forgotten."));
         const closed = store.get(req.id);
-        if (closed) await notifyAndMark(closed);
+        if (closed) await tellAsker(closed);
         return;
       }
       if (parsed.decision === "deny") {

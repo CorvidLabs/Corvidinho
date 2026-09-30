@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments",
+  "implementation_commit": "690bd95c61429db3a58916ee12f9232d993bd82d",
+  "implementation_tree": "97c2f000381771df353c77167673baa68e10e8a5",
+  "contract_digest": "1b2dd6cec3d9dc8f2f25ffb447213b108b994d51ed06c13ec90a82d167d98a80",
+  "workspace_digest": "8be84081ba464bfa97cb8f7b7a540b569650e1563fe24b00aeaa7777598fbef5",
+  "closing_digest": "d1f47bcab59298beb5a79e8a9a2a956632b36fd1e4deb58511883f66e4ae5248",
+  "review_digest": "90ff022a55d7d85fa883ce220b1b17322f96aad8ec5a59ec7f93d9ebc614828f",
+  "finalization_digest": "87f38f76a71d0c4fd0dbec1528fa1234d349f3eb38fce54c07c73e979d08f286",
+  "timestamp": 1790740268
+}

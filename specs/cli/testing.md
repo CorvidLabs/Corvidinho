@@ -33,6 +33,36 @@ the tool and reason ids once, which `task run` copies to
 `injectionNoticeFromUnknown` (tool-name source, known reasons only), and the
 bridge / WATCH tests drive the owner notice from it.
 
+## Private replies on the task-run result (REQ-cli-710)
+
+`tests/memory.private-view.test.ts` — the Discord agent client spawns the
+real `task run --output ndjson` against a local fake LLM that calls
+`memory-profile` and `memory-recall --category private`; the result frame's
+`privateReplies` holds both texts, the summary and every model request lack
+them. Spawned directly with seven private reads of different notes, its own
+result frame (read off stdout) carries the first five, the last saying 2 more
+were not sent.
+## No verify skip (REQ-cli-085, REQ-cli-006, REQ-cli-007)
+
+- `tests/agent.cli.test.ts`: help has no `--no-verify`; `task run --no-verify`
+  and `--no-verify doctor` exit 1 with the one refusal line and hint, print
+  nothing on stdout and never start the fake `fledge`; with `--json` /
+  `--output json` stdout is exactly `{ ok: false, error }`; `task run --json`
+  in a scratch project ends `done` with `filesChanged: []` and one "no
+  changes, nothing to verify" event; the SIGINT / SIGTERM cases run in a
+  carried talk worktree so the lane still starts.
+- `tests/cli.task-argv.test.ts`, `tests/cli.plugins-run-argv.test.ts`:
+  `--task --no-verify` and a `plugins run` argument after `--` never set
+  `removedFlag`.
+- `tests/cli.doctor-truth.test.ts`: a `fledge.toml` with
+  `[corvidinho] verify_before_complete = false` prints `[warn] verify-gate`
+  and doctor still passes; without the key there is no such line.
+- `tests/agent.verify-gate.test.ts`: the real CLI in a project whose
+  `fledge.toml` sets the key false runs the lane and exits 1.
+- `tests/agent.ndjson-spawn.test.ts`, `tests/agent.ask.test.ts`,
+  `tests/agent.spend-ask.test.ts`, `tests/cli.project-path.test.ts`: the real
+  CLI runs in scratch projects without `--no-verify`, never the repo's own
+  snapshot or verify lane.
 ## GitHub logins without a numeric id (REQ-cli-367, IDENTITY-7.a)
 
 `tests/cli.doctor-truth.test.ts` › "doctor warns about GitHub logins with no

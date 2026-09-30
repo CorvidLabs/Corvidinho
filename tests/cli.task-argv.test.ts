@@ -8,10 +8,12 @@ import { parseGlobalFlags } from "../src/cli.ts";
 describe("task run --task argv (AGENT-5 / SAFE-1)", () => {
   test("flag-looking task text stays task text", () => {
     for (const text of ["--tier=code", "--tier", "--no-verify", "-h", "- fix x", "--json", "--max-retries=9"]) {
-      const r = parseGlobalFlags(["task", "run", "--no-verify", "--task", text, "--json"]);
+      const r = parseGlobalFlags(["task", "run", "--task", text, "--json"]);
       expect(r.taskText).toBe(text);
       expect(r.tier).toBeUndefined();
       expect(r.maxRetries).toBeUndefined();
+      // `--no-verify` as task text is never the removed flag (REQ-cli-085).
+      expect(r.removedFlag).toBeUndefined();
       expect(r.rest).toEqual(["task", "run"]);
     }
   });

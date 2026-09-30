@@ -12,6 +12,17 @@
  * 30-day condensed summaries and last turns in `conversation_threads`,
  * AGENT-6.a / REQ-discord-472). MEMORY-ACL-4's owner-only `memory-forget` by
  * id stays as it was.
+ *
+ * MEMORY-ACL-6.a: an ask can also come from GitHub — a declared person
+ * (matched by their GitHub numeric id, IDENTITY-7) asks the watch user to
+ * forget them (src/watch/forget-me.ts) — or from the owner, who starts one
+ * for any declared person with `/admin people forget`. Either way it is the
+ * same row and the same card, and nothing is forgotten until the owner
+ * approves. Who asked is kept in `requester_user_id` without a schema change
+ * ({@link ForgetRequester}): a Discord id (the person themself, as before),
+ * `github:<numeric id>:<login>` (the person on GitHub) or `admin:<owner's
+ * Discord id>` (the owner via /admin); a GitHub ask's thread is
+ * `github:<owner/repo>#<n>` in `origin_channel_id`.
  */
 
 import { randomUUID } from "node:crypto";
@@ -26,14 +37,75 @@ export const FORGET_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type ForgetRequestStatus = "pending" | "approved" | "denied" | "expired";
 
+/**
+ * Who asked (MEMORY-ACL-6 / MEMORY-ACL-6.a): the person themself on Discord,
+ * the person themself on GitHub (numeric id and the login they used), or the
+ * owner, who started it with `/admin people forget`.
+ */
+export type ForgetRequester =
+  | { via: "discord"; discordId: string }
+  | { via: "github"; githubId: string; login: string }
+  | { via: "admin"; discordId: string };
+
+/** A GitHub issue or PR thread (`owner/repo`, number). */
+export type ForgetGithubThread = { repo: string; number: number };
+
+const GITHUB_REQUESTER_RE = /^github:(\d{1,20}):([a-z0-9](?:[a-z0-9-]{0,38}))$/;
+const ADMIN_REQUESTER_RE = /^admin:(\d{1,25})$/;
+const GITHUB_ORIGIN_RE = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d{1,10})$/;
+
+/** `requester_user_id` for `r` (no schema change: the kind is a prefix). */
+export function encodeForgetRequester(r: ForgetRequester): string {
+  if (r.via === "github") return `github:${r.githubId}:${r.login.trim().toLowerCase()}`;
+  if (r.via === "admin") return `admin:${r.discordId}`;
+  return r.discordId;
+}
+
+/** Who asked, from `requester_user_id`; anything else is a Discord id (as before). */
+export function parseForgetRequester(raw: string): ForgetRequester {
+  const g = GITHUB_REQUESTER_RE.exec(raw);
+  if (g) return { via: "github", githubId: g[1]!, login: g[2]! };
+  const a = ADMIN_REQUESTER_RE.exec(raw);
+  if (a) return { via: "admin", discordId: a[1]! };
+  return { via: "discord", discordId: raw };
+}
+
+/** `origin_channel_id` of a GitHub ask: its issue or PR thread. */
+export function encodeGithubOrigin(t: ForgetGithubThread): string {
+  return `github:${t.repo}#${t.number}`;
+}
+
+/** The GitHub thread an ask came from, else null (a Discord ask or none). */
+export function githubOriginOf(req: Pick<ForgetRequest, "originChannelId">): ForgetGithubThread | null {
+  const m = GITHUB_ORIGIN_RE.exec(req.originChannelId ?? "");
+  if (!m) return null;
+  const repo = m[1]!;
+  if (repo.split("/").some((p) => p === "." || p === "..")) return null;
+  return { repo, number: Number(m[2]) };
+}
+
+/** SAFE-5 actor of an ask's rows: the Discord id, `github:<login>`, or the owner's id. */
+export function forgetRequesterActor(r: ForgetRequester): string {
+  return r.via === "github" ? `github:${r.login}` : r.discordId;
+}
+
 export type ForgetRequest = {
   id: string;
   subjectKind: MemorySubject["kind"];
   /** Declared person id, or the Discord user id of an undeclared asker. */
   subjectId: string;
-  /** Discord user id that asked (always the subject's own). */
+  /**
+   * Who asked, as stored: a Discord user id (the subject's own), or
+   * `github:<id>:<login>` / `admin:<owner id>` (MEMORY-ACL-6.a); read it with
+   * {@link parseForgetRequester} (also in `requester`).
+   */
   requesterUserId: string;
-  /** Conversation the ask came from (fallback for the outcome notice). */
+  /** `requesterUserId` read (MEMORY-ACL-6.a). */
+  requester: ForgetRequester;
+  /**
+   * Conversation the ask came from (fallback for the outcome notice), or a
+   * GitHub ask's thread `github:<owner/repo>#<n>` ({@link githubOriginOf}).
+   */
   originChannelId?: string;
   originParentChannelId?: string;
   status: ForgetRequestStatus;
@@ -73,6 +145,7 @@ function toRequest(r: Row): ForgetRequest {
     subjectKind: r.subject_kind === "person" ? "person" : "user",
     subjectId: r.subject_id,
     requesterUserId: r.requester_user_id,
+    requester: parseForgetRequester(r.requester_user_id),
     status: r.status as ForgetRequestStatus,
     createdAt: r.created_at,
     expiresAt: r.expires_at,
@@ -114,6 +187,7 @@ export class ForgetRequestStore {
    */
   request(input: {
     subject: MemorySubject;
+    /** Stored as is: a Discord id, or {@link encodeForgetRequester}'s value. */
     requesterUserId: string;
     originChannelId?: string;
     originParentChannelId?: string;
@@ -193,6 +267,14 @@ export class ForgetRequestStore {
     ).map(toRequest);
   }
 
+  /**
+   * Decided GitHub asks (MEMORY-ACL-6.a) whose asker has not been told yet:
+   * the WATCH poller tells them on their thread; the bridge leaves them be.
+   */
+  unnotifiedGithub(): ForgetRequest[] {
+    return this.unnotified().filter((r) => r.requester.via === "github");
+  }
+
   markCardPosted(id: string, channelId: string, messageId: string): void {
     this.db.run(
       `UPDATE forget_requests SET card_channel_id = ?, card_message_id = ?, card_posted_at = ?
@@ -235,29 +317,45 @@ function linkedGithubLogins(dir: PeopleDirectory, personId: string): string[] {
   return (person?.githubLogins ?? []).filter((login) => dir.byGithubLogin.get(login) === personId);
 }
 
+/** GitHub numeric ids that resolve to `personId` now (same rule). */
+function linkedGithubIds(dir: PeopleDirectory, personId: string): string[] {
+  const person = dir.people.find((p) => p.id === personId);
+  return (person?.githubIds ?? []).filter((id) => dir.byGithubId.get(id) === personId);
+}
+
 /**
  * What an approved ask deletes: the recorded person's scope and their
- * Discord ids (as linked now, plus the id that asked), or the undeclared
- * asker's Discord id. A person the owner re-linked since is not widened to
- * whoever their id points at now. `githubLogins` (a declared person's, as
- * linked now) reach their kept WATCH conversations (AGENT-6.a).
+ * Discord ids (as linked now, plus the id that asked on Discord), or the
+ * undeclared asker's Discord id. A person the owner re-linked since is not
+ * widened to whoever their id points at now. `githubLogins` / `githubIds` (a
+ * declared person's, as linked now, plus the login and numeric id a GitHub
+ * ask came from, MEMORY-ACL-6.a) reach their kept WATCH conversations
+ * (AGENT-6.a). The owner who started an ask with `/admin` is never a target.
  */
 export function forgetTargets(
   req: Pick<ForgetRequest, "subjectKind" | "subjectId" | "requesterUserId">,
   dir: PeopleDirectory | null | undefined,
-): { scopes: string[]; discordIds: string[]; githubLogins: string[] } {
-  const discordIds = new Set<string>([req.requesterUserId]);
+): { scopes: string[]; discordIds: string[]; githubLogins: string[]; githubIds: string[] } {
+  const asker = parseForgetRequester(req.requesterUserId);
+  const discordIds = new Set<string>(asker.via === "discord" ? [asker.discordId] : []);
   const scopes = new Set<string>();
-  const githubLogins: string[] = [];
+  const githubLogins = new Set<string>(asker.via === "github" ? [asker.login] : []);
+  const githubIds = new Set<string>(asker.via === "github" ? [asker.githubId] : []);
   if (req.subjectKind === "person") {
     scopes.add(personScopeId(req.subjectId));
     for (const id of dir ? linkedDiscordIds(dir, req.subjectId) : []) discordIds.add(id);
-    if (dir) githubLogins.push(...linkedGithubLogins(dir, req.subjectId));
+    for (const login of dir ? linkedGithubLogins(dir, req.subjectId) : []) githubLogins.add(login);
+    for (const id of dir ? linkedGithubIds(dir, req.subjectId) : []) githubIds.add(id);
   } else {
     discordIds.add(req.subjectId);
   }
   for (const id of discordIds) scopes.add(id);
-  return { scopes: [...scopes], discordIds: [...discordIds], githubLogins };
+  return {
+    scopes: [...scopes],
+    discordIds: [...discordIds],
+    githubLogins: [...githubLogins],
+    githubIds: [...githubIds],
+  };
 }
 
 function tableExists(db: Database, table: string): boolean {
@@ -269,9 +367,9 @@ function tableExists(db: Database, table: string): boolean {
 /**
  * Delete, for good, every memory row of `scopes`, the stored turns of the
  * Discord sessions of `discordIds` (their conversations, MEMORY-1) and their
- * kept conversations (`conversation_threads`: Discord ids, GitHub logins, or
- * holding their words; AGENT-6.a), in one transaction. Returns what was
- * deleted.
+ * kept conversations (`conversation_threads`: Discord ids, GitHub logins and
+ * numeric ids, or holding their words; AGENT-6.a), in one transaction.
+ * Returns what was deleted.
  */
 export function forgetMemoryTargets(
   db: Database,
@@ -279,6 +377,7 @@ export function forgetMemoryTargets(
     scopes: readonly string[];
     discordIds: readonly string[];
     githubLogins?: readonly string[];
+    githubIds?: readonly string[];
   },
 ): { memories: number; turns: number; conversations: number } {
   let memories = 0;
@@ -299,6 +398,7 @@ export function forgetMemoryTargets(
       conversations = forgetConversations(db, {
         discordUserIds: ids,
         githubLogins: targets.githubLogins ?? [],
+        githubIds: targets.githubIds ?? [],
       });
     }
   }).immediate();

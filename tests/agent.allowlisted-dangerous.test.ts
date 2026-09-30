@@ -434,11 +434,13 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
 describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502, AGENT-4)", () => {
   async function runFledgeTask(opts: {
     includeDangerous?: boolean;
-    verify: boolean;
     calls?: ToolCallSpec[];
     envExtra?: Record<string, string>;
+    /** Written to the project's fledge.toml before the run. */
+    fledgeToml?: string;
   }) {
     const fake = makeFledge({ write: true });
+    if (opts.fledgeToml !== undefined) writeFileSync(join(fake.project, "fledge.toml"), opts.fledgeToml);
     const { fetchImpl } = fakeProvider(opts.calls ?? [{ name: "fledge-hello", argv: [] }]);
     const events: AgentEvent[] = [];
     const execute = createTaskExecute({
@@ -458,7 +460,6 @@ describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502
     const verifyCwds: string[] = [];
     const result = await runTask({
       cwd: fake.project,
-      verifyBeforeComplete: opts.verify,
       maxRetries: 0,
       onEvent: (e) => events.push(e),
       verifyRunner: async (cwd) => {
@@ -471,7 +472,7 @@ describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502
   }
 
   test("allowlisted fledge-hello edits app.ts in a non-git project without reporting it: verify runs and the run fails, never done", async () => {
-    const { fake, result, events, verifyCwds } = await runFledgeTask({ verify: true });
+    const { fake, result, events, verifyCwds } = await runFledgeTask({});
     expect(readFileSync(join(fake.project, "app.ts"), "utf8")).toBe("broken");
     expect(result.filesChanged).toEqual([]);
     expect(verifyCwds).toEqual([fake.project]);
@@ -484,7 +485,7 @@ describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502
   });
 
   test("the same holds when every dangerous tool is included (includeDangerous seam)", async () => {
-    const { result, verifyCwds } = await runFledgeTask({ verify: true, includeDangerous: true });
+    const { result, verifyCwds } = await runFledgeTask({ includeDangerous: true });
     expect(verifyCwds.length).toBe(1);
     expect(result.state).toBe("failed");
     expect(result.verified).toBe(false);
@@ -494,7 +495,6 @@ describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502
     process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
     process.env.CORVIDINHO_GITHUB_ALLOW_REPOS = "CorvidLabs/Corvidinho";
     const { result, verifyCwds, events } = await runFledgeTask({
-      verify: true,
       calls: [
         {
           name: "github-pr-review",
@@ -508,11 +508,14 @@ describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502
     expect(result.verifySkipped).toBe(true);
   });
 
-  test("with the verify gate off, nothing changes: done, verify skipped", async () => {
-    const { result, verifyCwds } = await runFledgeTask({ verify: false });
-    expect(verifyCwds).toEqual([]);
-    expect(result.state).toBe("done");
-    expect(result.verifySkipped).toBe(true);
+  test("a project fledge.toml with verify_before_complete = false cannot turn the gate off (AGENT-14)", async () => {
+    const { result, verifyCwds } = await runFledgeTask({
+      fledgeToml: "[corvidinho]\nverify_before_complete = false\nmax_retries = 0\n",
+    });
+    expect(verifyCwds.length).toBe(1);
+    expect(result.state).toBe("failed");
+    expect(result.verified).toBe(false);
+    expect(result.verifySkipped).toBe(false);
   });
 });
 
@@ -556,7 +559,6 @@ describe("non-git verify gate after a delegate worker that may have run a Fledge
     const verifyCwds: string[] = [];
     const result = await runTask({
       cwd: fake.project,
-      verifyBeforeComplete: true,
       maxRetries: 0,
       onEvent: (e) => events.push(e),
       verifyRunner: async (cwd) => {

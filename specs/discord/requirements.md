@@ -15,7 +15,7 @@ spec: discord.spec.md
 
 ### REQ-discord-001
 
-The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run --no-verify` (or echo); it SHALL NOT port ProcessManager.
+The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run` (or echo), which always holds the run to the verify gate (AGENT-14, REQ-cli-085); it SHALL NOT port ProcessManager.
 
 Acceptance Criteria
 - `routeMessage` on mention in allowed channel returns `kind: "start_session"` with new session id.
@@ -302,11 +302,12 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `task run` stdout is present (ndjson result frame or legacy `--json`), the
 Discord chat reply SHALL surface a parsed summary (state / verified /
 attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
-`--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
-agent loop still skips the verify lane when no tool reported files and the
-run's git working tree is unchanged (REQ-agent-085), so plain chat stays
-fast. Fixture tests SHALL cover argv shape and summary parsing without a live
-Discord token.
+`--no-verify` (the flag is removed and refused, REQ-cli-085) —
+prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always applies; a run whose
+real git diff is empty and that claimed no change ends with "no changes,
+nothing to verify" and no lane (REQ-agent-003 / REQ-agent-085), so plain
+chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
+without a live Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
@@ -710,17 +711,21 @@ Acceptance Criteria
 ### REQ-discord-024
 
 (Clarify bridge-live content only.) After every successful bridge restart
-(`ClientReady`), when configured, Corvidinho SHALL post the enriched bridge-live
-note from `formatBridgeLiveAnnouncement` (REQ-discord-025) via `postAnnouncement`
+(`ClientReady`), when configured, Corvidinho SHALL post the update note from
+`formatBridgeLiveAnnouncement` (REQ-discord-025) via `postAnnouncement`
 — never to the general allowlisted chat by default (DISCORD-ANNOUNCE-4). The
-bare `bridge live vX.Y.Z` one-liner is the minimum header; ship notes MAY include
-≤5 CHANGELOG bullets. Package version history for `/announce` slash itself
-remains **0.0.8**; current package is **0.0.11** after this enrichment.
+note SHALL be one short line in the persona's voice naming the running version
+with a link to that version's release notes (PERSONA-1.a), posted as one
+message; it SHALL NOT carry CHANGELOG bullets (the bare `bridge live vX.Y.Z`
+header and the ≤5 CHANGELOG bullets of package 0.0.11 are replaced). Package
+version history for `/announce` slash itself remains **0.0.8**; the bullets
+shipped in **0.0.11**.
 
 Acceptance Criteria
 - ClientReady posts bridge-live note only to announce channel (not dogfood allowlist).
-- Note content matches REQ-discord-025 (header + optional ≤5 bullets).
+- Note content matches REQ-discord-025 (one in-voice line with the version and the release notes link; no bullets).
 - `/announce` slash + persist behavior from REQ-discord-024 otherwise unchanged.
+- Through `startBridge`, one ClientReady gives exactly one post, to the announcements channel, pinging nobody; with no announcements channel nothing is posted.
 
 ### REQ-discord-042
 
@@ -870,7 +875,7 @@ Acceptance Criteria
 ### REQ-discord-073
 
 The Discord spawn agent client SHALL run
-`task run --no-verify --task <prompt> --output ndjson`, read stdout line by
+`task run --task <prompt> --output ndjson`, read stdout line by
 line while the child runs, and forward each frame's live state, current tool,
 and token counts to `onStatus` so the thinking embed shows what the agent is
 doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
@@ -891,33 +896,44 @@ Acceptance Criteria
 - Summary equals `summarizeTaskResult` of the result frame; garbage lines and stderr do not break parsing.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
 - A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
-- Spawn argv ends with `--output ndjson` (no `--json`).
+- Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
 
 ### REQ-discord-025
 
-`formatBridgeLiveAnnouncement` SHALL post a Discord-friendly bridge-live note
-after every successful restart when an announce channel is configured
-(DISCORD-ANNOUNCE-4): a version header `bridge live **vX.Y.Z**` plus a short
-bullet list (≤5) of what shipped in the current package version.
+`formatBridgeLiveAnnouncement` SHALL give the Discord-friendly bridge-live
+note the bridge posts after every successful restart when an announce channel
+is configured (DISCORD-ANNOUNCE-4): the update post, a short note in the
+persona's voice (`persona.md`: warm, direct, an emoji, never a flat changelog)
+with a link to the release notes, not a changelog dump (PERSONA-1.a, #69).
 
-Bullets SHALL prefer the matching `CHANGELOG.md` (or RELEASE notes) section for
-that version. When CHANGELOG is missing or has no usable bullets, the helper
-SHALL fall back to the package description or a single-line tip — never invent
-features. Posts remain **only** via `postAnnouncement` to the configured
-announce channel (never dogfood allowlist by default).
+For a plain release version `X.Y.Z` (each part 1–6 digits; a leading `v` and
+surrounding spaces dropped) the note SHALL be exactly one line:
+`Back online and running **vX.Y.Z** 🐦‍⬛ Everything new in this version is in the release notes 👀 <https://github.com/CorvidLabs/Corvidinho/releases/tag/vX.Y.Z>`
+— the version, one plain sentence and the link to that version's GitHub
+Release (every package version has a `vX.Y.Z` tag and Release,
+`.github/workflows/release.yml`), built from `CORVIDINHO_URL` and wrapped in
+`<>` so Discord shows no preview card. Any other version (empty, a
+pre-release, a mention, markdown, a secret, an over-long part) SHALL NOT be
+echoed: the note is then `Back online 🐦‍⬛ Everything new is in the release notes 👀 <https://github.com/CorvidLabs/Corvidinho/releases>`.
+The note SHALL be a fixed template: no model call and no spend, nothing read
+from `CHANGELOG.md` or `package.json` beyond the package version, no bullet,
+heading or newline, under 200 characters (always under 400); it SHALL be SAFE-6
+scrubbed and have `@everyone` / `@here` defanged. Posts remain **only** via
+`postAnnouncement` to the configured announce channel (never dogfood
+allowlist by default), and the gateway reply parses no mentions
+(REQ-discord-205). Editing `persona.md` does not change the template.
 
-Package version SHALL bump to **0.0.11**. Fixture tests without live Discord.
-No new slash commands; no new HI criteria (implements standing order + existing
-DISCORD-ANNOUNCE-4).
+No new slash command, config key, env var or schema change; no package
+version bump. Fixture tests without live Discord.
 
 Acceptance Criteria
-- Header is always `bridge live **vX.Y.Z**`.
-- With a CHANGELOG section, body has 1–5 short `-` bullets from that version.
-- Missing CHANGELOG / empty section → description or tip fallback (or header-only if none).
-- `postAnnouncement` still default-deny / announce-channel-only.
-- Package `0.0.11`; docs/STATUS/CHANGELOG updated.
-- Fixture tests + SpecSync + fledge verify green.
+- A plain release version gives exactly the one-line template: `**vX.Y.Z**`, the persona's 🐦‍⬛ / 👀, and `<https://github.com/CorvidLabs/Corvidinho/releases/tag/vX.Y.Z>`; a leading `v` and spaces are dropped; the default is the package version.
+- No `bridge live` header, no `-` / `*` bullet or heading line, no newline and no CHANGELOG text, even when CHANGELOG.md has a long section for that version; under 400 characters for the longest plain version.
+- A version that is not a plain release version (empty, pre-release, `@everyone` / `@here`, a fake key, a newline bullet, markdown, a 20-digit part) is never echoed; the note links the Releases page.
+- The note is unchanged by `scrubSecrets` and carries no `@everyone` / `@here`.
+- `postAnnouncement` still default-deny / announce-channel-only, sending the note as one message.
+- Regression tests in `tests/discord.update-post.test.ts` fail on the base sources and pass after.
 
 ### REQ-discord-098
 
@@ -1015,8 +1031,10 @@ opened only when all of these hold, checked before any commit or push:
 
 The PR step SHALL run only for the owner (ADMIN) or a declared team member
 (IDENTITY-10; the role is re-resolved from the live people list after the
-run, REQ-discord-065); community /work runs keep the changes on the work
-branch (ROLES-CHAT-3).
+run, REQ-discord-065). Community never starts `/work` (IDENTITY-11.a,
+REQ-discord-065), so it never reaches this step; a team member demoted to
+community during the run keeps the changes on the work branch
+(ROLES-CHAT-3).
 
 The steps SHALL run through the existing typed plugins with
 `nonInteractive: true` — `git-commit` (explicit paths from `git status`),
@@ -1038,25 +1056,36 @@ Acceptance Criteria
 - An unverified run triggers one verify-lane run in the worktree before push; a failing lane ships nothing.
 - Push or PR-create failure yields a plain line and never a claimed PR.
 - Fixture tests use temp repos, a local bare remote, the dry-run github plugin and a mocked verify lane.
-- A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3): a community /work never runs at all (IDENTITY-11.a; the reply is the ephemeral `not authorized`), and a team member demoted during the run gets a reply that says the changes stay on the work branch.
 - A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
 
 ### REQ-discord-085
 
 Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
-prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
-argv MUST NOT include `--no-verify`. An empty real diff with no
-tool-reported files continues to skip verify inside the agent loop (honest
-`verifySkipped`); when tools report file changes or the run's git working
-tree changed (REQ-agent-085), `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
-of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
-Discord.
+prove-before-done gate (AGENT-4 / FLEDGE-2 / AGENT-14): spawn argv MUST NOT
+include `--no-verify` (the flag is removed and refused, REQ-cli-085), and no
+project `fledge.toml` key turns the gate off (REQ-agent-003). Chat, button
+resumes, `/session`, `/work` and schedule runs all reach the one gate of
+`task run`. A run whose real diff is empty and that claimed no change ends
+with "no changes, nothing to verify" (honest `verifySkipped`); when the
+run's git working tree changed (REQ-agent-085) or a tool claimed a change
+git does not show, `fledge lanes run verify` runs before done.
+`ensureTalkWorkspace` SHALL write the verified marker into a new talk
+worktree's own git dir, so a new talk's first run starts from its own
+snapshot; a later run in that worktree after one that did not end `done`
+verifies every edit since the talk started (AGENT-15.a, REQ-agent-015).
+The talk base (`resolveBase`: the remote's default branch, else `main`, and
+HEAD's merge-base with it) lives in `src/worktree/base.ts`, shared by the
+`/work` PR path (REQ-discord-088) and the verify gate. Package version SHALL
+bump to **0.0.13**. Fixture tests without live Discord.
 
 Acceptance Criteria
 - Discord spawn argv never includes `--no-verify`.
 - Package `0.0.13`; docs/STATUS/CHANGELOG updated.
-- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool-reported files still skips verify (REQ-agent-085).
+- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool claim ends with the "no changes, nothing to verify" note (REQ-agent-003 / REQ-agent-085).
+- A talk worktree made by `ensureTalkWorkspace` holds the verified marker in its own git dir (`talkWorktreeGitDir`), and its first run that changes nothing has nothing to verify; after that run ends blocked with an edit, the next run there verifies the edit (REQ-agent-015).
+- The `/work` PR tests still find the base and merge-base through the shared `resolveBase`.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-108
@@ -2348,6 +2377,24 @@ no change for the same role. `/admin people list` shows each person's role;
 `config show` counts team and community. No chat or plugin path sets a role
 (IDENTITY-8).
 
+`/work` SHALL start only for the owner or a declared team member
+(IDENTITY-11.a): the handler resolves the caller's role with
+`resolveDiscordActingRole` from the live owner config and the people list
+re-read at the time of the command (`loadDeclaredPeople`), after the SAFE-13
+inbound check (REQ-discord-071), and for community — declared community, a
+declared person with no role and anyone undeclared (IDENTITY-12); a muted or
+deny-listed caller is community here too, though the dispatcher's mute and
+actor gates refuse them first — it SHALL reply only with the ephemeral
+`not authorized` (`NOT_AUTHORIZED`, the reply the owner-only
+`/announce channel`, `/schedule create` and `/admin` give a non-owner) and
+return before it defers a public reply, creates a session, a git worktree or
+`talk/*` branch, a work task, an agent run (so no verify lane) or the PR step.
+With no owner configured nobody is owner (IDENTITY-3), so only a declared
+team member can start `/work`. The owner's and a team member's `/work` are
+unchanged. `/session start` and chat stay open to community (read tools only,
+ROLES-CHAT-2). No new env var, config key, slash command, option or schema
+change.
+
 Acceptance Criteria
 - `role = "team"` / `"community"` (any case, TOML and JSON) resolve; no role, undeclared ⇒ community; the owner ⇒ owner; `role = "owner"` elsewhere ⇒ community with a problem; a list or unknown value skips the entry.
 - `resolveDiscordActingRole` gives owner, team and community, and community for a muted or deny-listed team member.
@@ -2355,6 +2402,10 @@ Acceptance Criteria
 - Through `startBridge`, chat stamps each speaker's role and a file edit applies to the next message; `/work` stamps team + the work flag for a team member and reaches the PR step; `/session start` stamps the role without the work flag.
 - `/admin people role` promotes and demotes with `admin-people-role` `started`/`ok` rows and a no-change reply for the same role; it refuses the owner role, unknown roles, undeclared people, the owner's person and a missing role (`denied`, file unchanged), a non-owner, and a missing audit trail; JSON files keep unread keys; `people list` shows roles and `config show` counts them.
 - Regression tests in `tests/roles.team.test.ts` and `tests/discord.admin-slash.test.ts` fail on the base sources and pass after.
+- IDENTITY-11.a: a `/work` by declared community, a declared person with no role, or an undeclared user (also with a `project` option, and with no owner configured) gets exactly one ephemeral `not authorized` reply and no deferred reply; no session, work task, agent run or PR step; the project repo gains no worktree or `talk/*` branch; through `handleSlashInteraction` and through `startBridge` alike. A muted or deny-listed team member gets the same refusal at the handler (through the dispatcher the mute and actor gates refuse them first, and nothing starts). With no owner configured a declared team member still starts `/work` as team.
+- A role change in the people file applies to the next `/work` without a restart: a demoted team member is refused, a promoted community member runs as team with the work flag.
+- The owner's and a team member's `/work` run unchanged (a worktree under the worktree base, `workTask: true`, the PR step); a community `/work` description that trips SAFE-13 still gets the SAFE-13 refusal and the owner ping.
+- Regression tests in `tests/roles.community-no-work.test.ts` fail on the base sources and pass after; the community cases in `tests/roles.team.test.ts`, `tests/work.pr.test.ts` and `tests/discord.actor-gate.test.ts` now expect the refusal.
 
 ### REQ-discord-101
 
@@ -2776,6 +2827,100 @@ Acceptance Criteria
 - An approved forget-me deletes the person's retained records (Discord ids, a declared person's GitHub logins, threads they commented on) with their memory, nobody else's; the running bridge's `forgetTurnsOfUsers` drops their live summary and records, and their next prompt replays nothing.
 - A fenced turn folded into a summary point keeps its words between that fence's own markers; a summary over its cap leaves a fenced point out whole; replayed turns and summary points quote fake block lines and turn labels, and a turn clipped inside its fence gets its end marker back.
 
+### REQ-discord-1016
+
+Forget from GitHub and from /admin, approved on the card (MEMORY-ACL-6.a,
+#101). A forget request SHALL record who asked in `requester_user_id` with no
+schema change (`ForgetRequester`, `src/memory/forget.ts`): a Discord user id
+(the person themself on Discord, as before), `github:<numeric id>:<login>`
+(the person themself on GitHub, REQ-watch-1016) or `admin:<owner Discord id>`
+(the owner with `/admin people forget`); a GitHub ask's thread SHALL be
+`github:<owner/repo>#<n>` in `origin_channel_id` (`githubOriginOf`), and
+`ForgetRequest.requester` SHALL be the parsed asker.
+
+`/admin people forget person:<id>` SHALL be owner-only (dispatch floor and
+the handler-time ADMIN re-check; a non-owner reaching the handler gets
+`not authorized` and a `denied` row) and SAFE-5 audited like the other
+`/admin people` ops (`admin-people-forget`: `started` before the request,
+`ok` after; no trail or a trail that throws ⇒ refused, nothing asked;
+`error` when the request cannot be recorded). The id SHALL name a person
+declared under `[people]` in the file the bridge loaded, re-read now
+(`memorySubjectForPerson`; never a Discord id); anything else SHALL be
+refused with a `denied` row and nothing asked. It SHALL record the same
+`forget_requests` ask a person's own request does (`SlashContext.requestForget`,
+one open ask per person: a pending one is reused and the reply says so),
+reply ephemerally with the request id and audit row numbers, and then run a
+delivery pass at once (`SlashContext.deliverForgetCards`) so the owner gets
+the same DM Approve/Deny card. The bridge SHALL wire both to its DB and
+forget cards; with no DB the command refuses.
+
+The card SHALL say who asked and where: `asked by <@id> in <#channel>` for a
+Discord ask, `asked on GitHub by @login (GitHub account id N) in
+owner/repo#n` for a GitHub ask, `started by you with /admin people forget`
+for the owner's. Audit rows of a pass (card, expiry) SHALL name the asker as
+the Discord id, `github:<login>` or the owner's id. The bridge SHALL never DM
+or post to a GitHub asker: their outcome is left to the WATCH poller
+(`ForgetRequestStore.unnotifiedGithub`), and the card, once decided, SHALL
+say they will be told on their GitHub thread. An ask the owner started SHALL
+be marked told when decided, with no DM or post to anyone and no "told" line
+on the card.
+
+What an approved ask deletes (`forgetTargets`) SHALL add the asker's Discord
+id only for a Discord ask (never an `admin:` or `github:` asker, so the
+owner who started a forget is never a target), and SHALL cover a declared
+person's GitHub logins and numeric ids as linked now plus the login and
+numeric id a GitHub ask came from (`githubLogins`, `githubIds`);
+`forgetMemoryTargets` / `forgetConversations` /
+`ConversationStore.deleteForPerson` SHALL delete kept conversations whose
+participants hold `github-id:<n>` (`githubIdParticipant`) for those ids, as
+well as by login. Nothing is deleted before the owner's Approve.
+
+Acceptance Criteria
+- `/admin people forget` is registered under `/admin people` with a required `person` string.
+- The owner's `/admin people forget person:Tofu` writes `admin-people-forget` `started` / `ok`, one pending ask (subject `person:tofu`, requester `admin:<owner id>`), replies with the request id, and DMs the owner a card saying "started by you with /admin people forget" (no memory content); a second run reuses the open ask; nothing is deleted before Approve.
+- Approve deletes that person's memory rows and session turns, never the owner's own memory or turns; nobody else is DMed; the ask is marked told; the people file is unchanged.
+- An undeclared id or a Discord id is refused with `denied`, no person gives the usage, a non-owner gets `not authorized`, a keyed chain without the key refuses (`audit log unavailable (SAFE-5)`) — no ask, no card.
+- A GitHub ask's card names `@login (GitHub account id N) in owner/repo#n`; the bridge never DMs its asker and marks the card "They will be told on their GitHub thread."; Approve also deletes kept WATCH conversations by the ask's login and by `github-id:<n>`.
+- `forgetTargets` for a GitHub ask gives the declared Discord ids only, the declared and asking logins and the numeric id; for an `/admin` ask the person's Discord ids only; a Discord ask is unchanged.
+- `tests/discord.admin-forget.test.ts`, `tests/watch.forget-me.test.ts` and `tests/discord.admin-slash.test.ts` cover each and fail on main.
+### REQ-discord-710
+
+The bridge shows private notes, profile reads and the owner's view of
+someone's memory only privately (MEMORY-7.a, #101). The Discord agent client
+SHALL read the result frame's `privateReplies` with
+`privateRepliesFromUnknown` (`src/discord/private-reply.ts`; anything but
+an array none) onto `AgentSpawnResult.privateReplies`, bounded with
+`boundPrivateReplies`, which `task run` also uses on its own result
+(REQ-cli-710): non-blank strings only, at most `PRIVATE_REPLIES_MAX` (5), each
+secret-scrubbed first (SAFE-6: a cut never leaves a token prefix a later scrub
+misses) and then cut to `PRIVATE_REPLY_TEXT_MAX` (6000) characters ending in
+the visible `PRIVATE_REPLY_CUT_MARKER`, never inside a surrogate pair; when
+more came than are kept, the last one kept SHALL end with a line saying how
+many more were not sent; a bounded list SHALL come back unchanged.
+
+On a chat reply, a button pick resume, an Answer form submit resume,
+`/session start` and `/work` the bridge SHALL, before the answer goes out,
+send each private reply to the person who asked (the message author, the
+presser / submitter, the slash invoker) by direct message only
+(`deliverPrivateReplies` over the gateway's `sendDm`, the forget card's DM
+path; `SlashContext.sendDm` for slash): `PRIVATE_DM_HEADER` then the text,
+secret-scrubbed (SAFE-6), `@everyone` / `@here` defanged and then split under
+the 1900-character DM cap, so the gateway's own defang and cap never cut a
+part. The channel answer SHALL get `PRIVATE_SENT_NOTE` on top when every part
+went out,
+else `PRIVATE_NOT_SENT_NOTE` (no DM path, a part refused or throwing) —
+never a channel fallback — and SHALL never hold the text; the session thread
+records only the answer as posted. Schedules and WATCH SHALL never post
+`privateReplies` (the plugins refuse those reads there). No new config key
+or env var.
+
+Acceptance Criteria
+- `privateRepliesFromUnknown` keeps non-empty strings, at most 5, each at most 6000; through it `boundPrivateReplies` keeps 5 of 8 texts with "3 more private results were not sent" on the last, cuts an over-long text with the cut marker — a token straddling the cut redacted, no lone surrogate — and returns a bounded list unchanged; `deliverPrivateReplies` returns null with none, "sent" with every part out (≤1900 each, scrubbed, header first, and still ≤1900 after the gateway's defang with a text full of `@everyone`), "failed" with no `sendDm`, a null or a throwing send; `withPrivateNote` puts the note on top.
+- Chat: one DM to the author with the text; the channel (posts, embeds, content edits) carries `PRIVATE_SENT_NOTE` and the model's answer, never the text; the session thread never records it; with the DM failing the channel carries `PRIVATE_NOT_SENT_NOTE` and the text is nowhere.
+- A button pick and an Answer form submit resume DM the presser / submitter, with the note in the channel.
+- `/session start` and `/work` DM the invoker with the note in the channel; with no `sendDm` the channel carries `PRIVATE_NOT_SENT_NOTE`.
+- End to end through the real `task run` spawn, the client returns both private texts.
+- `tests/memory.private-view.test.ts` covers each and fails on main.
 ### REQ-discord-713
 
 A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71). A

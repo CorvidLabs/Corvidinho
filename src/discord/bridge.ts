@@ -11,7 +11,8 @@
  * MEMORY: auto-recall inject on spawn (AGENT-7 / MEMORY-2/4).
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
  * DISCORD-12: presence/custom status shows shared package version.
- * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
+ * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only
+ *   (PERSONA-1.a: a short in-voice note linking the release notes).
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
@@ -22,6 +23,8 @@
  * ASK-4.a: a free-text ask's Answer button opens a private form whose submit
  * takes the same gates and resumes like a reply (a reply still works);
  * SESSION-MULTI: per-user sessions.
+ * MEMORY-7.a: a run's private replies (private notes, a profile, the owner's
+ * view of someone's memory) go to the asker by DM only (private-reply.ts).
  * AGENT-6: each run is recorded with its session and a continued run gets the
  * earlier turns replayed ahead of the new message (session-thread.ts),
  * condensed at about 80% of the model's window (SESSION-5/6); an expired
@@ -92,6 +95,7 @@ import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
 import { parseApproveCardCustomId } from "./approve-card.ts";
 import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
+import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
 import {
   DISCORD_ANSWER_MAX,
   answerSpendFor,
@@ -154,7 +158,7 @@ import {
   verifyAudit,
   type AuditEntryInput,
 } from "../audit/index.ts";
-import { MemoryStore } from "../memory/index.ts";
+import { ForgetRequestStore, MemoryStore } from "../memory/index.ts";
 import {
   ABANDONED_SETTLE_MS,
   ScheduleStore,
@@ -572,7 +576,13 @@ export async function startBridge(
       spendLine,
       spendAlerts,
       ...(replyRef.fn ? { post: replyRef.fn } : {}),
+      // MEMORY-7.a: /session start and /work send private replies by DM.
+      ...(sendDmRef.fn ? { sendDm: sendDmRef.fn } : {}),
       recordAudit,
+      // MEMORY-ACL-6.a: `/admin people forget` records the ask in the shared
+      // DB and sends the owner's card at once.
+      ...(db ? { requestForget: (i) => new ForgetRequestStore({ db }).request(i) } : {}),
+      ...(forgetCards ? { deliverForgetCards: () => forgetCards.deliver() } : {}),
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,
@@ -1037,13 +1047,24 @@ export async function startBridge(
           console.warn(ASK_NO_OWNER_WARNING);
         }
 
+        // MEMORY-7.a (REQ-discord-710): the run's private replies (private
+        // notes, a profile, the owner's view of someone) go to the asker by
+        // DM only; the channel gets the "sent privately" note, never the text.
+        const privateOutcome = await deliverPrivateReplies({
+          replies: result.privateReplies,
+          userId: msg.authorId,
+          sendDm: sendDmRef.fn,
+        });
         // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
-        const body = askBody
-          ? askBody.content
-          : result.ok
-            ? // DISCORD-16: the whole answer; it is split into messages when long.
-              result.summary
-            : `session ${session.id} failed (exit ${result.exitCode})`;
+        const body = withPrivateNote(
+          askBody
+            ? askBody.content
+            : result.ok
+              ? // DISCORD-16: the whole answer; it is split into messages when long.
+                result.summary
+              : `session ${session.id} failed (exit ${result.exitCode})`,
+          privateOutcome,
+        );
         // AGENT-6: the answer as posted joins the thread (a spend-cap stop
         // records no answer, REQ-discord-098).
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
@@ -1653,12 +1674,22 @@ export async function startBridge(
           store.setPendingAsk(session, pendingToStore);
         }
 
-        const body = askBody
-          ? askBody.content
-          : result.ok
-            ? // DISCORD-16: the whole answer; it is split into messages when long.
-              result.summary
-            : `session ${session.id} failed (exit ${result.exitCode})`;
+        // MEMORY-7.a (REQ-discord-710): as on a chat reply — private replies
+        // go to the presser (the session's own user) by DM only.
+        const privateOutcome = await deliverPrivateReplies({
+          replies: result.privateReplies,
+          userId: interaction.userId,
+          sendDm: sendDmRef.fn,
+        });
+        const body = withPrivateNote(
+          askBody
+            ? askBody.content
+            : result.ok
+              ? // DISCORD-16: the whole answer; it is split into messages when long.
+                result.summary
+              : `session ${session.id} failed (exit ${result.exitCode})`,
+          privateOutcome,
+        );
         // AGENT-6: the answer to the pick joins the session's thread.
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
 
@@ -1801,7 +1832,8 @@ export async function startBridge(
       }) >= PermissionLevel.ADMIN,
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
-      // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel.
+      // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel;
+      // PERSONA-1.a — one short in-voice line linking the release notes (fixed template).
       if (announceStore && replyRef.fn) {
         const note = formatBridgeLiveAnnouncement(version);
         void postAnnouncement(announceStore, replyRef.fn, note).then((r) => {

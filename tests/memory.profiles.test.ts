@@ -115,6 +115,17 @@ function schedule(actor: string): void {
   chat(actor, { conversation: false });
 }
 
+/**
+ * The local operator CLI with an actor set by hand: no role session, so a
+ * private read shows on the operator's own terminal (MEMORY-7.a).
+ */
+function terminal(actor: string): void {
+  for (const k of ["CORVIDINHO_ACTING_IS_ADMIN", "CORVIDINHO_ACTING_ROLE", "CORVIDINHO_DISCORD_REPLY_CHANNEL_ID"]) {
+    delete process.env[k];
+  }
+  process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = actor;
+}
+
 /** The local operator CLI: no role session, no actor. */
 function localCli(): void {
   for (const k of ["CORVIDINHO_ACTING_DISCORD_USER_ID", "CORVIDINHO_ACTING_IS_ADMIN", "CORVIDINHO_ACTING_ROLE", "CORVIDINHO_DISCORD_REPLY_CHANNEL_ID"]) {
@@ -235,9 +246,11 @@ describe("MEMORY-5: one profile per declared person, keyed by the person id", ()
     await Bun.sleep(3);
     await store("approval", "2026-09-03-merge", "approved merging #36");
     await store("private", "health", "PRIVATE-TOFU-NOTE");
+    // MEMORY-7.a: in a conversation the profile goes only to the asker, privately.
     const r = await runPlugin({ name: "memory-profile", args: [], nonInteractive: true, allowlist: [], cwd: dir });
     expect(r.ok).toBe(true);
-    const text = r.message ?? "";
+    expect(JSON.stringify([r.data, r.message])).not.toContain("short answers");
+    const text = r.privateText ?? "";
     expect(text).toContain("Profile: Tofu (tofu)");
     expect(text).toContain("- role: team");
     expect(text).toContain("maintains the bridge");
@@ -246,7 +259,11 @@ describe("MEMORY-5: one profile per declared person, keyed by the person id", ()
     expect(text.indexOf("asked for a review of #65")).toBeLessThan(text.indexOf("ship weekly"));
     expect(text).toContain("private notes: 1");
     expect(text).not.toContain("PRIVATE-TOFU-NOTE");
-    const data = r.data as { role: string; history: Row[]; privateNotes: number };
+    // The local CLI (no role session) shows it on the operator's own terminal.
+    terminal(TOFU);
+    const t = await run("memory-profile", []);
+    expect(t.privateText).toBeUndefined();
+    const data = t.data as { role: string; history: Row[]; privateNotes: number };
     expect(data.role).toBe("team");
     expect(data.history.map((h) => h.category)).toEqual(["approval", "ask", "decision"]);
     expect(JSON.stringify(data)).not.toContain("PRIVATE-TOFU-NOTE");
@@ -255,13 +272,13 @@ describe("MEMORY-5: one profile per declared person, keyed by the person id", ()
   test("the role in a profile is the people list's, changed only there", async () => {
     chat(KYN);
     const r1 = await run("memory-profile", []);
-    expect((r1.data as { role: string }).role).toBe("community");
+    expect(r1.privateText).toContain("- role: community");
     writeFileSync(path, fileText(PEOPLE.replace('role = "community"', 'role = "team"')));
     const r2 = await run("memory-profile", []);
-    expect((r2.data as { role: string }).role).toBe("team");
+    expect(r2.privateText).toContain("- role: team");
     chat(STRANGER);
     const r3 = await runPlugin({ name: "memory-profile", args: [], nonInteractive: true, allowlist: [], cwd: dir });
-    expect(r3.message).toContain("not on the owner's people list");
+    expect(r3.privateText).toContain("not on the owner's people list");
   });
 });
 
@@ -296,14 +313,17 @@ describe("MEMORY-7: a person's memory is theirs and the owner's only; private no
   test("the owner reads a person's memory and private notes with --person; a muted owner or no bridge bit cannot", async () => {
     await seedTofu();
     chat(OWNER_ID, { owner: true });
+    // MEMORY-7.a: the owner's view goes to the owner privately, never to the model.
     const r = await recall(["--person", "tofu"]);
     expect(r.ok).toBe(true);
-    expect(contents(r)).toEqual(["TOFU-TZ"]);
+    expect(r.privateText).toContain("TOFU-TZ");
+    expect(r.privateText).not.toContain("TOFU-PRIVATE");
+    expect(JSON.stringify([r.data, r.message])).not.toContain("TOFU-");
     const text = await runPlugin({ name: "memory-recall", args: ["--person", TOFU], nonInteractive: true, allowlist: [], cwd: dir });
-    expect(text.message).toContain("Memory of Tofu (tofu) (owner view");
-    expect(contents(await recall(["--person", "tofu", "--category", "private"]))).toEqual(["TOFU-PRIVATE"]);
+    expect(text.privateText).toContain("Memory of Tofu (tofu) — owner view");
+    expect((await recall(["--person", "tofu", "--category", "private"])).privateText).toContain("TOFU-PRIVATE");
     const p = await run("memory-profile", ["--person", "tofu"]);
-    expect((p.data as { privateNotes: number }).privateNotes).toBe(1);
+    expect(p.privateText).toContain("private notes: 1");
     expect((await recall(["--person", "nobody-here"])).error).toContain("no such person");
 
     process.env.CORVIDINHO_ACTING_IS_ADMIN = "0";
@@ -320,10 +340,12 @@ describe("MEMORY-7: a person's memory is theirs and the owner's only; private no
     expect(contents(await recall(["--query", "TOFU"]))).toEqual(["TOFU-TZ"]);
     const mine = await runPlugin({ name: "memory-recall", args: ["--category", "private"], nonInteractive: true, allowlist: [], cwd: dir });
     expect(mine.ok).toBe(true);
-    expect(mine.message).toContain("TOFU-PRIVATE");
-    expect(mine.message).toContain("never repeat them to anyone else");
+    // MEMORY-7.a: shown only privately — the model gets the placeholder.
+    expect(mine.privateText).toContain("TOFU-PRIVATE");
+    expect(mine.message).toContain("sent privately");
+    expect(mine.message).not.toContain("TOFU-PRIVATE");
     // Naming yourself with --person is your own memory.
-    expect(contents(await recall(["--person", "tofu", "--category", "private"]))).toEqual(["TOFU-PRIVATE"]);
+    expect((await recall(["--person", "tofu", "--category", "private"])).privateText).toContain("TOFU-PRIVATE");
     // A schedule run (no conversation) never gets them.
     schedule(TOFU);
     const s = await recall(["--category", "private"]);

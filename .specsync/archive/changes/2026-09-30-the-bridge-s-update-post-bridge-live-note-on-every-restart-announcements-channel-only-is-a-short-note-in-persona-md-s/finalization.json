@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "the-bridge-s-update-post-bridge-live-note-on-every-restart-announcements-channel-only-is-a-short-note-in-persona-md-s",
+  "implementation_commit": "85bdd767cf9af20fdcfd30334bde5edd503de8da",
+  "implementation_tree": "fa280a5c96b7779d0976008458da06000d1eb33c",
+  "contract_digest": "c8d8b572c4433b9dd65b1d17f2a92bfae85a9670d07fcdee4f74f48ffba38eb5",
+  "workspace_digest": "a4c4196c89134fcc86469e946b4f4f9ed9f441d0caca0fee64378a2c8560f222",
+  "closing_digest": "cbefe8fc358dd2dcca4f93c64b6f60d08e7293c9b557075aca07c3277f307566",
+  "review_digest": "b073d349dd2cc63645ff41d2fb037d1112b97b0b50adcc663346f5e0a7437422",
+  "finalization_digest": "a257ababb06b5d00b0602236f4b9fd695d74f68cf60e6aa88253da4e84682530",
+  "timestamp": 1790737518
+}
