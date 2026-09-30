@@ -118,6 +118,7 @@ const KEYS = [
   "CORVIDINHO_GITHUB_DENY_REPOS",
   "CORVIDINHO_GITHUB_DENY_ORGS",
   "DISCORD_MUTED_USER_IDS",
+  "CORVIDINHO_DISCORD_SESSION_ID",
   "GITHUB_TOKEN",
   "GH_TOKEN",
 ] as const;
@@ -271,6 +272,63 @@ describe("IDENTITY-12: the tool layer resolves the role on every call", () => {
       "specsync-change-finalize",
       "specsync-change-new",
     ]);
+  });
+});
+
+describe("DISCORD-SCHEDULE-1.a: schedule-run stamps in the tool layer", () => {
+  const SCHEDULE_SID = "schedule_sched_0123456789ab";
+
+  test("the owner's own schedule (owner stamp) is owner; a schedule is never team, whatever its stamp", async () => {
+    process.env.CORVIDINHO_DISCORD_SESSION_ID = SCHEDULE_SID;
+    session(OWNER_ID, { admin: true, role: "owner" });
+    expect(await resolveActingRole()).toBe("owner");
+    // A team member's schedule, as the scheduler stamps it (community).
+    session(TOFU, { role: "community" });
+    expect(await resolveActingRole()).toBe("community");
+    // A team or owner stamp on a team member's scheduled run still gives community.
+    session(TOFU, { role: "team" });
+    expect(await resolveActingRole()).toBe("community");
+    session(TOFU, { admin: true, role: "owner" });
+    expect(await resolveActingRole()).toBe("community");
+    // Outside a schedule the same team stamp is team (unchanged).
+    process.env.CORVIDINHO_DISCORD_SESSION_ID = "sess_chat_1";
+    session(TOFU, { role: "team" });
+    expect(await resolveActingRole()).toBe("team");
+  });
+
+  test("runPlugin: the owner's schedule passes the role gate for mutating tools; a team member's schedule gets the role refusal even for a team review tool", async () => {
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    process.env.CORVIDINHO_DISCORD_SESSION_ID = SCHEDULE_SID;
+    const allowlist = ["github-issue-comment"];
+    const args = ["12", "--repo", REPO, "--body", "nightly digest"];
+    session(OWNER_ID, { admin: true, role: "owner" });
+    const own = await runPlugin({ name: "github-issue-comment", args, nonInteractive: true, allowlist, cwd: dir });
+    expect(own.error ?? "").not.toContain(ROLE_REFUSED_MESSAGE);
+    expect(own.ok).toBe(true);
+    const write = await runPlugin({ name: "files-write", args: ["digest.txt", "ok"], nonInteractive: true, allowlist, cwd: dir });
+    expect(write.ok).toBe(true);
+    expect(readFileSync(join(dir, "digest.txt"), "utf8")).toBe("ok");
+
+    session(TOFU, { role: "team" });
+    const team = await runPlugin({ name: "github-issue-comment", args, nonInteractive: true, allowlist, cwd: dir });
+    expect(team.ok).toBe(false);
+    expect(team.exitCode).toBe(2);
+    expect(team.error ?? "").toContain(ROLE_REFUSED_MESSAGE);
+  });
+
+  test("the catalog: the owner's schedule is offered its allowlisted owner tools (never the shell); a team member's schedule no mutating tool", async () => {
+    process.env.CORVIDINHO_DISCORD_SESSION_ID = SCHEDULE_SID;
+    const allowlist = new Set(["github-issue-comment", "github-pr-create", "shell-exec"]);
+    session(OWNER_ID, { admin: true, role: "owner" });
+    const owner = names({ tier: "code", allowlist, actingRole: await resolveActingRole() });
+    expect(owner.has("github-issue-comment")).toBe(true);
+    expect(owner.has("github-pr-create")).toBe(true);
+    expect(owner.has("files-write")).toBe(true);
+    // SAFE-3.a: no grant for a schedule, so the allowlisted shell stays out.
+    expect(owner.has("shell-exec")).toBe(false);
+    session(TOFU, { role: "team" });
+    const team = names({ tier: "code", allowlist, actingRole: await resolveActingRole() });
+    for (const n of MUTATING()) expect(team.has(n)).toBe(false);
   });
 });
 

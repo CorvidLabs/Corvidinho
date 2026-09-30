@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "d867e80265cc4e58a5343af6f050cc339f99b740",
+  "contract_digest": "9e65512899b0f35f46d1335484b1db7d591cfcb67f5dfc7479c0448381e0ba49",
+  "execution_digest": "24af52ddfdf490171956c3f6483325069881b587169d73578da646a1dee7b2a0",
+  "workspace_digest": "7ee640e2c4e849695b114fb55cf2b0338f278e400edaf9bc604efd0d28553e3f",
+  "timestamp": 1790796738
+}

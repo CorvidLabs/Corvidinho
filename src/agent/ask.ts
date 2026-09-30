@@ -224,6 +224,52 @@ export function blockedTaskResult(
   };
 }
 
+/**
+ * The must-ask gate's refusal outcomes (src/plugins/must-ask.ts) that are the
+ * owner's no: denied on the card, no answer in time (SAFE-20: no answer means
+ * no), or the same call they denied before.
+ */
+const MUST_ASK_NO_OUTCOMES: ReadonlySet<string> = new Set(["denied", "expired", "resent"]);
+
+/** Longest part of the gate's `why` a schedule's question quotes. */
+const MUST_ASK_WHY_QUOTED_MAX = 300;
+
+/**
+ * DISCORD-SCHEDULE-1.a / AUTONOMY-6.a: the ask a scheduled run ends with when
+ * the owner said no to a must-ask call — `result` is `tool`'s refusal from
+ * `runPlugin` with outcome `denied`, `expired` or `resent`. A "stuck" ask
+ * (the owner is pinged, AUTONOMY-2) naming the refused action (the tool and
+ * the gate's own scrubbed `why`, never model text), the rule and the card;
+ * the schedule records it and its later runs wait on it (AUTONOMY-6.a)
+ * instead of raising a new card every tick. Null for anything else: a call
+ * that ran, any other refusal, a result with no must-ask data.
+ */
+export function mustAskRefusedAsk(tool: string, result: PluginHandlerResult): HumanAsk | null {
+  if (result.ok) return null;
+  const data = result.data as
+    | { refused?: unknown; rule?: unknown; outcome?: unknown; why?: unknown; request?: unknown }
+    | undefined;
+  if (!data || typeof data !== "object" || data.refused !== true) return null;
+  if (typeof data.outcome !== "string" || !MUST_ASK_NO_OUTCOMES.has(data.outcome)) return null;
+  const rule = typeof data.rule === "string" && data.rule.trim() ? data.rule.trim() : "AUTONOMY-9/10";
+  const rawWhy = typeof data.why === "string" ? data.why.replace(/\s+/g, " ").trim() : "";
+  const why =
+    rawWhy.length > MUST_ASK_WHY_QUOTED_MAX ? `${rawWhy.slice(0, MUST_ASK_WHY_QUOTED_MAX - 1)}…` : rawWhy;
+  const card =
+    typeof data.request === "string" && data.request.trim() ? `Approve card ${data.request.trim()}` : "its Approve card";
+  const no =
+    data.outcome === "denied"
+      ? `the owner denied it on ${card}`
+      : data.outcome === "resent"
+        ? `the owner already denied this exact call on ${card}`
+        : `nobody answered ${card} in time (SAFE-20: no answer means no)`;
+  const question = normalizeQuestion(
+    `I didn't run \`${tool}\`${why ? ` (${why})` : ""}, which needs the owner's OK (${rule}): ${no}, so nothing was done. ` +
+      "This schedule waits until this is answered: how should it go on?",
+  );
+  return question ? { reason: "stuck", question } : null;
+}
+
 /** Stuck ask when verification still fails after every retry (AUTONOMY-2). */
 export function stuckAfterVerifyAsk(maxRetries: number): HumanAsk {
   return {

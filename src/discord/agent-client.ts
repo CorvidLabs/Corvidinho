@@ -63,8 +63,10 @@ export type AgentRunChatOpts = {
    * IDENTITY-8..12: the most this run allows its actor — "team" only from
    * Discord chat, slash and button picks for a declared team member
    * (`resolveDiscordActingRole`). Omitted ⇒ owner when `actingIsAdmin`, else
-   * community (schedules). The tool layer re-resolves the role from the
-   * people list on every call; this stamp can only lower it.
+   * community (a schedule: the owner's own runs as the owner, anyone else's
+   * as community, never team — DISCORD-SCHEDULE-1.a). The tool layer
+   * re-resolves the role from the people list on every call; this stamp can
+   * only lower it.
    */
   actingRole?: PersonRole;
   /** A `/work` run: team work tools apply (IDENTITY-10). */
