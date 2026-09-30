@@ -14,6 +14,7 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
 
 - **SAFE-1**  Dangerous tools require my consent; in non-interactive mode they are denied unless I allowlisted them.
 - **SAFE-2**  The agent cannot delete or overwrite protected project infra (env files, git metadata, fledge.toml, specs, keystores) through its file tools.
+  - **SAFE-2.a**  Its file tools also can't change .fledge/, so a run can't weaken the checks it is verified by.
 - **SAFE-3**  Shell commands cannot `cd` their way out of the project root to run elsewhere on my machine.
   - **SAFE-3.a**  The model may use the shell, the language runners and Fledge lane/task runs only in my own interactive runs (chat, /session start, /work, local CLI), only when I allowlist them, and only inside that talk's own worktree; non-owners, WATCH and schedules never get them.
 - **SAFE-4**  Destructive data ops (raw SQL wipes, memory deletes) need a two-phase confirm so a single confused tool call cannot erase the store.

@@ -39,7 +39,8 @@ export function hasKeystoreComponent(parts: readonly string[]): boolean {
  * Pass the project `root` with an absolute path: the keystore rule then reads
  * only the components below the root, so a project checked out under a
  * directory such as `~/keystore-tools/` does not become read-only as a whole.
- * The exact-name rules (.git / .env* / specs / .specsync) read the whole path.
+ * The exact-name rules (.git / .env* / specs / .specsync / .fledge) read the
+ * whole path.
  */
 export function isProtectedPath(filePath: string, root?: string): boolean {
   const normalized = filePath.replace(/\\/g, "/");
@@ -50,6 +51,10 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
     if (lower === ".git") return true;
     if (lower === ".env" || lower.startsWith(".env.")) return true;
     if (lower === "specs") return true;
+    // Fledge lane imports and config (`.fledge/lanes/*.toml`): the verify gate
+    // runs them, so a run must not rewrite the checks it is judged by
+    // (SAFE-2.a). Reads stay allowed.
+    if (lower === ".fledge") return true;
     // SpecSync config, registry and archived changes. Files inside an active
     // change folder (`.specsync/changes/<id>/…`) stay writable so the agent
     // can fill change artifacts (SPECSYNC-4); `.specsync/changes` and
@@ -85,7 +90,7 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +
-    `(.env* / .git / fledge.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
+    `(.env* / .git / fledge.toml / .fledge / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
     `There is NO override — edit via SpecSync or outside the agent file tools.`
   );
 }
