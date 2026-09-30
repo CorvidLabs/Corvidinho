@@ -1,6 +1,6 @@
 ---
 id: i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set
-state: approved
+state: implementing
 type: feature
 base_commit: 156cfa975c6d269b7e3a183cef3c7fdb20cab4f9
 ---
