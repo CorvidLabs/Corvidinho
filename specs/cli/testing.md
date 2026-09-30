@@ -54,3 +54,12 @@ bridge / WATCH tests drive the owner notice from it.
   `tests/agent.spend-ask.test.ts`, `tests/cli.project-path.test.ts`: the real
   CLI runs in scratch projects without `--no-verify`, never the repo's own
   snapshot or verify lane.
+## GitHub logins without a numeric id (REQ-cli-367, IDENTITY-7.a)
+
+`tests/cli.doctor-truth.test.ts` › "doctor warns about GitHub logins with no
+numeric id" — the real CLI with a clean env and a temp allowlist file: an
+`[owner]` with `github_login` but no `github_id` and a person with only
+`github_logins` give one `[warn] people-github: ada, the owner: …` line naming
+person ids only (no Discord id, GitHub id or login printed) and doctor still
+passes; with `[owner] github_id` and `github_ids` there is no such line. Both
+fail on the base sources (no line) and pass after.

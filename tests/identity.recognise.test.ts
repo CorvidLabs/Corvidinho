@@ -285,7 +285,8 @@ describe("Discord button-pick resumes recognise declared people (IDENTITY-14)", 
 
 describe("Discord slash runs recognise declared people (IDENTITY-14)", () => {
   test("/session start and /work name the declared person by the invoker's Discord id", async () => {
-    const b = await bridge(FILE);
+    // IDENTITY-11.a: Tofu is team here (community can't start /work).
+    const b = await bridge(FILE.replace('[people.tofu]\n', '[people.tofu]\nrole = "team"\n'));
     for (const [n, command] of [[1, "session"], [2, "work"]] as const) {
       const edits: SlashReplyPayload[] = [];
       await b.handlers.onSlash!({
@@ -338,8 +339,8 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
     return cfg;
   };
 
-  test("the commenter's login or numeric id names the declared person in a leading [Corvidinho …] paragraph", () => {
-    const a = routeEvent(ev(), { store: new SessionStore(), allowlist: allowlist(), people: dir });
+  test("the commenter's numeric id names the declared person in a leading [Corvidinho …] paragraph", () => {
+    const a = routeEvent(ev({ senderId: 4242 }), { store: new SessionStore(), allowlist: allowlist(), people: dir });
     expect(a.kind).toBe("start_session");
     const prompt = a.kind === "start_session" ? a.prompt : "";
     expect(prompt.startsWith(`${WATCH_IDENTITY_HEADER}\n- github_login: Tofu-Dev\n- declared_person: tofu\n- display_name: Tofu\n- nicknames: T\n`)).toBe(true);
@@ -347,16 +348,20 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
     // Planning never selects modules from the identity paragraph.
     expect(planningSelectionText(prompt)).not.toContain("declared_person");
 
-    // A renamed login is still Tofu by the numeric id; a reused login with another id is not.
+    // A renamed login is still Tofu by the numeric id; a reused login with another id, or no id, is not (IDENTITY-7.a).
     expect(formatWatchIdentityBlock({ sender: "renamed", senderId: 4242 }, dir)).toContain("declared_person: tofu");
     expect(formatWatchIdentityBlock({ sender: "tofu-dev", senderId: 999 }, dir)).toContain("declared_person: none");
+    expect(formatWatchIdentityBlock({ sender: "tofu-dev" }, dir)).toContain("declared_person: none");
   });
 
-  test("the owner is recognised by [owner] github_login; strangers are marked undeclared; no people ⇒ prompt as before", () => {
-    const owner = formatWatchIdentityBlock({ sender: "0xLeif" }, dir)!;
+  test("the owner is recognised by [owner] github_id, never the login; strangers are marked undeclared; no people ⇒ prompt as before", () => {
+    const withId = buildPeopleDirectory(parsePeopleToml(PEOPLE), { ...OWNER, githubId: "8268288" });
+    const owner = formatWatchIdentityBlock({ sender: "0xLeif", senderId: 8268288 }, withId)!;
     expect(owner).toContain("- declared_person: owner");
     expect(owner).toContain("- display_name: Leif");
     expect(owner).toContain("- role: owner (recognised here; a GitHub run still gets no ADMIN tools)");
+    expect(formatWatchIdentityBlock({ sender: "0xLeif" }, dir)).toContain("declared_person: none");
+    expect(formatWatchIdentityBlock({ sender: "0xLeif", senderId: 1 }, withId)).toContain("declared_person: none");
     expect(formatWatchIdentityBlock({ sender: "Tofu" }, dir)).toContain("declared_person: none");
     const nobody = buildPeopleDirectory(parsePeopleToml(""), OWNER);
     expect(formatWatchIdentityBlock({ sender: "stranger" }, nobody)).toBeNull();
@@ -390,6 +395,7 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
     const d = tmp();
     const path = join(d, "allowlist.toml");
     writeFileSync(path, `[github]\nrepos = ["CorvidLabs/Corvidinho"]\nusers = ["tofu-dev", "ada-gh"]\n\n${PEOPLE}`);
+    // ada-gh's comment carries its numeric id (as the API does); ada is declared by it below.
     const prompts: string[] = [];
     const agent: WatchAgent = {
       async runChat({ prompt, sessionId }) {
@@ -412,7 +418,7 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
         round += 1;
         return round === 1
           ? [ev({ id: "c-1", sender: "tofu-dev", senderId: 4242 })]
-          : [ev({ id: "c-2", sender: "ada-gh", number: 8 })];
+          : [ev({ id: "c-2", sender: "ada-gh", senderId: 5151, number: 8 })];
       },
     });
     expect(result.ok).toBe(true);
@@ -420,7 +426,7 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
     running.push(result);
     await result.pollOnce();
     expect(prompts[0]).toContain("declared_person: tofu");
-    writeFileSync(path, `[github]\nrepos = ["CorvidLabs/Corvidinho"]\nusers = ["tofu-dev", "ada-gh"]\n\n${PEOPLE}\n[people.ada]\ngithub_logins = ["ada-gh"]\n`);
+    writeFileSync(path, `[github]\nrepos = ["CorvidLabs/Corvidinho"]\nusers = ["tofu-dev", "ada-gh"]\n\n${PEOPLE}\n[people.ada]\ngithub_logins = ["ada-gh"]\ngithub_ids = ["5151"]\n`);
     await result.pollOnce();
     expect(prompts[1]).toContain("declared_person: ada");
   });

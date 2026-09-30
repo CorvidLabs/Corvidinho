@@ -224,8 +224,8 @@ function safeFilename(name: string): string {
 /**
  * True when `abs` (inside `root`) must never be attached, judged on its
  * project-relative path: SAFE-2 protected infra (`.env*`, `.git`, `specs`,
- * `*.spec.md`, fledge/bun config, keystores), any `.specsync` state, or a
- * secret path (`.ssh`, keys, credentials).
+ * `*.spec.md`, fledge/bun config incl. `.fledge/`, keystores), any
+ * `.specsync` state, or a secret path (`.ssh`, keys, credentials).
  */
 function refusedPath(root: string, abs: string): boolean {
   const rel = relative(root, abs).split("\\").join("/");

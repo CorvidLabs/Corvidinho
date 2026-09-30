@@ -47,12 +47,14 @@ import {
   githubWatchDoctorCheck,
   llmDoctorCheck,
   loadDoctorAllowlist,
+  peopleGithubDoctorCheck,
   projectFilesDoctorChecks,
   removedVerifyKeyDoctorCheck,
   type DoctorCheck,
 } from "./doctor.ts";
 import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
+import { loadDeclaredPeople } from "./identity/people.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { forwardedSignals } from "./plugins/proc-group.ts";
@@ -555,6 +557,15 @@ async function doctor(): Promise<number> {
     mark: ownerLoad.owner && ownerLoad.issues.length === 0 ? "ok" : "info",
     detail: formatOwnerDoctorDetail(ownerLoad),
   });
+  // IDENTITY-7.a — the owner / declared people with a GitHub login but no
+  // numeric GitHub id are not recognised on GitHub ([warn], person ids only).
+  const peopleCheck = peopleGithubDoctorCheck(
+    loadDeclaredPeople({
+      allowlist: { sourcePath: allowPath && existsSync(allowPath) ? allowPath : null },
+      owner: ownerLoad.owner,
+    }),
+  );
+  if (peopleCheck) checks.push(peopleCheck);
   // IDENTITY-2 — ADMIN is owner-only; legacy admin lists are ignored.
   if (
     (process.env.CORVIDINHO_DISCORD_ADMIN_USERS ?? "").trim() ||

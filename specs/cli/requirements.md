@@ -925,6 +925,26 @@ Acceptance Criteria
 - A run whose tool result trips the detector reports `{ source, reasons }` once through `onInjection`; the Discord and WATCH spawn clients read it back from the result frame with `injectionNoticeFromUnknown` (tool-name source, known reason ids only) and the bridge / WATCH tests drive the owner notice from it.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 
+### REQ-cli-367
+
+`corvidinho doctor` SHALL warn about GitHub logins with no numeric id
+(IDENTITY-7.a, #36, REQ-discord-367). From the owner config (env + allowlist
+file `[owner]`) and the declared people of the allowlist file the loader
+resolves (read like the bridge and WATCH read them), doctor SHALL print one
+`[warn] people-github` line when the owner or any declared person has a GitHub
+login but no GitHub numeric id (`peopleWithoutGithubId`), naming them by
+person id only (`the owner` for the built-in owner, `<id> (the owner)` for the
+owner's declared person) — never a Discord id, GitHub id, login or token —
+and saying that on GitHub people match only by that id, so they read as
+undeclared (community) there until one is linked (`[owner] github_id` /
+`github_ids` in the file, or `/admin people link person:<id> github:<login>`).
+The line SHALL NOT change the exit code, and SHALL NOT be printed when nobody
+is affected.
+
+Acceptance Criteria
+- An allowlist file whose `[owner]` has a `github_login` but no `github_id` and a person with only `github_logins` gives `[warn] people-github: ada, the owner: …` naming person ids only; no Discord id, GitHub id or login is printed; doctor still passes (exit 0).
+- With `[owner] github_id` and `github_ids` on everyone with a login there is no `people-github` line.
+- The tests in `tests/cli.doctor-truth.test.ts` fail on the base sources and pass after.
 ### REQ-cli-425
 
 The project SHALL ship package version `0.0.34` (declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep). CLI `version` and Discord presence (DISCORD-12) report `0.0.34` after a restart. CHANGELOG SHALL include verbose 0.0.34 notes.

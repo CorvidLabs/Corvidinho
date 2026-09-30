@@ -66,6 +66,7 @@ users = ["tofu-dev", "kyn-gh", "stranger-gh", "0xleif"]
 discord_id = "${OWNER_ID}"
 display = "Leif"
 github_login = "0xleif"
+github_id = "8268288"
 
 [people.tofu]
 display = "Tofu"
@@ -79,6 +80,7 @@ display = "Kyn"
 role = "community"
 discord_ids = ["${KYN}"]
 github_logins = ["kyn-gh"]
+github_ids = ["6060"]
 `;
 
 const KEYS = [
@@ -246,24 +248,27 @@ describe("MEMORY-8 memory in GitHub (WATCH) runs, by the commenter's declared pe
     discord(TOFU, "team");
     expect(contents(await run("memory-recall", []))).toEqual(["uses helix"]);
     await run("memory-store", ["--category", "preference", "--key", "timezone", "--content", "Europe/Oslo"]);
-    github("Tofu-Dev");
+    // A renamed login with the same numeric id is still Tofu (IDENTITY-7.a).
+    github("Tofu-Renamed", "4242");
     expect(contents(await run("memory-recall", ["--query", "timezone"]))).toEqual(["Europe/Oslo"]);
   });
 
-  test("the owner (declared by [owner] github_login) keeps their Discord-id memory on GitHub", async () => {
+  test("the owner (declared by [owner] github_id) keeps their Discord-id memory on GitHub; the [owner] login alone does not", async () => {
     discord(OWNER_ID, "owner");
     await run("memory-store", ["--category", "person", "--key", "identity", "--content", "Leif is the owner"]);
-    github("0xleif");
+    github("0xleif", "8268288");
     const r = await run("memory-recall", []);
     expect(r.error).toBeUndefined();
     expect(contents(r)).toEqual(["Leif is the owner"]);
+    github("0xleif");
+    expect((await run("memory-recall", [])).ok).toBe(false);
   });
 
   test("privacy on GitHub (MEMORY-7): no --person, no private notes, no forget-me, never another person's rows", async () => {
     discord(KYN);
     await run("memory-store", ["--category", "person", "--key", "kyn-fact", "--content", "KYN-SECRET-ISH"]);
     await run("memory-store", ["--category", "private", "--key", "note", "--content", "KYN-PRIVATE"]);
-    github("kyn-gh");
+    github("kyn-gh", "6060");
     expect(contents(await run("memory-recall", []))).toEqual(["KYN-SECRET-ISH"]);
     const priv = await run("memory-recall", ["--category", "private"]);
     expect(priv.ok).toBe(false);
@@ -279,10 +284,14 @@ describe("MEMORY-8 memory in GitHub (WATCH) runs, by the commenter's declared pe
     }
   });
 
-  test("a renamed or re-used login whose numeric id differs is not the declared person", async () => {
+  test("a renamed or re-used login whose numeric id differs, or with no id, is not the declared person (IDENTITY-7.a)", async () => {
     github("tofu-dev", "9999");
     const r = await run("memory-store", ["--category", "person", "--key", "x", "--content", "impostor"]);
     expect(r.ok).toBe(false);
+    github("tofu-dev");
+    const noId = await run("memory-store", ["--category", "person", "--key", "y", "--content", "impostor"]);
+    expect(noId.ok).toBe(false);
+    expect(noId.error).toContain("not on the owner's people list");
     expect(withStore((s) => s.recall({ ownerUserId: "person:tofu" }))).toEqual([]);
   });
 

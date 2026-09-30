@@ -585,6 +585,19 @@ Options whose ids are already unique SHALL come out byte-identical, so
 normalizing a stored ask again changes nothing and its open buttons keep
 working. No new env var, flag or protocol field.
 
+The question and every option label SHALL be SAFE-6 scrubbed before they
+are cut (SAFE-6.a): `normalizeQuestion` (used by `askFromToolArguments` and
+`askFromUnknown`) SHALL drop control characters and trim, then scrub, then cut
+at `ASK_QUESTION_MAX` (1500); `cleanAskLabel` SHALL collapse whitespace, then
+scrub, then cut at `ASK_OPTION_LABEL_MAX` (80), for structured options and
+for choices parsed from the question. A secret the cut would split SHALL show
+as `[redacted:<kind>]`, never as a raw piece. A question or label that was
+cut SHALL be scrubbed once more, because the cut can end a key shape (an AWS
+key id is matched only up to a word boundary); that marker is shorter than
+what it replaces, so the text stays within its cap and normalizing it again
+changes nothing. Option ids are unchanged: a secret-looking id still falls
+back to its position.
+
 Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
 - Numbered question lines parse into options when structured options absent.
@@ -595,6 +608,10 @@ Acceptance Criteria
 - A dropped empty option holds no id (`[{id:"a",label:"  "},{id:"a"},{id:"b"}]` gives `a`, `b`).
 - Already-unique options normalize byte-identically, and normalizing the result again changes nothing.
 - ask-human arguments whose options repeat one id give option buttons with distinct `custom_id`s, and the second option's id finds the second label.
+- A question whose fake key starts where the whole marker fits before the 1500 cut comes out `…[redacted:github-token]…` (1500 chars) from `askFromToolArguments` and `askFromUnknown`, and `formatAskSummary` carries no raw piece; for every cut position across the key no raw piece survives and the question stays within 1500.
+- A label straddling the 80 cut comes out `…[redacted:github-token]…` from string options, `{id,label}` options and numbered question lines; for every cut position no raw piece survives and the label stays within 80; a secret-looking id still becomes its position.
+- A numbered choice the question cap cuts is parsed from the scrubbed question.
+- A label or question whose cut leaves `AKIA` plus 16 capitals before the `…` (a longer run that is no key id before the cut) comes out `…[redacted:aws-key]…` within its cap, and normalizing it again changes nothing.
 
 ### REQ-agent-260
 
@@ -681,6 +698,46 @@ hooks off, repo-locating env stripped, discovery clamped to the root,
 optional locks off) with fsmonitor off, and fingerprints are hashed in
 process: nothing is written to the index or object store (the talk marker of
 REQ-agent-015 lives in the worktree's own git dir, outside both). No flag,
+
+Real-diff verify gate (AGENT-4, issue #85). When the verify gate is on,
+`runTask` SHALL snapshot the run's git project before the first attempt:
+`HEAD`, `git status --porcelain=v1 -z --untracked-files=all --no-renames`
+and a fingerprint of every dirty or untracked path (SHA-256 of the file up
+to 4 MiB while a 64 MiB content budget lasts, stat identity past either, link
+target for a symlink, never followed). Later diffs SHALL fingerprint again
+only the paths dirty at the start (with the same kind); a path that became
+dirty or untracked is a change by itself. The
+project root is the nearest directory at or above the run cwd that holds
+`.git` (as in REQ-agent-084); a cwd below the root SHALL read only its own
+subtree and report paths relative to the cwd. After each attempt that ends
+without an ask, a provider error or an abort, and before deciding whether to
+verify, `runTask` SHALL add to `filesChanged` every path that differs from the
+snapshot: paths changed between the start `HEAD` and the current `HEAD`
+(including a first commit on an unborn `HEAD`), paths that became dirty or
+untracked, paths already dirty whose status or fingerprint changed, and
+dirty paths that became clean. These join the tool-reported files and the
+union across attempts (REQ-agent-242), so an edit no tool reported
+(code-tier `shell-exec`, a delegate worker, a commit made through a shell)
+runs the verify lane and the run ends `done` only when it passes, or fails
+plainly. Paths dirty before the run and left untouched, and gitignored paths,
+SHALL NOT count. When the cwd is not inside a git work tree, or the start
+snapshot cannot be read, the gate SHALL use tool-reported files only (the
+behaviour before this requirement), except that a run that called a tool
+whose file edits no result reports SHALL verify anyway (REQ-agent-502). When the start snapshot was read but a
+later diff cannot be, the gate SHALL fail closed: verify runs and one `Text`
+event says the diff could not be read. When the real diff adds paths no tool
+reported, one `Text` event SHALL say how many and name up to five. At most
+`WORKSPACE_DIFF_MAX_FILES` (1000) real-diff paths per run SHALL join
+`filesChanged` (the note still gives the full count and how many were
+listed), so the NDJSON `result` line stays under the parser's line cap and a
+bridge still gets the summary; the gate is unaffected because `filesChanged`
+is non-empty either way. An empty
+real diff with no tool-reported files SHALL still skip verify with
+`verifySkipped=true` (REQ-agent-003). `--no-verify` / `verify_before_complete
+= false` SHALL take no snapshot. Git SHALL run read-only through `runGit`
+(argv, no shell, hooks off, repo-locating env stripped, discovery clamped to
+the root, optional locks off) with fsmonitor off, and fingerprints are hashed
+in process: nothing is written to the index or object store. No flag,
 environment variable, config key or slash command is added. `RunTaskOptions`
 has a `workspaceDiff` test seam (like `verifyRunner`), not a product surface.
 
@@ -698,6 +755,8 @@ Acceptance Criteria
 - A tool that claims `dist/out.js` (gitignored, written), `app.ts` (edited) and `ghost.ts` (never written) in a git repo: `filesChanged` is `["app.ts"]`, the lane runs, and one note names `dist/out.js, ghost.ts`; a run whose only change is such a claim still runs the lane, and its retry after the failed verify runs it again.
 - The demo execute reports `filesChanged: []`.
 - End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
+- With the gate off no snapshot is taken.
+- End to end: the tool loop runs the real code-tier `shell-exec` with `cp broken.ts app.ts` in a temp git repo (a `>` or `tee` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write is a copy); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
 
 ### REQ-agent-428
 
@@ -1048,7 +1107,7 @@ Acceptance Criteria
 - A community run whose task claims the owner and asks for `files-write` is offered no mutating tool and the call gets the role refusal.
 - Through `createTaskExecute`: a `delegate` result, and a failed `council` result, carrying `data.injection` put `injectionWorkerNote` and the fence in the tool message, drop `files-write`, `memory-store` and the worker tool from the next request, refuse `memory-store` and `files-write` (nothing stored or written), report the worker's notice once, end the summary with the note and record one audit row; at delegation depth 1 a hit is reported but records no row.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
-
+- WATCH (REQ-watch-367, IDENTITY-7.a): `watchInjectionVerdict` exempts the owner only by the owner's GitHub numeric id; an injected body from the owner's login with no or another numeric id is flagged (`tests/safe.injection.test.ts`).
 
 ### REQ-agent-101
 

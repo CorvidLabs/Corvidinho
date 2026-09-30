@@ -27,6 +27,7 @@ import {
   type AgentEvent,
   type TaskResult,
 } from "../src/agent/index.ts";
+import { ASK_OPTION_LABEL_MAX, normalizeAskOptions } from "../src/agent/ask-options.ts";
 import { clearRegistry, register } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 
@@ -105,6 +106,116 @@ describe("ask-human tool arguments (AUTONOMY-1)", () => {
     expect(askFromUnknown({ reason: "clarify", question: "" })).toBeUndefined();
     expect(askFromUnknown("clarify")).toBeUndefined();
     expect(askFromUnknown(null)).toBeUndefined();
+  });
+});
+
+/**
+ * SAFE-6.a — a fake GitHub token, built at runtime (never a real key). Its
+ * scrub pattern needs 20 characters after `ghp_`, so a cut that keeps fewer
+ * leaves a raw piece no later scrub can catch.
+ */
+const FAKE_TOKEN = "gh" + "p_" + "a1B2c3D4e5".repeat(4).slice(0, 36);
+const TOKEN_HEAD = FAKE_TOKEN.slice(0, 4);
+const TOKEN_MARK = "[redacted:github-token]";
+
+/** `pad` chars (ending in a space), then the fake token, then `tail`. */
+function straddle(pad: number, tail = " — rotate it?"): string {
+  return `${"x".repeat(pad - 1)} ${FAKE_TOKEN}${tail}`;
+}
+
+describe("SAFE-6.a: ask questions and choice labels are scrubbed before they are cut", () => {
+  test("a question whose secret straddles the ASK_QUESTION_MAX cut shows [redacted:<kind>], never a raw piece", () => {
+    // Where the whole marker still fits before the cut (on main the cut kept
+    // `ghp_` plus 19 raw characters, one short of the scrub pattern).
+    const pad = ASK_QUESTION_MAX - TOKEN_MARK.length - 1;
+    for (const ask of [
+      askFromToolArguments(JSON.stringify({ question: straddle(pad) })),
+      { ok: true as const, ask: askFromUnknown({ reason: "clarify", question: straddle(pad) })! },
+    ]) {
+      expect(ask.ok).toBe(true);
+      if (!ask.ok) continue;
+      expect(ask.ask.question).toBe(`${"x".repeat(pad - 1)} ${TOKEN_MARK}…`);
+      expect(ask.ask.question.length).toBe(ASK_QUESTION_MAX);
+      expect(formatAskSummary(ask.ask)).not.toContain(TOKEN_HEAD);
+    }
+    // Wherever the cut falls across the token, no raw piece survives.
+    for (let pad = ASK_QUESTION_MAX - 60; pad <= ASK_QUESTION_MAX + 5; pad++) {
+      const q = askFromUnknown({ reason: "stuck", question: straddle(pad) })!.question;
+      expect(q).not.toContain(TOKEN_HEAD);
+      expect(q.length).toBeLessThanOrEqual(ASK_QUESTION_MAX);
+    }
+  });
+
+  test("a choice label whose secret straddles the 80-char cut shows [redacted:<kind>] (string, object and numbered-line options); ids behave as before", () => {
+    const pad = ASK_OPTION_LABEL_MAX - TOKEN_MARK.length - 1;
+    const label = straddle(pad, " for the deploy");
+    const want = `${"x".repeat(pad - 1)} ${TOKEN_MARK}…`;
+    const labelOf = (raw: string) => normalizeAskOptions([raw, "No"])![0]!.label;
+    expect(labelOf(label)).toBe(want);
+    expect(want.length).toBe(ASK_OPTION_LABEL_MAX);
+
+    const fromStrings = askFromToolArguments(
+      JSON.stringify({ question: "Which key?", options: [label, "Neither"] }),
+    );
+    expect(fromStrings).toMatchObject({
+      ok: true,
+      ask: { options: [{ id: "1", label: want }, { id: "2", label: "Neither" }] },
+    });
+    // #265 unchanged: a secret-looking id falls back to its position; a plain id is kept.
+    const fromObjects = askFromUnknown({
+      reason: "clarify",
+      question: "Which key?",
+      options: [
+        { id: "use-new", label },
+        { id: FAKE_TOKEN, label: "Neither" },
+      ],
+    });
+    expect(fromObjects?.options).toEqual([
+      { id: "use-new", label: want },
+      { id: "2", label: "Neither" },
+    ]);
+    const fromLines = askFromToolArguments(
+      JSON.stringify({ question: `Which key?\n1. ${label}\n2. Neither` }),
+    );
+    expect(fromLines.ok && fromLines.ask.options?.[0]?.label).toBe(want);
+    expect(fromLines.ok && fromLines.ask.question).not.toContain(TOKEN_HEAD);
+
+    // Wherever the cut falls across the token, no raw piece survives.
+    for (let p = 1; p <= ASK_OPTION_LABEL_MAX + 5; p++) {
+      const got = labelOf(straddle(p, " please"));
+      expect(got).not.toContain(TOKEN_HEAD);
+      expect(got.length).toBeLessThanOrEqual(ASK_OPTION_LABEL_MAX);
+    }
+  });
+
+  test("a numbered choice cut by the question cap is parsed from the scrubbed question", () => {
+    // The second choice's token starts where the whole marker still fits
+    // before the question cap; on main the choice kept a raw `ghp_…` piece.
+    const head = "Which key?\n1. Keep the old key\n";
+    const line = "2. Use ";
+    const fill = ASK_QUESTION_MAX - TOKEN_MARK.length - 1 - head.length - line.length - 1;
+    const question = `${head}${"z".repeat(fill)}\n${line}${FAKE_TOKEN}\n3. Ask me later`;
+    const ask = askFromUnknown({ reason: "clarify", question })!;
+    expect(ask.question).not.toContain(TOKEN_HEAD);
+    expect(ask.options?.map((o) => o.label)).toEqual(["Keep the old key", `Use ${TOKEN_MARK}…`]);
+  });
+
+  test("a cut that ends a key shape is scrubbed too, and normalizing again changes nothing", () => {
+    // `AKIA` + 20 capitals is no AWS key id (the pattern stops at a word
+    // boundary after 16), but a cut that keeps exactly 16 of them before `…`
+    // leaves one. Built at runtime; never a real key.
+    const longId = "AK" + "IA" + "QWERTYUIOPASDFGHJKLZ";
+    const awsMark = "[redacted:aws-key]";
+    const labelRaw = `${"x".repeat(ASK_OPTION_LABEL_MAX - 22)} ${longId} for the deploy`;
+    const once = normalizeAskOptions([labelRaw, "No"])!;
+    expect(once[0]!.label).toBe(`${"x".repeat(ASK_OPTION_LABEL_MAX - 22)} ${awsMark}…`);
+    expect(once[0]!.label.length).toBeLessThanOrEqual(ASK_OPTION_LABEL_MAX);
+    expect(normalizeAskOptions(once)).toEqual(once);
+
+    const questionRaw = `${"q".repeat(ASK_QUESTION_MAX - 22)} ${longId} — which region?`;
+    const q = askFromUnknown({ reason: "clarify", question: questionRaw })!.question;
+    expect(q).toBe(`${"q".repeat(ASK_QUESTION_MAX - 22)} ${awsMark}…`);
+    expect(askFromUnknown({ reason: "clarify", question: q })!.question).toBe(q);
   });
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearRegistry } from "../src/plugins/registry.ts";
@@ -118,5 +118,98 @@ describe("shell-exec SAFE-3 end to end (REQ-plugins-087)", () => {
     expect(result.ok).toBe(true);
     expect(result.message ?? "").toContain(join(dir, "sub"));
     expect(result.message ?? "").not.toContain(outside);
+  });
+});
+
+/**
+ * Regression (SAFE-3, REQ-plugins-495): `env -C` / `--chdir` ran the wrapped
+ * command in any directory, and a `cd` / `pushd` through an in-root symlink
+ * (committed, or made by `ln -s` in the same command) landed outside the root
+ * while the lexical check saw an in-root path.
+ */
+describe("shell-exec SAFE-3: env -C and symlinked cd can't leave the root (REQ-plugins-495)", () => {
+  let root = "";
+  let outside = "";
+
+  beforeEach(() => {
+    clearRegistry();
+    loadBuiltins();
+    root = mkdtempSync(join(tmpdir(), "corvidinho-shell-links-"));
+    outside = mkdtempSync(join(tmpdir(), "corvidinho-shell-links-out-"));
+    mkdirSync(join(root, "sub"));
+    mkdirSync(join(root, "sub", "deep"));
+    symlinkSync("/", join(root, "up"));
+    symlinkSync(outside, join(root, "sub", "out"));
+    symlinkSync(join(root, "sub"), join(root, "insub"));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  test("unit: env -C / --chdir (also clustered or abbreviated) and sudo -D are checked like cd", () => {
+    expect(firstDisallowedCd("env -C / ls", root)).toBe("/ (env -C)");
+    expect(firstDisallowedCd("env --chdir=/ ls", root)).toBe("/ (env --chdir)");
+    expect(firstDisallowedCd("env --chdir /etc sh -c pwd", root)).toBe("/etc (env --chdir)");
+    expect(firstDisallowedCd("env -iC/ ls", root)).toBe("/ (env -C)");
+    expect(firstDisallowedCd("env --ch=.. ls", root)).toBe(".. (env --chdir)");
+    expect(firstDisallowedCd("env -C up ls", root)).toBe("up (env -C)");
+    expect(firstDisallowedCd("env -C $D ls", root)).toBe("$D (env -C)");
+    expect(firstDisallowedCd("sudo -D / ls", root)).toBe("/ (sudo -D)");
+    expect(firstDisallowedCd("find . -exec env -C / ls \\;", root)).toBe("/ (env -C)");
+    // A wrapper string the clamp cannot split fails closed.
+    expect(firstDisallowedCd("env -S 'sh -c \"cd /\"'", root)).toContain("cannot read");
+    expect(firstDisallowedCd("env -C sub ls", root)).toBeNull();
+    expect(firstDisallowedCd("env -C sub ./x.sh", root)).toBeNull();
+  });
+
+  test("unit: cd / pushd through an in-root symlink that points out refuses", () => {
+    expect(firstDisallowedCd("cd up && ls", root)).toBe("up");
+    expect(firstDisallowedCd("pushd up", root)).toBe("up");
+    expect(firstDisallowedCd("cd up/etc", root)).toBe("up/etc");
+    expect(firstDisallowedCd("cd sub && cd out", root)).toBe("out");
+    expect(firstDisallowedCd("cd nothere/../up", root)).toBe("nothere/../up");
+    expect(firstDisallowedCd("cd insub && cd deep", root)).toBeNull();
+    expect(firstDisallowedCd("cd sub/deep/../..", root)).toBeNull();
+  });
+
+  test("unit: ln with a target that leads out refuses (the link could be cd'd through)", () => {
+    expect(firstDisallowedCd("ln -s / x && cd x", root)).toBe("/ (ln target)");
+    expect(firstDisallowedCd("ln -sfn /etc cfg", root)).toBe("/etc (ln target)");
+    expect(firstDisallowedCd("ln -s ../../x sub/l", root)).toBe("../../x (ln target)");
+    expect(firstDisallowedCd("ln /etc/hosts h", root)).toBe("/etc/hosts (ln target)");
+    expect(firstDisallowedCd("ln -s $T x", root)).toBe("$T (ln target)");
+    expect(firstDisallowedCd("ln -s ../sub sub/again", root)).toBeNull();
+    expect(firstDisallowedCd("ln -s sub l", root)).toBeNull();
+  });
+
+  const run = (command: string) =>
+    runPlugin({
+      name: "shell-exec",
+      args: ["--command", command],
+      cwd: root,
+      nonInteractive: true,
+      allowlist: ["shell-exec"],
+    });
+
+  test("end to end: env -C / and cd through a symlink are refused before spawn; in-root links still work", async () => {
+    for (const command of [
+      "touch spawned; env -C / pwd",
+      "touch spawned; env --chdir=/ pwd",
+      "touch spawned; cd up && pwd",
+      "touch spawned; cd sub/out && pwd",
+      "touch spawned; ln -s / x && cd x && pwd",
+    ]) {
+      const result = await run(command);
+      expect(result.ok).toBe(false);
+      expect(result.exitCode).toBe(2);
+      expect(result.error ?? "").toContain("SAFE-3");
+      expect(existsSync(join(root, "spawned"))).toBe(false);
+      expect(existsSync(join(root, "x"))).toBe(false);
+    }
+    const ok = await run("env -C sub pwd && cd insub && pwd");
+    expect(ok.ok).toBe(true);
+    expect(ok.message ?? "").toContain(join(root, "sub"));
   });
 });
