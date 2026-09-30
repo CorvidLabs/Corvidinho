@@ -351,3 +351,18 @@ frames report a failover returns `data.modelFallback` with it once;
 `runDelegateChild` returns the worker's failovers for the `delegate` data;
 the lead's tool loop reports a `delegate` result's `modelFallback` as its own
 (`via: "delegate"`). Fail on base (no field).
+
+## Schedule-run stamps in the tool layer (REQ-plugins-065; DISCORD-SCHEDULE-1.a)
+
+`tests/roles.team.test.ts` ("DISCORD-SCHEDULE-1.a: schedule-run stamps in
+the tool layer") — with `CORVIDINHO_DISCORD_SESSION_ID=schedule_…`: the
+owner stamp for the owner resolves `owner`; a team member stamped community,
+team or owner resolves `community`; the same team stamp outside a schedule is
+`team`. `runPlugin` runs the owner schedule's `github-issue-comment`
+(dry run) and `files-write`, and refuses a team member's scheduled
+`github-issue-comment` with the role refusal (exit 2). The catalog offers
+the owner's schedule its allowlisted owner tools and `files-write` but not
+`shell-exec`, and a team member's schedule no mutating tool.
+- Fail on base: with the base's (af4597e) `src/plugins/roles.ts` swapped in,
+  all three fail (a team stamp in a schedule resolves `team`); all pass on
+  the branch.

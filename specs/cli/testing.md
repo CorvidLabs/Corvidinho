@@ -120,3 +120,13 @@ on stderr and the note after the answer. A daemon with its own spawn client
 `llm.fallback` warn event with `sessionId`, `fallbacks` and `message` for a
 due schedule. `tests/docs.operator-facts.test.ts` keeps the Logs table whole.
 - Fail on base: all of these fail with the base's sources.
+
+## The daemon reads the owner live for each schedule run (REQ-cli-741; DISCORD-SCHEDULE-1.a)
+
+`tests/scheduler.owner-role.test.ts` ("daemon: …") — `startDaemon` with an
+allowlist file naming the owner spawns the owner's due schedule with
+`actingIsAdmin: true`; after the file names another owner, the next due run
+of the same schedule is spawned `actingIsAdmin: false`, with no restart.
+- Fail on base: with the base's (af4597e) `src/daemon/daemon.ts` and
+  `src/scheduler/service.ts` swapped in, it fails (always `false`); it passes
+  on the branch.

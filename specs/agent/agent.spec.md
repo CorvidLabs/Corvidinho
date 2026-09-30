@@ -442,6 +442,24 @@ client always overwrites it (REQ-discord-735, REQ-watch-735), and delegate
 workers and the verify lane drop it with the `CORVIDINHO_ACTING_` prefix. No
 config key, flag, slash command or schema.
 
+The owner's own schedule (DISCORD-SCHEDULE-1.a, REQ-agent-741): a scheduled
+run (`isScheduleRunEnv`, `src/plugins/roles.ts`) may now carry the owner
+stamp. `createTaskExecute` SHALL NOT discover Fledge plugin commands in a
+scheduled run, whatever its role (they run arbitrary project code, like the
+runners SAFE-3.a keeps from schedules); the other allowlisted dangerous tools
+stay offered to the owner's schedule. `src/agent/ask.ts` exports
+`mustAskRefusedAsk(tool, result)`: for a `runPlugin` refusal from the
+must-ask gate whose outcome is `denied`, `expired` or `resent` it returns a
+`stuck` HumanAsk naming the tool, the gate's scrubbed `why` (≤300 chars), the
+rule and the card, else null. In a scheduled run, `runToolLoop` SHALL end the
+run with that ask right after the refused call's `ToolResult` (one
+`[operator] DISCORD-SCHEDULE-1.a: <tool> was refused on its Approve card; this
+scheduled run stops and asks` Text line; later calls in that batch never run;
+the run is `blocked`, verify skipped), so the schedule waits on it
+(AUTONOMY-6.a) instead of raising a new card every tick. Outside a scheduled
+run the refusal still goes back to the model. No env var, config key, flag or
+schema.
+
 Untrusted text (SAFE-11/12/13, #71, REQ-agent-071): `src/agent/untrusted.ts`
 exports `cleanDisplayName(raw, max?)` / `DISPLAY_NAME_MAX` (32),
 `nameSkeleton` / `namesLookAlike`, `stripInvisible`, `defangContextMarkers`,
@@ -829,6 +847,12 @@ instructions for …" or a browser's developer mode do not count.
 - **When** it makes the same call a second time, then a third after seeing the steer
 - **Then** the 2nd tool result ends with the AGENT-16 harness steer quoting the error, the 3rd call never runs, and the run ends `blocked` with the stuck question `The same files-read call keeps failing with nothing changed in between. How should I proceed?` (REQ-agent-086)
 
+### Scenario: the owner's schedule posts to a channel and the owner says no
+
+- **Given** `CORVIDINHO_ALLOWLIST=discord-post-message` and a run the scheduler spawned for the owner's own schedule (owner stamp, `CORVIDINHO_ACTING_SURFACE=schedule`, session `schedule_<id>`)
+- **When** the model calls `discord-post-message` and the owner denies its Approve card (or lets it lapse)
+- **Then** nothing is posted, no later call in that batch runs, and the run ends `blocked` with a stuck question naming `discord-post-message`, why it asks, AUTONOMY-10 and the card; the schedule records it and waits; the same deny in the owner's chat goes back to the model instead (REQ-agent-741)
+
 ### Scenario: the owner's chat uses the shell in its own talk worktree
 
 - **Given** `CORVIDINHO_ALLOWLIST=shell-exec`, a code-tier run spawned by the bridge for the owner's chat message (`CORVIDINHO_ACTING_SURFACE=chat`) in the talk worktree made for its session
@@ -848,6 +872,8 @@ instructions for …" or a browser's developer mode do not count.
 | Talk worktree whose last run ended blocked / failed / cancelled or died | baseline is the talk branch's merge-base: its edits are verified before done; one carried note; a base git cannot find verifies anyway (REQ-agent-015) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a Fledge plugin command allowlisted, or a `delegate` whose worker left no result frame), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
+| Scheduled run (`schedule_*` session), even the owner's, whose allowlist names a Fledge plugin command | no Fledge discovery, so the command is not offered and fledge is never spawned (REQ-agent-741) |
+| Scheduled run: a must-ask call the owner denies, lets lapse, or denied before (`denied` / `expired` / `resent`) | nothing done; the run ends `blocked` with the `mustAskRefusedAsk` stuck question naming the tool, why, rule and card, verify skipped (REQ-agent-741) |
 | `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
 | The same, and the gate grants (the owner's own chat, `/session start`, `/work` or ask answer in its own talk worktree) | offered at code tier (never at tool tier); each call still goes through `runPlugin` (role re-check, SAFE-1, the must-ask Approve card for prod, SAFE-5) and the tool's own clamp, SAFE-21 refusals and credential-free env (REQ-agent-503) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |

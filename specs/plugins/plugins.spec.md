@@ -593,8 +593,11 @@ declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
 (`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
 (`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
 `files-edit`); `community` (everyone else: undeclared, declared community,
-WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
-(IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+WATCH, schedules other people create, workers, muted / deny-listed, any read
+failure) runs none (IDENTITY-10/11). A scheduled run (`isScheduleRunEnv`) is
+the owner (the owner's own schedule, which the scheduler stamps with the
+ADMIN bit, re-checked here) or community, never team, whatever its stamp
+(DISCORD-SCHEDULE-1.a, REQ-plugins-065). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 A team `github-pr-review` posts as `COMMENT` only: `--event APPROVE` /
 `REQUEST_CHANGES` get the role refusal (exit 2) unless the role, re-resolved
 at the call, is owner or there is no role session. In a team `/work` run

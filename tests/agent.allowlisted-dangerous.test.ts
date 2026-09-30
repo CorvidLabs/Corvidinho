@@ -3,7 +3,8 @@
  * CLI-3 / SAFE-1, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3): a dangerous plugin is
  * in the catalog only when the run's allowlist names it (the shell, runners
  * and Fledge core runs only with the SAFE-3.a grant, never in a local run),
- * and never for a non-ADMIN role session.
+ * and never for a non-ADMIN role session. The owner's own scheduled run gets
+ * its allowlisted tools but no discovered Fledge command (DISCORD-SCHEDULE-1.a).
  * A non-git run whose Fledge command may have changed files verifies anyway
  * (REQ-agent-502, AGENT-4). Fake provider, fake `fledge`, GitHub dry-run: no
  * network, no tokens.
@@ -428,6 +429,44 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
   test("the owner's ADMIN role session with fledge-hello allowlisted discovers and offers it", async () => {
     const { seen } = await roleSessionRun("1");
     expect(seen.offered).toContain("fledge-hello");
+  });
+
+  test("the owner's own scheduled run (owner stamp, schedule session and surface) never discovers or spawns fledge; its other allowlisted owner tools stay offered, the shell does not (DISCORD-SCHEDULE-1.a)", async () => {
+    const fake = makeFledge();
+    const { fetchImpl, seen } = fakeProvider([{ name: "fledge-hello", argv: ["world"] }]);
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: fake.project,
+      env: {
+        ...fake.env,
+        CORVIDINHO_ALLOWLIST_FILE: process.env.CORVIDINHO_ALLOWLIST_FILE,
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
+        CORVIDINHO_ACTING_DISCORD_USER_ID: OWNER,
+        CORVIDINHO_ACTING_IS_ADMIN: "1",
+        CORVIDINHO_ACTING_ROLE: "owner",
+        CORVIDINHO_ACTING_SURFACE: "schedule",
+        CORVIDINHO_DISCORD_SESSION_ID: "schedule_sched_0123456789ab",
+      },
+      fetchImpl,
+      tier: "code",
+      nonInteractive: true,
+      allowlist: ["fledge-hello", "github-pr-review", "files-delete", "shell-exec"],
+      autonomous: false,
+      projectInstructions: false,
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 2,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(seen.offered).toContain("github-pr-review");
+    expect(seen.offered).toContain("files-delete");
+    expect(seen.offered).not.toContain("shell-exec");
+    expect(seen.offered.filter((n) => n.startsWith("fledge-")).sort()).toEqual(FLEDGE_CORE_READS);
+    expect(get("fledge-hello")).toBeUndefined();
+    expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
+    const r = toolResults(events)[0];
+    expect(r?.success).toBe(false);
+    expect(r?.detail ?? "").toContain("not offered");
   });
 });
 

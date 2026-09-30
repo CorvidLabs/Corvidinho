@@ -1279,3 +1279,35 @@ pick continuing it (same session and cwd), `/session start` and `/work` pass
 `chat`, `ask`, `session` and `work`; a scheduler tick passes `schedule`.
 - Fail on base: with the base's (507d97b) sources swapped in, all three fail
   (no stamp; `surface` undefined).
+
+## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
+
+`tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,
+the owner's due schedule is spawned with `actingIsAdmin: true`, no
+`actingRole`, surface `schedule`, session `schedule_<id>` and its prompt
+unfenced, and its result post goes straight to its channel; a declared team
+member's and a stranger's schedules are spawned `actingIsAdmin: false` with
+no `actingRole` (never team); started with one owner while `loadOwner`
+names another, the old owner's schedule is community (fenced
+`role: community`) and the new owner's runs as the owner (one read per run);
+`loadOwner` returning null, throwing (logged `[scheduler] owner failed: …`)
+or a muted owner give community; without `loadOwner` the start-time owner is
+used; an owner schedule on a non-git project runs in its own
+`scoped-talk-schedule_…` folder, never the project folder. Through the real
+spawn client (a fake bin that resolves the role in the child) the owner's
+schedule resolves `owner` with stamps `1` / `owner` / `schedule` and the
+shell gate says "scheduled runs never get them", and a team member's resolves
+`community`. In process, with the owner's schedule stamps, a
+`discord-post-message` the model starts raises one `mustask-post` card with
+the exact text; denied, the run ends `blocked` with the stuck ask naming the
+tool and card and the scheduler records it: the ask posts to the channel
+pinging the owner with its controls, and the next two due ticks run nothing,
+raise no new card and post one wait note. The daemon (`startDaemon`) and the
+bridge (`startBridge`, null gateway) spawn the owner's schedule as the owner,
+and after the allowlist file names another owner the next run is community.
+- Fail on base: with the base's (af4597e) `src/scheduler/service.ts`,
+  `src/plugins/roles.ts`, `src/agent/execute.ts`, `src/discord/bridge.ts`,
+  `src/daemon/daemon.ts` and `src/discord/agent-client.ts` swapped in (the
+  additive `mustAskRefusedAsk` kept so the file loads), 11 of the 17 tests
+  fail; the read-only, owner-chat, other-person and `mustAskRefusedAsk` unit
+  guards pass on both. All pass on the branch.

@@ -197,6 +197,9 @@ export async function startDaemon(
     agent,
     allowlist: gate,
     owner,
+    // DISCORD-SCHEDULE-1.a: each run re-reads the owner config, so only the
+    // owner as configured now gets the owner stamp for their own schedule.
+    loadOwner: async () => (await loadOwnerConfig({ env })).owner,
     defaultProjectRoot: projectRoot,
     useWorktrees: opts.useWorktrees,
     ...(opts.now ? { now: opts.now } : {}),

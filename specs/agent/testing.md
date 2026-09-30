@@ -478,3 +478,31 @@ removes the shell from attempt 2; an allowlist without the six runs no gate.
   `src/agent/shell-gate.ts` removed, `agent.safe3a-gate` cannot load, 8 of 9
   `agent.safe3a-owner-shell` tests fail (the no-gate guard passes) and the
   renamed `SAFE3A_TOOLS` test fails; all pass on the branch.
+
+## The owner's own schedule: no Fledge discovery, a no ends the run with an ask (REQ-agent-741; DISCORD-SCHEDULE-1.a)
+
+`tests/agent.allowlisted-dangerous.test.ts` ("the owner's own scheduled run
+… never discovers or spawns fledge …") — with the owner stamp, surface
+`schedule` and a `schedule_*` session, an allowlist naming `fledge-hello`,
+`github-pr-review`, `files-delete` and `shell-exec` offers `github-pr-review`
+and `files-delete`, not `shell-exec`, only the read-only Fledge core
+builtins, never discovers `fledge-hello` and never spawns fledge; the
+model's call to it is refused as not offered.
+`tests/scheduler.owner-role.test.ts` — denied: one `mustask-post` card with
+the exact text and the owner as requester, the post refused, the next call
+in the batch never run, one model request, the run `blocked` with no verify
+and the stuck ask naming `` `discord-post-message` ``, its why, AUTONOMY-10
+and the card, the summary `formatAskSummary(ask)` and the
+`[operator] DISCORD-SCHEDULE-1.a` line; lapsed: the ask says nobody answered
+the card in time (SAFE-20); the owner's chat with the same deny goes on
+(`done`, two model requests, no ask); another person's schedule is not
+offered the post and gets the role refusal, raising no card.
+`mustAskRefusedAsk` gives the exact question for `denied`, and for
+`expired` / `resent`, null for a call that ran, `worker` / `no-owner` /
+`unavailable` / `aborted` and plain failures, cuts a long why and scrubs a
+token in it.
+- Fail on base: with the base's (af4597e) `src/agent/execute.ts` and
+  `src/plugins/roles.ts` (and the other sources listed under REQ-discord-741)
+  swapped in, the allowlisted-dangerous test (fledge discovered and offered)
+  and the denied / lapsed / scheduler-records tests (no ask) fail; all pass
+  on the branch.

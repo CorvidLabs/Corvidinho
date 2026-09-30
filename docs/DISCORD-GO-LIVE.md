@@ -276,9 +276,10 @@ What an entry unlocks **today**:
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
-  gates are unchanged: only ADMIN runs (the owner's Discord chat, `/session start` and `/work`)
-  and a local `corvidinho task run` get them; non-owner chats, WATCH, schedules and council
-  voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
+  gates are unchanged: only ADMIN runs (the owner's Discord chat, `/session start`, `/work` and
+  the schedules the owner created, DISCORD-SCHEDULE-1.a) and a local `corvidinho task run` get
+  them; non-owner chats, WATCH, schedules other people created and council voices never do
+  (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
 - The shell, the runners and the Fledge core runs (SAFE-3.a): `shell-exec`, `node-exec`,
@@ -307,7 +308,8 @@ What an entry unlocks **today**:
   talk worktree.
   They all still run through `corvidinho plugins run`.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
-  one and the run is not a non-ADMIN session. Naming a Fledge core builtin (`fledge-lanes-list`,
+  one and the run is not a non-ADMIN session and not a scheduled run (a schedule the owner
+  created gets none, like the runners, DISCORD-SCHEDULE-1.a). Naming a Fledge core builtin (`fledge-lanes-list`,
   `fledge-lanes-validate`, `fledge-lanes-run`, `fledge-run`) starts no discovery. Fledge
   commands can change files without reporting them, so in a project that is not a git work
   tree a run that called one, or a local run's `delegate` worker (which could have), runs the
@@ -331,7 +333,12 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
   run that stops to ask a human (stuck, clarify, spend cap) keeps its question on the run row,
   and the bridge's next scheduler tick posts it to the schedule's channel once (see
   [`DAEMON.md`](DAEMON.md)).
-- Scheduled runs are never ADMIN (read/chat tools only, E.6) and always non-interactive (E.3).
+- A schedule the owner created runs as the owner: the tools their allowlist names (E.3), with
+  the must-ask Approve cards (E.1), but never the shell, the runners, the Fledge lane/task runs
+  or a discovered Fledge plugin command (DISCORD-SCHEDULE-1.a, SAFE-3.a). Whether its creator is
+  the owner is read from the owner config at each run, so a changed `[owner]` applies to the
+  next run. A schedule anyone else created runs read-only (community, E.6). Scheduled runs are
+  always non-interactive (E.3).
 - Scheduled runs read and act only on GitHub-allowlisted repos, even public ones
   (DISCORD-SCHEDULE-3.a): the GitHub tools refuse any other repo, `web-fetch` refuses GitHub
   URLs outside the allowlist (every redirect too), and a schedule's project inside the bridge
@@ -367,7 +374,9 @@ counts; a missing file, section or key, or any other value, means off.
   Discord/GitHub tokens or the audit key. `council` is for a top-level lead only (a delegated
   worker is refused): 2–5 voices (default 3) at `read` tier by default and never above `tool`,
   at most 2 councils per run, 15 min cap per council.
-- WATCH and scheduled runs are never ADMIN, so they never get `delegate` or `council`.
+- WATCH runs and schedules other people create are never ADMIN, so they never get `delegate`
+  or `council`. A schedule the owner created is ADMIN, so with the gate on and the tier `code`
+  it may get them; its workers are community like any worker.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
@@ -390,8 +399,10 @@ Who is who in an allowlisted channel:
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
   chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
-- WATCH runs, scheduled runs and `delegate` / `council` workers are community whoever triggered
-  them.
+- WATCH runs, schedules anyone but the owner created and `delegate` / `council` workers are
+  community whoever triggered them. A schedule the owner created runs as the owner
+  (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,
+  runners or Fledge commands. A scheduled run is never team, even a team member's.
 - The role is re-read from the people list on every tool call (IDENTITY-12): a
   `/admin people role` change or a VM edit applies to the next call, no restart.
 - `[discord].users` / `.roles` / `deny_users` / `deny_roles` gate every @mention, reply-to-bot,
@@ -402,7 +413,8 @@ Who is who in an allowlisted channel:
   chat. A refused chat message gets no reply, session or run; a refused slash command gets only
   an ephemeral zero-width ack.
 
-Community sessions (every non-owner who is not team, plus all WATCH and scheduled runs):
+Community sessions (every non-owner who is not team, plus all WATCH runs and every schedule
+the owner did not create):
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
