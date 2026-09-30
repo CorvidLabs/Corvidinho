@@ -1,0 +1,54 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790727447,
+      "digest": "c9dfd9dfd899723de71740928e7748f52284ff7700bbcba4c1fc7a2317f96764",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by",
+        "title": "SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by",
+        "description": "SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "plugins/discord/send-file.ts",
+          "plugins/files/protectedPaths.ts",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "tests/discord.send-file.test.ts",
+          "tests/files.plugins.test.ts",
+          "tests/git.plugins.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "files-write, files-edit and files-delete refuse any path with a .fledge component (existing lane and config files, a new lane file, a file planted as .fledge itself, ./ and ../ spellings, an absolute path, other letter case, a symlink to a lane file, a path through a symlink to .fledge/lanes, a dangling symlink to a missing lane file) with the same SAFE-2 refusal (exit 2) and the files unchanged or not created; files-read and files-list of .fledge/ still work; git-commit refuses to stage the deletion of a .fledge/ file (exit 2, SAFE-2) and nothing is staged; discord-send-file refuses a .fledge/ file and a link to one like the rest of the SAFE-2 set; each of these tests fails on main's source"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "e252c2461ca5ac17b901cfd18ce07afeb04071f9139a3986c5e1821ffe71082d",
+        "plugins": "25405d5f70c2f1ec8b6f4fd355214b77bfdc6bbf7f940de9c6c5dca7453ed9f8"
+      }
+    }
+  ],
+  "reopenings": []
+}

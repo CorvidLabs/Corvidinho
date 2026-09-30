@@ -569,8 +569,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   channel or acting user are refused; a channel off the allowlist is refused
   and a thread passes through its parent; `.env`, `.env.*`, `.git`, keystore,
   `.specsync` (also inside a change folder), `specs/`, `.ssh`,
-  `fledge.toml`, a symlink to `.env`, a symlink into `.git`, a symlink out of
-  the project and `..` / absolute outside paths are refused; `.sh`, a
+  `fledge.toml`, a file under `.fledge/` and a link to it (SAFE-2.a; fails
+  on main's `isProtectedPath`), a symlink to `.env`, a symlink into `.git`, a
+  symlink out of the project and `..` / absolute outside paths are refused; `.sh`, a
   non-PNG `.png` and non-UTF-8 `.txt` are refused; a file over 8 MB is
   refused before the check, and so is a PNG whose size as first taken
   (`statSync` / `fstatSync` spied to report its size before it grew) is
