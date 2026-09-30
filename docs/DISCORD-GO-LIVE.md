@@ -369,9 +369,11 @@ text and injection attempts").
 - Discord names (the speaker's, and `discord-user-lookup` results) are cleaned before the model
   sees them, and a name that imitates the owner's or a declared person's is flagged as someone
   else. Identity and role come only from declared ids.
-- A non-owner's message, `/session start` topic and `/work` description, WATCH titles and
-  bodies, and GitHub / guild-member tool results reach the model fenced as untrusted data.
-- A non-owner message or WATCH event that looks like an injection attempt gets one short reply
+- A non-owner's message, `/session start` topic, `/work` description and answer typed in an
+  ask's private Answer form, WATCH titles and bodies, and GitHub / guild-member tool results
+  reach the model fenced as untrusted data.
+- A non-owner message (an Answer form answer included: private refusal, question kept open,
+  owner pinged in the channel) or WATCH event that looks like an injection attempt gets one short reply
   (Discord) or comment (GitHub) and no run; the owner is pinged on Discord, or @mentioned on
   GitHub when `[owner] github_login` / `CORVIDINHO_OWNER_GITHUB_LOGIN` is set. A tool result
   that looks like one (also one a `delegate` / `council` worker read) turns the run's mutating
