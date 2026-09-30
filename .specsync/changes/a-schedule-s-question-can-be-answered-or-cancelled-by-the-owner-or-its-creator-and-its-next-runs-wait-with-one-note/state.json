@@ -7,10 +7,11 @@
   "title": "A schedule's question can be answered or cancelled by the owner or its creator, and its next runs wait with one note (AUTONOMY-6.a): every recorded schedule run ask (clarify, stuck, spend-cap, could-not-start, auto-pause, SAFE-13 refusal) blocks the schedule until the creator or the live owner answers (Choose / private Answer form) or cancels it on Discord; its post carries Choose or Answer plus Cancel (spend-cap: Cancel only), controls never lapse while open, a channel reply does not answer it; due runs are skipped with no catch-up and one wait note pings nobody; a channel-less schedule's ask, controls and note go to the owner by DM; /schedule resume does not close it; the answer reaches the next run once; schema v15 adds the schedule_runs ask columns and closes legacy asks",
   "description": "A schedule's question can be answered or cancelled by the owner or its creator, and its next runs wait with one note (AUTONOMY-6.a): every recorded schedule run ask (clarify, stuck, spend-cap, could-not-start, auto-pause, SAFE-13 refusal) blocks the schedule until the creator or the live owner answers (Choose / private Answer form) or cancels it on Discord; its post carries Choose or Answer plus Cancel (spend-cap: Cancel only), controls never lapse while open, a channel reply does not answer it; due runs are skipped with no catch-up and one wait note pings nobody; a channel-less schedule's ask, controls and note go to the owner by DM; /schedule resume does not close it; the answer reaches the next run once; schema v15 adds the schedule_runs ask columns and closes legacy asks",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "156cfa975c6d269b7e3a183cef3c7fdb20cab4f9",
   "created_at": 1790777309,
-  "updated_at": 1790777476,
+  "updated_at": 1790777501,
   "affected_specs": [
     "discord"
   ],
