@@ -7,10 +7,11 @@
   "title": "Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue",
   "description": "Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "81ceb4a1423189b50ce25df34363b26b50426d1d",
   "created_at": 1790804257,
-  "updated_at": 1790804260,
+  "updated_at": 1790804267,
   "affected_specs": [
     "cli"
   ],
