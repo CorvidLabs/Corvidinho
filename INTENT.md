@@ -19,7 +19,7 @@
 - [memory](hi/memory.md): MEMORY (10 criteria)
 - [ops](hi/ops.md): OPS (2 criteria)
 - [persona](hi/persona.md): PERSONA (4 criteria)
-- [plugin](hi/plugin.md): PLUGIN (7 criteria)
+- [plugin](hi/plugin.md): PLUGIN (9 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
 - [safe](hi/safe.md): SAFE (27 criteria)
 - [session](hi/session.md): SESSION (7 criteria)
