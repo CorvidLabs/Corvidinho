@@ -677,7 +677,7 @@ describe("tool loop offers council per project config (REQ-agent-118)", () => {
     const exec = createTaskExecute({
       taskText: "x",
       cwd,
-      env: { CORVIDINHO_LLM_API_KEY: "k", ...env },
+      env: { CORVIDINHO_LLM_API_KEY: "k", CORVIDINHO_LLM_MODEL: "test-model", ...env },
       fetchImpl: async (_u, init) => {
         bodies.push(JSON.parse(String(init?.body)));
         return finalReply("done");
@@ -706,7 +706,7 @@ describe("tool loop offers council per project config (REQ-agent-118)", () => {
     const exec = createTaskExecute({
       taskText: "decide the cache backend",
       cwd: project(ENABLED),
-      env: { CORVIDINHO_LLM_API_KEY: "k", CORVIDINHO_LLM_TIER: "code" },
+      env: { CORVIDINHO_LLM_API_KEY: "k", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_TIER: "code" },
       loadPlugins: false,
       allowlist: [],
       fetchImpl: async (_u, init) => {

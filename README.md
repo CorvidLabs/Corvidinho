@@ -16,7 +16,8 @@ Read the full story (honoring ancestors): [`docs/ORIGIN.md`](docs/ORIGIN.md).
 - Linux, `git` (session worktrees and the git tools)
 - [Bun](https://bun.sh) ≥ 1.2
 - `fledge` + `specsync` on `PATH` (`corvidinho doctor` fails without them; the verify lane needs both)
-- In the project dir: `fledge.toml` with a `verify` lane that runs spec-check, `.specsync/` and `specs/` (`corvidinho doctor` names each one that is missing; `corvidinho init` reports the same project checks plus the LLM key, Fledge and SpecSync, and creates nothing)
+- In the project dir: `fledge.toml` with a `verify` lane that runs spec-check and a test step whose summary Corvidinho recognises (`bun test`, jest, vitest, `cargo test`, pytest or `go test`: a lane that shows no test ran is never "verified", AGENT-15), `.specsync/` and `specs/` (`corvidinho doctor` names each one that is missing, except the test step, which it does not check; `corvidinho init` reports the same project checks plus the model provider, Fledge and SpecSync, and creates nothing)
+- A model you configure (AGENT-13): `CORVIDINHO_LLM_MODEL=openai:<model>` (with `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`), `ollama:<model>` (`OLLAMA_HOST`, no key) or `anthropic:<model>` (`ANTHROPIC_API_KEY`). There is no built-in default: with none set, runs fail and `doctor`, `/status` and each surface's startup say so (AGENT-10). Upgrading from a key-only setup: set `CORVIDINHO_LLM_MODEL` (see [`docs/DISCORD-GO-LIVE.md`](docs/DISCORD-GO-LIVE.md) E.9)
 - Optional: `hi` (`hi check`), `gh` (human convenience only; Corvidinho itself reads `GITHUB_TOKEN` / `GH_TOKEN`)
 
 ## Quick start
@@ -32,7 +33,7 @@ bun test
 hi check
 ```
 
-Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN` / `GH_TOKEN`) stay in the environment — never in the repo or chat logs.
+Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN` / `GH_TOKEN`, the LLM keys) stay in the environment — never in the repo or chat logs.
 
 ### Another project without `cd` (CLI-5)
 

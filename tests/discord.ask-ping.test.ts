@@ -33,6 +33,12 @@ import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/st
 import { Database as SqliteDatabase } from "bun:sqlite";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { openWorkPr } from "../src/work/pr.ts";
+import { useConfiguredModel } from "./fixtures/fake-llm.ts";
+
+// The footer names the configured model; there is no built-in default
+// (AGENT-13), so this file configures one (a priced id; the stub agent calls
+// no model).
+useConfiguredModel();
 
 /** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
 function answerFooterText(before: string, after?: string) {

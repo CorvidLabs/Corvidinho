@@ -4,7 +4,8 @@
  * - Discord channel / GitHub repo allowlists through the same loader as the
  *   bridge and WATCH (allowlist file + env overlays, deny wins; ALLOW-1..4),
  *   naming where the entries came from (file / env), never the entries.
- * - The LLM key `task run` uses (none ⇒ demo stub).
+ * - The model provider `task run` uses (AGENT-13); none ⇒ the no-provider
+ *   notice (AGENT-10), since there is no built-in default.
  * - The shared data dir (exists / can be created, writable).
  * - The nightly backup (OPS-1/2): off when CORVIDINHO_BACKUP_DIR is unset,
  *   else the directory, its snapshots and the last backup / restore test.
@@ -30,9 +31,10 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { Database } from "bun:sqlite";
 import { removedVerifyKeys } from "./agent/config.ts";
-import { loadLlmEnv } from "./agent/execute.ts";
+import { entryLabel, providerForTier, providerNotice } from "./agent/providers.ts";
 import { findProjectRoot } from "./agent/project-instructions.ts";
-import { perTierModels } from "./agent/tier.ts";
+import { loadTierFromEnv, perTierModels, type CapabilityTier } from "./agent/tier.ts";
+import { llmBaseHost } from "./version.ts";
 import { checkChannel } from "./allowlist/discord.ts";
 import { isRepoAllowed } from "./allowlist/github.ts";
 import {
@@ -282,30 +284,40 @@ export function githubWatchDoctorCheck(
 
 /**
  * `; per tier: read …, tool …, code …` when any per-tier model key is set
- * (AGENT-5), else "" so the line reads as before. Model names only.
+ * (AGENT-5), else "" so the line reads as before. Each tier's first entry as
+ * configured (`kind:model` for non-openai kinds, AGENT-13), or `none`. Model
+ * names only.
  */
 function perTierModelsDetail(env: NodeJS.ProcessEnv): string {
-  const m = perTierModels(env);
-  return m ? `; per tier: read ${m.read}, tool ${m.tool}, code ${m.code}` : "";
+  if (!perTierModels(env)) return "";
+  const label = (tier: CapabilityTier): string => {
+    const p = providerForTier(env, tier);
+    return p ? entryLabel(p.entry) : "none";
+  };
+  return `; per tier: read ${label("read")}, tool ${label("tool")}, code ${label("code")}`;
 }
 
-/** `task run` without a key uses the demo stub: warn, never fail doctor. */
+/**
+ * The provider `task run` calls at the default tier (AGENT-13): its key env
+ * present (never the value) or no key needed (ollama), the model and host.
+ * With no usable provider for some tier, `[warn]` with the no-provider notice
+ * (AGENT-10): those runs fail until one is set. Never fails doctor.
+ */
 export function llmDoctorCheck(env: NodeJS.ProcessEnv = process.env): DoctorCheck {
-  const llm = loadLlmEnv(env);
-  if (llm.apiKey) {
-    return {
-      name: "llm",
-      ok: true,
-      detail: `CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model ${llm.model}${perTierModelsDetail(env)}`,
-    };
+  const notice = providerNotice(env);
+  const p = providerForTier(env, loadTierFromEnv(env, "tool"));
+  if (!p?.usable) {
+    return { name: "llm", ok: true, mark: "warn", detail: notice ?? "" };
   }
-  return {
-    name: "llm",
-    ok: true,
-    mark: "warn",
-    detail:
-      "no CORVIDINHO_LLM_API_KEY or OPENAI_API_KEY — task run uses the demo stub (no model is called)",
-  };
+  const keyPart = p.keyEnv
+    ? `${p.keyEnv.replace(" or ", "/")} present (value not shown)`
+    : "no key needed";
+  const detail =
+    `${keyPart}; model ${entryLabel(p.entry)} @ ${llmBaseHost(p.baseUrl)}${perTierModelsDetail(env)}` +
+    (notice ? ` — ${notice}` : "");
+  return notice
+    ? { name: "llm", ok: true, mark: "warn", detail }
+    : { name: "llm", ok: true, detail };
 }
 
 function errCode(e: unknown): string {

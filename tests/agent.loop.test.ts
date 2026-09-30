@@ -12,6 +12,7 @@ import { runTask } from "../src/agent/loop.ts";
 import type { AgentEvent, VerifyRunner } from "../src/agent/types.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "../src/agent/workspace-diff.ts";
 import { failingLaneLog, HELP_HEAD, LANE_FAILED_LINE } from "./fixtures/verify-lane-log.ts";
+import { LANE_PASS_OUTPUT, NON_GIT_CWD } from "./fixtures/lane-output.ts";
 
 /** The model-facing verify feedback cap (`VERIFY_FEEDBACK_MAX_CHARS`, AGENT-4.a). */
 const FEEDBACK_CAP = 4000;
@@ -34,10 +35,10 @@ describe("runTask prove-before-done", () => {
     const verifyCalls: number[] = [];
     const verify: VerifyRunner = async () => {
       verifyCalls.push(1);
-      return { success: true, output: "ok" };
+      return { success: true, output: LANE_PASS_OUTPUT };
     };
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -61,10 +62,10 @@ describe("runTask prove-before-done", () => {
     const verify: VerifyRunner = async () => {
       verifyN += 1;
       if (verifyN === 1) return { success: false, output: "lint boom" };
-      return { success: true, output: "ok" };
+      return { success: true, output: LANE_PASS_OUTPUT };
     };
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -95,11 +96,11 @@ describe("runTask prove-before-done", () => {
     let verifyN = 0;
     const feedbacks: (string | undefined)[] = [];
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: async () => {
         verifyN += 1;
-        return verifyN === 1 ? { success: false, output: log } : { success: true, output: "ok" };
+        return verifyN === 1 ? { success: false, output: log } : { success: true, output: LANE_PASS_OUTPUT };
       },
       execute: async ({ attempt, verifyFeedback }) => {
         feedbacks.push(verifyFeedback);
@@ -124,11 +125,11 @@ describe("runTask prove-before-done", () => {
     let verifyN = 0;
     const feedbacks: (string | undefined)[] = [];
     await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 1,
       verifyRunner: async () => {
         verifyN += 1;
-        return verifyN === 1 ? { success: false, output } : { success: true, output: "ok" };
+        return verifyN === 1 ? { success: false, output } : { success: true, output: LANE_PASS_OUTPUT };
       },
       execute: async ({ verifyFeedback }) => {
         feedbacks.push(verifyFeedback);
@@ -145,7 +146,7 @@ describe("runTask prove-before-done", () => {
       output: "always fail",
     });
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 1,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -169,7 +170,7 @@ describe("runTask prove-before-done", () => {
       return { success: false, output: "lint broke" };
     };
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 0,
       verifyRunner: verify,
       execute: async () => ({
@@ -188,10 +189,10 @@ describe("runTask prove-before-done", () => {
     const c = collect();
     const verify: VerifyRunner = async () => {
       called += 1;
-      return { success: true, output: "ok" };
+      return { success: true, output: LANE_PASS_OUTPUT };
     };
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       verifyRunner: verify,
       onEvent: c.onEvent,
       execute: async () => ({
@@ -214,7 +215,7 @@ describe("runTask prove-before-done", () => {
       return { success: false, output: "app.ts: syntax error" };
     };
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 2,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -239,10 +240,10 @@ describe("runTask prove-before-done", () => {
       verifyN += 1;
       return verifyN === 1
         ? { success: false, output: "boom" }
-        : { success: true, output: "ok" };
+        : { success: true, output: LANE_PASS_OUTPUT };
     };
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: verify,
       execute: async ({ attempt }) => ({
@@ -259,11 +260,11 @@ describe("runTask prove-before-done", () => {
     const c = collect();
     let verifyN = 0;
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: async () => {
         verifyN += 1;
-        return { success: true, output: "ok" };
+        return { success: true, output: LANE_PASS_OUTPUT };
       },
       onEvent: c.onEvent,
       execute: async () => ({
@@ -286,7 +287,7 @@ describe("runTask prove-before-done", () => {
   test("execute error on a retry after a failed verify → failed (REQ-agent-242)", async () => {
     let verifyN = 0;
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: async () => {
         verifyN += 1;
@@ -312,7 +313,7 @@ describe("runTask prove-before-done", () => {
   test("execute error after a failed verify still says plainly that verification failed (AGENT-4, REQ-agent-242)", async () => {
     const c = collect();
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 3,
       verifyRunner: async () => ({ success: false, output: "app.ts:3 syntax error" }),
       onEvent: c.onEvent,
@@ -342,8 +343,8 @@ describe("runTask prove-before-done", () => {
 
   test("execute error with no files changed is still failed (REQ-agent-242)", async () => {
     const result = await runTask({
-      cwd: "/tmp",
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      cwd: NON_GIT_CWD,
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       execute: async () => ({
         summary: "LLM request failed: network down",
         filesChanged: [],
@@ -358,9 +359,9 @@ describe("runTask prove-before-done", () => {
     const ac = new AbortController();
     ac.abort();
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       signal: ac.signal,
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       execute: async () => ({
         summary: "never",
         filesChanged: ["x.ts"],
@@ -377,7 +378,7 @@ describe("runTask prove-before-done", () => {
     const c = collect();
     let executeCalls = 0;
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 0,
       signal: ac.signal,
       onEvent: c.onEvent,
@@ -418,8 +419,8 @@ describe("runTask SpecSync Planning briefing", () => {
       cwd: root,
       task: "Improve the agent prove-before-done loop",
       // Never the repo's own snapshot or lane from inside its test run.
-      workspaceDiff: async () => ({ changed: async () => [] }),
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      workspaceDiff: async () => ({ changed: async () => [], testDrops: async () => [] }),
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       onEvent: c.onEvent,
       execute: async () => ({
         summary: "noop",
@@ -478,7 +479,7 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const runner: VerifyRunner = async (cwd) => {
       calls.push(cwd);
       const ok = outcomes[Math.min(calls.length - 1, outcomes.length - 1)]!;
-      return { success: ok, output: ok ? "ok" : "app.ts: syntax error" };
+      return { success: ok, output: ok ? LANE_PASS_OUTPUT : "app.ts: syntax error" };
     };
     return { calls, runner };
   }
@@ -694,10 +695,10 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const c = collect();
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       verifyRunner: v.runner,
       onEvent: c.onEvent,
-      workspaceDiff: async () => ({ changed: async () => null }),
+      workspaceDiff: async () => ({ changed: async () => null, testDrops: async () => [] }),
       execute: async () => ({ summary: "answered", filesChanged: [] }),
     });
     expect(v.calls.length).toBe(1);
@@ -716,11 +717,11 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([false]);
     const c = collect();
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 1,
       verifyRunner: v.runner,
       onEvent: c.onEvent,
-      workspaceDiff: async () => ({ changed: async () => ["package.json", ...huge] }),
+      workspaceDiff: async () => ({ changed: async () => ["package.json", ...huge], testDrops: async () => [] }),
       execute: async () => ({ summary: "installed", filesChanged: ["package.json"] }),
     });
     expect(v.calls.length).toBe(2);
@@ -761,11 +762,11 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     let starts = 0;
     const v = counter([true]);
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       verifyRunner: v.runner,
       workspaceDiff: async () => {
         starts += 1;
-        return { changed: async () => ["app.ts"] };
+        return { changed: async () => ["app.ts"], testDrops: async () => [] };
       },
       execute: async () => ({ summary: "wrote", filesChanged: [] }),
     });

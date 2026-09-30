@@ -458,6 +458,7 @@ describe("loadProjectInstructions: plain folder reads the working tree (AGENT-1)
 describe("createTaskExecute uses project instructions (AGENT-1)", () => {
   const llmEnv = {
     CORVIDINHO_LLM_API_KEY: "test-key",
+    CORVIDINHO_LLM_MODEL: "test-model",
     CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
   };
 

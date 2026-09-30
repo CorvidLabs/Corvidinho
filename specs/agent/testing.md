@@ -267,8 +267,8 @@ model gets the "sent privately" placeholder; the prompt names the rule.
   project whose `fledge.toml` sets the removed key still verifies and fails.
 - `tests/agent.config.test.ts`: `parseCorvidinhoSection` reads only
   `max_retries`; `removedVerifyKeys` names the key only under `[corvidinho]`.
-- `tests/agent.execute.test.ts`, `tests/agent.tool-loop.test.ts`: the demo
-  execute reports no files.
+- `tests/agent.execute.test.ts`, `tests/agent.tool-loop.test.ts`: a run with
+  no usable provider reports no files and calls nothing (REQ-agent-179).
 ## SAFE-13 WATCH owner exemption by numeric id (REQ-agent-071, REQ-watch-367)
 
 `tests/safe.injection.test.ts` › "the verdict skips the owner (by [owner]
@@ -310,3 +310,94 @@ flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the
 amounts. `tests/agent.spend-ask.test.ts` and `tests/agent.spend.test.ts` keep
 asserting that a stopped run's summary is `SPEND_CAP_SUMMARY` (no `$`, no
 `CORVIDINHO_`) and that the question carries the details.
+
+## Tests ran and none deleted (REQ-agent-185, AGENT-15)
+
+`tests/agent.test-evidence.test.ts`:
+- Summaries: `bun test` (pass + fail count, skip / todo don't; a lane of only
+  skipped tests ran none), the real `bun test` output of this Bun (FORCE_COLOR
+  on, stdout then stderr as the runner joins them) recognised with 2 executed,
+  jest, vitest, `cargo test` (one line per binary, summed), pytest (`==` and
+  `-q` forms, `no tests ran`), `go test` (`-v` top-level PASS / FAIL lines,
+  or `ok` packages without `[no tests to run]`, `[no test files]` = 0);
+  "ok", "All checks passed." and the like are not recognised. The verdict
+  note names the verify lane and the runners, says no test ran, names drops
+  as `"name" (file)` and stays under 2000 chars for 40 long names.
+- Declarations: JS/TS `.skip`, `.todo`, `x`-names, a skipped `describe` and
+  comments are not active tests, and `.skipIf` / `.if` / `describe.skipIf`
+  ones are conditional; `.each` and template titles are active; a `.only`
+  silences its file's other tests. pytest skip decorators (multi-line too;
+  `skip` off, `skipif` and a module `pytestmark` skipif conditional),
+  `Test*` classes, a skipped class, docstrings and comments; Go
+  `TestX(t *testing.T)` outside comments; Rust `#[test]` /
+  `#[tokio::test]` with `#[ignore]` off, comments and lifetimes ignored.
+  Test-file paths per language. `droppedTests`: a move or a renamed file is
+  not a drop, a retitle and a removed duplicate are; deleting an already-off
+  test is a drop and keeping it off is not; a conditional test deleted or
+  turned off, or a running one made conditional, is a drop, and one kept
+  conditional, made to run or moved is not (one match per declaration,
+  strongest first); drops come back in baseline order.
+- The gate in temp git repos (stub lanes): no recognised summary → not
+  verified, the retry's feedback starts with the note, both `VerifyResult`
+  events `success: false` with the note; all-skipped lane → "no test ran";
+  tests ran and none deleted → `done` verified with `Verify gate: 12 test(s)
+  ran (bun test: 12), and none were deleted.`; a deleted test named in the
+  feedback and a retry that restores it verified; deleting the file, `.skip`,
+  `.todo`, a sibling `.only`, a retitle and commenting out each named;
+  deleting a `.skipIf` test, a test in a `describe.skipIf` suite and a
+  `.skip` test each named, while touching their file and keeping them is
+  verified; a renamed / moved file and a test moved to another file verified; a deletion
+  committed through a shell seen; a test file dirty before the run compared
+  with its start text (untouched: verified; its extra test removed: named);
+  a run in a subdirectory sees a test deleted outside it (root-wide); a
+  carried talk whose blocked run deleted a test re-runs the lane on each
+  later turn and stays unverified; a tracker whose baseline git cannot give
+  (no base branch, a missing commit) returns null.
+- Non-git: a `.skip` in a plain project is named; a renamed file is verified;
+  a walk over its entry cap and a missing dir return null.
+- The real CLI in a carried talk worktree with a fake `fledge`: exit 0 with
+  no summary → exit 1, `failed`; a `bun test` summary on stderr → exit 0,
+  `done` verified.
+- `tests/agent.verify-gate.test.ts`: a talk whose base branch cannot be
+  found still runs the lane, and now ends `failed` (not verified) with the
+  "could not read the test files" note.
+- Stub lanes that pass print a `bun test` summary
+  (`tests/fixtures/lane-output.ts` `LANE_PASS_OUTPUT`); in-process runs that
+  use tool-reported files run in an empty scratch dir (`NON_GIT_CWD`), not
+  `/tmp`, whose walk can be over its cap.
+- Fail on base: with the base's (156cfa9) `src/agent/{loop,workspace-diff,types,index}.ts`
+  and `src/work/pr.ts` swapped in (the new `src/agent/test-evidence.ts`
+  kept so the file loads), 20 tests fail across `tests/agent.test-evidence.test.ts`
+  (every gate, non-git, CLI and /work case) and `tests/agent.verify-gate.test.ts`
+  (the no-base talk ends verified on the base); the pure summary and
+  declaration units pass on both. Restored, all pass.
+## AUTONOMY-11 sentence (REQ-agent-097)
+
+`tests/must-ask.boundary.test.ts` — `ASK_AGENT_SYSTEM_INSTRUCTIONS` carries
+the "Must-ask (AUTONOMY-9..11)" sentence and the tool loop's system message
+holds it; in one round a files-write runs with no card while a
+`discord-post-message` waits for the owner's card, and the owner's no reaches
+the model as the tool's refusal (`refused (AUTONOMY-10) … the owner denied
+it`), which it reports in its answer. `tests/agent.events-ndjson.test.ts`:
+`progressFromFrame` shows the gate's wait line as "waiting for the owner's OK
+on an Approve card" and every other `Text` frame (model text included, even
+one that says it is waiting) as nothing.
+
+## Model providers, no built-in default (REQ-agent-179, REQ-agent-007, REQ-agent-079; AGENT-13 / AGENT-10)
+
+`tests/agent.providers.test.ts` — entry parsing (`kind:model`, bare and
+unknown prefixes are OpenAI-compatible, comma lists), per-tier resolution with
+no default, each kind's endpoint and key (`resolveEntry`, `OLLAMA_HOST`
+forms, `providerId`), the transport per kind over a mock fetch (ollama: no
+authorization header; anthropic: its own key; only a list's head is called),
+the no-provider notice per case, `runTask` ending `failed` with the notice and
+no provider call, the real `task run` against a localhost keyless `ollama:`
+fake, and the `ANTHROPIC_API_KEY` SAFE-6 redaction.
+`tests/agent.execute.test.ts` / `tests/agent.tool-loop.test.ts`: a key alone
+picks no model; an attempt with no provider fails with the notice.
+- Fail on base: with the base's (156cfa9) sources swapped in (the new module
+  kept), 15 of 18 fail (the 3 pure units of the new module pass).
+- Tests that used the demo stub or the default model now use
+  `tests/fixtures/fake-llm.ts` (a localhost fake, an injected fetch, or a
+  configured model for bridge footers).
+

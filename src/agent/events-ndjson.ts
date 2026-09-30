@@ -631,9 +631,22 @@ const STATE_LABELS: Record<AgentState, string> = {
   blocked: "needs input",
 };
 
+/**
+ * The must-ask gate's wait line (src/plugins/must-ask.ts, AUTONOMY-9/10):
+ * the one `Text` frame the live status shows, so a held call reads as
+ * waiting for the owner's OK rather than as a slow tool.
+ */
+export const MUST_ASK_WAIT_TEXT_RE = /^\[operator\] AUTONOMY-\d+: waiting for the owner's OK on an Approve card\b/;
+
+/** The status line while a must-ask call waits for the owner's card. */
+export const MUST_ASK_WAIT_STATUS = "waiting for the owner's OK on an Approve card";
+
 /** Map one frame to a status update; null for frames that change nothing shown. */
 export function progressFromFrame(frame: NdjsonFrame): TaskProgress | null {
   switch (frame.type) {
+    case "Text":
+      // Model text never shows in the status; only the must-ask wait line does.
+      return MUST_ASK_WAIT_TEXT_RE.test(frame.text) ? { message: MUST_ASK_WAIT_STATUS } : null;
     case "StateChanged":
       return { state: frame.state, tool: "", message: STATE_LABELS[frame.state] };
     case "ToolCall": {

@@ -190,7 +190,9 @@ describe("slash handlers", () => {
     expect(body).toContain(`Protocol: ${CORVIDINHO_PROTOCOL_VERSION}`);
     expect(body).toContain("Active sessions: 1");
     expect(body).toContain("Channels (allowlist): 1");
-    expect(body).toContain("LLM: demo stub");
+    // AGENT-10: no provider is said plainly; the setting names are the owner's (SAFE-14.a).
+    expect(body).toContain("LLM: none — No model provider is configured.\n");
+    expect(body).not.toContain("demo stub");
     expect(body).toContain("Slash commands: session, status, agents, work, mute, unmute");
     expect(body).toContain("Git tip: abc1234");
     expect(body).not.toContain("sk-");

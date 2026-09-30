@@ -29,6 +29,7 @@ import { buildVerifyEnv } from "../../src/agent/verify.ts";
 import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { spawnCapped } from "../fledge/spawn.ts";
+import { runnerProdWhy } from "../shell/must-ask.ts";
 
 /** One language runner: command name, toolchain label, binaries tried in order. */
 export type RunnerSpec = {
@@ -247,6 +248,13 @@ export function runnerCommand(spec: RunnerSpec, bin: string): PluginCommand {
     description: runnerDescription(spec),
     dangerous: true,
     minTier: 2,
+    // AUTONOMY-9/9.a: argv, inline code or a script naming a prod or deploy tool asks first.
+    mustAsk: ({ args, cwd, env }) => {
+      const why = runnerProdWhy(spec.tool, args, cwd, { env });
+      return why
+        ? { ask: { class: "prod", why, target: `${spec.tool}, run in ${resolve(cwd)}`, text: JSON.stringify(args) } }
+        : null;
+    },
     handler: (ctx) =>
       runRunner({ spec, bin, args: ctx.args, cwd: ctx.cwd, signal: ctx.signal }),
   };

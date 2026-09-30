@@ -35,7 +35,7 @@ export const ASK_SUMMARY_PREFIX = "Needs your input:";
 /** ToolResult detail when ask-human ends the run. */
 export const ASK_TOOL_RESULT_DETAIL = "question sent to the requester; run stopped";
 
-/** Tool-loop system prompt rule (AUTONOMY-1/7). */
+/** Tool-loop system prompt rule (AUTONOMY-1/7; AUTONOMY-11's one sentence). */
 export const ASK_AGENT_SYSTEM_INSTRUCTIONS =
   "Clarifying questions (AUTONOMY-1 / DISCORD-ASK): when the task cannot proceed without a human choice " +
   "(missing intent, an ambiguous requirement, a decision only a human can make), call " +
@@ -48,7 +48,11 @@ export const ASK_AGENT_SYSTEM_INSTRUCTIONS =
   "Impossible or joke asks (AUTONOMY-7): for clearly impossible or joke requests " +
   '(e.g. "build a free energy / dark matter / zero-point generator"), prefer a witty ' +
   "public-safe decline or a tiny toy demo — do not open with ask-human or a long formal " +
-  "MCQ unless they clearly want a real utility. ";
+  "MCQ unless they clearly want a real utility. " +
+  "Must-ask (AUTONOMY-9..11): anything inside your guardrails you just do and then say what you did, " +
+  "because only prod or deploy contact and channel posts need the owner's OK and the tool itself waits for " +
+  "it on their Approve card — so never call ask-human for permission first, and never repeat a call the " +
+  "owner denied. ";
 
 export type AskToolDef = {
   type: "function";

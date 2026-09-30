@@ -12,7 +12,7 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true`. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
+When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
@@ -29,6 +29,8 @@ Acceptance Criteria
 - Colour escapes (FORCE_COLOR reaching the lane) are dropped from an over-cap log and hide neither fledge's markers nor passing-test lines; a failing parallel step is named `parallel(<tasks>)` and kept from its `Running parallel:` line; a log with no fledge markers is not called a failing step's output.
 - An `error:` line with emoji that the end of the error-line scan (where the kept end of the log starts) cuts between a high and a low surrogate is not kept on its high half: with the noise after it swept so the cut falls inside the emoji, the excerpt at 4000 and at runTask's 3946 cap still names the failing step and holds no lone surrogate.
 - A run that changed files is verified with no option set; `RunTaskOptions` has no field that skips the gate.
+- A passing lane whose output has no recognised test summary, or whose tests were all skipped, is not verified: the attempt is retried with the `Verify gate: not verified: …` note first in its feedback, then ends `failed` (REQ-agent-185).
+- A stub lane that passes and prints a `bun test` summary (`tests/fixtures/lane-output.ts`) ends `done` verified as before.
 
 ### REQ-agent-003
 
@@ -92,13 +94,13 @@ Acceptance Criteria
 
 ### REQ-agent-007
 
-The execute hook for `task run` SHALL call an OpenAI-compatible chat completions endpoint when `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (`CORVIDINHO_LLM_BASE_URL` / `CORVIDINHO_LLM_MODEL`, with the model chosen for the run's capability tier per REQ-agent-079), and SHALL keep the demo execute stub (synthetic filesChanged for the verify-gate exercise) when no key is set. Secrets SHALL stay in env and SHALL never be committed.
+The execute hook for `task run` SHALL call the OpenAI-compatible chat completions endpoint of the model provider the operator configured for the run's capability tier (AGENT-13, REQ-agent-179: the tier's first `kind:model` entry from `CORVIDINHO_LLM_MODEL_*` / `CORVIDINHO_LLM_MODEL`, with that kind's endpoint and key; the model per REQ-agent-079). There SHALL be no demo execute stub and no built-in default model: when the run's tier has no usable provider (no entry, or the kind's key is unset) the attempt SHALL make no provider call and SHALL return `error: true` with the no-provider notice as its summary and no files (AGENT-10), so the run ends `failed`. Secrets SHALL stay in env and SHALL never be committed.
 
 Acceptance Criteria
-- No API key → demo summary + filesChanged for gate exercise.
-- Key present → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
-- Fixture tests cover no-key path; key path mocks fetch (no live API in CI).
-- Key present → every request's `model` is the run tier's model (REQ-agent-079); with no per-tier model key it is `CORVIDINHO_LLM_MODEL` (default `gpt-4o-mini`) as before.
+- No usable provider (nothing set, a key with no model, or a model whose kind has no key) → no fetch; `error: true`, the summary starts `No model provider is configured`, `filesChanged` `[]`; never a demo summary or `gpt-4o-mini`.
+- Usable provider → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
+- Fixture tests cover the no-provider path; provider paths mock fetch or use a localhost fake provider (no live API in CI).
+- Provider set → every request's `model` is the run tier's model without its `kind:` prefix (REQ-agent-079); with no per-tier model key it is `CORVIDINHO_LLM_MODEL`'s first entry.
 
 ### REQ-agent-008
 
@@ -629,13 +631,15 @@ The repository SHALL ship a root `agent.3md` that validates with
 `@corvidlabs/agent3md` `validateAgent`, exposes guidance-only skill planes
 (no `tool=` bindings that duplicate the SAFE plugin registry), and is covered
 by a bun smoke that `route`s and `get`s at least one playbook. The agent loop
-SHALL NOT load this file for progressive disclosure until AGENT-13 is HI'd
-separately.
+SHALL NOT load this file for progressive disclosure until that is HI'd
+separately (the captured AGENT-13 is model providers, REQ-agent-179, not
+this).
 Acceptance Criteria
 - `validateAgent(readFileSync("agent.3md")).ok` is true in CI/tests.
 - Every skill in `Agent.manifest().skills` has `tool: null`.
 - `Agent.route` + `Agent.get` resolve a named guidance playbook (e.g. `discord-ask`).
 - `package.json` lists `@corvidlabs/agent3md` as a dependency.
+
 ### REQ-agent-312
 When the LLM tool loop exhausts `maxToolRounds` without a final no-tool reply, execute SHALL soft-land (AGENT-9): `ExecuteResult.summary` SHALL be the last assistant prose when present, otherwise a short clarifying ask (e.g. "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?"). The summary SHALL NOT contain the operator phrase `Stopped after N tool rounds`. An operator note with that phrase MAY be emitted as a `Text` event for thinking/NDJSON. `chatBodyFromTaskResult` SHALL strip any leftover `Stopped after N tool rounds` lines before Discord outbound (defense in depth).
 The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): prefer conversational prose for social/game banter; call `discord-user-lookup` for snowflakes/@mentions/named members before repo tools; only use SpecSync/git/github/files when the query clearly needs Corvidinho codebase or product data; treat bare `bug <snowflake>` in Discord as a user id, not a GitHub issue.
@@ -647,7 +651,7 @@ The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / 
 
 ### REQ-agent-079
 
-`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else `gpt-4o-mini` (AGENT-5). Every chat request of the run SHALL carry that model in `body.model`, so SAFE-8 spend pricing prices the tier's model. The endpoint (`CORVIDINHO_LLM_BASE_URL`) and the API key SHALL stay shared by all tiers. Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before.
+`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else no model at all (AGENT-5; AGENT-13: there is no built-in default, and the run fails with the no-provider notice, REQ-agent-179). Each key holds `kind:model` entries (REQ-agent-179); the tier's model is its first entry. Every chat request of the run SHALL carry that model, without its `kind:` prefix, in `body.model`, so SAFE-8 spend pricing prices the tier's model. The endpoint and the API key SHALL come from the entry's kind (REQ-agent-179), so tiers of one kind share them (`openai` entries share `CORVIDINHO_LLM_BASE_URL` and its key). Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before. A tier with no model calls nothing, so it SHALL NOT be flagged as unpriced.
 
 Acceptance Criteria
 - `CORVIDINHO_LLM_MODEL=big`, `CORVIDINHO_LLM_MODEL_READ=cheap`: a read run sends `cheap`, tool and code runs send `big`; adding `CORVIDINHO_LLM_MODEL_CODE=big2` / `CORVIDINHO_LLM_MODEL_TOOL=mid` makes code send `big2` and tool `mid`.
@@ -655,8 +659,9 @@ Acceptance Criteria
 - A read-tier `buildDelegateSpawn` env keeps the per-tier keys and resolves `cheap` (env tier or `--tier read`).
 - Under a SAFE-8 cap, an unpriced read model stops a read run before any provider call and the spend-cap ask names that model and `CORVIDINHO_LLM_MODEL_READ` as the key to switch; a tool run on an unpriced shared model names `CORVIDINHO_LLM_MODEL`.
 - Under a cap with a priced configured model and `CORVIDINHO_LLM_MODEL_READ` unpriced, doctor prints `[warn] spend: … model "<m>" has no known price, so read-tier runs stop and ask before calling the provider` and `/status` flags the read-tier model; with every tier priced or no per-tier key the lines read as before.
-- No per-tier keys → every tier sends `CORVIDINHO_LLM_MODEL`; a blank per-tier key falls back; no model at all → `gpt-4o-mini`.
+- No per-tier keys → every tier sends `CORVIDINHO_LLM_MODEL`; a blank per-tier key falls back; no model at all → no model (`model` `""` and the no-provider notice), never `gpt-4o-mini`.
 - Fixture tests mock fetch; no live API.
+
 ### REQ-agent-085
 
 Real-diff verify gate (AGENT-4, AGENT-15, issue #85). `runTask` SHALL always
@@ -702,8 +707,8 @@ paths were listed), so the NDJSON `result` line stays under the parser's line
 cap and a bridge still gets the summary; the gate is unaffected because
 `filesChanged` is non-empty either way. An empty real diff with no ghost
 claim SHALL end `done` with `verifySkipped=true` and the "no changes" note
-(REQ-agent-003). The demo execute (no LLM key) changes nothing and SHALL
-report no files. Git SHALL run read-only through `runGit` (argv, no shell,
+(REQ-agent-003). A run whose model called no tool, and a run with no usable
+provider (REQ-agent-179), changes nothing and SHALL report no files. Git SHALL run read-only through `runGit` (argv, no shell,
 hooks off, repo-locating env stripped, discovery clamped to the root,
 optional locks off) with fsmonitor off, and fingerprints are hashed in
 process: nothing is written to the index or object store (the talk marker of
@@ -723,7 +728,7 @@ Acceptance Criteria
 - With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
 - The snapshot is always taken (the `workspaceDiff` seam is called once per run) and a real change is verified.
 - A tool that claims `dist/out.js` (gitignored, written), `app.ts` (edited) and `ghost.ts` (never written) in a git repo: `filesChanged` is `["app.ts"]`, the lane runs, and one note names `dist/out.js, ghost.ts`; a run whose only change is such a claim still runs the lane, and its retry after the failed verify runs it again.
-- The demo execute reports `filesChanged: []`.
+- A reply-only (fake provider) run and a no-provider run report `filesChanged: []`.
 - End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
 
 ### REQ-agent-428
@@ -1218,7 +1223,7 @@ Acceptance Criteria
 - A talk whose base branch cannot be found verifies anyway with the "could not read the git working-tree diff" note.
 - The caller's own checkout: an edit left by a blocked run is not carried into the next run.
 - `talkWorktreeGitDir` is null for a main checkout and for a linked worktree not named `talk-*`; `takeTalkVerified` is true once, then false, and false for a symlink in the marker's place; a `done` settle never writes through that symlink; a marker planted during a run that does not end `done` is removed.
-- The real CLI in a carried talk worktree runs the verify lane although the demo run changes nothing.
+- The real CLI in a carried talk worktree runs the verify lane although its run (a fake provider whose reply calls no tool) changes nothing.
 - A worker (`{ nested: true }`) in a talk worktree whose lead took the marker and edited `app.ts`: one that changes nothing ends `done` without the lane; one that edits `lib.ts` lists only `lib.ts` and ends `done` verified; neither writes the marker, so the next top-level run (the lead died) carries `app.ts` and `lib.ts`. A worker that ends `failed` removes a marker; one that ends `done` leaves it as it was. The real CLI with `CORVIDINHO_DELEGATE_DEPTH=1` in a carried talk worktree runs no lane and writes no marker.
 
 ### REQ-agent-086
@@ -1285,4 +1290,171 @@ Acceptance Criteria
 - A verify retry (new conversation) whose first call repeats a call that failed twice in attempt 1 runs it and steers; its next identical call asks.
 - `runTask` with that execute ends `blocked`, `ask` = the stuck ask, verified false, verify never called.
 - The real CLI (`task run --output ndjson`, localhost mock LLM repeating a missing `files-read`) exits 0 with a `blocked` result frame whose `ask` is the stuck ask after exactly three LLM requests.
+
+### REQ-agent-185
+
+Tests ran and none deleted (AGENT-15, captured on main from Leif's
+2026-09-28 interview: "The real git diff decides what changed, and
+'verified' requires that tests ran and none were deleted."; this builds the
+tests-ran / none-deleted half). After the verify lane passes, `runTask` SHALL
+count the run as verified only when both hold, else the attempt SHALL be a
+failed verify (the `VerifyResult` event has `success: false` and the lane
+output followed by the note; the retry's `verifyFeedback` starts with the
+note after its "Verification failed" head, within the 4000-char cap; the
+failure summary puts the note before the lane output) with no opt-out
+(AGENT-14), and one `Text` event SHALL carry the verdict note either way
+(`Verify gate: N test(s) ran (<runner>: N, …), and none were deleted.`, or
+`Verify gate: not verified: …` naming every problem):
+
+1. Tests ran: `countExecutedTests(output)` (`src/agent/test-evidence.ts`)
+   SHALL read, with colour escapes dropped, only runners with a reliable
+   summary line: `bun test` (the ` N pass` / ` N fail` lines above
+   `Ran N tests across M files.`), jest (`Tests: … N total`), vitest
+   (`Tests  … (N)`), `cargo test` (every `test result:` line), pytest (the
+   `N passed, … in Xs` line, `no tests ran`) and `go test` (top-level
+   `--- PASS:` / `--- FAIL:` lines, else one per `ok <pkg>` line without
+   `[no tests to run]`; `[no test files]` = 0). Executed = passed + failed
+   (pytest also xfailed / xpassed); skipped, todo and ignored tests never
+   count. No recognised summary SHALL fail closed with a note that names the
+   verify lane (`fledge lanes run verify`) and the recognised runners; a
+   recognised summary with no executed test SHALL fail with a note saying no
+   test ran.
+2. None deleted: every `WorkspaceDiffTracker` SHALL have `testDrops()`,
+   which compares the tests declared in the test files that differ from its
+   baseline across the whole repo root (not only the cwd's subtree): the
+   baseline side from the baseline commit's blobs (`git ls-tree` /
+   `git cat-file`, read-only), or, for a test file already dirty or
+   untracked at the start, from its text read at the start (untouched since,
+   by stat identity, it is skipped); the other side from the working tree
+   (no symlink followed). Test files are JS/TS `*.test.*`, `*.spec.*`,
+   `*_test.*`, `*_spec.*`, `*_test_.*` and `__tests__/`, pytest `test_*.py`
+   / `*_test.py`, Go `*_test.go` and Rust `.rs`. A declaration is off when
+   it is `.skip`, `.todo`, `x`-prefixed, inside a skipped suite, silenced by
+   an `.only` elsewhere in its file, a `skip`-marked pytest test, class or
+   module, or a Rust `#[ignore]` test; otherwise it is conditional (it may
+   run here) when it or its suite is `.if`, `.skipIf`, `.todoIf` or
+   `.runIf`, or pytest `skipif` / `skipUnless`; otherwise it runs.
+   Commented-out code is not a declaration. `droppedTests` SHALL match names
+   (once per declaration) across all the changed files: every baseline
+   declaration needs one with its name that runs at least as much (a running
+   test a running one, a conditional test a running or conditional one, a
+   test already off any declaration). So a renamed or moved file, or a test
+   moved to another file, keeps its name and is not a drop, while a deleted
+   or retitled test (conditional or already off included), a running test
+   made conditional or off, and a conditional test turned off are, and the
+   note SHALL name each as `"name" (file)` (up to 10 and
+   1500 chars, then "and N more"). A baseline git cannot give (a carried talk
+   whose base branch cannot be found, a commit that is gone), a status
+   listing git cannot read, a test file over 4 MiB or unreadable, over 2000
+   changed test files or over 64 MiB of test source SHALL make `testDrops()`
+   null, and the run is not verified ("could not read the test files").
+3. With no git snapshot (a non-git cwd, or an unreadable start snapshot;
+   REQ-agent-502's rule that such a run verifies after an unreported edit is
+   kept), `runTask` SHALL walk the cwd's test files at run start
+   (`startTestNameWalk`: no symlink followed, dot-directories and
+   `node_modules`, `target`, `vendor`, `dist`, `build`, `coverage`, `venv`,
+   `__pycache__` skipped) and compare a second walk after the lane passes; a
+   walk over 20000 entries or that cannot read the cwd SHALL fail closed.
+
+In a talk worktree the carried baseline (REQ-agent-015) applies here too, so
+a run after one that did not end verified checks every test dropped since the
+talk started, and every later turn re-runs the lane until one ends verified.
+`startWorkspaceDiffFrom(cwd, commit)` SHALL give a tracker whose baseline is
+`commit` with no dirt (for /work, REQ-discord-185). No env var, config key,
+flag, slash command, table or NDJSON field is added.
+
+Acceptance Criteria
+- `countExecutedTests` counts pass + fail for `bun test` (skip / todo not), recognises the real `bun test` output of this Bun (stdout then stderr, colour on), jest, vitest, `cargo test` (summed), pytest (`==` and `-q`, `no tests ran` = 0) and `go test` (`-v` or `ok` packages); "ok" and other lines are not a summary.
+- In a temp git repo with a passing stub lane: no recognised summary → not verified, the retry's feedback starts with the note naming the verify lane, both `VerifyResult` events `success: false`; an all-skipped summary → "no test ran"; a summary with tests and no drop → `done` verified with the "N test(s) ran … none were deleted" note.
+- Deleting a test file, `.skip`, `.todo`, a sibling `.only`, a retitle and commenting a test out each end not verified with `"<name>" (tests/math.test.ts)` in the note; a retry that restores the test ends `done` verified.
+- Deleting a `.skipIf` test, a test in a `describe.skipIf` suite or an already-skipped test ends not verified with each named, and touching their file while keeping them is verified; `droppedTests` makes a conditional test deleted or turned off, and a running test made conditional, a drop, and a conditional test kept conditional, made to run or moved not one; pytest `skipif` (a decorator or a module `pytestmark`) is conditional and `skip` is off.
+- A renamed or moved test file and a test moved to another file are verified; a deletion committed through a shell is seen; a test file dirty before the run is compared with its start text; a run in a subdirectory sees a test deleted outside it.
+- A carried talk whose blocked run deleted a test re-runs the lane on each later turn and stays unverified; a tracker whose base branch or commit git cannot give returns null from `testDrops()`.
+- Non-git: a `.skip` is named, a renamed file is verified; a walk over its entry cap or of a missing dir returns null.
+- The real CLI in a carried talk with a fake `fledge` that exits 0: no summary → exit 1, `failed`; a `bun test` summary → exit 0, `done` verified.
+### REQ-agent-097
+
+Anything else inside its guardrails, it just does and tells me (AUTONOMY-11,
+captured on main from Leif's 2026-09-28 interview).
+`ASK_AGENT_SYSTEM_INSTRUCTIONS` (`src/agent/ask.ts`, in every tool-loop
+system prompt) SHALL carry one sentence: anything inside its guardrails it
+just does and then says what it did, because only prod or deploy contact and
+channel posts need the owner's OK and the tool itself waits for it on the
+Approve card (REQ-plugins-097) — so it never calls `ask-human` for
+permission first and never repeats a call the owner denied. A must-ask
+call's refusal (deny, lapse, worker, no owner) reaches the model as that
+tool's result like any refusal; the loop is otherwise unchanged. While a call
+waits, the live status SHALL say so: `progressFromFrame`
+(`src/agent/events-ndjson.ts`) SHALL map a `Text` frame that starts with the
+gate's wait line (`[operator] AUTONOMY-<n>: waiting for the owner's OK on an
+Approve card`, `MUST_ASK_WAIT_TEXT_RE`) to the message `MUST_ASK_WAIT_STATUS`
+("waiting for the owner's OK on an Approve card"), which the Discord thinking
+status shows; every other `Text` frame SHALL still change nothing shown.
+
+Acceptance Criteria
+- `ASK_AGENT_SYSTEM_INSTRUCTIONS` contains the "Must-ask (AUTONOMY-9..11)" sentence and the tool loop's system message holds it.
+- In one round a `files-write` runs with no card while a `discord-post-message` waits for the card; the owner's no reaches the model as `refused (AUTONOMY-10) … the owner denied it`.
+- `progressFromFrame` shows the gate's wait line as "waiting for the owner's OK on an Approve card" and any other `Text` frame as nothing.
+
+### REQ-agent-179
+
+I configure its models (OpenAI-compatible, Ollama, Anthropic or a headless
+agent CLI), and there's no built-in default (AGENT-13, partial: the headless
+agent CLI kind is a later change); with no provider set, it says so at startup
+and in /status (AGENT-10). Both were captured in `hi/agent.md` from Leif's
+2026-09-28 interview. `src/agent/providers.ts` SHALL read the model entries:
+`CORVIDINHO_LLM_MODEL` and the per-tier `CORVIDINHO_LLM_MODEL_READ` / `_TOOL`
+/ `_CODE` (REQ-agent-079) each hold an ordered, comma-separated list of
+entries (blanks skipped); an entry is `kind:model` with kind `openai`,
+`ollama` or `anthropic` (case-insensitive, split on the first `:` only when
+the prefix is a kind), and a bare entry or one whose prefix is not a kind
+(`qwen3:30b`) is OpenAI-compatible. Only the first entry of a tier SHALL be
+called; the AGENT-11 fallback chain is a later change. Each kind SHALL use
+its vendor endpoint (the endpoint of a provider the operator chose, not a
+default model) and its own key, never another kind's: `openai` →
+`CORVIDINHO_LLM_BASE_URL` (else `https://api.openai.com/v1`) with
+`CORVIDINHO_LLM_API_KEY`, else `OPENAI_API_KEY`; `ollama` → `OLLAMA_HOST` read
+as Ollama reads it (`host`, `host:port` or a URL; no scheme means http and
+port 11434; a bind-all address is reached on loopback; default
+`127.0.0.1:11434`) plus `/v1`, with no key; `anthropic` →
+`https://api.anthropic.com/v1` (its OpenAI-compatible API) with
+`ANTHROPIC_API_KEY`. Every kind SHALL go through the one OpenAI-compatible
+chat transport (`chatCompletions`, `extractUsage`) and the SAFE-8 spend guard
+unchanged; the request's `body.model` SHALL be the entry's model without its
+`kind:` prefix, and `authorization: Bearer <key>` SHALL be sent only when the
+kind has a key. There SHALL be no built-in default model and no demo stub. A
+tier's provider is usable when it has an entry and, for `openai` /
+`anthropic`, its key is set; a keyless `ollama` entry is usable. With no
+usable provider for a run's tier, `loadLlmEnv` SHALL carry the no-provider
+notice (`providerNotice`, starting with `NO_PROVIDER_NOTICE` "No model
+provider is configured") and the execute attempt SHALL make no provider call
+and SHALL return `error: true` with the notice as its summary and no files,
+so `runTask` ends `failed` on every surface (CLI, Discord chat, slash
+commands, `/work`, schedules, WATCH, delegate and council workers). The
+notice SHALL name what is missing — `CORVIDINHO_LLM_MODEL is not set` with
+how to set it (`openai:<model>`, `ollama:<model>` or `anthropic:<model>`,
+per-tier keys, no built-in default), or `<entry> needs <KEY>, which is not
+set` — grouping tiers with the same problem and naming the tiers when not
+every tier asked about has it; it SHALL name env keys and models only, never
+a key value. `providerStatus`, `providerForTier`, `defaultProviderLabel`
+(`<label> @ <host>` of the default tier, `openai` entries shown bare) and
+`providerId` (the endpoint host, which the SAFE-8 ledger records as
+`provider`) serve doctor, `/status` and the startup lines.
+`ANTHROPIC_API_KEY` SHALL be a SAFE-6 secret env name (`redactSecretEnvValues`
+/ `formatErrorLine`), as it already is dropped from the verify lane and the
+shell (`VERIFY_ENV_DROP`). No schema change, slash command, CLI flag or
+/admin knob is added; `OLLAMA_HOST` and `ANTHROPIC_API_KEY` are read only for
+their kind.
+
+Acceptance Criteria
+- `parseModelEntry`: `openai:gpt-4.1`, `ollama:qwen3:30b` (model `qwen3:30b`), `Anthropic:<m>`; bare `gpt-4o` and `qwen3:30b` are `openai`; blank and `ollama:` are null. `parseModelChain("ollama:a, anthropic:b ,, c")` keeps order and skips blanks.
+- A tier's own key wins, a blank or `,`-only key falls back to `CORVIDINHO_LLM_MODEL`, and nothing set is `[]`; `modelForTier` is the model without its kind, `""` when none.
+- `resolveEntry`: openai default `https://api.openai.com/v1`, `CORVIDINHO_LLM_BASE_URL` wins (trailing `/` dropped), `CORVIDINHO_LLM_API_KEY` over `OPENAI_API_KEY`, unusable without a key; ollama `http://127.0.0.1:11434/v1`, no key even when `OPENAI_API_KEY` is set, usable; anthropic `https://api.anthropic.com/v1` with `ANTHROPIC_API_KEY` only, unusable without it; `providerId` is the host.
+- `OLLAMA_HOST` `gpu-box` → `http://gpu-box:11434`, `gpu-box:9000`, `0.0.0.0` → `127.0.0.1:11434`, `https://…/` and `http://10.0.0.5:11434` as given.
+- Mock fetch: an `ollama:qwen3:30b` run posts to `http://gpu-box:9000/v1/chat/completions` with no authorization header and `model` `qwen3:30b`; an `anthropic:` run posts to `https://api.anthropic.com/v1/chat/completions` with `Bearer <ANTHROPIC_API_KEY>`, never the OpenAI key; `openai:gpt-4.1, ollama:later` calls only `gpt-4.1` at the base URL with its key.
+- `providerNotice({})` and with only `OPENAI_API_KEY` is the "CORVIDINHO_LLM_MODEL is not set" notice with how to set it; `anthropic:c` without its key names `ANTHROPIC_API_KEY`; only `_READ` set names the tool and code tiers; one run's own tier with a provider is null; the key value never appears.
+- `runTask` over `createTaskExecute` with only a key: `failed`, summary the notice, `filesChanged` `[]`, one attempt, no verify, no provider call.
+- The real `task run` with a keyless `ollama:` model pointed at a localhost fake server ends `done` with the server's reply; the server saw no authorization header and `model` `fake-model`.
+- `redactSecretEnvValues` / `formatErrorLine` redact an `ANTHROPIC_API_KEY` value.
+- On the base sources `tests/agent.providers.test.ts` fails 15 of 18 (the three that pass are pure units of the new module); on the branch all pass.
 

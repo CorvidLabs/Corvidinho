@@ -42,8 +42,12 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional SAFE-1: CORVIDINHO_ALLOWLIST=…   # dangerous tool names allowed non-interactive (E.3)
 # optional SAFE-5: CORVIDINHO_AUDIT_HMAC_KEY=…   # keys the audit chain (E.7)
 # optional OPS-1/2: CORVIDINHO_BACKUP_DIR=/var/backups/corvidinho   # nightly DB backup + weekly restore test (E.7)
-# LLM: CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY), CORVIDINHO_LLM_BASE_URL, CORVIDINHO_LLM_MODEL,
-#   CORVIDINHO_LLM_TIER=read|tool|code (default tool)
+# LLM (AGENT-13; required — there is no built-in default model):
+#   CORVIDINHO_LLM_MODEL=openai:<model> | ollama:<model> | anthropic:<model>  (bare = OpenAI-compatible)
+#   openai: CORVIDINHO_LLM_API_KEY (or OPENAI_API_KEY), optional CORVIDINHO_LLM_BASE_URL
+#   ollama: optional OLLAMA_HOST (default 127.0.0.1:11434), no key
+#   anthropic: ANTHROPIC_API_KEY
+#   CORVIDINHO_LLM_TIER=read|tool|code (default tool); CORVIDINHO_LLM_MODEL_READ/_TOOL/_CODE per tier
 # optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
 ```
 
@@ -68,8 +72,9 @@ file `[discord].channels` plus `CORVIDINHO_DISCORD_ALLOW_CHANNELS` and `DISCORD_
 A channel that is also deny-listed does not count (deny wins). The line names where the
 channels came from (`file`, `env` or `file + env`) and how many, never the ids. The
 `github-watch` check does the same for `[github]` repos / orgs and
-`CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS`. `doctor` also warns when no LLM key is set
-(`task run` uses the demo stub) and checks the data dir is writable (`data-dir`). Its
+`CORVIDINHO_GITHUB_ALLOW_REPOS` / `_ORGS`. `doctor` also warns when no model provider is
+usable (`[warn] llm: No model provider is configured …`, AGENT-10) and checks the data dir
+is writable (`data-dir`). Its
 `allowlist-file` check fails when the file exists but cannot be parsed, with the line and key
 (never the values); the bridge, `github watch` and `daemon` refuse to start until it is fixed.
 
@@ -146,13 +151,21 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
   no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
-- Approve / Deny cards and one-time codes (SAFE-18..20): every card (today: forget requests) comes
-  from the running bridge by **direct message**, checked about every 5 seconds even with the
+- Approve / Deny cards and one-time codes (SAFE-18..20): every card (forget requests, and the
+  must-ask cards below) comes from the running bridge by **direct message**, checked about every 5 seconds even with the
   scheduler off; a diff or text comes first, then the card with the exact action, target and
   amount. Destructive and money cards also need a **one-time code**: after **Approve** the bot DMs
   an 8-character code (valid once, for that card only, for 2 minutes) that you type with **Enter
   code**. Same DM rule as above; nothing to configure. With no bridge running no card goes out, and
   an unanswered card is a no. See [`discord.md`](discord.md) "Approve / Deny cards".
+- Must-ask (AUTONOMY-9/10): prod and deploy contact (the VPS, secrets, env, DNS, deploy tools, a
+  push to a remote's default branch or a usual default or deploy branch such as `main` — read-only
+  looks included) and every `discord-post-message`
+  post wait for your OK on one of those cards before they run (prod cards need the one-time code);
+  a deny or no answer in 5 minutes runs nothing. Updating to a tagged release with
+  `CORVIDINHO_REF=v<X.Y.Z> scripts/corvidinho-update.sh` in the installed checkout is not a deploy.
+  Needs the bridge running and an owner configured; nothing else to set. See [`discord.md`](discord.md)
+  "The must-ask list".
 - Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
   view of someone's memory are sent to whoever asked by **direct message**; the channel gets only a
   short "sent privately" note. Same DM rule as above: the person must share a server with the bot
@@ -237,7 +250,7 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
-| `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent) |
+| `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
@@ -254,7 +267,9 @@ What an entry unlocks **today**:
 - The bridge's `/work` draft-PR step: `git-commit` (when the tree is dirty), `git-push` and
   `github-pr-create`. Without them the reply says
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
-  and the changes stay on the work branch. The PR step also needs verify to pass, the requester
+  and the changes stay on the work branch. The PR step also needs verify to pass (with a test
+  summary showing tests ran), no test deleted or turned off since the branch left its base
+  (AGENT-15), the requester
   to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
   and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
@@ -286,7 +301,7 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
 [`DAEMON.md`](DAEMON.md). What an operator needs to know:
 
 - It uses the bridge's environment and adds no variables: `CORVIDINHO_DATA_DIR`,
-  `CORVIDINHO_BIN`, the allowlists, the LLM key, and `CORVIDINHO_BACKUP_DIR` when the nightly
+  `CORVIDINHO_BIN`, the allowlists, the model (`CORVIDINHO_LLM_MODEL`) and its key (E.9), and `CORVIDINHO_BACKUP_DIR` when the nightly
   backup is on. Put them in the unit's `EnvironmentFile` (mode 600, not in git).
 - One daemon per data dir: `<data dir>/daemon.lock`. A second one logs `daemon.lock_held` and exits 1.
 - It can run next to the bridge on the same DB. Each due run is claimed once. Runs the daemon
@@ -478,3 +493,42 @@ changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
   file, for example "working-tree changes not loaded". It is a `Text` event in the run's output:
   `bun src/cli.ts task run` prints it on stderr and `--json` / NDJSON carry it; the bridges and
   WATCH do not post it to Discord or GitHub.
+
+### E.9 Models: you configure them; there is no default (AGENT-13, AGENT-10)
+
+**Upgrading:** Corvidinho no longer falls back to `gpt-4o-mini` and has no demo stub. A box that
+set only `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` must now also set `CORVIDINHO_LLM_MODEL`
+(for the old behaviour, `CORVIDINHO_LLM_MODEL=gpt-4o-mini`), then restart the bridge, `github
+watch` and the daemon. Until a model is set, every run fails instead of answering, and the places
+below say why.
+
+`CORVIDINHO_LLM_MODEL` (and the optional per-tier `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` /
+`_CODE`, AGENT-5) holds `kind:model` entries. Every kind speaks the OpenAI-compatible chat API
+and goes through the same SAFE-8 spend cap:
+
+| Kind | Example | Endpoint | Key |
+|---|---|---|---|
+| `openai` (or no prefix) | `openai:gpt-4.1`, `gpt-4o-mini` | `CORVIDINHO_LLM_BASE_URL` (default `https://api.openai.com/v1`; any OpenAI-compatible gateway) | `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` |
+| `ollama` | `ollama:qwen3:30b` | `OLLAMA_HOST` (default `127.0.0.1:11434`), its `/v1` API | none |
+| `anthropic` | `anthropic:<model>` | `https://api.anthropic.com/v1` (Anthropic's OpenAI-compatible API) | `ANTHROPIC_API_KEY` |
+
+A prefix that is not one of these kinds is part of the model name (`qwen3:30b` is an
+OpenAI-compatible model). A comma list is accepted, but only its first entry is called for now;
+falling back to the next one (AGENT-11) comes later. A headless agent CLI as a model is not
+built yet.
+
+With no usable model for a tier (nothing set, or the kind's key is missing) it says so:
+
+- at startup: a `[discord] No model provider is configured …` line from the bridge, a
+  `[watch] …` line from `github watch` (not in a dry run), an `llm.no_provider` warn line and
+  `llm: "none"` on `daemon.started`, and the first stderr line of `task run`;
+- in `/status`: `LLM: none — …`. The owner sees which tier and what to set; anyone else sees
+  only `No model provider is configured.` (no setting names, like the spend line, SAFE-14.a);
+- in `doctor` and `init`: `[warn] llm: No model provider is configured …` (never fails them);
+- in the runs themselves: a run on that tier calls nothing and ends failed with the notice as its
+  result. `task run` prints it, and a WATCH run's summary comment carries it; Discord chat,
+  button answers, `/session start`, `/work` and schedules post their usual `… failed (exit 1)`
+  reply, like any failed run, so check `/status` or the start-up line.
+
+Keys stay in the environment and are never printed; `ANTHROPIC_API_KEY` is scrubbed from
+error lines like the other LLM keys and never reaches the verify lane or a shell (SAFE-6).

@@ -50,6 +50,12 @@ import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { teamPeopleFile } from "./fixtures/team-people.ts";
+import { useConfiguredModel } from "./fixtures/fake-llm.ts";
+
+// The footer names the configured model; there is no built-in default
+// (AGENT-13), so this file configures one (a priced id; the stub agent calls
+// no model).
+useConfiguredModel();
 
 /** The /work and /session start requester: a declared team member. */
 const SLASH_REQUESTER = "222233334444555566";
@@ -324,7 +330,7 @@ describe("bridge replies", () => {
       workActive: 0,
       workDone: 0,
       workFailed: 0,
-      llmLine: "LLM: demo stub",
+      llmLine: "LLM: none — No model provider is configured.",
       spendLine: "Spend cap: off (set CORVIDINHO_DAILY_SPEND_CAP_USD to track spend)",
     });
     expect(body).toContain("Spend cap: off");

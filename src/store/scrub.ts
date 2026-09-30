@@ -83,6 +83,8 @@ const SECRET_ENV_NAMES = [
   "GH_TOKEN",
   "CORVIDINHO_LLM_API_KEY",
   "OPENAI_API_KEY",
+  // AGENT-13: the anthropic: provider's key.
+  "ANTHROPIC_API_KEY",
   "CORVIDINHO_AUDIT_HMAC_KEY",
 ] as const;
 

@@ -30,6 +30,7 @@ import {
 import { ASK_OPTION_LABEL_MAX, normalizeAskOptions } from "../src/agent/ask-options.ts";
 import { clearRegistry, register } from "../src/plugins/registry.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
+import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
 
 const LLM_ENV = {
   CORVIDINHO_LLM_API_KEY: "test-key-not-real",
@@ -314,7 +315,7 @@ describe("runTask with an ask (AUTONOMY-1 / AUTONOMY-2 / AGENT-4)", () => {
     const ask = { reason: "clarify" as const, question: "Which repo?" };
     const result = await runTask({
       cwd: process.cwd(),
-      workspaceDiff: async () => ({ changed: async () => [] }),
+      workspaceDiff: async () => ({ changed: async () => [], testDrops: async () => [] }),
       maxRetries: 2,
       onEvent: (e) => events.push(e),
       verifyRunner: async () => {
@@ -344,7 +345,7 @@ describe("runTask with an ask (AUTONOMY-1 / AUTONOMY-2 / AGENT-4)", () => {
   test("verify retries exhausted → failed (AGENT-4) plus a stuck ask", async () => {
     const result = await runTask({
       cwd: process.cwd(),
-      workspaceDiff: async () => ({ changed: async () => ["a.ts"] }),
+      workspaceDiff: async () => ({ changed: async () => ["a.ts"], testDrops: async () => [] }),
       maxRetries: 1,
       verifyRunner: async () => ({ success: false, output: "lint broke" }),
       execute: async ({ attempt }) => ({ summary: `try ${attempt}`, filesChanged: ["a.ts"] }),
@@ -360,8 +361,8 @@ describe("runTask with an ask (AUTONOMY-1 / AUTONOMY-2 / AGENT-4)", () => {
     const result = await runTask({
       cwd: process.cwd(),
       // Never the repo's own snapshot or lane from inside its test run.
-      workspaceDiff: async () => ({ changed: async () => [] }),
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      workspaceDiff: async () => ({ changed: async () => [], testDrops: async () => [] }),
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       execute: async () => ({ summary: "fine", filesChanged: [] }),
     });
     expect(result.state).toBe("done");

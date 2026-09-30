@@ -23,6 +23,7 @@ type Probe = {
   runEnvSet: string[];
   nonInteractive: boolean;
   llmKeySet: boolean;
+  llmProviderSet: boolean;
   rows: number;
   keyed: number;
   cliExit: number;
@@ -149,7 +150,7 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
     expect(probe!.worktreeBase).toBeNull();
   }, 60_000);
 
-  test("bot run settings (non-interactive, spend cap, LLM keys, a scheduled run's session id) do not reach the suite", async () => {
+  test("bot run settings (non-interactive, spend cap, LLM keys and model config, a scheduled run's session id) do not reach the suite", async () => {
     // A Discord / WATCH / daemon task run sets CORVIDINHO_NON_INTERACTIVE=1 and
     // its verify lane runs this suite; with it, a SAFE-8 cap or an LLM key in
     // the env, CLI and mock-LLM tests fail (or call a real model) off CI. A
@@ -162,6 +163,16 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
       CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
       CORVIDINHO_LLM_API_KEY: "sk-operator-llm-key",
       OPENAI_API_KEY: "sk-operator-openai-key",
+      // AGENT-13: the operator's model config (a keyless ollama: model would
+      // call a local server) never reaches the suite either.
+      ANTHROPIC_API_KEY: "sk-ant-operator-anthropic-key",
+      OLLAMA_HOST: "127.0.0.1:11434",
+      CORVIDINHO_LLM_MODEL: "ollama:operator-model",
+      CORVIDINHO_LLM_MODEL_READ: "anthropic:operator-read",
+      CORVIDINHO_LLM_MODEL_TOOL: "ollama:operator-tool",
+      CORVIDINHO_LLM_MODEL_CODE: "ollama:operator-code",
+      CORVIDINHO_LLM_BASE_URL: "http://127.0.0.1:9/v1",
+      CORVIDINHO_LLM_TIER: "read",
       CORVIDINHO_DISCORD_SESSION_ID: "schedule_sched_verifylane",
     });
     expect(code, out).toBe(0);
@@ -169,5 +180,6 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
     expect(probe!.runEnvSet).toEqual([]);
     expect(probe!.nonInteractive).toBe(false);
     expect(probe!.llmKeySet).toBe(false);
+    expect(probe!.llmProviderSet).toBe(false);
   }, 60_000);
 });

@@ -461,6 +461,11 @@ describe("progressFromFrame (AGENT-8 / DISCORD-3)", () => {
       message: "verify passed",
     });
     expect(p({ type: "Text", text: "hi" })).toBeNull();
+    // The must-ask gate's wait line is the one Text the status shows (AUTONOMY-9/10).
+    expect(
+      p({ type: "Text", text: "[operator] AUTONOMY-9: waiting for the owner's OK on an Approve card with the one-time code (x)" }),
+    ).toEqual({ message: "waiting for the owner's OK on an Approve card" });
+    expect(p({ type: "Text", text: "I am waiting for the owner's OK on an Approve card" })).toBeNull();
     expect(
       progressFromFrame(usageFrame({ promptTokens: 1, completionTokens: 1, totalTokens: 2 })),
     ).toEqual({ totalTokens: 2 });
@@ -531,6 +536,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       taskText: "list plugins",
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
         CORVIDINHO_LLM_TIER: "tool",
       },
@@ -577,6 +583,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       taskText: "try tools",
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
       },
       fetchImpl,
@@ -618,7 +625,7 @@ describe("usage running totals (mock fetch, no network)", () => {
       );
     const usage: AgentTokenUsage[] = [];
     const exec = createTaskExecute({
-      env: { CORVIDINHO_LLM_API_KEY: "test-key-not-real", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+      env: { CORVIDINHO_LLM_API_KEY: "test-key-not-real", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
       fetchImpl,
       tier: "read",
       onUsage: (u) => usage.push(u),

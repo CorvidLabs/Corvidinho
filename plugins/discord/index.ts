@@ -12,7 +12,7 @@ import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { mergeChannelIds } from "../../src/discord/config.ts";
 import { formatErrorLine } from "../../src/store/scrub.ts";
 import { get, register } from "../../src/plugins/registry.ts";
-import type { PluginCommand } from "../../src/plugins/types.ts";
+import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { defangMassMentions } from "../../src/discord/allowed-mentions.ts";
 import {
   requesterCheckFix,
@@ -78,6 +78,105 @@ function actingDiscordUser(env: NodeJS.ProcessEnv): string {
   return env.CORVIDINHO_ACTING_DISCORD_USER_ID?.trim() ?? "";
 }
 
+type PreparedPost =
+  | { ok: false; result: PluginHandlerResult }
+  | {
+      ok: true;
+      channelId: string;
+      /** Exactly what is posted: mass mentions defanged, at most 1900 characters. */
+      body: string;
+      /** The DISCORD-8 requester to check, or "" for none. */
+      checkUserId: string;
+      actingUserId: string;
+      token: string;
+      dryRun: boolean;
+    };
+
+/**
+ * Everything discord-post-message checks before it posts, except the
+ * DISCORD-8 requester lookup (a network call): args, the bridge's channel
+ * gate, a requester id naming someone else, the token and strict mode. The
+ * must-ask classifier and the handler share it, so the owner is never asked
+ * about a post that would be refused, and a refusal is the same either way.
+ */
+async function preparePost(args: string[]): Promise<PreparedPost> {
+  const refuse = (error: string, exitCode: number): PreparedPost => ({
+    ok: false,
+    result: { ok: false, error, exitCode },
+  });
+  const channelId = parseFlag(args, "--channel") ?? parseFlag(args, "-c");
+  const content =
+    parseFlag(args, "--content") ??
+    parseFlag(args, "-m") ??
+    args.filter((a) => !a.startsWith("-")).join(" ").trim();
+  const requestingUserId =
+    parseFlag(args, "--requesting-user-id") ?? parseFlag(args, "--requester");
+
+  if (!channelId) {
+    return refuse(
+      "usage: discord-post-message --channel <id> --content <text> [--requesting-user-id <id>]",
+      1,
+    );
+  }
+  if (!content) return refuse("missing --content", 1);
+
+  // A malformed / unreadable allowlist file refuses (fail closed), never env-only.
+  const loaded = await tryLoadAllowlist({ env: process.env });
+  if (!loaded.ok) return refuse(`not authorized: ${loaded.error}`, 3);
+  // DISCORD-5 / REQ-discord-004: the bridge's and daemon's channel set —
+  // allowlist file + CORVIDINHO_DISCORD_ALLOW_CHANNELS ∪ DISCORD_CHANNEL_IDS.
+  // checkChannel reads the deny lists first, so a deny still wins.
+  const gate = checkChannel(channelId, {
+    ...loaded.config.discord,
+    channels: mergeChannelIds(loaded.config, process.env),
+  });
+  if (!gate.ok) return refuse(gate.error, 3);
+
+  // DISCORD-8: in a bridge-started run the check is about the acting user
+  // only. A requester id naming someone else is refused, not replaced —
+  // any of them, so a repeated flag or the other alias cannot slip one by.
+  const actingUserId = actingDiscordUser(process.env);
+  const namedRequesters = [
+    ...flagValues(args, "--requesting-user-id"),
+    ...flagValues(args, "--requester"),
+  ]
+    .map((id) => id.trim())
+    .filter((id) => id !== "");
+  if (actingUserId && namedRequesters.some((id) => id !== actingUserId)) {
+    return refuse(
+      "refused: --requesting-user-id / --requester names a different Discord user than the one this run acts for. The requester check is always for the acting user the bridge set (DISCORD-8); leave the flag out. Nothing was posted.",
+      3,
+    );
+  }
+
+  const token =
+    process.env.DISCORD_BOT_TOKEN?.trim() ||
+    process.env.DISCORD_TOKEN?.trim() ||
+    "";
+  if (!token) {
+    return refuse("missing DISCORD_TOKEN or DISCORD_BOT_TOKEN (set in env; never commit)", 1);
+  }
+
+  const checkUserId = actingUserId || requestingUserId || "";
+  if (!checkUserId && requireRequesterCheck(process.env)) {
+    return refuse(
+      "requesting_user_id is required (strict mode). Pass --requesting-user-id <discord-user-id> or unset CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK.",
+      3,
+    );
+  }
+
+  return {
+    ok: true,
+    channelId,
+    // REQ-discord-205: no @everyone/@here, role or user ping from text.
+    body: defangMassMentions(content).slice(0, 1900),
+    checkUserId,
+    actingUserId,
+    token,
+    dryRun: process.env.CORVIDINHO_DISCORD_DRY_RUN === "1",
+  };
+}
+
 /**
  * Dangerous: posts a message to a Discord channel via REST.
  * Requires token + allowlisted channel (the bridge's set: allowlist file / env
@@ -85,96 +184,35 @@ function actingDiscordUser(env: NodeJS.ProcessEnv): string {
  * bridge-started run always for the acting user (a --requesting-user-id
  * naming anyone else is refused, and a check that cannot run refuses);
  * otherwise when --requesting-user-id is provided (or strict mode requires it).
+ * AUTONOMY-10/10.a: every post it makes waits for the owner's OK on a plain
+ * Approve card showing the exact text (dictated text and replies to the
+ * owner included); a dry run posts nothing and does not ask.
  */
 const discordPostMessage: PluginCommand = {
   name: "discord-post-message",
   description:
-    "Post a message to an allowlisted Discord channel (dangerous; DISCORD-5/8)",
+    "Post a message to an allowlisted Discord channel; waits for the owner's OK on an Approve card first (dangerous; DISCORD-5/8, AUTONOMY-10)",
   dangerous: true,
   minTier: 1,
+  mustAsk: async ({ args }) => {
+    const post = await preparePost(args);
+    if (!post.ok) return { refuse: post.result };
+    if (post.dryRun) return null;
+    return {
+      ask: {
+        class: "public",
+        why: "posts this message in a Discord channel",
+        target: `Discord channel ${post.channelId}`,
+        text: post.body,
+      },
+    };
+  },
   async handler(ctx) {
-    const channelId =
-      parseFlag(ctx.args, "--channel") ?? parseFlag(ctx.args, "-c");
-    const content =
-      parseFlag(ctx.args, "--content") ??
-      parseFlag(ctx.args, "-m") ??
-      ctx.args.filter((a) => !a.startsWith("-")).join(" ").trim();
-    const requestingUserId =
-      parseFlag(ctx.args, "--requesting-user-id") ??
-      parseFlag(ctx.args, "--requester");
-
-    if (!channelId) {
-      return {
-        ok: false,
-        error: "usage: discord-post-message --channel <id> --content <text> [--requesting-user-id <id>]",
-        exitCode: 1,
-      };
-    }
-    if (!content) {
-      return {
-        ok: false,
-        error: "missing --content",
-        exitCode: 1,
-      };
-    }
-
-    // A malformed / unreadable allowlist file refuses (fail closed), never env-only.
-    const loaded = await tryLoadAllowlist({ env: process.env });
-    if (!loaded.ok) {
-      return { ok: false, error: `not authorized: ${loaded.error}`, exitCode: 3 };
-    }
-    // DISCORD-5 / REQ-discord-004: the bridge's and daemon's channel set —
-    // allowlist file + CORVIDINHO_DISCORD_ALLOW_CHANNELS ∪ DISCORD_CHANNEL_IDS.
-    // checkChannel reads the deny lists first, so a deny still wins.
-    const gate = checkChannel(channelId, {
-      ...loaded.config.discord,
-      channels: mergeChannelIds(loaded.config, process.env),
-    });
-    if (!gate.ok) {
-      return {
-        ok: false,
-        error: gate.error,
-        exitCode: 3,
-      };
-    }
-
-    // DISCORD-8: in a bridge-started run the check is about the acting user
-    // only. A requester id naming someone else is refused, not replaced —
-    // any of them, so a repeated flag or the other alias cannot slip one by.
-    const actingUserId = actingDiscordUser(process.env);
-    const namedRequesters = [
-      ...flagValues(ctx.args, "--requesting-user-id"),
-      ...flagValues(ctx.args, "--requester"),
-    ]
-      .map((id) => id.trim())
-      .filter((id) => id !== "");
-    if (actingUserId && namedRequesters.some((id) => id !== actingUserId)) {
-      return {
-        ok: false,
-        error:
-          "refused: --requesting-user-id / --requester names a different Discord user than the one this run acts for. The requester check is always for the acting user the bridge set (DISCORD-8); leave the flag out. Nothing was posted.",
-        exitCode: 3,
-      };
-    }
-
-    const token =
-      process.env.DISCORD_BOT_TOKEN?.trim() ||
-      process.env.DISCORD_TOKEN?.trim() ||
-      "";
-    if (!token) {
-      return {
-        ok: false,
-        error:
-          "missing DISCORD_TOKEN or DISCORD_BOT_TOKEN (set in env; never commit)",
-        exitCode: 1,
-      };
-    }
-
-    const dryRun = process.env.CORVIDINHO_DISCORD_DRY_RUN === "1";
-    const strict = requireRequesterCheck(process.env);
+    const post = await preparePost(ctx.args);
+    if (!post.ok) return post.result;
+    const { channelId, checkUserId, actingUserId, token, dryRun } = post;
 
     // DISCORD-8 — confused-deputy: check requester can send, not only the bot.
-    const checkUserId = actingUserId || requestingUserId;
     if (checkUserId) {
       let check: RequesterCheckResult;
       try {
@@ -200,13 +238,6 @@ const discordPostMessage: PluginCommand = {
           data: { status: check.status, reason: check.reason },
         };
       }
-    } else if (strict) {
-      return {
-        ok: false,
-        error:
-          "requesting_user_id is required (strict mode). Pass --requesting-user-id <discord-user-id> or unset CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK.",
-        exitCode: 3,
-      };
     }
 
     if (dryRun) {
@@ -215,8 +246,8 @@ const discordPostMessage: PluginCommand = {
         data: {
           dryRun: true,
           channelId,
-          content: content.slice(0, 100),
-          requestingUserId: actingUserId || (requestingUserId ?? null),
+          content: post.body.slice(0, 100),
+          requestingUserId: checkUserId || null,
         },
         message: `dry-run post to ${channelId}`,
         exitCode: 0,
@@ -234,7 +265,7 @@ const discordPostMessage: PluginCommand = {
           },
           // REQ-discord-205: no @everyone/@here, role or user ping from text.
           body: JSON.stringify({
-            content: defangMassMentions(content).slice(0, 1900),
+            content: post.body,
             allowed_mentions: { parse: [] },
           }),
         },

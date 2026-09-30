@@ -320,8 +320,14 @@ Acceptance Criteria
 
 Ephemeral `/status` SHALL use the shared package version (no hardcoded bridge
 constant) and SHALL include useful dogfood lines: Corvidinho vX.Y.Z; uptime;
-protocol; channels count; sessions / work counts; LLM model + base host from
-env when an API key is set (never print the key), else "demo stub"; the six
+protocol; channels count; sessions / work counts; the LLM line (AGENT-13 /
+AGENT-10, REQ-agent-179): the default tier's model (`kind:model` for
+non-openai kinds) + endpoint host when it has a usable provider (never a
+key), else `LLM: none — <notice>`, followed by the no-provider notice when any
+tier has none — the notice's tiers and setting names only in the owner's
+`/status` (`StatusReportInput.ownerView`, re-checked by the handler like the
+SAFE-14.a spend line), anyone else seeing only `No model provider is
+configured.` (or `… for some runs.`), and never "demo stub"; the six
 registered slash command names; optional git tip short SHA when available
 without failing offline. Fixture tests SHALL cover formatting without a live
 Discord token.
@@ -329,7 +335,9 @@ Discord token.
 Acceptance Criteria
 - Bridge starts with version from `src/version.ts` / package.json (no `BRIDGE_VERSION` literal).
 - `/status` ephemeral body includes the fields above.
-- With LLM key env set in fixtures → model @ host; without → demo stub; never the key.
+- With a model and its key in fixtures → model @ host (`LLM: gpt-test @ api.example.com`, `LLM: anthropic:<m> @ api.anthropic.com`, `LLM: ollama:<m> @ 127.0.0.1:11434`); never the key.
+- With no model (or a key alone): the owner's `/status` has `LLM: none — No model provider is configured: CORVIDINHO_LLM_MODEL is not set. Set …`; anyone else's has `LLM: none — No model provider is configured.` and no `CORVIDINHO_` setting name; a model whose kind has no key reads `LLM: none — … <model> needs <KEY>, which is not set.` for the owner.
+- Partly configured (only `_TOOL`): `LLM: ollama:<m> @ 127.0.0.1:11434 — No model provider is configured for some runs — read, code tiers: …` for the owner, `… — No model provider is configured for some runs.` for anyone else.
 - Offline / missing git → omit tip or show without throwing.
 - Mute/unmute unchanged; no new slash commands.
 
@@ -3426,4 +3434,72 @@ Acceptance Criteria
 - Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses Choose and a submit and takes Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused; on a paused schedule the ack of a Cancel, a typed answer or a pick ends with `SCHEDULE_ASK_PAUSED_NOTE`, on an active one it does not.
 - Through the bridge's own scheduler: the ask post carries Choose + Cancel, a channel reply to it leaves it open and the creator's Cancel closes it; a channel-less schedule DMs its ask and controls to the owner.
 - A v14 DB migrates to v15: the eight columns exist; asks recorded before that were posted, or are moot, are closed `superseded`, are neither open nor pending and are not posted again, and that schedule's next due run goes; a still-pending ask on its schedule's newest run becomes open and blocking, its schedule's next due run waits and that ask is posted with Answer + Cancel, then the one note; a re-run changes nothing; `ask_answer` and `ask_options` are re-scrubbed.
+### REQ-discord-185
+
+/work none-deleted check (AGENT-15, REQ-agent-185). Before `openWorkPr`
+commits or pushes anything (after the run, worktree, branch, allowlist and
+repo gates), it SHALL compare the work tree about to be committed and pushed
+(commits since the merge-base plus the dirty tree) with the talk branch's
+merge-base by test name (`startWorkspaceDiffFrom(worktree, mergeBase)
+.testDrops()`, REQ-agent-185), whatever runs made the change. A test deleted,
+retitled or turned off since the branch left its base SHALL keep the PR from
+opening with reason `tests-deleted` and one scrubbed `PR: not opened — …`
+line that says how many tests were deleted or turned off since the branch
+left the base branch (named), names each as `"name" (file)` (removed,
+retitled, skip, todo, or silenced by only) and says the changes stay on the
+work branch; names that cannot be read SHALL do the same with "could not
+check that no test was deleted since the branch left" the base branch. A
+renamed test file or a moved test keeps its name and does not
+block. When the run did not report `verified` and the verify lane is re-run
+before the push, a passing lane SHALL also have to show that tests ran
+(`judgeTestEvidence`); otherwise reason `verify-failed` with the
+`Verify gate: not verified: …` note. No plugin runs and nothing is pushed in
+either case. No env var, config key, flag or slash command is added.
+
+Acceptance Criteria
+- A /work worktree whose earlier commit on the branch removed a test: `opened: false`, reason `tests-deleted`, the line names `"keeps order" (tests/math.test.ts)` and `main`, no plugin call, no lane run, nothing on the remote.
+- A `git mv` rename of the test file with a pre-push lane that prints no test summary: `verify-failed` naming the missing summary, no plugin call; with a `bun test` summary: opened (`pre-push`) through `git-commit` → `git-push` → `github-pr-create`.
+### REQ-discord-097
+
+Every channel post it makes waits for my OK, even text I dictated and replies
+to me (AUTONOMY-10.a, captured with `hi` in this change from Leif's
+2026-09-30 round 13 decision; the channel-post half — the first-20
+public-thread replies half is a later change), and every prod card needs the
+one-time code (AUTONOMY-9.a). `src/discord/approval-cards.ts` SHALL export
+`mustAskApprovalKinds({ db, now? })`: two `storedApprovalKind` kinds over
+`approval_requests` — `mustask` (class destructive: Approve, then the SAFE-19
+one-time code) and `mustask-post` (class plain: one Approve press) — whose
+Approve only records the decision for the waiting run to consume once
+(REQ-plugins-097), `nothingDone` "nothing was done", and whose request is
+closed as a no when its waiting process is gone. The bridge SHALL register
+both on its one engine beside the forget kind, so the cards are DMed to the
+owner on the engine's ~5 s poll (with or without the scheduler), the text or
+command first as quoted data, and answered by the owner only (SAFE-18..20).
+`discord-post-message` SHALL raise the `mustask-post` card for every post
+(target `Discord channel <id>`, text exactly the defanged body it posts,
+at most 1900 characters) before its DISCORD-8 requester lookup; its channel
+gate, requester-flag, token and strict-mode checks (`preparePost`, shared
+with the handler) run first, so a post they refuse raises no card, and a
+dry run (`CORVIDINHO_DISCORD_DRY_RUN=1`) raises none. No env var, config key
+or schema change.
+
+Acceptance Criteria
+- `mustAskApprovalKinds` gives `mustask` (destructive) and `mustask-post` (plain); on the engine a prod card's text goes out first as quoted data, Approve alone runs nothing and Approve plus the code runs the waiting call once; a post card needs one press, and Deny runs nothing.
+- A real `discord-post-message` post waits for the card and posts exactly the text the card showed; a refused post (channel, requester flag, token, strict) and a dry run raise no card.
+
+### REQ-discord-079
+
+With no provider set, it says so at startup and in /status (AGENT-10,
+captured from Leif's 2026-09-28 interview). The Discord bridge SHALL log one
+`[discord] <notice>` line with `console.warn` at start (after the audit
+line) when any tier has no usable model provider
+(`providerNotice(env)`, REQ-agent-179) and nothing when every tier has one.
+Runs it starts on such a tier (chat, button answers, `/session start`,
+`/work`, schedules) fail and call no model (REQ-agent-179): the run's result
+summary is the notice, while the channel gets the usual failed reply
+(`… failed (exit 1)`), as for any failed run; the start-up line and `/status`
+say why. No new slash command, setting or schema change.
+
+Acceptance Criteria
+- A dry-run bridge started with no model logs `[discord] No model provider is configured: CORVIDINHO_LLM_MODEL is not set. …` once; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs no no-provider line.
 
