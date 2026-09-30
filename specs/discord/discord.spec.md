@@ -475,7 +475,9 @@ with `SPEND_CAP_HEADLINE` ("💸 Work is paused for budget.") /
 question quote — the question holds the amounts, the cap and the setting, so
 it never reaches a channel (SAFE-14.a; `SPEND_PAUSED_TEXT` from
 `src/agent/spend-notice.ts`); `askPingKey` keys a `spend-cap` ask on its
-reason only, so a schedule pings once per cap episode. `ask-ping.ts` also
+reason and the provider caps it stopped at (`spendScopesOf`; the total cap
+alone keys on the reason only, as before), so a schedule pings once per
+episode of each cap (SAFE-15, REQ-agent-114). `ask-ping.ts` also
 exports `appendPostLine` (a SAFE-13 line or a slash owner notice on a post).
 `AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
 `result` frame by `spendWarningFromUnknown`); no channel post carries it.
@@ -490,10 +492,11 @@ start the bridge logs `[discord] <notice>` once with `console.warn` when any
 tier has no usable provider (REQ-discord-079).
 `SlashContext.spendLine(ownerView)` / `StatusReportInput.spendLine` carry
 `/status`'s spend line: for the owner (ADMIN, re-checked by the handler) the
-24 h spend vs cap line (`formatSpendStatusLine` over `readSpendSnapshot` on
-the bridge's shared DB, plus a note while a spend DM waits); for anyone else
-`formatSpendPublicStatusLine` ("Spend: Work is paused for budget." while runs
-stop at the cap, else no line); no new slash command. The bridge builds one
+24 h spend vs cap line and one line per provider cap (`formatSpendStatusLine`
+over `readSpendSnapshot` on the bridge's shared DB, plus a note while a spend
+DM waits); for anyone else `formatSpendPublicStatusLine` ("Spend: Work is
+paused for budget." while runs stop at any cap, else no line, never which
+cap); no new slash command. The bridge builds one
 `createSpendAlertOutbox({ db, env })` (`src/agent/spend-outbox.ts`) and shares
 it as `SlashContext.spendAlerts` and `SchedulerServiceOpts.spendAlerts`;
 `SlashContext.post` is the gateway reply (a fresh channel post).
@@ -506,7 +509,8 @@ channelId?)`, `formatSpendStopDm`, `formatSpendWarningDm`,
 owner (the gateway `sendDm`) a cap stop's details (the spend-cap question,
 scrubbed and defanged, naming the channel) when that stop's post claimed the
 episode's owner ping, and the pending 80% warning (`takeSpendWarning`: the
-outbox's, else the run's own; rebuilt with `formatSpendWarningLine`); a DM
+outbox's, else the run's own; rebuilt with `formatSpendWarningLine`, one line
+per cap that crossed 80%, a provider cap's naming its scope); a DM
 that does not go out keeps its claim (the warning released to the outbox, the
 stop held in memory, the newest replacing it) for the next pass and is logged
 once per failure streak without amounts; no owner or no DM path claims
@@ -514,7 +518,9 @@ nothing. The bridge shares it as `SlashContext.spendDm` and
 `SchedulerServiceOpts.spendDm`, and runs a pass after each chat, button-pick,
 `/work` and `/session start` run and on every scheduler tick.
 `src/discord/spend-post.ts` exports `askPingOwner` (a `spend-cap` ask pings
-once per cap episode via `claimCapPing`; its `release` hands the ping back
+once per cap episode via `claimCapPing`, per cap: the episode of each scope
+`spendScopesOf` gives — the ask's `spendScopes`, else its stored question's
+"Stopped at cap" marker, else the total cap; its `release` hands the ping back
 when the post fails), `askNeedsOwner` (stuck and spend-cap ping the owner;
 clarify addresses the requester, AUTONOMY-4), `takeSpendWarning`,
 `ownerAskNoticeLine` (a spend-cap line says only that work is paused for
@@ -922,8 +928,11 @@ Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
 from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 `src/discord/session-thread.ts`, REQ-discord-072) are created with CREATE
 TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
-scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
-no free-text column (a constant kind and integers).
+scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` holds
+a constant kind, integers and its cap `scope` (`total` / `provider:<id>`,
+SAFE-14; added by an idempotent ALTER, scrubbed on write and in
+`SCRUB_TARGETS`), and a re-scrub skips a listed column an older module-owned
+table does not have yet.
 Retained conversations live in `conversation_threads` (schema v13,
 `SCHEMA_VERSION` 13, a forward-only migration after v12's `forget_requests`;
 REQ-discord-472): `summary`
