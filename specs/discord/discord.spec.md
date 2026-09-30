@@ -476,7 +476,9 @@ with `SPEND_CAP_HEADLINE` ("💸 Work is paused for budget.") /
 question quote — the question holds the amounts, the cap and the setting, so
 it never reaches a channel (SAFE-14.a; `SPEND_PAUSED_TEXT` from
 `src/agent/spend-notice.ts`); `askPingKey` keys a `spend-cap` ask on its
-reason only, so a schedule pings once per cap episode. `ask-ping.ts` also
+reason and the provider caps it stopped at (`spendScopesOf`; the total cap
+alone keys on the reason only, as before), so a schedule pings once per
+episode of each cap (SAFE-15, REQ-agent-114). `ask-ping.ts` also
 exports `appendPostLine` (a SAFE-13 line or a slash owner notice on a post).
 `AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
 `result` frame by `spendWarningFromUnknown`); no channel post carries it.
@@ -491,10 +493,11 @@ start the bridge logs `[discord] <notice>` once with `console.warn` when any
 tier has no usable provider (REQ-discord-079).
 `SlashContext.spendLine(ownerView)` / `StatusReportInput.spendLine` carry
 `/status`'s spend line: for the owner (ADMIN, re-checked by the handler) the
-24 h spend vs cap line (`formatSpendStatusLine` over `readSpendSnapshot` on
-the bridge's shared DB, plus a note while a spend DM waits); for anyone else
-`formatSpendPublicStatusLine` ("Spend: Work is paused for budget." while runs
-stop at the cap, else no line); no new slash command. The bridge builds one
+24 h spend vs cap line and one line per provider cap (`formatSpendStatusLine`
+over `readSpendSnapshot` on the bridge's shared DB, plus a note while a spend
+DM waits); for anyone else `formatSpendPublicStatusLine` ("Spend: Work is
+paused for budget." while runs stop at any cap, else no line, never which
+cap); no new slash command. The bridge builds one
 `createSpendAlertOutbox({ db, env })` (`src/agent/spend-outbox.ts`) and shares
 it as `SlashContext.spendAlerts` and `SchedulerServiceOpts.spendAlerts`;
 `SlashContext.post` is the gateway reply (a fresh channel post).
@@ -507,7 +510,8 @@ channelId?)`, `formatSpendStopDm`, `formatSpendWarningDm`,
 owner (the gateway `sendDm`) a cap stop's details (the spend-cap question,
 scrubbed and defanged, naming the channel) when that stop's post claimed the
 episode's owner ping, and the pending 80% warning (`takeSpendWarning`: the
-outbox's, else the run's own; rebuilt with `formatSpendWarningLine`); a DM
+outbox's, else the run's own; rebuilt with `formatSpendWarningLine`, one line
+per cap that crossed 80%, a provider cap's naming its scope); a DM
 that does not go out keeps its claim (the warning released to the outbox, the
 stop held in memory, the newest replacing it) for the next pass and is logged
 once per failure streak without amounts; no owner or no DM path claims
@@ -515,7 +519,9 @@ nothing. The bridge shares it as `SlashContext.spendDm` and
 `SchedulerServiceOpts.spendDm`, and runs a pass after each chat, button-pick,
 `/work` and `/session start` run and on every scheduler tick.
 `src/discord/spend-post.ts` exports `askPingOwner` (a `spend-cap` ask pings
-once per cap episode via `claimCapPing`; its `release` hands the ping back
+once per cap episode via `claimCapPing`, per cap: the episode of each scope
+`spendScopesOf` gives — the ask's `spendScopes`, else its stored question's
+"Stopped at cap" marker, else the total cap; its `release` hands the ping back
 when the post fails), `askNeedsOwner` (stuck and spend-cap ping the owner;
 clarify addresses the requester, AUTONOMY-4), `takeSpendWarning`,
 `ownerAskNoticeLine` (a spend-cap line says only that work is paused for
@@ -624,7 +630,13 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044), and `tests-deleted`: a test
 deleted or turned off since the branch left its base, or names that could
-not be read, keeps the PR from opening (AGENT-15, REQ-discord-185).
+not be read, keeps the PR from opening (AGENT-15, REQ-discord-185), and
+`sdd-uncovered`: in a repo whose SpecSync workflow (read from the
+merge-base, HEAD and the work tree, merged fail-closed) requires a change for
+meaningful files, a meaningful path changed since the merge-base that no
+open change and no change archived on the branch covers, or a diff that
+cannot be read, keeps the PR from opening, before the pre-push lane and
+before anything is committed or pushed (AGENT-18, REQ-discord-518).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
 `openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
@@ -925,8 +937,11 @@ Module-owned tables in the shared DB (e.g. `spend_ledger` and `spend_alerts`
 from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 `src/discord/session-thread.ts`, REQ-discord-072) are created with CREATE
 TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
-scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
-no free-text column (a constant kind and integers).
+scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` holds
+a constant kind, integers and its cap `scope` (`total` / `provider:<id>`,
+SAFE-14; added by an idempotent ALTER, scrubbed on write and in
+`SCRUB_TARGETS`), and a re-scrub skips a listed column an older module-owned
+table does not have yet.
 `openCorvidinhoDb` sets busy_timeout 5000 and foreign_keys on, then runs the
 migration and `ensureScrubbed` in one transaction that takes the write lock
 up front (REQ-discord-287): only its BEGIN IMMEDIATE goes through
@@ -1192,6 +1207,7 @@ failed lookup writes nothing.
 | Blank author id | Prompt unchanged; no inject |
 | `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
 | `/work` tree deleted or turned off a test since the branch left its base, or its test names cannot be read | `PR: not opened — N test(s) were deleted or turned off since the branch left …` naming each as `"name" (file)` (or "could not check …"); nothing committed or pushed; reason `tests-deleted` (REQ-discord-185) |
+| `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
 | Stuck WATCH ask with no owner Discord id or no live gateway DM | left pending, not sent; given up with a log line after a day (REQ-discord-086) |
 | Owner DM for a stuck WATCH ask fails (DMs closed) | ask handed back; retried after 10 minutes; one log line per try (REQ-discord-086) |
@@ -1374,3 +1390,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
 | 2026-09-30 | a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and: A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a) |
+| 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
+| 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |

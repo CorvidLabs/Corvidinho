@@ -185,11 +185,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
-- Spend is the owner's (SAFE-14.a): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, a run stopped at
-  the cap posts only "💸 Work is paused for budget." (the owner pinged once per cap episode) —
-  never the amounts, the cap or the setting name. The details (24 h spend, the next call's
-  estimate, the cap, which setting to change) and the 80% warning go to the owner by **direct
-  message** after each run and on every scheduler tick. Same DM rule as above: the owner must
+- Spend is the owner's (SAFE-14.a): with a spend cap set — the total
+  `CORVIDINHO_DAILY_SPEND_CAP_USD`, or per provider `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
+  (`provider=USD` entries keyed on the provider id, e.g. `api.openai.com=3,api.anthropic.com=2`;
+  a bad entry or a provider no configured model uses stops every call until fixed, SAFE-14/15) —
+  a run stopped at a cap posts only "💸 Work is paused for budget." (the owner pinged once per
+  episode of each cap) — never the amounts, the cap, which cap or the setting name. The details
+  (which cap, 24 h spend against it, the next call's estimate, the cap, which setting to change)
+  and each cap's 80% warning go to the owner by **direct message** after each run and on every
+  scheduler tick. Same DM rule as above: the owner must
   share a server with the bot and accept DMs from its members; until then the DM is kept and
   retried every tick, the bridge logs one
   `[discord] spend DM to the owner did not go out (SAFE-14.a) …` line per failure streak (no
@@ -253,11 +257,18 @@ worktree (SAFE-3.a, see "What an entry unlocks" below):
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
+| `specsync-change-approve` / `specsync-change-finalize` | true | 2 | true | on Corvidinho itself, the run should approve and archive (check, review, finalize) the SpecSync change it opened, right after its verify lane is green, then verify again (AGENT-18.a). Never offered to the model: the run takes these steps itself, in owner runs and team `/work` runs only, never in WATCH, schedules or workers. In any other repo they refuse (`refused: in this repo a human approves, reviews and finalizes SpecSync changes (AGENT-18.a) …`) and the run says the change stays open for a human |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit`, IDENTITY-10):
-`files-write` (minTier 2), `files-edit` (minTier 2), `delegate` and `council` (minTier 2, autonomous extras, E.5).
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+`files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
+(minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
+and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
+`council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
+still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
+directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a).
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
@@ -270,7 +281,8 @@ What an entry unlocks **today**:
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass (with a test
   summary showing tests ran), no test deleted or turned off since the branch left its base
-  (AGENT-15), the requester
+  (AGENT-15), in a repo whose SpecSync workflow requires a change for meaningful files every such
+  path changed on the branch covered by a SpecSync change (AGENT-18), the requester
   to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
   and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the

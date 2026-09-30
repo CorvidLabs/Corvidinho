@@ -27,7 +27,7 @@ import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
 import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
 import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
-import { spendDoctorCheck } from "./agent/spend.ts";
+import { spendDoctorChecks } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
@@ -150,6 +150,9 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
   CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
+  CORVIDINHO_PROVIDER_SPEND_CAPS_USD                    optional per-provider rolling 24h caps, provider=USD comma list keyed on the
+                                                        provider id (endpoint host, e.g. api.openai.com=5); each warns at 80% and
+                                                        stops and asks at 100%; a bad entry or unknown provider stops every call (SAFE-14/15)
   CORVIDINHO_BACKUP_DIR                                 optional absolute local dir for the nightly SQLite backup + weekly restore test (OPS-1/2); unset = no backup
   (AlgoChat / wallet ACT deferred until wallet allowlist exists — WALLET-1..3)
 
@@ -595,8 +598,9 @@ async function doctor(): Promise<number> {
   // ([warn] when off, unusable or failing; never fails doctor).
   checks.push(backupDoctorCheck(process.env));
 
-  // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the cap (info when no cap; never fails doctor).
-  checks.push({ name: "spend", ...spendDoctorCheck({ env: process.env, model: loadLlmEnv().model }) });
+  // SAFE-8 / AUTONOMOUS-8 — rolling 24 h spend vs the total cap, then SAFE-14 one
+  // line per provider cap (info when no cap; never fails doctor).
+  checks.push(...spendDoctorChecks({ env: process.env, model: loadLlmEnv().model }));
 
   console.log("corvidinho doctor\n");
   const allOk = printChecks(checks);

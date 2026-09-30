@@ -22,7 +22,7 @@
  */
 
 import type { SpendAlertOutbox, TakenSpendWarning } from "../agent/spend-outbox.ts";
-import { SPEND_PAUSED_TEXT } from "../agent/spend-notice.ts";
+import { SPEND_PAUSED_TEXT, spendScopesOf } from "../agent/spend-notice.ts";
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { appendPostLine, formatCollapsedPing } from "./ask-ping.ts";
@@ -49,7 +49,10 @@ const NOOP = () => {};
 /**
  * Owner to ping for a run's ask. Non-spend-cap asks always ping (when an
  * owner is set); a spend-cap ask pings once per cap episode when an outbox
- * is wired (no outbox ⇒ every time). Call `release` if the post fails.
+ * is wired (no outbox ⇒ every time) — per cap (SAFE-15): the episode of each
+ * scope the ask stopped at (`spendScopesOf`: its `spendScopes`, else its
+ * question's "Stopped at cap" marker; none = the total cap). Call `release`
+ * if the post fails.
  */
 export function askPingOwner(
   ask: HumanAsk,
@@ -60,7 +63,7 @@ export function askPingOwner(
   if (!o || ask.reason !== "spend-cap" || !outbox) {
     return { owner: o, deduped: false, release: NOOP };
   }
-  const claim = outbox.claimCapPing();
+  const claim = outbox.claimCapPing(spendScopesOf(ask));
   return claim
     ? { owner: o, deduped: false, release: claim.release }
     : { owner: null, deduped: true, release: NOOP };

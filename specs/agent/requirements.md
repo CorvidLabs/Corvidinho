@@ -14,6 +14,13 @@ Acceptance Criteria
 
 When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
 
+In a repo whose SpecSync workflow requires a change for meaningful files,
+the REQ-agent-518 coverage check SHALL come first: an uncovered path makes the
+attempt a failed verify with no lane run; and on Corvidinho, after approving
+and archiving the run's own change (REQ-agent-519), the lane SHALL run once
+more over what that wrote, with the same evidence verdict, before the run is
+done.
+
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
 - Exhausted retries yield `verified=false` and failed state.
@@ -31,6 +38,7 @@ Acceptance Criteria
 - A run that changed files is verified with no option set; `RunTaskOptions` has no field that skips the gate.
 - A passing lane whose output has no recognised test summary, or whose tests were all skipped, is not verified: the attempt is retried with the `Verify gate: not verified: …` note first in its feedback, then ends `failed` (REQ-agent-185).
 - A stub lane that passes and prints a `bun test` summary (`tests/fixtures/lane-output.ts`) ends `done` verified as before.
+- In a repo whose `sdd.json` requires a change, an attempt whose real diff has a meaningful path no open change covers ends as a failed verify with no lane call, and the lane runs once a change covers it (REQ-agent-518); on Corvidinho the lane runs a second time after the own-change approve and archive, and a failure there fails the run (REQ-agent-519).
 
 ### REQ-agent-003
 
@@ -211,7 +219,8 @@ The agent SHALL enforce an optional operator-set daily spend cap on provider
 (LLM) calls (SAFE-8, as amended on #98: warn at 80%, ask at 100%) in
 `src/agent/spend.ts`. The cap SHALL be read from
 `CORVIDINHO_DAILY_SPEND_CAP_USD` as a plain USD amount over a rolling
-24-hour window. When it is unset or blank, the capped fetch SHALL be the
+24-hour window. When it and `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
+(REQ-agent-114) are unset or blank, the capped fetch SHALL be the
 provider fetch unchanged and the database SHALL NOT be opened, so behavior
 is unchanged. When it is set, `createTaskExecute` SHALL send every
 OpenAI-compatible call through the capped fetch, which SHALL price the call
@@ -267,9 +276,11 @@ model, an invalid cap value, an unreadable ledger), and
 `formatSpendPublicStatusLine(snapshot)` is "Spend: Work is paused for budget."
 then and undefined otherwise, naming no amount, cap, model, path or setting.
 The bridge delivers the claimed warning to the owner by DM only
-(REQ-discord-098). The Approve card (#96, SAFE-18..20) and
-per-provider caps (SAFE-14, and SAFE-15 for each cap) are not part of this
-requirement; of SAFE-14 it covers only SAFE-14.a's public text.
+(REQ-discord-098). This cap is the total cap (scope `total`) of SAFE-14:
+the per-provider caps next to it, and SAFE-15's 80% warning and 100% stop
+for each cap, are REQ-agent-114, and a call is checked against this cap and
+its provider's cap in the same reservation. The Approve card (#96,
+SAFE-18..20) is not part of this requirement.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
@@ -282,6 +293,7 @@ Acceptance Criteria
 - The call that brings spend to 80% yields exactly one `Text` warning and one `onSpendWarning`; later calls stay quiet while spend stays at or above 70%; after spend is seen under 70% (by a settle or a reservation) the next crossing warns again, including within 24 hours; 24 hours after the last warning, or with a new cap value, it warns again; `task run --json` carries `result.spendWarning` on the crossing run.
 - A warning recorded by one process is taken once by the outbox with current spend, can be released and taken again, and stays pending (not delivered, not dropped) while spend is back under 80%: 80% at T0, then 72%, then 96% delivers exactly one warning at 96% and records no second warning; without a database the outbox returns the run's own warning.
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
+- An invalid total cap reads as the snapshot `{ kind: "invalid", keys: ["CORVIDINHO_DAILY_SPEND_CAP_USD"] }`; a reservation refused at the total cap names it (`trips: [{ scope: "total", spentMicroUsd, capMicroUsd }]`), and its ask question says `Stopped at cap: total.` (REQ-agent-114).
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
 
 ### REQ-agent-117
@@ -946,11 +958,15 @@ it with `workTask` (`CORVIDINHO_ACTING_WORK_TASK`), so each run's catalog is
 built from the role at that moment (IDENTITY-12): owner and no role session get
 today's ADMIN catalog (IDENTITY-9); team gets the read tools plus
 `github-issue-comment` / `github-pr-review` when allowlisted, plus
-`files-write` / `files-edit` in a `/work` run (IDENTITY-10); community gets
+`files-write` / `files-edit` / `specsync-change-new` /
+`specsync-change-answer` in a `/work` run (IDENTITY-10, AGENT-18); community gets
 today's non-ADMIN catalog (IDENTITY-11). Fledge plugin discovery stays owner /
 no-role-session only. A not-offered mutating plugin the model names gets the
 role refusal exactly when the role, re-resolved at that call, does not allow
-it (REQ-agent-333 unchanged otherwise). `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`
+it (REQ-agent-333 unchanged otherwise). A plugin marked `agentTool: false`
+(`specsync-change-approve`, `specsync-change-finalize`: the run takes those
+steps itself, REQ-agent-519) SHALL never be offered, whatever the role,
+allowlist or tier. `PUBLIC_QA_AGENT_SYSTEM_INSTRUCTIONS`
 SHALL name the only community site / roadmap sources — the public repo docs
 (README, docs/, STATUS, CHANGELOG — `github-docs-read` or the project files)
 and the public issues and milestones of allowed public repos
@@ -958,10 +974,12 @@ and the public issues and milestones of allowed public repos
 as the site or roadmap (ROLES-CHAT-8.a).
 
 Acceptance Criteria
-- With every dangerous plugin allowlisted, `actingRole` owner and null equal the ADMIN catalog and community equals the non-ADMIN catalog (no mutating plugin); team adds only `github-issue-comment` / `github-pr-review` (and exactly `files-write` / `files-edit` with `workTask`); an unallowlisted review tool is not offered.
+- With every dangerous plugin allowlisted, `actingRole` owner and null equal the ADMIN catalog and community equals the non-ADMIN catalog (no mutating plugin); team adds only `github-issue-comment` / `github-pr-review` (and exactly `files-write` / `files-edit` / `specsync-change-new` / `specsync-change-answer` with `workTask`); an unallowlisted review tool is not offered.
 - Through `createTaskExecute` and a scripted provider: a team chat run offers the review tools but not `files-write` or `github-pr-create`; a team `/work` run adds the file tools; a team member on a community-stamped surface and an undeclared actor with a team stamp get read tools only.
 - The public Q&A prompt names README, docs/, STATUS, CHANGELOG and the public issues and milestones of allowed public repos, says nothing else counts, and no longer offers "the project site, and the roadmap".
 - Regression tests in `tests/roles.team.test.ts` and `tests/github.public-docs.test.ts` fail on the base sources and pass after.
+- With both allowlisted, `specsync-change-approve` and `specsync-change-finalize` are offered to no role (owner included); `specsync-change-new` is offered to the owner and to team only with `workTask` (`tests/agent.repo-ways.test.ts`, `tests/roles.team.test.ts`).
+
 ### REQ-agent-069
 
 Persona file (PERSONA-1/2/3, issue #69). Corvidinho's voice SHALL live in one
@@ -1249,8 +1267,10 @@ unanswered approval, an `ask-human` with no question, a thrown handler).
 `changedState(name, result)` SHALL be the single "something changed"
 predicate: true when the result's data reports `filesChanged` (ok or not), or
 when a tool in `STATE_CHANGING_TOOLS` (file writes, git writes, GitHub
-writes, Discord posts and files, memory forget / override, `delegate`, the
-shell, the language runners and `fledge-run`) or a Fledge plugin command
+writes, Discord posts and files, memory forget / override, a SpecSync
+change opened, answered, approved or archived (`specsync-change-new`,
+`-answer`, `-approve`, `-finalize`, AGENT-18), `delegate`, the shell, the
+language runners and `fledge-run`) or a Fledge plugin command
 (`origin` `fledge:`) succeeds; never for `NO_STATE_CHANGE_TOOLS`
 (`web-fetch`, `danger-ping`, `fledge-lanes-run`, `council`) or a read.
 Every dangerous or mutating builtin SHALL be in exactly one of the two sets.
@@ -1618,4 +1638,181 @@ Acceptance Criteria
 - `tests/scheduler.owner-role.test.ts`: in the owner's scheduled run a denied `discord-post-message` card leaves the post refused, the next call in the batch unrun, one model request, the run `blocked` with no verify and the stuck ask naming the tool, its why, AUTONOMY-10 and the card; a lapsed card gives the "nobody answered … in time (SAFE-20 …)" ask; the owner's chat with the same deny ends `done` with no ask; another person's schedule is not offered the post and raises no card.
 - `mustAskRefusedAsk` gives the exact question for `denied`, the lapse and resent wording, null for the other outcomes, a call that ran and plain failures, and cuts a long why and scrubs a token in it.
 - The allowlisted-dangerous, denied and lapsed tests fail with the base sources.
+### REQ-agent-518
+
+Repo ways and SpecSync coverage (AGENT-18, captured on main from Leif's
+2026-09-28 interview: "It works each repo's own way: a SpecSync change where
+the repo uses SpecSync; …"; this builds its SpecSync clause). At planning
+`runTask` SHALL read the ways the repo works with `scanRepoWays(cwd, base)`
+(`src/agent/repo-ways.ts`): the SpecSync change workflow (`.specsync/sdd.json`
+with `enabled: true`), hi criteria (a `hi/*.md` whose front matter has a
+`hi:` line) and Trust (`.trust.toml`), each flag the union of the session
+base (`repoWaysBase`: the merge-base with the remote's default branch, else
+HEAD), HEAD and the working tree, so a file deleted or committed away during
+the run cannot switch a way off. It SHALL emit one Text line naming the ways
+found (`formatRepoWaysLine`; none when nothing is found) and pass `repoWays`
+to every attempt (`ExecuteContext.repoWays`, absent when none); the tool loop
+SHALL append the fixed `renderRepoWaysBlock` text to its system prompt (open
+a change with `specsync-change-new` for the edits, answer it with
+`specsync-change-answer`, fill its artifacts, never approve, review or
+finalize a change; in a hi repo never invent criteria and cite captured hi
+ids). Before the lane, the SpecSync policy — the start scan merged with a
+scan now (`mergeScans`: enabled or required in any tree counts, meaningful
+paths the union, ignored paths the intersection; an `sdd.json` that is not a
+JSON object fails closed as enabled, required, every path meaningful) —
+SHALL be checked: when it requires a change for meaningful files
+(`require_change_for_meaningful_files`), every path of the run's real diff
+(REQ-agent-085; tool-reported paths with no git snapshot) that it counts as
+meaningful (`meaningful_paths` less a more specific `ignored_paths` entry;
+SpecSync's defaults when a list is missing) SHALL be covered by an open
+change's `affected_paths` (`.specsync/changes/*/state.json`: the path, or a
+dir prefix) or by a change archived in the same diff. Otherwise, or when the
+diff cannot be read, the attempt SHALL be a failed verify with no lane run:
+one `SpecSync gate:` Text note naming the paths (five, then "…") and how to
+open a change, a `VerifyResult` with `success: false`, the note as the
+retry's whole feedback after its "Verification failed" head, and after the
+retries the failed result with the stuck ask. No env var, config key, flag,
+NDJSON field or schema.
+
+Acceptance Criteria
+- `detectRepoWays` finds all three ways in a repo that has them and none in a plain one (a `hi/README.md` without front matter and a disabled `sdd.json` do not count); with `sdd.json`, `hi/` and `.trust.toml` removed from the working tree HEAD still has them, and after a commit that removes them only the base passed in still does.
+- A non-git project reads its working tree only.
+- Meaningful vs ignored paths follow `sdd.json` (the more specific entry wins; SpecSync's defaults make `.specsync/sdd.json` meaningful and `.specsync/lifecycle/…` not); an unparseable `sdd.json` makes every path meaningful; merged policies keep the strictest reading.
+- An open change's file or dir path covers; a change archived before the diff does not, one archived in it does; a policy that does not require changes covers everything.
+- In an SDD repo, an attempt that edits `src/app.ts` with no change gets the `SpecSync gate:` note, no lane call and a failed `VerifyResult`; the retry (feedback starts with the note) that opens a change covering it runs the lane once and ends verified; the ways line names SpecSync changes and hi, and `ctx.repoWays` is `{ sdd: true, hi: true, trust: false }`.
+- Deleting `sdd.json` and committing mid-run on a branch still gates (failed, no lane call).
+- A repo with none of the ways gets no ways line, no `repoWays` and the gate as before.
+- The tool loop's system prompt carries the SpecSync and hi block only when `repoWays` has them.
+- `tests/agent.repo-ways.test.ts` fails on the base sources and passes after.
+
+### REQ-agent-519
+
+Own SpecSync change on Corvidinho (AGENT-18.a, captured in this change with
+`hi` from Leif's 2026-09-28 interview, round 13 of 2026-09-30: "On
+Corvidinho it may approve and archive its own SpecSync change once verify is
+green; in other repos a human approves, reviews and finalizes."). `runTask`
+SHALL keep a per-cwd run ledger (`beginSddRun` / `endSddRun`) in which
+`specsync-change-new` records the change ids its own spawn added
+(REQ-plugins-518), never ids from model text. Right after a lane that passed
+with the AGENT-15 evidence verdict, for each recorded change still open, it
+SHALL settle it (`settleOwnSddChanges`): when the cwd is not Corvidinho
+itself, one Text line SHALL say the change stays open for a human to
+approve, review and finalize and nothing is approved; when it is
+(`isCorvidinhoProject`: the cwd shares the git common dir of the checkout
+this code runs from — the checkout or one of its worktrees — and that
+repository's `origin` is github.com/CorvidLabs/Corvidinho, both read from
+disk, never an env var, flag or model input), the ledger SHALL be marked
+verified only while `runTask` runs `specsync-change-approve <id>` and then
+`specsync-change-finalize <id>` through `runPlugin` (non-interactive, the
+run's `CORVIDINHO_ALLOWLIST`), so the role gate, SAFE-1, the must-ask gate,
+SAFE-5 and the tools' own gate (REQ-plugins-519) all apply, with one Text
+line per outcome (approved and archived; not approved, with the scrubbed
+reason; approved but not archived). A refused or failed step SHALL leave the
+change for a human and the run verified. When a step ran, the lane (with the
+evidence verdict) SHALL run again over what it wrote; if it fails the run
+SHALL end failed, not verified, with no retry, and its summary SHALL say
+verification failed when re-run over what approving and archiving its own
+change wrote. A change this run
+did not open SHALL never be approved or archived.
+
+Acceptance Criteria
+- On Corvidinho (test seam) with both tools allowlisted, a run that opened `bump-x` through `specsync-change-new` and whose lane passes spawns `change approve bump-x --actor corvid-agent`, `change check`, `change review --reviewer corvid-agent` and `change finalize` in that order, emits the approved-and-archived line, runs the lane twice and ends verified with the change archived.
+- On a repo whose origin is not Corvidinho the run ends verified, spawns only `change new`, runs the lane once and says the change stays open for a human.
+- On Corvidinho without the allowlist the approve is denied by SAFE-1, the line names it and says the change stays open for a human, the run stays verified, and an open change the run did not open is untouched.
+- A lane that fails when re-run after the approve and archive ends the run failed and says so.
+- A failing approve leaves the change open with a line naming the reason; finalize is not run; the run stays verified with one lane run.
+### REQ-agent-114
+
+It keeps rolling 24-hour spend caps per provider plus a total cap, and tracks
+spend against each (SAFE-14); it warns at 80% of a cap and stops and asks at
+100%, for each cap (SAFE-15) — both captured from Leif's 2026-09-28
+interview, round 4. `src/agent/spend.ts` SHALL read an optional
+`CORVIDINHO_PROVIDER_SPEND_CAPS_USD` next to the total cap
+`CORVIDINHO_DAILY_SPEND_CAP_USD` (REQ-agent-098): a comma list of
+`provider=USD` entries keyed on the configured provider id — the endpoint
+host that `providerId` (`src/agent/providers.ts`, AGENT-13) gives an entry,
+which is what the ledger records as a call's `provider` (the request URL
+host); keys match case-insensitively. Every cap SHALL be optional
+(`parseSpendCaps`: `off`, `invalid` with the bad setting names, or `caps` with
+a nullable total and a provider map). The provider setting SHALL be invalid
+as a whole when any entry is malformed (no `=`, a blank entry or key, a key
+that is not a host, a duplicate key, an amount that is not a plain USD
+amount; `parseProviderCapList`) or when a key names no configured provider
+(`configuredProviderIds`: every entry of `CORVIDINHO_LLM_MODEL` and the
+per-tier keys, fallback entries included). An invalid setting SHALL stop
+every provider call with a `spend-cap` ask naming the setting, before the
+ledger opens, and SHALL never echo its value.
+
+While any cap is set, every priced provider call SHALL be recorded in
+`spend_ledger`, and `SpendLedger.reserve` SHALL check, in the one IMMEDIATE
+transaction that reserves the estimate, the total cap (if set) against all
+recorded spend and the call's provider cap (if set) against that provider's
+spend (`SpendLedger.window(now, provider?)`, backed by an index on
+`spend_ledger(provider, ts)`; the provider is compared as stored, scrubbed).
+A refused reservation SHALL name every tripped scope, `total` first, then
+`provider:<id>` (`trips`). The call SHALL NOT be sent: the attempt ends with
+a `spend-cap` ask whose question names each tripped scope with its 24-hour
+spend and cap, the call's estimate, the setting that lifts it (raise or
+unset the total, raise or remove the provider's entry) and the fixed marker
+`Stopped at cap: <scope>.` / `Stopped at caps: <scope>, <scope>.`, and whose
+`spendScopes` lists those scopes; the summary stays the generic
+`SPEND_CAP_SUMMARY` (SAFE-14.a), and `runTask` returns `blocked` as for the
+total cap. The stop SHALL be thrown as `SpendCapRefusal` before any request,
+so it is never a model failure: no model fallback (AGENT-11) may route a
+stopped call to another provider or model. Calls to a provider with no cap
+of its own still count against the total cap. A model with no known price
+SHALL stop and ask when a cap covers its call (the total cap, or its
+provider's cap; the ask names that scope) and SHALL be sent unrecorded when
+none does (its cost stays unknown, never counted as free, SAFE-16).
+
+At 80%, after a call settles, each cap the call counts against SHALL be
+checked on its own: the warning state in `spend_alerts` SHALL be kept per
+scope and cap value (a `scope` column, `total` or `provider:<id>`, added by
+an idempotent ALTER with default `total` for older rows, written through
+`scrubSecrets`; no schema version bump), so each cap warns once per crossing
+and re-arms when its own spend is seen under 70%, after 24 hours, or for a
+new cap value; a provider cap's `SpendWarning` carries its `scope` (absent =
+the total cap), and `formatSpendWarningLine` names it. The outbox
+(`takeWarning`) SHALL hand over one warning per claimed cap (`warnings`),
+each with that scope's current spend, leaving a cap whose spend is back under
+80% pending; `claimCapPing(scopes)` SHALL claim the owner ping once per
+episode of each scope a stop tripped (default the total cap), and
+`spendScopesOf(ask)` SHALL give those scopes from the ask's `spendScopes`, or
+from its question's marker when the ask was stored as text only (a schedule
+run's recorded ask, the daemon's). `askFromUnknown` SHALL keep well-formed
+`spendScopes` (at most 8) of a `spend-cap` ask and drop anything else.
+
+`readSpendSnapshot` SHALL report each provider cap with its provider's spend
+(`providers`, sorted by id; `capMicroUsd` absent when no total cap is set),
+treat a model as unpriced only when a cap covers its calls, and
+`spendDoctorChecks` / `formatSpendDoctorLines` SHALL give the `spend` line
+(the total cap, or "no total daily cap set" without amounts) and one
+`spend provider:<id>` line per provider cap (spend, cap, percent, calls, `warn`
+at 80% and at the cap; never fails doctor); `formatSpendStatusLine` SHALL add
+one owner `/status` line per provider cap; `spendPaused` SHALL be true while
+any cap is reached, so anyone but the owner sees only "Spend: Work is paused
+for budget." (SAFE-14.a). Amounts, scopes and setting names SHALL appear only
+in the ask question, the owner's DMs and `/status` lines, doctor, `task run`
+output and the daemon's logs. The Approve card that continues past a cap
+(SAFE-8, SAFE-18..20) is not part of this requirement: the stop keeps the
+operator-action ask of REQ-agent-098.
+
+Acceptance Criteria
+- `configuredProviderIds` lists the host of every chain entry of every tier key (OpenAI, Anthropic, Ollama's `127.0.0.1:11434`, a custom `CORVIDINHO_LLM_BASE_URL` host); `parseSpendCaps` is `off` with nothing set, `caps` with a total only, providers only (keys lower-cased, spaces trimmed) or both.
+- A missing `=`, empty key or amount, a non-USD or negative amount, a blank entry or trailing comma, a duplicate key, a key with a space, an amount over 1e9, or a well-formed key that no configured model uses makes the provider setting invalid; both settings bad name both.
+- `window(now, provider)` counts only that provider's calls in the window; `idx_spend_ledger_provider_ts` covers `(provider, ts)`.
+- `reserve` refuses past the total (Anthropic under its own cap, total over), past the call's provider cap (on that provider's spend alone) or both (`total` first) and names each; a provider under its own cap with no total is reserved.
+- The capped fetch stops a call past its provider's cap with no fetch, `spendScopes` `["provider:api.openai.com"]`, a question starting "Daily spend cap reached (SAFE-15): $0.9990 spent on api.openai.com in the last 24h (99% of its $1.00 cap)" naming `Stopped at cap: provider:api.openai.com.` and the entry to raise, never `CORVIDINHO_DAILY_SPEND_CAP_USD`; `finish` gives `SPEND_CAP_SUMMARY`; a call to an uncapped provider is sent and recorded.
+- With both caps, a call past the total only names `total`; a call past both names both, `would pass 2 caps`, and both settings.
+- A bad provider setting stops calls to every provider, creates no DB file and never echoes the value or a secret-shaped key.
+- An unpriced model stops under its provider's cap (naming that cap and entry) and runs unrecorded on a provider no cap covers.
+- One call crossing 80% of a provider cap records one warning with its scope; later calls stay quiet; the total cap's crossing warns separately without a scope; the rows carry their scopes.
+- `createTaskExecute` with a two-model chain and the head provider at its cap ends the attempt with the spend-cap ask and makes no provider call at all.
+- The outbox hands over one warning per cap with current spend and returns both on release; a cap back under 80% stays pending while another is claimed; the owner's DM has one line per cap.
+- `askPingOwner` pings once per episode of each cap (a second provider's stop and the total's each ping; a released claim pings again); a stored question-only stop names its caps through `spendScopesOf` and claims their episodes; `askFromUnknown` keeps well-formed scopes only; `askPingKey` keys a schedule's spend-cap ping on its provider scopes (the total alone keys as before).
+- A provider warning keeps its scope through `spendWarningFromUnknown`; the public ask post names no scope, provider, amount or setting.
+- An older `spend_alerts` gets `scope` (existing rows `total`); re-scrub before that ALTER does not throw; `SCRUB_TARGETS` lists `spend_alerts.scope`, which is stored and re-scrubbed redacted.
+- The snapshot lists each provider cap; doctor prints `spend` plus `spend provider:<id>` lines (`warn` at 80% and at the cap, all `ok: true`); the owner's `/status` has one line per cap; the public line is "Spend: Work is paused for budget." while any cap is reached; with provider caps only the `spend` line shows no amount and an unpriced model warns only when a cap covers it; an invalid provider setting is named (never its value) on doctor and `/status`.
+- `corvidinho doctor` with an Anthropic model and `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.anthropic.com=2` prints `[info] spend: no total daily cap set` and `[ok] spend provider:api.anthropic.com: $0.00 of $2.00 daily cap …`.
+- These tests fail on main's sources.
 

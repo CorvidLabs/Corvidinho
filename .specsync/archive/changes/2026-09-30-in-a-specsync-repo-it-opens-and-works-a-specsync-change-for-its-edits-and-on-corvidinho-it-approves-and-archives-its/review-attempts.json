@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "beefaa59fcc6115fa24953a2be6d567d1278c7c4",
+      "contract_digest": "a5702f1822a53f3bf035b6bb558dbe12dbac0bc87ceb895623cd8002d9a16256",
+      "execution_digest": "05a564580851e251ff5ebb72d3decb07efb80313c01667e76a371836ae219719",
+      "workspace_digest": "97974f85e5456a6d06153ff4017feb23c478a695417188778a3d0c974c1afa7c",
+      "timestamp": 1790795738
+    }
+  ]
+}

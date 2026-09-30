@@ -130,3 +130,20 @@ of the same schedule is spawned `actingIsAdmin: false`, with no restart.
 - Fail on base: with the base's (af4597e) `src/daemon/daemon.ts` and
   `src/scheduler/service.ts` swapped in, it fails (always `false`); it passes
   on the branch.
+## Doctor per spend cap and the preload (REQ-cli-098 modified, REQ-cli-262 modified; SAFE-14 / SAFE-15)
+
+- `tests/agent.spend-caps.test.ts` › "`corvidinho doctor` prints a line per
+  provider cap" — with an Anthropic model and
+  `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.anthropic.com=2` the real CLI prints
+  `[info] spend: no total daily cap set (CORVIDINHO_DAILY_SPEND_CAP_USD)` and
+  `[ok] spend provider:api.anthropic.com: $0.00 of $2.00 daily cap for
+  api.anthropic.com used in the last 24h (0%; 0 provider call(s);
+  CORVIDINHO_PROVIDER_SPEND_CAPS_USD, SAFE-14)`, never the key; the unit
+  tests cover `warn` at 80% and at the cap and the invalid setting (named,
+  not echoed).
+- `tests/preload.operator-data-dir.test.ts` › "bot run settings … do not
+  reach the suite" — a child `bun test` started with
+  `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set sees no such key
+  (`tests/fixtures/preload-probe.ts` lists it). Fail on base: the base
+  preload leaves it set and the probe reports it.
+

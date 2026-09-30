@@ -29,6 +29,7 @@ files:
   - src/agent/recall-guard.ts
   - src/agent/loop-guards.ts
   - src/agent/shell-gate.ts
+  - src/agent/repo-ways.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -40,6 +41,7 @@ files:
   - tests/agent.ndjson-spawn.test.ts
   - tests/agent.spend.test.ts
   - tests/agent.spend-ask.test.ts
+  - tests/agent.spend-caps.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
   - tests/agent.verify-feedback.test.ts
@@ -62,6 +64,7 @@ files:
   - tests/fixtures/fake-llm.ts
   - tests/agent.safe3a-gate.test.ts
   - tests/agent.safe3a-owner-shell.test.ts
+  - tests/agent.repo-ways.test.ts
 
 db_tables: []
 depends_on:
@@ -291,6 +294,42 @@ null when the episode already pinged), the delivery side the Discord bridge
 uses (its owner DM pass, `src/discord/spend-dm.ts`, takes the warning;
 SAFE-14.a).
 
+Per-provider caps (REQ-agent-114, SAFE-14 / SAFE-15): `src/agent/spend.ts`
+also exports `PROVIDER_SPEND_CAPS_ENV` (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`,
+a comma list of `provider=USD` keyed on the configured provider id, the
+endpoint host `providerId` gives), `parseProviderCapList` (syntax only),
+`configuredProviderIds` (every entry of `CORVIDINHO_LLM_MODEL` and the
+per-tier keys), `parseSpendCaps` (`SpendCaps`: `off`, `invalid` with the bad
+setting names, or `caps` with a nullable total and a provider map; a
+malformed entry or a key no configured model uses makes the provider setting
+invalid, which stops every call and is never echoed) and `spendDoctorChecks`
+(the `spend` line plus one `spend provider:<id>` line per cap).
+`SpendLedger.window(now, provider?)` reads one provider's spend (index
+`idx_spend_ledger_provider_ts` on `(provider, ts)`), `reserve` takes an
+optional total `capMicroUsd` and `providerCapMicroUsd` and refuses with
+`trips` (every tripped `SpendTrip`: scope `total` / `provider:<id>`, spend,
+cap) in the same IMMEDIATE transaction, and `noteWarning({ …, provider })`
+checks a provider cap against its own spend. `createSpendGuard` reads every
+cap: while any cap is set it records every priced call, stops a call past
+its provider's cap or the total with a `spend-cap` ask naming each tripped
+scope (`spendCapReachedAsk({ estimateMicroUsd, trips })`, the
+`Stopped at cap: …` marker, `HumanAsk.spendScopes`), notes the 80% warning of
+each cap the call counts against (a provider's `SpendWarning.scope`), and
+sends an unpriced model's call unrecorded only when no cap covers it. The
+stop is a `SpendCapRefusal`, which the AGENT-11 model chain treats as no
+model failure, so it never falls back. `spend-alerts.ts` keeps every row's
+`scope` (idempotent ALTER, scrubbed) and all arming per scope and cap value;
+`claimSpendWarnings` returns one warning per scope; the outbox's
+`takeWarning` returns `warnings` (one per cap) and `claimCapPing(scopes?)`
+claims each tripped scope's episode. `src/agent/spend-notice.ts` adds
+`TOTAL_SPEND_SCOPE`, `providerSpendScope`, `providerOfSpendScope`,
+`isSpendScope`, `spendScopesOf` (an ask's scopes, else its question's
+marker), `formatProviderSpendDoctorLine`, `formatSpendDoctorLines`, the
+`ProviderSpend` / `SpendTrip` / `NamedSpendDoctorLine` types, per-provider
+`/status` lines in `formatSpendStatusLine`, and a `SpendSnapshot` of kind
+`cap` with an optional total `capMicroUsd` and `providers`. `askFromUnknown`
+keeps well-formed `spendScopes` of a `spend-cap` ask.
+
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
 `loadAutonomousConfig`, `isAutonomousEnabled`, `autonomousSessionAllowed`;
@@ -478,6 +517,24 @@ exports `withInjectionNote(summary, notice)` and `toolResultScanText(result)`;
 gains optional `injection?: InjectionNotice` (additive on the NDJSON
 `result` frame: protocol stays 2). No env var, config key or flag.
 
+Repo ways (AGENT-18 / AGENT-18.a, REQ-agent-518 / REQ-agent-519):
+`src/agent/repo-ways.ts` exports `RepoWays` (`sdd`, `hi`, `trust`),
+`SddPolicy` / `RepoWaysScan`, `detectRepoWays(root, base)`,
+`scanRepoWays(root, base)`, `repoWaysBase(root)`, `mergeScans`,
+`parseSddPolicy`, `mergeSddPolicies`, `isMeaningfulPath`,
+`sddRequiresChange`, `hasHiFrontMatter`, `activeChangeIds(root)`,
+`sddUncovered(root, changed, policy)`, `sddUncoveredNote(paths)`,
+`formatRepoWaysLine(ways)`, `renderRepoWaysBlock(ways)`, the run ledger
+`SddRun` / `beginSddRun(cwd)` / `endSddRun(run)` / `currentSddRun(cwd)` /
+`noteOpenedChange(cwd, id)` / `repoWaysNow(cwd)`, `CORVIDINHO_REPO`,
+`SELF_LIFECYCLE_ACTOR` (`corvid-agent`), `isCorvidinhoOriginUrl(url)`,
+`isCorvidinhoProject(cwd)`, `setCorvidinhoCheckoutForTests(dir)` (a code-only
+test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
+`SDD_APPROVE_TOOL` / `SDD_FINALIZE_TOOL`, `SddToolCall`,
+`settleOwnSddChanges({ cwd, run, call, onText })`, `capturedHiIds(cwd)` and
+`citedHiIds(text, families)`. `ExecuteContext` gains optional
+`repoWays?: RepoWays`. No env var, config key, flag or schema.
+
 ## Invariants
 
 A failed model hands the run to the next configured one and says so (AGENT-11,
@@ -598,9 +655,12 @@ ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
 
-No spend cap set means no spend behavior: the fetch is untouched and the DB is
-not opened. With a cap, a provider call is never sent unless its estimate was
-reserved under the cap in one IMMEDIATE transaction. A call that would pass
+No spend cap set (neither the total nor a provider cap) means no spend
+behavior: the fetch is untouched and the DB is not opened. With a cap, a
+provider call is never sent unless its estimate was reserved under the total
+cap and its provider's cap in one IMMEDIATE transaction; each cap warns and
+stops on its own (SAFE-15), and a cap stop never falls back to another model
+(AGENT-11). A call that would pass
 the cap, and every call while the model is unpriced, the cap value is invalid
 or the ledger is unavailable, is not sent: the attempt ends with a
 `spend-cap` ask and the run is `blocked` (never `done`, never retried, verify
@@ -741,7 +801,59 @@ first, and they aim at orders to the model: a speaker's own "ignore my
 previous …", a rules file, a question about a token in code, "list your
 instructions for …" or a browser's developer mode do not count.
 
+Repo ways (AGENT-18, REQ-agent-518): at planning `runTask` reads the ways
+the repo works — a SpecSync change workflow (`.specsync/sdd.json` with
+`enabled: true`), hi criteria (a `hi/*.md` with `hi:` front matter) and Trust
+(`.trust.toml`) — from the session base (`repoWaysBase`: the merge-base with
+the remote's default branch, else HEAD), HEAD and the working tree, each flag
+the union, names what it found in one Text line (none when nothing) and
+passes `repoWays` to every attempt; the tool loop appends one fixed prompt
+block for them (`renderRepoWaysBlock`: open and answer a SpecSync change for
+the edits, never approve, review or finalize one; in a hi repo never invent
+criteria and cite captured hi ids). The read tier sends no block. Before the
+lane runs, the SpecSync policy — the start scan merged with a scan now
+(enabled or required in any tree counts, meaningful paths the union, ignored
+paths the intersection, an unparseable `sdd.json` fails closed) — is checked:
+when it requires a change for meaningful files, every path of the run's real
+diff (tool-reported paths with no git snapshot) it counts as meaningful must
+be in an open change's `affected_paths` (a file, or a dir prefix) or in a
+change archived in the same diff; otherwise the attempt is a failed verify
+whose `SpecSync gate:` note (the paths, and how to open a change) is the
+retry's whole feedback, no lane runs, and after the retries the run fails
+with the stuck ask as for any failed verify. A diff that cannot be read fails
+closed the same way. Deleting or committing away `sdd.json` during the run
+does not switch the check off.
+
+Own SpecSync change (AGENT-18.a, REQ-agent-519): `runTask` keeps a per-cwd
+ledger for the run. `specsync-change-new` records the ids its own spawn added
+(listing `.specsync/changes/*/state.json` before and after, never model
+text). Right after a green, evidence-backed lane, for each recorded change
+still open: outside Corvidinho one Text line says it stays open for a human
+to approve, review and finalize; on Corvidinho (`isCorvidinhoProject`: the
+cwd shares the git common dir of the checkout this code runs from and its
+`origin` is github.com/CorvidLabs/Corvidinho — read from disk, never a flag)
+the ledger is marked verified only while `runTask` runs
+`specsync-change-approve <id>` then `specsync-change-finalize <id>` through
+`runPlugin` (non-interactive, the run's `CORVIDINHO_ALLOWLIST`: role gate,
+SAFE-1, must-ask gate and SAFE-5 all apply), one Text line per outcome; a
+refused or failed step leaves the change for a human and the run stays
+verified. When a step ran, the lane (with the AGENT-15 evidence verdict) runs
+again over what it wrote; a failure there ends the run failed with no retry.
+A change the run did not open is never touched.
+
 ## Behavioral Examples
+
+### Scenario: an edit in a SpecSync repo with no change for it
+
+- **Given** a repo whose `.specsync/sdd.json` enables the change workflow and requires a change for `src/`, and a run that edits `src/app.ts` without opening one
+- **When** the attempt ends
+- **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
+
+### Scenario: its own change on Corvidinho once verify is green
+
+- **Given** a run on Corvidinho's own checkout that opened change `bump-x` with `specsync-change-new`, and `CORVIDINHO_ALLOWLIST` naming `specsync-change-approve` and `specsync-change-finalize`
+- **When** its verify lane passes with tests shown to have run
+- **Then** it runs `specsync change approve bump-x --actor corvid-agent`, then `change check`, `change review --reviewer corvid-agent` and `change finalize`, says so in one Text line, runs the lane again and ends verified; in any other repo it only says the change stays open for a human (REQ-agent-519)
 
 ### Scenario: System prompt mentions memory-store
 
@@ -903,6 +1015,7 @@ instructions for …" or a browser's developer mode do not count.
 | SpecSync registry missing | Planning lists modules from `specs/<name>/<name>.spec.md` instead (REQ-plugins-008); none there → soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
+| `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Non-ADMIN caller (checked at the call) names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once, and the result frame / chat body caps keep it (ROLES-CHAT-3, REQ-agent-333) |
@@ -927,6 +1040,13 @@ instructions for …" or a browser's developer mode do not count.
 | A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool and no `memory-store` offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
 | A `delegate` / `council` result carries its worker's own hit (`data.injection`) | counts as this run's hit: `injectionWorkerNote` and the fenced result in its tool message, then the same drop, report, row and note; the worker itself records no row (REQ-agent-071) |
 | Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
+| SpecSync workflow requires a change and a changed meaningful path has none | `SpecSync gate:` note, failed verify with no lane run, retry with the note, then failed with the stuck ask (REQ-agent-518) |
+| `sdd.json` deleted, disabled or committed away during the run | the base tree, HEAD and the start scan still count; the check stays on (REQ-agent-518) |
+| `sdd.json` present but not valid JSON | fails closed: enabled, required, every path meaningful (REQ-agent-518) |
+| Git diff unreadable in a repo whose SpecSync workflow requires a change | failed verify with the "could not read what changed" `SpecSync gate:` note (REQ-agent-518) |
+| Own change on a repo other than Corvidinho after a green lane | one Text line: it stays open for a human; nothing approved (REQ-agent-519) |
+| Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
+| Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |
 
 ## Dependencies
 
@@ -1002,3 +1122,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
 | 2026-09-30 | a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and: A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a) |
+| 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
+| 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |

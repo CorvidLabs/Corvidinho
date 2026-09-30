@@ -163,25 +163,34 @@ export {
   estimateCallMicroUsd,
   formatUsd,
   MODEL_PRICES_USD_PER_MTOK,
+  configuredProviderIds,
   createSpendGuard,
+  parseProviderCapList,
   parseSpendCap,
+  parseSpendCaps,
   priceForModel,
+  PROVIDER_SPEND_CAPS_ENV,
   readSpendSnapshot,
   SPEND_CAP_ENV,
   SPEND_WARN_PERCENT,
   SPEND_WINDOW_MS,
   SpendCapRefusal,
   spendDoctorCheck,
+  spendDoctorChecks,
   SpendLedger,
   withSpendCap,
 } from "./spend.ts";
 export type {
   ModelPrice,
+  NamedSpendDoctorLine,
+  ProviderSpend,
   SpendCap,
   SpendCapOptions,
+  SpendCaps,
   SpendDoctorLine,
   SpendGuard,
   SpendSnapshot,
+  SpendTrip,
   SpendWindow,
 } from "./spend.ts";
 export { createSpendAlertOutbox } from "./spend-outbox.ts";
@@ -194,7 +203,9 @@ export {
   releaseSpendWarnings,
 } from "./spend-alerts.ts";
 export {
+  formatProviderSpendDoctorLine,
   formatSpendDoctorLine,
+  formatSpendDoctorLines,
   formatSpendPublicStatusLine,
   formatSpendStatusLine,
   formatSpendWarningLine,
@@ -208,6 +219,11 @@ export {
   spendCapUnpricedAsk,
   spendPercent,
   spendWarningFromUnknown,
+  isSpendScope,
+  providerOfSpendScope,
+  providerSpendScope,
+  spendScopesOf,
+  TOTAL_SPEND_SCOPE,
 } from "./spend-notice.ts";
 
 export {

@@ -125,6 +125,7 @@ import {
   type ProviderKind,
   type ResolvedProvider,
 } from "./providers.ts";
+import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
   allowlistOffers,
@@ -673,7 +674,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
   let safe3aNoted = false;
 
-  const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing }) => {
+  const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing, repoWays }) => {
     if (personaNote) {
       emit(onEvent, { type: "Text", text: personaNote });
       personaNote = null;
@@ -776,6 +777,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       projectBlock,
       personaBlock,
       specBriefing,
+      repoWays,
       roleEnv: env,
       onRoleRefusal: () => {
         roleRefused = true;
@@ -849,6 +851,8 @@ type LoopArgs = {
   /** PERSONA-2: the persona block, placed before the rules ("" when none). */
   personaBlock: string;
   specBriefing?: string;
+  /** AGENT-18: the repo's ways (fixed prompt block, REQ-agent-518). */
+  repoWays?: RepoWays;
   /** Env the role session and ADMIN bit are read from (ROLES-CHAT-3/6). */
   roleEnv: NodeJS.ProcessEnv;
   /** Called for each tool call refused for the caller's role (ROLES-CHAT-3). */
@@ -885,6 +889,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     projectBlock,
     personaBlock,
     specBriefing,
+    repoWays,
     roleEnv,
     onRoleRefusal,
     injectionTripped,
@@ -923,6 +928,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         ? DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS
         : "") +
       ASK_AGENT_SYSTEM_INSTRUCTIONS +
+      // AGENT-18: the fixed block for this repo's own ways ("" when none).
+      renderRepoWaysBlock(repoWays) +
       "When finished, reply with one concise plain-text message (no tool call) saying what you did, in the persona's voice — never a flat changelog (PERSONA-1). " +
       "Do not claim files were edited unless a tool result reported filesChanged.",
       personaBlock,

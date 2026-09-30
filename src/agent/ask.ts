@@ -22,6 +22,7 @@ import type {
   TaskResult,
 } from "./types.ts";
 import { resolveAskOptions } from "./ask-options.ts";
+import { isSpendScope } from "./spend-notice.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
 export const ASK_TOOL_NAME = "ask-human";
@@ -297,5 +298,14 @@ export function askFromUnknown(raw: unknown): HumanAsk | undefined {
   const ask: HumanAsk = { reason: o.reason as HumanAskReason, question };
   const options = resolveAskOptions({ options: o.options ?? o.choices, question });
   if (options) ask.options = options;
+  // SAFE-15: a spend-cap stop names the cap scope(s) it tripped, so the
+  // bridge pings the owner once per episode of each cap. Kept only when
+  // every entry is well formed (at most 8), else dropped (= the total cap).
+  if (ask.reason === "spend-cap" && Array.isArray(o.spendScopes)) {
+    const scopes = o.spendScopes as unknown[];
+    if (scopes.length > 0 && scopes.length <= 8 && scopes.every(isSpendScope)) {
+      ask.spendScopes = [...new Set(scopes as string[])];
+    }
+  }
   return ask;
 }

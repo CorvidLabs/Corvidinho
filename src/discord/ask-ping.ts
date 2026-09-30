@@ -22,7 +22,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { SPEND_PAUSED_TEXT } from "../agent/spend-notice.ts";
+import { SPEND_PAUSED_TEXT, spendScopesOf, TOTAL_SPEND_SCOPE } from "../agent/spend-notice.ts";
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import type { HumanAsk } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
@@ -96,6 +96,14 @@ export type FormatAskReplyOpts = {
   hint?: string;
 };
 
+/** The tripped provider cap scopes of a spend-cap ask, sorted; "" for the total cap alone. */
+function spendScopeKey(scopes: readonly string[] | undefined): string {
+  const list = [...new Set(scopes ?? [])].sort();
+  return list.length === 0 || (list.length === 1 && list[0] === TOTAL_SPEND_SCOPE)
+    ? ""
+    : scrubSecrets(list.join(","));
+}
+
 /**
  * Stable digest of an ask (reason + scrubbed question) used to ping once per
  * schedule per question (AUTONOMY-2). Hex SHA-256 of the SAFE-6 scrubbed
@@ -103,8 +111,10 @@ export type FormatAskReplyOpts = {
  */
 export function askPingKey(ask: HumanAsk): string {
   // SAFE-8: a spend-cap question carries live amounts; key on the reason so a
-  // schedule pings once per cap episode (a clean run re-arms it).
-  const body = ask.reason === "spend-cap" ? "" : scrubSecrets(ask.question).trim();
+  // schedule pings once per cap episode (a clean run re-arms it). SAFE-15:
+  // and on the provider caps it tripped, so a stop at another cap pings
+  // again (the total cap alone keys as before).
+  const body = ask.reason === "spend-cap" ? spendScopeKey(spendScopesOf(ask)) : scrubSecrets(ask.question).trim();
   return createHash("sha256")
     .update(`${ask.reason}\n${body}`)
     .digest("hex");

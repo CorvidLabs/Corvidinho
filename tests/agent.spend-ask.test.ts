@@ -505,7 +505,10 @@ describe("spend notices (spend-notice.ts)", () => {
     try {
       expect(readSpendSnapshot({ env: { CORVIDINHO_DATA_DIR: dir }, model: "gpt-4o-mini" })).toEqual({ kind: "off" });
       expect(readdirSync(dir)).toEqual([]);
-      expect(readSpendSnapshot({ env: { [SPEND_CAP_ENV]: "x" }, model: "gpt-4o-mini" })).toEqual({ kind: "invalid" });
+      expect(readSpendSnapshot({ env: { [SPEND_CAP_ENV]: "x" }, model: "gpt-4o-mini" })).toEqual({
+        kind: "invalid",
+        keys: [SPEND_CAP_ENV],
+      });
       const s = readSpendSnapshot({ env: { CORVIDINHO_DATA_DIR: dir, [SPEND_CAP_ENV]: "2" }, model: "gpt-4o-mini" });
       expect(s).toMatchObject({ kind: "cap", capMicroUsd: 2_000_000, priced: true, window: { spentMicroUsd: 0 } });
       const blocked = join(dir, "not-a-dir");

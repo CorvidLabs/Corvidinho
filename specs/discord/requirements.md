@@ -951,7 +951,12 @@ The shared SQLite store SHALL treat the module-owned `spend_ledger` and
 version bump) like every other persisted table under SAFE-6: the free-text
 `provider` and `model` columns of `spend_ledger` SHALL be written through
 `scrubSecrets` and SHALL be listed in `SCRUB_TARGETS`, so a scrub-rules
-re-scrub also covers them; `spend_alerts` SHALL hold no free text.
+re-scrub also covers them; `spend_alerts` SHALL hold no free text but its
+cap `scope` (`total` or `provider:<id>`, SAFE-14; added in place by an
+idempotent ALTER, older rows `total`), which SHALL be written through
+`scrubSecrets` and listed in `SCRUB_TARGETS`. A re-scrub SHALL skip a listed
+column a module-owned table does not have yet (a `spend_alerts` created by an
+older build, before its module adds `scope`) instead of failing the open.
 
 On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8, SAFE-14.a), a run that stopped at
 the spend cap (`ask.reason` `spend-cap`) SHALL be posted through the
@@ -961,7 +966,13 @@ without the "reply to answer" hint (a reply cannot lift the cap). Like a
 stuck ask (AUTONOMY-2/4), a spend-cap ask SHALL ping the configured owner,
 once per cap episode across those surfaces (the bridge's spend alert outbox
 `claimCapPing`; a schedule also keeps its per-schedule ping key); later
-spend-cap asks in the same episode SHALL post without a ping. A spend-cap
+spend-cap asks in the same episode SHALL post without a ping. Episodes SHALL
+be kept per cap (SAFE-15, REQ-agent-114): a stop pings once per episode of
+each cap it stopped at (`spendScopesOf`: the ask's `spendScopes`, else the
+"Stopped at cap" marker of a question stored as text), so a stop at another
+provider's cap or at the total cap pings again, and a schedule's ping key for
+a spend-cap ask SHALL follow the provider caps it stopped at (the total cap
+alone keys as before). A spend-cap
 stop SHALL NOT be kept as the session's pending ask (AUTONOMY-5/6; a reply
 cannot lift the cap): a later thin reply runs the agent like any other
 message, a substantive reply carries no cap text into the prompt, and a
@@ -990,13 +1001,15 @@ whose channel left the allowlist): after each chat, button-pick, `/work` and
 pending warning from the outbox over the bridge's shared DB (the run's own
 `spendWarning`, validated by `spendWarningFromUnknown`, only when the bridge
 has no DB) and send the warning line built from integer amounts to the
-configured owner by DM only (SAFE-14.a); a DM that did not go out SHALL hand
-the warning back for the next pass. A post that did not go out (a chat
+configured owner by DM only (SAFE-14.a), one line per cap that crossed 80%
+(the total cap, and each provider cap named by its scope); a DM that did not
+go out SHALL hand the warning(s) back for the next pass. A post that did not go out (a chat
 reply, a schedule post, or a slash run's owner notice that went out neither
 as a channel post nor in the reply) SHALL hand back the cap episode's owner
 ping for the next post, and a schedule SHALL keep no ping key for a ping that
 was never posted. `/status` SHALL show the owner the rolling 24-hour spend
-against the cap with the percent, or that no cap is set, from the bridge's
+against the cap with the percent, or that no cap is set, and one line per
+provider cap (that provider's spend against its cap), from the bridge's
 shared DB, with no new slash command.
 
 Only the owner SHALL see spend amounts and cap settings; everyone else SHALL
@@ -1030,12 +1043,14 @@ only see that work is paused for budget (SAFE-14.a):
 - `/status` SHALL show the spend line only to the owner (ADMIN, IDENTITY-2,
   re-checked by the handler), with a note while a spend DM waits; anyone else
   SHALL see no spend line, and "Spend: Work is paused for budget." while runs
-  stop at the spend check (cap reached, unpriced model, invalid value,
-  unreadable ledger).
+  stop at the spend check (any cap reached, the total or a provider's,
+  unpriced model, invalid value, unreadable ledger) — never which cap.
 - The owner's answer footers keep tokens and cost and everyone else's show
   model and time (DISCORD-15.a, REQ-discord-457, unchanged). `corvidinho
   doctor`, `task run` output and the daemon's logs stay the operator's.
-- No new env var, config key, table, column or schema version.
+- No new table, slash command or schema version; the env var
+  (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`) is REQ-agent-114's and the
+  `spend_alerts.scope` column is added in place.
 
 Acceptance Criteria
 - A ledger row written with a vendor-key-looking provider or model persists redacted.
@@ -1062,6 +1077,7 @@ Acceptance Criteria
 - SAFE-14.a `createSpendDm`: a DM that returns null or throws keeps its claim (the warning pending in `spend_alerts`, the stop held) and is sent on the next pass, once; the failure is logged once per streak with no amounts; a newer stop replaces a held one; no owner or no DM path claims nothing; concurrent passes send a held stop once.
 - DISCORD-15.a unchanged: someone else's answer footer shows model and time only; the owner's shows tokens and cost.
 - These SAFE-14.a tests fail on the base sources.
+- SAFE-14 / SAFE-15 per cap: `SCRUB_TARGETS` lists `spend_alerts.scope`, a secret-shaped provider id is stored and re-scrubbed redacted, and a re-scrub over a `spend_alerts` without `scope` does not throw; `askPingOwner` pings once per episode of each cap (another provider's stop and the total's each ping; a released claim pings again; a stored question-only stop claims its own caps); the owner's DM carries one warning line per cap; the owner's `/status` lines list each provider cap; the public spend-cap post names no scope, provider, amount or setting.
 
 ### REQ-discord-088
 
@@ -3638,4 +3654,25 @@ Acceptance Criteria
 - Same file: in process, the owner's schedule's `discord-post-message` raises one `mustask-post` card; denied, the scheduler records the stuck ask naming it, posts it once pinging the owner with its controls, and the next two due ticks run nothing, raise no new card and post one wait note.
 - Same file: `startDaemon` and `startBridge` spawn the owner's schedule as the owner, and after the allowlist file names another owner the next run of it is community.
 - With the base sources these tests fail; the read-only, owner-chat and other-person guards pass on both.
+### REQ-discord-518
+
+/work SpecSync coverage (AGENT-18, REQ-agent-518). Before `openWorkPr`
+commits or pushes anything, after the tests-deleted check (REQ-discord-185)
+and before the pre-push lane, it SHALL read the repo's SpecSync policy with
+`scanRepoWays(worktree, mergeBase)` (the merge-base, HEAD and the work tree,
+merged fail-closed) and, when it requires a change for meaningful files,
+SHALL list the paths changed since the merge-base (commits and the dirty
+tree, `startWorkspaceDiffFrom(worktree, mergeBase).changed()`) and require
+each meaningful one to be covered by an open change or by a change archived
+on the branch (`sddUncovered`). An uncovered path, or changes that cannot be
+read, SHALL keep the PR from opening with reason `sdd-uncovered` and one
+scrubbed `PR: not opened — …` line that counts and names the paths (five,
+then "…"), says to open a change with `specsync change new … --path`, and
+says the changes stay on the work branch; no plugin runs and nothing is
+committed or pushed. Turning the workflow off on the branch does not skip
+the check. No env var, config key, flag or slash command.
+
+Acceptance Criteria
+- A /work worktree of an SDD repo with `src/app.ts` edited and no change: `opened: false`, reason `sdd-uncovered`, the line names `src/app.ts`, no plugin call; after a change archived on the branch covers it: opened through `git-commit` → `git-push` → `github-pr-create`.
+- A branch that deletes `sdd.json` and commits the edit still gets `sdd-uncovered`.
 

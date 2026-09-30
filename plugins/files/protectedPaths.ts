@@ -87,6 +87,35 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
   return false;
 }
 
+/**
+ * AGENT-18 / AGENT-18.a: SpecSync's own lifecycle records in an active change
+ * folder, the `*.json` files directly in `.specsync/changes/<id>/` (state,
+ * approvals, review, verification, finalization). Only the `specsync change`
+ * commands write them: a file tool that could would let a run widen the
+ * paths its change covers past the coverage gate, put acceptance criteria in
+ * past the hi check, or write an approval or review a human owes. The
+ * change's artifacts (`*.md`, `deltas/…`) stay writable (SPECSYNC-4). Kept
+ * out of {@link isProtectedPath}, so archiving a change still stages their
+ * deletion.
+ */
+export function isSddRecordPath(filePath: string): boolean {
+  const parts = pathParts(filePath.replace(/\\/g, "/"));
+  for (let i = 0; i + 3 < parts.length; i++) {
+    if (parts[i]!.toLowerCase() !== ".specsync") continue;
+    if (parts[i + 1]!.toLowerCase() !== "changes") continue;
+    if (parts.length === i + 4 && parts[i + 3]!.toLowerCase().endsWith(".json")) return true;
+  }
+  return false;
+}
+
+export function sddRecordRefuseMessage(path: string): string {
+  return (
+    `refused (SAFE-2): '${path}' is a SpecSync lifecycle record (state, approvals, review, verification); ` +
+    `only the specsync change commands write it. Answer the change's interview with specsync-change-answer ` +
+    `and fill its .md artifacts; approving, reviewing and finalizing are never a file edit (AGENT-18, AGENT-18.a).`
+  );
+}
+
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +

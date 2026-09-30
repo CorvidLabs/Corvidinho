@@ -12,8 +12,12 @@ import { toolDefForEntry } from "../agent/tools.ts";
 import { get } from "./registry.ts";
 import type { PluginListEntry } from "./types.ts";
 
-/** Default budget for the whole loaded tool surface (all commands offered). */
-export const TOOL_SURFACE_BUDGET_TOKENS = 8_000;
+/**
+ * Default budget for the whole loaded tool surface (all commands offered).
+ * ~9000 since the SpecSync change tools (AGENT-18 / AGENT-18.a) joined the
+ * builtins: five more schemas at ~70 tokens of fixed shape each.
+ */
+export const TOOL_SURFACE_BUDGET_TOKENS = 9_000;
 /** A single command schema above this is flagged as oversized. */
 export const TOOL_SCHEMA_SOFT_CAP_TOKENS = 250;
 

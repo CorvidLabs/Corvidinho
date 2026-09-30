@@ -366,3 +366,21 @@ the owner's schedule its allowlisted owner tools and `files-write` but not
 - Fail on base: with the base's (af4597e) `src/plugins/roles.ts` swapped in,
   all three fail (a team stamp in a schedule resolves `team`); all pass on
   the branch.
+## SpecSync change tools and own-change approve / finalize (REQ-plugins-518, REQ-plugins-519, REQ-plugins-065 / REQ-plugins-114 modified; AGENT-18, AGENT-18.a)
+
+`tests/agent.repo-ways.test.ts` ("SpecSync change tools", "Corvidinho is a
+fixed fact", "approve and finalize"): tool shapes (mutating / dangerous,
+minTier, `agentTool: false`, `TEAM_WORK_TOOLS`, role gate by work flag),
+`SDD_OFF_REFUSAL` and `--root` refusals with nothing spawned, `change new`
+recording `opened` in the run ledger, `change status`, hi citations (none,
+not captured, retired refused; captured spawns with the joined answer; other
+questions and non-hi repos unchecked), `citedHiIds`, origin URL forms, the
+checkout / worktree / look-alike rule, and every `selfLifecycleRefusal`
+branch (outside Corvidinho, not this run's change, no green lane, WATCH,
+schedule session and stamp, worker, community) plus the SAFE-1 denial and
+the approve argv. `tests/roles.team.test.ts`: `TEAM_WORK_TOOLS` and the team
+`/work` catalog (approve / finalize never offered).
+`tests/agent.loop-guards.test.ts`: the four new tools are state-changing.
+`tests/fledge.plugins.test.ts`: the builtin surface with a Fledge plugin is
+under the ~9000-token budget. The fail-on-base proof is in
+`specs/agent/testing.md`.

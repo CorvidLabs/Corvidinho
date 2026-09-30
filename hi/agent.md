@@ -36,6 +36,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
   - **AGENT-16.a**  When a GitHub run is stuck and needs me, it pings me on Discord like other stuck asks.
 - **AGENT-17**  If it only plans, or says 'Done.' without changing anything, it gets one nudge, then moves to a stronger model I've configured.
 - **AGENT-18**  It works each repo's own way: a SpecSync change where the repo uses SpecSync; where it uses hi, it drafts criteria and asks before capturing, never inventing them; and Trust where the repo uses Trust.
+  - **AGENT-18.a**  On Corvidinho it may approve and archive its own SpecSync change once verify is green; in other repos a human approves, reviews and finalizes.
 
 ## Notes (not numbered AC)
 

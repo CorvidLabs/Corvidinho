@@ -113,6 +113,13 @@ export type PluginCommand = {
    * the session is allowed autonomous tools (AUTONOMOUS-1 / SAFE-9).
    */
   autonomous?: boolean;
+  /**
+   * When false, never offered in the agent's tool catalog even when
+   * allowlisted: the agent loop itself runs it (AGENT-18.a: the SpecSync
+   * approve and finalize steps `runTask` takes right after a verified lane).
+   * `runPlugin` and `corvidinho plugins run` still reach it. Default true.
+   */
+  agentTool?: boolean;
   /** Where the command comes from (PLUGIN-6): "builtin" (default) or "fledge:<plugin>@<version>". */
   origin?: string;
   handler: (ctx: PluginHandlerArgs) => Promise<PluginHandlerResult>;
